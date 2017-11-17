@@ -64,67 +64,59 @@ typedef enum {
 } z80_pins;
 
 /* Z80 CPU state */
-typedef struct {
-    /* main register set */
+typedef struct _z80 z80;
+typedef struct _z80 {
     union {
         uint8_t r8[8];   /* to access with register index, flip bit 0 */
         uint16_t r16[4];
         struct {
-            /* this assumes we're on a little-endian CPU */
             union { uint16_t BC; struct { uint8_t C, B; }; };
             union { uint16_t DE; struct { uint8_t E, D; }; };
             union { uint16_t HL; struct { uint8_t L, H; }; };
             union { uint16_t AF; struct { uint8_t F, A; }; };
         };
     };
-    /* alternate register set */
     uint16_t BC_, DE_, HL_, AF_;
-    /* undocumented WZ and shadow WZ */
     uint16_t WZ, WZ_;
-    /* index registers */
     union { uint16_t IX; struct { uint8_t IXL, IXH; }; };
     union { uint16_t IY; struct { uint8_t IYL, IYH; }; };
-    /* stack pointer */
     uint16_t SP;
-    /* program counter */
     uint16_t PC;
-    /* interrupt vector */
     uint8_t I;
-    /* memory refresh */
     uint8_t R;
-    /* control pins */
-    uint16_t ctrl;
-    /* address bus pins */
-    uint16_t addr;
-    /* data bus pins */
-    uint8_t data;
+    uint16_t CTRL;      /* control pins */
+    uint16_t ADDR;      /* address pins */
+    uint8_t DATA;       /* data pins */
 
-    /* interrupt mode IM0, IM1 or IM2 */
     uint8_t im;
-    /* interrupt enable flip-flips */
     bool imm1, imm2;
+    uint8_t opcode;
+    uint32_t ticks;
 
     /* tick function and context data */
-    void (*tick_func)(z80* cpu, void* context);
-
+    void (*tick)(z80* cpu);
+    void* context;
 } z80;
 
 typedef struct {
     void* tick_context;
-    void (*tick_func)(z80* cpu, void* context);
+    void (*tick_func)(z80* cpu);
 } z80_desc;
 
 /* initialize a new z80 instance */
 extern void z80_init(z80* cpu, z80_desc* desc);
 /* execute the next instruction, return number of time cycles */
-extern uint32_t z80_step(z80* cpu, z80_desc* desc);
+extern uint32_t z80_step(z80* cpu);
 /* execute instructions for up to 'ticks' time cycles, return executed time cycles */
 extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 /* set one or more pins to active state */
 extern void z80_on(z80* cpu, uint16_t pins);
 /* set one or more pins to cleared state */
 extern void z80_off(z80* cpu, uint16_t pins);
-
+/* test if any control pin is active */
+extern bool z80_any(z80* cpu, uint16_t pins);
+/* test if all control pins are active */
+extern bool z80_all(z80* cpu, uint16_t pins);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -139,61 +131,180 @@ extern void z80_off(z80* cpu, uint16_t pins);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _Z80_SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
-#define _Z80_SZYXCH(acc,val,res) (_Z80_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
-#define _Z80_ADD_FLAGS(acc,val,res) (_Z80_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
-#define _Z80_SUB_FLAGS(acc,val,res) (Z80_NF|_Z80_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
-#define _Z80_CP_FLAGS(acc,val,res) (Z80_NF|(_Z80_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF)) 
+#ifdef _SZ
+#undef _SZ
+#endif
+#ifdef _SZYXCH
+#undef _SZYXCH
+#endif
+#ifdef _ADD_FLAGS
+#undef _ADD_FLAGS
+#endif
+#ifdef _SUB_FLAGS
+#undef _SUB_FLAGS
+#endif
+#ifdef _CP_FLAGS
+#undef _CP_FLAGS
+#endif
+#ifdef _ON
+#undef _ON
+#endif
+#ifdef _OFF
+#undef _OFF
+#endif
+#ifdef _TICK
+#undef _TICK
+#endif
+#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
+#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
+#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
+#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
+#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
+#define _ON(m) { cpu->CTRL |= (m); }
+#define _OFF(m) { cpu->CTRL &= ~(m); }
+#define _TICK() { cpu->tick(cpu); cpu->ticks++; }
+
+/*
+    instruction fetch machine cycle (M1)
+              T1   T2   T3   T4
+    --------+----+----+----+----+
+    CLK     |--**|--**|--**|--**|
+    A15-A0  |   PC    | REFRESH |
+    MREQ    |   *|****|  **|**  |
+    RD      |   *|****|    |    |
+    WAIT    |    | -- |    |    |
+    M1      |****|****|    |    |
+    D7-D0   |    |   X|    |    |
+    RFSH    |    |    |****|****|
+
+*/
+static void _z80_fetch(z80* cpu) {
+    /*--- T1 ---*/
+    _ON(Z80_M1);
+    cpu->ADDR = cpu->PC++;
+    _TICK();
+    /*--- T2 ---*/
+    _ON(Z80_MREQ|Z80_RD);
+    _TICK();
+    cpu->opcode = cpu->DATA;    /* store current opcode */
+    cpu->R = (cpu->R&0x80)|((cpu->R+1)&0x7F);   /* update R */
+    /*--- T3 ---*/
+    _OFF(Z80_M1|Z80_MREQ|Z80_RD);
+    _ON(Z80_RFSH);
+    cpu->ADDR = (cpu->I<<8)|cpu->R;
+    _TICK();
+    /*--- T4 ---*/
+    _ON(Z80_MREQ);
+    _TICK();
+    _OFF(Z80_RFSH|Z80_MREQ);
+}
+
+/*
+    a memory read cycle, place address in ADDR, read byte into DATA
+
+              T1   T2   T3
+    --------+----+----+----+
+    CLK     |--**|--**|--**|
+    A15-A0  |   MEM ADDR   |
+    MREQ    |   *|****|*** |
+    RD      |   *|****|*** |
+    WR      |    |    |    |
+    D7-D0   |    |    | X  |
+    WAIT    |    | -- |    |
+*/
+static void _z80_read(z80* cpu, uint16_t addr) {
+    /*--- T1 ---*/
+    cpu->ADDR = addr;
+    _TICK();
+    /*--- T2 ---*/
+    _ON(Z80_MREQ|Z80_RD);
+    _TICK();
+    /*--- T3 ---*/
+    _OFF(Z80_MREQ|Z80_RD);
+    _TICK();
+}
+
+/*
+    a memory write cycle, place address into ADDR, place data into DATA
+
+              T1   T2   T3
+    --------+----+----+----+
+    CLK     |--**|--**|--**|
+    A15-A0  |   MEM ADDR   |
+    MREQ    |   *|****|*** |
+    RD      |    |    |    |
+    WR      |    |  **|*** |
+    D7-D0   |   X|XXXX|XXXX|
+    WAIT    |    | -- |    |
+*/
+static void _z80_write(z80* cpu, uint16_t addr, uint8_t data) {
+    /*--- T1 ---*/
+    cpu->ADDR = addr;
+    _TICK();
+    /*--- T2 ---*/
+    _ON(Z80_MREQ|Z80_WR);
+    cpu->DATA = data;
+    _TICK();
+    /*--- T3 ---*/
+    _OFF(Z80_MREQ|Z80_WR);
+    _TICK();
+}
 
 /*-- ALU functions -----------------------------------------------------------*/
 static void _z80_add8(z80* cpu, uint8_t val) {
     int res = cpu->A + val;
-    cpu->F = _Z80_ADD_FLAGS(cpu->A, val, res);
+    cpu->F = _ADD_FLAGS(cpu->A, val, res);
     cpu->A = (uint8_t) res;
 }
 
 static void _z80_adc8(z80* cpu, uint8_t val) {
     int res = cpu->A + val + (cpu->F & Z80_CF);
-    cpu->F = _Z80_ADD_FLAGS(cpu->A, val, res);
+    cpu->F = _ADD_FLAGS(cpu->A, val, res);
     cpu->A = (uint8_t) res;
 }
 
 static void _z80_sub8(z80* cpu, uint8_t val) {
     int res = (int)cpu->A - (int)val;
-    cpu->F = _Z80_SUB_FLAGS(cpu->A, val, res);
+    cpu->F = _SUB_FLAGS(cpu->A, val, res);
     cpu->A = (uint8_t) res;
 }
 
 static void _z80_sbc8(z80* cpu, uint8_t val) {
     int res = (int)cpu->A - (int)val - (cpu->F & Z80_CF);
-    cpu->F = _Z80_SUB_FLAGS(cpu->A, val, res);
+    cpu->F = _SUB_FLAGS(cpu->A, val, res);
     cpu->A = (uint8_t) res;
 }
 
 static void _z80_cp8(z80* cpu, uint8_t val) {
     /* NOTE: XF|YF are set from val, not from result */
     int res = (int)cpu->A - (int)val;
-    cpu->F = _Z80_CP_FLAGS(cpu->A, val, res);
+    cpu->F = _CP_FLAGS(cpu->A, val, res);
 }
 
 static void _z80_neg8(z80* cpu) {
     uint8_t val = cpu->A;
     cpu->A = 0;
-    _z80_sub(cpu, val);
+    _z80_sub8(cpu, val);
+}
+
+static void _z80_exec(z80* cpu) {
+    // FIXME
 }
 
 void z80_init(z80* cpu, z80_desc* desc) {
     CHIPS_ASSERT(cpu);
     CHIPS_ASSERT(desc);
     CHIPS_ASSERT(desc->tick_func);
-    memset(cpu, 0, sizeof(z80);
-    cpu->tick_func = desc->tick_func;
-    cpu->tick_context = desc->tick_context;
+    memset(cpu, 0, sizeof(z80));
+    cpu->tick = desc->tick_func;
+    cpu->context = desc->tick_context;
 }
 
 uint32_t z80_step(z80* cpu) {
-    // FIXME
-    return 0;
+    cpu->ticks = 0;
+    _z80_fetch(cpu);
+    _z80_exec(cpu);
+    return cpu->ticks;
 }
 
 uint32_t z80_run(z80* cpu, uint32_t t) {
@@ -201,14 +312,28 @@ uint32_t z80_run(z80* cpu, uint32_t t) {
     return 0;
 }
 
+/* control pin functions */
 void z80_on(z80* cpu, uint16_t pins) {
-    // FIXME
+    cpu->CTRL |= pins;
 }
-
 void z80_off(z80* cpu, uint16_t pins) {
-    // FIXME
+    cpu->CTRL &= ~pins;
+}
+bool z80_any(z80* cpu, uint16_t pins) {
+    return (cpu->CTRL & pins) != 0;
+}
+bool z80_all(z80* cpu, uint16_t pins) {
+    return (cpu->CTRL & pins) == pins;
 }
 
+#undef _SZ
+#undef _SZYXCH
+#undef _ADD_FLAGS
+#undef _SUB_FLAGS
+#undef _CP_FLAGS
+#undef _ON
+#undef _OFF
+#undef _TICK
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
