@@ -78,11 +78,11 @@ typedef struct _z80 {
             union { uint16_t FA; struct { uint8_t A, F; }; };
         };
     };
-    uint16_t BC_, DE_, HL_, AF_;
-    uint16_t WZ, WZ_;
+    union { uint16_t WZ; struct { uint8_t Z, W; }; };
     union { uint16_t IX; struct { uint8_t IXL, IXH; }; };
     union { uint16_t IY; struct { uint8_t IYL, IYH; }; };
     union { uint16_t IR; struct { uint8_t R, I; }; };
+    uint16_t BC_, DE_, HL_, FA_, WZ_;
     uint16_t SP;
     uint16_t PC;
     uint16_t CTRL;      /* control pins */
@@ -166,8 +166,8 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #define _ON(m) { cpu->CTRL |= (m); }
 #define _OFF(m) { cpu->CTRL &= ~(m); }
 #define _TICK() { cpu->tick(cpu); cpu->ticks++; }
-#define _WRITE(a,r) { _z80_write(cpu, a, r); }
-#define _READ(a) { _z80_read(cpu, a); }
+#define _WRITE(a,r) _z80_write(cpu, a, r)
+#define _READ(a) _z80_read(cpu, a)
 
 /*
     instruction fetch machine cycle (M1)
@@ -218,7 +218,7 @@ static void _z80_fetch(z80* cpu) {
     D7-D0   |    |    | X  |
     WAIT    |    | -- |    |
 */
-static void _z80_read(z80* cpu, uint16_t addr) {
+static uint8_t _z80_read(z80* cpu, uint16_t addr) {
     /*--- T1 ---*/
     cpu->ADDR = addr;
     _TICK();
@@ -228,6 +228,7 @@ static void _z80_read(z80* cpu, uint16_t addr) {
     /*--- T3 ---*/
     _OFF(Z80_MREQ|Z80_RD);
     _TICK();
+    return cpu->DATA;
 }
 
 /*
@@ -321,20 +322,20 @@ static void _z80_op(z80* cpu) {
         if (y == 6) {
             if (z == 6) {
                 /* special case: LD HL,HL is HALT */
-                _z80_halt(cpu);
+                _z80_halt(cpu); return;
             }
             else {
                 /* LD (HL),r; LD (IX+d),r; LD (IY+d),r */
-                _WRITE(cpu->HL, cpu->r8[z^1]);
+                _WRITE(cpu->HL, cpu->r8[z^1]); return;
             }
         }
         else if (z == 6) {
             /* LD r,(HL); LD r,(IX+d); LD r,(IY+d),r */
-            _READ(cpu->HL); cpu->r8[y^1]=cpu->DATA;
+            cpu->r8[y^1]=_READ(cpu->HL); return;
         }
         else {
             /* LD r,r */
-            cpu->r8[y^1] = cpu->r8[z^1];
+            cpu->r8[y^1] = cpu->r8[z^1]; return;
         }
     }
     else if (x == 2) {
@@ -356,6 +357,9 @@ static void _z80_op(z80* cpu) {
             case 1:
                 if (q == 0) {
                     /* 16-bit immediate loads */
+                    cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
+                    if (p == 3) { cpu->SP=cpu->WZ; } else { cpu->r16[p]=cpu->WZ; }
+                    return;
                 }
                 else {
                     /* ADD HL,rr; ADD IX,rr; ADD IY,rr */
@@ -363,6 +367,36 @@ static void _z80_op(z80* cpu) {
                 break;
             case 2:
                 /* indirect loads */
+                switch (y) {
+                    /* LD (BC),A */
+                    case 0: cpu->WZ=cpu->BC; _WRITE(cpu->WZ++,cpu->A); cpu->W=cpu->A; return;
+                    /* LD A,(BC) */
+                    case 1: cpu->WZ=cpu->BC; cpu->A=_READ(cpu->WZ++); return;
+                    /* LD (DE),A */
+                    case 2: cpu->WZ=cpu->DE; _WRITE(cpu->WZ++,cpu->A); cpu->W=cpu->A; return;
+                    /* LD A,(DE) */
+                    case 3: cpu->WZ=cpu->DE; cpu->A=_READ(cpu->WZ++); return;
+                    /* LD (nn),HL|IX|IY */
+                    case 4:
+                        cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
+                        _WRITE(cpu->WZ++,cpu->L); _WRITE(cpu->WZ++,cpu->H);
+                        return;
+                    /* LD HL|IX|IY,(nn) */
+                    case 5:
+                        cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
+                        cpu->L=_READ(cpu->WZ++); cpu->H=_READ(cpu->WZ++);
+                        return;
+                    /* LD (nn),A */
+                    case 6:
+                        cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
+                        _WRITE(cpu->WZ++,cpu->A); cpu->W=cpu->A;
+                        return;
+                    /* LD A,(nn) */
+                    case 7:
+                        cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
+                        cpu->A=_READ(cpu->WZ++);
+                        return;
+                }
                 break;
             case 3:
                 /* 16-bit INC,DEC */
@@ -376,10 +410,11 @@ static void _z80_op(z80* cpu) {
             case 6:
                 if (y == 6) {
                     /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
+                    _READ(cpu->PC++); _WRITE(cpu->HL, cpu->DATA); return;
                 }
                 else {
                     /* LD r,n */
-                    _READ(cpu->PC++); cpu->r8[y^1]=cpu->DATA;
+                    _READ(cpu->PC++); cpu->r8[y^1]=cpu->DATA; return;
                 }
                 break;
             case 7:
@@ -390,6 +425,8 @@ static void _z80_op(z80* cpu) {
     else if (x == 3) {
         /* block 3: misc and extended instructions */
     }
+    /* unhandled/invalid instruction */
+    assert(false);
 }
 
 void z80_init(z80* cpu, z80_desc* desc) {
