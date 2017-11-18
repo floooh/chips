@@ -318,6 +318,22 @@ static void _z80_neg8(z80* cpu) {
     _z80_sub8(cpu, val);
 }
 
+static uint8_t _z80_inc8(z80* cpu, uint8_t val) {
+    uint8_t r = val + 1;
+    uint8_t f = _SZ(r)|(r&(Z80_XF|Z80_YF))|((r^val)&Z80_HF);
+    if (r == 0x80) f |= Z80_VF;
+    cpu->F = f | (cpu->F & Z80_CF);
+    return r;
+}
+
+static uint8_t _z80_dec8(z80* cpu, uint8_t val) {
+    uint8_t r = val - 1;
+    uint8_t f = Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^val)&Z80_HF);
+    if (r == 0x7F) f |= Z80_VF;
+    cpu->F = f | (cpu->F & Z80_CF);
+    return r;
+}
+
 /*-- INSTRUCTION DECODERS ----------------------------------------------------*/
 static void _z80_op(z80* cpu) {
 
@@ -426,11 +442,23 @@ static void _z80_op(z80* cpu) {
                 /* 16-bit INC,DEC */
                 break;
             case 4:
-                /* INC */
-                break;
+                /* INC (HL); INC (IX+d); INC (IY+d); INC r */
+                if (y == 6) {
+                    _WRITE(cpu->HL, _z80_inc8(cpu, _READ(cpu->HL)));
+                }
+                else {
+                    cpu->r8[y^1] = _z80_inc8(cpu, cpu->r8[y^1]);
+                }
+                return;
             case 5:
-                /* DEC */
-                break;
+                /* DEC (HL); DEC (IX+d); DEC (IY+d); DEC r */
+                if (y == 6) {
+                    _WRITE(cpu->HL, _z80_dec8(cpu, _READ(cpu->HL)));
+                }
+                else {
+                    cpu->r8[y^1] = _z80_dec8(cpu, cpu->r8[y^1]);
+                }
+                return;
             case 6:
                 if (y == 6) {
                     /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
