@@ -96,6 +96,9 @@ typedef struct _z80 {
     /* tick function and context data */
     void (*tick)(z80* cpu);
     void* context;
+
+    /* flag lookup table for SZP flag combinations */
+    uint8_t szp[256];
 } z80;
 
 typedef struct {
@@ -294,6 +297,21 @@ static void _z80_cp8(z80* cpu, uint8_t val) {
     cpu->F = _CP_FLAGS(cpu->A, val, res);
 }
 
+static void _z80_and8(z80* cpu, uint8_t val) {
+    cpu->A &= val;
+    cpu->F = cpu->szp[cpu->A]|Z80_HF;
+}
+
+static void _z80_or8(z80* cpu, uint8_t val) {
+    cpu->A |= val;
+    cpu->F = cpu->szp[cpu->A];
+}
+
+static void _z80_xor8(z80* cpu, uint8_t val) {
+    cpu->A ^= val;
+    cpu->F = cpu->szp[cpu->A];
+}
+
 static void _z80_neg8(z80* cpu) {
     uint8_t val = cpu->A;
     cpu->A = 0;
@@ -329,18 +347,24 @@ static void _z80_op(z80* cpu) {
                 _WRITE(cpu->HL, cpu->r8[z^1]); return;
             }
         }
-        else if (z == 6) {
-            /* LD r,(HL); LD r,(IX+d); LD r,(IY+d),r */
-            cpu->r8[y^1]=_READ(cpu->HL); return;
-        }
         else {
-            /* LD r,r */
-            cpu->r8[y^1] = cpu->r8[z^1]; return;
+            /* LD r,(HL); LD r,(IX+d); LD r,(IY+d); LD r,r' */
+            cpu->r8[y^1] = (z == 6) ? _READ(cpu->HL) : cpu->r8[z^1]; return;
         }
     }
     else if (x == 2) {
-        /* block 2: 8-bit ALU instructions */
-
+        /* block 2: 8-bit register ALU instructions */
+        uint8_t val = (z == 6) ? _READ(cpu->HL) : cpu->r8[z^1];
+        switch (y) {
+            case 0: _z80_add8(cpu, val); return;
+            case 1: _z80_adc8(cpu, val); return;
+            case 2: _z80_sub8(cpu, val); return;
+            case 3: _z80_sbc8(cpu, val); return;
+            case 4: _z80_and8(cpu, val); return;
+            case 5: _z80_xor8(cpu, val); return;
+            case 6: _z80_or8(cpu, val); return;
+            case 7: _z80_cp8(cpu, val); return;
+        }
     }
     else if (x == 0) {
         /* block 0: misc instructions */
@@ -424,6 +448,30 @@ static void _z80_op(z80* cpu) {
     }
     else if (x == 3) {
         /* block 3: misc and extended instructions */
+        switch (z) {
+            case 0: /* RET cc */ break;
+            case 1: /* POP + misc */ break;
+            case 2: /* JP cc,nn */ break;
+            case 3: /* misc */ break;
+            case 4: /* CALL cc,nn */ break;
+            case 5: /* PUSH, CALL, extended */ break;
+            case 6:
+                /* ALU n */
+                {
+                    uint8_t val = _READ(cpu->PC++);
+                    switch (y) {
+                        case 0: _z80_add8(cpu, val); return;
+                        case 1: _z80_adc8(cpu, val); return;
+                        case 2: _z80_sub8(cpu, val); return;
+                        case 3: _z80_sbc8(cpu, val); return;
+                        case 4: _z80_and8(cpu, val); return;
+                        case 5: _z80_xor8(cpu, val); return;
+                        case 6: _z80_or8(cpu, val); return;
+                        case 7: _z80_cp8(cpu, val); return;
+                    }
+                }
+                break;
+        }
     }
     /* unhandled/invalid instruction */
     assert(false);
@@ -436,6 +484,16 @@ void z80_init(z80* cpu, z80_desc* desc) {
     memset(cpu, 0, sizeof(z80));
     cpu->tick = desc->tick_func;
     cpu->context = desc->tick_context;
+    for (int val = 0; val < 256; val++) {
+        int p = 0;
+        for (int i = 0; i < 8; i++) {
+            if (val & (1<<i)) p++;
+        }
+        uint8_t f = val ? (val & Z80_SF) : Z80_ZF;
+        f |= (val & (Z80_YF|Z80_XF));   // undocumented flag bits 3 and 5
+        f |= p & 1 ? 0 : Z80_PF;
+        cpu->szp[val] = f;
+    }
 }
 
 uint32_t z80_step(z80* cpu) {
