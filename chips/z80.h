@@ -512,6 +512,7 @@ void z80_init(z80* cpu, z80_desc* desc) {
     memset(cpu, 0, sizeof(z80));
     cpu->tick = desc->tick_func;
     cpu->context = desc->tick_context;
+    /* init SZP flags table */
     for (int val = 0; val < 256; val++) {
         int p = 0;
         for (int i = 0; i < 8; i++) {
@@ -558,6 +559,8 @@ bool z80_all(z80* cpu, uint16_t pins) {
 #undef _ON
 #undef _OFF
 #undef _TICK
+#undef _READ
+#undef _WRITE
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
