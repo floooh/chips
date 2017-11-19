@@ -859,7 +859,16 @@ static void _z80_op(z80* cpu) {
                     case 0: /* NOP */
                         return;
                     case 1: /* EX AF,AF' */ break;
-                    case 2: /* DJNZ */ break;
+                    case 2: /* DJNZ */
+                        {
+                            _TICK();
+                            int8_t d = (int8_t) _READ(cpu->PC++);
+                            if (--cpu->B > 0) {
+                                cpu->WZ = cpu->PC = cpu->PC + d;
+                                _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+                            }
+                        }
+                        return;
                     case 3: /* JR d */ break;
                     default: /* JR cc,d */
                         {
@@ -966,7 +975,20 @@ static void _z80_op(z80* cpu) {
         /* block 3: misc and extended instructions */
         switch (z) {
             case 0: /* RET cc */ break;
-            case 1: /* POP + misc */ break;
+            case 1: /* POP + misc */
+                if (q == 0) {
+                    /* POP BC/DE/HL/IX/IY/AF */
+                }
+                else switch (p) {
+                    case 0: /* RET */
+                        cpu->Z=_READ(cpu->SP++); cpu->W=_READ(cpu->SP++);
+                        cpu->PC = cpu->WZ;
+                        return;
+                    case 1: /* EXX */ break;
+                    case 2: /* JP (HL); JP (IX); JP (IY) */ break;
+                    case 3: /* LD SP,HL; LD SP,IX; LD SP,IY */ break;
+                }
+                break;
             case 2: /* JP cc,nn */
                 cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
                 if (_z80_cond(cpu, y)) {
@@ -1005,7 +1027,13 @@ static void _z80_op(z80* cpu) {
                     // FIXME
                 }
                 else switch (p) {
-                    case 0: /* CALL nn */ break;
+                    case 0: /* CALL nn */
+                        cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
+                        _TICK();
+                        _WRITE(--cpu->SP, (uint8_t)(cpu->PC>>8));
+                        _WRITE(--cpu->SP, (uint8_t)cpu->PC);
+                        cpu->PC=cpu->WZ;
+                        return;
                     case 1: /* DD prefix */ break;
                     case 2:
                         /* ED prefix */
