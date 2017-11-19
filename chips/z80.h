@@ -634,6 +634,26 @@ static void _z80_ret(z80* cpu) {
     cpu->PC = cpu->WZ;
 }
 
+static void _z80_callcc(z80* cpu, uint8_t cond) {
+    cpu->Z = _READ(cpu->PC++);
+    cpu->W = _READ(cpu->PC++);
+    if (_z80_cond(cpu, cond)) {
+        _TICK();
+        _WRITE(--cpu->SP, (uint8_t)(cpu->PC>>8));
+        _WRITE(--cpu->SP, (uint8_t)cpu->PC);
+        cpu->PC = cpu->WZ;
+    }
+}
+
+static void _z80_retcc(z80* cpu, uint8_t cond) {
+    _TICK();
+    if (_z80_cond(cpu, cond)) {
+        cpu->Z = _READ(cpu->SP++);
+        cpu->W = _READ(cpu->SP++);
+        cpu->PC = cpu->WZ;
+    }
+}
+
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
 static void _z80_halt(z80* cpu) {
     _ON(Z80_HALT);
@@ -767,8 +787,10 @@ static void _z80_ed_op(z80* cpu, bool ext) {
     const uint8_t x = op>>6;
     const uint8_t y = (op>>3) & 7;
     const uint8_t z = op & 7;
+    /*
     const uint8_t p = y>>1;
     const uint8_t q = y & 1;
+    */
 
     if (x == 2) {
         /* block instructions */
@@ -1008,7 +1030,9 @@ static void _z80_op(z80* cpu) {
     else if (x == 3) {
         /* block 3: misc and extended instructions */
         switch (z) {
-            case 0: /* RET cc */ break;
+            case 0: /* RET cc */
+                _z80_retcc(cpu, y);
+                return;
             case 1: /* POP + misc */
                 if (q == 0) {
                     /* POP BC/DE/HL/IX/IY/AF */
@@ -1049,7 +1073,9 @@ static void _z80_op(z80* cpu) {
                         return;
                 }
                 break;
-            case 4: /* CALL cc,nn */ break;
+            case 4: /* CALL cc,nn */
+                _z80_callcc(cpu, y);
+                return;
             case 5:
                 /* PUSH, CALL, extended */
                 if (q == 0) {
