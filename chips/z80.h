@@ -446,35 +446,111 @@ static void _z80_rld(z80* cpu) {
 
 /*-- BLOCK FUNCTIONS ---------------------------------------------------------*/
 static void _z80_ldi(z80* cpu) {
-    // FIXME
+    uint8_t val = _READ(cpu->HL);
+    _WRITE(cpu->DE, val);
+    _TICK(); _TICK();
+    val += cpu->A;
+    uint8_t f = cpu->F & (Z80_SF|Z80_ZF|Z80_CF);
+    if (val & 0x02) f |= Z80_YF;
+    if (val & 0x08) f |= Z80_XF;
+    cpu->HL++;
+    cpu->DE++;
+    cpu->BC--;
+    if (cpu->BC) {
+        f |= Z80_VF;
+    }
+    cpu->F = f;
 }
 
 static void _z80_ldd(z80* cpu) {
-    // FIXME
+    uint8_t val = _READ(cpu->HL);
+    _WRITE(cpu->DE, val);
+    _TICK(); _TICK();
+    val += cpu->A;
+    uint8_t f = cpu->F & (Z80_SF|Z80_ZF|Z80_CF);
+    if (val & 0x02) f |= Z80_YF;
+    if (val & 0x08) f |= Z80_XF;
+    cpu->HL--;
+    cpu->DE--;
+    cpu->BC--;
+    if (cpu->BC) {
+        f |= Z80_VF;
+    }
+    cpu->F = f;
 }
 
 static void _z80_ldir(z80* cpu) {
-    // FIXME
+    _z80_ldi(cpu);
+    if (cpu->BC != 0) {
+        cpu->PC -= 2;
+        cpu->WZ = cpu->PC + 1;
+        _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+    }
 }
 
 static void _z80_lddr(z80* cpu) {
-    // FIXME
+    _z80_ldd(cpu);
+    if (cpu->BC != 0) {
+        cpu->PC -= 2;
+        cpu->WZ = cpu->PC + 1;
+        _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+    }
 }
 
 static void _z80_cpi(z80* cpu) {
-    // FIXME
+    int r = (int)cpu->A - (int)_READ(cpu->HL);
+    _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+    uint8_t f = Z80_NF | (cpu->F & Z80_CF) | _SZ(r);
+    if ((r & 0xF) > (cpu->A & 0xF)) {
+        f |= Z80_HF;
+        r--;
+    }
+    if (r & 0x02) f |= Z80_YF;
+    if (r & 0x08) f |= Z80_XF;
+    cpu->WZ++;
+    cpu->HL++;
+    cpu->BC--;
+    if (cpu->BC) {
+        f |= Z80_VF;
+    }
+    cpu->F = f;
 }
 
 static void _z80_cpd(z80* cpu) {
-    // FIXME
+    int r = (int)cpu->A - (int)_READ(cpu->HL);
+    _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+    uint8_t f = Z80_NF | (cpu->F & Z80_CF) | _SZ(r);
+    if ((r & 0xF) > (cpu->A & 0xF)) {
+        f |= Z80_HF;
+        r--;
+    }
+    if (r & 0x02) f |= Z80_YF;
+    if (r & 0x08) f |= Z80_XF;
+    cpu->WZ--;
+    cpu->HL--;
+    cpu->BC--;
+    if (cpu->BC) {
+        f |= Z80_VF;
+    }
+    cpu->F = f;
 }
 
 static void _z80_cpir(z80* cpu) {
-    // FIXME
+    _z80_cpi(cpu);
+    if ((cpu->BC != 0) && !(cpu->F & Z80_ZF)) {
+        cpu->PC -= 2;
+        cpu->WZ = cpu->PC + 1;    /* FIXME: is this correct (see memptr_eng.txt) */
+        _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+    }
 }
 
 static void _z80_cpdr(z80* cpu) {
-    // FIXME
+    _z80_cpd(cpu);
+    if ((cpu->BC != 0) && !(cpu->F & Z80_ZF)) {
+        cpu->PC -= 2;
+        cpu->WZ = cpu->PC + 1;
+        _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+    }
 }
 
 static void _z80_ini(z80* cpu) {
