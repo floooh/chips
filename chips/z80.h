@@ -92,6 +92,7 @@ typedef struct _z80 {
     uint8_t opcode;     /* last opcode read with _z80_fetch() */
     uint8_t im;
     bool iff1, iff2;
+    bool ei_pending;
     uint32_t ticks;
 
     /* tick function and context data */
@@ -408,20 +409,6 @@ static uint8_t _z80_srl(z80* cpu, uint8_t val) {
     return r;
 }
 
-static uint8_t _z80_rot(z80* cpu, uint8_t val, uint8_t type) {
-    switch (type) {
-        case 0: return _z80_rlc(cpu, val);
-        case 1: return _z80_rrc(cpu, val);
-        case 2: return _z80_rl(cpu, val);
-        case 3: return _z80_rr(cpu, val);
-        case 4: return _z80_sla(cpu, val);
-        case 5: return _z80_sra(cpu, val);
-        case 6: return _z80_sll(cpu, val);
-        case 7: return _z80_srl(cpu, val);
-    }
-    return 0;   /* can't happen */
-}
-
 static void _z80_rrd(z80* cpu) {
     cpu->WZ = cpu->HL;
     uint8_t x = _READ(cpu->WZ++);
@@ -592,11 +579,12 @@ static void _z80_halt(z80* cpu) {
 }
 
 static void _z80_di(z80* cpu) {
-    // FIXME!
+    cpu->iff1 = false;
+    cpu->iff2 = false;
 }
 
 static void _z80_ei(z80* cpu) {
-    // FIXME!
+    cpu->ei_pending = true;
 }
 
 static void _z80_im(z80* cpu, uint8_t y) {
@@ -648,6 +636,37 @@ static void _z80_scf(z80* cpu) {
 
 static void _z80_ccf(z80* cpu) {
     cpu->F = ((cpu->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF))|((cpu->F&Z80_CF)<<4)|(cpu->A&(Z80_YF|Z80_XF)))^Z80_CF;
+}
+
+/*-- DECODE HELPERS ----------------------------------------------------------*/
+static uint8_t _z80_rot(z80* cpu, uint8_t val, uint8_t type) {
+    /* select rotate/shift operation */
+    switch (type) {
+        case 0: return _z80_rlc(cpu, val);
+        case 1: return _z80_rrc(cpu, val);
+        case 2: return _z80_rl(cpu, val);
+        case 3: return _z80_rr(cpu, val);
+        case 4: return _z80_sla(cpu, val);
+        case 5: return _z80_sra(cpu, val);
+        case 6: return _z80_sll(cpu, val);
+        case 7: return _z80_srl(cpu, val);
+    }
+    return 0;   /* can't happen */
+}
+
+static bool _z80_cond(z80* cpu, uint8_t cc) {
+    /* condition code flag check */
+    switch (cc) {
+        case 0: return !(cpu->F & Z80_ZF);      /* NZ */
+        case 1: return  (cpu->F & Z80_ZF);      /* Z */
+        case 2: return !(cpu->F & Z80_CF);      /* NC */
+        case 3: return  (cpu->F & Z80_CF);      /* C */
+        case 4: return !(cpu->F & Z80_PF);      /* PO */
+        case 5: return  (cpu->F & Z80_PF);      /* PE */
+        case 6: return !(cpu->F & Z80_SF);      /* P */
+        case 7: return  (cpu->F & Z80_SF);      /* M */
+    }
+    return false; /* can't happen */
 }
 
 /*-- INSTRUCTION DECODERS ----------------------------------------------------*/
@@ -749,9 +768,13 @@ static void _z80_ed_op(z80* cpu, bool ext) {
             case 1: /* OUT (C),r */ break;
             case 2: /* SBC/ADC HL,rr */ break;
             case 3: /* 16-bit immediate load/store */ break;
-            case 4: /* NEG */ _z80_neg8(cpu); return;
+            case 4: /* NEG */
+                _z80_neg8(cpu);
+                return;
             case 5: /* RETN; RETI */
-            case 6: /* IM m */ _z80_im(cpu, y); return;
+            case 6: /* IM m */
+                _z80_im(cpu, y);
+                return;
             case 7:
                 switch (y) {
                     case 0: /* LD I,A */
@@ -833,11 +856,20 @@ static void _z80_op(z80* cpu) {
         switch (z) {
             case 0:
                 switch (y) {
-                    case 0: /* NOP */ break;
+                    case 0: /* NOP */
+                        return;
                     case 1: /* EX AF,AF' */ break;
                     case 2: /* DJNZ */ break;
                     case 3: /* JR d */ break;
-                    default: /* JR cc,d */ break;
+                    default: /* JR cc,d */
+                        {
+                            int8_t d = (int8_t) _READ(cpu->PC++);
+                            if (_z80_cond(cpu, y-4)) {
+                                cpu->WZ = cpu->PC = cpu->PC + d;
+                                _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+                            }
+                        }
+                        return;
                 }
                 break;
             case 1:
@@ -935,7 +967,12 @@ static void _z80_op(z80* cpu) {
         switch (z) {
             case 0: /* RET cc */ break;
             case 1: /* POP + misc */ break;
-            case 2: /* JP cc,nn */ break;
+            case 2: /* JP cc,nn */
+                cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
+                if (_z80_cond(cpu, y)) {
+                    cpu->PC = cpu->WZ;
+                }
+                return;
             case 3:
                 /* misc ops and CB prefix */
                 switch (y) {
@@ -1022,6 +1059,10 @@ void z80_init(z80* cpu, z80_desc* desc) {
 
 uint32_t z80_step(z80* cpu) {
     cpu->ticks = 0;
+    if (cpu->ei_pending) {
+        cpu->iff1 = cpu->iff2 = true;
+        cpu->ei_pending = false;
+    }
     _z80_fetch(cpu);
     _z80_op(cpu);
     return cpu->ticks;
