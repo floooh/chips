@@ -1,0 +1,115 @@
+MEMPTR, esoteric register of the ZiLOG Z80 CPU.
+by Boo-boo (first and draft English translation by Vladimir Kladov)
+
+  As it is known, after the instruction BIT n,(HL) execution, bits 3 and 5 of the flag register become containing values that is not documented in the official documentation at all. Actually these bits are copied from the bits 11 and 13 of the internal register pair of Z80 CPU, which is used for 16-bit operations, and in most cases to handle addresses. This is usual practice for processors having 8-bits data bus working with 16-bits data.
+  It is not known why and how these bits of the internal buffer register are copied to the flags register though. At least Sean Young in the "Undocumented Z80 Documented" refers to that phenomenon (http://www.myquest.nl/z80undocumented/) and a bit more info can be found in the Z80 description of another "nocash" project (http://www.work.de/nocash/zxdocs.htm) where such register pair is called as MEMPTR. Unfortunately until now attemts to crack the algorithm setting the value of the MEMPTR by different processor instructions on base of knowning only two bits of those 16-bits register were not successful.
+  But miraculously in result of many experiments (based on the hyposesis that index addressing instructions initialize the MEMPTR always the same way) and also after the deep meditations under the results of these samples we have found that CPI instruction increments the MEMPTR by 1 whereas CPD instruction decrements it. Hence, decrementing the MEMPTR in the loop and monitoring borrow from the high bits having two known bits in the flag register, it is possible to determine unambigously 14 low bits of the MEMPTR and having these in our hands to say for sure on which rule MEMPTR is set after each instruction.
+  A list of instructions changing the MEMPTR is follow, together with the formula for new MEMPTR value. Here "rp" means register pair (16 bits register BC, DE, HL or SP - ?), and "INDEX" means register pair IX or IY. Instructions not listed below do not affect MEMPTR as it is found. All the CPU chips tested give the same results except KP1858BM1 and T34BM1 slices noted as "BM1" in the text.
+====================================================================================
+
+LD A,(addr)
+	MEMPTR = addr + 1
+
+LD (addr),A
+	MEMPTR_low = (addr + 1) & #FF,  MEMPTR_hi = A
+	Note for *BM1: MEMPTR_low = (addr + 1) & #FF,  MEMPTR_hi = 0
+
+LD A,(rp)  where rp -- BC or DE
+	MEMPTR = rp + 1
+
+LD (rp),A  where rp -- BC or DE
+	MEMPTR_low = (rp + 1) & #FF,  MEMPTR_hi = A
+	Note for *BM1: MEMPTR_low = (rp + 1) & #FF,  MEMPTR_hi = 0
+
+LD (addr), rp
+LD rp,(addr)
+	MEMPTR = addr + 1
+
+EX (SP),rp
+	MEMPTR = rp value after the operation
+
+ADD/ADC/SBC rp1,rp2
+	MEMPTR = rp1_before_operation + 1
+
+RLD/RRD
+	MEMPTR = HL + 1
+
+JR/DJNZ/RET/RETI/RST (jumping to addr)
+	MEMPTR = addr
+
+JP(except JP rp)/CALL addr (even in case of conditional call/jp, independantly on condition satisfied or not)
+	MEMPTR = addr
+
+IN A,(port)
+	MEMPTR = (A_before_operation << 8) + port + 1
+
+IN A,(C)
+	MEMPTR = BC + 1
+
+OUT (port),A
+	MEMPTR_low = (port + 1) & #FF,  MEMPTR_hi = A
+	Note for *BM1: MEMPTR_low = (port + 1) & #FF,  MEMPTR_hi = 0
+
+OUT (C),A
+	MEMPTR = BC + 1
+
+LDIR/LDDR
+	when BC == 1: MEMPTR is not changed
+	when BC <> 1: MEMPTR = PC + 1, where PC = instruction address
+
+CPI
+	MEMPTR = MEMPTR + 1
+
+CPD
+	MEMPTR = MEMPTR - 1
+
+CPIR
+	when BC=1 or A=(HL): exactly as CPI
+	In other cases MEMPTR = PC + 1 on each step, where PC = instruction address.
+	Note* since at the last execution BC=1 or A=(HL), resulting MEMPTR = PC + 1 + 1 
+	  (if there were not interrupts during the execution) 
+
+CPDR
+	when BC=1 or A=(HL): exactly as CPD
+	In other cases MEMPTR = PC + 1 on each step, where PC = instruction address.
+	Note* since at the last execution BC=1 or A=(HL), resulting MEMPTR = PC + 1 - 1 
+	  (if there were not interrupts during the execution)
+
+INI
+	MEMPTR = BC_before_decrementing_B + 1
+
+IND
+	MEMPTR = BC_before_decrementing_B - 1
+
+INIR
+	exactly as INI on each execution.
+	I.e. resulting MEMPTR = ((1 << 8) + C) + 1 
+
+INDR
+	exactly as IND on each execution.
+	I.e. resulting MEMPTR = ((1 << 8) + C) - 1 
+
+OUTI
+	MEMPTR = BC_after_decrementing_B + 1
+
+OUTD
+	MEMPTR = BC_after_decrementing_B - 1
+
+OTIR
+	exactly as OUTI on each execution. I.e. resulting MEMPTR = C + 1 
+
+OTDR
+	exactly as OUTD on each execution. I.e. resulting MEMPTR = C - 1
+
+Any instruction with (INDEX+d):
+	MEMPTR = INDEX+d
+
+Interrupt call to addr:
+	As usual CALL. I.e. MEMPTR = addr
+
+====================================================================================
+  What is the profit of which secret knowledge? First of all, it is possible now to program Z80 emulators supporting _all_ the undocumented pecularities of the CPU. In the second place the fact that on some Z80 clones MEMPTR register behaves a bit another adds a method of model checking. Seems very enough!
+(c)2006, zx.pk.ru
+Theoretical part: boo_boo, Vladimir Kladov
+Testing real Z80 chips: Wlodek, CHRV, icebear, molodcov_alex, goodboy
+
