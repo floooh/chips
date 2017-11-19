@@ -572,6 +572,68 @@ static void _z80_otdr(z80* cpu) {
     // FIXME
 }
 
+/*-- CONTROL FLOW FUNCTIONS --------------------------------------------------*/
+static bool _z80_cond(z80* cpu, uint8_t cc) {
+    /* condition code flag check */
+    switch (cc) {
+        case 0: return !(cpu->F & Z80_ZF);      /* NZ */
+        case 1: return  (cpu->F & Z80_ZF);      /* Z */
+        case 2: return !(cpu->F & Z80_CF);      /* NC */
+        case 3: return  (cpu->F & Z80_CF);      /* C */
+        case 4: return !(cpu->F & Z80_PF);      /* PO */
+        case 5: return  (cpu->F & Z80_PF);      /* PE */
+        case 6: return !(cpu->F & Z80_SF);      /* P */
+        case 7: return  (cpu->F & Z80_SF);      /* M */
+    }
+    return false; /* can't happen */
+}
+
+static void _z80_djnz(z80* cpu) {
+    _TICK();
+    int8_t d = (int8_t) _READ(cpu->PC++);
+    if (--cpu->B > 0) {
+        cpu->WZ = cpu->PC = cpu->PC + d;
+        _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+    }
+}
+
+static void _z80_jp(z80* cpu) {
+    cpu->Z = _READ(cpu->PC++);
+    cpu->W = _READ(cpu->PC);
+    cpu->PC = cpu->WZ;
+}
+
+static void _z80_jpcc(z80* cpu, uint8_t cond) {
+    cpu->Z = _READ(cpu->PC++);
+    cpu->W = _READ(cpu->PC++);
+    if (_z80_cond(cpu, cond)) {
+        cpu->PC = cpu->WZ;
+    }
+}
+
+static void _z80_jrcc(z80* cpu, uint8_t cond) {
+    int8_t d = (int8_t) _READ(cpu->PC++);
+    if (_z80_cond(cpu, cond-4)) {
+        cpu->WZ = cpu->PC = cpu->PC + d;
+        _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
+    }
+}
+
+static void _z80_call(z80* cpu) {
+    cpu->Z = _READ(cpu->PC++);
+    cpu->W = _READ(cpu->PC++);
+    _TICK();
+    _WRITE(--cpu->SP, (uint8_t)(cpu->PC>>8));
+    _WRITE(--cpu->SP, (uint8_t)cpu->PC);
+    cpu->PC=cpu->WZ;
+}
+
+static void _z80_ret(z80* cpu) {
+    cpu->Z = _READ(cpu->SP++);
+    cpu->W = _READ(cpu->SP++);
+    cpu->PC = cpu->WZ;
+}
+
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
 static void _z80_halt(z80* cpu) {
     _ON(Z80_HALT);
@@ -652,21 +714,6 @@ static uint8_t _z80_rot(z80* cpu, uint8_t val, uint8_t type) {
         case 7: return _z80_srl(cpu, val);
     }
     return 0;   /* can't happen */
-}
-
-static bool _z80_cond(z80* cpu, uint8_t cc) {
-    /* condition code flag check */
-    switch (cc) {
-        case 0: return !(cpu->F & Z80_ZF);      /* NZ */
-        case 1: return  (cpu->F & Z80_ZF);      /* Z */
-        case 2: return !(cpu->F & Z80_CF);      /* NC */
-        case 3: return  (cpu->F & Z80_CF);      /* C */
-        case 4: return !(cpu->F & Z80_PF);      /* PO */
-        case 5: return  (cpu->F & Z80_PF);      /* PE */
-        case 6: return !(cpu->F & Z80_SF);      /* P */
-        case 7: return  (cpu->F & Z80_SF);      /* M */
-    }
-    return false; /* can't happen */
 }
 
 /*-- INSTRUCTION DECODERS ----------------------------------------------------*/
@@ -860,24 +907,11 @@ static void _z80_op(z80* cpu) {
                         return;
                     case 1: /* EX AF,AF' */ break;
                     case 2: /* DJNZ */
-                        {
-                            _TICK();
-                            int8_t d = (int8_t) _READ(cpu->PC++);
-                            if (--cpu->B > 0) {
-                                cpu->WZ = cpu->PC = cpu->PC + d;
-                                _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
-                            }
-                        }
+                        _z80_djnz(cpu);
                         return;
                     case 3: /* JR d */ break;
                     default: /* JR cc,d */
-                        {
-                            int8_t d = (int8_t) _READ(cpu->PC++);
-                            if (_z80_cond(cpu, y-4)) {
-                                cpu->WZ = cpu->PC = cpu->PC + d;
-                                _TICK(); _TICK(); _TICK(); _TICK(); _TICK();
-                            }
-                        }
+                        _z80_jrcc(cpu, y);
                         return;
                 }
                 break;
@@ -981,8 +1015,7 @@ static void _z80_op(z80* cpu) {
                 }
                 else switch (p) {
                     case 0: /* RET */
-                        cpu->Z=_READ(cpu->SP++); cpu->W=_READ(cpu->SP++);
-                        cpu->PC = cpu->WZ;
+                        _z80_ret(cpu);
                         return;
                     case 1: /* EXX */ break;
                     case 2: /* JP (HL); JP (IX); JP (IY) */ break;
@@ -990,16 +1023,13 @@ static void _z80_op(z80* cpu) {
                 }
                 break;
             case 2: /* JP cc,nn */
-                cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
-                if (_z80_cond(cpu, y)) {
-                    cpu->PC = cpu->WZ;
-                }
+                _z80_jpcc(cpu, y);
                 return;
             case 3:
                 /* misc ops and CB prefix */
                 switch (y) {
                     case 0: /* JP nn */
-                        cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC); cpu->PC=cpu->WZ;
+                        _z80_jp(cpu);
                         return;
                     case 1: /* CB prefix */
                         _z80_fetch(cpu);
@@ -1028,11 +1058,7 @@ static void _z80_op(z80* cpu) {
                 }
                 else switch (p) {
                     case 0: /* CALL nn */
-                        cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
-                        _TICK();
-                        _WRITE(--cpu->SP, (uint8_t)(cpu->PC>>8));
-                        _WRITE(--cpu->SP, (uint8_t)cpu->PC);
-                        cpu->PC=cpu->WZ;
+                        _z80_call(cpu);
                         return;
                     case 1: /* DD prefix */ break;
                     case 2:
