@@ -765,6 +765,19 @@ static uint16_t _z80_addr(z80* cpu) {
     }
 }
 
+static uint16_t _z80_addr_d(z80* cpu, int8_t d) {
+    /* special version of _z80_addr for DD/FD CB prefix */
+    /* get effective address (HL, or IX+d, or IY+d), updates WZ if indexed */
+    if (cpu->ddfd) {
+        /* indexed instruction IX+d or IY+d */
+        cpu->WZ = cpu->r16[cpu->ri16sp[2]] + d;
+        return cpu->WZ;
+    }
+    else {
+        return cpu->HL;
+    }
+}
+
 static void _z80_patch_ix(z80* cpu) {
     /* patch HL register indirection index to IX */
     cpu->ri8[4] = 9;    /* L = IXL */
@@ -794,7 +807,7 @@ static void _z80_unpatch_ixiy(z80* cpu) {
 /*-- INSTRUCTION DECODERS ----------------------------------------------------*/
 
 /* CB prefix instruction decoder */
-static void _z80_cb_op(z80* cpu) {
+static void _z80_cb_op(z80* cpu, int8_t d) {
     /*
         Split opcode into bit groups:
         |xx|yyy|zzz|
@@ -806,9 +819,11 @@ static void _z80_cb_op(z80* cpu) {
     if (x == 0) {
         if (z == 6) {
             /* ROT (HL); ROT (IX+d); ROT (IY+d) */
-            uint16_t addr = _z80_addr(cpu);
-            _EXTICKS(5);
-            _WRITE(addr, _z80_rot(cpu, _READ(addr), y));
+            uint16_t addr = _z80_addr_d(cpu, d);
+            _EXTICKS(1);
+            uint8_t val = _READ(addr);
+            _TICK();
+            _WRITE(addr, _z80_rot(cpu, val, y));
             return;
         }
         else if (cpu->ddfd) {
@@ -1166,8 +1181,16 @@ static void _z80_op(z80* cpu) {
                         _z80_jp(cpu);
                         return;
                     case 1: /* CB prefix */
-                        _z80_fetch(cpu);
-                        _z80_cb_op(cpu);
+                        if (cpu->ddfd) {
+                            /* special case, DD/FD CB, offset d comes after CB and before opcode */
+                            int8_t d = _READ(cpu->PC++);
+                            _z80_fetch(cpu);
+                            _z80_cb_op(cpu, d);
+                        }
+                        else {
+                            _z80_fetch(cpu);
+                            _z80_cb_op(cpu, 0);
+                        }
                         return;
                     case 2: /* OUT (n),A */ break;
                     case 3: /* IN A,(n) */ break;
