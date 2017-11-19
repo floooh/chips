@@ -174,6 +174,9 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #ifdef _READ
 #undef _READ
 #endif
+#ifdef _WRITE
+#undef _WRITE
+#endif
 #ifdef _SWAP16
 #undef _SWAP16
 #endif
@@ -1076,6 +1079,7 @@ static void _z80_op(z80* cpu) {
                 if (y == 6) {
                     uint16_t addr = _z80_addr(cpu);
                     _EXTICKS(5);
+                    _TICK();
                     _WRITE(addr, _z80_inc8(cpu, _READ(addr)));
                 }
                 else {
@@ -1087,6 +1091,7 @@ static void _z80_op(z80* cpu) {
                 if (y == 6) {
                     uint16_t addr = _z80_addr(cpu);
                     _EXTICKS(5);
+                    _TICK();
                     _WRITE(addr, _z80_dec8(cpu, _READ(addr)));
                 }
                 else {
