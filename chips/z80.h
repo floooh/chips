@@ -89,8 +89,9 @@ typedef struct _z80 {
     uint16_t ADDR;      /* address pins */
     uint8_t DATA;       /* data pins */
 
+    uint8_t opcode;     /* last opcode read with _z80_fetch() */
     uint8_t im;
-    bool imm1, imm2;
+    bool iff1, iff2;
     uint32_t ticks;
 
     /* tick function and context data */
@@ -161,6 +162,9 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #ifdef _READ
 #undef _READ
 #endif
+#ifdef _SWAP16
+#undef _SWAP16
+#endif
 #define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
 #define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
 #define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
@@ -171,6 +175,7 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #define _TICK() { cpu->tick(cpu); cpu->ticks++; }
 #define _WRITE(a,r) _z80_write(cpu, a, r)
 #define _READ(a) _z80_read(cpu, a)
+#define _SWAP16(a,b) { uint16_t tmp=a; a=b; b=tmp; }
 
 /*
     instruction fetch machine cycle (M1)
@@ -195,6 +200,7 @@ static void _z80_fetch(z80* cpu) {
     /*--- T2 ---*/
     _ON(Z80_MREQ|Z80_RD);
     _TICK();
+    cpu->opcode = cpu->DATA;
     cpu->R = (cpu->R&0x80)|((cpu->R+1)&0x7F);   /* update R */
     /*--- T3 ---*/
     _OFF(Z80_M1|Z80_MREQ|Z80_RD);
@@ -259,50 +265,6 @@ static void _z80_write(z80* cpu, uint16_t addr, uint8_t data) {
     /*--- T3 ---*/
     _OFF(Z80_MREQ|Z80_WR);
     _TICK();
-}
-
-/*-- MISC functions ----------------------------------------------------------*/
-static void _z80_halt(z80* cpu) {
-    // FIXME!
-}
-
-static void _z80_dda(z80* cpu) {
-    // from MAME and http://www.z80.info/zip/z80-documented.pdf
-    uint8_t val = cpu->A;
-    if (cpu->F & Z80_NF) {
-        if (((cpu->A & 0xF) > 0x9) || (cpu->F & Z80_HF)) {
-            val -= 0x06;
-        }
-        if ((cpu->A > 0x99) || (cpu->F & Z80_CF)) {
-            val -= 0x60;
-        }
-    }
-    else {
-        if (((cpu->A & 0xF) > 0x9) || (cpu->F & Z80_HF)) {
-            val += 0x06;
-        }
-        if ((cpu->A > 0x99) || (cpu->F & Z80_CF)) {
-            val += 0x60;
-        }
-    }
-    cpu->F &= Z80_CF|Z80_NF;
-    cpu->F |= (cpu->A > 0x99) ? Z80_CF:0;
-    cpu->F |= (cpu->A^val) & Z80_HF;
-    cpu->F |= cpu->szp[val];
-    cpu->A = val;
-}
-
-static void _z80_cpl(z80* cpu) {
-    cpu->A ^= 0xFF;
-    cpu->F = (cpu->F&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|Z80_HF|Z80_NF|(cpu->A&(Z80_YF|Z80_XF));
-}
-
-static void _z80_scf(z80* cpu) {
-    cpu->F = (cpu->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF))|Z80_CF|(cpu->A&(Z80_YF|Z80_XF));
-}
-
-static void _z80_ccf(z80* cpu) {
-    cpu->F = ((cpu->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF))|((cpu->F&Z80_CF)<<4)|(cpu->A&(Z80_YF|Z80_XF)))^Z80_CF;
 }
 
 /*-- ALU FUNCTIONS -----------------------------------------------------------*/
@@ -398,23 +360,367 @@ static void _z80_rra(z80* cpu) {
     cpu->A = r;
 }
 
+static uint8_t _z80_rlc(z80* cpu, uint8_t val) {
+    uint8_t r = val<<1 | val>>7;
+    cpu->F = cpu->szp[r] | (val>>7 & Z80_CF);
+    return r;
+}
+
+static uint8_t _z80_rrc(z80* cpu, uint8_t val) {
+    uint8_t r = val>>1 | val<<7;
+    cpu->F = cpu->szp[r] | (val & Z80_CF);
+    return r;
+}
+
+static uint8_t _z80_rl(z80* cpu, uint8_t val) {
+    uint8_t r = val<<1 | (cpu->F & Z80_CF);
+    cpu->F = (val>>7 & Z80_CF) | cpu->szp[r];
+    return r;
+}
+
+static uint8_t _z80_rr(z80* cpu, uint8_t val) {
+    uint8_t r = val>>1 | ((cpu->F & Z80_CF)<<7);
+    cpu->F = (val & Z80_CF) | cpu->szp[r];
+    return r;
+}
+
+static uint8_t _z80_sla(z80* cpu, uint8_t val) {
+    uint8_t r = val<<1;
+    cpu->F = (val>>7 & Z80_CF) | cpu->szp[r];
+    return r;
+}
+
+static uint8_t _z80_sra(z80* cpu, uint8_t val) {
+    uint8_t r = val>>1 | (val & 0x80);
+    cpu->F = (val & Z80_CF) | cpu->szp[r];
+    return r;
+}
+
+static uint8_t _z80_sll(z80* cpu, uint8_t val) {
+    // undocument! sll8 is identical with sla8 but inserts a 1 into the LSB
+    uint8_t r = (val<<1) | 1;
+    cpu->F = (val>>7 & Z80_CF) | cpu->szp[r];
+    return r;
+}
+
+static uint8_t _z80_srl(z80* cpu, uint8_t val) {
+    uint8_t r = val>>1;
+    cpu->F = (val & Z80_CF) | cpu->szp[r];
+    return r;
+}
+
+static uint8_t _z80_rot(z80* cpu, uint8_t val, uint8_t type) {
+    switch (type) {
+        case 0: return _z80_rlc(cpu, val);
+        case 1: return _z80_rrc(cpu, val);
+        case 2: return _z80_rl(cpu, val);
+        case 3: return _z80_rr(cpu, val);
+        case 4: return _z80_sla(cpu, val);
+        case 5: return _z80_sra(cpu, val);
+        case 6: return _z80_sll(cpu, val);
+        case 7: return _z80_srl(cpu, val);
+    }
+    return 0;   /* can't happen */
+}
+
+static void _z80_rrd(z80* cpu) {
+    cpu->WZ = cpu->HL;
+    uint8_t x = _READ(cpu->WZ++);
+    uint8_t tmp = cpu->A & 0xF;             // store A low nibble
+    cpu->A = (cpu->A & 0xF0) | (x & 0x0F);  // move (HL) low nibble to A low nibble
+    x = (x >> 4) | (tmp << 4);              // move A low nibble to (HL) high nibble, and (HL) high nibble to (HL) low nibble
+    _TICK(); _TICK(); _TICK(); _TICK();
+    _WRITE(cpu->HL, x);
+    cpu->F = cpu->szp[cpu->A] | (cpu->F & Z80_CF);
+}
+
+static void _z80_rld(z80* cpu) {
+    cpu->WZ = cpu->HL;
+    uint8_t x = _READ(cpu->WZ++);
+    uint8_t tmp = cpu->A & 0xF;             // store A low nibble
+    cpu->A = (cpu->A & 0xF0) | (x>>4);      // move (HL) high nibble into A low nibble
+    x = (x<<4) | tmp;                       // move (HL) low to high nibble, move A low nibble to (HL) low nibble
+    _TICK(); _TICK(); _TICK(); _TICK();
+    _WRITE(cpu->HL, x);
+    cpu->F = cpu->szp[cpu->A] | (cpu->F & Z80_CF);
+}
+
+/*-- BLOCK FUNCTIONS ---------------------------------------------------------*/
+static void _z80_ldi(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_ldd(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_ldir(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_lddr(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_cpi(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_cpd(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_cpir(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_cpdr(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_ini(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_ind(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_inir(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_indr(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_outi(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_outd(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_otir(z80* cpu) {
+    // FIXME
+}
+
+static void _z80_otdr(z80* cpu) {
+    // FIXME
+}
+
+/*-- MISC FUNCTIONS ----------------------------------------------------------*/
+static void _z80_halt(z80* cpu) {
+    // FIXME!
+}
+
+static void _z80_di(z80* cpu) {
+    // FIXME!
+}
+
+static void _z80_ei(z80* cpu) {
+    // FIXME!
+}
+
+static void _z80_im(z80* cpu, uint8_t y) {
+    /* mapping table: 0->0; 1->0; 2->1; 3->2; 4->0; 5->0; 6->1; 7->2 */
+    cpu->im = (y&3)==0 ? 0 : (y&3)-1;
+}
+
+static uint8_t _z80_sziff2(z80* cpu, uint8_t val) {
+    uint8_t f = _SZ(val);
+    f |= (val & (Z80_YF|Z80_XF));
+    if (cpu->iff2) f |= Z80_PF;
+    return f;
+}
+
+static void _z80_dda(z80* cpu) {
+    /* from MAME and http://www.z80.info/zip/z80-documented.pdf */
+    uint8_t val = cpu->A;
+    if (cpu->F & Z80_NF) {
+        if (((cpu->A & 0xF) > 0x9) || (cpu->F & Z80_HF)) {
+            val -= 0x06;
+        }
+        if ((cpu->A > 0x99) || (cpu->F & Z80_CF)) {
+            val -= 0x60;
+        }
+    }
+    else {
+        if (((cpu->A & 0xF) > 0x9) || (cpu->F & Z80_HF)) {
+            val += 0x06;
+        }
+        if ((cpu->A > 0x99) || (cpu->F & Z80_CF)) {
+            val += 0x60;
+        }
+    }
+    cpu->F &= Z80_CF|Z80_NF;
+    cpu->F |= (cpu->A > 0x99) ? Z80_CF:0;
+    cpu->F |= (cpu->A^val) & Z80_HF;
+    cpu->F |= cpu->szp[val];
+    cpu->A = val;
+}
+
+static void _z80_cpl(z80* cpu) {
+    cpu->A ^= 0xFF;
+    cpu->F = (cpu->F&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|Z80_HF|Z80_NF|(cpu->A&(Z80_YF|Z80_XF));
+}
+
+static void _z80_scf(z80* cpu) {
+    cpu->F = (cpu->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF))|Z80_CF|(cpu->A&(Z80_YF|Z80_XF));
+}
+
+static void _z80_ccf(z80* cpu) {
+    cpu->F = ((cpu->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF))|((cpu->F&Z80_CF)<<4)|(cpu->A&(Z80_YF|Z80_XF)))^Z80_CF;
+}
+
 /*-- INSTRUCTION DECODERS ----------------------------------------------------*/
-static void _z80_op(z80* cpu) {
 
+/* CB prefix instruction decoder */
+static void _z80_cb_op(z80* cpu, bool ext) {
     /*
-        Expects current opcode in DATA.
+        Split opcode into bit groups:
+        |xx|yyy|zzz|
+    */
+    const uint8_t op = cpu->opcode;
+    const uint8_t x = op>>6;
+    const uint8_t y = (op>>3) & 7;
+    const uint8_t z = op & 7;
+    if (x == 0) {
+        if (z == 6) {
+            /* ROT (HL); ROT (IX+d); ROT (IY+d) */
+            _WRITE(cpu->HL, _z80_rot(cpu, _READ(cpu->HL), y));
+            return;
+        }
+        else if (ext) {
+            /* undocumented: ROT (IX+d),r; ROT (IY+d),r */
+            // FIXME
+        }
+        else {
+            /* ROT r */
+            cpu->r8[z^1] = _z80_rot(cpu, cpu->r8[z^1], y);
+            return;
+        }
+    }
+    else if (x == 1) {
 
+    }
+    else if (x == 2) {
+
+    }
+    else if (x == 3) {
+
+    }
+    assert(false);
+}
+
+/* ED prefix instruction decoder */
+static void _z80_ed_op(z80* cpu, bool ext) {
+    /*
         Split opcode into bit groups:
         |xx|yyy|zzz|
         |xx|ppq|zzz|
     */
-    const uint8_t op = cpu->DATA;
+    const uint8_t op = cpu->opcode;
     const uint8_t x = op>>6;
     const uint8_t y = (op>>3) & 7;
     const uint8_t z = op & 7;
     const uint8_t p = y>>1;
     const uint8_t q = y & 1;
 
+    if (x == 2) {
+        /* block instructions */
+        switch (z) {
+            case 0:
+                switch (y) {
+                    case 4: _z80_ldi(cpu); return;
+                    case 5: _z80_ldd(cpu); return;
+                    case 6: _z80_ldir(cpu); return;
+                    case 7: _z80_lddr(cpu); return;
+                }
+                break;
+            case 1:
+                switch (y) {
+                    case 4: _z80_cpi(cpu); return;
+                    case 5: _z80_cpd(cpu); return;
+                    case 6: _z80_cpir(cpu); return;
+                    case 7: _z80_cpdr(cpu); return;
+                }
+                break;
+            case 2:
+                switch (y) {
+                    case 4: _z80_ini(cpu); return;
+                    case 5: _z80_ind(cpu); return;
+                    case 6: _z80_inir(cpu); return;
+                    case 7: _z80_indr(cpu); return;
+
+                }
+                break;
+            case 3:
+                switch (y) {
+                    case 4: _z80_outi(cpu); return;
+                    case 5: _z80_outd(cpu); return;
+                    case 6: _z80_otir(cpu); return;
+                    case 7: _z80_otdr(cpu); return;
+                }
+                break;
+        }
+    }
+    else if (x == 1) {
+        /* misc ED ops */
+        switch (z) {
+            case 0: /* IN r,(C) */ break;
+            case 1: /* OUT (C),r */ break;
+            case 2: /* SBC/ADC HL,rr */ break;
+            case 3: /* 16-bit immediate load/store */ break;
+            case 4: /* NEG */ _z80_neg8(cpu); return;
+            case 5: /* RETN; RETI */
+            case 6: /* IM m */ _z80_im(cpu, y); return;
+            case 7:
+                switch (y) {
+                    case 0: /* LD I,A */
+                        cpu->I=cpu->A; _TICK();
+                        return;
+                    case 1: /* LD R,A */
+                        cpu->R=cpu->A; _TICK();
+                        return;
+                    case 2: /* LD A,I */
+                        cpu->A=cpu->I; cpu->F=_z80_sziff2(cpu,cpu->I)|(cpu->F&Z80_CF);
+                        _TICK();
+                        return;
+                    case 3: /* LD A,R */
+                        /* FIXME: "If an interrupt occurs during execution of this instruction, the parity flag contains a 0." */
+                        cpu->A=cpu->R; cpu->F=_z80_sziff2(cpu,cpu->R)|(cpu->F&Z80_CF);
+                        _TICK();
+                        return;
+                    case 4: /* RRD */
+                        _z80_rrd(cpu);
+                        return;
+                    case 5: /* RLD */
+                        _z80_rld(cpu);
+                        return;
+                    case 6: /* NOP (ED) */ return;
+                    case 7: /* NOP (ED) */ return;
+                }
+                break;
+        }
+    }
+    assert(false);
+}
+
+/* main instruction decoder */
+static void _z80_op(z80* cpu) {
+    /*
+        Split opcode into bit groups:
+        |xx|yyy|zzz|
+        |xx|ppq|zzz|
+    */
+    const uint8_t op = cpu->opcode;
+    const uint8_t x = op>>6;
+    const uint8_t y = (op>>3) & 7;
+    const uint8_t z = op & 7;
+    const uint8_t p = y>>1;
+    const uint8_t q = y & 1;
     if (x == 1) {
         /* block 1: 8-bit loads and HALT */
         if (y == 6) {
@@ -472,31 +778,31 @@ static void _z80_op(z80* cpu) {
             case 2:
                 /* indirect loads */
                 switch (y) {
-                    /* LD (BC),A */
-                    case 0: cpu->WZ=cpu->BC; _WRITE(cpu->WZ++,cpu->A); cpu->W=cpu->A; return;
-                    /* LD A,(BC) */
-                    case 1: cpu->WZ=cpu->BC; cpu->A=_READ(cpu->WZ++); return;
-                    /* LD (DE),A */
-                    case 2: cpu->WZ=cpu->DE; _WRITE(cpu->WZ++,cpu->A); cpu->W=cpu->A; return;
-                    /* LD A,(DE) */
-                    case 3: cpu->WZ=cpu->DE; cpu->A=_READ(cpu->WZ++); return;
-                    /* LD (nn),HL|IX|IY */
-                    case 4:
+                    case 0: /* LD (BC),A */
+                        cpu->WZ=cpu->BC; _WRITE(cpu->WZ++,cpu->A); cpu->W=cpu->A;
+                        return;
+                    case 1: /* LD A,(BC) */
+                        cpu->WZ=cpu->BC; cpu->A=_READ(cpu->WZ++);
+                        return;
+                    case 2: /* LD (DE),A */
+                        cpu->WZ=cpu->DE; _WRITE(cpu->WZ++,cpu->A); cpu->W=cpu->A;
+                        return;
+                    case 3: /* LD A,(DE) */
+                        cpu->WZ=cpu->DE; cpu->A=_READ(cpu->WZ++);
+                        return;
+                    case 4: /* LD (nn),HL|IX|IY */
                         cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
                         _WRITE(cpu->WZ++,cpu->L); _WRITE(cpu->WZ,cpu->H);
                         return;
-                    /* LD HL|IX|IY,(nn) */
-                    case 5:
+                    case 5: /* LD HL|IX|IY,(nn) */
                         cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
                         cpu->L=_READ(cpu->WZ++); cpu->H=_READ(cpu->WZ);
                         return;
-                    /* LD (nn),A */
-                    case 6:
+                    case 6: /* LD (nn),A */
                         cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
                         _WRITE(cpu->WZ++,cpu->A); cpu->W=cpu->A;
                         return;
-                    /* LD A,(nn) */
-                    case 7:
+                    case 7: /* LD A,(nn) */
                         cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC++);
                         cpu->A=_READ(cpu->WZ++);
                         return;
@@ -554,9 +860,48 @@ static void _z80_op(z80* cpu) {
             case 0: /* RET cc */ break;
             case 1: /* POP + misc */ break;
             case 2: /* JP cc,nn */ break;
-            case 3: /* misc */ break;
+            case 3:
+                /* misc ops and CB prefix */
+                switch (y) {
+                    case 0: /* JP nn */
+                        cpu->Z=_READ(cpu->PC++); cpu->W=_READ(cpu->PC); cpu->PC=cpu->WZ;
+                        return;
+                    case 1: /* CB prefix */
+                        _z80_fetch(cpu);
+                        _z80_cb_op(cpu, false);
+                        return;
+                    case 2: /* OUT (n),A */ break;
+                    case 3: /* IN A,(n) */ break;
+                    case 4: /* EX (SP),HL; EX (SP),IX; EX (SP),IY */
+                    case 5: /* EX DE,HL */
+                        _SWAP16(cpu->DE, cpu->HL);
+                        return;
+                    case 6: /* DI */
+                        _z80_di(cpu);
+                        return;
+                    case 7: /* EI */
+                        _z80_ei(cpu);
+                        return;
+                }
+                break;
             case 4: /* CALL cc,nn */ break;
-            case 5: /* PUSH, CALL, extended */ break;
+            case 5:
+                /* PUSH, CALL, extended */
+                if (q == 0) {
+                    /* PUSH BC/DE/HL/IX/IY/AF */
+                    // FIXME
+                }
+                else switch (p) {
+                    case 0: /* CALL nn */ break;
+                    case 1: /* DD prefix */ break;
+                    case 2:
+                        /* ED prefix */
+                        _z80_fetch(cpu);
+                        _z80_ed_op(cpu, false);
+                        return;
+                    case 3: /* FD prefix */ break;
+                }
+                break;
             case 6:
                 /* ALU n */
                 {
