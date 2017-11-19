@@ -190,7 +190,7 @@ extern bool z80_all(z80* cpu, uint16_t pins);
     D7-D0   |    |   X|    |    |
     RFSH    |    |    |****|****|
 
-    Result is the fetched opcode in DATA member.
+    Result is the fetched opcode in z80.opcode and z80.DATA
 */
 static void _z80_fetch(z80* cpu) {
     /*--- T1 ---*/
@@ -211,7 +211,6 @@ static void _z80_fetch(z80* cpu) {
     _ON(Z80_MREQ);
     _TICK();
     _OFF(Z80_RFSH|Z80_MREQ);
-    /* opcode is in DATA member */
 }
 
 /*
@@ -233,7 +232,7 @@ static uint8_t _z80_read(z80* cpu, uint16_t addr) {
     _TICK();
     /*--- T2 ---*/
     _ON(Z80_MREQ|Z80_RD);
-    _TICK();
+    _TICK();    /* tick callback must read memory here */
     /*--- T3 ---*/
     _OFF(Z80_MREQ|Z80_RD);
     _TICK();
@@ -261,7 +260,7 @@ static void _z80_write(z80* cpu, uint16_t addr, uint8_t data) {
     /*--- T2 ---*/
     _ON(Z80_MREQ|Z80_WR);
     cpu->DATA = data;
-    _TICK();
+    _TICK();    /* tick callback must write memory here */
     /*--- T3 ---*/
     _OFF(Z80_MREQ|Z80_WR);
     _TICK();
@@ -512,7 +511,8 @@ static void _z80_otdr(z80* cpu) {
 
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
 static void _z80_halt(z80* cpu) {
-    // FIXME!
+    _ON(Z80_HALT);
+    cpu->PC--;
 }
 
 static void _z80_di(z80* cpu) {
