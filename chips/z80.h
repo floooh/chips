@@ -1073,7 +1073,14 @@ static void _z80_op(z80* cpu) {
                 break;
             case 3:
                 /* 16-bit INC,DEC */
-                break;
+                _TICKS(2);
+                if (q == 0) {
+                    cpu->r16[cpu->ri16sp[p]]++;
+                }
+                else {
+                    cpu->r16[cpu->ri16sp[p]]--;
+                }
+                return;
             case 4:
                 /* INC (HL); INC (IX+d); INC (IY+d); INC r */
                 if (y == 6) {
