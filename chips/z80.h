@@ -86,7 +86,6 @@ typedef struct _z80 {
     uint8_t IM;
     bool IFF1, IFF2;
 
-    uint8_t opcode;     /* last opcode read with _z80_fetch() */
     bool ei_pending;
     uint32_t ticks;
 
