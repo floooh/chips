@@ -13,7 +13,7 @@ import sys
 TabWidth = 2
 
 # the output path
-OutPath = '../chips/_z80_decode.inl'
+OutPath = '../chips/_z80_opcodes.h'
 
 # the target file handle
 Out = None

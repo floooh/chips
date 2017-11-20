@@ -694,7 +694,7 @@ static void _z80_ccf(z80* c) {
 }
 
 /*-- INSTRUCTION DECODER ----------------------------------------------------*/
-#include "_z80_decode.inl"
+#include "_z80_opcodes.h"
 
 /*-- PUBLIC FUNCTIONS --------------------------------------------------------*/
 void z80_init(z80* c, z80_desc* desc) {
