@@ -6,5 +6,6 @@ memptr\_eng.txt (on the hidden WZ register): http://zx.pk.ru/attachment.php?atta
 
 decoding.html: http://z80.info/decoding.htm
 
+z80-documented.pdf: http://z80.info/zip/z80-documented.pdf
 
 
