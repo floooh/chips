@@ -158,6 +158,9 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #ifdef _RD
 #undef _RD
 #endif
+#ifdef _RDS
+#undef _RDS
+#endif
 #ifdef _WR
 #undef _WR
 #endif
@@ -186,6 +189,7 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #define _T() { c->tick(c); c->ticks++; }
 #define _WR(a,r) _z80_write(c, a, r)
 #define _RD(a) _z80_read(c, a)
+#define _RDS(a) ((int8_t)_z80_read(c, a))
 #define _OUT(a,r) _z80_out(c, a, r)
 #define _IN(a) _z80_in(c, a)
 #define _SWP16(a,b) { uint16_t tmp=a; a=b; b=tmp; }
@@ -599,7 +603,7 @@ static void _z80_otdr(z80* c) {
 /*-- CONTROL FLOW FUNCTIONS --------------------------------------------------*/
 static void _z80_djnz(z80* c) {
     _T();
-    int8_t d = (int8_t) _RD(c->PC++);
+    int8_t d = _RDS(c->PC++);
     if (--c->B > 0) {
         c->WZ = c->PC = c->PC + d;
         _T(); _T(); _T(); _T(); _T();
@@ -607,14 +611,14 @@ static void _z80_djnz(z80* c) {
 }
 
 static void _z80_jr(z80* c) {
-    int8_t d = (int8_t) _RD(c->PC++);
+    int8_t d = _RDS(c->PC++);
     c->WZ = c->PC + d;
     c->PC = c->WZ;
     _T(); _T(); _T(); _T(); _T();
 }
 
 static void _z80_jr_cc(z80* c, bool cond) {
-    int8_t d = (int8_t) _RD(c->PC++);
+    int8_t d = _RDS(c->PC++);
     if (cond) {
         c->WZ = c->PC = c->PC + d;
         _T(); _T(); _T(); _T(); _T();
@@ -824,6 +828,7 @@ bool z80_all(z80* c, uint16_t pins) {
 #undef _OFF
 #undef _T
 #undef _RD
+#undef _RDS
 #undef _WR
 #undef _IN
 #undef _OUT

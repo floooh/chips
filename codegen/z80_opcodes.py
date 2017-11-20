@@ -85,7 +85,7 @@ def iHLcmt(ext) :
 def iHLsrc(ext) :
     if (ext) :
         # IX+d or IY+d
-        return 'uint16_t a=c->WZ=c->{}+_RD(c->PC++)'.format(r[6])
+        return 'uint16_t a=c->WZ=c->{}+_RDS(c->PC++)'.format(r[6])
     else :
         # HL
         return 'uint16_t a=c->{}'.format(r[6])
@@ -101,6 +101,15 @@ def iHLdsrc(ext) :
     else :
         # HL
         return 'uint16_t a=c->{}'.format(r[6])
+
+#-------------------------------------------------------------------------------
+# Return string with _T() ticks or empty string depending on 'ext'
+#
+def ext_ticks(ext, num):
+    if ext:
+        return '_T();'*num
+    else:
+        return ''
 
 #-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
@@ -133,11 +142,11 @@ def enc_op(op, ext, cc) :
             else:
                 # LD (HL),r; LD (IX+d),r; LD (IX+d),r
                 o.cmt = 'LD {},{}'.format(iHLcmt(ext), r2[z])
-                o.src = '{{ {}; _WR(a,c->{}); }};'.format(iHLsrc(ext), r2[z])
+                o.src = '{{ {};{}_WR(a,c->{}); }};'.format(iHLsrc(ext), ext_ticks(ext,5), r2[z])
         elif z == 6:
             # LD r,(HL); LD r,(IX+d); LD r,(IY+d)
             o.cmt = 'LD {},{}'.format(r2[y], iHLcmt(ext))
-            o.src = '{{ {}; c->{}=_RD(a); }};'.format(iHLsrc(ext), r2[y])
+            o.src = '{{ {};{}c->{}=_RD(a); }};'.format(iHLsrc(ext), ext_ticks(ext,5), r2[y])
         else:
             # LD r,s
             o.cmt = 'LD {},{}'.format(r[y], r[z])
@@ -148,7 +157,7 @@ def enc_op(op, ext, cc) :
         if z == 6:
             # ALU (HL); ALU (IX+d); ALU (IY+d)
             o.cmt = '{} {}'.format(alu_cmt[y], iHLcmt(ext))
-            o.src = '{{ {}; {}(c,_RD(a)); }};'.format(iHLsrc(ext), alu[y])
+            o.src = '{{ {};{}{}(c,_RD(a)); }};'.format(iHLsrc(ext), ext_ticks(ext,5), alu[y])
         else:
             # ALU r
             o.cmt = '{} {}'.format(alu_cmt[y], r[z])
@@ -204,17 +213,17 @@ def enc_op(op, ext, cc) :
             # 16-bit INC/DEC 
             if q == 0:
                 o.cmt = 'INC {}'.format(rp[p])
-                o.src = 'c->{}++;'.format(rp[p])
+                o.src = '_T();_T();c->{}++;'.format(rp[p])
             else:
                 o.cmt = 'DEC {}'.format(rp[p])
-                o.src = 'c->{}--;'.format(rp[p])
+                o.src = '_T();_T();c->{}--;'.format(rp[p])
         elif z == 4 or z == 5:
             cmt = 'INC' if z == 4 else 'DEC'
             fn = '_z80_inc' if z == 4 else '_z80_dec'
             if y == 6:
                 # INC/DEC (HL)/(IX+d)/(IY+d)
                 o.cmt = '{} {}'.format(cmt, iHLcmt(ext))
-                o.src = '{{ {}; _WR(a,{}(c,_RD(a))); }}'.format(iHLsrc(ext), fn)
+                o.src = '{{ {};{}_T();_WR(a,{}(c,_RD(a))); }}'.format(iHLsrc(ext), ext_ticks(ext,5), fn)
             else:
                 # INC/DEC r
                 o.cmt = '{} {}'.format(cmt, r[y])
@@ -223,7 +232,7 @@ def enc_op(op, ext, cc) :
             if y == 6:
                 # LD (HL),n; LD (IX+d),n; LD (IY+d),n
                 o.cmt = 'LD {},n'.format(iHLcmt(ext))
-                o.src = '{{ {}; _WR(a,_RD(c->PC++)); }}'.format(iHLsrc(ext))
+                o.src = '{{ {};{}_WR(a,_RD(c->PC++)); }}'.format(iHLsrc(ext), ext_ticks(ext,2))
             else:
                 # LD r,n
                 o.cmt = 'LD {},n'.format(r[y])
@@ -410,10 +419,10 @@ def enc_ed_op(op) :
         elif z == 7:
             # misc ops on I,R and A
             op_tbl = [
-                [ 'LD I,A', 'c->I=c->A;' ],
-                [ 'LD R,A', 'c->R=c->A;' ],
-                [ 'LD A,I', 'c->A=c->I; c->F=_z80_sziff2(c->I,c->IFF2)|(c->F&Z80_CF);' ],
-                [ 'LD A,R', 'c->A=c->R; c->F=_z80_sziff2(c->R,c->IFF2)|(c->F&Z80_CF);' ],
+                [ 'LD I,A', '_T(); c->I=c->A;' ],
+                [ 'LD R,A', '_T(); c->R=c->A;' ],
+                [ 'LD A,I', '_T(); c->A=c->I; c->F=_z80_sziff2(c,c->I)|(c->F&Z80_CF);' ],
+                [ 'LD A,R', '_T(); c->A=c->R; c->F=_z80_sziff2(c,c->R)|(c->F&Z80_CF);' ],
                 [ 'RRD',    '_z80_rrd(c);' ],
                 [ 'RLD',    '_z80_rld(c);' ],
                 [ 'NOP (ED)', ' ' ],
@@ -438,11 +447,11 @@ def enc_cb_op(op, ext, cc) :
         if z == 6:
             # ROT (HL); ROT (IX+d); ROT (IY+d)
             o.cmt = '{} {}'.format(rot_cmt[y],iHLcmt(ext))
-            o.src = '{{ {}; _WR(a,{}(c,_RD(a))); }}'.format(iHLdsrc(ext), rot[y])
+            o.src = '{{ {};{}_T();_WR(a,{}(c,_RD(a))); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), rot[y])
         elif ext:
             # undocumented: ROT (IX+d),(IY+d),r (also stores result in a register)
             o.cmt = '{} {},{}'.format(rot_cmt[y],iHLcmt(ext),r2[z])
-            o.src = '{{ {}; c->{}={}(c,_RD(a)); _WR(a,c->{}); }}'.format(iHLdsrc(ext), r2[z], rot[y], r2[z])
+            o.src = '{{ {};{}_T();c->{}={}(c,_RD(a));_WR(a,c->{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], rot[y], r2[z])
         else:
             # ROT r
             o.cmt = '{} {}'.format(rot_cmt[y],r2[z])
@@ -531,7 +540,7 @@ def write_begin_group(indent, ext_byte=None, read_offset=False) :
     # these have the d offset after the CB byte and before
     # the actual instruction byte
     if read_offset :
-        l('{}{{ const int8_t d = _RD(c->PC++);'.format(tab(indent)))
+        l('{}{{ const int8_t d = _RDS(c->PC++);'.format(tab(indent)))
     l('{}switch (_z80_fetch(c)) {{'.format(tab(indent)))
     indent += 1
     return indent
