@@ -152,14 +152,8 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #ifdef _OFF
 #undef _OFF
 #endif
-#ifdef _TICK
-#undef _TICK
-#endif
-#ifdef _TICKS
-#undef _TICKS
-#endif
-#ifdef _EXTICKS
-#undef _EXTICKS
+#ifdef _T
+#undef _T
 #endif
 #ifdef _RD
 #undef _RD
@@ -167,11 +161,20 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #ifdef _WR
 #undef _WR
 #endif
+#ifndef _IN
+#undef _IN
+#endif
+#ifndef _OUT
+#undef _OUT
+#endif
 #ifdef _SWP16
 #undef _SWP16
 #endif
 #ifndef _IMM16
 #undef _IMM16
+#endif
+#ifndef _INVALID_OPCODE
+#undef _INVALID_OPCODE
 #endif
 #define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
 #define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
@@ -183,8 +186,11 @@ extern bool z80_all(z80* cpu, uint16_t pins);
 #define _T() { c->tick(c); c->ticks++; }
 #define _WR(a,r) _z80_write(c, a, r)
 #define _RD(a) _z80_read(c, a)
+#define _OUT(a,r) _z80_out(c, a, r)
+#define _IN(a) _z80_in(c, a)
 #define _SWP16(a,b) { uint16_t tmp=a; a=b; b=tmp; }
 #define _IMM16() c->Z=_RD(c->PC++);c->W=_RD(c->PC++);
+#define _INVALID_OPCODE(n) CHIPS_ASSERT(false);
 
 /*
     instruction fetch machine cycle (M1)
@@ -208,7 +214,7 @@ static uint8_t _z80_fetch(z80* c) {
     _T();
     /*--- T2 ---*/
     _ON(Z80_MREQ|Z80_RD);
-    _T());
+    _T();
     uint8_t opcode = c->DATA;
     c->R = (c->R&0x80)|((c->R+1)&0x7F);   /* update R */
     /*--- T3 ---*/
@@ -276,6 +282,15 @@ static void _z80_write(z80* c, uint16_t addr, uint8_t data) {
     _T();
 }
 
+static uint8_t _z80_in(z80* c, uint16_t addr) {
+    // FIXME!
+    return 0;
+}
+
+static void _z80_out(z80* c, uint16_t addr, uint8_t data) {
+    // FIXME!
+}
+
 /*-- ALU FUNCTIONS -----------------------------------------------------------*/
 static void _z80_add(z80* c, uint8_t val) {
     int res = c->A + val;
@@ -325,7 +340,7 @@ static void _z80_xor(z80* c, uint8_t val) {
 static void _z80_neg(z80* c) {
     uint8_t val = c->A;
     c->A = 0;
-    _z80_sub8(c, val);
+    _z80_sub(c, val);
 }
 
 static uint8_t _z80_inc(z80* c, uint8_t val) {
@@ -432,11 +447,11 @@ static void _z80_rrd(z80* c) {
 static void _z80_rld(z80* c) {
     c->WZ = c->HL;
     uint8_t x = _RD(c->WZ++);
-    uint8_t tmp = cpu->A & 0xF;             // store A low nibble
-    cpu->A = (cpu->A & 0xF0) | (x>>4);      // move (HL) high nibble into A low nibble
+    uint8_t tmp = c->A & 0xF;             // store A low nibble
+    c->A = (c->A & 0xF0) | (x>>4);      // move (HL) high nibble into A low nibble
     x = (x<<4) | tmp;                       // move (HL) low to high nibble, move A low nibble to (HL) low nibble
     _T(); _T(); _T(); _T();
-    _WR(cpu->HL, x);
+    _WR(c->HL, x);
     c->F = c->szp[c->A] | (c->F & Z80_CF);
 }
 
@@ -459,8 +474,8 @@ static void _z80_ldi(z80* c) {
 }
 
 static void _z80_ldd(z80* c) {
-    uint8_t val = _RD(cpu->HL);
-    _WR(cpu->DE, val);
+    uint8_t val = _RD(c->HL);
+    _WR(c->DE, val);
     _T(); _T();
     val += c->A;
     uint8_t f = c->F & (Z80_SF|Z80_ZF|Z80_CF);
@@ -509,7 +524,7 @@ static void _z80_cpi(z80* c) {
     if (c->BC) {
         f |= Z80_VF;
     }
-    cpu->F = f;
+    c->F = f;
 }
 
 static void _z80_cpd(z80* c) {
@@ -591,15 +606,22 @@ static void _z80_djnz(z80* c) {
     }
 }
 
+static void _z80_jr(z80* c) {
+    int8_t d = (int8_t) _RD(c->PC++);
+    c->WZ = c->PC + d;
+    c->PC = c->WZ;
+    _T(); _T(); _T(); _T(); _T();
+}
+
 static void _z80_jr_cc(z80* c, bool cond) {
-    int8_t d = (int8_t) _READ(c->PC++);
+    int8_t d = (int8_t) _RD(c->PC++);
     if (cond) {
         c->WZ = c->PC = c->PC + d;
         _T(); _T(); _T(); _T(); _T();
     }
 }
 
-staticu void _z80_call(z80* c) {
+static void _z80_call(z80* c) {
     _IMM16();
     _T();
     _WR(--c->SP, (uint8_t)(c->PC>>8));
@@ -632,7 +654,44 @@ static void _z80_retcc(z80* c, bool cond) {
     }
 }
 
+/*-- BIT MANIPULATION FUNCTIONS ----------------------------------------------*/
+static void _z80_bit(z80* c, uint8_t val, uint8_t mask) {
+    uint8_t r = val & mask;
+    uint8_t f = Z80_HF | (r ? (r & Z80_SF) : (Z80_ZF|Z80_PF));
+    f |= (val & (Z80_YF|Z80_XF));
+    c->F = f | (c->F & Z80_CF);
+}
+
+static void _z80_ibit(z80* c, uint8_t val, uint8_t mask) {
+    // this is the version for the BIT instruction for (HL), (IX+d), (IY+d),
+    // these set the undocumented YF and XF flags from high byte of HL+1
+    // or IX/IY+d
+    uint8_t r = val & mask;
+    uint8_t f = Z80_HF | (r ? (r & Z80_SF) : (Z80_ZF|Z80_PF));
+    f |= (c->W & (Z80_YF|Z80_XF));
+    c->F = f | (c->F & Z80_CF);
+}
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
+static uint16_t _z80_add16(z80* c, uint16_t val0, uint16_t val1) {
+    // FIXME
+    return 0;
+}
+
+static uint16_t _z80_adc16(z80* c, uint16_t val0, uint16_t val1) {
+    // FIXME
+    return 0;
+}
+
+static uint16_t _z80_sbc16(z80* c, uint16_t val0, uint16_t val1) {
+    // FIXME
+    return 0;
+}
+
+static uint16_t _z80_exsp(z80* c, uint16_t val) {
+    // FIXME!
+    return 0;
+}
+
 static void _z80_halt(z80* c) {
     _ON(Z80_HALT);
     c->PC--;
@@ -647,6 +706,10 @@ static void _z80_ei(z80* c) {
     c->ei_pending = true;
 }
 
+static void _z80_reti(z80* c) {
+    // FIXME
+}
+
 static uint8_t _z80_sziff2(z80* c, uint8_t val) {
     uint8_t f = _SZ(val);
     f |= (val & (Z80_YF|Z80_XF));
@@ -654,7 +717,7 @@ static uint8_t _z80_sziff2(z80* c, uint8_t val) {
     return f;
 }
 
-static void _z80_dda(z80* c) {
+static void _z80_daa(z80* c) {
     /* from MAME and http://www.z80.info/zip/z80-documented.pdf */
     uint8_t val = c->A;
     if (c->F & Z80_NF) {
@@ -693,12 +756,18 @@ static void _z80_ccf(z80* c) {
     c->F = ((c->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF))|((c->F&Z80_CF)<<4)|(c->A&(Z80_YF|Z80_XF)))^Z80_CF;
 }
 
+static void _z80_rst(z80* c, uint8_t vec) {
+    _WR(--c->SP, (uint8_t)c->PC<<8);
+    _WR(--c->SP, (uint8_t)c->PC);
+    c->WZ = c->PC = (uint16_t) vec;
+}
+
 /*-- INSTRUCTION DECODER ----------------------------------------------------*/
 #include "_z80_opcodes.h"
 
 /*-- PUBLIC FUNCTIONS --------------------------------------------------------*/
 void z80_init(z80* c, z80_desc* desc) {
-    CHIPS_ASSERT(cpu);
+    CHIPS_ASSERT(c);
     CHIPS_ASSERT(desc);
     CHIPS_ASSERT(desc->tick_func);
     memset(c, 0, sizeof(z80));
@@ -720,11 +789,11 @@ void z80_init(z80* c, z80_desc* desc) {
 uint32_t z80_step(z80* c) {
     c->ticks = 0;
     if (c->ei_pending) {
-        c->IFF1 = cpu->iFF2 = true;
+        c->IFF1 = c->IFF2 = true;
         c->ei_pending = false;
     }
     _z80_op(c);
-    return cpu->ticks;
+    return c->ticks;
 }
 
 uint32_t z80_run(z80* c, uint32_t t) {
@@ -756,8 +825,11 @@ bool z80_all(z80* c, uint16_t pins) {
 #undef _T
 #undef _RD
 #undef _WR
+#undef _IN
+#undef _OUT
 #undef _SWP16
 #undef _IMM16
+#undef _INVALID_OPCODE
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
