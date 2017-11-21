@@ -208,7 +208,7 @@ extern bool z80_all(z80* cpu, uint16_t pins);
     D7-D0   |    |   X|    |    |
     RFSH    |    |    |****|****|
 
-    Result is the fetched opcode in z80.opcode and z80.DATA
+    returns the fetched opcode.
 */
 static uint8_t _z80_fetch(z80* c) {
     /*--- T1 ---*/
