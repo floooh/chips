@@ -198,7 +198,7 @@ void _z80_op(z80* c) {
     case 0xc2: _IMM16(); if (!(c->F&Z80_ZF)) { c->PC=c->WZ; } return; // JP NZ,nn
     case 0xc3: _IMM16(); c->PC=c->WZ; return; // JP nn
     case 0xc4: _z80_callcc(c, !(c->F&Z80_ZF)); return; // CALL NZ,nn
-    case 0xc5: _WR(--c->SP,(uint8_t)(c->BC>>8)); _WR(--c->SP,(uint8_t)c->BC); return; // PUSH BC
+    case 0xc5: _T();_WR(--c->SP,(uint8_t)(c->BC>>8)); _WR(--c->SP,(uint8_t)c->BC); return; // PUSH BC
     case 0xc6: _z80_add(c,_RD(c->PC++)); return; // ADD n
     case 0xc7: _z80_rst(c,0x0); return; // RST 0x0
     case 0xc8: _z80_retcc(c,(c->F&Z80_ZF)); return; // RET Z
@@ -474,7 +474,7 @@ void _z80_op(z80* c) {
     case 0xd2: _IMM16(); if (!(c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP NC,nn
     case 0xd3: _OUT((c->A<<8)|_RD(c->PC++), c->A); return; // OUT (n),A
     case 0xd4: _z80_callcc(c, !(c->F&Z80_CF)); return; // CALL NC,nn
-    case 0xd5: _WR(--c->SP,(uint8_t)(c->DE>>8)); _WR(--c->SP,(uint8_t)c->DE); return; // PUSH DE
+    case 0xd5: _T();_WR(--c->SP,(uint8_t)(c->DE>>8)); _WR(--c->SP,(uint8_t)c->DE); return; // PUSH DE
     case 0xd6: _z80_sub(c,_RD(c->PC++)); return; // SUB n
     case 0xd7: _z80_rst(c,0x10); return; // RST 0x10
     case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
@@ -681,7 +681,7 @@ void _z80_op(z80* c) {
         case 0xc2: _IMM16(); if (!(c->F&Z80_ZF)) { c->PC=c->WZ; } return; // JP NZ,nn
         case 0xc3: _IMM16(); c->PC=c->WZ; return; // JP nn
         case 0xc4: _z80_callcc(c, !(c->F&Z80_ZF)); return; // CALL NZ,nn
-        case 0xc5: _WR(--c->SP,(uint8_t)(c->BC>>8)); _WR(--c->SP,(uint8_t)c->BC); return; // PUSH BC
+        case 0xc5: _T();_WR(--c->SP,(uint8_t)(c->BC>>8)); _WR(--c->SP,(uint8_t)c->BC); return; // PUSH BC
         case 0xc6: _z80_add(c,_RD(c->PC++)); return; // ADD n
         case 0xc7: _z80_rst(c,0x0); return; // RST 0x0
         case 0xc8: _z80_retcc(c,(c->F&Z80_ZF)); return; // RET Z
@@ -959,7 +959,7 @@ void _z80_op(z80* c) {
         case 0xd2: _IMM16(); if (!(c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP NC,nn
         case 0xd3: _OUT((c->A<<8)|_RD(c->PC++), c->A); return; // OUT (n),A
         case 0xd4: _z80_callcc(c, !(c->F&Z80_CF)); return; // CALL NC,nn
-        case 0xd5: _WR(--c->SP,(uint8_t)(c->DE>>8)); _WR(--c->SP,(uint8_t)c->DE); return; // PUSH DE
+        case 0xd5: _T();_WR(--c->SP,(uint8_t)(c->DE>>8)); _WR(--c->SP,(uint8_t)c->DE); return; // PUSH DE
         case 0xd6: _z80_sub(c,_RD(c->PC++)); return; // SUB n
         case 0xd7: _z80_rst(c,0x10); return; // RST 0x10
         case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
@@ -974,7 +974,7 @@ void _z80_op(z80* c) {
         case 0xe2: _IMM16(); if (!(c->F&Z80_PF)) { c->PC=c->WZ; } return; // JP PO,nn
         case 0xe3: c->IX=_z80_exsp(c,c->IX); return; // EX (SP),IX
         case 0xe4: _z80_callcc(c, !(c->F&Z80_PF)); return; // CALL PO,nn
-        case 0xe5: _WR(--c->SP,(uint8_t)(c->IX>>8)); _WR(--c->SP,(uint8_t)c->IX); return; // PUSH IX
+        case 0xe5: _T();_WR(--c->SP,(uint8_t)(c->IX>>8)); _WR(--c->SP,(uint8_t)c->IX); return; // PUSH IX
         case 0xe6: _z80_and(c,_RD(c->PC++)); return; // AND n
         case 0xe7: _z80_rst(c,0x20); return; // RST 0x20
         case 0xe8: _z80_retcc(c,(c->F&Z80_PF)); return; // RET PE
@@ -989,7 +989,7 @@ void _z80_op(z80* c) {
         case 0xf2: _IMM16(); if (!(c->F&Z80_SF)) { c->PC=c->WZ; } return; // JP P,nn
         case 0xf3: _z80_di(c); return; // DI
         case 0xf4: _z80_callcc(c, !(c->F&Z80_SF)); return; // CALL P,nn
-        case 0xf5: _WR(--c->SP,(uint8_t)(c->AF>>8)); _WR(--c->SP,(uint8_t)c->AF); return; // PUSH AF
+        case 0xf5: _T();_WR(--c->SP,(uint8_t)(c->AF>>8)); _WR(--c->SP,(uint8_t)c->AF); return; // PUSH AF
         case 0xf6: _z80_or(c,_RD(c->PC++)); return; // OR n
         case 0xf7: _z80_rst(c,0x30); return; // RST 0x30
         case 0xf8: _z80_retcc(c,(c->F&Z80_SF)); return; // RET M
@@ -1009,7 +1009,7 @@ void _z80_op(z80* c) {
     case 0xe2: _IMM16(); if (!(c->F&Z80_PF)) { c->PC=c->WZ; } return; // JP PO,nn
     case 0xe3: c->HL=_z80_exsp(c,c->HL); return; // EX (SP),HL
     case 0xe4: _z80_callcc(c, !(c->F&Z80_PF)); return; // CALL PO,nn
-    case 0xe5: _WR(--c->SP,(uint8_t)(c->HL>>8)); _WR(--c->SP,(uint8_t)c->HL); return; // PUSH HL
+    case 0xe5: _T();_WR(--c->SP,(uint8_t)(c->HL>>8)); _WR(--c->SP,(uint8_t)c->HL); return; // PUSH HL
     case 0xe6: _z80_and(c,_RD(c->PC++)); return; // AND n
     case 0xe7: _z80_rst(c,0x20); return; // RST 0x20
     case 0xe8: _z80_retcc(c,(c->F&Z80_PF)); return; // RET PE
@@ -1102,7 +1102,7 @@ void _z80_op(z80* c) {
     case 0xf2: _IMM16(); if (!(c->F&Z80_SF)) { c->PC=c->WZ; } return; // JP P,nn
     case 0xf3: _z80_di(c); return; // DI
     case 0xf4: _z80_callcc(c, !(c->F&Z80_SF)); return; // CALL P,nn
-    case 0xf5: _WR(--c->SP,(uint8_t)(c->AF>>8)); _WR(--c->SP,(uint8_t)c->AF); return; // PUSH AF
+    case 0xf5: _T();_WR(--c->SP,(uint8_t)(c->AF>>8)); _WR(--c->SP,(uint8_t)c->AF); return; // PUSH AF
     case 0xf6: _z80_or(c,_RD(c->PC++)); return; // OR n
     case 0xf7: _z80_rst(c,0x30); return; // RST 0x30
     case 0xf8: _z80_retcc(c,(c->F&Z80_SF)); return; // RET M
@@ -1309,7 +1309,7 @@ void _z80_op(z80* c) {
         case 0xc2: _IMM16(); if (!(c->F&Z80_ZF)) { c->PC=c->WZ; } return; // JP NZ,nn
         case 0xc3: _IMM16(); c->PC=c->WZ; return; // JP nn
         case 0xc4: _z80_callcc(c, !(c->F&Z80_ZF)); return; // CALL NZ,nn
-        case 0xc5: _WR(--c->SP,(uint8_t)(c->BC>>8)); _WR(--c->SP,(uint8_t)c->BC); return; // PUSH BC
+        case 0xc5: _T();_WR(--c->SP,(uint8_t)(c->BC>>8)); _WR(--c->SP,(uint8_t)c->BC); return; // PUSH BC
         case 0xc6: _z80_add(c,_RD(c->PC++)); return; // ADD n
         case 0xc7: _z80_rst(c,0x0); return; // RST 0x0
         case 0xc8: _z80_retcc(c,(c->F&Z80_ZF)); return; // RET Z
@@ -1587,7 +1587,7 @@ void _z80_op(z80* c) {
         case 0xd2: _IMM16(); if (!(c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP NC,nn
         case 0xd3: _OUT((c->A<<8)|_RD(c->PC++), c->A); return; // OUT (n),A
         case 0xd4: _z80_callcc(c, !(c->F&Z80_CF)); return; // CALL NC,nn
-        case 0xd5: _WR(--c->SP,(uint8_t)(c->DE>>8)); _WR(--c->SP,(uint8_t)c->DE); return; // PUSH DE
+        case 0xd5: _T();_WR(--c->SP,(uint8_t)(c->DE>>8)); _WR(--c->SP,(uint8_t)c->DE); return; // PUSH DE
         case 0xd6: _z80_sub(c,_RD(c->PC++)); return; // SUB n
         case 0xd7: _z80_rst(c,0x10); return; // RST 0x10
         case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
@@ -1602,7 +1602,7 @@ void _z80_op(z80* c) {
         case 0xe2: _IMM16(); if (!(c->F&Z80_PF)) { c->PC=c->WZ; } return; // JP PO,nn
         case 0xe3: c->IY=_z80_exsp(c,c->IY); return; // EX (SP),IY
         case 0xe4: _z80_callcc(c, !(c->F&Z80_PF)); return; // CALL PO,nn
-        case 0xe5: _WR(--c->SP,(uint8_t)(c->IY>>8)); _WR(--c->SP,(uint8_t)c->IY); return; // PUSH IY
+        case 0xe5: _T();_WR(--c->SP,(uint8_t)(c->IY>>8)); _WR(--c->SP,(uint8_t)c->IY); return; // PUSH IY
         case 0xe6: _z80_and(c,_RD(c->PC++)); return; // AND n
         case 0xe7: _z80_rst(c,0x20); return; // RST 0x20
         case 0xe8: _z80_retcc(c,(c->F&Z80_PF)); return; // RET PE
@@ -1617,7 +1617,7 @@ void _z80_op(z80* c) {
         case 0xf2: _IMM16(); if (!(c->F&Z80_SF)) { c->PC=c->WZ; } return; // JP P,nn
         case 0xf3: _z80_di(c); return; // DI
         case 0xf4: _z80_callcc(c, !(c->F&Z80_SF)); return; // CALL P,nn
-        case 0xf5: _WR(--c->SP,(uint8_t)(c->AF>>8)); _WR(--c->SP,(uint8_t)c->AF); return; // PUSH AF
+        case 0xf5: _T();_WR(--c->SP,(uint8_t)(c->AF>>8)); _WR(--c->SP,(uint8_t)c->AF); return; // PUSH AF
         case 0xf6: _z80_or(c,_RD(c->PC++)); return; // OR n
         case 0xf7: _z80_rst(c,0x30); return; // RST 0x30
         case 0xf8: _z80_retcc(c,(c->F&Z80_SF)); return; // RET M

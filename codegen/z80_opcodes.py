@@ -302,7 +302,7 @@ def enc_op(op, ext, cc) :
             if q == 0:
                 # PUSH BC,DE,HL,IX,IY,AF
                 o.cmt = 'PUSH {}'.format(rp2[p])
-                o.src = '_WR(--c->SP,(uint8_t)(c->{}>>8)); _WR(--c->SP,(uint8_t)c->{});'.format(rp2[p], rp2[p])
+                o.src = '_T();_WR(--c->SP,(uint8_t)(c->{}>>8)); _WR(--c->SP,(uint8_t)c->{});'.format(rp2[p], rp2[p])
             else:
                 op_tbl = [
                     [ 'CALL nn', '_z80_call(c);' ],
