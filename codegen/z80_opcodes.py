@@ -283,11 +283,8 @@ def enc_op(op, ext, cc) :
                 [ 'JP nn', '_IMM16(); c->PC=c->WZ;' ],
                 [ None, None ], # CB prefix instructions
                 [ 'OUT (n),A', '_OUT((c->A<<8)|_RD(c->PC++), c->A);' ],
-                [ 'IN A,(n)', 'c->A=_IN((c->A<<8)|_RD(c->PC++));' ],
-                [ 
-                    'EX (SP),{}'.format(rp[2]), 
-                    'c->{}=_z80_exsp(c,c->{});'.format(rp[2], rp[2])
-                ],
+                [ 'IN A,(n)', 'c->WZ=((c->A<<8)|_RD(c->PC++));c->A=_IN(c->WZ++);' ],
+                [ 'EX (SP),{}'.format(rp[2]), 'c->{}=_z80_exsp(c,c->{});'.format(rp[2], rp[2]) ],
                 [ 'EX DE,HL', '_SWP16(c->DE,c->HL);' ],
                 [ 'DI', '_z80_di(c);' ],
                 [ 'EI', '_z80_ei(c);' ]
@@ -375,10 +372,10 @@ def enc_ed_op(op) :
             if y == 6:
                 # undocumented special case 'IN F,(C)', only alter flags, don't store result
                 o.cmt = 'IN (C)';
-                o.src = 'c->F=c->szp[_IN(c->BC)]|(c->F&Z80_CF);'
+                o.src = 'c->WZ=c->BC;c->F=c->szp[_IN(c->WZ++)]|(c->F&Z80_CF);'
             else:
                 o.cmt = 'IN {},(C)'.format(r[y])
-                o.src = 'c->{}=_IN(c->BC); c->F=c->szp[c->{}]|(c->F&Z80_CF);'.format(r[y],r[y])
+                o.src = 'c->WZ=c->BC;c->{}=_IN(c->WZ++);c->F=c->szp[c->{}]|(c->F&Z80_CF);'.format(r[y],r[y])
         elif z == 1:
             # OUT (C),r
             if y == 6:

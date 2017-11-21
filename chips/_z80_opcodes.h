@@ -480,7 +480,7 @@ void _z80_op(z80* c) {
     case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
     case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_); return; // EXX
     case 0xda: _IMM16(); if ((c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP C,nn
-    case 0xdb: c->A=_IN((c->A<<8)|_RD(c->PC++)); return; // IN A,(n)
+    case 0xdb: c->WZ=((c->A<<8)|_RD(c->PC++));c->A=_IN(c->WZ++); return; // IN A,(n)
     case 0xdc: _z80_callcc(c, (c->F&Z80_CF)); return; // CALL C,nn
     case 0xdd:
       switch (_z80_fetch(c)) {
@@ -965,7 +965,7 @@ void _z80_op(z80* c) {
         case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
         case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_); return; // EXX
         case 0xda: _IMM16(); if ((c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP C,nn
-        case 0xdb: c->A=_IN((c->A<<8)|_RD(c->PC++)); return; // IN A,(n)
+        case 0xdb: c->WZ=((c->A<<8)|_RD(c->PC++));c->A=_IN(c->WZ++); return; // IN A,(n)
         case 0xdc: _z80_callcc(c, (c->F&Z80_CF)); return; // CALL C,nn
         case 0xde: _z80_sbc(c,_RD(c->PC++)); return; // SBC n
         case 0xdf: _z80_rst(c,0x18); return; // RST 0x18
@@ -1019,14 +1019,14 @@ void _z80_op(z80* c) {
     case 0xec: _z80_callcc(c, (c->F&Z80_PF)); return; // CALL PE,nn
     case 0xed:
       switch (_z80_fetch(c)) {
-        case 0x40: c->B=_IN(c->BC); c->F=c->szp[c->B]|(c->F&Z80_CF); return; // IN B,(C)
+        case 0x40: c->WZ=c->BC;c->B=_IN(c->WZ++);c->F=c->szp[c->B]|(c->F&Z80_CF); return; // IN B,(C)
         case 0x41: _OUT(c->BC,c->B); return; // OUT (C),B
         case 0x42: c->HL=_z80_sbc16(c,c->HL,c->BC); return; // SBC HL,BC
         case 0x43: _IMM16();_WR(c->WZ++,(uint8_t)c->BC);_WR(c->WZ,(uint8_t)(c->BC>>8)); return; // LD (nn),BC
         case 0x44: _z80_neg(c); return; // NEG
         case 0x46: c->IM=0; return; // IM 0
         case 0x47: _T(); c->I=c->A; return; // LD I,A
-        case 0x48: c->C=_IN(c->BC); c->F=c->szp[c->C]|(c->F&Z80_CF); return; // IN C,(C)
+        case 0x48: c->WZ=c->BC;c->C=_IN(c->WZ++);c->F=c->szp[c->C]|(c->F&Z80_CF); return; // IN C,(C)
         case 0x49: _OUT(c->BC,c->C); return; // OUT (C),C
         case 0x4a: c->HL=_z80_adc16(c,c->HL,c->BC); return; // ADC HL,BC
         case 0x4b: {_IMM16();uint8_t l=_RD(c->WZ++);uint8_t h=_RD(c->WZ);c->BC=(h<<8)|l;} return; // LD BC,(nn)
@@ -1034,42 +1034,42 @@ void _z80_op(z80* c) {
         case 0x4d: _z80_reti(c); return; // RETI
         case 0x4e: c->IM=0; return; // IM 0
         case 0x4f: _T(); c->R=c->A; return; // LD R,A
-        case 0x50: c->D=_IN(c->BC); c->F=c->szp[c->D]|(c->F&Z80_CF); return; // IN D,(C)
+        case 0x50: c->WZ=c->BC;c->D=_IN(c->WZ++);c->F=c->szp[c->D]|(c->F&Z80_CF); return; // IN D,(C)
         case 0x51: _OUT(c->BC,c->D); return; // OUT (C),D
         case 0x52: c->HL=_z80_sbc16(c,c->HL,c->DE); return; // SBC HL,DE
         case 0x53: _IMM16();_WR(c->WZ++,(uint8_t)c->DE);_WR(c->WZ,(uint8_t)(c->DE>>8)); return; // LD (nn),DE
         case 0x54: _z80_neg(c); return; // NEG
         case 0x56: c->IM=1; return; // IM 1
         case 0x57: _T(); c->A=c->I; c->F=_z80_sziff2(c,c->I)|(c->F&Z80_CF); return; // LD A,I
-        case 0x58: c->E=_IN(c->BC); c->F=c->szp[c->E]|(c->F&Z80_CF); return; // IN E,(C)
+        case 0x58: c->WZ=c->BC;c->E=_IN(c->WZ++);c->F=c->szp[c->E]|(c->F&Z80_CF); return; // IN E,(C)
         case 0x59: _OUT(c->BC,c->E); return; // OUT (C),E
         case 0x5a: c->HL=_z80_adc16(c,c->HL,c->DE); return; // ADC HL,DE
         case 0x5b: {_IMM16();uint8_t l=_RD(c->WZ++);uint8_t h=_RD(c->WZ);c->DE=(h<<8)|l;} return; // LD DE,(nn)
         case 0x5c: _z80_neg(c); return; // NEG
         case 0x5e: c->IM=2; return; // IM 2
         case 0x5f: _T(); c->A=c->R; c->F=_z80_sziff2(c,c->R)|(c->F&Z80_CF); return; // LD A,R
-        case 0x60: c->H=_IN(c->BC); c->F=c->szp[c->H]|(c->F&Z80_CF); return; // IN H,(C)
+        case 0x60: c->WZ=c->BC;c->H=_IN(c->WZ++);c->F=c->szp[c->H]|(c->F&Z80_CF); return; // IN H,(C)
         case 0x61: _OUT(c->BC,c->H); return; // OUT (C),H
         case 0x62: c->HL=_z80_sbc16(c,c->HL,c->HL); return; // SBC HL,HL
         case 0x63: _IMM16();_WR(c->WZ++,(uint8_t)c->HL);_WR(c->WZ,(uint8_t)(c->HL>>8)); return; // LD (nn),HL
         case 0x64: _z80_neg(c); return; // NEG
         case 0x66: c->IM=0; return; // IM 0
         case 0x67: _z80_rrd(c); return; // RRD
-        case 0x68: c->L=_IN(c->BC); c->F=c->szp[c->L]|(c->F&Z80_CF); return; // IN L,(C)
+        case 0x68: c->WZ=c->BC;c->L=_IN(c->WZ++);c->F=c->szp[c->L]|(c->F&Z80_CF); return; // IN L,(C)
         case 0x69: _OUT(c->BC,c->L); return; // OUT (C),L
         case 0x6a: c->HL=_z80_adc16(c,c->HL,c->HL); return; // ADC HL,HL
         case 0x6b: {_IMM16();uint8_t l=_RD(c->WZ++);uint8_t h=_RD(c->WZ);c->HL=(h<<8)|l;} return; // LD HL,(nn)
         case 0x6c: _z80_neg(c); return; // NEG
         case 0x6e: c->IM=0; return; // IM 0
         case 0x6f: _z80_rld(c); return; // RLD
-        case 0x70: c->F=c->szp[_IN(c->BC)]|(c->F&Z80_CF); return; // IN (C)
+        case 0x70: c->WZ=c->BC;c->F=c->szp[_IN(c->WZ++)]|(c->F&Z80_CF); return; // IN (C)
         case 0x71: _OUT(c->BC,0); return; // None
         case 0x72: c->HL=_z80_sbc16(c,c->HL,c->SP); return; // SBC HL,SP
         case 0x73: _IMM16();_WR(c->WZ++,(uint8_t)c->SP);_WR(c->WZ,(uint8_t)(c->SP>>8)); return; // LD (nn),SP
         case 0x74: _z80_neg(c); return; // NEG
         case 0x76: c->IM=1; return; // IM 1
         case 0x77:   return; // NOP (ED)
-        case 0x78: c->A=_IN(c->BC); c->F=c->szp[c->A]|(c->F&Z80_CF); return; // IN A,(C)
+        case 0x78: c->WZ=c->BC;c->A=_IN(c->WZ++);c->F=c->szp[c->A]|(c->F&Z80_CF); return; // IN A,(C)
         case 0x79: _OUT(c->BC,c->A); return; // OUT (C),A
         case 0x7a: c->HL=_z80_adc16(c,c->HL,c->SP); return; // ADC HL,SP
         case 0x7b: {_IMM16();uint8_t l=_RD(c->WZ++);uint8_t h=_RD(c->WZ);c->SP=(h<<8)|l;} return; // LD SP,(nn)
@@ -1593,7 +1593,7 @@ void _z80_op(z80* c) {
         case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
         case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_); return; // EXX
         case 0xda: _IMM16(); if ((c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP C,nn
-        case 0xdb: c->A=_IN((c->A<<8)|_RD(c->PC++)); return; // IN A,(n)
+        case 0xdb: c->WZ=((c->A<<8)|_RD(c->PC++));c->A=_IN(c->WZ++); return; // IN A,(n)
         case 0xdc: _z80_callcc(c, (c->F&Z80_CF)); return; // CALL C,nn
         case 0xde: _z80_sbc(c,_RD(c->PC++)); return; // SBC n
         case 0xdf: _z80_rst(c,0x18); return; // RST 0x18

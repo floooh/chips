@@ -233,14 +233,14 @@ static uint8_t _z80_fetch(z80* c) {
 }
 
 /*
-    a memory read cycle, place address in ADDR, read byte into DATA
+    a memory read machine cycle, place address in ADDR, read byte into DATA
 
               T1   T2   T3
     --------+----+----+----+
     CLK     |--**|--**|--**|
     A15-A0  |   MEM ADDR   |
-    MREQ    |   *|****|*** |
-    RD      |   *|****|*** |
+    MREQ    |   *|****|**  |
+    RD      |   *|****|**  |
     WR      |    |    |    |
     D7-D0   |    |    | X  |
     WAIT    |    | -- |    |
@@ -259,16 +259,16 @@ static uint8_t _z80_read(z80* c, uint16_t addr) {
 }
 
 /*
-    a memory write cycle, place 16-bit address into ADDR, place 8-bit
+    a memory write machine cycle, place 16-bit address into ADDR, place 8-bit
     value into DATA, and then memory[ADDR] = DATA
 
               T1   T2   T3
     --------+----+----+----+
     CLK     |--**|--**|--**|
     A15-A0  |   MEM ADDR   |
-    MREQ    |   *|****|*** |
+    MREQ    |   *|****|**  |
     RD      |    |    |    |
-    WR      |    |  **|*** |
+    WR      |    |  **|**  |
     D7-D0   |   X|XXXX|XXXX|
     WAIT    |    | -- |    |
 */
@@ -285,13 +285,66 @@ static void _z80_write(z80* c, uint16_t addr, uint8_t data) {
     _T();
 }
 
+/*
+    an IO input machine cycle, place device address in ADDR, read byte into DATA
+
+              T1   T2   TW   T3
+    --------+----+----+----+----+
+    CLK     |--**|--**|--**|--**|
+    A15-A0  |     PORT ADDR     |
+    IORQ    |    |****|****|**  |
+    RD      |    |****|****|**  |
+    WR      |    |    |    |    |
+    D7-D0   |    |    |    | X  |
+    WAIT    |    |    | -- |    |
+
+    NOTE: the IORQ|RD pins will already be switched off at the beginning
+    of TW, so that IO devices are not don't need to do double work.
+*/
 static uint8_t _z80_in(z80* c, uint16_t addr) {
-    // FIXME!
-    return 0;
+    /*--- T1 ---*/
+    c->ADDR = addr;
+    _T();
+    /*--- T2 ---*/
+    _ON(Z80_IORQ|Z80_RD);
+    _T();
+    /*--- TW ---*/
+    _OFF(Z80_IORQ|Z80_RD);
+    _T();
+    /*--- T3 ---*/
+    _T();
+    return c->DATA;
 }
 
+/*
+    an IO output machine cycle, place device address in ADDR and data in DATA
+
+              T1   T2   TW   T3
+    --------+----+----+----+----+
+    CLK     |--**|--**|--**|--**|
+    A15-A0  |     PORT ADDR     |
+    IORQ    |    |****|****|**  |
+    RD      |    |    |    |    |
+    WR      |    |****|****|**  |
+    D7-D0   |  XX|XXXX|XXXX|XXXX|
+    WAIT    |    |    | -- |    |
+
+    NOTE: the IORQ|WR pins will already be switched off at the beginning
+    of TW, so that IO devices are not don't need to do double work.
+*/
 static void _z80_out(z80* c, uint16_t addr, uint8_t data) {
-    // FIXME!
+    /*--- T1 ---*/
+    c->ADDR = addr;
+    _T();
+    /*--- T2 ---*/
+    _ON(Z80_IORQ|Z80_WR);
+    c->DATA = data;
+    _T();
+    /*--- TW ---*/
+    _OFF(Z80_IORQ|Z80_WR);
+    _T();
+    /*--- T3 ---*/
+    _T();
 }
 
 /*-- ALU FUNCTIONS -----------------------------------------------------------*/
