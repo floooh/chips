@@ -267,7 +267,7 @@ def enc_op(op, ext, cc) :
                 # misc ops
                 op_tbl = [
                     [ 'RET', '_z80_ret(c);' ],
-                    [ 'EXX', '_SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_);_SWP16(c->WZ,c->WZ_);' ],
+                    [ 'EXX', '_SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_);' ],
                     [ 'JP {}'.format(rp[2]), 'c->PC=c->{};'.format(rp[2]) ],
                     [ 'LD SP,{}'.format(rp[2]), '_T();_T();c->SP=c->{};'.format(rp[2]) ]
                 ]

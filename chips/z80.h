@@ -77,16 +77,26 @@ typedef struct _z80 {
     union { uint16_t IY; struct { uint8_t IYL, IYH; }; };
     union { uint16_t WZ; struct { uint8_t Z, W; }; };
     union { uint16_t IR; struct { uint8_t R, I; }; };
-    uint16_t BC_, DE_, HL_, AF_, WZ_;
+    /* alternate register set (there is no WZ' register!) */
+    uint16_t BC_, DE_, HL_, AF_;
+    /* program counter */
     uint16_t PC;
+    /* stack pointer */
     uint16_t SP;
-    uint16_t CTRL;      /* control pins */
-    uint16_t ADDR;      /* address pins */
+    /* control pins (see z80_pins enum) */
+    uint16_t CTRL;
+    /* 16-bit address bus */
+    uint16_t ADDR;
+    /* 8-bit data bus */
     uint8_t DATA;       /* data pins */
+    /* interrupt mode (0, 1 or 2) */
     uint8_t IM;
+    /* interrupt enable bits */
     bool IFF1, IFF2;
 
+    /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
+    /* number of executed ticks in current instruction */
     uint32_t ticks;
 
     /* tick function and context data */
@@ -108,14 +118,6 @@ extern void z80_init(z80* cpu, z80_desc* desc);
 extern uint32_t z80_step(z80* cpu);
 /* execute instructions for up to 'ticks' time cycles, return executed time cycles */
 extern uint32_t z80_run(z80* cpu, uint32_t ticks);
-/* set one or more pins to active state */
-extern void z80_on(z80* cpu, uint16_t pins);
-/* set one or more pins to cleared state */
-extern void z80_off(z80* cpu, uint16_t pins);
-/* test if any control pin is active */
-extern bool z80_any(z80* cpu, uint16_t pins);
-/* test if all control pins are active */
-extern bool z80_all(z80* cpu, uint16_t pins);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -207,8 +209,6 @@ extern bool z80_all(z80* cpu, uint16_t pins);
     M1      |****|****|    |    |
     D7-D0   |    |   X|    |    |
     RFSH    |    |    |****|****|
-
-    returns the fetched opcode.
 */
 static uint8_t _z80_fetch(z80* c) {
     /*--- T1 ---*/
@@ -218,8 +218,8 @@ static uint8_t _z80_fetch(z80* c) {
     /*--- T2 ---*/
     _ON(Z80_MREQ|Z80_RD);
     _T();
-    uint8_t opcode = c->DATA;
-    c->R = (c->R&0x80)|((c->R+1)&0x7F);   /* update R */
+    const uint8_t opcode = c->DATA;
+    c->R = (c->R&0x80)|((c->R+1)&0x7F);
     /*--- T3 ---*/
     _OFF(Z80_M1|Z80_MREQ|Z80_RD);
     _ON(Z80_RFSH);
@@ -251,7 +251,7 @@ static uint8_t _z80_read(z80* c, uint16_t addr) {
     _T();
     /*--- T2 ---*/
     _ON(Z80_MREQ|Z80_RD);
-    _T();    /* tick callback must read memory here */
+    _T();
     /*--- T3 ---*/
     _OFF(Z80_MREQ|Z80_RD);
     _T();
@@ -279,7 +279,7 @@ static void _z80_write(z80* c, uint16_t addr, uint8_t data) {
     /*--- T2 ---*/
     _ON(Z80_MREQ|Z80_WR);
     c->DATA = data;
-    _T();    /* tick callback must write memory here */
+    _T();
     /*--- T3 ---*/
     _OFF(Z80_MREQ|Z80_WR);
     _T();
@@ -439,9 +439,9 @@ static uint8_t _z80_srl(z80* c, uint8_t val) {
 static void _z80_rrd(z80* c) {
     c->WZ = c->HL;
     uint8_t x = _RD(c->WZ++);
-    uint8_t tmp = c->A & 0xF;           // store A low nibble
-    c->A = (c->A & 0xF0) | (x & 0x0F);  // move (HL) low nibble to A low nibble
-    x = (x >> 4) | (tmp << 4);          // move A low nibble to (HL) high nibble, and (HL) high nibble to (HL) low nibble
+    uint8_t tmp = c->A & 0xF;
+    c->A = (c->A & 0xF0) | (x & 0x0F);
+    x = (x >> 4) | (tmp << 4);
     _T(); _T(); _T(); _T();
     _WR(c->HL, x);
     c->F = c->szp[c->A] | (c->F & Z80_CF);
@@ -450,9 +450,9 @@ static void _z80_rrd(z80* c) {
 static void _z80_rld(z80* c) {
     c->WZ = c->HL;
     uint8_t x = _RD(c->WZ++);
-    uint8_t tmp = c->A & 0xF;             // store A low nibble
-    c->A = (c->A & 0xF0) | (x>>4);      // move (HL) high nibble into A low nibble
-    x = (x<<4) | tmp;                       // move (HL) low to high nibble, move A low nibble to (HL) low nibble
+    uint8_t tmp = c->A & 0xF;
+    c->A = (c->A & 0xF0) | (x>>4);
+    x = (x<<4) | tmp;
     _T(); _T(); _T(); _T();
     _WR(c->HL, x);
     c->F = c->szp[c->A] | (c->F & Z80_CF);
@@ -802,20 +802,6 @@ uint32_t z80_step(z80* c) {
 uint32_t z80_run(z80* c, uint32_t t) {
     // FIXME
     return 0;
-}
-
-/* control pin functions */
-void z80_on(z80* c, uint16_t pins) {
-    c->CTRL |= pins;
-}
-void z80_off(z80* c, uint16_t pins) {
-    c->CTRL &= ~pins;
-}
-bool z80_any(z80* c, uint16_t pins) {
-    return (c->CTRL & pins) != 0;
-}
-bool z80_all(z80* c, uint16_t pins) {
-    return (c->CTRL & pins) == pins;
 }
 
 #undef _SZ

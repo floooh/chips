@@ -478,7 +478,7 @@ void _z80_op(z80* c) {
     case 0xd6: _z80_sub(c,_RD(c->PC++)); return; // SUB n
     case 0xd7: _z80_rst(c,0x10); return; // RST 0x10
     case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
-    case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_);_SWP16(c->WZ,c->WZ_); return; // EXX
+    case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_); return; // EXX
     case 0xda: _IMM16(); if ((c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP C,nn
     case 0xdb: c->A=_IN((c->A<<8)|_RD(c->PC++)); return; // IN A,(n)
     case 0xdc: _z80_callcc(c, (c->F&Z80_CF)); return; // CALL C,nn
@@ -963,7 +963,7 @@ void _z80_op(z80* c) {
         case 0xd6: _z80_sub(c,_RD(c->PC++)); return; // SUB n
         case 0xd7: _z80_rst(c,0x10); return; // RST 0x10
         case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
-        case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_);_SWP16(c->WZ,c->WZ_); return; // EXX
+        case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_); return; // EXX
         case 0xda: _IMM16(); if ((c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP C,nn
         case 0xdb: c->A=_IN((c->A<<8)|_RD(c->PC++)); return; // IN A,(n)
         case 0xdc: _z80_callcc(c, (c->F&Z80_CF)); return; // CALL C,nn
@@ -1591,7 +1591,7 @@ void _z80_op(z80* c) {
         case 0xd6: _z80_sub(c,_RD(c->PC++)); return; // SUB n
         case 0xd7: _z80_rst(c,0x10); return; // RST 0x10
         case 0xd8: _z80_retcc(c,(c->F&Z80_CF)); return; // RET C
-        case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_);_SWP16(c->WZ,c->WZ_); return; // EXX
+        case 0xd9: _SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_); return; // EXX
         case 0xda: _IMM16(); if ((c->F&Z80_CF)) { c->PC=c->WZ; } return; // JP C,nn
         case 0xdb: c->A=_IN((c->A<<8)|_RD(c->PC++)); return; // IN A,(n)
         case 0xdc: _z80_callcc(c, (c->F&Z80_CF)); return; // CALL C,nn
