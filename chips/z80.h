@@ -786,6 +786,7 @@ static void _z80_ibit(z80* c, uint8_t val, uint8_t mask) {
     f |= (c->W & (Z80_YF|Z80_XF));
     c->F = f | (c->F & Z80_CF);
 }
+
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
 static uint16_t _z80_add16(z80* c, uint16_t acc, uint16_t val) {
     c->WZ = acc+1;

@@ -458,7 +458,7 @@ def enc_cb_op(op, ext, cc) :
         if z == 6 or ext:
             # BIT n,(HL); BIT n,(IX+d); BIT n,(IY+d)
             o.cmt = 'BIT {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {}; _z80_ibit(c,_RD(a),{}); }}'.format(iHLdsrc(ext), hex(1<<y))
+            o.src = '{{ {};{}_T();_z80_ibit(c,_RD(a),{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
         else:
             # BIT n,r
             o.cmt = 'BIT {},{}'.format(y,r2[z])
@@ -468,11 +468,11 @@ def enc_cb_op(op, ext, cc) :
         if z == 6:
             # RES n,(HL); RES n,(IX+d); RES n,(IY+d)
             o.cmt = 'RES {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {}; _WR(a,_RD(a)&~{}); }}'.format(iHLdsrc(ext), hex(1<<y))
+            o.src = '{{ {};{}_T();_WR(a,_RD(a)&~{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
         elif ext:
             # undocumented: RES n,(IX+d),r; RES n,(IY+d),r
             o.cmt = 'RES {},{},{}'.format(y,iHLcmt(ext),r2[z])
-            o.src = '{{ {}; c->{}=_RD(a)&~{}; _WR(a,c->{}); }}'.format(iHLdsrc(ext), r2[z], hex(1<<y), r2[z])
+            o.src = '{{ {};{}_T();c->{}=_RD(a)&~{};_WR(a,c->{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], hex(1<<y), r2[z])
         else:
             # RES n,r
             o.cmt = 'RES {},{}'.format(y,r2[z])
@@ -482,11 +482,11 @@ def enc_cb_op(op, ext, cc) :
         if z == 6:
             # SET n,(HL); RES n,(IX+d); RES n,(IY+d)
             o.cmt = 'SET {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {}; _WR(a,_RD(a)|{});}}'.format(iHLdsrc(ext), hex(1<<y))
+            o.src = '{{ {};{}_T();_WR(a,_RD(a)|{});}}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
         elif ext:
             # undocumented: SET n,(IX+d),r; SET n,(IY+d),r
             o.cmt = 'SET {},{},{}'.format(y,iHLcmt(ext),r2[z])
-            o.src = '{{ {}; c->{}=_RD(a)|{}; _WR(a,c->{});}}'.format(iHLdsrc(ext), r2[z], hex(1<<y), r[z])
+            o.src = '{{ {};{}_T();c->{}=_RD(a)|{};_WR(a,c->{});}}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], hex(1<<y), r[z])
         else:
             # SET n,r
             o.cmt = 'SET {},{}'.format(y,r2[z])

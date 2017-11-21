@@ -276,7 +276,7 @@ void _z80_op(z80* c) {
         case 0x43: _z80_bit(c,c->E,0x1); return; // BIT 0,E
         case 0x44: _z80_bit(c,c->H,0x1); return; // BIT 0,H
         case 0x45: _z80_bit(c,c->L,0x1); return; // BIT 0,L
-        case 0x46: { uint16_t a=c->HL; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->HL)
+        case 0x46: { uint16_t a=c->HL;_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->HL)
         case 0x47: _z80_bit(c,c->A,0x1); return; // BIT 0,A
         case 0x48: _z80_bit(c,c->B,0x2); return; // BIT 1,B
         case 0x49: _z80_bit(c,c->C,0x2); return; // BIT 1,C
@@ -284,7 +284,7 @@ void _z80_op(z80* c) {
         case 0x4b: _z80_bit(c,c->E,0x2); return; // BIT 1,E
         case 0x4c: _z80_bit(c,c->H,0x2); return; // BIT 1,H
         case 0x4d: _z80_bit(c,c->L,0x2); return; // BIT 1,L
-        case 0x4e: { uint16_t a=c->HL; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->HL)
+        case 0x4e: { uint16_t a=c->HL;_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->HL)
         case 0x4f: _z80_bit(c,c->A,0x2); return; // BIT 1,A
         case 0x50: _z80_bit(c,c->B,0x4); return; // BIT 2,B
         case 0x51: _z80_bit(c,c->C,0x4); return; // BIT 2,C
@@ -292,7 +292,7 @@ void _z80_op(z80* c) {
         case 0x53: _z80_bit(c,c->E,0x4); return; // BIT 2,E
         case 0x54: _z80_bit(c,c->H,0x4); return; // BIT 2,H
         case 0x55: _z80_bit(c,c->L,0x4); return; // BIT 2,L
-        case 0x56: { uint16_t a=c->HL; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->HL)
+        case 0x56: { uint16_t a=c->HL;_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->HL)
         case 0x57: _z80_bit(c,c->A,0x4); return; // BIT 2,A
         case 0x58: _z80_bit(c,c->B,0x8); return; // BIT 3,B
         case 0x59: _z80_bit(c,c->C,0x8); return; // BIT 3,C
@@ -300,7 +300,7 @@ void _z80_op(z80* c) {
         case 0x5b: _z80_bit(c,c->E,0x8); return; // BIT 3,E
         case 0x5c: _z80_bit(c,c->H,0x8); return; // BIT 3,H
         case 0x5d: _z80_bit(c,c->L,0x8); return; // BIT 3,L
-        case 0x5e: { uint16_t a=c->HL; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->HL)
+        case 0x5e: { uint16_t a=c->HL;_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->HL)
         case 0x5f: _z80_bit(c,c->A,0x8); return; // BIT 3,A
         case 0x60: _z80_bit(c,c->B,0x10); return; // BIT 4,B
         case 0x61: _z80_bit(c,c->C,0x10); return; // BIT 4,C
@@ -308,7 +308,7 @@ void _z80_op(z80* c) {
         case 0x63: _z80_bit(c,c->E,0x10); return; // BIT 4,E
         case 0x64: _z80_bit(c,c->H,0x10); return; // BIT 4,H
         case 0x65: _z80_bit(c,c->L,0x10); return; // BIT 4,L
-        case 0x66: { uint16_t a=c->HL; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->HL)
+        case 0x66: { uint16_t a=c->HL;_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->HL)
         case 0x67: _z80_bit(c,c->A,0x10); return; // BIT 4,A
         case 0x68: _z80_bit(c,c->B,0x20); return; // BIT 5,B
         case 0x69: _z80_bit(c,c->C,0x20); return; // BIT 5,C
@@ -316,7 +316,7 @@ void _z80_op(z80* c) {
         case 0x6b: _z80_bit(c,c->E,0x20); return; // BIT 5,E
         case 0x6c: _z80_bit(c,c->H,0x20); return; // BIT 5,H
         case 0x6d: _z80_bit(c,c->L,0x20); return; // BIT 5,L
-        case 0x6e: { uint16_t a=c->HL; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->HL)
+        case 0x6e: { uint16_t a=c->HL;_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->HL)
         case 0x6f: _z80_bit(c,c->A,0x20); return; // BIT 5,A
         case 0x70: _z80_bit(c,c->B,0x40); return; // BIT 6,B
         case 0x71: _z80_bit(c,c->C,0x40); return; // BIT 6,C
@@ -324,7 +324,7 @@ void _z80_op(z80* c) {
         case 0x73: _z80_bit(c,c->E,0x40); return; // BIT 6,E
         case 0x74: _z80_bit(c,c->H,0x40); return; // BIT 6,H
         case 0x75: _z80_bit(c,c->L,0x40); return; // BIT 6,L
-        case 0x76: { uint16_t a=c->HL; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->HL)
+        case 0x76: { uint16_t a=c->HL;_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->HL)
         case 0x77: _z80_bit(c,c->A,0x40); return; // BIT 6,A
         case 0x78: _z80_bit(c,c->B,0x80); return; // BIT 7,B
         case 0x79: _z80_bit(c,c->C,0x80); return; // BIT 7,C
@@ -332,7 +332,7 @@ void _z80_op(z80* c) {
         case 0x7b: _z80_bit(c,c->E,0x80); return; // BIT 7,E
         case 0x7c: _z80_bit(c,c->H,0x80); return; // BIT 7,H
         case 0x7d: _z80_bit(c,c->L,0x80); return; // BIT 7,L
-        case 0x7e: { uint16_t a=c->HL; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->HL)
+        case 0x7e: { uint16_t a=c->HL;_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->HL)
         case 0x7f: _z80_bit(c,c->A,0x80); return; // BIT 7,A
         case 0x80: c->B&=~0x1; return; // RES 0,B
         case 0x81: c->C&=~0x1; return; // RES 0,C
@@ -340,7 +340,7 @@ void _z80_op(z80* c) {
         case 0x83: c->E&=~0x1; return; // RES 0,E
         case 0x84: c->H&=~0x1; return; // RES 0,H
         case 0x85: c->L&=~0x1; return; // RES 0,L
-        case 0x86: { uint16_t a=c->HL; _WR(a,_RD(a)&~0x1); } return; // RES 0,(c->HL)
+        case 0x86: { uint16_t a=c->HL;_T();_WR(a,_RD(a)&~0x1); } return; // RES 0,(c->HL)
         case 0x87: c->A&=~0x1; return; // RES 0,A
         case 0x88: c->B&=~0x2; return; // RES 1,B
         case 0x89: c->C&=~0x2; return; // RES 1,C
@@ -348,7 +348,7 @@ void _z80_op(z80* c) {
         case 0x8b: c->E&=~0x2; return; // RES 1,E
         case 0x8c: c->H&=~0x2; return; // RES 1,H
         case 0x8d: c->L&=~0x2; return; // RES 1,L
-        case 0x8e: { uint16_t a=c->HL; _WR(a,_RD(a)&~0x2); } return; // RES 1,(c->HL)
+        case 0x8e: { uint16_t a=c->HL;_T();_WR(a,_RD(a)&~0x2); } return; // RES 1,(c->HL)
         case 0x8f: c->A&=~0x2; return; // RES 1,A
         case 0x90: c->B&=~0x4; return; // RES 2,B
         case 0x91: c->C&=~0x4; return; // RES 2,C
@@ -356,7 +356,7 @@ void _z80_op(z80* c) {
         case 0x93: c->E&=~0x4; return; // RES 2,E
         case 0x94: c->H&=~0x4; return; // RES 2,H
         case 0x95: c->L&=~0x4; return; // RES 2,L
-        case 0x96: { uint16_t a=c->HL; _WR(a,_RD(a)&~0x4); } return; // RES 2,(c->HL)
+        case 0x96: { uint16_t a=c->HL;_T();_WR(a,_RD(a)&~0x4); } return; // RES 2,(c->HL)
         case 0x97: c->A&=~0x4; return; // RES 2,A
         case 0x98: c->B&=~0x8; return; // RES 3,B
         case 0x99: c->C&=~0x8; return; // RES 3,C
@@ -364,7 +364,7 @@ void _z80_op(z80* c) {
         case 0x9b: c->E&=~0x8; return; // RES 3,E
         case 0x9c: c->H&=~0x8; return; // RES 3,H
         case 0x9d: c->L&=~0x8; return; // RES 3,L
-        case 0x9e: { uint16_t a=c->HL; _WR(a,_RD(a)&~0x8); } return; // RES 3,(c->HL)
+        case 0x9e: { uint16_t a=c->HL;_T();_WR(a,_RD(a)&~0x8); } return; // RES 3,(c->HL)
         case 0x9f: c->A&=~0x8; return; // RES 3,A
         case 0xa0: c->B&=~0x10; return; // RES 4,B
         case 0xa1: c->C&=~0x10; return; // RES 4,C
@@ -372,7 +372,7 @@ void _z80_op(z80* c) {
         case 0xa3: c->E&=~0x10; return; // RES 4,E
         case 0xa4: c->H&=~0x10; return; // RES 4,H
         case 0xa5: c->L&=~0x10; return; // RES 4,L
-        case 0xa6: { uint16_t a=c->HL; _WR(a,_RD(a)&~0x10); } return; // RES 4,(c->HL)
+        case 0xa6: { uint16_t a=c->HL;_T();_WR(a,_RD(a)&~0x10); } return; // RES 4,(c->HL)
         case 0xa7: c->A&=~0x10; return; // RES 4,A
         case 0xa8: c->B&=~0x20; return; // RES 5,B
         case 0xa9: c->C&=~0x20; return; // RES 5,C
@@ -380,7 +380,7 @@ void _z80_op(z80* c) {
         case 0xab: c->E&=~0x20; return; // RES 5,E
         case 0xac: c->H&=~0x20; return; // RES 5,H
         case 0xad: c->L&=~0x20; return; // RES 5,L
-        case 0xae: { uint16_t a=c->HL; _WR(a,_RD(a)&~0x20); } return; // RES 5,(c->HL)
+        case 0xae: { uint16_t a=c->HL;_T();_WR(a,_RD(a)&~0x20); } return; // RES 5,(c->HL)
         case 0xaf: c->A&=~0x20; return; // RES 5,A
         case 0xb0: c->B&=~0x40; return; // RES 6,B
         case 0xb1: c->C&=~0x40; return; // RES 6,C
@@ -388,7 +388,7 @@ void _z80_op(z80* c) {
         case 0xb3: c->E&=~0x40; return; // RES 6,E
         case 0xb4: c->H&=~0x40; return; // RES 6,H
         case 0xb5: c->L&=~0x40; return; // RES 6,L
-        case 0xb6: { uint16_t a=c->HL; _WR(a,_RD(a)&~0x40); } return; // RES 6,(c->HL)
+        case 0xb6: { uint16_t a=c->HL;_T();_WR(a,_RD(a)&~0x40); } return; // RES 6,(c->HL)
         case 0xb7: c->A&=~0x40; return; // RES 6,A
         case 0xb8: c->B&=~0x80; return; // RES 7,B
         case 0xb9: c->C&=~0x80; return; // RES 7,C
@@ -396,7 +396,7 @@ void _z80_op(z80* c) {
         case 0xbb: c->E&=~0x80; return; // RES 7,E
         case 0xbc: c->H&=~0x80; return; // RES 7,H
         case 0xbd: c->L&=~0x80; return; // RES 7,L
-        case 0xbe: { uint16_t a=c->HL; _WR(a,_RD(a)&~0x80); } return; // RES 7,(c->HL)
+        case 0xbe: { uint16_t a=c->HL;_T();_WR(a,_RD(a)&~0x80); } return; // RES 7,(c->HL)
         case 0xbf: c->A&=~0x80; return; // RES 7,A
         case 0xc0: c->B|=0x1; return; // SET 0,B
         case 0xc1: c->C|=0x1; return; // SET 0,C
@@ -404,7 +404,7 @@ void _z80_op(z80* c) {
         case 0xc3: c->E|=0x1; return; // SET 0,E
         case 0xc4: c->H|=0x1; return; // SET 0,H
         case 0xc5: c->L|=0x1; return; // SET 0,L
-        case 0xc6: { uint16_t a=c->HL; _WR(a,_RD(a)|0x1);} return; // SET 0,(c->HL)
+        case 0xc6: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x1);} return; // SET 0,(c->HL)
         case 0xc7: c->A|=0x1; return; // SET 0,A
         case 0xc8: c->B|=0x2; return; // SET 1,B
         case 0xc9: c->C|=0x2; return; // SET 1,C
@@ -412,7 +412,7 @@ void _z80_op(z80* c) {
         case 0xcb: c->E|=0x2; return; // SET 1,E
         case 0xcc: c->H|=0x2; return; // SET 1,H
         case 0xcd: c->L|=0x2; return; // SET 1,L
-        case 0xce: { uint16_t a=c->HL; _WR(a,_RD(a)|0x2);} return; // SET 1,(c->HL)
+        case 0xce: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x2);} return; // SET 1,(c->HL)
         case 0xcf: c->A|=0x2; return; // SET 1,A
         case 0xd0: c->B|=0x4; return; // SET 2,B
         case 0xd1: c->C|=0x4; return; // SET 2,C
@@ -420,7 +420,7 @@ void _z80_op(z80* c) {
         case 0xd3: c->E|=0x4; return; // SET 2,E
         case 0xd4: c->H|=0x4; return; // SET 2,H
         case 0xd5: c->L|=0x4; return; // SET 2,L
-        case 0xd6: { uint16_t a=c->HL; _WR(a,_RD(a)|0x4);} return; // SET 2,(c->HL)
+        case 0xd6: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x4);} return; // SET 2,(c->HL)
         case 0xd7: c->A|=0x4; return; // SET 2,A
         case 0xd8: c->B|=0x8; return; // SET 3,B
         case 0xd9: c->C|=0x8; return; // SET 3,C
@@ -428,7 +428,7 @@ void _z80_op(z80* c) {
         case 0xdb: c->E|=0x8; return; // SET 3,E
         case 0xdc: c->H|=0x8; return; // SET 3,H
         case 0xdd: c->L|=0x8; return; // SET 3,L
-        case 0xde: { uint16_t a=c->HL; _WR(a,_RD(a)|0x8);} return; // SET 3,(c->HL)
+        case 0xde: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x8);} return; // SET 3,(c->HL)
         case 0xdf: c->A|=0x8; return; // SET 3,A
         case 0xe0: c->B|=0x10; return; // SET 4,B
         case 0xe1: c->C|=0x10; return; // SET 4,C
@@ -436,7 +436,7 @@ void _z80_op(z80* c) {
         case 0xe3: c->E|=0x10; return; // SET 4,E
         case 0xe4: c->H|=0x10; return; // SET 4,H
         case 0xe5: c->L|=0x10; return; // SET 4,L
-        case 0xe6: { uint16_t a=c->HL; _WR(a,_RD(a)|0x10);} return; // SET 4,(c->HL)
+        case 0xe6: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x10);} return; // SET 4,(c->HL)
         case 0xe7: c->A|=0x10; return; // SET 4,A
         case 0xe8: c->B|=0x20; return; // SET 5,B
         case 0xe9: c->C|=0x20; return; // SET 5,C
@@ -444,7 +444,7 @@ void _z80_op(z80* c) {
         case 0xeb: c->E|=0x20; return; // SET 5,E
         case 0xec: c->H|=0x20; return; // SET 5,H
         case 0xed: c->L|=0x20; return; // SET 5,L
-        case 0xee: { uint16_t a=c->HL; _WR(a,_RD(a)|0x20);} return; // SET 5,(c->HL)
+        case 0xee: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x20);} return; // SET 5,(c->HL)
         case 0xef: c->A|=0x20; return; // SET 5,A
         case 0xf0: c->B|=0x40; return; // SET 6,B
         case 0xf1: c->C|=0x40; return; // SET 6,C
@@ -452,7 +452,7 @@ void _z80_op(z80* c) {
         case 0xf3: c->E|=0x40; return; // SET 6,E
         case 0xf4: c->H|=0x40; return; // SET 6,H
         case 0xf5: c->L|=0x40; return; // SET 6,L
-        case 0xf6: { uint16_t a=c->HL; _WR(a,_RD(a)|0x40);} return; // SET 6,(c->HL)
+        case 0xf6: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x40);} return; // SET 6,(c->HL)
         case 0xf7: c->A|=0x40; return; // SET 6,A
         case 0xf8: c->B|=0x80; return; // SET 7,B
         case 0xf9: c->C|=0x80; return; // SET 7,C
@@ -460,7 +460,7 @@ void _z80_op(z80* c) {
         case 0xfb: c->E|=0x80; return; // SET 7,E
         case 0xfc: c->H|=0x80; return; // SET 7,H
         case 0xfd: c->L|=0x80; return; // SET 7,L
-        case 0xfe: { uint16_t a=c->HL; _WR(a,_RD(a)|0x80);} return; // SET 7,(c->HL)
+        case 0xfe: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x80);} return; // SET 7,(c->HL)
         case 0xff: c->A|=0x80; return; // SET 7,A
         default: return _INVALID_OPCODE(2);
       }
@@ -754,198 +754,198 @@ void _z80_op(z80* c) {
             case 0x3d: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_z80_srl(c,_RD(a));_WR(a,c->L); } return; // SRL (c->IX+d),L
             case 0x3e: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_z80_srl(c,_RD(a))); } return; // SRL (c->IX+d)
             case 0x3f: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_z80_srl(c,_RD(a));_WR(a,c->A); } return; // SRL (c->IX+d),A
-            case 0x40: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
-            case 0x41: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
-            case 0x42: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
-            case 0x43: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
-            case 0x44: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
-            case 0x45: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
-            case 0x46: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
-            case 0x47: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
-            case 0x48: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
-            case 0x49: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
-            case 0x4a: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
-            case 0x4b: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
-            case 0x4c: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
-            case 0x4d: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
-            case 0x4e: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
-            case 0x4f: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
-            case 0x50: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
-            case 0x51: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
-            case 0x52: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
-            case 0x53: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
-            case 0x54: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
-            case 0x55: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
-            case 0x56: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
-            case 0x57: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
-            case 0x58: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
-            case 0x59: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
-            case 0x5a: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
-            case 0x5b: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
-            case 0x5c: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
-            case 0x5d: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
-            case 0x5e: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
-            case 0x5f: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
-            case 0x60: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
-            case 0x61: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
-            case 0x62: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
-            case 0x63: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
-            case 0x64: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
-            case 0x65: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
-            case 0x66: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
-            case 0x67: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
-            case 0x68: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
-            case 0x69: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
-            case 0x6a: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
-            case 0x6b: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
-            case 0x6c: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
-            case 0x6d: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
-            case 0x6e: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
-            case 0x6f: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
-            case 0x70: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
-            case 0x71: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
-            case 0x72: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
-            case 0x73: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
-            case 0x74: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
-            case 0x75: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
-            case 0x76: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
-            case 0x77: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
-            case 0x78: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
-            case 0x79: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
-            case 0x7a: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
-            case 0x7b: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
-            case 0x7c: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
-            case 0x7d: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
-            case 0x7e: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
-            case 0x7f: { uint16_t a=c->WZ=c->IX+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
-            case 0x80: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)&~0x1; _WR(a,c->B); } return; // RES 0,(c->IX+d),B
-            case 0x81: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)&~0x1; _WR(a,c->C); } return; // RES 0,(c->IX+d),C
-            case 0x82: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)&~0x1; _WR(a,c->D); } return; // RES 0,(c->IX+d),D
-            case 0x83: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)&~0x1; _WR(a,c->E); } return; // RES 0,(c->IX+d),E
-            case 0x84: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)&~0x1; _WR(a,c->H); } return; // RES 0,(c->IX+d),H
-            case 0x85: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)&~0x1; _WR(a,c->L); } return; // RES 0,(c->IX+d),L
-            case 0x86: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)&~0x1); } return; // RES 0,(c->IX+d)
-            case 0x87: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)&~0x1; _WR(a,c->A); } return; // RES 0,(c->IX+d),A
-            case 0x88: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)&~0x2; _WR(a,c->B); } return; // RES 1,(c->IX+d),B
-            case 0x89: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)&~0x2; _WR(a,c->C); } return; // RES 1,(c->IX+d),C
-            case 0x8a: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)&~0x2; _WR(a,c->D); } return; // RES 1,(c->IX+d),D
-            case 0x8b: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)&~0x2; _WR(a,c->E); } return; // RES 1,(c->IX+d),E
-            case 0x8c: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)&~0x2; _WR(a,c->H); } return; // RES 1,(c->IX+d),H
-            case 0x8d: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)&~0x2; _WR(a,c->L); } return; // RES 1,(c->IX+d),L
-            case 0x8e: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)&~0x2); } return; // RES 1,(c->IX+d)
-            case 0x8f: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)&~0x2; _WR(a,c->A); } return; // RES 1,(c->IX+d),A
-            case 0x90: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)&~0x4; _WR(a,c->B); } return; // RES 2,(c->IX+d),B
-            case 0x91: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)&~0x4; _WR(a,c->C); } return; // RES 2,(c->IX+d),C
-            case 0x92: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)&~0x4; _WR(a,c->D); } return; // RES 2,(c->IX+d),D
-            case 0x93: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)&~0x4; _WR(a,c->E); } return; // RES 2,(c->IX+d),E
-            case 0x94: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)&~0x4; _WR(a,c->H); } return; // RES 2,(c->IX+d),H
-            case 0x95: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)&~0x4; _WR(a,c->L); } return; // RES 2,(c->IX+d),L
-            case 0x96: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)&~0x4); } return; // RES 2,(c->IX+d)
-            case 0x97: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)&~0x4; _WR(a,c->A); } return; // RES 2,(c->IX+d),A
-            case 0x98: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)&~0x8; _WR(a,c->B); } return; // RES 3,(c->IX+d),B
-            case 0x99: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)&~0x8; _WR(a,c->C); } return; // RES 3,(c->IX+d),C
-            case 0x9a: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)&~0x8; _WR(a,c->D); } return; // RES 3,(c->IX+d),D
-            case 0x9b: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)&~0x8; _WR(a,c->E); } return; // RES 3,(c->IX+d),E
-            case 0x9c: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)&~0x8; _WR(a,c->H); } return; // RES 3,(c->IX+d),H
-            case 0x9d: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)&~0x8; _WR(a,c->L); } return; // RES 3,(c->IX+d),L
-            case 0x9e: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)&~0x8); } return; // RES 3,(c->IX+d)
-            case 0x9f: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)&~0x8; _WR(a,c->A); } return; // RES 3,(c->IX+d),A
-            case 0xa0: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)&~0x10; _WR(a,c->B); } return; // RES 4,(c->IX+d),B
-            case 0xa1: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)&~0x10; _WR(a,c->C); } return; // RES 4,(c->IX+d),C
-            case 0xa2: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)&~0x10; _WR(a,c->D); } return; // RES 4,(c->IX+d),D
-            case 0xa3: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)&~0x10; _WR(a,c->E); } return; // RES 4,(c->IX+d),E
-            case 0xa4: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)&~0x10; _WR(a,c->H); } return; // RES 4,(c->IX+d),H
-            case 0xa5: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)&~0x10; _WR(a,c->L); } return; // RES 4,(c->IX+d),L
-            case 0xa6: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)&~0x10); } return; // RES 4,(c->IX+d)
-            case 0xa7: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)&~0x10; _WR(a,c->A); } return; // RES 4,(c->IX+d),A
-            case 0xa8: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)&~0x20; _WR(a,c->B); } return; // RES 5,(c->IX+d),B
-            case 0xa9: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)&~0x20; _WR(a,c->C); } return; // RES 5,(c->IX+d),C
-            case 0xaa: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)&~0x20; _WR(a,c->D); } return; // RES 5,(c->IX+d),D
-            case 0xab: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)&~0x20; _WR(a,c->E); } return; // RES 5,(c->IX+d),E
-            case 0xac: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)&~0x20; _WR(a,c->H); } return; // RES 5,(c->IX+d),H
-            case 0xad: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)&~0x20; _WR(a,c->L); } return; // RES 5,(c->IX+d),L
-            case 0xae: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)&~0x20); } return; // RES 5,(c->IX+d)
-            case 0xaf: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)&~0x20; _WR(a,c->A); } return; // RES 5,(c->IX+d),A
-            case 0xb0: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)&~0x40; _WR(a,c->B); } return; // RES 6,(c->IX+d),B
-            case 0xb1: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)&~0x40; _WR(a,c->C); } return; // RES 6,(c->IX+d),C
-            case 0xb2: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)&~0x40; _WR(a,c->D); } return; // RES 6,(c->IX+d),D
-            case 0xb3: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)&~0x40; _WR(a,c->E); } return; // RES 6,(c->IX+d),E
-            case 0xb4: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)&~0x40; _WR(a,c->H); } return; // RES 6,(c->IX+d),H
-            case 0xb5: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)&~0x40; _WR(a,c->L); } return; // RES 6,(c->IX+d),L
-            case 0xb6: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)&~0x40); } return; // RES 6,(c->IX+d)
-            case 0xb7: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)&~0x40; _WR(a,c->A); } return; // RES 6,(c->IX+d),A
-            case 0xb8: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)&~0x80; _WR(a,c->B); } return; // RES 7,(c->IX+d),B
-            case 0xb9: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)&~0x80; _WR(a,c->C); } return; // RES 7,(c->IX+d),C
-            case 0xba: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)&~0x80; _WR(a,c->D); } return; // RES 7,(c->IX+d),D
-            case 0xbb: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)&~0x80; _WR(a,c->E); } return; // RES 7,(c->IX+d),E
-            case 0xbc: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)&~0x80; _WR(a,c->H); } return; // RES 7,(c->IX+d),H
-            case 0xbd: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)&~0x80; _WR(a,c->L); } return; // RES 7,(c->IX+d),L
-            case 0xbe: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)&~0x80); } return; // RES 7,(c->IX+d)
-            case 0xbf: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)&~0x80; _WR(a,c->A); } return; // RES 7,(c->IX+d),A
-            case 0xc0: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)|0x1; _WR(a,c->B);} return; // SET 0,(c->IX+d),B
-            case 0xc1: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)|0x1; _WR(a,c->C);} return; // SET 0,(c->IX+d),C
-            case 0xc2: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)|0x1; _WR(a,c->D);} return; // SET 0,(c->IX+d),D
-            case 0xc3: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)|0x1; _WR(a,c->E);} return; // SET 0,(c->IX+d),E
-            case 0xc4: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)|0x1; _WR(a,c->IXH);} return; // SET 0,(c->IX+d),H
-            case 0xc5: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)|0x1; _WR(a,c->IXL);} return; // SET 0,(c->IX+d),L
-            case 0xc6: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)|0x1);} return; // SET 0,(c->IX+d)
-            case 0xc7: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)|0x1; _WR(a,c->A);} return; // SET 0,(c->IX+d),A
-            case 0xc8: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)|0x2; _WR(a,c->B);} return; // SET 1,(c->IX+d),B
-            case 0xc9: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)|0x2; _WR(a,c->C);} return; // SET 1,(c->IX+d),C
-            case 0xca: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)|0x2; _WR(a,c->D);} return; // SET 1,(c->IX+d),D
-            case 0xcb: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)|0x2; _WR(a,c->E);} return; // SET 1,(c->IX+d),E
-            case 0xcc: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)|0x2; _WR(a,c->IXH);} return; // SET 1,(c->IX+d),H
-            case 0xcd: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)|0x2; _WR(a,c->IXL);} return; // SET 1,(c->IX+d),L
-            case 0xce: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)|0x2);} return; // SET 1,(c->IX+d)
-            case 0xcf: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)|0x2; _WR(a,c->A);} return; // SET 1,(c->IX+d),A
-            case 0xd0: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)|0x4; _WR(a,c->B);} return; // SET 2,(c->IX+d),B
-            case 0xd1: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)|0x4; _WR(a,c->C);} return; // SET 2,(c->IX+d),C
-            case 0xd2: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)|0x4; _WR(a,c->D);} return; // SET 2,(c->IX+d),D
-            case 0xd3: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)|0x4; _WR(a,c->E);} return; // SET 2,(c->IX+d),E
-            case 0xd4: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)|0x4; _WR(a,c->IXH);} return; // SET 2,(c->IX+d),H
-            case 0xd5: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)|0x4; _WR(a,c->IXL);} return; // SET 2,(c->IX+d),L
-            case 0xd6: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)|0x4);} return; // SET 2,(c->IX+d)
-            case 0xd7: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)|0x4; _WR(a,c->A);} return; // SET 2,(c->IX+d),A
-            case 0xd8: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)|0x8; _WR(a,c->B);} return; // SET 3,(c->IX+d),B
-            case 0xd9: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)|0x8; _WR(a,c->C);} return; // SET 3,(c->IX+d),C
-            case 0xda: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)|0x8; _WR(a,c->D);} return; // SET 3,(c->IX+d),D
-            case 0xdb: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)|0x8; _WR(a,c->E);} return; // SET 3,(c->IX+d),E
-            case 0xdc: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)|0x8; _WR(a,c->IXH);} return; // SET 3,(c->IX+d),H
-            case 0xdd: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)|0x8; _WR(a,c->IXL);} return; // SET 3,(c->IX+d),L
-            case 0xde: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)|0x8);} return; // SET 3,(c->IX+d)
-            case 0xdf: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)|0x8; _WR(a,c->A);} return; // SET 3,(c->IX+d),A
-            case 0xe0: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)|0x10; _WR(a,c->B);} return; // SET 4,(c->IX+d),B
-            case 0xe1: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)|0x10; _WR(a,c->C);} return; // SET 4,(c->IX+d),C
-            case 0xe2: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)|0x10; _WR(a,c->D);} return; // SET 4,(c->IX+d),D
-            case 0xe3: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)|0x10; _WR(a,c->E);} return; // SET 4,(c->IX+d),E
-            case 0xe4: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)|0x10; _WR(a,c->IXH);} return; // SET 4,(c->IX+d),H
-            case 0xe5: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)|0x10; _WR(a,c->IXL);} return; // SET 4,(c->IX+d),L
-            case 0xe6: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)|0x10);} return; // SET 4,(c->IX+d)
-            case 0xe7: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)|0x10; _WR(a,c->A);} return; // SET 4,(c->IX+d),A
-            case 0xe8: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)|0x20; _WR(a,c->B);} return; // SET 5,(c->IX+d),B
-            case 0xe9: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)|0x20; _WR(a,c->C);} return; // SET 5,(c->IX+d),C
-            case 0xea: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)|0x20; _WR(a,c->D);} return; // SET 5,(c->IX+d),D
-            case 0xeb: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)|0x20; _WR(a,c->E);} return; // SET 5,(c->IX+d),E
-            case 0xec: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)|0x20; _WR(a,c->IXH);} return; // SET 5,(c->IX+d),H
-            case 0xed: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)|0x20; _WR(a,c->IXL);} return; // SET 5,(c->IX+d),L
-            case 0xee: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)|0x20);} return; // SET 5,(c->IX+d)
-            case 0xef: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)|0x20; _WR(a,c->A);} return; // SET 5,(c->IX+d),A
-            case 0xf0: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)|0x40; _WR(a,c->B);} return; // SET 6,(c->IX+d),B
-            case 0xf1: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)|0x40; _WR(a,c->C);} return; // SET 6,(c->IX+d),C
-            case 0xf2: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)|0x40; _WR(a,c->D);} return; // SET 6,(c->IX+d),D
-            case 0xf3: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)|0x40; _WR(a,c->E);} return; // SET 6,(c->IX+d),E
-            case 0xf4: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)|0x40; _WR(a,c->IXH);} return; // SET 6,(c->IX+d),H
-            case 0xf5: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)|0x40; _WR(a,c->IXL);} return; // SET 6,(c->IX+d),L
-            case 0xf6: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)|0x40);} return; // SET 6,(c->IX+d)
-            case 0xf7: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)|0x40; _WR(a,c->A);} return; // SET 6,(c->IX+d),A
-            case 0xf8: { uint16_t a=c->WZ=c->IX+d;; c->B=_RD(a)|0x80; _WR(a,c->B);} return; // SET 7,(c->IX+d),B
-            case 0xf9: { uint16_t a=c->WZ=c->IX+d;; c->C=_RD(a)|0x80; _WR(a,c->C);} return; // SET 7,(c->IX+d),C
-            case 0xfa: { uint16_t a=c->WZ=c->IX+d;; c->D=_RD(a)|0x80; _WR(a,c->D);} return; // SET 7,(c->IX+d),D
-            case 0xfb: { uint16_t a=c->WZ=c->IX+d;; c->E=_RD(a)|0x80; _WR(a,c->E);} return; // SET 7,(c->IX+d),E
-            case 0xfc: { uint16_t a=c->WZ=c->IX+d;; c->H=_RD(a)|0x80; _WR(a,c->IXH);} return; // SET 7,(c->IX+d),H
-            case 0xfd: { uint16_t a=c->WZ=c->IX+d;; c->L=_RD(a)|0x80; _WR(a,c->IXL);} return; // SET 7,(c->IX+d),L
-            case 0xfe: { uint16_t a=c->WZ=c->IX+d;; _WR(a,_RD(a)|0x80);} return; // SET 7,(c->IX+d)
-            case 0xff: { uint16_t a=c->WZ=c->IX+d;; c->A=_RD(a)|0x80; _WR(a,c->A);} return; // SET 7,(c->IX+d),A
+            case 0x40: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
+            case 0x41: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
+            case 0x42: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
+            case 0x43: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
+            case 0x44: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
+            case 0x45: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
+            case 0x46: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
+            case 0x47: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IX+d)
+            case 0x48: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
+            case 0x49: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
+            case 0x4a: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
+            case 0x4b: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
+            case 0x4c: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
+            case 0x4d: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
+            case 0x4e: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
+            case 0x4f: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IX+d)
+            case 0x50: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
+            case 0x51: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
+            case 0x52: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
+            case 0x53: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
+            case 0x54: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
+            case 0x55: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
+            case 0x56: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
+            case 0x57: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IX+d)
+            case 0x58: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
+            case 0x59: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
+            case 0x5a: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
+            case 0x5b: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
+            case 0x5c: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
+            case 0x5d: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
+            case 0x5e: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
+            case 0x5f: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IX+d)
+            case 0x60: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
+            case 0x61: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
+            case 0x62: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
+            case 0x63: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
+            case 0x64: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
+            case 0x65: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
+            case 0x66: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
+            case 0x67: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IX+d)
+            case 0x68: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
+            case 0x69: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
+            case 0x6a: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
+            case 0x6b: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
+            case 0x6c: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
+            case 0x6d: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
+            case 0x6e: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
+            case 0x6f: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IX+d)
+            case 0x70: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
+            case 0x71: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
+            case 0x72: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
+            case 0x73: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
+            case 0x74: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
+            case 0x75: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
+            case 0x76: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
+            case 0x77: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IX+d)
+            case 0x78: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
+            case 0x79: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
+            case 0x7a: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
+            case 0x7b: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
+            case 0x7c: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
+            case 0x7d: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
+            case 0x7e: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
+            case 0x7f: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IX+d)
+            case 0x80: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)&~0x1;_WR(a,c->B); } return; // RES 0,(c->IX+d),B
+            case 0x81: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)&~0x1;_WR(a,c->C); } return; // RES 0,(c->IX+d),C
+            case 0x82: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)&~0x1;_WR(a,c->D); } return; // RES 0,(c->IX+d),D
+            case 0x83: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)&~0x1;_WR(a,c->E); } return; // RES 0,(c->IX+d),E
+            case 0x84: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)&~0x1;_WR(a,c->H); } return; // RES 0,(c->IX+d),H
+            case 0x85: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)&~0x1;_WR(a,c->L); } return; // RES 0,(c->IX+d),L
+            case 0x86: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)&~0x1); } return; // RES 0,(c->IX+d)
+            case 0x87: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)&~0x1;_WR(a,c->A); } return; // RES 0,(c->IX+d),A
+            case 0x88: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)&~0x2;_WR(a,c->B); } return; // RES 1,(c->IX+d),B
+            case 0x89: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)&~0x2;_WR(a,c->C); } return; // RES 1,(c->IX+d),C
+            case 0x8a: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)&~0x2;_WR(a,c->D); } return; // RES 1,(c->IX+d),D
+            case 0x8b: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)&~0x2;_WR(a,c->E); } return; // RES 1,(c->IX+d),E
+            case 0x8c: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)&~0x2;_WR(a,c->H); } return; // RES 1,(c->IX+d),H
+            case 0x8d: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)&~0x2;_WR(a,c->L); } return; // RES 1,(c->IX+d),L
+            case 0x8e: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)&~0x2); } return; // RES 1,(c->IX+d)
+            case 0x8f: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)&~0x2;_WR(a,c->A); } return; // RES 1,(c->IX+d),A
+            case 0x90: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)&~0x4;_WR(a,c->B); } return; // RES 2,(c->IX+d),B
+            case 0x91: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)&~0x4;_WR(a,c->C); } return; // RES 2,(c->IX+d),C
+            case 0x92: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)&~0x4;_WR(a,c->D); } return; // RES 2,(c->IX+d),D
+            case 0x93: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)&~0x4;_WR(a,c->E); } return; // RES 2,(c->IX+d),E
+            case 0x94: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)&~0x4;_WR(a,c->H); } return; // RES 2,(c->IX+d),H
+            case 0x95: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)&~0x4;_WR(a,c->L); } return; // RES 2,(c->IX+d),L
+            case 0x96: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)&~0x4); } return; // RES 2,(c->IX+d)
+            case 0x97: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)&~0x4;_WR(a,c->A); } return; // RES 2,(c->IX+d),A
+            case 0x98: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)&~0x8;_WR(a,c->B); } return; // RES 3,(c->IX+d),B
+            case 0x99: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)&~0x8;_WR(a,c->C); } return; // RES 3,(c->IX+d),C
+            case 0x9a: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)&~0x8;_WR(a,c->D); } return; // RES 3,(c->IX+d),D
+            case 0x9b: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)&~0x8;_WR(a,c->E); } return; // RES 3,(c->IX+d),E
+            case 0x9c: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)&~0x8;_WR(a,c->H); } return; // RES 3,(c->IX+d),H
+            case 0x9d: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)&~0x8;_WR(a,c->L); } return; // RES 3,(c->IX+d),L
+            case 0x9e: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)&~0x8); } return; // RES 3,(c->IX+d)
+            case 0x9f: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)&~0x8;_WR(a,c->A); } return; // RES 3,(c->IX+d),A
+            case 0xa0: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)&~0x10;_WR(a,c->B); } return; // RES 4,(c->IX+d),B
+            case 0xa1: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)&~0x10;_WR(a,c->C); } return; // RES 4,(c->IX+d),C
+            case 0xa2: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)&~0x10;_WR(a,c->D); } return; // RES 4,(c->IX+d),D
+            case 0xa3: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)&~0x10;_WR(a,c->E); } return; // RES 4,(c->IX+d),E
+            case 0xa4: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)&~0x10;_WR(a,c->H); } return; // RES 4,(c->IX+d),H
+            case 0xa5: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)&~0x10;_WR(a,c->L); } return; // RES 4,(c->IX+d),L
+            case 0xa6: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)&~0x10); } return; // RES 4,(c->IX+d)
+            case 0xa7: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)&~0x10;_WR(a,c->A); } return; // RES 4,(c->IX+d),A
+            case 0xa8: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)&~0x20;_WR(a,c->B); } return; // RES 5,(c->IX+d),B
+            case 0xa9: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)&~0x20;_WR(a,c->C); } return; // RES 5,(c->IX+d),C
+            case 0xaa: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)&~0x20;_WR(a,c->D); } return; // RES 5,(c->IX+d),D
+            case 0xab: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)&~0x20;_WR(a,c->E); } return; // RES 5,(c->IX+d),E
+            case 0xac: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)&~0x20;_WR(a,c->H); } return; // RES 5,(c->IX+d),H
+            case 0xad: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)&~0x20;_WR(a,c->L); } return; // RES 5,(c->IX+d),L
+            case 0xae: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)&~0x20); } return; // RES 5,(c->IX+d)
+            case 0xaf: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)&~0x20;_WR(a,c->A); } return; // RES 5,(c->IX+d),A
+            case 0xb0: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)&~0x40;_WR(a,c->B); } return; // RES 6,(c->IX+d),B
+            case 0xb1: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)&~0x40;_WR(a,c->C); } return; // RES 6,(c->IX+d),C
+            case 0xb2: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)&~0x40;_WR(a,c->D); } return; // RES 6,(c->IX+d),D
+            case 0xb3: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)&~0x40;_WR(a,c->E); } return; // RES 6,(c->IX+d),E
+            case 0xb4: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)&~0x40;_WR(a,c->H); } return; // RES 6,(c->IX+d),H
+            case 0xb5: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)&~0x40;_WR(a,c->L); } return; // RES 6,(c->IX+d),L
+            case 0xb6: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)&~0x40); } return; // RES 6,(c->IX+d)
+            case 0xb7: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)&~0x40;_WR(a,c->A); } return; // RES 6,(c->IX+d),A
+            case 0xb8: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)&~0x80;_WR(a,c->B); } return; // RES 7,(c->IX+d),B
+            case 0xb9: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)&~0x80;_WR(a,c->C); } return; // RES 7,(c->IX+d),C
+            case 0xba: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)&~0x80;_WR(a,c->D); } return; // RES 7,(c->IX+d),D
+            case 0xbb: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)&~0x80;_WR(a,c->E); } return; // RES 7,(c->IX+d),E
+            case 0xbc: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)&~0x80;_WR(a,c->H); } return; // RES 7,(c->IX+d),H
+            case 0xbd: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)&~0x80;_WR(a,c->L); } return; // RES 7,(c->IX+d),L
+            case 0xbe: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)&~0x80); } return; // RES 7,(c->IX+d)
+            case 0xbf: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)&~0x80;_WR(a,c->A); } return; // RES 7,(c->IX+d),A
+            case 0xc0: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)|0x1;_WR(a,c->B);} return; // SET 0,(c->IX+d),B
+            case 0xc1: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)|0x1;_WR(a,c->C);} return; // SET 0,(c->IX+d),C
+            case 0xc2: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)|0x1;_WR(a,c->D);} return; // SET 0,(c->IX+d),D
+            case 0xc3: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)|0x1;_WR(a,c->E);} return; // SET 0,(c->IX+d),E
+            case 0xc4: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)|0x1;_WR(a,c->IXH);} return; // SET 0,(c->IX+d),H
+            case 0xc5: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x1;_WR(a,c->IXL);} return; // SET 0,(c->IX+d),L
+            case 0xc6: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x1);} return; // SET 0,(c->IX+d)
+            case 0xc7: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x1;_WR(a,c->A);} return; // SET 0,(c->IX+d),A
+            case 0xc8: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)|0x2;_WR(a,c->B);} return; // SET 1,(c->IX+d),B
+            case 0xc9: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)|0x2;_WR(a,c->C);} return; // SET 1,(c->IX+d),C
+            case 0xca: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)|0x2;_WR(a,c->D);} return; // SET 1,(c->IX+d),D
+            case 0xcb: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)|0x2;_WR(a,c->E);} return; // SET 1,(c->IX+d),E
+            case 0xcc: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)|0x2;_WR(a,c->IXH);} return; // SET 1,(c->IX+d),H
+            case 0xcd: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x2;_WR(a,c->IXL);} return; // SET 1,(c->IX+d),L
+            case 0xce: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x2);} return; // SET 1,(c->IX+d)
+            case 0xcf: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x2;_WR(a,c->A);} return; // SET 1,(c->IX+d),A
+            case 0xd0: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)|0x4;_WR(a,c->B);} return; // SET 2,(c->IX+d),B
+            case 0xd1: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)|0x4;_WR(a,c->C);} return; // SET 2,(c->IX+d),C
+            case 0xd2: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)|0x4;_WR(a,c->D);} return; // SET 2,(c->IX+d),D
+            case 0xd3: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)|0x4;_WR(a,c->E);} return; // SET 2,(c->IX+d),E
+            case 0xd4: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)|0x4;_WR(a,c->IXH);} return; // SET 2,(c->IX+d),H
+            case 0xd5: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x4;_WR(a,c->IXL);} return; // SET 2,(c->IX+d),L
+            case 0xd6: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x4);} return; // SET 2,(c->IX+d)
+            case 0xd7: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x4;_WR(a,c->A);} return; // SET 2,(c->IX+d),A
+            case 0xd8: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)|0x8;_WR(a,c->B);} return; // SET 3,(c->IX+d),B
+            case 0xd9: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)|0x8;_WR(a,c->C);} return; // SET 3,(c->IX+d),C
+            case 0xda: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)|0x8;_WR(a,c->D);} return; // SET 3,(c->IX+d),D
+            case 0xdb: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)|0x8;_WR(a,c->E);} return; // SET 3,(c->IX+d),E
+            case 0xdc: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)|0x8;_WR(a,c->IXH);} return; // SET 3,(c->IX+d),H
+            case 0xdd: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x8;_WR(a,c->IXL);} return; // SET 3,(c->IX+d),L
+            case 0xde: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x8);} return; // SET 3,(c->IX+d)
+            case 0xdf: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x8;_WR(a,c->A);} return; // SET 3,(c->IX+d),A
+            case 0xe0: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)|0x10;_WR(a,c->B);} return; // SET 4,(c->IX+d),B
+            case 0xe1: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)|0x10;_WR(a,c->C);} return; // SET 4,(c->IX+d),C
+            case 0xe2: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)|0x10;_WR(a,c->D);} return; // SET 4,(c->IX+d),D
+            case 0xe3: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)|0x10;_WR(a,c->E);} return; // SET 4,(c->IX+d),E
+            case 0xe4: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)|0x10;_WR(a,c->IXH);} return; // SET 4,(c->IX+d),H
+            case 0xe5: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x10;_WR(a,c->IXL);} return; // SET 4,(c->IX+d),L
+            case 0xe6: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x10);} return; // SET 4,(c->IX+d)
+            case 0xe7: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x10;_WR(a,c->A);} return; // SET 4,(c->IX+d),A
+            case 0xe8: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)|0x20;_WR(a,c->B);} return; // SET 5,(c->IX+d),B
+            case 0xe9: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)|0x20;_WR(a,c->C);} return; // SET 5,(c->IX+d),C
+            case 0xea: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)|0x20;_WR(a,c->D);} return; // SET 5,(c->IX+d),D
+            case 0xeb: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)|0x20;_WR(a,c->E);} return; // SET 5,(c->IX+d),E
+            case 0xec: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)|0x20;_WR(a,c->IXH);} return; // SET 5,(c->IX+d),H
+            case 0xed: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x20;_WR(a,c->IXL);} return; // SET 5,(c->IX+d),L
+            case 0xee: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x20);} return; // SET 5,(c->IX+d)
+            case 0xef: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x20;_WR(a,c->A);} return; // SET 5,(c->IX+d),A
+            case 0xf0: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)|0x40;_WR(a,c->B);} return; // SET 6,(c->IX+d),B
+            case 0xf1: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)|0x40;_WR(a,c->C);} return; // SET 6,(c->IX+d),C
+            case 0xf2: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)|0x40;_WR(a,c->D);} return; // SET 6,(c->IX+d),D
+            case 0xf3: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)|0x40;_WR(a,c->E);} return; // SET 6,(c->IX+d),E
+            case 0xf4: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)|0x40;_WR(a,c->IXH);} return; // SET 6,(c->IX+d),H
+            case 0xf5: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x40;_WR(a,c->IXL);} return; // SET 6,(c->IX+d),L
+            case 0xf6: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x40);} return; // SET 6,(c->IX+d)
+            case 0xf7: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x40;_WR(a,c->A);} return; // SET 6,(c->IX+d),A
+            case 0xf8: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_RD(a)|0x80;_WR(a,c->B);} return; // SET 7,(c->IX+d),B
+            case 0xf9: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_RD(a)|0x80;_WR(a,c->C);} return; // SET 7,(c->IX+d),C
+            case 0xfa: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_RD(a)|0x80;_WR(a,c->D);} return; // SET 7,(c->IX+d),D
+            case 0xfb: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->E=_RD(a)|0x80;_WR(a,c->E);} return; // SET 7,(c->IX+d),E
+            case 0xfc: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->H=_RD(a)|0x80;_WR(a,c->IXH);} return; // SET 7,(c->IX+d),H
+            case 0xfd: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x80;_WR(a,c->IXL);} return; // SET 7,(c->IX+d),L
+            case 0xfe: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x80);} return; // SET 7,(c->IX+d)
+            case 0xff: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x80;_WR(a,c->A);} return; // SET 7,(c->IX+d),A
             default: return _INVALID_OPCODE(4);
           }
           break;
@@ -1382,198 +1382,198 @@ void _z80_op(z80* c) {
             case 0x3d: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_z80_srl(c,_RD(a));_WR(a,c->L); } return; // SRL (c->IY+d),L
             case 0x3e: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_z80_srl(c,_RD(a))); } return; // SRL (c->IY+d)
             case 0x3f: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_z80_srl(c,_RD(a));_WR(a,c->A); } return; // SRL (c->IY+d),A
-            case 0x40: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
-            case 0x41: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
-            case 0x42: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
-            case 0x43: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
-            case 0x44: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
-            case 0x45: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
-            case 0x46: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
-            case 0x47: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
-            case 0x48: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
-            case 0x49: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
-            case 0x4a: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
-            case 0x4b: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
-            case 0x4c: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
-            case 0x4d: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
-            case 0x4e: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
-            case 0x4f: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
-            case 0x50: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
-            case 0x51: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
-            case 0x52: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
-            case 0x53: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
-            case 0x54: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
-            case 0x55: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
-            case 0x56: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
-            case 0x57: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
-            case 0x58: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
-            case 0x59: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
-            case 0x5a: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
-            case 0x5b: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
-            case 0x5c: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
-            case 0x5d: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
-            case 0x5e: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
-            case 0x5f: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
-            case 0x60: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
-            case 0x61: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
-            case 0x62: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
-            case 0x63: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
-            case 0x64: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
-            case 0x65: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
-            case 0x66: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
-            case 0x67: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
-            case 0x68: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
-            case 0x69: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
-            case 0x6a: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
-            case 0x6b: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
-            case 0x6c: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
-            case 0x6d: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
-            case 0x6e: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
-            case 0x6f: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
-            case 0x70: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
-            case 0x71: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
-            case 0x72: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
-            case 0x73: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
-            case 0x74: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
-            case 0x75: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
-            case 0x76: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
-            case 0x77: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
-            case 0x78: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
-            case 0x79: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
-            case 0x7a: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
-            case 0x7b: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
-            case 0x7c: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
-            case 0x7d: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
-            case 0x7e: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
-            case 0x7f: { uint16_t a=c->WZ=c->IY+d;; _z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
-            case 0x80: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)&~0x1; _WR(a,c->B); } return; // RES 0,(c->IY+d),B
-            case 0x81: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)&~0x1; _WR(a,c->C); } return; // RES 0,(c->IY+d),C
-            case 0x82: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)&~0x1; _WR(a,c->D); } return; // RES 0,(c->IY+d),D
-            case 0x83: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)&~0x1; _WR(a,c->E); } return; // RES 0,(c->IY+d),E
-            case 0x84: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)&~0x1; _WR(a,c->H); } return; // RES 0,(c->IY+d),H
-            case 0x85: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)&~0x1; _WR(a,c->L); } return; // RES 0,(c->IY+d),L
-            case 0x86: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)&~0x1); } return; // RES 0,(c->IY+d)
-            case 0x87: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)&~0x1; _WR(a,c->A); } return; // RES 0,(c->IY+d),A
-            case 0x88: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)&~0x2; _WR(a,c->B); } return; // RES 1,(c->IY+d),B
-            case 0x89: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)&~0x2; _WR(a,c->C); } return; // RES 1,(c->IY+d),C
-            case 0x8a: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)&~0x2; _WR(a,c->D); } return; // RES 1,(c->IY+d),D
-            case 0x8b: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)&~0x2; _WR(a,c->E); } return; // RES 1,(c->IY+d),E
-            case 0x8c: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)&~0x2; _WR(a,c->H); } return; // RES 1,(c->IY+d),H
-            case 0x8d: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)&~0x2; _WR(a,c->L); } return; // RES 1,(c->IY+d),L
-            case 0x8e: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)&~0x2); } return; // RES 1,(c->IY+d)
-            case 0x8f: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)&~0x2; _WR(a,c->A); } return; // RES 1,(c->IY+d),A
-            case 0x90: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)&~0x4; _WR(a,c->B); } return; // RES 2,(c->IY+d),B
-            case 0x91: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)&~0x4; _WR(a,c->C); } return; // RES 2,(c->IY+d),C
-            case 0x92: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)&~0x4; _WR(a,c->D); } return; // RES 2,(c->IY+d),D
-            case 0x93: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)&~0x4; _WR(a,c->E); } return; // RES 2,(c->IY+d),E
-            case 0x94: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)&~0x4; _WR(a,c->H); } return; // RES 2,(c->IY+d),H
-            case 0x95: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)&~0x4; _WR(a,c->L); } return; // RES 2,(c->IY+d),L
-            case 0x96: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)&~0x4); } return; // RES 2,(c->IY+d)
-            case 0x97: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)&~0x4; _WR(a,c->A); } return; // RES 2,(c->IY+d),A
-            case 0x98: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)&~0x8; _WR(a,c->B); } return; // RES 3,(c->IY+d),B
-            case 0x99: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)&~0x8; _WR(a,c->C); } return; // RES 3,(c->IY+d),C
-            case 0x9a: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)&~0x8; _WR(a,c->D); } return; // RES 3,(c->IY+d),D
-            case 0x9b: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)&~0x8; _WR(a,c->E); } return; // RES 3,(c->IY+d),E
-            case 0x9c: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)&~0x8; _WR(a,c->H); } return; // RES 3,(c->IY+d),H
-            case 0x9d: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)&~0x8; _WR(a,c->L); } return; // RES 3,(c->IY+d),L
-            case 0x9e: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)&~0x8); } return; // RES 3,(c->IY+d)
-            case 0x9f: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)&~0x8; _WR(a,c->A); } return; // RES 3,(c->IY+d),A
-            case 0xa0: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)&~0x10; _WR(a,c->B); } return; // RES 4,(c->IY+d),B
-            case 0xa1: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)&~0x10; _WR(a,c->C); } return; // RES 4,(c->IY+d),C
-            case 0xa2: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)&~0x10; _WR(a,c->D); } return; // RES 4,(c->IY+d),D
-            case 0xa3: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)&~0x10; _WR(a,c->E); } return; // RES 4,(c->IY+d),E
-            case 0xa4: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)&~0x10; _WR(a,c->H); } return; // RES 4,(c->IY+d),H
-            case 0xa5: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)&~0x10; _WR(a,c->L); } return; // RES 4,(c->IY+d),L
-            case 0xa6: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)&~0x10); } return; // RES 4,(c->IY+d)
-            case 0xa7: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)&~0x10; _WR(a,c->A); } return; // RES 4,(c->IY+d),A
-            case 0xa8: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)&~0x20; _WR(a,c->B); } return; // RES 5,(c->IY+d),B
-            case 0xa9: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)&~0x20; _WR(a,c->C); } return; // RES 5,(c->IY+d),C
-            case 0xaa: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)&~0x20; _WR(a,c->D); } return; // RES 5,(c->IY+d),D
-            case 0xab: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)&~0x20; _WR(a,c->E); } return; // RES 5,(c->IY+d),E
-            case 0xac: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)&~0x20; _WR(a,c->H); } return; // RES 5,(c->IY+d),H
-            case 0xad: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)&~0x20; _WR(a,c->L); } return; // RES 5,(c->IY+d),L
-            case 0xae: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)&~0x20); } return; // RES 5,(c->IY+d)
-            case 0xaf: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)&~0x20; _WR(a,c->A); } return; // RES 5,(c->IY+d),A
-            case 0xb0: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)&~0x40; _WR(a,c->B); } return; // RES 6,(c->IY+d),B
-            case 0xb1: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)&~0x40; _WR(a,c->C); } return; // RES 6,(c->IY+d),C
-            case 0xb2: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)&~0x40; _WR(a,c->D); } return; // RES 6,(c->IY+d),D
-            case 0xb3: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)&~0x40; _WR(a,c->E); } return; // RES 6,(c->IY+d),E
-            case 0xb4: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)&~0x40; _WR(a,c->H); } return; // RES 6,(c->IY+d),H
-            case 0xb5: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)&~0x40; _WR(a,c->L); } return; // RES 6,(c->IY+d),L
-            case 0xb6: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)&~0x40); } return; // RES 6,(c->IY+d)
-            case 0xb7: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)&~0x40; _WR(a,c->A); } return; // RES 6,(c->IY+d),A
-            case 0xb8: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)&~0x80; _WR(a,c->B); } return; // RES 7,(c->IY+d),B
-            case 0xb9: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)&~0x80; _WR(a,c->C); } return; // RES 7,(c->IY+d),C
-            case 0xba: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)&~0x80; _WR(a,c->D); } return; // RES 7,(c->IY+d),D
-            case 0xbb: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)&~0x80; _WR(a,c->E); } return; // RES 7,(c->IY+d),E
-            case 0xbc: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)&~0x80; _WR(a,c->H); } return; // RES 7,(c->IY+d),H
-            case 0xbd: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)&~0x80; _WR(a,c->L); } return; // RES 7,(c->IY+d),L
-            case 0xbe: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)&~0x80); } return; // RES 7,(c->IY+d)
-            case 0xbf: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)&~0x80; _WR(a,c->A); } return; // RES 7,(c->IY+d),A
-            case 0xc0: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)|0x1; _WR(a,c->B);} return; // SET 0,(c->IY+d),B
-            case 0xc1: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)|0x1; _WR(a,c->C);} return; // SET 0,(c->IY+d),C
-            case 0xc2: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)|0x1; _WR(a,c->D);} return; // SET 0,(c->IY+d),D
-            case 0xc3: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)|0x1; _WR(a,c->E);} return; // SET 0,(c->IY+d),E
-            case 0xc4: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)|0x1; _WR(a,c->IYH);} return; // SET 0,(c->IY+d),H
-            case 0xc5: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)|0x1; _WR(a,c->IYL);} return; // SET 0,(c->IY+d),L
-            case 0xc6: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)|0x1);} return; // SET 0,(c->IY+d)
-            case 0xc7: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)|0x1; _WR(a,c->A);} return; // SET 0,(c->IY+d),A
-            case 0xc8: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)|0x2; _WR(a,c->B);} return; // SET 1,(c->IY+d),B
-            case 0xc9: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)|0x2; _WR(a,c->C);} return; // SET 1,(c->IY+d),C
-            case 0xca: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)|0x2; _WR(a,c->D);} return; // SET 1,(c->IY+d),D
-            case 0xcb: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)|0x2; _WR(a,c->E);} return; // SET 1,(c->IY+d),E
-            case 0xcc: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)|0x2; _WR(a,c->IYH);} return; // SET 1,(c->IY+d),H
-            case 0xcd: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)|0x2; _WR(a,c->IYL);} return; // SET 1,(c->IY+d),L
-            case 0xce: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)|0x2);} return; // SET 1,(c->IY+d)
-            case 0xcf: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)|0x2; _WR(a,c->A);} return; // SET 1,(c->IY+d),A
-            case 0xd0: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)|0x4; _WR(a,c->B);} return; // SET 2,(c->IY+d),B
-            case 0xd1: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)|0x4; _WR(a,c->C);} return; // SET 2,(c->IY+d),C
-            case 0xd2: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)|0x4; _WR(a,c->D);} return; // SET 2,(c->IY+d),D
-            case 0xd3: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)|0x4; _WR(a,c->E);} return; // SET 2,(c->IY+d),E
-            case 0xd4: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)|0x4; _WR(a,c->IYH);} return; // SET 2,(c->IY+d),H
-            case 0xd5: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)|0x4; _WR(a,c->IYL);} return; // SET 2,(c->IY+d),L
-            case 0xd6: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)|0x4);} return; // SET 2,(c->IY+d)
-            case 0xd7: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)|0x4; _WR(a,c->A);} return; // SET 2,(c->IY+d),A
-            case 0xd8: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)|0x8; _WR(a,c->B);} return; // SET 3,(c->IY+d),B
-            case 0xd9: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)|0x8; _WR(a,c->C);} return; // SET 3,(c->IY+d),C
-            case 0xda: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)|0x8; _WR(a,c->D);} return; // SET 3,(c->IY+d),D
-            case 0xdb: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)|0x8; _WR(a,c->E);} return; // SET 3,(c->IY+d),E
-            case 0xdc: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)|0x8; _WR(a,c->IYH);} return; // SET 3,(c->IY+d),H
-            case 0xdd: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)|0x8; _WR(a,c->IYL);} return; // SET 3,(c->IY+d),L
-            case 0xde: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)|0x8);} return; // SET 3,(c->IY+d)
-            case 0xdf: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)|0x8; _WR(a,c->A);} return; // SET 3,(c->IY+d),A
-            case 0xe0: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)|0x10; _WR(a,c->B);} return; // SET 4,(c->IY+d),B
-            case 0xe1: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)|0x10; _WR(a,c->C);} return; // SET 4,(c->IY+d),C
-            case 0xe2: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)|0x10; _WR(a,c->D);} return; // SET 4,(c->IY+d),D
-            case 0xe3: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)|0x10; _WR(a,c->E);} return; // SET 4,(c->IY+d),E
-            case 0xe4: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)|0x10; _WR(a,c->IYH);} return; // SET 4,(c->IY+d),H
-            case 0xe5: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)|0x10; _WR(a,c->IYL);} return; // SET 4,(c->IY+d),L
-            case 0xe6: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)|0x10);} return; // SET 4,(c->IY+d)
-            case 0xe7: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)|0x10; _WR(a,c->A);} return; // SET 4,(c->IY+d),A
-            case 0xe8: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)|0x20; _WR(a,c->B);} return; // SET 5,(c->IY+d),B
-            case 0xe9: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)|0x20; _WR(a,c->C);} return; // SET 5,(c->IY+d),C
-            case 0xea: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)|0x20; _WR(a,c->D);} return; // SET 5,(c->IY+d),D
-            case 0xeb: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)|0x20; _WR(a,c->E);} return; // SET 5,(c->IY+d),E
-            case 0xec: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)|0x20; _WR(a,c->IYH);} return; // SET 5,(c->IY+d),H
-            case 0xed: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)|0x20; _WR(a,c->IYL);} return; // SET 5,(c->IY+d),L
-            case 0xee: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)|0x20);} return; // SET 5,(c->IY+d)
-            case 0xef: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)|0x20; _WR(a,c->A);} return; // SET 5,(c->IY+d),A
-            case 0xf0: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)|0x40; _WR(a,c->B);} return; // SET 6,(c->IY+d),B
-            case 0xf1: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)|0x40; _WR(a,c->C);} return; // SET 6,(c->IY+d),C
-            case 0xf2: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)|0x40; _WR(a,c->D);} return; // SET 6,(c->IY+d),D
-            case 0xf3: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)|0x40; _WR(a,c->E);} return; // SET 6,(c->IY+d),E
-            case 0xf4: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)|0x40; _WR(a,c->IYH);} return; // SET 6,(c->IY+d),H
-            case 0xf5: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)|0x40; _WR(a,c->IYL);} return; // SET 6,(c->IY+d),L
-            case 0xf6: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)|0x40);} return; // SET 6,(c->IY+d)
-            case 0xf7: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)|0x40; _WR(a,c->A);} return; // SET 6,(c->IY+d),A
-            case 0xf8: { uint16_t a=c->WZ=c->IY+d;; c->B=_RD(a)|0x80; _WR(a,c->B);} return; // SET 7,(c->IY+d),B
-            case 0xf9: { uint16_t a=c->WZ=c->IY+d;; c->C=_RD(a)|0x80; _WR(a,c->C);} return; // SET 7,(c->IY+d),C
-            case 0xfa: { uint16_t a=c->WZ=c->IY+d;; c->D=_RD(a)|0x80; _WR(a,c->D);} return; // SET 7,(c->IY+d),D
-            case 0xfb: { uint16_t a=c->WZ=c->IY+d;; c->E=_RD(a)|0x80; _WR(a,c->E);} return; // SET 7,(c->IY+d),E
-            case 0xfc: { uint16_t a=c->WZ=c->IY+d;; c->H=_RD(a)|0x80; _WR(a,c->IYH);} return; // SET 7,(c->IY+d),H
-            case 0xfd: { uint16_t a=c->WZ=c->IY+d;; c->L=_RD(a)|0x80; _WR(a,c->IYL);} return; // SET 7,(c->IY+d),L
-            case 0xfe: { uint16_t a=c->WZ=c->IY+d;; _WR(a,_RD(a)|0x80);} return; // SET 7,(c->IY+d)
-            case 0xff: { uint16_t a=c->WZ=c->IY+d;; c->A=_RD(a)|0x80; _WR(a,c->A);} return; // SET 7,(c->IY+d),A
+            case 0x40: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
+            case 0x41: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
+            case 0x42: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
+            case 0x43: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
+            case 0x44: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
+            case 0x45: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
+            case 0x46: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
+            case 0x47: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x1); } return; // BIT 0,(c->IY+d)
+            case 0x48: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
+            case 0x49: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
+            case 0x4a: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
+            case 0x4b: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
+            case 0x4c: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
+            case 0x4d: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
+            case 0x4e: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
+            case 0x4f: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x2); } return; // BIT 1,(c->IY+d)
+            case 0x50: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
+            case 0x51: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
+            case 0x52: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
+            case 0x53: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
+            case 0x54: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
+            case 0x55: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
+            case 0x56: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
+            case 0x57: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x4); } return; // BIT 2,(c->IY+d)
+            case 0x58: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
+            case 0x59: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
+            case 0x5a: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
+            case 0x5b: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
+            case 0x5c: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
+            case 0x5d: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
+            case 0x5e: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
+            case 0x5f: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x8); } return; // BIT 3,(c->IY+d)
+            case 0x60: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
+            case 0x61: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
+            case 0x62: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
+            case 0x63: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
+            case 0x64: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
+            case 0x65: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
+            case 0x66: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
+            case 0x67: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x10); } return; // BIT 4,(c->IY+d)
+            case 0x68: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
+            case 0x69: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
+            case 0x6a: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
+            case 0x6b: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
+            case 0x6c: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
+            case 0x6d: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
+            case 0x6e: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
+            case 0x6f: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x20); } return; // BIT 5,(c->IY+d)
+            case 0x70: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
+            case 0x71: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
+            case 0x72: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
+            case 0x73: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
+            case 0x74: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
+            case 0x75: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
+            case 0x76: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
+            case 0x77: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x40); } return; // BIT 6,(c->IY+d)
+            case 0x78: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
+            case 0x79: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
+            case 0x7a: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
+            case 0x7b: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
+            case 0x7c: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
+            case 0x7d: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
+            case 0x7e: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
+            case 0x7f: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_z80_ibit(c,_RD(a),0x80); } return; // BIT 7,(c->IY+d)
+            case 0x80: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)&~0x1;_WR(a,c->B); } return; // RES 0,(c->IY+d),B
+            case 0x81: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)&~0x1;_WR(a,c->C); } return; // RES 0,(c->IY+d),C
+            case 0x82: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)&~0x1;_WR(a,c->D); } return; // RES 0,(c->IY+d),D
+            case 0x83: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)&~0x1;_WR(a,c->E); } return; // RES 0,(c->IY+d),E
+            case 0x84: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)&~0x1;_WR(a,c->H); } return; // RES 0,(c->IY+d),H
+            case 0x85: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)&~0x1;_WR(a,c->L); } return; // RES 0,(c->IY+d),L
+            case 0x86: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)&~0x1); } return; // RES 0,(c->IY+d)
+            case 0x87: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)&~0x1;_WR(a,c->A); } return; // RES 0,(c->IY+d),A
+            case 0x88: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)&~0x2;_WR(a,c->B); } return; // RES 1,(c->IY+d),B
+            case 0x89: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)&~0x2;_WR(a,c->C); } return; // RES 1,(c->IY+d),C
+            case 0x8a: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)&~0x2;_WR(a,c->D); } return; // RES 1,(c->IY+d),D
+            case 0x8b: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)&~0x2;_WR(a,c->E); } return; // RES 1,(c->IY+d),E
+            case 0x8c: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)&~0x2;_WR(a,c->H); } return; // RES 1,(c->IY+d),H
+            case 0x8d: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)&~0x2;_WR(a,c->L); } return; // RES 1,(c->IY+d),L
+            case 0x8e: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)&~0x2); } return; // RES 1,(c->IY+d)
+            case 0x8f: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)&~0x2;_WR(a,c->A); } return; // RES 1,(c->IY+d),A
+            case 0x90: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)&~0x4;_WR(a,c->B); } return; // RES 2,(c->IY+d),B
+            case 0x91: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)&~0x4;_WR(a,c->C); } return; // RES 2,(c->IY+d),C
+            case 0x92: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)&~0x4;_WR(a,c->D); } return; // RES 2,(c->IY+d),D
+            case 0x93: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)&~0x4;_WR(a,c->E); } return; // RES 2,(c->IY+d),E
+            case 0x94: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)&~0x4;_WR(a,c->H); } return; // RES 2,(c->IY+d),H
+            case 0x95: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)&~0x4;_WR(a,c->L); } return; // RES 2,(c->IY+d),L
+            case 0x96: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)&~0x4); } return; // RES 2,(c->IY+d)
+            case 0x97: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)&~0x4;_WR(a,c->A); } return; // RES 2,(c->IY+d),A
+            case 0x98: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)&~0x8;_WR(a,c->B); } return; // RES 3,(c->IY+d),B
+            case 0x99: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)&~0x8;_WR(a,c->C); } return; // RES 3,(c->IY+d),C
+            case 0x9a: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)&~0x8;_WR(a,c->D); } return; // RES 3,(c->IY+d),D
+            case 0x9b: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)&~0x8;_WR(a,c->E); } return; // RES 3,(c->IY+d),E
+            case 0x9c: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)&~0x8;_WR(a,c->H); } return; // RES 3,(c->IY+d),H
+            case 0x9d: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)&~0x8;_WR(a,c->L); } return; // RES 3,(c->IY+d),L
+            case 0x9e: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)&~0x8); } return; // RES 3,(c->IY+d)
+            case 0x9f: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)&~0x8;_WR(a,c->A); } return; // RES 3,(c->IY+d),A
+            case 0xa0: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)&~0x10;_WR(a,c->B); } return; // RES 4,(c->IY+d),B
+            case 0xa1: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)&~0x10;_WR(a,c->C); } return; // RES 4,(c->IY+d),C
+            case 0xa2: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)&~0x10;_WR(a,c->D); } return; // RES 4,(c->IY+d),D
+            case 0xa3: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)&~0x10;_WR(a,c->E); } return; // RES 4,(c->IY+d),E
+            case 0xa4: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)&~0x10;_WR(a,c->H); } return; // RES 4,(c->IY+d),H
+            case 0xa5: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)&~0x10;_WR(a,c->L); } return; // RES 4,(c->IY+d),L
+            case 0xa6: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)&~0x10); } return; // RES 4,(c->IY+d)
+            case 0xa7: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)&~0x10;_WR(a,c->A); } return; // RES 4,(c->IY+d),A
+            case 0xa8: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)&~0x20;_WR(a,c->B); } return; // RES 5,(c->IY+d),B
+            case 0xa9: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)&~0x20;_WR(a,c->C); } return; // RES 5,(c->IY+d),C
+            case 0xaa: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)&~0x20;_WR(a,c->D); } return; // RES 5,(c->IY+d),D
+            case 0xab: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)&~0x20;_WR(a,c->E); } return; // RES 5,(c->IY+d),E
+            case 0xac: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)&~0x20;_WR(a,c->H); } return; // RES 5,(c->IY+d),H
+            case 0xad: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)&~0x20;_WR(a,c->L); } return; // RES 5,(c->IY+d),L
+            case 0xae: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)&~0x20); } return; // RES 5,(c->IY+d)
+            case 0xaf: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)&~0x20;_WR(a,c->A); } return; // RES 5,(c->IY+d),A
+            case 0xb0: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)&~0x40;_WR(a,c->B); } return; // RES 6,(c->IY+d),B
+            case 0xb1: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)&~0x40;_WR(a,c->C); } return; // RES 6,(c->IY+d),C
+            case 0xb2: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)&~0x40;_WR(a,c->D); } return; // RES 6,(c->IY+d),D
+            case 0xb3: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)&~0x40;_WR(a,c->E); } return; // RES 6,(c->IY+d),E
+            case 0xb4: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)&~0x40;_WR(a,c->H); } return; // RES 6,(c->IY+d),H
+            case 0xb5: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)&~0x40;_WR(a,c->L); } return; // RES 6,(c->IY+d),L
+            case 0xb6: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)&~0x40); } return; // RES 6,(c->IY+d)
+            case 0xb7: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)&~0x40;_WR(a,c->A); } return; // RES 6,(c->IY+d),A
+            case 0xb8: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)&~0x80;_WR(a,c->B); } return; // RES 7,(c->IY+d),B
+            case 0xb9: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)&~0x80;_WR(a,c->C); } return; // RES 7,(c->IY+d),C
+            case 0xba: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)&~0x80;_WR(a,c->D); } return; // RES 7,(c->IY+d),D
+            case 0xbb: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)&~0x80;_WR(a,c->E); } return; // RES 7,(c->IY+d),E
+            case 0xbc: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)&~0x80;_WR(a,c->H); } return; // RES 7,(c->IY+d),H
+            case 0xbd: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)&~0x80;_WR(a,c->L); } return; // RES 7,(c->IY+d),L
+            case 0xbe: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)&~0x80); } return; // RES 7,(c->IY+d)
+            case 0xbf: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)&~0x80;_WR(a,c->A); } return; // RES 7,(c->IY+d),A
+            case 0xc0: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)|0x1;_WR(a,c->B);} return; // SET 0,(c->IY+d),B
+            case 0xc1: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)|0x1;_WR(a,c->C);} return; // SET 0,(c->IY+d),C
+            case 0xc2: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)|0x1;_WR(a,c->D);} return; // SET 0,(c->IY+d),D
+            case 0xc3: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)|0x1;_WR(a,c->E);} return; // SET 0,(c->IY+d),E
+            case 0xc4: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)|0x1;_WR(a,c->IYH);} return; // SET 0,(c->IY+d),H
+            case 0xc5: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x1;_WR(a,c->IYL);} return; // SET 0,(c->IY+d),L
+            case 0xc6: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x1);} return; // SET 0,(c->IY+d)
+            case 0xc7: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x1;_WR(a,c->A);} return; // SET 0,(c->IY+d),A
+            case 0xc8: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)|0x2;_WR(a,c->B);} return; // SET 1,(c->IY+d),B
+            case 0xc9: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)|0x2;_WR(a,c->C);} return; // SET 1,(c->IY+d),C
+            case 0xca: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)|0x2;_WR(a,c->D);} return; // SET 1,(c->IY+d),D
+            case 0xcb: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)|0x2;_WR(a,c->E);} return; // SET 1,(c->IY+d),E
+            case 0xcc: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)|0x2;_WR(a,c->IYH);} return; // SET 1,(c->IY+d),H
+            case 0xcd: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x2;_WR(a,c->IYL);} return; // SET 1,(c->IY+d),L
+            case 0xce: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x2);} return; // SET 1,(c->IY+d)
+            case 0xcf: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x2;_WR(a,c->A);} return; // SET 1,(c->IY+d),A
+            case 0xd0: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)|0x4;_WR(a,c->B);} return; // SET 2,(c->IY+d),B
+            case 0xd1: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)|0x4;_WR(a,c->C);} return; // SET 2,(c->IY+d),C
+            case 0xd2: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)|0x4;_WR(a,c->D);} return; // SET 2,(c->IY+d),D
+            case 0xd3: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)|0x4;_WR(a,c->E);} return; // SET 2,(c->IY+d),E
+            case 0xd4: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)|0x4;_WR(a,c->IYH);} return; // SET 2,(c->IY+d),H
+            case 0xd5: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x4;_WR(a,c->IYL);} return; // SET 2,(c->IY+d),L
+            case 0xd6: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x4);} return; // SET 2,(c->IY+d)
+            case 0xd7: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x4;_WR(a,c->A);} return; // SET 2,(c->IY+d),A
+            case 0xd8: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)|0x8;_WR(a,c->B);} return; // SET 3,(c->IY+d),B
+            case 0xd9: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)|0x8;_WR(a,c->C);} return; // SET 3,(c->IY+d),C
+            case 0xda: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)|0x8;_WR(a,c->D);} return; // SET 3,(c->IY+d),D
+            case 0xdb: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)|0x8;_WR(a,c->E);} return; // SET 3,(c->IY+d),E
+            case 0xdc: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)|0x8;_WR(a,c->IYH);} return; // SET 3,(c->IY+d),H
+            case 0xdd: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x8;_WR(a,c->IYL);} return; // SET 3,(c->IY+d),L
+            case 0xde: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x8);} return; // SET 3,(c->IY+d)
+            case 0xdf: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x8;_WR(a,c->A);} return; // SET 3,(c->IY+d),A
+            case 0xe0: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)|0x10;_WR(a,c->B);} return; // SET 4,(c->IY+d),B
+            case 0xe1: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)|0x10;_WR(a,c->C);} return; // SET 4,(c->IY+d),C
+            case 0xe2: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)|0x10;_WR(a,c->D);} return; // SET 4,(c->IY+d),D
+            case 0xe3: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)|0x10;_WR(a,c->E);} return; // SET 4,(c->IY+d),E
+            case 0xe4: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)|0x10;_WR(a,c->IYH);} return; // SET 4,(c->IY+d),H
+            case 0xe5: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x10;_WR(a,c->IYL);} return; // SET 4,(c->IY+d),L
+            case 0xe6: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x10);} return; // SET 4,(c->IY+d)
+            case 0xe7: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x10;_WR(a,c->A);} return; // SET 4,(c->IY+d),A
+            case 0xe8: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)|0x20;_WR(a,c->B);} return; // SET 5,(c->IY+d),B
+            case 0xe9: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)|0x20;_WR(a,c->C);} return; // SET 5,(c->IY+d),C
+            case 0xea: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)|0x20;_WR(a,c->D);} return; // SET 5,(c->IY+d),D
+            case 0xeb: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)|0x20;_WR(a,c->E);} return; // SET 5,(c->IY+d),E
+            case 0xec: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)|0x20;_WR(a,c->IYH);} return; // SET 5,(c->IY+d),H
+            case 0xed: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x20;_WR(a,c->IYL);} return; // SET 5,(c->IY+d),L
+            case 0xee: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x20);} return; // SET 5,(c->IY+d)
+            case 0xef: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x20;_WR(a,c->A);} return; // SET 5,(c->IY+d),A
+            case 0xf0: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)|0x40;_WR(a,c->B);} return; // SET 6,(c->IY+d),B
+            case 0xf1: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)|0x40;_WR(a,c->C);} return; // SET 6,(c->IY+d),C
+            case 0xf2: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)|0x40;_WR(a,c->D);} return; // SET 6,(c->IY+d),D
+            case 0xf3: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)|0x40;_WR(a,c->E);} return; // SET 6,(c->IY+d),E
+            case 0xf4: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)|0x40;_WR(a,c->IYH);} return; // SET 6,(c->IY+d),H
+            case 0xf5: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x40;_WR(a,c->IYL);} return; // SET 6,(c->IY+d),L
+            case 0xf6: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x40);} return; // SET 6,(c->IY+d)
+            case 0xf7: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x40;_WR(a,c->A);} return; // SET 6,(c->IY+d),A
+            case 0xf8: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_RD(a)|0x80;_WR(a,c->B);} return; // SET 7,(c->IY+d),B
+            case 0xf9: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_RD(a)|0x80;_WR(a,c->C);} return; // SET 7,(c->IY+d),C
+            case 0xfa: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_RD(a)|0x80;_WR(a,c->D);} return; // SET 7,(c->IY+d),D
+            case 0xfb: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->E=_RD(a)|0x80;_WR(a,c->E);} return; // SET 7,(c->IY+d),E
+            case 0xfc: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->H=_RD(a)|0x80;_WR(a,c->IYH);} return; // SET 7,(c->IY+d),H
+            case 0xfd: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x80;_WR(a,c->IYL);} return; // SET 7,(c->IY+d),L
+            case 0xfe: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x80);} return; // SET 7,(c->IY+d)
+            case 0xff: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x80;_WR(a,c->A);} return; // SET 7,(c->IY+d),A
             default: return _INVALID_OPCODE(4);
           }
           break;
