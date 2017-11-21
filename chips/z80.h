@@ -299,7 +299,7 @@ static void _z80_write(z80* c, uint16_t addr, uint8_t data) {
     WAIT    |    |    | -- |    |
 
     NOTE: the IORQ|RD pins will already be switched off at the beginning
-    of TW, so that IO devices are not don't need to do double work.
+    of TW, so that IO devices don't need to do double work.
 */
 static uint8_t _z80_in(z80* c, uint16_t addr) {
     /*--- T1 ---*/
@@ -330,7 +330,7 @@ static uint8_t _z80_in(z80* c, uint16_t addr) {
     WAIT    |    |    | -- |    |
 
     NOTE: the IORQ|WR pins will already be switched off at the beginning
-    of TW, so that IO devices are not don't need to do double work.
+    of TW, so that IO devices don't need to do double work.
 */
 static void _z80_out(z80* c, uint16_t addr, uint8_t data) {
     /*--- T1 ---*/
