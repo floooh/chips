@@ -675,24 +675,52 @@ static void _z80_ibit(z80* c, uint8_t val, uint8_t mask) {
     c->F = f | (c->F & Z80_CF);
 }
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
-static uint16_t _z80_add16(z80* c, uint16_t val0, uint16_t val1) {
-    // FIXME
-    return 0;
+static uint16_t _z80_add16(z80* c, uint16_t acc, uint16_t val) {
+    c->WZ = acc+1;
+    uint32_t res = acc + val;
+    // flag computation taken from MAME
+    c->F = (c->F & (Z80_SF|Z80_ZF|Z80_VF)) |
+           (((acc^res^val)>>8)&Z80_HF)|
+           ((res>>16) & Z80_CF) | ((res >> 8) & (Z80_YF|Z80_XF));
+    _T(); _T(); _T(); _T();
+    _T(); _T(); _T();
+    return (uint16_t)res;
 }
 
-static uint16_t _z80_adc16(z80* c, uint16_t val0, uint16_t val1) {
-    // FIXME
-    return 0;
+static uint16_t _z80_adc16(z80* c, uint16_t acc, uint16_t val) {
+    c->WZ = acc+1;
+    uint32_t res = acc + val + (c->F & Z80_CF);
+    // flag computation taken from MAME
+    c->F = (((acc^res^val)>>8)&Z80_HF) |
+           ((res>>16)&Z80_CF) |
+           ((res>>8)&(Z80_SF|Z80_YF|Z80_XF)) |
+           ((res & 0xFFFF) ? 0 : Z80_ZF) |
+           (((val^acc^0x8000) & (val^res)&0x8000)>>13);
+    _T(); _T(); _T(); _T();
+    _T(); _T(); _T();
+    return res;
 }
 
-static uint16_t _z80_sbc16(z80* c, uint16_t val0, uint16_t val1) {
-    // FIXME
-    return 0;
+static uint16_t _z80_sbc16(z80* c, uint16_t acc, uint16_t val) {
+    c->WZ = acc+1;
+    uint32_t res = acc - val - (c->F & Z80_CF);
+    // flag computation taken from MAME
+    c->F = (((acc^res^val)>>8)&Z80_HF) | Z80_NF |
+           ((res>>16)&Z80_CF) |
+           ((res>>8) & (Z80_SF|Z80_YF|Z80_XF)) |
+           ((res & 0xFFFF) ? 0 : Z80_ZF) |
+           (((val^acc) & (acc^res)&0x8000)>>13);
+    _T(); _T(); _T(); _T();
+    _T(); _T(); _T();
+    return res;
 }
 
 static uint16_t _z80_exsp(z80* c, uint16_t val) {
-    // FIXME!
-    return 0;
+    c->Z = _RD(c->SP); c->W = _RD(c->SP+1);
+    _T();
+    _WR(c->SP, (uint8_t)val); _WR(c->SP+1, (uint8_t)(val>>8));
+    _T(); _T();
+    return c->WZ;
 }
 
 static void _z80_halt(z80* c) {
