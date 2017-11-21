@@ -88,7 +88,7 @@ typedef struct _z80 {
     /* 16-bit address bus */
     uint16_t ADDR;
     /* 8-bit data bus */
-    uint8_t DATA;       /* data pins */
+    uint8_t DATA;
     /* interrupt mode (0, 1 or 2) */
     uint8_t IM;
     /* interrupt enable bits */
