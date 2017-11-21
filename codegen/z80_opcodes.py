@@ -282,7 +282,7 @@ def enc_op(op, ext, cc) :
             op_tbl = [
                 [ 'JP nn', '_IMM16(); c->PC=c->WZ;' ],
                 [ None, None ], # CB prefix instructions
-                [ 'OUT (n),A', '_OUT((c->A<<8)|_RD(c->PC++), c->A);' ],
+                [ 'OUT (n),A', 'c->WZ=((c->A<<8)|_RD(c->PC++));_OUT(c->WZ,c->A);c->Z++;' ],
                 [ 'IN A,(n)', 'c->WZ=((c->A<<8)|_RD(c->PC++));c->A=_IN(c->WZ++);' ],
                 [ 'EX (SP),{}'.format(rp[2]), 'c->{}=_z80_exsp(c,c->{});'.format(rp[2], rp[2]) ],
                 [ 'EX DE,HL', '_SWP16(c->DE,c->HL);' ],
@@ -381,10 +381,10 @@ def enc_ed_op(op) :
             if y == 6:
                 # undocumented special case 'OUT (C),F', always output 0
                 o.cmd = 'OUT (C)';
-                o.src = '_OUT(c->BC,0);'
+                o.src = 'c->WZ=c->BC;_OUT(c->WZ++,0);'
             else:
                 o.cmt = 'OUT (C),{}'.format(r[y])
-                o.src = '_OUT(c->BC,c->{});'.format(r[y])
+                o.src = 'c->WZ=c->BC;_OUT(c->WZ++,c->{});'.format(r[y])
         elif z == 2:
             # SBC/ADC HL,rr
             cmt = 'SBC' if q == 0 else 'ADC'
