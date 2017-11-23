@@ -179,15 +179,15 @@ def enc_op(op, ext, cc) :
             elif y == 2:
                 # DJNZ d
                 o.cmt = 'DJNZ'
-                o.src = '_z80_djnz(c);'
+                o.src = '_z80_djnz(c,tick);'
             elif  y == 3:
                 # JR d
                 o.cmt = 'JR d'
-                o.src = '_z80_jr(c);'
+                o.src = '_z80_jr(c,tick);'
             else:
                 # JR cc,d
                 o.cmt = 'JR {},d'.format(cond_cmt[y-4])
-                o.src = '_z80_jr_cc(c,{});'.format(cond[y-4])
+                o.src = '_z80_jr_cc(c,{},tick);'.format(cond[y-4])
         elif z == 1:
             if q == 0:
                 # 16-bit immediate loads
@@ -196,7 +196,7 @@ def enc_op(op, ext, cc) :
             else :
                 # ADD HL,rr; ADD IX,rr; ADD IY,rr
                 o.cmt = 'ADD {},{}'.format(rp[2],rp[p])
-                o.src = 'c->{}=_z80_add16(c,c->{},c->{});'.format(rp[2],rp[2],rp[p]) 
+                o.src = 'c->{}=_z80_add16(c,c->{},c->{},tick);'.format(rp[2],rp[2],rp[p]) 
         elif z == 2:
             # indirect loads
             op_tbl = [
@@ -259,7 +259,7 @@ def enc_op(op, ext, cc) :
         if z == 0:
             # RET cc
             o.cmt = 'RET {}'.format(cond_cmt[y])
-            o.src = '_z80_retcc(c,{});'.format(cond[y])
+            o.src = '_z80_retcc(c,{},tick);'.format(cond[y])
         elif z == 1:
             if q == 0:
                 # POP BC,DE,HL,IX,IY,AF
@@ -268,7 +268,7 @@ def enc_op(op, ext, cc) :
             else:
                 # misc ops
                 op_tbl = [
-                    [ 'RET', '_z80_ret(c);' ],
+                    [ 'RET', '_z80_ret(c,tick);' ],
                     [ 'EXX', '_SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_);' ],
                     [ 'JP {}'.format(rp[2]), 'c->PC=c->{};'.format(rp[2]) ],
                     [ 'LD SP,{}'.format(rp[2]), '_T();_T();c->SP=c->{};'.format(rp[2]) ]
@@ -286,7 +286,7 @@ def enc_op(op, ext, cc) :
                 [ None, None ], # CB prefix instructions
                 [ 'OUT (n),A', 'c->WZ=((c->A<<8)|_RD(c->PC++));_OUT(c->WZ,c->A);c->Z++;' ],
                 [ 'IN A,(n)', 'c->WZ=((c->A<<8)|_RD(c->PC++));c->A=_IN(c->WZ++);' ],
-                [ 'EX (SP),{}'.format(rp[2]), 'c->{}=_z80_exsp(c,c->{});'.format(rp[2], rp[2]) ],
+                [ 'EX (SP),{}'.format(rp[2]), 'c->{}=_z80_exsp(c,c->{},tick);'.format(rp[2], rp[2]) ],
                 [ 'EX DE,HL', '_SWP16(c->DE,c->HL);' ],
                 [ 'DI', '_z80_di(c);' ],
                 [ 'EI', '_z80_ei(c);' ]
@@ -296,7 +296,7 @@ def enc_op(op, ext, cc) :
         elif z == 4:
             # CALL cc,nn
             o.cmt = 'CALL {},nn'.format(cond_cmt[y])
-            o.src = '_z80_callcc(c, {});'.format(cond[y])
+            o.src = '_z80_callcc(c,{},tick);'.format(cond[y])
         elif z == 5:
             if q == 0:
                 # PUSH BC,DE,HL,IX,IY,AF
@@ -304,7 +304,7 @@ def enc_op(op, ext, cc) :
                 o.src = '_T();_WR(--c->SP,(uint8_t)(c->{}>>8)); _WR(--c->SP,(uint8_t)c->{});'.format(rp2[p], rp2[p])
             else:
                 op_tbl = [
-                    [ 'CALL nn', '_z80_call(c);' ],
+                    [ 'CALL nn', '_z80_call(c,tick);' ],
                     [ None, None ], # DD prefix instructions
                     [ None, None ], # ED prefix instructions
                     [ None, None ], # FD prefix instructions
@@ -318,7 +318,7 @@ def enc_op(op, ext, cc) :
         elif z == 7:
             # RST
             o.cmt = 'RST {}'.format(hex(y*8))
-            o.src = '_z80_rst(c,{});'.format(hex(y*8))
+            o.src = '_z80_rst(c,{},tick);'.format(hex(y*8))
 
     return o
 
@@ -340,28 +340,28 @@ def enc_ed_op(op) :
         if y >= 4 and z < 4 :
             op_tbl = [
                 [ 
-                    [ 'LDI',    '_z80_ldi(c);' ],
-                    [ 'LDD',    '_z80_ldd(c);' ],
-                    [ 'LDIR',   '_z80_ldir(c);' ],
-                    [ 'LDDR',   '_z80_lddr(c);' ]
+                    [ 'LDI',    '_z80_ldi(c,tick);' ],
+                    [ 'LDD',    '_z80_ldd(c,tick);' ],
+                    [ 'LDIR',   '_z80_ldir(c,tick);' ],
+                    [ 'LDDR',   '_z80_lddr(c,tick);' ]
                 ],
                 [
-                    [ 'CPI',    '_z80_cpi(c);' ],
-                    [ 'CPD',    '_z80_cpd(c);' ],
-                    [ 'CPIR',   '_z80_cpir(c);' ],
-                    [ 'CPDR',   '_z80_cpdr(c);' ]
+                    [ 'CPI',    '_z80_cpi(c,tick);' ],
+                    [ 'CPD',    '_z80_cpd(c,tick);' ],
+                    [ 'CPIR',   '_z80_cpir(c,tick);' ],
+                    [ 'CPDR',   '_z80_cpdr(c,tick);' ]
                 ],
                 [
-                    [ 'INI',    '_z80_ini(c);' ],
-                    [ 'IND',    '_z80_ind(c);' ],
-                    [ 'INIR',   '_z80_inir(c);' ],
-                    [ 'INDR',   '_z80_indr(c);' ]
+                    [ 'INI',    '_z80_ini(c,tick);' ],
+                    [ 'IND',    '_z80_ind(c,tick);' ],
+                    [ 'INIR',   '_z80_inir(c,tick);' ],
+                    [ 'INDR',   '_z80_indr(c,tick);' ]
                 ],
                 [
-                    [ 'OUTI',   '_z80_outi(c);' ],
-                    [ 'OUTD',   '_z80_outd(c);' ],
-                    [ 'OTIR',   '_z80_otir(c);' ],
-                    [ 'OTDR',   '_z80_otdr(c);' ]
+                    [ 'OUTI',   '_z80_outi(c,tick);' ],
+                    [ 'OUTD',   '_z80_outd(c,tick);' ],
+                    [ 'OTIR',   '_z80_otir(c,tick);' ],
+                    [ 'OTDR',   '_z80_otdr(c,tick);' ]
                 ]
             ]
             o.cmt = op_tbl[z][y-4][0]
@@ -392,7 +392,7 @@ def enc_ed_op(op) :
             cmt = 'SBC' if q == 0 else 'ADC'
             src = '_z80_sbc16' if q == 0 else '_z80_adc16'
             o.cmt = '{} HL,{}'.format(cmt, rp[p])
-            o.src = 'c->HL={}(c,c->HL,c->{});'.format(src, rp[p])
+            o.src = 'c->HL={}(c,c->HL,c->{},tick);'.format(src, rp[p])
         elif z == 3:
             # 16-bit immediate address load/store
             if q == 0:
@@ -422,8 +422,8 @@ def enc_ed_op(op) :
                 [ 'LD R,A', '_T(); c->R=c->A;' ],
                 [ 'LD A,I', '_T(); c->A=c->I; c->F=_z80_sziff2(c,c->I)|(c->F&Z80_CF);' ],
                 [ 'LD A,R', '_T(); c->A=c->R; c->F=_z80_sziff2(c,c->R)|(c->F&Z80_CF);' ],
-                [ 'RRD',    '_z80_rrd(c);' ],
-                [ 'RLD',    '_z80_rld(c);' ],
+                [ 'RRD',    '_z80_rrd(c,tick);' ],
+                [ 'RLD',    '_z80_rld(c,tick);' ],
                 [ 'NOP (ED)', ' ' ],
                 [ 'NOP (ED)', ' ' ],
             ]
@@ -526,6 +526,7 @@ def l(s) :
 def write_header() :
     l('// machine generated, do not edit!')
     l('static void _z80_op(z80* c) {')
+    l('  void(*tick)(z80*) = c->tick;')
 
 #-------------------------------------------------------------------------------
 # begin a new instruction group (begins a switch statement)
@@ -541,9 +542,9 @@ def write_begin_group(indent, ext_byte=None, read_offset=False) :
     # increment R
     if read_offset :
         l('{}{{ const int8_t d = _RDS(c->PC++);'.format(tab(indent)))
-        l('{}switch (_z80_xxcb_fetch(c)) {{'.format(tab(indent)))
+        l('{}switch (_z80_xxcb_fetch(c,tick)) {{'.format(tab(indent)))
     else:
-        l('{}switch (_z80_fetch(c)) {{'.format(tab(indent)))
+        l('{}switch (_z80_fetch(c,tick)) {{'.format(tab(indent)))
     indent += 1
     return indent
 

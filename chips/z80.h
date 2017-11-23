@@ -72,30 +72,27 @@ typedef struct _z80 {
     void (*tick)(z80* cpu);
     /* number of executed ticks in current instruction */
     uint32_t ticks;
-    /* user-provided context pointer */
-    void* context;
-
-    /* NOTE: union layout assumes little-endian CPU */
-    union { uint16_t BC; struct { uint8_t C, B; }; };
-    union { uint16_t DE; struct { uint8_t E, D; }; };
-    union { uint16_t HL; struct { uint8_t L, H; }; };
-    union { uint16_t AF; struct { uint8_t F, A; }; };
-    union { uint16_t IX; struct { uint8_t IXL, IXH; }; };
-    union { uint16_t IY; struct { uint8_t IYL, IYH; }; };
-    union { uint16_t WZ; struct { uint8_t Z, W; }; };
-    union { uint16_t IR; struct { uint8_t R, I; }; };
-    /* alternate register set (there is no WZ' register!) */
-    uint16_t BC_, DE_, HL_, AF_;
-    /* program counter */
-    uint16_t PC;
-    /* stack pointer */
-    uint16_t SP;
     /* control pins (see z80_pins enum) */
     uint16_t CTRL;
     /* 16-bit address bus */
     uint16_t ADDR;
     /* 8-bit data bus */
     uint8_t DATA;
+    /* program counter */
+    uint16_t PC;
+    /* NOTE: union layout assumes little-endian CPU */
+    union { uint16_t AF; struct { uint8_t F, A; }; };
+    union { uint16_t HL; struct { uint8_t L, H; }; };
+    union { uint16_t IX; struct { uint8_t IXL, IXH; }; };
+    union { uint16_t IY; struct { uint8_t IYL, IYH; }; };
+    union { uint16_t BC; struct { uint8_t C, B; }; };
+    union { uint16_t DE; struct { uint8_t E, D; }; };
+    union { uint16_t WZ; struct { uint8_t Z, W; }; };
+    union { uint16_t IR; struct { uint8_t R, I; }; };
+    /* alternate register set (there is no WZ' register!) */
+    uint16_t BC_, DE_, HL_, AF_;
+    /* stack pointer */
+    uint16_t SP;
     /* interrupt mode (0, 1 or 2) */
     uint8_t IM;
     /* interrupt enable bits */
@@ -104,6 +101,8 @@ typedef struct _z80 {
     /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
 
+    /* user-provided context pointer */
+    void* context;
     /* flag lookup table for SZP flag combinations */
     uint8_t szp[256];
 } z80;
@@ -187,12 +186,12 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 #define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
 #define _ON(m) { c->CTRL |= (m); }
 #define _OFF(m) { c->CTRL &= ~(m); }
-#define _T() { c->tick(c); c->ticks++; }
-#define _WR(a,r) _z80_write(c, a, r)
-#define _RD(a) _z80_read(c, a)
-#define _RDS(a) ((int8_t)_z80_read(c, a))
-#define _OUT(a,r) _z80_out(c, a, r)
-#define _IN(a) _z80_in(c, a)
+#define _T() { tick(c); c->ticks++; }
+#define _WR(a,r) _z80_write(c, a, r, tick)
+#define _RD(a) _z80_read(c, a, tick)
+#define _RDS(a) ((int8_t)_z80_read(c, a, tick))
+#define _OUT(a,r) _z80_out(c, a, r, tick)
+#define _IN(a) _z80_in(c, a, tick)
 #define _SWP16(a,b) { uint16_t tmp=a; a=b; b=tmp; }
 #define _IMM16() c->Z=_RD(c->PC++);c->W=_RD(c->PC++);
 
@@ -209,7 +208,7 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
     D7-D0   |    |   X|    |    |
     RFSH    |    |    |****|****|
 */
-static uint8_t _z80_fetch(z80* c) {
+static uint8_t _z80_fetch(z80* c, void(*tick)(z80*)) {
     /*--- t1 ---*/
     _ON(Z80_M1);
     c->ADDR = c->PC++;
@@ -239,7 +238,7 @@ static uint8_t _z80_fetch(z80* c) {
    FIXME: is memory refresh issued during such a special fetch
    machine cycle? currently assuming no
 */
-static uint8_t _z80_xxcb_fetch(z80* c) {
+static uint8_t _z80_xxcb_fetch(z80* c, void(*tick)(z80*)) {
     /*--- t1 ---*/
     _ON(Z80_M1);
     c->ADDR = c->PC++;
@@ -269,7 +268,7 @@ static uint8_t _z80_xxcb_fetch(z80* c) {
     D7-D0   |    |    | X  |
     WAIT    |    | -- |    |
 */
-static uint8_t _z80_read(z80* c, uint16_t addr) {
+static uint8_t _z80_read(z80* c, uint16_t addr, void(*tick)(z80*)) {
     /*--- T1 ---*/
     c->ADDR = addr;
     _T();
@@ -296,7 +295,7 @@ static uint8_t _z80_read(z80* c, uint16_t addr) {
     D7-D0   |   X|XXXX|XXXX|
     WAIT    |    | -- |    |
 */
-static void _z80_write(z80* c, uint16_t addr, uint8_t data) {
+static void _z80_write(z80* c, uint16_t addr, uint8_t data, void(*tick)(z80*)) {
     /*--- T1 ---*/
     c->ADDR = addr;
     _T();
@@ -325,7 +324,7 @@ static void _z80_write(z80* c, uint16_t addr, uint8_t data) {
     NOTE: the IORQ|RD pins will already be switched off at the beginning
     of TW, so that IO devices don't need to do double work.
 */
-static uint8_t _z80_in(z80* c, uint16_t addr) {
+static uint8_t _z80_in(z80* c, uint16_t addr, void(*tick)(z80*)) {
     /*--- T1 ---*/
     c->ADDR = addr;
     _T();
@@ -356,7 +355,7 @@ static uint8_t _z80_in(z80* c, uint16_t addr) {
     NOTE: the IORQ|WR pins will already be switched off at the beginning
     of TW, so that IO devices don't need to do double work.
 */
-static void _z80_out(z80* c, uint16_t addr, uint8_t data) {
+static void _z80_out(z80* c, uint16_t addr, uint8_t data, void(*tick)(z80*)) {
     /*--- T1 ---*/
     c->ADDR = addr;
     _T();
@@ -513,7 +512,7 @@ static uint8_t _z80_srl(z80* c, uint8_t val) {
     return r;
 }
 
-static void _z80_rrd(z80* c) {
+static void _z80_rrd(z80* c, void(*tick)(z80*)) {
     c->WZ = c->HL;
     uint8_t x = _RD(c->WZ++);
     uint8_t tmp = c->A & 0xF;
@@ -524,7 +523,7 @@ static void _z80_rrd(z80* c) {
     c->F = c->szp[c->A] | (c->F & Z80_CF);
 }
 
-static void _z80_rld(z80* c) {
+static void _z80_rld(z80* c, void(*tick)(z80*)) {
     c->WZ = c->HL;
     uint8_t x = _RD(c->WZ++);
     uint8_t tmp = c->A & 0xF;
@@ -536,7 +535,7 @@ static void _z80_rld(z80* c) {
 }
 
 /*-- BLOCK FUNCTIONS ---------------------------------------------------------*/
-static void _z80_ldi(z80* c) {
+static void _z80_ldi(z80* c, void(*tick)(z80*)) {
     uint8_t val = _RD(c->HL);
     _WR(c->DE, val);
     _T(); _T();
@@ -553,7 +552,7 @@ static void _z80_ldi(z80* c) {
     c->F = f;
 }
 
-static void _z80_ldd(z80* c) {
+static void _z80_ldd(z80* c, void(*tick)(z80*)) {
     uint8_t val = _RD(c->HL);
     _WR(c->DE, val);
     _T(); _T();
@@ -570,8 +569,8 @@ static void _z80_ldd(z80* c) {
     c->F = f;
 }
 
-static void _z80_ldir(z80* c) {
-    _z80_ldi(c);
+static void _z80_ldir(z80* c, void(*tick)(z80*)) {
+    _z80_ldi(c, tick);
     if (c->BC != 0) {
         c->PC -= 2;
         c->WZ = c->PC + 1;
@@ -579,8 +578,8 @@ static void _z80_ldir(z80* c) {
     }
 }
 
-static void _z80_lddr(z80* c) {
-    _z80_ldd(c);
+static void _z80_lddr(z80* c, void(*tick)(z80*)) {
+    _z80_ldd(c, tick);
     if (c->BC != 0) {
         c->PC -= 2;
         c->WZ = c->PC + 1;
@@ -588,7 +587,7 @@ static void _z80_lddr(z80* c) {
     }
 }
 
-static void _z80_cpi(z80* c) {
+static void _z80_cpi(z80* c, void(*tick)(z80*)) {
     int r = (int)c->A - (int)_RD(c->HL);
     _T(); _T(); _T(); _T(); _T();
     uint8_t f = Z80_NF | (c->F & Z80_CF) | _SZ(r);
@@ -607,7 +606,7 @@ static void _z80_cpi(z80* c) {
     c->F = f;
 }
 
-static void _z80_cpd(z80* c) {
+static void _z80_cpd(z80* c, void(*tick)(z80*)) {
     int r = (int)c->A - (int)_RD(c->HL);
     _T(); _T(); _T(); _T(); _T();
     uint8_t f = Z80_NF | (c->F & Z80_CF) | _SZ(r);
@@ -626,8 +625,8 @@ static void _z80_cpd(z80* c) {
     c->F = f;
 }
 
-static void _z80_cpir(z80* c) {
-    _z80_cpi(c);
+static void _z80_cpir(z80* c, void(*tick)(z80*)) {
+    _z80_cpi(c, tick);
     if ((c->BC != 0) && !(c->F & Z80_ZF)) {
         c->PC -= 2;
         c->WZ = c->PC + 1;    /* FIXME: is this correct (see memptr_eng.txt) */
@@ -635,8 +634,8 @@ static void _z80_cpir(z80* c) {
     }
 }
 
-static void _z80_cpdr(z80* c) {
-    _z80_cpd(c);
+static void _z80_cpdr(z80* c, void(*tick)(z80*)) {
+    _z80_cpd(c, tick);
     if ((c->BC != 0) && !(c->F & Z80_ZF)) {
         c->PC -= 2;
         c->WZ = c->PC + 1;
@@ -657,7 +656,7 @@ _z80_ini_ind_flags(z80* c, uint8_t io_val, int c_add) {
     return f;
 }
 
-static void _z80_ini(z80* c) {
+static void _z80_ini(z80* c, void(*tick)(z80*)) {
     _T();
     c->WZ = c->BC;
     uint8_t io_val = _IN(c->WZ++);
@@ -666,7 +665,7 @@ static void _z80_ini(z80* c) {
     c->F = _z80_ini_ind_flags(c, io_val, +1);
 }
 
-static void _z80_ind(z80* c) {
+static void _z80_ind(z80* c, void(*tick)(z80*)) {
     _T();
     c->WZ = c->BC;
     uint8_t io_val = _IN(c->WZ--);
@@ -674,16 +673,16 @@ static void _z80_ind(z80* c) {
     _WR(c->HL--, io_val);
     c->F = _z80_ini_ind_flags(c, io_val, -1);}
 
-static void _z80_inir(z80* c) {
-    _z80_ini(c);
+static void _z80_inir(z80* c, void(*tick)(z80*)) {
+    _z80_ini(c, tick);
     if (c->B != 0) {
         c->PC -= 2;
         _T(); _T(); _T(); _T(); _T();
     }
 }
 
-static void _z80_indr(z80* c) {
-    _z80_ind(c);
+static void _z80_indr(z80* c, void(*tick)(z80*)) {
+    _z80_ind(c, tick);
     if (c->B != 0) {
         c->PC -= 2;
         _T(); _T(); _T(); _T(); _T();
@@ -701,7 +700,7 @@ static uint8_t _z80_outi_outd_flags(z80* c, uint8_t io_val) {
     f |= c->szp[((uint8_t)(t & 0x07))^c->B] & Z80_PF;
     return f;
 }
-static void _z80_outi(z80* c) {
+static void _z80_outi(z80* c, void(*tick)(z80*)) {
     _T();
     uint8_t io_val = _RD(c->HL++);
     c->B--;
@@ -710,7 +709,7 @@ static void _z80_outi(z80* c) {
     c->F = _z80_outi_outd_flags(c, io_val);
 }
 
-static void _z80_outd(z80* c) {
+static void _z80_outd(z80* c, void(*tick)(z80*)) {
     _T();
     uint8_t io_val = _RD(c->HL--);
     c->B--;
@@ -719,16 +718,16 @@ static void _z80_outd(z80* c) {
     c->F = _z80_outi_outd_flags(c, io_val);
 }
 
-static void _z80_otir(z80* c) {
-    _z80_outi(c);
+static void _z80_otir(z80* c, void(*tick)(z80*)) {
+    _z80_outi(c, tick);
     if (c->B != 0) {
         c->PC -= 2;
         _T(); _T(); _T(); _T(); _T();
     }
 }
 
-static void _z80_otdr(z80* c) {
-    _z80_outd(c);
+static void _z80_otdr(z80* c, void(*tick)(z80*)) {
+    _z80_outd(c, tick);
     if (c->B != 0) {
         c->PC -= 2;
         _T(); _T(); _T(); _T(); _T();
@@ -736,7 +735,7 @@ static void _z80_otdr(z80* c) {
 }
 
 /*-- CONTROL FLOW FUNCTIONS --------------------------------------------------*/
-static void _z80_djnz(z80* c) {
+static void _z80_djnz(z80* c, void(*tick)(z80*)) {
     _T();
     int8_t d = _RDS(c->PC++);
     if (--c->B > 0) {
@@ -745,14 +744,14 @@ static void _z80_djnz(z80* c) {
     }
 }
 
-static void _z80_jr(z80* c) {
+static void _z80_jr(z80* c, void(*tick)(z80*)) {
     int8_t d = _RDS(c->PC++);
     c->WZ = c->PC + d;
     c->PC = c->WZ;
     _T(); _T(); _T(); _T(); _T();
 }
 
-static void _z80_jr_cc(z80* c, bool cond) {
+static void _z80_jr_cc(z80* c, bool cond, void(*tick)(z80*)) {
     int8_t d = _RDS(c->PC++);
     if (cond) {
         c->WZ = c->PC = c->PC + d;
@@ -760,7 +759,7 @@ static void _z80_jr_cc(z80* c, bool cond) {
     }
 }
 
-static void _z80_call(z80* c) {
+static void _z80_call(z80* c, void(*tick)(z80*)) {
     _IMM16();
     _T();
     _WR(--c->SP, (uint8_t)(c->PC>>8));
@@ -768,13 +767,13 @@ static void _z80_call(z80* c) {
     c->PC=c->WZ;
 }
 
-static void _z80_ret(z80* c) {
+static void _z80_ret(z80* c, void(*tick)(z80*)) {
     c->Z = _RD(c->SP++);
     c->W = _RD(c->SP++);
     c->PC = c->WZ;
 }
 
-static void _z80_callcc(z80* c, bool cond) {
+static void _z80_callcc(z80* c, bool cond, void(*tick)(z80*)) {
     _IMM16();
     if (cond) {
         _T();
@@ -784,7 +783,7 @@ static void _z80_callcc(z80* c, bool cond) {
     }
 }
 
-static void _z80_retcc(z80* c, bool cond) {
+static void _z80_retcc(z80* c, bool cond, void(*tick)(z80*)) {
     _T();
     if (cond) {
         c->Z = _RD(c->SP++);
@@ -812,7 +811,7 @@ static void _z80_ibit(z80* c, uint8_t val, uint8_t mask) {
 }
 
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
-static uint16_t _z80_add16(z80* c, uint16_t acc, uint16_t val) {
+static uint16_t _z80_add16(z80* c, uint16_t acc, uint16_t val, void(*tick)(z80*)) {
     c->WZ = acc+1;
     uint32_t res = acc + val;
     // flag computation taken from MAME
@@ -824,7 +823,7 @@ static uint16_t _z80_add16(z80* c, uint16_t acc, uint16_t val) {
     return (uint16_t)res;
 }
 
-static uint16_t _z80_adc16(z80* c, uint16_t acc, uint16_t val) {
+static uint16_t _z80_adc16(z80* c, uint16_t acc, uint16_t val, void(*tick)(z80*)) {
     c->WZ = acc+1;
     uint32_t res = acc + val + (c->F & Z80_CF);
     // flag computation taken from MAME
@@ -838,7 +837,7 @@ static uint16_t _z80_adc16(z80* c, uint16_t acc, uint16_t val) {
     return res;
 }
 
-static uint16_t _z80_sbc16(z80* c, uint16_t acc, uint16_t val) {
+static uint16_t _z80_sbc16(z80* c, uint16_t acc, uint16_t val, void(*tick)(z80*)) {
     c->WZ = acc+1;
     uint32_t res = acc - val - (c->F & Z80_CF);
     // flag computation taken from MAME
@@ -852,7 +851,7 @@ static uint16_t _z80_sbc16(z80* c, uint16_t acc, uint16_t val) {
     return res;
 }
 
-static uint16_t _z80_exsp(z80* c, uint16_t val) {
+static uint16_t _z80_exsp(z80* c, uint16_t val, void(*tick)(z80*)) {
     c->Z = _RD(c->SP); c->W = _RD(c->SP+1);
     _T();
     _WR(c->SP, (uint8_t)val); _WR(c->SP+1, (uint8_t)(val>>8));
@@ -924,7 +923,7 @@ static void _z80_ccf(z80* c) {
     c->F = ((c->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF))|((c->F&Z80_CF)<<4)|(c->A&(Z80_YF|Z80_XF)))^Z80_CF;
 }
 
-static void _z80_rst(z80* c, uint8_t vec) {
+static void _z80_rst(z80* c, uint8_t vec, void(*tick)(z80*)) {
     _WR(--c->SP, (uint8_t)c->PC<<8);
     _WR(--c->SP, (uint8_t)c->PC);
     c->WZ = c->PC = (uint16_t) vec;
