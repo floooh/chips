@@ -1,5 +1,5 @@
 // machine generated, do not edit!
-void _z80_op(z80* c) {
+static void _z80_op(z80* c) {
   switch (_z80_fetch(c)) {
     case 0x0:   return; // NOP
     case 0x1: _IMM16(); c->BC=c->WZ; return; // LD BC,nn

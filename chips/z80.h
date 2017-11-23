@@ -114,6 +114,8 @@ typedef struct {
 
 /* initialize a new z80 instance */
 extern void z80_init(z80* cpu, z80_desc* desc);
+/* reset an existing z80 instance */
+extern void z80_reset(z80* cpu);
 /* execute the next instruction, return number of time cycles */
 extern uint32_t z80_step(z80* cpu);
 /* execute instructions for up to 'ticks' time cycles, return executed time cycles */
@@ -915,6 +917,7 @@ void z80_init(z80* c, z80_desc* desc) {
     CHIPS_ASSERT(desc);
     CHIPS_ASSERT(desc->tick_func);
     memset(c, 0, sizeof(z80));
+    z80_reset(c);
     c->tick = desc->tick_func;
     c->context = desc->tick_context;
     /* init SZP flags table */
@@ -928,6 +931,25 @@ void z80_init(z80* c, z80_desc* desc) {
         f |= p & 1 ? 0 : Z80_PF;
         c->szp[val] = f;
     }
+}
+
+void z80_reset(z80* c) {
+    CHIPS_ASSERT(c);
+    /* AF and SP are set to 0xFFFF */
+    c->AF = c->SP = 0xFFFF;
+    /* PC is set to 0x0000 */
+    c->PC = 0x0000;
+    /* IFF1 and IFF2 are off */
+    c->IFF1 = c->IFF2 = false;
+    /* IM is set to 0 */
+    c->IM = 0;
+    /* all other registers are undefined, set them to 0xFF */
+    c->BC = c->DE = c->HL = 0xFFFF;
+    c->IX = c->IY = 0xFFFF;
+    c->BC_ = c->DE_ = c->HL_ = c->AF_ = 0xFFFF;
+    c->WZ = c->IR = 0xFFFF;
+    c->ei_pending = false;
+    c->ticks = 0;
 }
 
 uint32_t z80_step(z80* c) {

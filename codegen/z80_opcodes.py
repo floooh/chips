@@ -523,7 +523,7 @@ def l(s) :
 #
 def write_header() :
     l('// machine generated, do not edit!')
-    l('void _z80_op(z80* c) {')
+    l('static void _z80_op(z80* c) {')
 
 #-------------------------------------------------------------------------------
 # begin a new instruction group (begins a switch statement)
