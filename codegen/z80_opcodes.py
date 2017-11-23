@@ -525,9 +525,8 @@ def l(s) :
 #
 def write_header() :
     l('// machine generated, do not edit!')
-    l('static void _z80_op(z80* c) {')
+    l('static uint32_t _z80_op(z80* c, uint32_t ticks) {')
     l('  void(*tick)(z80*) = c->tick;')
-    l('  uint32_t ticks=c->ticks;')
     l('  uint8_t opcode;')
 
 #-------------------------------------------------------------------------------
@@ -555,13 +554,13 @@ def write_begin_group(indent, ext_byte=None, read_offset=False) :
 #
 def write_op(indent, op) :
     if op.src :
-        l('{}case {}: {} break; // {}'.format(tab(indent), hex(op.byte), op.src, op.cmt))
+        l('{}case {}: {} return ticks; // {}'.format(tab(indent), hex(op.byte), op.src, op.cmt))
 
 #-------------------------------------------------------------------------------
 # finish an instruction group (ends current statement)
 #
 def write_end_group(indent, inv_op_bytes, ext_byte=None, read_offset=False) :
-    l('{}default: break;'.format(tab(indent), inv_op_bytes))
+    l('{}default: return ticks;'.format(tab(indent), inv_op_bytes))
     indent -= 1
     l('{}}}'.format(tab(indent)))
     # if this was a prefix instruction, need to write a final break
@@ -576,7 +575,7 @@ def write_end_group(indent, inv_op_bytes, ext_byte=None, read_offset=False) :
 # write source footer
 #
 def write_footer() :
-    l('  c->ticks=ticks;')
+    l('  return ticks;')
     l('}')
 
 #-------------------------------------------------------------------------------

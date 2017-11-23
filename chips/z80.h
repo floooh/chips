@@ -101,8 +101,6 @@ typedef struct _z80 {
     void (*tick)(z80* cpu);
     /* user-provided context pointer */
     void* context;
-    /* number of executed ticks in current instruction */
-    uint32_t ticks;
     /* flag lookup table for SZP flag combinations */
     uint8_t szp[256];
 } z80;
@@ -952,17 +950,14 @@ void z80_reset(z80* c) {
     /* after power-on or reset, R is set to 0 (see z80-documented.pdf) */
     c->R = 0;
     c->ei_pending = false;
-    c->ticks = 0;
 }
 
 uint32_t z80_step(z80* c) {
-    c->ticks = 0;
     if (c->ei_pending) {
         c->IFF1 = c->IFF2 = true;
         c->ei_pending = false;
     }
-    _z80_op(c);
-    return c->ticks;
+    return _z80_op(c, 0);
 }
 
 uint32_t z80_run(z80* c, uint32_t t) {
