@@ -462,7 +462,7 @@ static void _z80_op(z80* c) {
         case 0xfd: c->L|=0x80; return; // SET 7,L
         case 0xfe: { uint16_t a=c->HL;_T();_WR(a,_RD(a)|0x80);} return; // SET 7,(c->HL)
         case 0xff: c->A|=0x80; return; // SET 7,A
-        default: return _INVALID_OPCODE(2);
+        default: return;
       }
       break;
     case 0xcc: _z80_callcc(c, (c->F&Z80_ZF)); return; // CALL Z,nn
@@ -946,7 +946,7 @@ static void _z80_op(z80* c) {
             case 0xfd: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->L=_RD(a)|0x80;_WR(a,c->IXL);} return; // SET 7,(c->IX+d),L
             case 0xfe: { uint16_t a=c->WZ=c->IX+d;;_T();_T();_WR(a,_RD(a)|0x80);} return; // SET 7,(c->IX+d)
             case 0xff: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->A=_RD(a)|0x80;_WR(a,c->A);} return; // SET 7,(c->IX+d),A
-            default: return _INVALID_OPCODE(4);
+            default: return;
           }
           break;
           }
@@ -999,7 +999,7 @@ static void _z80_op(z80* c) {
         case 0xfc: _z80_callcc(c, (c->F&Z80_SF)); return; // CALL M,nn
         case 0xfe: _z80_cp(c,_RD(c->PC++)); return; // CP n
         case 0xff: _z80_rst(c,0x38); return; // RST 0x38
-        default: return _INVALID_OPCODE(2);
+        default: return;
       }
       break;
     case 0xde: _z80_sbc(c,_RD(c->PC++)); return; // SBC n
@@ -1092,7 +1092,7 @@ static void _z80_op(z80* c) {
         case 0xb9: _z80_cpdr(c); return; // CPDR
         case 0xba: _z80_indr(c); return; // INDR
         case 0xbb: _z80_otdr(c); return; // OTDR
-        default: return _INVALID_OPCODE(2);
+        default: return;
       }
       break;
     case 0xee: _z80_xor(c,_RD(c->PC++)); return; // XOR n
@@ -1574,7 +1574,7 @@ static void _z80_op(z80* c) {
             case 0xfd: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->L=_RD(a)|0x80;_WR(a,c->IYL);} return; // SET 7,(c->IY+d),L
             case 0xfe: { uint16_t a=c->WZ=c->IY+d;;_T();_T();_WR(a,_RD(a)|0x80);} return; // SET 7,(c->IY+d)
             case 0xff: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->A=_RD(a)|0x80;_WR(a,c->A);} return; // SET 7,(c->IY+d),A
-            default: return _INVALID_OPCODE(4);
+            default: return;
           }
           break;
           }
@@ -1627,11 +1627,11 @@ static void _z80_op(z80* c) {
         case 0xfc: _z80_callcc(c, (c->F&Z80_SF)); return; // CALL M,nn
         case 0xfe: _z80_cp(c,_RD(c->PC++)); return; // CP n
         case 0xff: _z80_rst(c,0x38); return; // RST 0x38
-        default: return _INVALID_OPCODE(2);
+        default: return;
       }
       break;
     case 0xfe: _z80_cp(c,_RD(c->PC++)); return; // CP n
     case 0xff: _z80_rst(c,0x38); return; // RST 0x38
-    default: return _INVALID_OPCODE(1);
+    default: return;
   }
 }

@@ -179,9 +179,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 #ifndef _IMM16
 #undef _IMM16
 #endif
-#ifndef _INVALID_OPCODE
-#undef _INVALID_OPCODE
-#endif
 #define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
 #define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
 #define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
@@ -197,7 +194,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 #define _IN(a) _z80_in(c, a)
 #define _SWP16(a,b) { uint16_t tmp=a; a=b; b=tmp; }
 #define _IMM16() c->Z=_RD(c->PC++);c->W=_RD(c->PC++);
-#define _INVALID_OPCODE(n) CHIPS_ASSERT(false);
 
 /*
     instruction fetch machine cycle (M1)
@@ -982,7 +978,6 @@ uint32_t z80_run(z80* c, uint32_t t) {
 #undef _OUT
 #undef _SWP16
 #undef _IMM16
-#undef _INVALID_OPCODE
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus

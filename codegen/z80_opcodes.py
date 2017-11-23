@@ -6,6 +6,8 @@
 #       http://www.righto.com/2014/10/how-z80s-registers-are-implemented-down.html
 #       http://www.z80.info/zip/z80-documented.pdf
 #       https://www.omnimaga.org/asm-language/bit-n-(hl)-flags/5/?wap2
+#
+#   FIXME: long sequences of prefixes 0xDD/0xFD are currently handled wrong!
 #-------------------------------------------------------------------------------
 import sys
 
@@ -553,7 +555,7 @@ def write_op(indent, op) :
 # finish an instruction group (ends current statement)
 #
 def write_end_group(indent, inv_op_bytes, ext_byte=None, read_offset=False) :
-    l('{}default: return _INVALID_OPCODE({});'.format(tab(indent), inv_op_bytes))
+    l('{}default: return;'.format(tab(indent), inv_op_bytes))
     indent -= 1
     l('{}}}'.format(tab(indent)))
     # if this was a prefix instruction, need to write a final break
