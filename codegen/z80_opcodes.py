@@ -87,7 +87,7 @@ def iHLcmt(ext) :
 def iHLsrc(ext) :
     if (ext) :
         # IX+d or IY+d
-        return 'uint16_t a=c->WZ=c->{}+_RDS(c->PC++)'.format(r[6])
+        return 'int8_t d;_RD(c->PC++,d);uint16_t a=c->WZ=c->{}+d;'.format(r[6])
     else :
         # HL
         return 'uint16_t a=c->{}'.format(r[6])
@@ -148,7 +148,7 @@ def enc_op(op, ext, cc) :
         elif z == 6:
             # LD r,(HL); LD r,(IX+d); LD r,(IY+d)
             o.cmt = 'LD {},{}'.format(r2[y], iHLcmt(ext))
-            o.src = '{{ {};{}c->{}=_RD(a); }};'.format(iHLsrc(ext), ext_ticks(ext,5), r2[y])
+            o.src = '{{ {};{}_RD(a,c->{}); }};'.format(iHLsrc(ext), ext_ticks(ext,5), r2[y])
         else:
             # LD r,s
             o.cmt = 'LD {},{}'.format(r[y], r[z])
@@ -159,7 +159,7 @@ def enc_op(op, ext, cc) :
         if z == 6:
             # ALU (HL); ALU (IX+d); ALU (IY+d)
             o.cmt = '{} {}'.format(alu_cmt[y], iHLcmt(ext))
-            o.src = '{{ {};{}{}(c,_RD(a)); }};'.format(iHLsrc(ext), ext_ticks(ext,5), alu[y])
+            o.src = '{{ {};{}uint8_t val;_RD(a,val);{}(c,val); }};'.format(iHLsrc(ext), ext_ticks(ext,5), alu[y])
         else:
             # ALU r
             o.cmt = '{} {}'.format(alu_cmt[y], r[z])
@@ -179,15 +179,15 @@ def enc_op(op, ext, cc) :
             elif y == 2:
                 # DJNZ d
                 o.cmt = 'DJNZ'
-                o.src = '_z80_djnz(c,tick);'
+                o.src = 'ticks=_z80_djnz(c,tick,ticks);'
             elif  y == 3:
                 # JR d
                 o.cmt = 'JR d'
-                o.src = '_z80_jr(c,tick);'
+                o.src = 'ticks=_z80_jr(c,tick,ticks);'
             else:
                 # JR cc,d
                 o.cmt = 'JR {},d'.format(cond_cmt[y-4])
-                o.src = '_z80_jr_cc(c,{},tick);'.format(cond[y-4])
+                o.src = 'ticks=_z80_jr_cc(c,{},tick,ticks);'.format(cond[y-4])
         elif z == 1:
             if q == 0:
                 # 16-bit immediate loads
@@ -196,18 +196,18 @@ def enc_op(op, ext, cc) :
             else :
                 # ADD HL,rr; ADD IX,rr; ADD IY,rr
                 o.cmt = 'ADD {},{}'.format(rp[2],rp[p])
-                o.src = 'c->{}=_z80_add16(c,c->{},c->{},tick);'.format(rp[2],rp[2],rp[p]) 
+                o.src = 'c->{}=_z80_add16(c,c->{},c->{});_T();_T();_T();_T();_T();_T();_T();'.format(rp[2],rp[2],rp[p]) 
         elif z == 2:
             # indirect loads
             op_tbl = [
                 [ 'LD (BC),A', 'c->WZ=c->BC;_WR(c->WZ++,c->A);c->W=c->A;' ],
-                [ 'LD A,(BC)', 'c->WZ=c->BC;c->A=_RD(c->WZ++);' ],
+                [ 'LD A,(BC)', 'c->WZ=c->BC;_RD(c->WZ++,c->A);' ],
                 [ 'LD (DE),A', 'c->WZ=c->DE;_WR(c->WZ++,c->A);c->W=c->A;' ],
-                [ 'LD A,(DE)', 'c->WZ=c->DE;c->A=_RD(c->WZ++);' ],
+                [ 'LD A,(DE)', 'c->WZ=c->DE;_RD(c->WZ++,c->A);' ],
                 [ 'LD (nn),{}'.format(rp[2]), '{{_IMM16();_WR(c->WZ++,(uint8_t)c->{});_WR(c->WZ,(uint8_t)(c->{}>>8));}}'.format(rp[2],rp[2]) ],
-                [ 'LD {},(nn)'.format(rp[2]), '{{_IMM16();uint8_t l=_RD(c->WZ++);uint8_t h=_RD(c->WZ);c->{}=(h<<8)|l;}}'.format(rp[2]) ],
+                [ 'LD {},(nn)'.format(rp[2]), '{{_IMM16();uint8_t l;_RD(c->WZ++,l);uint8_t h;_RD(c->WZ,h);c->{}=(h<<8)|l;}}'.format(rp[2]) ],
                 [ 'LD (nn),A', '_IMM16();_WR(c->WZ++,c->A);c->W=c->A;' ],
-                [ 'LD A,(nn)', '_IMM16();c->A=_RD(c->WZ++);' ]
+                [ 'LD A,(nn)', '_IMM16();_RD(c->WZ++,c->A);' ]
             ]
             o.cmt = op_tbl[y][0]
             o.src = op_tbl[y][1]
@@ -225,7 +225,7 @@ def enc_op(op, ext, cc) :
             if y == 6:
                 # INC/DEC (HL)/(IX+d)/(IY+d)
                 o.cmt = '{} {}'.format(cmt, iHLcmt(ext))
-                o.src = '{{ {};{}_T();_WR(a,{}(c,_RD(a))); }}'.format(iHLsrc(ext), ext_ticks(ext,5), fn)
+                o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_WR(a,{}(c,v)); }}'.format(iHLsrc(ext), ext_ticks(ext,5), fn)
             else:
                 # INC/DEC r
                 o.cmt = '{} {}'.format(cmt, r[y])
@@ -234,11 +234,11 @@ def enc_op(op, ext, cc) :
             if y == 6:
                 # LD (HL),n; LD (IX+d),n; LD (IY+d),n
                 o.cmt = 'LD {},n'.format(iHLcmt(ext))
-                o.src = '{{ {};{}_WR(a,_RD(c->PC++)); }}'.format(iHLsrc(ext), ext_ticks(ext,2))
+                o.src = '{{ {};{}uint8_t v;_RD(c->PC++,v);_WR(a,v); }}'.format(iHLsrc(ext), ext_ticks(ext,2))
             else:
                 # LD r,n
                 o.cmt = 'LD {},n'.format(r[y])
-                o.src = 'c->{}=_RD(c->PC++);'.format(r[y])
+                o.src = '_RD(c->PC++,c->{});'.format(r[y])
         elif z == 7:
             # misc ops on A and F
             op_tbl = [
@@ -259,16 +259,16 @@ def enc_op(op, ext, cc) :
         if z == 0:
             # RET cc
             o.cmt = 'RET {}'.format(cond_cmt[y])
-            o.src = '_z80_retcc(c,{},tick);'.format(cond[y])
+            o.src = 'ticks=_z80_retcc(c,{},tick,ticks);'.format(cond[y])
         elif z == 1:
             if q == 0:
                 # POP BC,DE,HL,IX,IY,AF
                 o.cmt = 'POP {}'.format(rp2[p])
-                o.src = '{{ uint8_t l=_RD(c->SP++);uint8_t h=_RD(c->SP++);c->{}=(h<<8)|l; }}'.format(rp2[p])
+                o.src = '{{ uint8_t l;_RD(c->SP++,l);uint8_t h;_RD(c->SP++,h);c->{}=(h<<8)|l; }}'.format(rp2[p])
             else:
                 # misc ops
                 op_tbl = [
-                    [ 'RET', '_z80_ret(c,tick);' ],
+                    [ 'RET', 'ticks=_z80_ret(c,tick,ticks);' ],
                     [ 'EXX', '_SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_);' ],
                     [ 'JP {}'.format(rp[2]), 'c->PC=c->{};'.format(rp[2]) ],
                     [ 'LD SP,{}'.format(rp[2]), '_T();_T();c->SP=c->{};'.format(rp[2]) ]
@@ -284,9 +284,9 @@ def enc_op(op, ext, cc) :
             op_tbl = [
                 [ 'JP nn', '_IMM16(); c->PC=c->WZ;' ],
                 [ None, None ], # CB prefix instructions
-                [ 'OUT (n),A', 'c->WZ=((c->A<<8)|_RD(c->PC++));_OUT(c->WZ,c->A);c->Z++;' ],
-                [ 'IN A,(n)', 'c->WZ=((c->A<<8)|_RD(c->PC++));c->A=_IN(c->WZ++);' ],
-                [ 'EX (SP),{}'.format(rp[2]), 'c->{}=_z80_exsp(c,c->{},tick);'.format(rp[2], rp[2]) ],
+                [ 'OUT (n),A', '{uint8_t v;_RD(c->PC++,v);c->WZ=((c->A<<8)|v);_OUT(c->WZ,c->A);c->Z++;}' ],
+                [ 'IN A,(n)', '{uint8_t v;_RD(c->PC++,v);c->WZ=((c->A<<8)|v);_IN(c->WZ++,c->A);}' ],
+                [ 'EX (SP),{}'.format(rp[2]), '_T();_RD(c->SP,c->Z);_RD(c->SP+1,c->W);_WR(c->SP,(uint8_t)c->{});_WR(c->SP+1,(uint8_t)(c->{}>>8));c->{}=c->WZ;_T();_T();'.format(rp[2], rp[2],rp[2]) ],
                 [ 'EX DE,HL', '_SWP16(c->DE,c->HL);' ],
                 [ 'DI', '_z80_di(c);' ],
                 [ 'EI', '_z80_ei(c);' ]
@@ -296,7 +296,7 @@ def enc_op(op, ext, cc) :
         elif z == 4:
             # CALL cc,nn
             o.cmt = 'CALL {},nn'.format(cond_cmt[y])
-            o.src = '_z80_callcc(c,{},tick);'.format(cond[y])
+            o.src = 'ticks=_z80_callcc(c,{},tick,ticks);'.format(cond[y])
         elif z == 5:
             if q == 0:
                 # PUSH BC,DE,HL,IX,IY,AF
@@ -304,7 +304,7 @@ def enc_op(op, ext, cc) :
                 o.src = '_T();_WR(--c->SP,(uint8_t)(c->{}>>8)); _WR(--c->SP,(uint8_t)c->{});'.format(rp2[p], rp2[p])
             else:
                 op_tbl = [
-                    [ 'CALL nn', '_z80_call(c,tick);' ],
+                    [ 'CALL nn', 'ticks=_z80_call(c,tick,ticks);' ],
                     [ None, None ], # DD prefix instructions
                     [ None, None ], # ED prefix instructions
                     [ None, None ], # FD prefix instructions
@@ -314,11 +314,11 @@ def enc_op(op, ext, cc) :
         elif z == 6:
             # ALU n
             o.cmt = '{} n'.format(alu_cmt[y])
-            o.src = '{}(c,_RD(c->PC++));'.format(alu[y])
+            o.src = '{{uint8_t v;_RD(c->PC++,v);{}(c,v);}}'.format(alu[y])
         elif z == 7:
             # RST
             o.cmt = 'RST {}'.format(hex(y*8))
-            o.src = '_z80_rst(c,{},tick);'.format(hex(y*8))
+            o.src = 'ticks=_z80_rst(c,{},tick,ticks);'.format(hex(y*8))
 
     return o
 
@@ -340,28 +340,28 @@ def enc_ed_op(op) :
         if y >= 4 and z < 4 :
             op_tbl = [
                 [ 
-                    [ 'LDI',    '_z80_ldi(c,tick);' ],
-                    [ 'LDD',    '_z80_ldd(c,tick);' ],
-                    [ 'LDIR',   '_z80_ldir(c,tick);' ],
-                    [ 'LDDR',   '_z80_lddr(c,tick);' ]
+                    [ 'LDI',    'ticks=_z80_ldi(c,tick,ticks);' ],
+                    [ 'LDD',    'ticks=_z80_ldd(c,tick,ticks);' ],
+                    [ 'LDIR',   'ticks=_z80_ldir(c,tick,ticks);' ],
+                    [ 'LDDR',   'ticks=_z80_lddr(c,tick,ticks);' ]
                 ],
                 [
-                    [ 'CPI',    '_z80_cpi(c,tick);' ],
-                    [ 'CPD',    '_z80_cpd(c,tick);' ],
-                    [ 'CPIR',   '_z80_cpir(c,tick);' ],
-                    [ 'CPDR',   '_z80_cpdr(c,tick);' ]
+                    [ 'CPI',    'ticks=_z80_cpi(c,tick,ticks);' ],
+                    [ 'CPD',    'ticks=_z80_cpd(c,tick,ticks);' ],
+                    [ 'CPIR',   'ticks=_z80_cpir(c,tick,ticks);' ],
+                    [ 'CPDR',   'ticks=_z80_cpdr(c,tick,ticks);' ]
                 ],
                 [
-                    [ 'INI',    '_z80_ini(c,tick);' ],
-                    [ 'IND',    '_z80_ind(c,tick);' ],
-                    [ 'INIR',   '_z80_inir(c,tick);' ],
-                    [ 'INDR',   '_z80_indr(c,tick);' ]
+                    [ 'INI',    'ticks=_z80_ini(c,tick,ticks);' ],
+                    [ 'IND',    'ticks=_z80_ind(c,tick,ticks);' ],
+                    [ 'INIR',   'ticks=_z80_inir(c,tick,ticks);' ],
+                    [ 'INDR',   'ticks=_z80_indr(c,tick,ticks);' ]
                 ],
                 [
-                    [ 'OUTI',   '_z80_outi(c,tick);' ],
-                    [ 'OUTD',   '_z80_outd(c,tick);' ],
-                    [ 'OTIR',   '_z80_otir(c,tick);' ],
-                    [ 'OTDR',   '_z80_otdr(c,tick);' ]
+                    [ 'OUTI',   'ticks=_z80_outi(c,tick,ticks);' ],
+                    [ 'OUTD',   'ticks=_z80_outd(c,tick,ticks);' ],
+                    [ 'OTIR',   'ticks=_z80_otir(c,tick,ticks);' ],
+                    [ 'OTDR',   'ticks=_z80_otdr(c,tick,ticks);' ]
                 ]
             ]
             o.cmt = op_tbl[z][y-4][0]
@@ -374,10 +374,10 @@ def enc_ed_op(op) :
             if y == 6:
                 # undocumented special case 'IN F,(C)', only alter flags, don't store result
                 o.cmt = 'IN (C)';
-                o.src = 'c->WZ=c->BC;c->F=c->szp[_IN(c->WZ++)]|(c->F&Z80_CF);'
+                o.src = 'c->WZ=c->BC;uint8_t v; _IN(c->WZ++,v);c->F=c->szp[v]|(c->F&Z80_CF);'
             else:
                 o.cmt = 'IN {},(C)'.format(r[y])
-                o.src = 'c->WZ=c->BC;c->{}=_IN(c->WZ++);c->F=c->szp[c->{}]|(c->F&Z80_CF);'.format(r[y],r[y])
+                o.src = 'c->WZ=c->BC;_IN(c->WZ++,c->{});c->F=c->szp[c->{}]|(c->F&Z80_CF);'.format(r[y],r[y])
         elif z == 1:
             # OUT (C),r
             if y == 6:
@@ -392,7 +392,7 @@ def enc_ed_op(op) :
             cmt = 'SBC' if q == 0 else 'ADC'
             src = '_z80_sbc16' if q == 0 else '_z80_adc16'
             o.cmt = '{} HL,{}'.format(cmt, rp[p])
-            o.src = 'c->HL={}(c,c->HL,c->{},tick);'.format(src, rp[p])
+            o.src = 'c->HL={}(c,c->HL,c->{});_T();_T();_T();_T();_T();_T();_T();'.format(src, rp[p])
         elif z == 3:
             # 16-bit immediate address load/store
             if q == 0:
@@ -400,7 +400,7 @@ def enc_ed_op(op) :
                 o.src = '_IMM16();_WR(c->WZ++,(uint8_t)c->{});_WR(c->WZ,(uint8_t)(c->{}>>8));'.format(rp[p],rp[p])
             else:
                 o.cmt = 'LD {},(nn)'.format(rp[p])
-                o.src = '{{_IMM16();uint8_t l=_RD(c->WZ++);uint8_t h=_RD(c->WZ);c->{}=(h<<8)|l;}}'.format(rp[p])
+                o.src = '{{_IMM16();uint8_t l;_RD(c->WZ++,l);uint8_t h;_RD(c->WZ,h);c->{}=(h<<8)|l;}}'.format(rp[p])
         elif z == 4:
             # NEG
             o.cmt = 'NEG'
@@ -422,8 +422,8 @@ def enc_ed_op(op) :
                 [ 'LD R,A', '_T(); c->R=c->A;' ],
                 [ 'LD A,I', '_T(); c->A=c->I; c->F=_z80_sziff2(c,c->I)|(c->F&Z80_CF);' ],
                 [ 'LD A,R', '_T(); c->A=c->R; c->F=_z80_sziff2(c,c->R)|(c->F&Z80_CF);' ],
-                [ 'RRD',    '_z80_rrd(c,tick);' ],
-                [ 'RLD',    '_z80_rld(c,tick);' ],
+                [ 'RRD',    'ticks=_z80_rrd(c,tick,ticks);' ],
+                [ 'RLD',    'ticks=_z80_rld(c,tick,ticks);' ],
                 [ 'NOP (ED)', ' ' ],
                 [ 'NOP (ED)', ' ' ],
             ]
@@ -446,11 +446,11 @@ def enc_cb_op(op, ext, cc) :
         if z == 6:
             # ROT (HL); ROT (IX+d); ROT (IY+d)
             o.cmt = '{} {}'.format(rot_cmt[y],iHLcmt(ext))
-            o.src = '{{ {};{}_T();_WR(a,{}(c,_RD(a))); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), rot[y])
+            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_WR(a,{}(c,v)); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), rot[y])
         elif ext:
             # undocumented: ROT (IX+d),(IY+d),r (also stores result in a register)
             o.cmt = '{} {},{}'.format(rot_cmt[y],iHLcmt(ext),r2[z])
-            o.src = '{{ {};{}_T();c->{}={}(c,_RD(a));_WR(a,c->{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], rot[y], r2[z])
+            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);c->{}={}(c,v);_WR(a,c->{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], rot[y], r2[z])
         else:
             # ROT r
             o.cmt = '{} {}'.format(rot_cmt[y],r2[z])
@@ -460,7 +460,7 @@ def enc_cb_op(op, ext, cc) :
         if z == 6 or ext:
             # BIT n,(HL); BIT n,(IX+d); BIT n,(IY+d)
             o.cmt = 'BIT {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {};{}_T();_z80_ibit(c,_RD(a),{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
+            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_z80_ibit(c,v,{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
         else:
             # BIT n,r
             o.cmt = 'BIT {},{}'.format(y,r2[z])
@@ -470,11 +470,11 @@ def enc_cb_op(op, ext, cc) :
         if z == 6:
             # RES n,(HL); RES n,(IX+d); RES n,(IY+d)
             o.cmt = 'RES {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {};{}_T();_WR(a,_RD(a)&~{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
+            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_WR(a,v&~{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
         elif ext:
             # undocumented: RES n,(IX+d),r; RES n,(IY+d),r
             o.cmt = 'RES {},{},{}'.format(y,iHLcmt(ext),r2[z])
-            o.src = '{{ {};{}_T();c->{}=_RD(a)&~{};_WR(a,c->{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], hex(1<<y), r2[z])
+            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);c->{}=v&~{};_WR(a,c->{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], hex(1<<y), r2[z])
         else:
             # RES n,r
             o.cmt = 'RES {},{}'.format(y,r2[z])
@@ -484,11 +484,11 @@ def enc_cb_op(op, ext, cc) :
         if z == 6:
             # SET n,(HL); RES n,(IX+d); RES n,(IY+d)
             o.cmt = 'SET {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {};{}_T();_WR(a,_RD(a)|{});}}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
+            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_WR(a,v|{});}}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
         elif ext:
             # undocumented: SET n,(IX+d),r; SET n,(IY+d),r
             o.cmt = 'SET {},{},{}'.format(y,iHLcmt(ext),r2[z])
-            o.src = '{{ {};{}_T();c->{}=_RD(a)|{};_WR(a,c->{});}}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], hex(1<<y), r[z])
+            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);c->{}=v|{};_WR(a,c->{});}}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], hex(1<<y), r[z])
         else:
             # SET n,r
             o.cmt = 'SET {},{}'.format(y,r2[z])
@@ -527,6 +527,8 @@ def write_header() :
     l('// machine generated, do not edit!')
     l('static void _z80_op(z80* c) {')
     l('  void(*tick)(z80*) = c->tick;')
+    l('  uint32_t ticks=c->ticks;')
+    l('  uint8_t opcode;')
 
 #-------------------------------------------------------------------------------
 # begin a new instruction group (begins a switch statement)
@@ -541,10 +543,10 @@ def write_begin_group(indent, ext_byte=None, read_offset=False) :
     # the actual instruction byte, and the next opcode fetch doesn't
     # increment R
     if read_offset :
-        l('{}{{ const int8_t d = _RDS(c->PC++);'.format(tab(indent)))
-        l('{}switch (_z80_xxcb_fetch(c,tick)) {{'.format(tab(indent)))
+        l('{}{{ int8_t d; _RD(c->PC++, d);'.format(tab(indent)))
+        l('{}_FETCH(); switch (opcode) {{'.format(tab(indent)))
     else:
-        l('{}switch (_z80_fetch(c,tick)) {{'.format(tab(indent)))
+        l('{}_FETCH(); switch (opcode) {{'.format(tab(indent)))
     indent += 1
     return indent
 
@@ -553,13 +555,13 @@ def write_begin_group(indent, ext_byte=None, read_offset=False) :
 #
 def write_op(indent, op) :
     if op.src :
-        l('{}case {}: {} return; // {}'.format(tab(indent), hex(op.byte), op.src, op.cmt))
+        l('{}case {}: {} break; // {}'.format(tab(indent), hex(op.byte), op.src, op.cmt))
 
 #-------------------------------------------------------------------------------
 # finish an instruction group (ends current statement)
 #
 def write_end_group(indent, inv_op_bytes, ext_byte=None, read_offset=False) :
-    l('{}default: return;'.format(tab(indent), inv_op_bytes))
+    l('{}default: break;'.format(tab(indent), inv_op_bytes))
     indent -= 1
     l('{}}}'.format(tab(indent)))
     # if this was a prefix instruction, need to write a final break
@@ -574,6 +576,7 @@ def write_end_group(indent, inv_op_bytes, ext_byte=None, read_offset=False) :
 # write source footer
 #
 def write_footer() :
+    l('  c->ticks=ticks;')
     l('}')
 
 #-------------------------------------------------------------------------------
