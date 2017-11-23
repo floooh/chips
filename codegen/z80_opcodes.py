@@ -537,10 +537,13 @@ def write_begin_group(indent, ext_byte=None, read_offset=False) :
     indent += 1
     # special case for DD/FD CB 'double extended' instructions,
     # these have the d offset after the CB byte and before
-    # the actual instruction byte
+    # the actual instruction byte, and the next opcode fetch doesn't
+    # increment R
     if read_offset :
         l('{}{{ const int8_t d = _RDS(c->PC++);'.format(tab(indent)))
-    l('{}switch (_z80_fetch(c)) {{'.format(tab(indent)))
+        l('{}switch (_z80_xxcb_fetch(c)) {{'.format(tab(indent)))
+    else:
+        l('{}switch (_z80_fetch(c)) {{'.format(tab(indent)))
     indent += 1
     return indent
 

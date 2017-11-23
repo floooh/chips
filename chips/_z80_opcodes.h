@@ -689,7 +689,7 @@ static void _z80_op(z80* c) {
         case 0xca: _IMM16(); if ((c->F&Z80_ZF)) { c->PC=c->WZ; } return; // JP Z,nn
         case 0xcb:
           { const int8_t d = _RDS(c->PC++);
-          switch (_z80_fetch(c)) {
+          switch (_z80_xxcb_fetch(c)) {
             case 0x0: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->B=_z80_rlc(c,_RD(a));_WR(a,c->B); } return; // RLC (c->IX+d),B
             case 0x1: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->C=_z80_rlc(c,_RD(a));_WR(a,c->C); } return; // RLC (c->IX+d),C
             case 0x2: { uint16_t a=c->WZ=c->IX+d;;_T();_T();c->D=_z80_rlc(c,_RD(a));_WR(a,c->D); } return; // RLC (c->IX+d),D
@@ -1317,7 +1317,7 @@ static void _z80_op(z80* c) {
         case 0xca: _IMM16(); if ((c->F&Z80_ZF)) { c->PC=c->WZ; } return; // JP Z,nn
         case 0xcb:
           { const int8_t d = _RDS(c->PC++);
-          switch (_z80_fetch(c)) {
+          switch (_z80_xxcb_fetch(c)) {
             case 0x0: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->B=_z80_rlc(c,_RD(a));_WR(a,c->B); } return; // RLC (c->IY+d),B
             case 0x1: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->C=_z80_rlc(c,_RD(a));_WR(a,c->C); } return; // RLC (c->IY+d),C
             case 0x2: { uint16_t a=c->WZ=c->IY+d;;_T();_T();c->D=_z80_rlc(c,_RD(a));_WR(a,c->D); } return; // RLC (c->IY+d),D

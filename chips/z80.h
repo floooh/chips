@@ -209,24 +209,49 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
     RFSH    |    |    |****|****|
 */
 static uint8_t _z80_fetch(z80* c) {
-    /*--- T1 ---*/
+    /*--- t1 ---*/
     _ON(Z80_M1);
     c->ADDR = c->PC++;
     _T();
-    /*--- T2 ---*/
+    /*--- t2 ---*/
     _ON(Z80_MREQ|Z80_RD);
     _T();
     const uint8_t opcode = c->DATA;
-    c->R = (c->R&0x80)|((c->R+1)&0x7F);
-    /*--- T3 ---*/
+    c->R = (c->R&0x80)|((c->R+1)&0x7f);
+    /*--- t3 ---*/
     _OFF(Z80_M1|Z80_MREQ|Z80_RD);
     _ON(Z80_RFSH);
     c->ADDR = c->IR;
     _T();
-    /*--- T4 ---*/
+    /*--- t4 ---*/
     _ON(Z80_MREQ);
     _T();
     _OFF(Z80_RFSH|Z80_MREQ);
+    return opcode;
+}
+
+/* 
+    special version of opcode fetch for DD/FD CB instructions, the
+   opcode fetch following the offset value doesn't increment the
+   R register
+
+   FIXME: is memory refresh issued during such a special fetch
+   machine cycle? currently assuming no
+*/
+static uint8_t _z80_xxcb_fetch(z80* c) {
+    /*--- t1 ---*/
+    _ON(Z80_M1);
+    c->ADDR = c->PC++;
+    _T();
+    /*--- t2 ---*/
+    _ON(Z80_MREQ|Z80_RD);
+    _T();
+    const uint8_t opcode = c->DATA;
+    /*--- t3 ---*/
+    _OFF(Z80_M1|Z80_MREQ|Z80_RD);
+    _T();
+    /*--- T4 ---*/
+    _T();
     return opcode;
 }
 
