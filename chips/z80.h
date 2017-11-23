@@ -68,6 +68,13 @@ typedef enum {
 /* Z80 CPU state */
 typedef struct _z80 z80;
 typedef struct _z80 {
+    /* tick function and context data, keep at start */
+    void (*tick)(z80* cpu);
+    /* number of executed ticks in current instruction */
+    uint32_t ticks;
+    /* user-provided context pointer */
+    void* context;
+
     /* NOTE: union layout assumes little-endian CPU */
     union { uint16_t BC; struct { uint8_t C, B; }; };
     union { uint16_t DE; struct { uint8_t E, D; }; };
@@ -96,12 +103,6 @@ typedef struct _z80 {
 
     /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
-    /* number of executed ticks in current instruction */
-    uint32_t ticks;
-
-    /* tick function and context data */
-    void (*tick)(z80* cpu);
-    void* context;
 
     /* flag lookup table for SZP flag combinations */
     uint8_t szp[256];
