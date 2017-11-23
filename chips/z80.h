@@ -944,6 +944,8 @@ void z80_reset(z80* c) {
     c->IX = c->IY = 0xFFFF;
     c->BC_ = c->DE_ = c->HL_ = c->AF_ = 0xFFFF;
     c->WZ = c->IR = 0xFFFF;
+    /* after power-on or reset, R is set to 0 (see z80-documented.pdf) */
+    c->R = 0;
     c->ei_pending = false;
     c->ticks = 0;
 }
