@@ -188,67 +188,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 #define _SWP16(a,b) {uint16_t tmp=a;a=b;b=tmp;}
 #define _IMM16() {_RD(c->PC++,c->Z);_RD(c->PC++,c->W);}
 
-/*
-    instruction fetch machine cycle (M1)
-              T1   T2   T3   T4
-    --------+----+----+----+----+
-    CLK     |--**|--**|--**|--**|
-    A15-A0  |   PC    | REFRESH |
-    MREQ    |   *|****|  **|**  |
-    RD      |   *|****|    |    |
-    WAIT    |    | -- |    |    |
-    M1      |****|****|    |    |
-    D7-D0   |    |   X|    |    |
-    RFSH    |    |    |****|****|
-*/
-#define _FETCH(){\
-    _ON(Z80_M1);\
-    c->ADDR = c->PC++;\
-    _T();\
-    _ON(Z80_MREQ|Z80_RD);\
-    _T();\
-    opcode = c->DATA;\
-    c->R = (c->R&0x80)|((c->R+1)&0x7f);\
-    _OFF(Z80_M1|Z80_MREQ|Z80_RD);\
-    _ON(Z80_RFSH);\
-    c->ADDR = c->IR;\
-    _T();\
-    _ON(Z80_MREQ);\
-    _T();\
-    _OFF(Z80_RFSH|Z80_MREQ);}
-
-/* 
-    special version of opcode fetch for DD/FD CB instructions, the
-   opcode fetch following the offset value doesn't increment the
-   R register
-
-   FIXME: is memory refresh issued during such a special fetch
-   machine cycle? currently assuming no
-*/
-#define _XXCB_FETCH(){\
-    _ON(Z80_M1);\
-    c->ADDR = c->PC++;\
-    _T();\
-    _ON(Z80_MREQ|Z80_RD);\
-    _T();\
-    opcode=c->DATA;\
-    _OFF(Z80_M1|Z80_MREQ|Z80_RD);\
-    _T();\
-    _T();}
-
-/*
-    a memory read machine cycle, place address in ADDR, read byte into DATA
-
-              T1   T2   T3
-    --------+----+----+----+
-    CLK     |--**|--**|--**|
-    A15-A0  |   MEM ADDR   |
-    MREQ    |   *|****|**  |
-    RD      |   *|****|**  |
-    WR      |    |    |    |
-    D7-D0   |    |    | X  |
-    WAIT    |    | -- |    |
-*/
 #define _RD(addr,res){\
     c->ADDR=addr;\
     _T();\
@@ -257,7 +196,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
     _OFF(Z80_MREQ|Z80_RD);\
     _T();\
     res=c->DATA;}
-
 /*
     a memory write machine cycle, place 16-bit address into ADDR, place 8-bit
     value into DATA, and then memory[ADDR] = DATA
