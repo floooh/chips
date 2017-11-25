@@ -53,10 +53,7 @@ cond_cmt = [ 'NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M' ]
 # 8-bit ALU instructions command names
 alu_cmt = [ 'ADD', 'ADC', 'SUB', 'SBC', 'AND', 'XOR', 'OR', 'CP' ]
 
-# rot and shift instruction table (C++ method names)
-rot = [ '_z80_rlc', '_z80_rrc', '_z80_rl', '_z80_rr', '_z80_sla', '_z80_sra', '_z80_sll', '_z80_srl' ]
-
-# the same 'human readbla for comments
+# rot and shift instruction command names
 rot_cmt = [ 'RLC', 'RRC', 'RL', 'RR', 'SLA', 'SRA', 'SLL', 'SRL' ]
 
 # an 'opcode' wraps the instruction byte, human-readable asm mnemonics,
@@ -384,33 +381,6 @@ def ld_dd_inn(p):
     return src
 
 #-------------------------------------------------------------------------------
-#   rot_idd
-#
-#   Generate code for ROT (HL); ROT (IX+d); ROT (IY+d)
-#
-def rot_idd(ext, y):
-    src =iHLdsrc(ext)
-    src+=tick()
-    src+=ext_ticks(ext,1)
-    src+=rd('a','v')
-    src+=wr('a',rot[y]+'(c,v)')
-    return src
-
-#-------------------------------------------------------------------------------
-#   rot_idd_r
-#
-#   Generate code for ROT (IX+d),r; ROT (IY+d),r undocumented instructions.
-#
-def rot_idd_r(y, z):
-    src =iHLdsrc(True)
-    src+=tick(2)
-    src+=rd('a','v')
-    src+='v='+rot[y]+'(c,v);'
-    src+='c->'+r2[z]+'=v;'
-    src+=wr('a','v')
-    return src
-
-#-------------------------------------------------------------------------------
 #   bit_n_idd
 #
 #   Generate code for BIT n,(HL); BIT n,(IX+d); BIT n,(IY+d)
@@ -519,34 +489,6 @@ def call_cc_nn(y):
     src+=wr('--c->SP','(uint8_t)c->PC')
     src+='c->PC=c->WZ;'
     src+='}'
-    return src
-
-#-------------------------------------------------------------------------------
-#   rrd
-#
-def rrd():
-    src ='c->WZ=c->HL;'
-    src+=rd('c->WZ++','v')
-    src+='l=c->A&0x0F;'
-    src+='c->A=(c->A&0xF0)|(v&0x0F);'
-    src+='v=(v>>4)|(l<<4);'
-    src+=tick(4)
-    src+=wr('c->HL','v')
-    src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
-    return src
-
-#-------------------------------------------------------------------------------
-#   rld
-#
-def rld():
-    src ='c->WZ=c->HL;'
-    src+=rd('c->WZ++','v')
-    src+='l=c->A&0x0F;'
-    src+='c->A=(c->A&0xF0)|(v>>4);'
-    src+='v=(v<<4)|l;'
-    src+=tick(4)
-    src+=wr('c->HL','v')
-    src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
     return src
 
 #-------------------------------------------------------------------------------
@@ -1036,6 +978,174 @@ def sbc16(acc,val):
     return src
 
 #-------------------------------------------------------------------------------
+#   rotate and shift functions
+#
+def rrd():
+    src ='c->WZ=c->HL;'
+    src+=rd('c->WZ++','v')
+    src+='l=c->A&0x0F;'
+    src+='c->A=(c->A&0xF0)|(v&0x0F);'
+    src+='v=(v>>4)|(l<<4);'
+    src+=tick(4)
+    src+=wr('c->HL','v')
+    src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    return src
+
+def rld():
+    src ='c->WZ=c->HL;'
+    src+=rd('c->WZ++','v')
+    src+='l=c->A&0x0F;'
+    src+='c->A=(c->A&0xF0)|(v>>4);'
+    src+='v=(v<<4)|l;'
+    src+=tick(4)
+    src+=wr('c->HL','v')
+    src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    return src
+
+def rlca():
+    src ='{'
+    src+='uint8_t r=c->A<<1|c->A>>7;'
+    src+='c->F=(c->A>>7&Z80_CF)|(c->F&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_XF|Z80_YF));'
+    src+='c->A=r;'
+    src+='}'
+    return src
+
+def rrca():
+    src ='{'
+    src+='uint8_t r=c->A>>1|c->A<<7;'
+    src+='c->F=(c->A&Z80_CF)|(c->F&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+    src+='c->A=r;'
+    src+='}'
+    return src
+
+def rla():
+    src ='{'
+    src+='uint8_t r=c->A<<1|(c->F&Z80_CF);'
+    src+='c->F=(c->A>>7&Z80_CF)|(c->F&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+    src+='c->A=r;'
+    src+='}'
+    return src
+
+def rra():
+    src ='{'
+    src+='uint8_t r=c->A>>1|((c->F&Z80_CF)<<7);'
+    src+='c->F=(c->A&Z80_CF)|(c->F&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+    src+='c->A=r;'
+    src+='}'
+    return src
+
+def rlc(val):
+    src ='{'
+    src+='uint8_t r='+val+'<<1|'+val+'>>7;'
+    src+='c->F=c->szp[r]|('+val+'>>7&Z80_CF);'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+def rrc(val):
+    src ='{'
+    src+='uint8_t r='+val+'>>1|'+val+'<<7;'
+    src+='c->F=c->szp[r]|('+val+'&Z80_CF);'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+def rl(val):
+    src ='{'
+    src+='uint8_t r='+val+'<<1|(c->F&Z80_CF);'
+    src+='c->F=('+val+'>>7&Z80_CF)|c->szp[r];'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+def rr(val):
+    src ='{'
+    src+='uint8_t r='+val+'>>1|((c->F & Z80_CF)<<7);'
+    src+='c->F=('+val+'&Z80_CF)|c->szp[r];'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+def sla(val):
+    src ='{'
+    src+='uint8_t r='+val+'<<1;'
+    src+='c->F=('+val+'>>7&Z80_CF)|c->szp[r];'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+def sra(val):
+    src ='{'
+    src+='uint8_t r='+val+'>>1|('+val+'&0x80);'
+    src+='c->F=('+val+'&Z80_CF)|c->szp[r];'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+# undocuments, sll is identical to sla, but inserts a 1 into the LSB
+def sll(val):
+    src ='{'
+    src+='uint8_t r=('+val+'<<1)|1;'
+    src+='c->F=('+val+'>>7&Z80_CF)|c->szp[r];'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+def srl(val):
+    src ='{'
+    src+='uint8_t r='+val+'>>1;'
+    src+='c->F=('+val+'&Z80_CF)|c->szp[r];'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+def rot(y,val):
+    if y==0:
+        return rlc(val)
+    elif y==1:
+        return rrc(val)
+    elif y==2:
+        return rl(val)
+    elif y==3:
+        return rr(val)
+    elif y==4:
+        return sla(val)
+    elif y==5:
+        return sra(val)
+    elif y==6:
+        return sll(val)
+    elif y==7:
+        return srl(val)
+
+#-------------------------------------------------------------------------------
+#   rot_idd
+#
+#   Generate code for ROT (HL); ROT (IX+d); ROT (IY+d)
+#
+def rot_idd(ext, y):
+    src =iHLdsrc(ext)
+    src+=tick()
+    src+=ext_ticks(ext,1)
+    src+=rd('a','v')
+    src+=rot(y,'v')
+    src+=wr('a','v')
+    return src
+
+#-------------------------------------------------------------------------------
+#   rot_idd_r
+#
+#   Generate code for ROT (IX+d),r; ROT (IY+d),r undocumented instructions.
+#
+def rot_idd_r(y, z):
+    src =iHLdsrc(True)
+    src+=tick(2)
+    src+=rd('a','v')
+    src+=rot(y,'v')
+    src+='c->'+r2[z]+'=v;'
+    src+=wr('a','v')
+    return src
+
+#-------------------------------------------------------------------------------
 #   misc ops
 #
 def cpl():
@@ -1195,10 +1305,10 @@ def enc_op(op, ext, cc) :
         elif z == 7:
             # misc ops on A and F
             op_tbl = [
-                [ 'RLCA', '_z80_rlca(c);'],
-                [ 'RRCA', '_z80_rrca(c);'],
-                [ 'RLA',  '_z80_rla(c);'],
-                [ 'RRA',  '_z80_rra(c);'],
+                [ 'RLCA', rlca() ],
+                [ 'RRCA', rrca() ],
+                [ 'RLA',  rla() ],
+                [ 'RRA',  rra() ],
                 [ 'DAA',  daa() ],
                 [ 'CPL',  cpl() ],
                 [ 'SCF',  scf() ],
@@ -1409,7 +1519,7 @@ def enc_cb_op(op, ext, cc) :
         else:
             # ROT r
             o.cmt = '{} {}'.format(rot_cmt[y],r2[z])
-            o.src = 'c->{}={}(c,c->{});'.format(r2[z], rot[y], r2[z])
+            o.src = rot(y,'c->'+r2[z])
     elif x == 1:
         # BIT n
         if z == 6 or ext:
