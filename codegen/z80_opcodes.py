@@ -673,6 +673,129 @@ def cpdr():
     return src
 
 #-------------------------------------------------------------------------------
+#   ini_ind_flags(io_val,c_add)
+#   outi_outd_flags(io_val,c_add)
+#
+#   Returns a string which evaluates the flags for ini and ind instructions into F.
+#   NOTE: most INI/OUTI flag settings are undocumented in the official
+#   docs, so this is taken from MAME, there's also more
+#   information here: http://www.z80.info/z80undoc3.txt
+#
+def ini_ind_flags(io_val,c_add):
+    src ='f=c->B?(c->B&Z80_SF):Z80_ZF;'
+    src+='if('+io_val+'&Z80_SF){f|=Z80_NF;}'
+    src+='{';
+    src+='uint32_t t=(uint32_t)((c->C+('+c_add+'))&0xFF)+(uint32_t)'+io_val+';'
+    src+='if(t&0x100){f|=(Z80_HF|Z80_CF);}'
+    src+='f|=c->szp[((uint8_t)(t&0x07))^c->B]&Z80_PF;'
+    src+='}'
+    src+='c->F=f;'
+    return src
+
+def outi_outd_flags(io_val):
+    src='f=c->B?(c->B&Z80_SF):Z80_ZF;'
+    src+='if('+io_val+'&Z80_SF){f|=Z80_NF;}'
+    src+='{';
+    src+='uint32_t t=(uint32_t)c->L+(uint32_t)'+io_val+';'
+    src+='if(t&0x100){f|=(Z80_HF|Z80_CF);}'
+    src+='f|=c->szp[((uint8_t)(t&0x07))^c->B]&Z80_PF;'
+    src+='}'
+    src+='c->F=f;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   ini()
+#
+def ini():
+    src =tick()
+    src+='c->WZ=c->BC;'
+    src+=inp('c->WZ++','v')
+    src+='c->B--;'
+    src+=wr('c->HL++','v')
+    src+=ini_ind_flags('v','+1')
+    return src
+
+#-------------------------------------------------------------------------------
+#   inir()
+#
+def inir():
+    src =ini()
+    src+='if(c->B){'
+    src+='c->PC-=2;'
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   ind()
+#
+def ind():
+    src =tick()
+    src+='c->WZ=c->BC;'
+    src+=inp('c->WZ--','v')
+    src+='c->B--;'
+    src+=wr('c->HL--','v')
+    src+=ini_ind_flags('v','-1')
+    return src
+
+#-------------------------------------------------------------------------------
+#   indr()
+#
+def indr():
+    src =ind()
+    src+='if(c->B){'
+    src+='c->PC-=2;'
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   outi()
+#
+def outi():
+    src =tick()
+    src+=rd('c->HL++','v')
+    src+='c->B--;'
+    src+='c->WZ=c->BC;'
+    src+=out('c->WZ++','v')
+    src+=outi_outd_flags('v')
+    return src
+
+#-------------------------------------------------------------------------------
+#   otir()
+#
+def otir():
+    src =outi()
+    src+='if(c->B){'
+    src+='c->PC-=2;'
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   outd()
+#
+def outd():
+    src =tick()
+    src+=rd('c->HL--','v')
+    src+='c->B--;'
+    src+='c->WZ=c->BC;'
+    src+=out('c->WZ--','v')
+    src+=outi_outd_flags('v')
+    return src
+
+#-------------------------------------------------------------------------------
+#   otdr()
+#
+def otdr():
+    src =outd()
+    src+='if(c->B){'
+    src+='c->PC-=2;'
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
 # Takes an opcode byte and returns an opcode object, for invalid instructions
 # the opcode object will be in its default state (opcode.src==None).
@@ -911,16 +1034,16 @@ def enc_ed_op(op) :
                     [ 'CPDR', cpdr() ]
                 ],
                 [
-                    [ 'INI',    'ticks=_z80_ini(c,tick,ticks);' ],
-                    [ 'IND',    'ticks=_z80_ind(c,tick,ticks);' ],
-                    [ 'INIR',   'ticks=_z80_inir(c,tick,ticks);' ],
-                    [ 'INDR',   'ticks=_z80_indr(c,tick,ticks);' ]
+                    [ 'INI',  ini() ],
+                    [ 'IND',  ind() ],
+                    [ 'INIR', inir() ],
+                    [ 'INDR', indr() ]
                 ],
                 [
-                    [ 'OUTI',   'ticks=_z80_outi(c,tick,ticks);' ],
-                    [ 'OUTD',   'ticks=_z80_outd(c,tick,ticks);' ],
-                    [ 'OTIR',   'ticks=_z80_otir(c,tick,ticks);' ],
-                    [ 'OTDR',   'ticks=_z80_otdr(c,tick,ticks);' ]
+                    [ 'OUTI', outi() ],
+                    [ 'OUTD', outd() ],
+                    [ 'OTIR', otir() ],
+                    [ 'OTDR', otdr() ]
                 ]
             ]
             o.cmt = op_tbl[z][y-4][0]
