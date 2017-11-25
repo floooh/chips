@@ -991,6 +991,79 @@ def dec8(val):
     return src
 
 #-------------------------------------------------------------------------------
+#   16-bit add,adc,sbc
+#
+#   flags computation taken from MAME
+#
+def add16(acc,val):
+    src ='{'
+    src+='c->WZ='+acc+'+1;'
+    src+='uint32_t r='+acc+'+'+val+';'
+    src+='c->F=(c->F&(Z80_SF|Z80_ZF|Z80_VF))|'
+    src+='((('+acc+'^r^'+val+')>>8)&Z80_HF)|'
+    src+='((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));'
+    src+=acc+'=r;'
+    src+='}'
+    return src
+
+def adc16(acc,val):
+    src ='{'
+    src+='c->WZ='+acc+'+1;'
+    src+='uint32_t r='+acc+'+'+val+'+(c->F&Z80_CF);'
+    src+='c->F=((('+acc+'^r^'+val+')>>8)&Z80_HF)|'
+    src+='((r>>16)&Z80_CF)|'
+    src+='((r>>8)&(Z80_SF|Z80_YF|Z80_XF))|'
+    src+='((r&0xFFFF)?0:Z80_ZF)|'
+    src+='((('+val+'^'+acc+'^0x8000)&('+val+'^r)&0x8000)>>13);'
+    src+=acc+'=r;'
+    src+='}'
+    return src
+
+def sbc16(acc,val):
+    src ='{'
+    src+='c->WZ='+acc+'+1;'
+    src+='uint32_t r='+acc+'-'+val+'-(c->F&Z80_CF);'
+    src+='c->F=((('+acc+'^r^'+val+')>>8)&Z80_HF)|Z80_NF|'
+    src+='((r>>16)&Z80_CF)|'
+    src+='((r>>8)&(Z80_SF|Z80_YF|Z80_XF))|'
+    src+='((r&0xFFFF)?0:Z80_ZF)|'
+    src+='((('+val+'^'+acc+')&('+acc+'^r)&0x8000)>>13);'
+    src+=acc+'=r;'
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   misc ops
+#
+def cpl():
+    src ='c->A^=0xFF;'
+    src+='c->F=(c->F&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|Z80_HF|Z80_NF|(c->A&(Z80_YF|Z80_XF));'
+    return src
+
+def scf():
+    return 'c->F=(c->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF))|Z80_CF|(c->A&(Z80_YF|Z80_XF));'
+
+def ccf():
+    return 'c->F=((c->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF))|((c->F&Z80_CF)<<4)|(c->A&(Z80_YF|Z80_XF)))^Z80_CF;'
+
+# DAA from MAME and http://www.z80.info/zip/z80-documented.pdf
+def daa():
+    src ='v=c->A;'
+    src+='if(c->F&Z80_NF){'
+    src+='if(((c->A&0xF)>0x9)||(c->F&Z80_HF)){v-=0x06;}'
+    src+='if((c->A>0x99)||(c->F&Z80_CF)){v-=0x60;}'
+    src+='}else{'
+    src+='if(((c->A&0xF)>0x9)||(c->F&Z80_HF)){v+=0x06;}'
+    src+='if((c->A>0x99)||(c->F&Z80_CF)){v+=0x60;}'
+    src+='}'
+    src+='c->F&=Z80_CF|Z80_NF;'
+    src+='c->F|=(c->A>0x99)?Z80_CF:0;'
+    src+='c->F|=(c->A^v)&Z80_HF;'
+    src+='c->F|=c->szp[v];'
+    src+='c->A=v;'
+    return src
+
+#-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
 # Takes an opcode byte and returns an opcode object, for invalid instructions
 # the opcode object will be in its default state (opcode.src==None).
@@ -1073,7 +1146,7 @@ def enc_op(op, ext, cc) :
             else :
                 # ADD HL,rr; ADD IX,rr; ADD IY,rr
                 o.cmt = 'ADD '+rp[2]+','+rp[p]
-                o.src = 'c->'+rp[2]+'=_z80_add16(c,c->'+rp[2]+',c->'+rp[p]+');'+tick(7)
+                o.src = add16('c->'+rp[2],'c->'+rp[p])+tick(7)
         elif z == 2:
             # indirect loads
             op_tbl = [
@@ -1123,10 +1196,10 @@ def enc_op(op, ext, cc) :
                 [ 'RRCA', '_z80_rrca(c);'],
                 [ 'RLA',  '_z80_rla(c);'],
                 [ 'RRA',  '_z80_rra(c);'],
-                [ 'DAA',  '_z80_daa(c);'],
-                [ 'CPL',  '_z80_cpl(c);'],
-                [ 'SCF',  '_z80_scf(c);'],
-                [ 'CCF',  '_z80_ccf(c);']
+                [ 'DAA',  daa() ],
+                [ 'CPL',  cpl() ],
+                [ 'SCF',  scf() ],
+                [ 'CCF',  ccf() ]
             ]
             o.cmt = op_tbl[y][0]
             o.src = op_tbl[y][1]
@@ -1266,10 +1339,12 @@ def enc_ed_op(op) :
                 o.src = out_r_ic(y)
         elif z == 2:
             # SBC/ADC HL,rr
-            cmt = 'SBC' if q == 0 else 'ADC'
-            src = '_z80_sbc16' if q == 0 else '_z80_adc16'
-            o.cmt = '{} HL,{}'.format(cmt, rp[p])
-            o.src = 'c->HL='+src+'(c,c->HL,c->'+rp[p]+');'+tick(7)
+            if q==0:
+                o.cmt = 'SBC HL,'+rp[p]
+                o.src = sbc16('c->HL','c->'+rp[p])+tick(7)
+            else:
+                o.cmt = 'ADC HL,'+rp[p]
+                o.src = adc16('c->HL','c->'+rp[p])+tick(7)
         elif z == 3:
             # 16-bit immediate address load/store
             if q == 0:

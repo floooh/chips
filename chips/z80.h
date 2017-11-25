@@ -232,40 +232,6 @@ static uint8_t _z80_srl(z80* c, uint8_t val) {
 }
 
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
-static uint16_t _z80_add16(z80* c, uint16_t acc, uint16_t val) {
-    c->WZ = acc+1;
-    uint32_t res = acc + val;
-    // flag computation taken from MAME
-    c->F = (c->F & (Z80_SF|Z80_ZF|Z80_VF)) |
-           (((acc^res^val)>>8)&Z80_HF)|
-           ((res>>16) & Z80_CF) | ((res >> 8) & (Z80_YF|Z80_XF));
-    return (uint16_t)res;
-}
-
-static uint16_t _z80_adc16(z80* c, uint16_t acc, uint16_t val) {
-    c->WZ = acc+1;
-    uint32_t res = acc + val + (c->F & Z80_CF);
-    // flag computation taken from MAME
-    c->F = (((acc^res^val)>>8)&Z80_HF) |
-           ((res>>16)&Z80_CF) |
-           ((res>>8)&(Z80_SF|Z80_YF|Z80_XF)) |
-           ((res & 0xFFFF) ? 0 : Z80_ZF) |
-           (((val^acc^0x8000) & (val^res)&0x8000)>>13);
-    return res;
-}
-
-static uint16_t _z80_sbc16(z80* c, uint16_t acc, uint16_t val) {
-    c->WZ = acc+1;
-    uint32_t res = acc - val - (c->F & Z80_CF);
-    // flag computation taken from MAME
-    c->F = (((acc^res^val)>>8)&Z80_HF) | Z80_NF |
-           ((res>>16)&Z80_CF) |
-           ((res>>8) & (Z80_SF|Z80_YF|Z80_XF)) |
-           ((res & 0xFFFF) ? 0 : Z80_ZF) |
-           (((val^acc) & (acc^res)&0x8000)>>13);
-    return res;
-}
-
 static void _z80_halt(z80* c) {
     c->CTRL |= Z80_HALT;
     c->PC--;
@@ -289,45 +255,6 @@ static uint8_t _z80_sziff2(z80* c, uint8_t val) {
     f |= (val & (Z80_YF|Z80_XF));
     if (c->IFF2) f |= Z80_PF;
     return f;
-}
-
-static void _z80_daa(z80* c) {
-    /* from MAME and http://www.z80.info/zip/z80-documented.pdf */
-    uint8_t val = c->A;
-    if (c->F & Z80_NF) {
-        if (((c->A & 0xF) > 0x9) || (c->F & Z80_HF)) {
-            val -= 0x06;
-        }
-        if ((c->A > 0x99) || (c->F & Z80_CF)) {
-            val -= 0x60;
-        }
-    }
-    else {
-        if (((c->A & 0xF) > 0x9) || (c->F & Z80_HF)) {
-            val += 0x06;
-        }
-        if ((c->A > 0x99) || (c->F & Z80_CF)) {
-            val += 0x60;
-        }
-    }
-    c->F &= Z80_CF|Z80_NF;
-    c->F |= (c->A > 0x99) ? Z80_CF:0;
-    c->F |= (c->A^val) & Z80_HF;
-    c->F |= c->szp[val];
-    c->A = val;
-}
-
-static void _z80_cpl(z80* c) {
-    c->A ^= 0xFF;
-    c->F = (c->F&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|Z80_HF|Z80_NF|(c->A&(Z80_YF|Z80_XF));
-}
-
-static void _z80_scf(z80* c) {
-    c->F = (c->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF))|Z80_CF|(c->A&(Z80_YF|Z80_XF));
-}
-
-static void _z80_ccf(z80* c) {
-    c->F = ((c->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF))|((c->F&Z80_CF)<<4)|(c->A&(Z80_YF|Z80_XF)))^Z80_CF;
 }
 
 /*-- INSTRUCTION DECODER ----------------------------------------------------*/
