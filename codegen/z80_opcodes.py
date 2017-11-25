@@ -93,7 +93,7 @@ def fetch(xxcb_ext):
     src += 'c->CTRL|=Z80_M1;c->ADDR=c->PC++;'
     src += tick()
     # T2
-    src += 'c->CTRL|=Z80_MREQ|Z80_RD;'
+    src += 'c->CTRL|=(Z80_MREQ|Z80_RD);'
     src += tick()
     src += 'opcode=c->DATA;'
     # T3
@@ -127,7 +127,7 @@ def rd(addr,res):
     src+='c->ADDR='+addr+';'
     src+=tick()
     # T2
-    src+='c->CTRL|=Z80_MREQ|Z80_RD;'
+    src+='c->CTRL|=(Z80_MREQ|Z80_RD);'
     src+=tick()
     src+=res+'=c->DATA;'
     # T3
@@ -165,13 +165,75 @@ def wr(addr,val):
     return src
 
 #-------------------------------------------------------------------------------
+#   Generate code for an input machine cycle.
+#
+#              T1   T2   TW   T3
+#    --------+----+----+----+----+
+#    CLK     |--**|--**|--**|--**|
+#    A15-A0  |     PORT ADDR     |
+#    IORQ    |    |****|****|**  |
+#    RD      |    |****|****|**  |
+#    WR      |    |    |    |    |
+#    D7-D0   |    |    |    | X  |
+#    WAIT    |    |    | -- |    |
+#
+#    NOTE: the IORQ|RD pins will already be switched off at the beginning
+#    of TW, so that IO devices don't need to do double work.
+#
+def inp(addr,res):
+    src='/*>in*/'
+    # T1
+    src+='c->ADDR='+addr+';'
+    src+=tick()
+    # T2
+    src+='c->CTRL|=(Z80_IORQ|Z80_RD);'
+    src+=tick()
+    src+=res+'=c->DATA;'
+    # TW+T3
+    src+='c->CTRL&=~(Z80_IORQ|Z80_RD);'
+    src+=tick(2)
+    src+='/*<in*/'
+    return src
+
+#-------------------------------------------------------------------------------
+#   Generate code for output machine cycle.
+#
+#              T1   T2   TW   T3
+#    --------+----+----+----+----+
+#    CLK     |--**|--**|--**|--**|
+#    A15-A0  |     PORT ADDR     |
+#    IORQ    |    |****|****|**  |
+#    RD      |    |    |    |    |
+#    WR      |    |****|****|**  |
+#    D7-D0   |  XX|XXXX|XXXX|XXXX|
+#    WAIT    |    |    | -- |    |
+#
+#    NOTE: the IORQ|WR pins will already be switched off at the beginning
+#    of TW, so that IO devices don't need to do double work.
+#
+def out(addr,val):
+    src='/*>out*/'
+    # T1
+    src+='c->ADDR='+addr+';'
+    src+=tick()
+    # T2
+    src+='c->CTRL|=(Z80_IORQ|Z80_WR);'
+    src+='c->DATA='+val+';'
+    src+=tick()
+    # TW+T3
+    src+='c->CTRL&=~(Z80_IORQ|Z80_WR);'
+    src+=tick(2)
+    src+='/*<out*/'
+    return src
+
+#-------------------------------------------------------------------------------
 # return comment string for (HL), (IX+d), (IY+d)
 #
 def iHLcmt(ext) :
     if (ext) :
-        return '(c->'+r[6]+'+d)'
+        return '('+r[6]+'+d)'
     else :
-        return '(c->'+r[6]+')'
+        return '('+r[6]+')'
 
 #-------------------------------------------------------------------------------
 # Return code to setup an address variable 'a' with the address of HL
@@ -215,6 +277,278 @@ def ext_ticks(ext, num):
         return ''
 
 #-------------------------------------------------------------------------------
+#   imm16()
+#
+#   Generate code for a 16-bit immediate load into WZ
+#
+def imm16():
+    src =rd('c->PC++','c->Z')
+    src+=rd('c->PC++','c->W')
+    return src
+
+#-------------------------------------------------------------------------------
+#   out_n_a
+#
+#   Generate code for OUT (n),A
+#
+def out_n_a():
+    src =rd('c->PC++','v')
+    src+='c->WZ=((c->A<<8)|v);'
+    src+=out('c->WZ','c->A')
+    src+='c->Z++;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   in_A_n
+#
+#   Generate code for IN A,(n)
+#
+def in_n_a():
+    src =rd('c->PC++','v')
+    src+='c->WZ=((c->A<<8)|v);'
+    src+=inp('c->WZ++','c->A')
+    return src
+
+#-------------------------------------------------------------------------------
+#   ex_sp_dd
+#
+#   Generate code for EX (SP),HL; EX (SP),IX and EX (SP),IY
+#
+def ex_sp_dd():
+    src =tick()
+    src+=rd('c->SP','c->Z')
+    src+=rd('c->SP+1','c->W')
+    src+=wr('c->SP','(uint8_t)c->'+rp[2])
+    src+=wr('c->SP+1','(uint8_t)(c->'+rp[2]+'>>8)')
+    src+='c->'+rp[2]+'=c->WZ;'
+    src+=tick(2)
+    return src
+
+#-------------------------------------------------------------------------------
+#   exx
+#
+#   Generate code for EXX
+#
+def exx():
+    src ='_SWP16(c->BC,c->BC_);'
+    src+='_SWP16(c->DE,c->DE_);'
+    src+='_SWP16(c->HL,c->HL_);'
+    return src
+
+#-------------------------------------------------------------------------------
+#   pop_dd
+#
+#   Generate code for POP dd.
+#
+def pop_dd(p):
+    src =rd('c->SP++','l')
+    src+=rd('c->SP++','h')
+    src+='c->'+rp2[p]+'=(h<<8)|l;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   push_dd
+#
+#   Generate code for PUSH dd
+#
+def push_dd(p):
+    src =tick()
+    src+=wr('--c->SP','(uint8_t)(c->'+rp2[p]+'>>8)')
+    src+=wr('--c->SP','(uint8_t)c->'+rp2[p])    
+    return src
+
+#-------------------------------------------------------------------------------
+#   ld_inn_dd
+#   LD (nn),dd
+#
+def ld_inn_dd(p):
+    src =imm16()
+    src+=wr('c->WZ++','(uint8_t)c->'+rp[p])
+    src+=wr('c->WZ','(uint8_t)(c->'+rp[p]+'>>8)')
+    return src
+
+#-------------------------------------------------------------------------------
+#   ld_dd_inn
+#   LD dd,(nn)
+#
+def ld_dd_inn(p):
+    src =imm16()
+    src+=rd('c->WZ++','l')
+    src+=rd('c->WZ','h')
+    src+='c->'+rp[p]+'=(h<<8)|l;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   rot_idd
+#
+#   Generate code for ROT (HL); ROT (IX+d); ROT (IY+d)
+#
+def rot_idd(ext, y):
+    src =iHLdsrc(ext)
+    src+=tick()
+    src+=ext_ticks(ext,1)
+    src+=rd('a','v')
+    src+=wr('a',rot[y]+'(c,v)')
+    return src
+
+#-------------------------------------------------------------------------------
+#   rot_idd_r
+#
+#   Generate code for ROT (IX+d),r; ROT (IY+d),r undocumented instructions.
+#
+def rot_idd_r(y, z):
+    src =iHLdsrc(True)
+    src+=tick(2)
+    src+=rd('a','v')
+    src+='v='+rot[y]+'(c,v);'
+    src+='c->'+r2[z]+'=v;'
+    src+=wr('a','v')
+    return src
+
+#-------------------------------------------------------------------------------
+#   bit_n_idd
+#
+#   Generate code for BIT n,(HL); BIT n,(IX+d); BIT n,(IY+d)
+#
+#   Flag computation: the undocumented YF and XF flags are set from high byte 
+#   of HL+1 or IX/IY+d
+#
+def bit_n_idd(ext, y):
+    src =iHLdsrc(ext)
+    src+=tick()
+    src+=ext_ticks(ext,1)
+    src+=rd('a','v')
+    src+='l=v&'+hex(1<<y)+';'
+    src+='h=Z80_HF|(l?(l&Z80_SF):(Z80_ZF|Z80_PF))|(c->W&(Z80_YF|Z80_XF));'
+    src+='c->F=h|(c->F&Z80_CF);'
+    return src
+
+#-------------------------------------------------------------------------------
+#   bit_n_r
+#
+#   Generate code for BIT n,r
+#
+def bit_n_r(ext,y,z):
+    src ='l=c->'+r2[z]+'&'+hex(1<<y)+';'
+    src+='h=Z80_HF|(l?(l&Z80_SF):(Z80_ZF|Z80_PF))|(c->'+r2[z]+'&(Z80_YF|Z80_XF));'
+    src+='c->F=h|(c->F&Z80_CF);'
+    return src
+
+#-------------------------------------------------------------------------------
+#   res_n_idd
+#
+#   Generate code for RES n,(HL); RES n,(IX+d); RES n,(IY+d)
+#
+def res_n_idd(ext, y):
+    src =iHLdsrc(ext)
+    src+=tick()
+    src+=ext_ticks(ext,1)
+    src+=rd('a','v')
+    src+=wr('a','v&~'+hex(1<<y))
+    return src
+
+#-------------------------------------------------------------------------------
+#   res_n_idd_r
+#
+#   Generate code for RES n,(IX+d),r; RES n,(IY+d),r undocumented instructions
+#
+def res_n_idd_r(ext, y, z):
+    src =iHLdsrc(ext)
+    src+=tick()
+    src+=ext_ticks(ext,1)
+    src+=rd('a','v')
+    src+='c->'+r2[z]+'=v&~'+hex(1<<y)+';'
+    src+=wr('a','c->'+r2[z])
+    return src
+
+#-------------------------------------------------------------------------------
+#   set_n_idd
+#
+#   Generate code for SET n,(HL); SET n,(IX+d); SET n,(IY+d)
+#
+def set_n_idd(ext, y):
+    src =iHLdsrc(ext)
+    src+=tick()
+    src+=ext_ticks(ext,1)
+    src+=rd('a','v')
+    src+=wr('a','v|'+hex(1<<y))
+    return src
+
+#-------------------------------------------------------------------------------
+#   set_n_idd_r
+#
+#   Generate code for SET n,(IX+d),r; SET n,(IY+d),r undocumented instructions
+#
+def set_n_idd_r(ext, y, z):
+    src =iHLdsrc(ext)
+    src+=tick()
+    src+=ext_ticks(ext,1)
+    src+=rd('a','v')
+    src+='c->'+r2[z]+'=v|'+hex(1<<y)+';'
+    src+=wr('a','c->'+r2[z])
+    return src
+
+#-------------------------------------------------------------------------------
+#   call_nn
+#
+#   Generate code for CALL nn
+#
+def call_nn():
+    src =imm16()
+    src+=tick()
+    src+=wr('--c->SP','(uint8_t)(c->PC>>8)')
+    src+=wr('--c->SP','(uint8_t)c->PC')
+    src+='c->PC=c->WZ;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   call_cc_nn
+#
+#   Generate code for CALL cc,nn
+#
+def call_cc_nn(y):
+    src =imm16()
+    src+='if ('+cond[y]+'){'
+    src+=tick()
+    src+=wr('--c->SP','(uint8_t)(c->PC>>8)')
+    src+=wr('--c->SP','(uint8_t)c->PC')
+    src+='c->PC=c->WZ;'
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   rrd
+#
+#   Generate code for RRD
+#
+def rrd():
+    src ='c->WZ=c->HL;'
+    src+=rd('c->WZ++','v')
+    src+='l=c->A&0x0F;'
+    src+='c->A=(c->A&0xF0)|(v&0x0F);'
+    src+='v=(v>>4)|(l<<4);'
+    src+=tick(4)
+    src+=wr('c->HL','v')
+    src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    return src
+
+#-------------------------------------------------------------------------------
+#   rld
+#
+#   Generate code for RLD
+#
+def rld():
+    src ='c->WZ=c->HL;'
+    src+=rd('c->WZ++','v')
+    src+='l=c->A&0x0F;'
+    src+='c->A=(c->A&0xF0)|(v>>4);'
+    src+='v=(v<<4)|l;'
+    src+=tick(4)
+    src+=wr('c->HL','v')
+    src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    return src
+
+#-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
 # Takes an opcode byte and returns an opcode object, for invalid instructions
 # the opcode object will be in its default state (opcode.src==None).
@@ -245,11 +579,11 @@ def enc_op(op, ext, cc) :
             else:
                 # LD (HL),r; LD (IX+d),r; LD (IX+d),r
                 o.cmt = 'LD '+iHLcmt(ext)+','+r2[z]
-                o.src = '{'+iHLsrc(ext)+ext_ticks(ext,5)+wr('a','c->'+r2[z])+';}'
+                o.src = iHLsrc(ext)+ext_ticks(ext,5)+wr('a','c->'+r2[z])
         elif z == 6:
             # LD r,(HL); LD r,(IX+d); LD r,(IY+d)
             o.cmt = 'LD '+r2[y]+','+iHLcmt(ext)
-            o.src = '{'+iHLsrc(ext)+ext_ticks(ext,5)+rd('a','c->'+r2[y])+'}'
+            o.src = iHLsrc(ext)+ext_ticks(ext,5)+rd('a','c->'+r2[y])
         else:
             # LD r,s
             o.cmt = 'LD '+r[y]+','+r[z]
@@ -293,7 +627,7 @@ def enc_op(op, ext, cc) :
             if q == 0:
                 # 16-bit immediate loads
                 o.cmt = 'LD '+rp[p]+',nn'
-                o.src = '_IMM16(); c->'+rp[p]+'=c->WZ;'
+                o.src = imm16()+'c->'+rp[p]+'=c->WZ;'
             else :
                 # ADD HL,rr; ADD IX,rr; ADD IY,rr
                 o.cmt = 'ADD '+rp[2]+','+rp[p]
@@ -305,10 +639,10 @@ def enc_op(op, ext, cc) :
                 [ 'LD A,(BC)', 'c->WZ=c->BC;'+rd('c->WZ++','c->A')+';' ],
                 [ 'LD (DE),A', 'c->WZ=c->DE;'+wr('c->WZ++','c->A')+';c->W=c->A;' ],
                 [ 'LD A,(DE)', 'c->WZ=c->DE;'+rd('c->WZ++','c->A')+';' ],
-                [ 'LD (nn),'+rp[2], '_IMM16();'+wr('c->WZ++','(uint8_t)c->'+rp[2])+wr('c->WZ','(uint8_t)(c->'+rp[2]+'>>8)') ],
-                [ 'LD '+rp[2]+',(nn)', '_IMM16();'+rd('c->WZ++','l')+rd('c->WZ','h')+'c->'+rp[2]+'=(h<<8)|l;' ],
-                [ 'LD (nn),A', '_IMM16();'+wr('c->WZ++','c->A')+';c->W=c->A;' ],
-                [ 'LD A,(nn)', '_IMM16();'+rd('c->WZ++','c->A')+';' ]
+                [ 'LD (nn),'+rp[2], imm16()+wr('c->WZ++','(uint8_t)c->'+rp[2])+wr('c->WZ','(uint8_t)(c->'+rp[2]+'>>8)') ],
+                [ 'LD '+rp[2]+',(nn)', imm16()+rd('c->WZ++','l')+rd('c->WZ','h')+'c->'+rp[2]+'=(h<<8)|l;' ],
+                [ 'LD (nn),A', imm16()+wr('c->WZ++','c->A')+';c->W=c->A;' ],
+                [ 'LD A,(nn)', imm16()+rd('c->WZ++','c->A')+';' ]
             ]
             o.cmt = op_tbl[y][0]
             o.src = op_tbl[y][1]
@@ -365,12 +699,12 @@ def enc_op(op, ext, cc) :
             if q == 0:
                 # POP BC,DE,HL,IX,IY,AF
                 o.cmt = 'POP '+rp2[p]
-                o.src = rd('c->SP++','l')+rd('c->SP++','h')+';c->'+rp2[p]+'=(h<<8)|l;'
+                o.src = pop_dd(p)
             else:
                 # misc ops
                 op_tbl = [
                     [ 'RET', 'ticks=_z80_ret(c,tick,ticks);' ],
-                    [ 'EXX', '_SWP16(c->BC,c->BC_);_SWP16(c->DE,c->DE_);_SWP16(c->HL,c->HL_);' ],
+                    [ 'EXX', exx() ],
                     [ 'JP '+rp[2], 'c->PC=c->'+rp[2]+';' ],
                     [ 'LD SP,'+rp[2], tick(2)+'c->SP=c->'+rp[2]+';' ]
                 ]
@@ -379,15 +713,15 @@ def enc_op(op, ext, cc) :
         elif z == 2:
             # JP cc,nn
             o.cmt = 'JP {},nn'.format(cond_cmt[y])
-            o.src = '_IMM16(); if ({}) {{ c->PC=c->WZ; }}'.format(cond[y])
+            o.src = imm16()+'if ({}) {{ c->PC=c->WZ; }}'.format(cond[y])
         elif z == 3:
             # misc ops
             op_tbl = [
-                [ 'JP nn', '_IMM16(); c->PC=c->WZ;' ],
+                [ 'JP nn', imm16()+'c->PC=c->WZ;' ],
                 [ None, None ], # CB prefix instructions
-                [ 'OUT (n),A', '{uint8_t v;_RD(c->PC++,v);c->WZ=((c->A<<8)|v);_OUT(c->WZ,c->A);c->Z++;}' ],
-                [ 'IN A,(n)', '{uint8_t v;_RD(c->PC++,v);c->WZ=((c->A<<8)|v);_IN(c->WZ++,c->A);}' ],
-                [ 'EX (SP),{}'.format(rp[2]), '_T();_RD(c->SP,c->Z);_RD(c->SP+1,c->W);_WR(c->SP,(uint8_t)c->{});_WR(c->SP+1,(uint8_t)(c->{}>>8));c->{}=c->WZ;_T();_T();'.format(rp[2], rp[2],rp[2]) ],
+                [ 'OUT (n),A', out_n_a() ],
+                [ 'IN A,(n)', in_n_a() ],
+                [ 'EX (SP),'+rp[2], ex_sp_dd() ],
                 [ 'EX DE,HL', '_SWP16(c->DE,c->HL);' ],
                 [ 'DI', '_z80_di(c);' ],
                 [ 'EI', '_z80_ei(c);' ]
@@ -397,15 +731,15 @@ def enc_op(op, ext, cc) :
         elif z == 4:
             # CALL cc,nn
             o.cmt = 'CALL {},nn'.format(cond_cmt[y])
-            o.src = 'ticks=_z80_callcc(c,{},tick,ticks);'.format(cond[y])
+            o.src = call_cc_nn(y)
         elif z == 5:
             if q == 0:
                 # PUSH BC,DE,HL,IX,IY,AF
                 o.cmt = 'PUSH {}'.format(rp2[p])
-                o.src = '_T();_WR(--c->SP,(uint8_t)(c->{}>>8)); _WR(--c->SP,(uint8_t)c->{});'.format(rp2[p], rp2[p])
+                o.src = push_dd(p)
             else:
                 op_tbl = [
-                    [ 'CALL nn', 'ticks=_z80_call(c,tick,ticks);' ],
+                    [ 'CALL nn', call_nn() ],
                     [ None, None ], # DD prefix instructions
                     [ None, None ], # ED prefix instructions
                     [ None, None ], # FD prefix instructions
@@ -415,7 +749,7 @@ def enc_op(op, ext, cc) :
         elif z == 6:
             # ALU n
             o.cmt = '{} n'.format(alu_cmt[y])
-            o.src = '{{uint8_t v;_RD(c->PC++,v);{}(c,v);}}'.format(alu[y])
+            o.src = rd('c->PC++','v')+alu[y]+'(c,v);'
         elif z == 7:
             # RST
             o.cmt = 'RST {}'.format(hex(y*8))
@@ -498,10 +832,10 @@ def enc_ed_op(op) :
             # 16-bit immediate address load/store
             if q == 0:
                 o.cmt = 'LD (nn),{}'.format(rp[p])
-                o.src = '_IMM16();_WR(c->WZ++,(uint8_t)c->{});_WR(c->WZ,(uint8_t)(c->{}>>8));'.format(rp[p],rp[p])
+                o.src = ld_inn_dd(p)
             else:
                 o.cmt = 'LD {},(nn)'.format(rp[p])
-                o.src = '{{_IMM16();uint8_t l;_RD(c->WZ++,l);uint8_t h;_RD(c->WZ,h);c->{}=(h<<8)|l;}}'.format(rp[p])
+                o.src = ld_dd_inn(p)
         elif z == 4:
             # NEG
             o.cmt = 'NEG'
@@ -523,8 +857,8 @@ def enc_ed_op(op) :
                 [ 'LD R,A', '_T(); c->R=c->A;' ],
                 [ 'LD A,I', '_T(); c->A=c->I; c->F=_z80_sziff2(c,c->I)|(c->F&Z80_CF);' ],
                 [ 'LD A,R', '_T(); c->A=c->R; c->F=_z80_sziff2(c,c->R)|(c->F&Z80_CF);' ],
-                [ 'RRD',    'ticks=_z80_rrd(c,tick,ticks);' ],
-                [ 'RLD',    'ticks=_z80_rld(c,tick,ticks);' ],
+                [ 'RRD', rrd() ],
+                [ 'RLD', rld() ],
                 [ 'NOP (ED)', ' ' ],
                 [ 'NOP (ED)', ' ' ],
             ]
@@ -547,11 +881,11 @@ def enc_cb_op(op, ext, cc) :
         if z == 6:
             # ROT (HL); ROT (IX+d); ROT (IY+d)
             o.cmt = '{} {}'.format(rot_cmt[y],iHLcmt(ext))
-            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_WR(a,{}(c,v)); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), rot[y])
+            o.src = rot_idd(ext,y)
         elif ext:
             # undocumented: ROT (IX+d),(IY+d),r (also stores result in a register)
             o.cmt = '{} {},{}'.format(rot_cmt[y],iHLcmt(ext),r2[z])
-            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);c->{}={}(c,v);_WR(a,c->{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], rot[y], r2[z])
+            o.src = rot_idd_r(y,z) 
         else:
             # ROT r
             o.cmt = '{} {}'.format(rot_cmt[y],r2[z])
@@ -561,21 +895,21 @@ def enc_cb_op(op, ext, cc) :
         if z == 6 or ext:
             # BIT n,(HL); BIT n,(IX+d); BIT n,(IY+d)
             o.cmt = 'BIT {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_z80_ibit(c,v,{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
+            o.src = bit_n_idd(ext,y) 
         else:
             # BIT n,r
             o.cmt = 'BIT {},{}'.format(y,r2[z])
-            o.src = '_z80_bit(c,c->{},{});'.format(r2[z], hex(1<<y))
+            o.src = bit_n_r(ext,y,z)
     elif x == 2:
         # RES n
         if z == 6:
             # RES n,(HL); RES n,(IX+d); RES n,(IY+d)
             o.cmt = 'RES {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_WR(a,v&~{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
+            o.src = res_n_idd(ext,y)
         elif ext:
             # undocumented: RES n,(IX+d),r; RES n,(IY+d),r
             o.cmt = 'RES {},{},{}'.format(y,iHLcmt(ext),r2[z])
-            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);c->{}=v&~{};_WR(a,c->{}); }}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], hex(1<<y), r2[z])
+            o.src = res_n_idd_r(ext,y,z)
         else:
             # RES n,r
             o.cmt = 'RES {},{}'.format(y,r2[z])
@@ -585,11 +919,11 @@ def enc_cb_op(op, ext, cc) :
         if z == 6:
             # SET n,(HL); RES n,(IX+d); RES n,(IY+d)
             o.cmt = 'SET {},{}'.format(y,iHLcmt(ext))
-            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);_WR(a,v|{});}}'.format(iHLdsrc(ext), ext_ticks(ext,1), hex(1<<y))
+            o.src = set_n_idd(ext,y)
         elif ext:
             # undocumented: SET n,(IX+d),r; SET n,(IY+d),r
             o.cmt = 'SET {},{},{}'.format(y,iHLcmt(ext),r2[z])
-            o.src = '{{ {};{}_T();uint8_t v;_RD(a,v);c->{}=v|{};_WR(a,c->{});}}'.format(iHLdsrc(ext), ext_ticks(ext,1), r2[z], hex(1<<y), r[z])
+            o.src = set_n_idd_r(ext,y,z)
         else:
             # SET n,r
             o.cmt = 'SET {},{}'.format(y,r2[z])
@@ -643,7 +977,7 @@ def write_begin_group(indent, ext_byte=None, xxcb_ext=False) :
     # the actual instruction byte, and the next opcode fetch doesn't
     # increment R
     if xxcb_ext:
-        l(tab(indent)+'_RD(c->PC++, d);')
+        l(tab(indent)+rd('c->PC++', 'd'))
     l(tab(indent)+fetch(xxcb_ext))
     l(tab(indent)+'switch (opcode) {')
     indent += 1
@@ -654,7 +988,9 @@ def write_begin_group(indent, ext_byte=None, xxcb_ext=False) :
 #
 def write_op(indent, op) :
     if op.src :
-        l(tab(indent)+'case '+hex(op.byte)+': '+op.src+'return ticks; //'+op.cmt if op.cmt else '')
+        if not op.cmt:
+            op.cmt='???'
+        l(tab(indent)+'case '+hex(op.byte)+':/*'+op.cmt+'*/'+op.src+'return ticks;')
 
 #-------------------------------------------------------------------------------
 # finish an instruction group (ends current statement)

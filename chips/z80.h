@@ -174,9 +174,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 #ifdef _SWP16
 #undef _SWP16
 #endif
-#ifndef _IMM16
-#undef _IMM16
-#endif
 #define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
 #define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
 #define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
@@ -186,7 +183,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 #define _OFF(m) {c->CTRL&=~(m);}
 #define _T() {tick(c);ticks++;}
 #define _SWP16(a,b) {uint16_t tmp=a;a=b;b=tmp;}
-#define _IMM16() {_RD(c->PC++,c->Z);_RD(c->PC++,c->W);}
 
 #define _RD(addr,res){\
     c->ADDR=addr;\
@@ -411,30 +407,6 @@ static uint8_t _z80_srl(z80* c, uint8_t val) {
     uint8_t r = val>>1;
     c->F = (val & Z80_CF) | c->szp[r];
     return r;
-}
-
-static uint32_t _z80_rrd(z80* c, void(*tick)(z80*), uint32_t ticks) {
-    c->WZ = c->HL;
-    uint8_t x; _RD(c->WZ++,x);
-    uint8_t tmp = c->A & 0xF;
-    c->A = (c->A & 0xF0) | (x & 0x0F);
-    x = (x >> 4) | (tmp << 4);
-    _T(); _T(); _T(); _T();
-    _WR(c->HL, x);
-    c->F = c->szp[c->A] | (c->F & Z80_CF);
-    return ticks;
-}
-
-static uint32_t _z80_rld(z80* c, void(*tick)(z80*), uint32_t ticks) {
-    c->WZ = c->HL;
-    uint8_t x; _RD(c->WZ++, x);
-    uint8_t tmp = c->A & 0xF;
-    c->A = (c->A & 0xF0) | (x>>4);
-    x = (x<<4) | tmp;
-    _T(); _T(); _T(); _T();
-    _WR(c->HL, x);
-    c->F = c->szp[c->A] | (c->F & Z80_CF);
-    return ticks;
 }
 
 /*-- BLOCK FUNCTIONS ---------------------------------------------------------*/
@@ -684,30 +656,10 @@ static uint32_t _z80_jr_cc(z80* c, bool cond, void(*tick)(z80*), uint32_t ticks)
     return ticks;
 }
 
-static uint32_t _z80_call(z80* c, void(*tick)(z80*), uint32_t ticks) {
-    _IMM16();
-    _T();
-    _WR(--c->SP, (uint8_t)(c->PC>>8));
-    _WR(--c->SP, (uint8_t)c->PC);
-    c->PC=c->WZ;
-    return ticks;
-}
-
 static uint32_t _z80_ret(z80* c, void(*tick)(z80*), uint32_t ticks) {
     _RD(c->SP++, c->Z);
     _RD(c->SP++, c->W);
     c->PC = c->WZ;
-    return ticks;
-}
-
-static uint32_t _z80_callcc(z80* c, bool cond, void(*tick)(z80*), uint32_t ticks) {
-    _IMM16();
-    if (cond) {
-        _T();
-        _WR(--c->SP, (uint8_t)(c->PC>>8));
-        _WR(--c->SP, (uint8_t)c->PC);
-        c->PC = c->WZ;
-    }
     return ticks;
 }
 
@@ -719,24 +671,6 @@ static uint32_t _z80_retcc(z80* c, bool cond, void(*tick)(z80*), uint32_t ticks)
         c->PC = c->WZ;
     }
     return ticks;
-}
-
-/*-- BIT MANIPULATION FUNCTIONS ----------------------------------------------*/
-static void _z80_bit(z80* c, uint8_t val, uint8_t mask) {
-    uint8_t r = val & mask;
-    uint8_t f = Z80_HF | (r ? (r & Z80_SF) : (Z80_ZF|Z80_PF));
-    f |= (val & (Z80_YF|Z80_XF));
-    c->F = f | (c->F & Z80_CF);
-}
-
-static void _z80_ibit(z80* c, uint8_t val, uint8_t mask) {
-    // this is the version for the BIT instruction for (HL), (IX+d), (IY+d),
-    // these set the undocumented YF and XF flags from high byte of HL+1
-    // or IX/IY+d
-    uint8_t r = val & mask;
-    uint8_t f = Z80_HF | (r ? (r & Z80_SF) : (Z80_ZF|Z80_PF));
-    f |= (c->W & (Z80_YF|Z80_XF));
-    c->F = f | (c->F & Z80_CF);
 }
 
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
@@ -917,7 +851,6 @@ uint32_t z80_run(z80* c, uint32_t t) {
 #undef _IN
 #undef _OUT
 #undef _SWP16
-#undef _IMM16
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
