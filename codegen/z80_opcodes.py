@@ -287,6 +287,14 @@ def imm16():
     return src
 
 #-------------------------------------------------------------------------------
+#   sz(val)
+#
+#   Return code to evaluate S and Z flags from value.
+#
+def sz(val):
+    return '(('+val+'&0xFF)?('+val+'&Z80_SF):Z80_ZF)'
+
+#-------------------------------------------------------------------------------
 #   out_n_a
 #
 #   Generate code for OUT (n),A
@@ -418,9 +426,9 @@ def bit_n_idd(ext, y):
     src+=tick()
     src+=ext_ticks(ext,1)
     src+=rd('a','v')
-    src+='l=v&'+hex(1<<y)+';'
-    src+='h=Z80_HF|(l?(l&Z80_SF):(Z80_ZF|Z80_PF))|(c->W&(Z80_YF|Z80_XF));'
-    src+='c->F=h|(c->F&Z80_CF);'
+    src+='v&='+hex(1<<y)+';'
+    src+='f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|(c->W&(Z80_YF|Z80_XF));'
+    src+='c->F=f|(c->F&Z80_CF);'
     return src
 
 #-------------------------------------------------------------------------------
@@ -429,9 +437,9 @@ def bit_n_idd(ext, y):
 #   Generate code for BIT n,r
 #
 def bit_n_r(ext,y,z):
-    src ='l=c->'+r2[z]+'&'+hex(1<<y)+';'
-    src+='h=Z80_HF|(l?(l&Z80_SF):(Z80_ZF|Z80_PF))|(c->'+r2[z]+'&(Z80_YF|Z80_XF));'
-    src+='c->F=h|(c->F&Z80_CF);'
+    src ='v=c->'+r2[z]+'&'+hex(1<<y)+';'
+    src+='f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|(c->'+r2[z]+'&(Z80_YF|Z80_XF));'
+    src+='c->F=f|(c->F&Z80_CF);'
     return src
 
 #-------------------------------------------------------------------------------
@@ -519,8 +527,6 @@ def call_cc_nn(y):
 #-------------------------------------------------------------------------------
 #   rrd
 #
-#   Generate code for RRD
-#
 def rrd():
     src ='c->WZ=c->HL;'
     src+=rd('c->WZ++','v')
@@ -535,8 +541,6 @@ def rrd():
 #-------------------------------------------------------------------------------
 #   rld
 #
-#   Generate code for RLD
-#
 def rld():
     src ='c->WZ=c->HL;'
     src+=rd('c->WZ++','v')
@@ -546,6 +550,126 @@ def rld():
     src+=tick(4)
     src+=wr('c->HL','v')
     src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    return src
+
+#-------------------------------------------------------------------------------
+#   ldi
+#
+def ldi():
+    src =rd('c->HL','v')
+    src+=wr('c->DE','v')
+    src+=tick(2)
+    src+='v+=c->A;'
+    src+='f=c->F&(Z80_SF|Z80_ZF|Z80_CF);'
+    src+='if(v&0x02){f|=Z80_YF;}'
+    src+='if(v&0x08){f|=Z80_XF;}'
+    src+='c->HL++;c->DE++;c->BC--;'
+    src+='if(c->BC){f|=Z80_VF;}'
+    src+='c->F=f;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   ldir
+#
+def ldir():
+    src=ldi()
+    src+='if(c->BC){'
+    src+='c->PC-=2;'
+    src+='c->WZ=c->PC+1;'
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   ldd
+#
+def ldd():
+    src =rd('c->HL','v')
+    src+=wr('c->DE','v')
+    src+=tick(2)
+    src+='v+=c->A;'
+    src+='f=c->F&(Z80_SF|Z80_ZF|Z80_CF);'
+    src+='if(v&0x02){f|=Z80_YF;}'
+    src+='if(v&0x08){f|=Z80_XF;}'
+    src+='c->HL--;c->DE--;c->BC--;'
+    src+='if(c->BC){f|=Z80_VF;}'
+    src+='c->F=f;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   lddr()
+#
+def lddr():
+    src =ldd()
+    src+='if(c->BC){'
+    src+='c->PC-=2;'
+    src+='c->WZ=c->PC+1;'
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   cpi()
+#
+def cpi():
+    src =rd('c->HL','v')
+    src+=tick(5)
+    src+='{int r=(int)c->A-v;'
+    src+='f=Z80_NF|(c->F&Z80_CF)|'+sz('r')+';'
+    src+='if((r&0x0F)>(c->A&0x0F)){'
+    src+='f|=Z80_HF;'
+    src+='r--;'
+    src+='}'
+    src+='if(r&0x02){f|=Z80_YF;}'
+    src+='if(r&0x08){f|=Z80_XF;}'
+    src+='}'
+    src+='c->WZ++;c->HL++;c->BC--;'
+    src+='if(c->BC){f|=Z80_VF;}'
+    src+='c->F=f;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   cpir()
+#
+def cpir():
+    src =cpi()
+    src+='if(c->BC&&!(c->F&Z80_ZF)){'
+    src+='c->PC-=2;'
+    src+='c->WZ=c->PC+1;'   # FIXME: is this correct (see memptr_eng.txt)
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   cpd()
+#
+def cpd():
+    src =rd('c->HL','v')
+    src+='{int r=(int)c->A-v;'
+    src+=tick(5)
+    src+='f=Z80_NF|(c->F&Z80_CF)|'+sz('r')+';'
+    src+='if((r&0x0F)>(c->A&0x0F)){'
+    src+='f|=Z80_HF;'
+    src+='r--;'
+    src+='}'
+    src+='if(r&0x02){f|=Z80_YF;}'
+    src+='if(r&0x08){f|=Z80_XF;}'
+    src+='}'
+    src+='c->WZ--;c->HL--;c->BC--;'
+    src+='if(c->BC){f|=Z80_VF;}'
+    src+='c->F=f;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   cpdr()
+#
+def cpdr():
+    src =cpd()
+    src+='if((c->BC)&&!(c->F&Z80_ZF)){'
+    src+='c->PC-=2;'
+    src+='c->WZ=c->PC+1;'
+    src+=tick(5)
+    src+='}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -775,16 +899,16 @@ def enc_ed_op(op) :
         if y >= 4 and z < 4 :
             op_tbl = [
                 [ 
-                    [ 'LDI',    'ticks=_z80_ldi(c,tick,ticks);' ],
-                    [ 'LDD',    'ticks=_z80_ldd(c,tick,ticks);' ],
-                    [ 'LDIR',   'ticks=_z80_ldir(c,tick,ticks);' ],
-                    [ 'LDDR',   'ticks=_z80_lddr(c,tick,ticks);' ]
+                    [ 'LDI',  ldi() ],
+                    [ 'LDD',  ldd() ],
+                    [ 'LDIR', ldir() ],
+                    [ 'LDDR', lddr() ]
                 ],
                 [
-                    [ 'CPI',    'ticks=_z80_cpi(c,tick,ticks);' ],
-                    [ 'CPD',    'ticks=_z80_cpd(c,tick,ticks);' ],
-                    [ 'CPIR',   'ticks=_z80_cpir(c,tick,ticks);' ],
-                    [ 'CPDR',   'ticks=_z80_cpdr(c,tick,ticks);' ]
+                    [ 'CPI',  cpi() ],
+                    [ 'CPD',  cpd() ],
+                    [ 'CPIR', cpir() ],
+                    [ 'CPDR', cpdr() ]
                 ],
                 [
                     [ 'INI',    'ticks=_z80_ini(c,tick,ticks);' ],
@@ -962,7 +1086,7 @@ def write_header() :
     l('// machine generated, do not edit!')
     l('static uint32_t _z80_op(z80* c, uint32_t ticks) {')
     l('  void(*tick)(z80*) = c->tick;')
-    l('  uint8_t opcode; int8_t d; uint16_t a; uint8_t v; uint8_t l; uint8_t h;')
+    l('  uint8_t opcode; int8_t d; uint16_t a; uint8_t v; uint8_t l; uint8_t h; uint8_t f;')
 
 #-------------------------------------------------------------------------------
 # begin a new instruction group (begins a switch statement)
