@@ -147,30 +147,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 #ifdef _CP_FLAGS
 #undef _CP_FLAGS
 #endif
-#ifdef _ON
-#undef _ON
-#endif
-#ifdef _OFF
-#undef _OFF
-#endif
-#ifdef _T
-#undef _T
-#endif
-#ifdef _RD
-#undef _RD
-#endif
-#ifdef _RDS
-#undef _RDS
-#endif
-#ifdef _WR
-#undef _WR
-#endif
-#ifndef _IN
-#undef _IN
-#endif
-#ifndef _OUT
-#undef _OUT
-#endif
 #ifdef _SWP16
 #undef _SWP16
 #endif
@@ -179,161 +155,7 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 #define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
 #define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
 #define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
-#define _ON(m) {c->CTRL|=(m);}
-#define _OFF(m) {c->CTRL&=~(m);}
-#define _T() {tick(c);ticks++;}
 #define _SWP16(a,b) {uint16_t tmp=a;a=b;b=tmp;}
-
-#define _RD(addr,res){\
-    c->ADDR=addr;\
-    _T();\
-    _ON(Z80_MREQ|Z80_RD);\
-    _T();\
-    _OFF(Z80_MREQ|Z80_RD);\
-    _T();\
-    res=c->DATA;}
-/*
-    a memory write machine cycle, place 16-bit address into ADDR, place 8-bit
-    value into DATA, and then memory[ADDR] = DATA
-
-              T1   T2   T3
-    --------+----+----+----+
-    CLK     |--**|--**|--**|
-    A15-A0  |   MEM ADDR   |
-    MREQ    |   *|****|**  |
-    RD      |    |    |    |
-    WR      |    |  **|**  |
-    D7-D0   |   X|XXXX|XXXX|
-    WAIT    |    | -- |    |
-*/
-#define _WR(addr,data){\
-    c->ADDR=addr;\
-    _T();\
-    _ON(Z80_MREQ|Z80_WR);\
-    c->DATA=data;\
-    _T();\
-    _OFF(Z80_MREQ|Z80_WR);\
-    _T();}
-
-/*
-    an IO input machine cycle, place device address in ADDR, read byte into DATA
-
-              T1   T2   TW   T3
-    --------+----+----+----+----+
-    CLK     |--**|--**|--**|--**|
-    A15-A0  |     PORT ADDR     |
-    IORQ    |    |****|****|**  |
-    RD      |    |****|****|**  |
-    WR      |    |    |    |    |
-    D7-D0   |    |    |    | X  |
-    WAIT    |    |    | -- |    |
-
-    NOTE: the IORQ|RD pins will already be switched off at the beginning
-    of TW, so that IO devices don't need to do double work.
-*/
-#define _IN(addr,res){\
-    c->ADDR=addr;\
-    _T();\
-    _ON(Z80_IORQ|Z80_RD);\
-    _T();\
-    _OFF(Z80_IORQ|Z80_RD);\
-    _T();\
-    _T();\
-    res=c->DATA;}
-
-/*
-    an IO output machine cycle, place device address in ADDR and data in DATA
-
-              T1   T2   TW   T3
-    --------+----+----+----+----+
-    CLK     |--**|--**|--**|--**|
-    A15-A0  |     PORT ADDR     |
-    IORQ    |    |****|****|**  |
-    RD      |    |    |    |    |
-    WR      |    |****|****|**  |
-    D7-D0   |  XX|XXXX|XXXX|XXXX|
-    WAIT    |    |    | -- |    |
-
-    NOTE: the IORQ|WR pins will already be switched off at the beginning
-    of TW, so that IO devices don't need to do double work.
-*/
-#define _OUT(addr, data){\
-    c->ADDR=addr;\
-    _T();\
-    _ON(Z80_IORQ|Z80_WR);\
-    c->DATA=data;\
-    _T();\
-    _OFF(Z80_IORQ|Z80_WR);\
-    _T();\
-    _T();}
-
-/*-- ALU FUNCTIONS -----------------------------------------------------------*/
-static void _z80_add(z80* c, uint8_t val) {
-    int res = c->A + val;
-    c->F = _ADD_FLAGS(c->A, val, res);
-    c->A = (uint8_t) res;
-}
-
-static void _z80_adc(z80* c, uint8_t val) {
-    int res = c->A + val + (c->F & Z80_CF);
-    c->F = _ADD_FLAGS(c->A, val, res);
-    c->A = (uint8_t) res;
-}
-
-static void _z80_sub(z80* c, uint8_t val) {
-    int res = (int)c->A - (int)val;
-    c->F = _SUB_FLAGS(c->A, val, res);
-    c->A = (uint8_t) res;
-}
-
-static void _z80_sbc(z80* c, uint8_t val) {
-    int res = (int)c->A - (int)val - (c->F & Z80_CF);
-    c->F = _SUB_FLAGS(c->A, val, res);
-    c->A = (uint8_t) res;
-}
-
-static void _z80_cp(z80* c, uint8_t val) {
-    /* NOTE: XF|YF are set from val, not from result */
-    int res = (int)c->A - (int)val;
-    c->F = _CP_FLAGS(c->A, val, res);
-}
-
-static void _z80_and(z80* c, uint8_t val) {
-    c->A &= val;
-    c->F = c->szp[c->A]|Z80_HF;
-}
-
-static void _z80_or(z80* c, uint8_t val) {
-    c->A |= val;
-    c->F = c->szp[c->A];
-}
-
-static void _z80_xor(z80* c, uint8_t val) {
-    c->A ^= val;
-    c->F = c->szp[c->A];
-}
-
-static void _z80_neg(z80* c) {
-    uint8_t val = c->A;
-    c->A = 0;
-    _z80_sub(c, val);
-}
-
-static uint8_t _z80_inc(z80* c, uint8_t val) {
-    uint8_t r = val + 1;
-    uint8_t f = _SZ(r)|(r&(Z80_XF|Z80_YF))|((r^val)&Z80_HF);
-    if (r == 0x80) f |= Z80_VF;
-    c->F = f | (c->F & Z80_CF);
-    return r;
-}
-
-static uint8_t _z80_dec(z80* c, uint8_t val) {
-    uint8_t r = val - 1;
-    uint8_t f = Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^val)&Z80_HF);
-    if (r == 0x7F) f |= Z80_VF;
-    c->F = f | (c->F & Z80_CF);
-    return r;
-}
 
 /*-- ROTATE AND SHIFT FUNCTIONS ----------------------------------------------*/
 static void _z80_rlca(z80* c) {
@@ -409,51 +231,6 @@ static uint8_t _z80_srl(z80* c, uint8_t val) {
     return r;
 }
 
-/*-- CONTROL FLOW FUNCTIONS --------------------------------------------------*/
-static uint32_t _z80_djnz(z80* c, void(*tick)(z80*), uint32_t ticks) {
-    _T();
-    int8_t d; _RD(c->PC++, d);
-    if (--c->B > 0) {
-        c->WZ = c->PC = c->PC + d;
-        _T(); _T(); _T(); _T(); _T();
-    }
-    return ticks;
-}
-
-static uint32_t _z80_jr(z80* c, void(*tick)(z80*), uint32_t ticks) {
-    int8_t d; _RD(c->PC++, d);
-    c->WZ = c->PC + d;
-    c->PC = c->WZ;
-    _T(); _T(); _T(); _T(); _T();
-    return ticks;
-}
-
-static uint32_t _z80_jr_cc(z80* c, bool cond, void(*tick)(z80*), uint32_t ticks) {
-    int8_t d; _RD(c->PC++, d);
-    if (cond) {
-        c->WZ = c->PC = c->PC + d;
-        _T(); _T(); _T(); _T(); _T();
-    }
-    return ticks;
-}
-
-static uint32_t _z80_ret(z80* c, void(*tick)(z80*), uint32_t ticks) {
-    _RD(c->SP++, c->Z);
-    _RD(c->SP++, c->W);
-    c->PC = c->WZ;
-    return ticks;
-}
-
-static uint32_t _z80_retcc(z80* c, bool cond, void(*tick)(z80*), uint32_t ticks) {
-    _T();
-    if (cond) {
-        _RD(c->SP++, c->Z);
-        _RD(c->SP++, c->W);
-        c->PC = c->WZ;
-    }
-    return ticks;
-}
-
 /*-- MISC FUNCTIONS ----------------------------------------------------------*/
 static uint16_t _z80_add16(z80* c, uint16_t acc, uint16_t val) {
     c->WZ = acc+1;
@@ -490,7 +267,7 @@ static uint16_t _z80_sbc16(z80* c, uint16_t acc, uint16_t val) {
 }
 
 static void _z80_halt(z80* c) {
-    _ON(Z80_HALT);
+    c->CTRL |= Z80_HALT;
     c->PC--;
 }
 
@@ -551,13 +328,6 @@ static void _z80_scf(z80* c) {
 
 static void _z80_ccf(z80* c) {
     c->F = ((c->F&(Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF))|((c->F&Z80_CF)<<4)|(c->A&(Z80_YF|Z80_XF)))^Z80_CF;
-}
-
-static uint32_t _z80_rst(z80* c, uint8_t vec, void(*tick)(z80*), uint32_t ticks) {
-    _WR(--c->SP, (uint8_t)c->PC<<8);
-    _WR(--c->SP, (uint8_t)c->PC);
-    c->WZ = c->PC = (uint16_t) vec;
-    return ticks;
 }
 
 /*-- INSTRUCTION DECODER ----------------------------------------------------*/
@@ -623,14 +393,6 @@ uint32_t z80_run(z80* c, uint32_t t) {
 #undef _ADD_FLAGS
 #undef _SUB_FLAGS
 #undef _CP_FLAGS
-#undef _ON
-#undef _OFF
-#undef _T
-#undef _RD
-#undef _RDS
-#undef _WR
-#undef _IN
-#undef _OUT
 #undef _SWP16
 #endif /* CHIPS_IMPL */
 

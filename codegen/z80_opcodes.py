@@ -50,10 +50,7 @@ cond = [
 # the same as 'human readable' flags for comments
 cond_cmt = [ 'NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M' ]
 
-# 8-bit ALU instruction table (C++ method names)
-alu = [ '_z80_add', '_z80_adc', '_z80_sub', '_z80_sbc', '_z80_and', '_z80_xor', '_z80_or', '_z80_cp' ]
-
-# the same 'human readable' for comments
+# 8-bit ALU instructions command names
 alu_cmt = [ 'ADD', 'ADC', 'SUB', 'SBC', 'AND', 'XOR', 'OR', 'CP' ]
 
 # rot and shift instruction table (C++ method names)
@@ -268,7 +265,7 @@ def tick(num=1):
     return 'tick(c);ticks++;'*num
 
 #-------------------------------------------------------------------------------
-# Return string with _T() ticks or empty string depending on 'ext'
+# Return string with num ticks or empty string depending on 'ext'
 #
 def ext_ticks(ext, num):
     if ext:
@@ -796,6 +793,204 @@ def otdr():
     return src
 
 #-------------------------------------------------------------------------------
+#   djnz()
+#
+def djnz():
+    src =tick()
+    src+=rd('c->PC++','d')
+    src+='if(--c->B>0){'
+    src+='c->WZ=c->PC=c->PC+d;'
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   jr()
+#
+def jr():
+    src =rd('c->PC++','d')
+    src+='c->WZ=c->PC=c->PC+d;'
+    src+=tick(5)
+    return src;
+
+#-------------------------------------------------------------------------------
+#   jr_cc()
+#
+def jr_cc(y):
+    src =rd('c->PC++','d')
+    src+='if('+cond[y-4]+'){'
+    src+='c->WZ=c->PC=c->PC+d;'
+    src+=tick(5)
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   ret()
+#
+def ret():
+    src =rd('c->SP++','c->Z')
+    src+=rd('c->SP++','c->W')
+    src+='c->PC=c->WZ;'
+    return src
+
+#-------------------------------------------------------------------------------
+#   ret_cc()
+#
+def ret_cc(y):
+    src =tick()
+    src+='if('+cond[y]+'){'
+    src+=rd('c->SP++','c->Z')
+    src+=rd('c->SP++','c->W')
+    src+='c->PC=c->WZ;'
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   rst()
+#
+def rst(y):
+    src =wr('--c->SP','(uint8_t)c->PC<<8')
+    src+=wr('--c->SP','(uint8_t)c->PC')
+    src+='c->WZ=c->PC=(uint16_t)'+hex(y*8)+';'
+    return src
+
+#-------------------------------------------------------------------------------
+#   in_ic()
+#   IN (C)
+#
+def in_ic():
+    src ='c->WZ=c->BC;'
+    src+=inp('c->WZ++','v')
+    src+='c->F=c->szp[v]|(c->F&Z80_CF);'
+    return src
+
+#-------------------------------------------------------------------------------
+#   in_r_ic
+#   IN r,(C)
+#
+def in_r_ic(y):
+    src ='c->WZ=c->BC;'
+    src+=inp('c->WZ++','c->'+r[y])
+    src+='c->F=c->szp[c->'+r[y]+']|(c->F&Z80_CF);'
+    return src
+
+#-------------------------------------------------------------------------------
+#   out_ic()
+#   OUT (C)
+#
+def out_ic():
+    src ='c->WZ=c->BC;'
+    src+=out('c->WZ++','0')
+    return src
+
+#-------------------------------------------------------------------------------
+#   out_r_ic()
+#   OUT r,(C)
+#
+def out_r_ic(y):
+    src ='c->WZ=c->BC;'
+    src+=out('c->WZ++','c->'+r[y])
+    return src
+
+#-------------------------------------------------------------------------------
+#   ALU funcs
+#
+def add8(val):
+    src ='{'
+    src+='int res=c->A+'+val+';'
+    src+='c->F=_ADD_FLAGS(c->A,'+val+',res);'
+    src+='c->A=(uint8_t)res;'
+    src+='}'
+    return src
+
+def adc8(val):
+    src ='{'
+    src+='int res=c->A+'+val+'+(c->F&Z80_CF);'
+    src+='c->F=_ADD_FLAGS(c->A,'+val+',res);'
+    src+='c->A=(uint8_t)res;'
+    src+='}'
+    return src
+
+def sub8(val):
+    src ='{'
+    src+='int res=(int)c->A-(int)'+val+';'
+    src+='c->F=_SUB_FLAGS(c->A,'+val+',res);'
+    src+='c->A=(uint8_t)res;'
+    src+='}'
+    return src
+
+def sbc8(val):
+    src ='{'
+    src+='int res=(int)c->A-(int)'+val+'-(c->F&Z80_CF);'
+    src+='c->F=_SUB_FLAGS(c->A,'+val+',res);'
+    src+='c->A=(uint8_t)res;'
+    src+='}'
+    return src
+
+def cp8(val):
+    # NOTE: XF|YF are set from val, not from result
+    src ='{'
+    src+='int res=(int)c->A-(int)'+val+';'
+    src+='c->F=_CP_FLAGS(c->A,'+val+',res);'
+    src+='}'
+    return src
+
+def and8(val):
+    src='c->A&='+val+';c->F=c->szp[c->A]|Z80_HF;' 
+    return src
+
+def or8(val):
+    src='c->A|='+val+';c->F=c->szp[c->A];' 
+    return src
+
+def xor8(val):
+    src='c->A^='+val+';c->F=c->szp[c->A];' 
+    return src
+
+def alu8(y,val):
+    if (y==0):
+        return add8(val)
+    elif (y==1):
+        return adc8(val)
+    elif (y==2):
+        return sub8(val)
+    elif (y==3):
+        return sbc8(val)
+    elif (y==4):
+        return and8(val)
+    elif (y==5):
+        return xor8(val)
+    elif (y==6):
+        return or8(val)
+    elif (y==7):
+        return cp8(val)
+
+def neg8():
+    src ='v=c->A;c->A=0;'
+    src+=sub8('v')
+    return src
+
+def inc8(val):
+    src ='{'
+    src+='uint8_t r='+val+'+1;'
+    src+='f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^'+val+')&Z80_HF);'
+    src+='if(r==0x80){f|=Z80_VF;}'
+    src+='c->F=f|(c->F&Z80_CF);'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+def dec8(val):
+    src ='{'
+    src+='uint8_t r='+val+'-1;'
+    src+='f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^'+val+')&Z80_HF);'
+    src+='if(r==0x7F){f|=Z80_VF;}'
+    src+='c->F=f|(c->F&Z80_CF);'
+    src+=val+'=r;'
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
 # Takes an opcode byte and returns an opcode object, for invalid instructions
 # the opcode object will be in its default state (opcode.src==None).
@@ -841,11 +1036,11 @@ def enc_op(op, ext, cc) :
         if z == 6:
             # ALU (HL); ALU (IX+d); ALU (IY+d)
             o.cmt = alu_cmt[y]+' '+iHLcmt(ext)
-            o.src = iHLsrc(ext)+ext_ticks(ext,5)+rd('a','v')+alu[y]+'(c,v);'
+            o.src = iHLsrc(ext)+ext_ticks(ext,5)+rd('a','v')+alu8(y,'v')
         else:
             # ALU r
             o.cmt = alu_cmt[y]+' '+r[z]
-            o.src = alu[y]+'(c,c->'+r[z]+');'
+            o.src = alu8(y,'c->'+r[z])
 
     #---- block 0: misc ops
     elif x == 0:
@@ -861,15 +1056,15 @@ def enc_op(op, ext, cc) :
             elif y == 2:
                 # DJNZ d
                 o.cmt = 'DJNZ'
-                o.src = 'ticks=_z80_djnz(c,tick,ticks);'
+                o.src = djnz()
             elif  y == 3:
                 # JR d
                 o.cmt = 'JR d'
-                o.src = 'ticks=_z80_jr(c,tick,ticks);'
+                o.src = jr()
             else:
                 # JR cc,d
                 o.cmt = 'JR '+cond_cmt[y-4]+',d'
-                o.src = 'ticks=_z80_jr_cc(c,'+cond[y-4]+',tick,ticks);'
+                o.src = jr_cc(y)
         elif z == 1:
             if q == 0:
                 # 16-bit immediate loads
@@ -903,15 +1098,15 @@ def enc_op(op, ext, cc) :
                 o.src = tick(2)+'c->'+rp[p]+'--;'.format(rp[p])
         elif z == 4 or z == 5:
             cmt = 'INC' if z == 4 else 'DEC'
-            fn = '_z80_inc' if z == 4 else '_z80_dec'
             if y == 6:
                 # INC/DEC (HL)/(IX+d)/(IY+d)
                 o.cmt = cmt+' '+iHLcmt(ext)
-                o.src = iHLsrc(ext)+ext_ticks(ext,5)+tick()+rd('a','v')+wr('a',fn+'(c,v)')
+                fn = inc8('v') if z==4 else dec8('v')
+                o.src = iHLsrc(ext)+ext_ticks(ext,5)+tick()+rd('a','v')+fn+wr('a','v')
             else:
                 # INC/DEC r
                 o.cmt = cmt+' '+r[y]
-                o.src = 'c->'+r[y]+'='+fn+'(c,c->'+r[y]+');'
+                o.src = inc8('c->'+r[y]) if z==4 else dec8('c->'+r[y])
         elif z == 6:
             if y == 6:
                 # LD (HL),n; LD (IX+d),n; LD (IY+d),n
@@ -941,7 +1136,7 @@ def enc_op(op, ext, cc) :
         if z == 0:
             # RET cc
             o.cmt = 'RET '+cond_cmt[y]
-            o.src = 'ticks=_z80_retcc(c,'+cond[y]+',tick,ticks);'.format(cond[y])
+            o.src = ret_cc(y)
         elif z == 1:
             if q == 0:
                 # POP BC,DE,HL,IX,IY,AF
@@ -950,7 +1145,7 @@ def enc_op(op, ext, cc) :
             else:
                 # misc ops
                 op_tbl = [
-                    [ 'RET', 'ticks=_z80_ret(c,tick,ticks);' ],
+                    [ 'RET', ret() ],
                     [ 'EXX', exx() ],
                     [ 'JP '+rp[2], 'c->PC=c->'+rp[2]+';' ],
                     [ 'LD SP,'+rp[2], tick(2)+'c->SP=c->'+rp[2]+';' ]
@@ -996,11 +1191,11 @@ def enc_op(op, ext, cc) :
         elif z == 6:
             # ALU n
             o.cmt = '{} n'.format(alu_cmt[y])
-            o.src = rd('c->PC++','v')+alu[y]+'(c,v);'
+            o.src = rd('c->PC++','v')+alu8(y,'v')
         elif z == 7:
             # RST
             o.cmt = 'RST {}'.format(hex(y*8))
-            o.src = 'ticks=_z80_rst(c,{},tick,ticks);'.format(hex(y*8))
+            o.src = rst(y)
 
     return o
 
@@ -1056,25 +1251,25 @@ def enc_ed_op(op) :
             if y == 6:
                 # undocumented special case 'IN F,(C)', only alter flags, don't store result
                 o.cmt = 'IN (C)';
-                o.src = 'c->WZ=c->BC;uint8_t v; _IN(c->WZ++,v);c->F=c->szp[v]|(c->F&Z80_CF);'
+                o.src = in_ic()
             else:
                 o.cmt = 'IN {},(C)'.format(r[y])
-                o.src = 'c->WZ=c->BC;_IN(c->WZ++,c->{});c->F=c->szp[c->{}]|(c->F&Z80_CF);'.format(r[y],r[y])
+                o.src = in_r_ic(y)
         elif z == 1:
             # OUT (C),r
             if y == 6:
                 # undocumented special case 'OUT (C),F', always output 0
                 o.cmd = 'OUT (C)';
-                o.src = 'c->WZ=c->BC;_OUT(c->WZ++,0);'
+                o.src = out_ic()
             else:
                 o.cmt = 'OUT (C),{}'.format(r[y])
-                o.src = 'c->WZ=c->BC;_OUT(c->WZ++,c->{});'.format(r[y])
+                o.src = out_r_ic(y)
         elif z == 2:
             # SBC/ADC HL,rr
             cmt = 'SBC' if q == 0 else 'ADC'
             src = '_z80_sbc16' if q == 0 else '_z80_adc16'
             o.cmt = '{} HL,{}'.format(cmt, rp[p])
-            o.src = 'c->HL={}(c,c->HL,c->{});_T();_T();_T();_T();_T();_T();_T();'.format(src, rp[p])
+            o.src = 'c->HL='+src+'(c,c->HL,c->'+rp[p]+');'+tick(7)
         elif z == 3:
             # 16-bit immediate address load/store
             if q == 0:
@@ -1086,7 +1281,7 @@ def enc_ed_op(op) :
         elif z == 4:
             # NEG
             o.cmt = 'NEG'
-            o.src = '_z80_neg(c);'
+            o.src = neg8()
         elif z == 5:
             # RETN, RETI (only RETI implemented!)
             if y == 1:
@@ -1100,10 +1295,10 @@ def enc_ed_op(op) :
         elif z == 7:
             # misc ops on I,R and A
             op_tbl = [
-                [ 'LD I,A', '_T(); c->I=c->A;' ],
-                [ 'LD R,A', '_T(); c->R=c->A;' ],
-                [ 'LD A,I', '_T(); c->A=c->I; c->F=_z80_sziff2(c,c->I)|(c->F&Z80_CF);' ],
-                [ 'LD A,R', '_T(); c->A=c->R; c->F=_z80_sziff2(c,c->R)|(c->F&Z80_CF);' ],
+                [ 'LD I,A', tick()+'c->I=c->A;' ],
+                [ 'LD R,A', tick()+'c->R=c->A;' ],
+                [ 'LD A,I', tick()+'c->A=c->I; c->F=_z80_sziff2(c,c->I)|(c->F&Z80_CF);' ],
+                [ 'LD A,R', tick()+'c->A=c->R; c->F=_z80_sziff2(c,c->R)|(c->F&Z80_CF);' ],
                 [ 'RRD', rrd() ],
                 [ 'RLD', rld() ],
                 [ 'NOP (ED)', ' ' ],
