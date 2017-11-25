@@ -132,57 +132,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#ifdef _SZ
-#undef _SZ
-#endif
-#ifdef _SZYXCH
-#undef _SZYXCH
-#endif
-#ifdef _ADD_FLAGS
-#undef _ADD_FLAGS
-#endif
-#ifdef _SUB_FLAGS
-#undef _SUB_FLAGS
-#endif
-#ifdef _CP_FLAGS
-#undef _CP_FLAGS
-#endif
-#ifdef _SWP16
-#undef _SWP16
-#endif
-#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
-#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
-#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
-#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
-#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
-#define _SWP16(a,b) {uint16_t tmp=a;a=b;b=tmp;}
-
-/*-- MISC FUNCTIONS ----------------------------------------------------------*/
-static void _z80_halt(z80* c) {
-    c->CTRL |= Z80_HALT;
-    c->PC--;
-}
-
-static void _z80_di(z80* c) {
-    c->IFF1 = false;
-    c->IFF2 = false;
-}
-
-static void _z80_ei(z80* c) {
-    c->ei_pending = true;
-}
-
-static void _z80_reti(z80* c) {
-    // FIXME
-}
-
-static uint8_t _z80_sziff2(z80* c, uint8_t val) {
-    uint8_t f = _SZ(val);
-    f |= (val & (Z80_YF|Z80_XF));
-    if (c->IFF2) f |= Z80_PF;
-    return f;
-}
-
 /*-- INSTRUCTION DECODER ----------------------------------------------------*/
 #include "_z80_opcodes.h"
 
@@ -241,12 +190,6 @@ uint32_t z80_run(z80* c, uint32_t t) {
     return 0;
 }
 
-#undef _SZ
-#undef _SZYXCH
-#undef _ADD_FLAGS
-#undef _SUB_FLAGS
-#undef _CP_FLAGS
-#undef _SWP16
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus

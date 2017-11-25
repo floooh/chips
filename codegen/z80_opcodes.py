@@ -281,12 +281,33 @@ def imm16():
     return src
 
 #-------------------------------------------------------------------------------
-#   sz(val)
+#   swp16()
 #
-#   Return code to evaluate S and Z flags from value.
+#   Generate code to swap 2 16-bit values.
+#
+def swp16(val0,val1):
+    return '{uint16_t tmp='+val0+';'+val0+'='+val1+';'+val1+'=tmp;}'
+
+#-------------------------------------------------------------------------------
+#   Flag computation helpers
 #
 def sz(val):
     return '(('+val+'&0xFF)?('+val+'&Z80_SF):Z80_ZF)'
+
+def szyxch(acc,val,res):
+    return '('+sz(res)+'|('+res+'&(Z80_YF|Z80_XF))|(('+res+'>>8)&Z80_CF)|(('+acc+'^'+val+'^'+res+')&Z80_HF))'
+
+def add_flags(acc,val,res):
+    return '('+szyxch(acc,val,res)+'|(((('+val+'^'+acc+'^0x80)&('+val+'^'+res+'))>>5)&Z80_VF))'
+
+def sub_flags(acc,val,res):
+    return '(Z80_NF|'+szyxch(acc,val,res)+'|(((('+val+'^'+acc+')&('+res+'^'+acc+'))>>5)&Z80_VF))'
+
+def cp_flags(acc,val,res):
+    return '(Z80_NF|('+sz(res)+'|('+val+'&(Z80_YF|Z80_XF))|(('+res+'>>8)&Z80_CF)|(('+acc+'^'+val+'^'+res+')&Z80_HF))|(((('+val+'^'+acc+')&('+res+'^'+acc+'))>>5)&Z80_VF))'
+
+def sziff2(val):
+    return '('+sz(val)+'|('+val+'&(Z80_YF|Z80_XF))|(c->IFF2?Z80_PF:0))'
 
 #-------------------------------------------------------------------------------
 #   out_n_a
@@ -332,10 +353,7 @@ def ex_sp_dd():
 #   Generate code for EXX
 #
 def exx():
-    src ='_SWP16(c->BC,c->BC_);'
-    src+='_SWP16(c->DE,c->DE_);'
-    src+='_SWP16(c->HL,c->HL_);'
-    return src
+    return swp16('c->BC','c->BC_')+swp16('c->DE','c->DE_')+swp16('c->HL','c->HL_')
 
 #-------------------------------------------------------------------------------
 #   pop_dd
@@ -840,7 +858,7 @@ def out_r_ic(y):
 def add8(val):
     src ='{'
     src+='int res=c->A+'+val+';'
-    src+='c->F=_ADD_FLAGS(c->A,'+val+',res);'
+    src+='c->F='+add_flags('c->A',val,'res')+';'
     src+='c->A=(uint8_t)res;'
     src+='}'
     return src
@@ -848,7 +866,7 @@ def add8(val):
 def adc8(val):
     src ='{'
     src+='int res=c->A+'+val+'+(c->F&Z80_CF);'
-    src+='c->F=_ADD_FLAGS(c->A,'+val+',res);'
+    src+='c->F='+add_flags('c->A',val,'res')+';'
     src+='c->A=(uint8_t)res;'
     src+='}'
     return src
@@ -856,7 +874,7 @@ def adc8(val):
 def sub8(val):
     src ='{'
     src+='int res=(int)c->A-(int)'+val+';'
-    src+='c->F=_SUB_FLAGS(c->A,'+val+',res);'
+    src+='c->F='+sub_flags('c->A',val,'res')+';'
     src+='c->A=(uint8_t)res;'
     src+='}'
     return src
@@ -864,7 +882,7 @@ def sub8(val):
 def sbc8(val):
     src ='{'
     src+='int res=(int)c->A-(int)'+val+'-(c->F&Z80_CF);'
-    src+='c->F=_SUB_FLAGS(c->A,'+val+',res);'
+    src+='c->F='+sub_flags('c->A',val,'res')+';'
     src+='c->A=(uint8_t)res;'
     src+='}'
     return src
@@ -873,7 +891,7 @@ def cp8(val):
     # NOTE: XF|YF are set from val, not from result
     src ='{'
     src+='int res=(int)c->A-(int)'+val+';'
-    src+='c->F=_CP_FLAGS(c->A,'+val+',res);'
+    src+='c->F='+cp_flags('c->A',val,'res')+';'
     src+='}'
     return src
 
@@ -915,7 +933,7 @@ def neg8():
 def inc8(val):
     src ='{'
     src+='uint8_t r='+val+'+1;'
-    src+='f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^'+val+')&Z80_HF);'
+    src+='f='+sz('r')+'|(r&(Z80_XF|Z80_YF))|((r^'+val+')&Z80_HF);'
     src+='if(r==0x80){f|=Z80_VF;}'
     src+='c->F=f|(c->F&Z80_CF);'
     src+=val+'=r;'
@@ -925,7 +943,7 @@ def inc8(val):
 def dec8(val):
     src ='{'
     src+='uint8_t r='+val+'-1;'
-    src+='f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^'+val+')&Z80_HF);'
+    src+='f=Z80_NF|'+sz('r')+'|(r&(Z80_XF|Z80_YF))|((r^'+val+')&Z80_HF);'
     src+='if(r==0x7F){f|=Z80_VF;}'
     src+='c->F=f|(c->F&Z80_CF);'
     src+=val+'=r;'
@@ -1176,6 +1194,18 @@ def daa():
     src+='c->A=v;'
     return src
 
+def halt():
+    return 'c->CTRL|=Z80_HALT;c->PC--;'
+
+def di():
+    return 'c->IFF1=c->IFF2=false;'
+
+def ei():
+    return 'c->ei_pending=true;'
+
+def reti():
+    return '/*FIXME!*/'
+
 #-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
 # Takes an opcode byte and returns an opcode object, for invalid instructions
@@ -1203,7 +1233,7 @@ def enc_op(op, ext, cc) :
             if z == 6:
                 # special case: LD (HL),(HL) is HALT
                 o.cmt = 'HALT'
-                o.src = '_z80_halt(c);'
+                o.src = halt()
             else:
                 # LD (HL),r; LD (IX+d),r; LD (IX+d),r
                 o.cmt = 'LD '+iHLcmt(ext)+','+r2[z]
@@ -1238,7 +1268,7 @@ def enc_op(op, ext, cc) :
             elif y == 1:
                 # EX AF,AF'
                 o.cmt = "EX AF,AF'"
-                o.src = '_SWP16(c->AF,c->AF_);'
+                o.src = swp16('c->AF','c->AF_')
             elif y == 2:
                 # DJNZ d
                 o.cmt = 'DJNZ'
@@ -1350,9 +1380,9 @@ def enc_op(op, ext, cc) :
                 [ 'OUT (n),A', out_n_a() ],
                 [ 'IN A,(n)', in_n_a() ],
                 [ 'EX (SP),'+rp[2], ex_sp_dd() ],
-                [ 'EX DE,HL', '_SWP16(c->DE,c->HL);' ],
-                [ 'DI', '_z80_di(c);' ],
-                [ 'EI', '_z80_ei(c);' ]
+                [ 'EX DE,HL', swp16('c->DE','c->HL') ],
+                [ 'DI', di() ],
+                [ 'EI', ei() ]
             ]
             o.cmt = op_tbl[y][0]
             o.src = op_tbl[y][1]
@@ -1474,7 +1504,7 @@ def enc_ed_op(op) :
             # RETN, RETI (only RETI implemented!)
             if y == 1:
                 o.cmt = 'RETI'
-                o.src = '_z80_reti(c);'
+                o.src = reti()
         elif z == 6:
             # IM m
             im_mode = [ 0, 0, 1, 2, 0, 0, 1, 2 ]
@@ -1485,8 +1515,8 @@ def enc_ed_op(op) :
             op_tbl = [
                 [ 'LD I,A', tick()+'c->I=c->A;' ],
                 [ 'LD R,A', tick()+'c->R=c->A;' ],
-                [ 'LD A,I', tick()+'c->A=c->I; c->F=_z80_sziff2(c,c->I)|(c->F&Z80_CF);' ],
-                [ 'LD A,R', tick()+'c->A=c->R; c->F=_z80_sziff2(c,c->R)|(c->F&Z80_CF);' ],
+                [ 'LD A,I', tick()+'c->A=c->I; c->F='+sziff2('c->I')+'|(c->F&Z80_CF);' ],
+                [ 'LD A,R', tick()+'c->A=c->R; c->F='+sziff2('c->R')+'|(c->F&Z80_CF);' ],
                 [ 'RRD', rrd() ],
                 [ 'RLD', rld() ],
                 [ 'NOP (ED)', ' ' ],
