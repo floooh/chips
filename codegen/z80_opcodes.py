@@ -1004,6 +1004,7 @@ def add16(acc,val):
     src+='((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));'
     src+=acc+'=r;'
     src+='}'
+    src+=tick(7)
     return src
 
 def adc16(acc,val):
@@ -1017,6 +1018,7 @@ def adc16(acc,val):
     src+='((('+val+'^'+acc+'^0x8000)&('+val+'^r)&0x8000)>>13);'
     src+=acc+'=r;'
     src+='}'
+    src+=tick(7)
     return src
 
 def sbc16(acc,val):
@@ -1030,6 +1032,7 @@ def sbc16(acc,val):
     src+='((('+val+'^'+acc+')&('+acc+'^r)&0x8000)>>13);'
     src+=acc+'=r;'
     src+='}'
+    src+=tick(7)
     return src
 
 #-------------------------------------------------------------------------------
@@ -1146,7 +1149,7 @@ def enc_op(op, ext, cc) :
             else :
                 # ADD HL,rr; ADD IX,rr; ADD IY,rr
                 o.cmt = 'ADD '+rp[2]+','+rp[p]
-                o.src = add16('c->'+rp[2],'c->'+rp[p])+tick(7)
+                o.src = add16('c->'+rp[2],'c->'+rp[p])
         elif z == 2:
             # indirect loads
             op_tbl = [
@@ -1341,10 +1344,10 @@ def enc_ed_op(op) :
             # SBC/ADC HL,rr
             if q==0:
                 o.cmt = 'SBC HL,'+rp[p]
-                o.src = sbc16('c->HL','c->'+rp[p])+tick(7)
+                o.src = sbc16('c->HL','c->'+rp[p])
             else:
                 o.cmt = 'ADC HL,'+rp[p]
-                o.src = adc16('c->HL','c->'+rp[p])+tick(7)
+                o.src = adc16('c->HL','c->'+rp[p])
         elif z == 3:
             # 16-bit immediate address load/store
             if q == 0:
