@@ -103,6 +103,8 @@ typedef struct _z80 {
     uint64_t PINS;
     /* program counter */
     uint16_t PC;
+    /* memptr */
+    uint16_t WZ;
     /* NOTE: union layout assumes little-endian CPU */
     union { uint16_t AF; struct { uint8_t F, A; }; };
     union { uint16_t HL; struct { uint8_t L, H; }; };
@@ -110,7 +112,6 @@ typedef struct _z80 {
     union { uint16_t IY; struct { uint8_t IYL, IYH; }; };
     union { uint16_t BC; struct { uint8_t C, B; }; };
     union { uint16_t DE; struct { uint8_t E, D; }; };
-    union { uint16_t WZ; struct { uint8_t Z, W; }; };
     union { uint16_t IR; struct { uint8_t R, I; }; };
     /* alternate register set (there is no WZ' register!) */
     uint16_t BC_, DE_, HL_, AF_;

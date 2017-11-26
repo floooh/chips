@@ -82,7 +82,7 @@ class opcode :
 #    RFSH    |    |    |****|****|
 #
 def fetch(xxcb_ext):
-    src = '/*>fetch*/{'
+    src = '/*>fetch*/'
     # T1
     src += 'pins|=Z80_M1;'
     src += '_SADDR(c->PC++);'
@@ -93,8 +93,6 @@ def fetch(xxcb_ext):
     src += 'opcode=_GDATA();'
     # T3
     src += 'pins&=~(Z80_M1|Z80_MREQ|Z80_RD);'
-    if not xxcb_ext:
-        src += 'c->R=(c->R&0x80)|((c->R+1)&0x7F);'
     src += 'pins|=Z80_RFSH;'
     src += tick()
     # T4
@@ -102,7 +100,9 @@ def fetch(xxcb_ext):
     src += '_SADDR(c->IR);'
     src += tick()
     src += 'pins&=~(Z80_RFSH|Z80_MREQ);'
-    src += '}/*<fetch*/'
+    if not xxcb_ext:
+        src += 'c->R=(c->R&0x80)|((c->R+1)&0x7F);'
+    src += '/*<fetch*/'
     return src
 
 #-------------------------------------------------------------------------------
@@ -278,8 +278,10 @@ def ext_ticks(ext, num):
 #   Generate code for a 16-bit immediate load into WZ
 #
 def imm16():
-    src =rd('c->PC++','c->Z')
-    src+=rd('c->PC++','c->W')
+    src ='{uint8_t w,z;'
+    src+=rd('c->PC++','z')
+    src+=rd('c->PC++','w')
+    src+='c->WZ=(w<<8)|z;}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -320,7 +322,7 @@ def out_n_a():
     src =rd('c->PC++','v')
     src+='c->WZ=((c->A<<8)|v);'
     src+=out('c->WZ','c->A')
-    src+='c->Z++;'
+    src+='{uint8_t z=(uint8_t)c->WZ;z++;c->WZ=(c->WZ&0xFF00)|z;}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -341,11 +343,12 @@ def in_n_a():
 #
 def ex_sp_dd():
     src =tick()
-    src+=rd('c->SP','c->Z')
-    src+=rd('c->SP+1','c->W')
+    src+='{uint8_t w,z;'
+    src+=rd('c->SP','z')
+    src+=rd('c->SP+1','w')
     src+=wr('c->SP','(uint8_t)c->'+rp[2])
     src+=wr('c->SP+1','(uint8_t)(c->'+rp[2]+'>>8)')
-    src+='c->'+rp[2]+'=c->WZ;'
+    src+='c->'+rp[2]+'=c->WZ=(w<<8)|z;}'
     src+=tick(2)
     return src
 
@@ -414,7 +417,7 @@ def bit_n_idd(ext, y):
     src+=ext_ticks(ext,1)
     src+=rd('a','v')
     src+='v&='+hex(1<<y)+';'
-    src+='f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|(c->W&(Z80_YF|Z80_XF));'
+    src+='f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|((c->WZ>>8)&(Z80_YF|Z80_XF));'
     src+='c->F=f|(c->F&Z80_CF);'
     return src
 
@@ -790,9 +793,10 @@ def jr_cc(y):
 #   ret()
 #
 def ret():
-    src =rd('c->SP++','c->Z')
-    src+=rd('c->SP++','c->W')
-    src+='c->PC=c->WZ;'
+    src ='{uint8_t w,z;'
+    src+=rd('c->SP++','z')
+    src+=rd('c->SP++','w')
+    src+='c->PC=c->WZ=(w<<8)|z;}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -801,9 +805,10 @@ def ret():
 def ret_cc(y):
     src =tick()
     src+='if('+cond[y]+'){'
-    src+=rd('c->SP++','c->Z')
-    src+=rd('c->SP++','c->W')
-    src+='c->PC=c->WZ;'
+    src+='uint8_t w,z;'
+    src+=rd('c->SP++','z')
+    src+=rd('c->SP++','w')
+    src+='c->PC=c->WZ=(w<<8)|z;'
     src+='}'
     return src
 
@@ -1295,13 +1300,13 @@ def enc_op(op, ext, cc) :
         elif z == 2:
             # indirect loads
             op_tbl = [
-                [ 'LD (BC),A', 'c->WZ=c->BC;'+wr('c->WZ++','c->A')+';c->W=c->A;' ],
+                [ 'LD (BC),A', 'c->WZ=c->BC;'+wr('c->WZ++','c->A')+';c->WZ=(c->WZ&0x00FF)|(c->A<<8);' ],
                 [ 'LD A,(BC)', 'c->WZ=c->BC;'+rd('c->WZ++','c->A')+';' ],
-                [ 'LD (DE),A', 'c->WZ=c->DE;'+wr('c->WZ++','c->A')+';c->W=c->A;' ],
+                [ 'LD (DE),A', 'c->WZ=c->DE;'+wr('c->WZ++','c->A')+';c->WZ=(c->WZ&0x00FF)|(c->A<<8);' ],
                 [ 'LD A,(DE)', 'c->WZ=c->DE;'+rd('c->WZ++','c->A')+';' ],
                 [ 'LD (nn),'+rp[2], imm16()+wr('c->WZ++','(uint8_t)c->'+rp[2])+wr('c->WZ','(uint8_t)(c->'+rp[2]+'>>8)') ],
                 [ 'LD '+rp[2]+',(nn)', imm16()+rd('c->WZ++','l')+rd('c->WZ','h')+'c->'+rp[2]+'=(h<<8)|l;' ],
-                [ 'LD (nn),A', imm16()+wr('c->WZ++','c->A')+';c->W=c->A;' ],
+                [ 'LD (nn),A', imm16()+wr('c->WZ++','c->A')+';c->WZ=(c->WZ&0x00FF)|(c->A<<8);' ],
                 [ 'LD A,(nn)', imm16()+rd('c->WZ++','c->A')+';' ]
             ]
             o.cmt = op_tbl[y][0]
@@ -1622,7 +1627,7 @@ def l(s) :
 #
 def write_header() :
     l('// machine generated, do not edit!')
-    l('static uint32_t _z80_op(z80* c, uint32_t ticks) {')
+    l('static uint32_t _z80_op(z80* restrict c, uint32_t ticks) {')
     l('  uint64_t pins = c->PINS;')
     l('  tick_callback tick = c->tick;')
     l('  uint8_t opcode; int8_t d; uint16_t a; uint8_t v; uint8_t l; uint8_t h; uint8_t f;')
