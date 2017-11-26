@@ -261,7 +261,7 @@ def iHLdsrc(ext) :
 #   the ticks counter.
 #
 def tick(num=1):
-    return 'pins=tick(pins,ctx);ticks++;'*num
+    return 'pins=tick(pins);ticks++;'*num
 
 #-------------------------------------------------------------------------------
 # Return string with num ticks or empty string depending on 'ext'
@@ -1624,7 +1624,6 @@ def write_header() :
     l('// machine generated, do not edit!')
     l('static uint32_t _z80_op(z80* c, uint32_t ticks) {')
     l('  uint64_t pins = c->PINS;')
-    l('  void* ctx = c->context;')
     l('  tick_callback tick = c->tick;')
     l('  uint8_t opcode; int8_t d; uint16_t a; uint8_t v; uint8_t l; uint8_t h; uint8_t f;')
 

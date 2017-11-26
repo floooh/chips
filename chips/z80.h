@@ -72,7 +72,7 @@ typedef enum {
     - bits 16..23:  data bus
     - bits 24..36:  control pins
 */
-typedef uint64_t (*tick_callback)(uint64_t, void*);
+typedef uint64_t (*tick_callback)(uint64_t);
 
 /* pin functions */
 typedef enum {
@@ -124,16 +124,13 @@ typedef struct _z80 {
     /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
 
-    /* tick function and context data */
+    /* tick function */
     tick_callback tick;
-    /* user-provided context pointer */
-    void* context;
     /* flag lookup table for SZP flag combinations */
     uint8_t szp[256];
 } z80;
 
 typedef struct {
-    void* tick_context;
     tick_callback tick_func;
 } z80_desc;
 
@@ -145,6 +142,15 @@ extern void z80_reset(z80* cpu);
 extern uint32_t z80_step(z80* cpu);
 /* execute instructions for up to 'ticks' time cycles, return executed time cycles */
 extern uint32_t z80_run(z80* cpu, uint32_t ticks);
+
+/* extract 16-bit address bus from 64-bit pins */
+#define Z80_ADDR(p) ((uint16_t)p)
+/* merge 16-bit address bus value into 64-bit pins */
+#define Z80_SET_ADDR(p,a) {p=((p&~0xFFFF)|(a));}
+/* extract 8-bit data bus from 64-bit pins */
+#define Z80_DATA(p) ((uint8_t)(p>>16))
+/* merge 8-bit data bus value into 64-bit pins */
+#define Z80_SET_DATA(p,d) {p=((p&~0xFF0000)|(((uint8_t)d)<<16));}
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -175,7 +181,6 @@ void z80_init(z80* c, z80_desc* desc) {
     memset(c, 0, sizeof(z80));
     z80_reset(c);
     c->tick = desc->tick_func;
-    c->context = desc->tick_context;
     /* init SZP flags table */
     for (int val = 0; val < 256; val++) {
         int p = 0;
