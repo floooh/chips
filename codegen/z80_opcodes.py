@@ -65,6 +65,22 @@ class opcode :
         self.src = None
 
 #-------------------------------------------------------------------------------
+#   Generate code for one or more 'ticks', call tick callback and increment 
+#   the ticks counter.
+#
+def tick(num=1):
+    return 'pins=tick(pins);ticks++;'*num
+
+#-------------------------------------------------------------------------------
+#   Generate a tick() call optionally looping on the WAIT pin. Usually
+#   only one time cycle in a machine cycle is waitable:
+#   - opcode fetch, memory read/write: T2
+#   - in/out: TW
+#
+def tick_wait():
+    return 'do{pins=tick(pins);ticks++;}while(pins&Z80_WAIT);'
+
+#-------------------------------------------------------------------------------
 #   Generate code for an opcode fetch. If xxcb_ext is true, the special
 #   opcode fetch following a DD/FD+CB prefix instruction is generated
 #   which doesn't increment the R register
@@ -89,7 +105,7 @@ def fetch(xxcb_ext):
     src += tick()
     # T2
     src += 'pins|=(Z80_MREQ|Z80_RD);'
-    src += tick()
+    src += tick_wait()
     src += 'opcode=_GDATA();'
     # T3
     src += 'pins&=~(Z80_M1|Z80_MREQ|Z80_RD);'
@@ -117,6 +133,7 @@ def fetch(xxcb_ext):
 #    WR      |    |    |    |
 #    D7-D0   |    |    | X  |
 #    WAIT    |    | -- |    |
+#
 def rd(addr,res):
     src='/*>rd*/'
     # T1
@@ -124,7 +141,7 @@ def rd(addr,res):
     src+=tick()
     # T2
     src+='pins|=(Z80_MREQ|Z80_RD);'
-    src+=tick()
+    src+= tick_wait()
     src+=res+'=_GDATA();'
     # T3
     src+='pins&=~(Z80_MREQ|Z80_RD);'
@@ -153,7 +170,7 @@ def wr(addr,val):
     # T2
     src+='pins|=(Z80_MREQ|Z80_WR);'
     src+='_SDATA('+val+');'
-    src+=tick()
+    src+=tick_wait()
     # T3
     src+='pins&=~(Z80_MREQ|Z80_WR);'
     src+=tick()
@@ -173,8 +190,9 @@ def wr(addr,val):
 #    D7-D0   |    |    |    | X  |
 #    WAIT    |    |    | -- |    |
 #
-#    NOTE: the IORQ|RD pins will already be switched off at the beginning
-#    of TW, so that IO devices don't need to do double work.
+#   NOTE: the implementation moves the activation of the IORQ|RD
+#   pins from T2 to TW, so that the pins will only be active 
+#   for one tick (assuming no wait states)
 #
 def inp(addr,res):
     src='/*>in*/'
@@ -182,12 +200,14 @@ def inp(addr,res):
     src+='_SADDR('+addr+');'
     src+=tick()
     # T2
-    src+='pins|=(Z80_IORQ|Z80_RD);'
     src+=tick()
+    # TW
+    src+='pins|=(Z80_IORQ|Z80_RD);'
+    src+=tick_wait()
     src+=res+'=_GDATA();'
-    # TW+T3
+    # T3
     src+='pins&=~(Z80_IORQ|Z80_RD);'
-    src+=tick(2)
+    src+=tick()
     src+='/*<in*/'
     return src
 
@@ -213,12 +233,14 @@ def out(addr,val):
     src+='_SADDR('+addr+');'
     src+=tick()
     # T2
+    src+=tick()
+    # TW
     src+='pins|=(Z80_IORQ|Z80_WR);'
     src+='_SDATA('+val+');'
-    src+=tick()
-    # TW+T3
+    src+=tick_wait()
+    # T3
     src+='pins&=~(Z80_IORQ|Z80_WR);'
-    src+=tick(2)
+    src+=tick()
     src+='/*<out*/'
     return src
 
@@ -255,13 +277,6 @@ def iHLdsrc(ext) :
     else :
         # HL
         return 'a=c->'+r[6]+';'
-
-#-------------------------------------------------------------------------------
-#   Generate code for one or more 'ticks', call tick callback and increment 
-#   the ticks counter.
-#
-def tick(num=1):
-    return 'pins=tick(pins);ticks++;'*num
 
 #-------------------------------------------------------------------------------
 # Return string with num ticks or empty string depending on 'ext'
