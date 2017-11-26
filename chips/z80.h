@@ -43,37 +43,64 @@ typedef enum {
     Z80_SF = (1<<7),        /* sign */
 } z80_flags;
 
+/*
+    The tick function is called for every time cycle and
+    connects the Z80 to the outside world. The CPU pins
+    (control pins, data bus and address bus) are communicated
+    as a single 64-bit integer. The tick callback function
+    must inspect the pins, and modify the pin state 
+    accordingly:
+
+    - if MREQ|RD is set, this is a memory read cycle, the tick
+      callback must read the memory at the location indicated by
+      the address bus, and set the data bus bits with the memory content
+    - if MREQ|WR is set, this is a memory write cycle, the tick
+      callback must change the memory content at the location of
+      the address bus to the value of the data bus pins
+    - if IORQ|RD is set, this is a device input cycle, the 16-bit
+      port number is on the address bus (usually only the lower 8-bit
+      of this are used), and the tick callback must set the data bus
+      pins to the port input value
+    - if IORQ|WR is set, this is a device output cycle, the 16-bit
+      port number is on the address bus, and the 8-bit output value
+      is on the data bus
+    - FIXME: more pin states
+
+    The pin-layout of the 64-bit integer is as follows:
+
+    - bits 0..15:   address bus
+    - bits 16..23:  data bus
+    - bits 24..36:  control pins
+*/
+typedef uint64_t (*tick_callback)(uint64_t, void*);
+
 /* pin functions */
 typedef enum {
     /* system control pins */
-    Z80_M1    = (1<<0),          /* machine cycle 1 */
-    Z80_MREQ  = (1<<1),          /* memory request */
-    Z80_IORQ  = (1<<2),          /* input/output request */
-    Z80_RD    = (1<<3),          /* read */
-    Z80_WR    = (1<<4),          /* write */
-    Z80_RFSH  = (1<<5),          /* refresh */
+    Z80_M1    = (1<<24),          /* machine cycle 1 */
+    Z80_MREQ  = (1<<25),          /* memory request */
+    Z80_IORQ  = (1<<26),          /* input/output request */
+    Z80_RD    = (1<<27),          /* read */
+    Z80_WR    = (1<<28),          /* write */
+    Z80_RFSH  = (1<<29),          /* refresh */
 
     /* CPU control pins */
-    Z80_HALT  = (1<<6),          /* halt state */
-    Z80_WAIT  = (1<<7),          /* wait state */
-    Z80_INT   = (1<<8),          /* interrupt request */
-    Z80_NMI   = (1<<9),          /* non-maskable interrupt */
-    Z80_RESET = (1<<10),         /* reset */
+    Z80_HALT  = (1<<30),          /* halt state */
+    Z80_WAIT  = (1<<31),          /* wait state */
+    Z80_INT   = (1<<32),          /* interrupt request */
+    Z80_NMI   = (1<<33),          /* non-maskable interrupt */
+    Z80_RESET = (1<<34),         /* reset */
 
     /* CPU bus control pins */
-    Z80_BUSREQ = (1<<11),        /* bus request */
-    Z80_BUSACK = (1<<12),        /* bus acknowledge */
+    Z80_BUSREQ = (1<<35),        /* bus request */
+    Z80_BUSACK = (1<<36),        /* bus acknowledge */
 } z80_pins;
 
 /* Z80 CPU state */
 typedef struct _z80 z80;
 typedef struct _z80 {
-    /* control pins (see z80_pins enum) */
-    uint16_t CTRL;
-    /* 16-bit address bus */
-    uint16_t ADDR;
-    /* 8-bit data bus */
-    uint8_t DATA;
+    /* the CPU pins (control, address and data) */
+    uint64_t PINS;
     /* program counter */
     uint16_t PC;
     /* NOTE: union layout assumes little-endian CPU */
@@ -98,7 +125,7 @@ typedef struct _z80 {
     bool ei_pending;
 
     /* tick function and context data */
-    void (*tick)(z80* cpu);
+    tick_callback tick;
     /* user-provided context pointer */
     void* context;
     /* flag lookup table for SZP flag combinations */
@@ -107,7 +134,7 @@ typedef struct _z80 {
 
 typedef struct {
     void* tick_context;
-    void (*tick_func)(z80* cpu);
+    tick_callback tick_func;
 } z80_desc;
 
 /* initialize a new z80 instance */
@@ -131,6 +158,11 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
+
+#define _SADDR(addr) {pins=(pins&~0xFFFF)|(uint16_t)addr;}
+#define _GADDR() ((uint16_t)pins)
+#define _SDATA(data) {pins=(pins&~0xFF0000)|(((uint8_t)data)<<16);}
+#define _GDATA() ((uint8_t)(pins>>16))
 
 /*-- INSTRUCTION DECODER ----------------------------------------------------*/
 #include "_z80_opcodes.h"

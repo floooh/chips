@@ -84,22 +84,24 @@ class opcode :
 def fetch(xxcb_ext):
     src = '/*>fetch*/{'
     # T1
-    src += 'c->CTRL|=Z80_M1;c->ADDR=c->PC++;'
+    src += 'pins|=Z80_M1;'
+    src += '_SADDR(c->PC++);'
     src += tick()
     # T2
-    src += 'c->CTRL|=(Z80_MREQ|Z80_RD);'
+    src += 'pins|=(Z80_MREQ|Z80_RD);'
     src += tick()
-    src += 'opcode=c->DATA;'
+    src += 'opcode=_GDATA();'
     # T3
-    src += 'c->CTRL&=~(Z80_M1|Z80_MREQ|Z80_RD);'
+    src += 'pins&=~(Z80_M1|Z80_MREQ|Z80_RD);'
     if not xxcb_ext:
         src += 'c->R=(c->R&0x80)|((c->R+1)&0x7F);'
-    src += 'c->CTRL|=Z80_RFSH;'
+    src += 'pins|=Z80_RFSH;'
     src += tick()
     # T4
-    src += 'c->CTRL|=Z80_MREQ;c->ADDR=c->IR;'
+    src += 'pins|=Z80_MREQ;'
+    src += '_SADDR(c->IR);'
     src += tick()
-    src += 'c->CTRL&=~(Z80_RFSH|Z80_MREQ);'
+    src += 'pins&=~(Z80_RFSH|Z80_MREQ);'
     src += '}/*<fetch*/'
     return src
 
@@ -118,14 +120,14 @@ def fetch(xxcb_ext):
 def rd(addr,res):
     src='/*>rd*/'
     # T1
-    src+='c->ADDR='+addr+';'
+    src+='_SADDR('+addr+');'
     src+=tick()
     # T2
-    src+='c->CTRL|=(Z80_MREQ|Z80_RD);'
+    src+='pins|=(Z80_MREQ|Z80_RD);'
     src+=tick()
-    src+=res+'=c->DATA;'
+    src+=res+'=_GDATA();'
     # T3
-    src+='c->CTRL&=~(Z80_MREQ|Z80_RD);'
+    src+='pins&=~(Z80_MREQ|Z80_RD);'
     src+=tick()
     src+='/*<rd*/'
     return src
@@ -146,14 +148,14 @@ def rd(addr,res):
 def wr(addr,val):
     src='/*>wr*/'
     # T1
-    src+='c->ADDR='+addr+';'
+    src+='_SADDR('+addr+');'
     src+=tick()
     # T2
-    src+='c->CTRL|=(Z80_MREQ|Z80_WR);'
-    src+='c->DATA='+val+';'
+    src+='pins|=(Z80_MREQ|Z80_WR);'
+    src+='_SDATA('+val+');'
     src+=tick()
     # T3
-    src+='c->CTRL&=~(Z80_MREQ|Z80_WR);'
+    src+='pins&=~(Z80_MREQ|Z80_WR);'
     src+=tick()
     src+='/*wr<*/'
     return src
@@ -177,14 +179,14 @@ def wr(addr,val):
 def inp(addr,res):
     src='/*>in*/'
     # T1
-    src+='c->ADDR='+addr+';'
+    src+='_SADDR('+addr+');'
     src+=tick()
     # T2
-    src+='c->CTRL|=(Z80_IORQ|Z80_RD);'
+    src+='pins|=(Z80_IORQ|Z80_RD);'
     src+=tick()
-    src+=res+'=c->DATA;'
+    src+=res+'=_GDATA();'
     # TW+T3
-    src+='c->CTRL&=~(Z80_IORQ|Z80_RD);'
+    src+='pins&=~(Z80_IORQ|Z80_RD);'
     src+=tick(2)
     src+='/*<in*/'
     return src
@@ -208,14 +210,14 @@ def inp(addr,res):
 def out(addr,val):
     src='/*>out*/'
     # T1
-    src+='c->ADDR='+addr+';'
+    src+='_SADDR('+addr+');'
     src+=tick()
     # T2
-    src+='c->CTRL|=(Z80_IORQ|Z80_WR);'
-    src+='c->DATA='+val+';'
+    src+='pins|=(Z80_IORQ|Z80_WR);'
+    src+='_SDATA('+val+');'
     src+=tick()
     # TW+T3
-    src+='c->CTRL&=~(Z80_IORQ|Z80_WR);'
+    src+='pins&=~(Z80_IORQ|Z80_WR);'
     src+=tick(2)
     src+='/*<out*/'
     return src
@@ -259,7 +261,7 @@ def iHLdsrc(ext) :
 #   the ticks counter.
 #
 def tick(num=1):
-    return 'tick(c);ticks++;'*num
+    return 'pins=tick(pins,ctx);ticks++;'*num
 
 #-------------------------------------------------------------------------------
 # Return string with num ticks or empty string depending on 'ext'
@@ -1195,7 +1197,7 @@ def daa():
     return src
 
 def halt():
-    return 'c->CTRL|=Z80_HALT;c->PC--;'
+    return 'pins|=Z80_HALT;c->PC--;'
 
 def di():
     return 'c->IFF1=c->IFF2=false;'
@@ -1621,7 +1623,9 @@ def l(s) :
 def write_header() :
     l('// machine generated, do not edit!')
     l('static uint32_t _z80_op(z80* c, uint32_t ticks) {')
-    l('  void(*tick)(z80*) = c->tick;')
+    l('  uint64_t pins = c->PINS;')
+    l('  void* ctx = c->context;')
+    l('  tick_callback tick = c->tick;')
     l('  uint8_t opcode; int8_t d; uint16_t a; uint8_t v; uint8_t l; uint8_t h; uint8_t f;')
 
 #-------------------------------------------------------------------------------
@@ -1650,13 +1654,13 @@ def write_op(indent, op) :
     if op.src :
         if not op.cmt:
             op.cmt='???'
-        l(tab(indent)+'case '+hex(op.byte)+':/*'+op.cmt+'*/'+op.src+'return ticks;')
+        l(tab(indent)+'case '+hex(op.byte)+':/*'+op.cmt+'*/'+op.src+'break;')
 
 #-------------------------------------------------------------------------------
 # finish an instruction group (ends current statement)
 #
 def write_end_group(indent, inv_op_bytes, ext_byte=None) :
-    l(tab(indent)+'default: return ticks;')
+    l(tab(indent)+'default: break;')
     indent -= 1
     l(tab(indent)+'}')
     # if this was a prefix instruction, need to write a final break
@@ -1669,6 +1673,7 @@ def write_end_group(indent, inv_op_bytes, ext_byte=None) :
 # write source footer
 #
 def write_footer() :
+    l('  c->PINS = pins;')
     l('  return ticks;')
     l('}')
 
