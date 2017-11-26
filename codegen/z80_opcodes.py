@@ -239,7 +239,7 @@ def iHLcmt(ext) :
 def iHLsrc(ext) :
     if (ext) :
         # IX+d or IY+d
-        return rd('c->PC++','d')+';a=c->WZ=c->'+r[6]+'+d;'
+        return '{int8_t d;'+rd('c->PC++','d')+';a=c->WZ=c->'+r[6]+'+d;}'
     else :
         # HL
         return 'a=c->'+r[6]+';'
@@ -366,9 +366,11 @@ def exx():
 #   Generate code for POP dd.
 #
 def pop_dd(p):
-    src =rd('c->SP++','l')
+    src ='{uint8_t l,h;'
+    src+=rd('c->SP++','l')
     src+=rd('c->SP++','h')
     src+='c->'+rp2[p]+'=(h<<8)|l;'
+    src+='}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -398,9 +400,11 @@ def ld_inn_dd(p):
 #
 def ld_dd_inn(p):
     src =imm16()
+    src+='{uint8_t l,h;'
     src+=rd('c->WZ++','l')
     src+=rd('c->WZ','h')
     src+='c->'+rp[p]+'=(h<<8)|l;'
+    src+='}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -762,10 +766,12 @@ def otdr():
 #
 def djnz():
     src =tick()
+    src+='{int8_t d;'
     src+=rd('c->PC++','d')
     src+='if(--c->B>0){'
     src+='c->WZ=c->PC=c->PC+d;'
     src+=tick(5)
+    src+='}'
     src+='}'
     return src
 
@@ -773,8 +779,10 @@ def djnz():
 #   jr()
 #
 def jr():
-    src =rd('c->PC++','d')
+    src ='{int8_t d;'
+    src+=rd('c->PC++','d')
     src+='c->WZ=c->PC=c->PC+d;'
+    src+='}'
     src+=tick(5)
     return src;
 
@@ -782,10 +790,12 @@ def jr():
 #   jr_cc()
 #
 def jr_cc(y):
-    src =rd('c->PC++','d')
+    src ='{int8_t d;'
+    src+=rd('c->PC++','d')
     src+='if('+cond[y-4]+'){'
     src+='c->WZ=c->PC=c->PC+d;'
     src+=tick(5)
+    src+='}'
     src+='}'
     return src
 
@@ -1006,7 +1016,8 @@ def sbc16(acc,val):
 #   rotate and shift functions
 #
 def rrd():
-    src ='c->WZ=c->HL;'
+    src ='{uint8_t l,v;'
+    src+='c->WZ=c->HL;'
     src+=rd('c->WZ++','v')
     src+='l=c->A&0x0F;'
     src+='c->A=(c->A&0xF0)|(v&0x0F);'
@@ -1014,10 +1025,12 @@ def rrd():
     src+=tick(4)
     src+=wr('c->HL','v')
     src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    src+='}'
     return src
 
 def rld():
-    src ='c->WZ=c->HL;'
+    src ='{uint8_t l,v;'
+    src+='c->WZ=c->HL;'
     src+=rd('c->WZ++','v')
     src+='l=c->A&0x0F;'
     src+='c->A=(c->A&0xF0)|(v>>4);'
@@ -1025,6 +1038,7 @@ def rld():
     src+=tick(4)
     src+=wr('c->HL','v')
     src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    src+='}'
     return src
 
 def rlca():
@@ -1305,7 +1319,7 @@ def enc_op(op, ext, cc) :
                 [ 'LD (DE),A', 'c->WZ=c->DE;'+wr('c->WZ++','c->A')+';c->WZ=(c->WZ&0x00FF)|(c->A<<8);' ],
                 [ 'LD A,(DE)', 'c->WZ=c->DE;'+rd('c->WZ++','c->A')+';' ],
                 [ 'LD (nn),'+rp[2], imm16()+wr('c->WZ++','(uint8_t)c->'+rp[2])+wr('c->WZ','(uint8_t)(c->'+rp[2]+'>>8)') ],
-                [ 'LD '+rp[2]+',(nn)', imm16()+rd('c->WZ++','l')+rd('c->WZ','h')+'c->'+rp[2]+'=(h<<8)|l;' ],
+                [ 'LD '+rp[2]+',(nn)', imm16()+'{uint8_t l,h;'+rd('c->WZ++','l')+rd('c->WZ','h')+'c->'+rp[2]+'=(h<<8)|l;}' ],
                 [ 'LD (nn),A', imm16()+wr('c->WZ++','c->A')+';c->WZ=(c->WZ&0x00FF)|(c->A<<8);' ],
                 [ 'LD A,(nn)', imm16()+rd('c->WZ++','c->A')+';' ]
             ]
@@ -1629,8 +1643,8 @@ def write_header() :
     l('// machine generated, do not edit!')
     l('static uint32_t _z80_op(z80* restrict c, uint32_t ticks) {')
     l('  uint64_t pins = c->PINS;')
-    l('  tick_callback tick = c->tick;')
-    l('  uint8_t opcode; int8_t d; uint16_t a; uint8_t v; uint8_t l; uint8_t h; uint8_t f;')
+    l('  const tick_callback tick = c->tick;')
+    l('  uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;')
 
 #-------------------------------------------------------------------------------
 # begin a new instruction group (begins a switch statement)
@@ -1644,8 +1658,9 @@ def write_begin_group(indent, ext_byte=None, xxcb_ext=False) :
     # these have the d offset after the CB byte and before
     # the actual instruction byte, and the next opcode fetch doesn't
     # increment R
+    l(tab(indent)+'{')
     if xxcb_ext:
-        l(tab(indent)+rd('c->PC++', 'd'))
+        l(tab(indent)+'int8_t d;'+rd('c->PC++', 'd'))
     l(tab(indent)+fetch(xxcb_ext))
     l(tab(indent)+'switch (opcode) {')
     indent += 1
@@ -1666,7 +1681,7 @@ def write_op(indent, op) :
 def write_end_group(indent, inv_op_bytes, ext_byte=None) :
     l(tab(indent)+'default: break;')
     indent -= 1
-    l(tab(indent)+'}')
+    l(tab(indent)+'} }')
     # if this was a prefix instruction, need to write a final break
     if ext_byte:
         l(tab(indent)+'break;')
