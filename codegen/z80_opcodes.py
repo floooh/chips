@@ -1656,7 +1656,7 @@ def l(s) :
 #
 def write_header() :
     l('// machine generated, do not edit!')
-    l('static uint32_t _z80_op(z80* restrict c, uint32_t ticks) {')
+    l('static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {')
     l('  uint64_t pins = c->PINS;')
     l('  const tick_callback tick = c->tick;')
     l('  uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;')

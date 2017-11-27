@@ -1,5 +1,5 @@
 // machine generated, do not edit!
-static uint32_t _z80_op(z80* restrict c, uint32_t ticks) {
+static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
   uint64_t pins = c->PINS;
   const tick_callback tick = c->tick;
   uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;

@@ -75,26 +75,25 @@ typedef enum {
 typedef uint64_t (*tick_callback)(uint64_t);
 
 /* pin functions */
-typedef enum {
-    /* system control pins */
-    Z80_M1    = (1<<24),          /* machine cycle 1 */
-    Z80_MREQ  = (1<<25),          /* memory request */
-    Z80_IORQ  = (1<<26),          /* input/output request */
-    Z80_RD    = (1<<27),          /* read */
-    Z80_WR    = (1<<28),          /* write */
-    Z80_RFSH  = (1<<29),          /* refresh */
 
-    /* CPU control pins */
-    Z80_HALT  = (1<<30),          /* halt state */
-    Z80_WAIT  = (1<<31),          /* wait state */
-    Z80_INT   = (1<<32),          /* interrupt request */
-    Z80_NMI   = (1<<33),          /* non-maskable interrupt */
-    Z80_RESET = (1<<34),         /* reset */
+/* system control pins */
+#define  Z80_M1    (1<<24)      /* machine cycle 1 */
+#define  Z80_MREQ  (1<<25)      /* memory request */
+#define  Z80_IORQ  (1<<26)      /* input/output request */
+#define  Z80_RD    (1<<27)      /* read */
+#define  Z80_WR    (1<<28)      /* write */
+#define  Z80_RFSH  (1<<29)      /* refresh */
 
-    /* CPU bus control pins */
-    Z80_BUSREQ = (1<<35),        /* bus request */
-    Z80_BUSACK = (1<<36),        /* bus acknowledge */
-} z80_pins;
+/* CPU control pins */
+#define  Z80_HALT  (1<<30)      /* halt state */
+#define  Z80_WAIT  (1<<31)      /* wait state */
+#define  Z80_INT   (1<<32)      /* interrupt request */
+#define  Z80_NMI   (1<<33)      /* non-maskable interrupt */
+#define  Z80_RESET (1<<34)      /* reset */
+
+/* CPU bus control pins */
+#define  Z80_BUSREQ (1<<35)     /* bus request */
+#define  Z80_BUSACK (1<<36)     /* bus acknowledge */
 
 /* Z80 CPU state */
 typedef struct _z80 z80;
