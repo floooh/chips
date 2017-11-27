@@ -30,19 +30,6 @@
 extern "C" {
 #endif
 
-/* status indicator flags */
-typedef enum {
-    Z80_CF = (1<<0),        /* carry */
-    Z80_NF = (1<<1),        /* add/subtract */
-    Z80_VF = (1<<2),        /* parity/overflow */
-    Z80_PF = Z80_VF,
-    Z80_XF = (1<<3),        /* undocumented bit 3 */
-    Z80_HF = (1<<4),        /* half carry */
-    Z80_YF = (1<<5),        /* undocumented bit 5 */
-    Z80_ZF = (1<<6),        /* zero */
-    Z80_SF = (1<<7),        /* sign */
-} z80_flags;
-
 /*
     The tick function is called for every time cycle and
     connects the Z80 to the outside world. The CPU pins
@@ -64,7 +51,9 @@ typedef enum {
     - if IORQ|WR is set, this is a device output cycle, the 16-bit
       port number is on the address bus, and the 8-bit output value
       is on the data bus
-    - FIXME: more pin states
+    - to inject a wait state, set the WAIT pin in the tick callback,
+      note that the WAIT pin is only checked during read or write
+      time cycle
 
     The pin-layout of the 64-bit integer is as follows:
 
@@ -74,7 +63,7 @@ typedef enum {
 */
 typedef uint64_t (*tick_callback)(uint64_t);
 
-/* pin functions */
+/*--- pin functions ---*/
 
 /* system control pins */
 #define  Z80_M1    (1<<24)      /* machine cycle 1 */
@@ -95,6 +84,17 @@ typedef uint64_t (*tick_callback)(uint64_t);
 #define  Z80_BUSREQ (1<<35)     /* bus request */
 #define  Z80_BUSACK (1<<36)     /* bus acknowledge */
 
+/*--- status indicator flags ---*/
+#define Z80_CF (1<<0)           /* carry */
+#define Z80_NF (1<<1)           /* add/subtract */
+#define Z80_VF (1<<2)           /* parity/overflow */
+#define Z80_PF Z80_VF
+#define Z80_XF (1<<3)           /* undocumented bit 3 */
+#define Z80_HF (1<<4)           /* half carry */
+#define Z80_YF (1<<5)           /* undocumented bit 5 */
+#define Z80_ZF (1<<6)           /* zero */
+#define Z80_SF (1<<7)           /* sign */
+
 /* Z80 CPU state */
 typedef struct _z80 z80;
 typedef struct _z80 {
@@ -112,7 +112,7 @@ typedef struct _z80 {
     union { uint16_t BC; struct { uint8_t C, B; }; };
     union { uint16_t DE; struct { uint8_t E, D; }; };
     union { uint16_t IR; struct { uint8_t R, I; }; };
-    /* alternate register set (there is no WZ' register!) */
+    /* alternate register set */
     uint16_t BC_, DE_, HL_, AF_;
     /* stack pointer */
     uint16_t SP;
@@ -140,7 +140,7 @@ extern void z80_init(z80* cpu, z80_desc* desc);
 extern void z80_reset(z80* cpu);
 /* execute the next instruction, return number of time cycles */
 extern uint32_t z80_step(z80* cpu);
-/* execute instructions for up to 'ticks' time cycles, return executed time cycles */
+/* execute instructions for (at least) given number of ticks, return executed ticks */
 extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 
 /* extract 16-bit address bus from 64-bit pins */
