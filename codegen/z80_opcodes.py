@@ -65,11 +65,82 @@ class opcode :
         self.src = None
 
 #-------------------------------------------------------------------------------
+#   output a src line
+#
+def l(s) :
+    Out.write(s+'\n')
+
+#-------------------------------------------------------------------------------
+#   write C defines, these make the generated code a bit more readable
+#
+def defines():
+    l('/* set 16-bit address in 64-bit pin mask*/')
+    l('#define _SA(addr) pins=(pins&~0xFFFF)|(uint16_t)addr')
+    l('/* set 8-bit data in 64-bit pin mask */')
+    l('#define _SD(data) pins=(pins&~0xFF0000)|(((uint8_t)data)<<16)')
+    l('/* extract 8-bit data from 64-bit pin mask */')
+    l('#define _GD() ((uint8_t)(pins>>16))')
+    l('/* enable control pins */')
+    l('#define _ON(m) pins|=(m)')
+    l('/* disable control pins */')
+    l('#define _OFF(m) pins&=~(m)')
+    l('/* a normal tick (no wait state detection) */')
+    l('#define _T() pins=tick(pins);ticks++;')
+    l('/* a tick with wait-state handling */')
+    l('#define _TW() do{pins=tick(pins);ticks++;}while(pins&Z80_WAIT);')
+    l('/* a memory read machine cycle */')
+    l('#define _MR(addr,data) _SA(addr);_T();_ON(Z80_MREQ|Z80_RD);_TW();data=_GD();_OFF(Z80_MREQ|Z80_RD);_T()')
+    l('/* a memory write machine cycle */')
+    l('#define _MW(addr,data) _SA(addr);_T();_ON(Z80_MREQ|Z80_WR);_SD(data);_TW();_OFF(Z80_MREQ|Z80_WR);_T()')
+    l('/* an input machine cycle */')
+    l('#define _IN(addr,data) _SA(addr);_T();_T();_ON(Z80_IORQ|Z80_RD);_TW();data=_GD();_OFF(Z80_IORQ|Z80_RD);_T()')
+    l('/* an output machine cycle */')
+    l('#define _OUT(addr,data) _SA(addr);_T();_T();_ON(Z80_IORQ|Z80_WR);_SD(data);_TW();_OFF(Z80_IORQ|Z80_WR);_T()')
+    l('/* an opcode fetch machine cycle */')
+    l('#define _FETCH(op) _ON(Z80_M1);_SA(c->PC++);_T();_ON(Z80_MREQ|Z80_RD);_TW();op=_GD();_OFF(Z80_M1|Z80_MREQ|Z80_RD);_ON(Z80_RFSH);_T();_ON(Z80_MREQ);_SA(c->IR);_T();_OFF(Z80_RFSH|Z80_MREQ);c->R=(c->R&0x80)|((c->R+1)&0x7F);')
+    l('/* a special opcode fetch for DD/FD+CB instructions without incrementing R */')
+    l('#define _FETCH_CB(op) _ON(Z80_M1);_SA(c->PC++);_T();_ON(Z80_MREQ|Z80_RD);_TW();op=_GD();_OFF(Z80_M1|Z80_MREQ|Z80_RD);_ON(Z80_RFSH);_T();_ON(Z80_MREQ);_SA(c->IR);_T();_OFF(Z80_RFSH|Z80_MREQ);')
+    l('/* a 16-bit immediate load from (PC) into WZ */')
+    l('#define _IMM16() {uint8_t w,z;_MR(c->PC++,z);_MR(c->PC++,w);c->WZ=(w<<8)|z;}')
+    l('/* evaluate the S and Z flags */')
+    l('#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)')
+    l('/* evaluate the S,Z,Y,X,C and H flags */')
+    l('#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))')
+    l('/* evaluate flags for ADD and ADC */')
+    l('#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))')
+    l('/* evaluate flags for SUB and SBC */')
+    l('#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))')
+    l('/* evaluate flags for CP */')
+    l('#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))')
+    l('')
+#-------------------------------------------------------------------------------
+#   undefine the C defines
+#
+def undefines():
+    l('#undef _SA')
+    l('#undef _SD')
+    l('#undef _GD')
+    l('#undef _ON')
+    l('#undef _OFF')
+    l('#undef _T')
+    l('#undef _TW')
+    l('#undef _MR')
+    l('#undef _MW')
+    l('#undef _IN')
+    l('#undef _OUT')
+    l('#undef _FETCH')
+    l('#undef _FETCH_CB')
+    l('#undef _IMM16')
+    l('#undef _ADD_FLAGS')
+    l('#undef _SUB_FLAGS')
+    l('#undef _CP_FLAGS')
+
+#-------------------------------------------------------------------------------
 #   Generate code for one or more 'ticks', call tick callback and increment 
 #   the ticks counter.
 #
 def tick(num=1):
-    return 'pins=tick(pins);ticks++;'*num
+    return '_T();'*num
 
 #-------------------------------------------------------------------------------
 #   Generate a tick() call optionally looping on the WAIT pin. Usually
@@ -78,7 +149,7 @@ def tick(num=1):
 #   - in/out: TW
 #
 def tick_wait():
-    return 'do{pins=tick(pins);ticks++;}while(pins&Z80_WAIT);'
+    return '_TW();'
 
 #-------------------------------------------------------------------------------
 #   Generate code for an opcode fetch. If xxcb_ext is true, the special
@@ -98,28 +169,10 @@ def tick_wait():
 #    RFSH    |    |    |****|****|
 #
 def fetch(xxcb_ext):
-    src = '/*>fetch*/'
-    # T1
-    src += 'pins|=Z80_M1;'
-    src += '_SADDR(c->PC++);'
-    src += tick()
-    # T2
-    src += 'pins|=(Z80_MREQ|Z80_RD);'
-    src += tick_wait()
-    src += 'opcode=_GDATA();'
-    # T3
-    src += 'pins&=~(Z80_M1|Z80_MREQ|Z80_RD);'
-    src += 'pins|=Z80_RFSH;'
-    src += tick()
-    # T4
-    src += 'pins|=Z80_MREQ;'
-    src += '_SADDR(c->IR);'
-    src += tick()
-    src += 'pins&=~(Z80_RFSH|Z80_MREQ);'
-    if not xxcb_ext:
-        src += 'c->R=(c->R&0x80)|((c->R+1)&0x7F);'
-    src += '/*<fetch*/'
-    return src
+    if xxcb_ext:
+        return '_FETCH_CB(opcode);'
+    else:
+        return '_FETCH(opcode);'
 
 #-------------------------------------------------------------------------------
 #   Generate code for a memory-read machine cycle
@@ -135,19 +188,7 @@ def fetch(xxcb_ext):
 #    WAIT    |    | -- |    |
 #
 def rd(addr,res):
-    src='/*>rd*/'
-    # T1
-    src+='_SADDR('+addr+');'
-    src+=tick()
-    # T2
-    src+='pins|=(Z80_MREQ|Z80_RD);'
-    src+= tick_wait()
-    src+=res+'=_GDATA();'
-    # T3
-    src+='pins&=~(Z80_MREQ|Z80_RD);'
-    src+=tick()
-    src+='/*<rd*/'
-    return src
+    return '_MR('+addr+','+res+');'
 
 #-------------------------------------------------------------------------------
 #   Generate code for a memory-write machine cycle
@@ -163,19 +204,7 @@ def rd(addr,res):
 #    WAIT    |    | -- |    |
 #
 def wr(addr,val):
-    src='/*>wr*/'
-    # T1
-    src+='_SADDR('+addr+');'
-    src+=tick()
-    # T2
-    src+='pins|=(Z80_MREQ|Z80_WR);'
-    src+='_SDATA('+val+');'
-    src+=tick_wait()
-    # T3
-    src+='pins&=~(Z80_MREQ|Z80_WR);'
-    src+=tick()
-    src+='/*wr<*/'
-    return src
+    return '_MW('+addr+','+val+');'
 
 #-------------------------------------------------------------------------------
 #   Generate code for an input machine cycle.
@@ -195,21 +224,7 @@ def wr(addr,val):
 #   for one tick (assuming no wait states)
 #
 def inp(addr,res):
-    src='/*>in*/'
-    # T1
-    src+='_SADDR('+addr+');'
-    src+=tick()
-    # T2
-    src+=tick()
-    # TW
-    src+='pins|=(Z80_IORQ|Z80_RD);'
-    src+=tick_wait()
-    src+=res+'=_GDATA();'
-    # T3
-    src+='pins&=~(Z80_IORQ|Z80_RD);'
-    src+=tick()
-    src+='/*<in*/'
-    return src
+    return '_IN('+addr+','+res+');'
 
 #-------------------------------------------------------------------------------
 #   Generate code for output machine cycle.
@@ -228,21 +243,7 @@ def inp(addr,res):
 #    of TW, so that IO devices don't need to do double work.
 #
 def out(addr,val):
-    src='/*>out*/'
-    # T1
-    src+='_SADDR('+addr+');'
-    src+=tick()
-    # T2
-    src+=tick()
-    # TW
-    src+='pins|=(Z80_IORQ|Z80_WR);'
-    src+='_SDATA('+val+');'
-    src+=tick_wait()
-    # T3
-    src+='pins&=~(Z80_IORQ|Z80_WR);'
-    src+=tick()
-    src+='/*<out*/'
-    return src
+    return '_OUT('+addr+','+val+');'
 
 #-------------------------------------------------------------------------------
 # return comment string for (HL), (IX+d), (IY+d)
@@ -293,11 +294,7 @@ def ext_ticks(ext, num):
 #   Generate code for a 16-bit immediate load into WZ
 #
 def imm16():
-    src ='{uint8_t w,z;'
-    src+=rd('c->PC++','z')
-    src+=rd('c->PC++','w')
-    src+='c->WZ=(w<<8)|z;}'
-    return src
+    return '_IMM16();'
 
 #-------------------------------------------------------------------------------
 #   swp16()
@@ -311,19 +308,19 @@ def swp16(val0,val1):
 #   Flag computation helpers
 #
 def sz(val):
-    return '(('+val+'&0xFF)?('+val+'&Z80_SF):Z80_ZF)'
+    return '_SZ('+val+')'
 
 def szyxch(acc,val,res):
-    return '('+sz(res)+'|('+res+'&(Z80_YF|Z80_XF))|(('+res+'>>8)&Z80_CF)|(('+acc+'^'+val+'^'+res+')&Z80_HF))'
+    return '_SZYXCH('+acc+','+val+','+res+')'
 
 def add_flags(acc,val,res):
-    return '('+szyxch(acc,val,res)+'|(((('+val+'^'+acc+'^0x80)&('+val+'^'+res+'))>>5)&Z80_VF))'
+    return '_ADD_FLAGS('+acc+','+val+','+res+')'
 
 def sub_flags(acc,val,res):
-    return '(Z80_NF|'+szyxch(acc,val,res)+'|(((('+val+'^'+acc+')&('+res+'^'+acc+'))>>5)&Z80_VF))'
+    return '_SUB_FLAGS('+acc+','+val+','+res+')'
 
 def cp_flags(acc,val,res):
-    return '(Z80_NF|('+sz(res)+'|('+val+'&(Z80_YF|Z80_XF))|(('+res+'>>8)&Z80_CF)|(('+acc+'^'+val+'^'+res+')&Z80_HF))|(((('+val+'^'+acc+')&('+res+'^'+acc+'))>>5)&Z80_VF))'
+    return '_CP_FLAGS('+acc+','+val+','+res+')'
 
 def sziff2(val):
     return '('+sz(val)+'|('+val+'&(Z80_YF|Z80_XF))|(c->IFF2?Z80_PF:0))'
@@ -1231,7 +1228,7 @@ def daa():
     return src
 
 def halt():
-    return 'pins|=Z80_HALT;c->PC--;'
+    return '_ON(Z80_HALT);c->PC--;'
 
 def di():
     return 'c->IFF1=c->IFF2=false;'
@@ -1647,15 +1644,11 @@ def tab(indent) :
     return ' '*TabWidth*indent
 
 #-------------------------------------------------------------------------------
-# output a src line
-def l(s) :
-    Out.write(s+'\n')
-
-#-------------------------------------------------------------------------------
 # write source header
 #
 def write_header() :
     l('// machine generated, do not edit!')
+    defines()
     l('static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {')
     l('  uint64_t pins = c->PINS;')
     l('  const tick_callback tick = c->tick;')
@@ -1710,6 +1703,7 @@ def write_footer() :
     l('  c->PINS = pins;')
     l('  return ticks;')
     l('}')
+    undefines()
 
 #-------------------------------------------------------------------------------
 # main encoder function, this populates all the opcode tables and

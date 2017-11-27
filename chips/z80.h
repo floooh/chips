@@ -165,11 +165,6 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _SADDR(addr) {pins=(pins&~0xFFFF)|(uint16_t)addr;}
-#define _GADDR() ((uint16_t)pins)
-#define _SDATA(data) {pins=(pins&~0xFF0000)|(((uint8_t)data)<<16);}
-#define _GDATA() ((uint8_t)(pins>>16))
-
 /*-- INSTRUCTION DECODER ----------------------------------------------------*/
 #include "_z80_opcodes.h"
 
