@@ -94,6 +94,13 @@ extern "C" {
         enabled on the onto the CPU interrupt request line
     (*) setting bit D4 during any mode of operation will cause any pending
         interrupt to be reset
+
+    The interrupt enable flip-flop of a port may be set or reset
+    without modifying the rest of the interrupt control word
+    by the following command:
+
+     D7 D6 D5 D4 D3 D2 D1 D0
+    |EI| x| x| x| 0| 0| 1| 1|
 */
 #define Z80PIO_INTCTRL_EI           (1<<7)
 #define Z80PIO_INTCTRL_ANDOR        (1<<6)
@@ -138,13 +145,13 @@ extern void z80pio_tick(z80pio* pio);
 /* set one or several port bits to inactive */
 #define Z80PIO_OFF(pins,bits) {pins&=~bits;}
 /* extract data bus pins D0..D7 */
-#define Z80PIO_DATA(pins) ((uint8_t)pins)
+#define Z80PIO_GET_DATA(pins) ((uint8_t)pins)
 /* set data bus pins D0..D7 */
 #define Z80PIO_SET_DATA(pins,data) {pins=(pins&~0xFF)|(data&0xFF);}
 /* extract port A or B pins A0..A7 or B0..B7 */
-#define Z80PIO_PORT_DATA(pins,port) ((uint8_t)(pins>>(8+port*8)))
+#define Z80PIO_GET_PORT(pins,port) ((uint8_t)(pins>>(8+port*8)))
 /* set port A or B pins A0..A7 or B0..B7 */
-#define Z80PIO_SET_PORT_DATA(pins,port,data) {pins=(pins&~(0xFF<<(8+port*8)))|(((data&0xFF)<<(8+port*8)));}
+#define Z80PIO_SET_PORT(pins,port,data) {pins=(pins&~(0xFF<<(8+port*8)))|(((data&0xFF)<<(8+port*8)));}
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -185,7 +192,7 @@ void z80pio_reset(z80pio* pio) {
     Z80PIO_OFF(pio->PINS, Z80PIO_ARDY);
     Z80PIO_OFF(pio->PINS, Z80PIO_BRDY);
     for (int p = 0; p < Z80PIO_NUM_PORTS; p++) {
-        Z80PIO_SET_PORT_DATA(pio->PINS, p, 0x00);
+        Z80PIO_SET_PORT(pio->PINS, p, 0x00);
         pio->PORT[p].mask = 0;
         pio->PORT[p].mode = Z80PIO_MODE_INPUT;
         pio->PORT[p].output = 0;
