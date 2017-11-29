@@ -8,9 +8,9 @@
             D7 <->|           |<-> A7
          BASEL -->|           |--> ARDY
          CDSEL -->|           |<-- ASTB
-            CE -->|           |
-            M1 -->|           |<-> B0
-          IORQ -->|    Z80    |<-> ..
+            CE -->|    Z80    |
+            M1 -->|    PIO    |<-> B0
+          IORQ -->|           |<-> ..
             RD -->|           |<-> B7
            INT <--|           |--> BRDY
            IEI -->|           |<-- BSTB
@@ -32,20 +32,23 @@ extern "C" {
     8..15:      PORT A DATA
     16..23:     PORT B DATA
     24..36:     CONTROL PINS
+
+    NOTE that the pins that are usually directly connected to CPU
+    control pins share the same bit positions.
 */
 
 /* PIO control pins */
-#define Z80PIO_BASEL    (1UL<<24)     /* port B or A select (set: B, clear: A) */
-#define Z80PIO_CDSEL    (1UL<<25)     /* control or data select (set: control, clear: data) */
-#define Z80PIO_CE       (1UL<<26)     /* chip enable */
-#define Z80PIO_M1       (1UL<<27)     /* machine cycle one from CPU */
-#define Z80PIO_IORQ     (1UL<<28)     /* input/output request from CPU */
-#define Z80PIO_RD       (1UL<<29)     /* read cycle status from CPU */
+#define Z80PIO_M1       (1UL<<24)     /* machine cycle one from CPU (same as Z80_M1) */
+#define Z80PIO_CE       (1UL<<25)     /* chip enable */
+#define Z80PIO_IORQ     (1UL<<26)     /* input/output request from CPU (same as Z80_IORQ) */
+#define Z80PIO_RD       (1UL<<27)     /* read cycle status from CPU (same as Z80_RD) */
+#define Z80PIO_BASEL    (1UL<<28)     /* port B or A select (set: B, clear: A) */
+#define Z80PIO_CDSEL    (1UL<<29)     /* control or data select (set: control, clear: data) */
 
 /* interrupt control pins */
-#define Z80PIO_INT      (1UL<<30)     /* interrupt request */
-#define Z80PIO_IEI      (1UL<<31)     /* interrupt enable in */
-#define Z80PIO_IEO      (1UL<<32)     /* interrupt enable out */
+#define Z80PIO_IEI      (1UL<<30)     /* interrupt enable in */
+#define Z80PIO_IEO      (1UL<<31)     /* interrupt enable out */
+#define Z80PIO_INT      (1UL<<32)     /* interrupt request (same Z80_INT) */
 
 /* port A status pins */
 #define Z80PIO_ASTB     (1UL<<33)     /* port A strobe pulse from peripheral device */
@@ -114,11 +117,12 @@ typedef struct {
     uint8_t input;          /* 8-bit data input register */
     uint8_t output;         /* 8-bit data output register */
     uint8_t mode;           /* 2-bit mode control register (Z80PIO_MODE_*) */
-    uint8_t mask;           /* 8-bit mask register */
     uint8_t io_select;      /* 8-bit input/output select register */
-    uint8_t mask_control;   /* 2-bit mask control register */
     uint8_t int_vector;     /* 8-bit interrupt vector */
     uint8_t int_control;    /* interrupt control word (Z80PIO_INTCTRL_*) */
+    uint8_t int_mask;       /* 8-bit interrupt control mask */
+    bool expect_io_select;  /* next control word will be io_select */
+    bool expect_int_mask;   /* next control word will be  mask */
 } z80pio_port;
 
 /*
@@ -130,7 +134,7 @@ typedef struct {
     /* port A and B register sets */
     z80pio_port PORT[Z80PIO_NUM_PORTS];
     /* currently in reset state? (until a control word is received) */
-    bool in_reset_state;
+    bool reset_active;
 } z80pio;
 
 /* initialize a new z80pio instance */
@@ -167,6 +171,8 @@ extern void z80pio_tick(z80pio* pio);
 #endif
 
 /*
+    void z80pio_init(z80pio* pio);
+
     Calls this once to initialize a new Z80 PIO instance, this will
     clear the z80pio structure and go into reset state.
 */
@@ -177,6 +183,8 @@ void z80pio_init(z80pio* pio) {
 }
 
 /*
+    void z80pio_reset(z80pio* pio);
+
     The Z80-PIO automatically enters a reset state when power is applied.
     The reset state performs the following functions:
     1) Both port mask registers are reset to inhibit all port data bits.
@@ -193,13 +201,129 @@ void z80pio_reset(z80pio* pio) {
     Z80PIO_OFF(pio->PINS, Z80PIO_BRDY);
     for (int p = 0; p < Z80PIO_NUM_PORTS; p++) {
         Z80PIO_SET_PORT(pio->PINS, p, 0x00);
-        pio->PORT[p].mask = 0;
         pio->PORT[p].mode = Z80PIO_MODE_INPUT;
         pio->PORT[p].output = 0;
+        pio->PORT[p].io_select = 0;
         pio->PORT[p].int_control &= ~Z80PIO_INTCTRL_EI;
+        pio->PORT[p].int_mask = 0xFF;
+        pio->PORT[p].expect_int_mask = false;
+        pio->PORT[p].expect_io_select = false;
     }
-    pio->in_reset_state = true;
+    pio->reset_active = true;
 }
+
+/* get port A or B from Z80PIO_ABSEL pin */
+static z80pio_port* _z80pio_select_port(z80pio* pio, uint64_t pins) {
+    return (pins & Z80PIO_BASEL) ? &pio->PORT[Z80PIO_PORT_B] : &pio->PORT[Z80PIO_PORT_A];
+}
+
+/* new control word received from CPU */
+static void _z80pio_write_control(z80pio* pio) {
+    pio->reset_active = false;
+    z80pio_port* port = _z80pio_select_port(pio, pio->PINS);
+    const uint8_t val = Z80PIO_GET_DATA(pio->PINS);
+    if (port->expect_io_select) {
+        /* followup io_select mask */
+        port->io_select = val;
+        port->expect_io_select = false;
+    } 
+    else if (port->expect_int_mask) {
+        /* followup interrupt mask */
+        port->int_mask = val;
+        port->expect_int_mask = false;
+    }
+    else {
+        const uint8_t ctrl = val & 0x0F;
+        if ((ctrl & 1) == 0) {
+            /* set interrupt vector */
+            port->int_vector = val;
+        }
+        else if (ctrl == 0x0F) {
+            /* set operating mode (Z80PIO_MODE_*) */
+            port->mode = val>>6;
+            if (Z80PIO_MODE_BIDIRECTIONAL == port->mode) {
+                /* next control word is the io_select mask */
+                port->expect_io_select = true;
+            }
+        }
+        else if (ctrl == 0x07) {
+            /* set interrupt control word (Z80PIO_INTCTRL_*) */
+            port->int_control = val & 0xF0;
+            if (val & Z80PIO_INTCTRL_MASK_FOLLOWS) {
+                /* next control word is the interrupt control mask */
+                port->expect_int_mask = true;
+            }
+        }
+        else if (ctrl == 0x03) {
+            /* only set interrupt enable bit */
+            port->int_control = (val & Z80PIO_INTCTRL_EI)|(port->int_control & ~Z80PIO_INTCTRL_EI);
+        }
+    }
+}
+
+/* read control word back to CPU */
+static uint8_t _z80pio_read_control(z80pio* pio) {
+    /* I haven't found documentation about what is
+       returned when reading the control word, this
+       is what MAME does
+    */
+    return (pio->PORT[Z80PIO_PORT_A].int_control & 0xC0) |
+           (pio->PORT[Z80PIO_PORT_B].int_control >> 4);
+}
+
+/* new data word received from CPU */
+static void _z80pio_write_data(z80pio* pio) {
+
+}
+
+/* read port data back to CPU */
+static uint8_t _z80pio_read_data(z80pio* pio) {
+    // FIXME
+    return 0xFF;
+}
+
+/* interrupt acknowledge from CPU */
+static void _z80pio_interrupt_acknowledge(z80pio* pio) {
+    // FIXME!
+}
+
+/*
+    void z80pio_tick(z80pio* pio)
+
+    The tick function is usually called from within the Z80 CPU tick
+    callback after output pin state of the CPU has been transferred to
+    input pins of the PIO.
+*/
+void z80pio_tick(z80pio* pio) {
+    if ((pio->PINS & (Z80PIO_IORQ|Z80PIO_CE)) == (Z80PIO_IORQ|Z80PIO_CE)) {
+        if (pio->PINS & Z80PIO_M1) {
+            _z80pio_interrupt_acknowledge(pio);
+        }
+        if (pio->PINS & Z80PIO_RD) {
+            /* PIO -> CPU */
+            if (pio->PINS & Z80PIO_CDSEL) {
+                uint8_t data = _z80pio_read_control(pio);
+                Z80PIO_SET_DATA(pio->PINS, data);
+            }
+            else {
+                uint8_t data = _z80pio_read_data(pio);
+                Z80PIO_SET_DATA(pio->PINS, data);
+            }
+        }
+        else {
+            /* CPU -> PIO */
+            if (pio->PINS & Z80PIO_CDSEL) {
+                /* control word from CPU */
+                _z80pio_write_control(pio);
+            }
+            else {
+                /* data word to CPU */
+                _z80pio_write_data(pio);
+            }
+        }
+    }
+}
+
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
