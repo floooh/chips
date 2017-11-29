@@ -66,23 +66,23 @@ typedef uint64_t (*tick_callback)(uint64_t);
 /*--- pin functions ---*/
 
 /* system control pins */
-#define  Z80_M1    (1<<24)      /* machine cycle 1 */
-#define  Z80_MREQ  (1<<25)      /* memory request */
-#define  Z80_IORQ  (1<<26)      /* input/output request */
-#define  Z80_RD    (1<<27)      /* read */
-#define  Z80_WR    (1<<28)      /* write */
-#define  Z80_RFSH  (1<<29)      /* refresh */
+#define  Z80_M1    (1UL<<24)      /* machine cycle 1 */
+#define  Z80_MREQ  (1UL<<25)      /* memory request */
+#define  Z80_IORQ  (1UL<<26)      /* input/output request */
+#define  Z80_RD    (1UL<<27)      /* read */
+#define  Z80_WR    (1UL<<28)      /* write */
+#define  Z80_RFSH  (1UL<<29)      /* refresh */
 
 /* CPU control pins */
-#define  Z80_HALT  (1<<30)      /* halt state */
-#define  Z80_WAIT  (1<<31)      /* wait state */
-#define  Z80_INT   (1<<32)      /* interrupt request */
-#define  Z80_NMI   (1<<33)      /* non-maskable interrupt */
-#define  Z80_RESET (1<<34)      /* reset */
+#define  Z80_HALT  (1UL<<30)      /* halt state */
+#define  Z80_WAIT  (1UL<<31)      /* wait state */
+#define  Z80_INT   (1UL<<32)      /* interrupt request */
+#define  Z80_NMI   (1UL<<33)      /* non-maskable interrupt */
+#define  Z80_RESET (1UL<<34)      /* reset */
 
 /* CPU bus control pins */
-#define  Z80_BUSREQ (1<<35)     /* bus request */
-#define  Z80_BUSACK (1<<36)     /* bus acknowledge */
+#define  Z80_BUSREQ (1UL<<35)     /* bus request */
+#define  Z80_BUSACK (1UL<<36)     /* bus acknowledge */
 
 /*--- status indicator flags ---*/
 #define Z80_CF (1<<0)           /* carry */
@@ -96,8 +96,7 @@ typedef uint64_t (*tick_callback)(uint64_t);
 #define Z80_SF (1<<7)           /* sign */
 
 /* Z80 CPU state */
-typedef struct _z80 z80;
-typedef struct _z80 {
+typedef struct {
     /* the CPU pins (control, address and data) */
     uint64_t PINS;
     /* program counter */
@@ -146,11 +145,11 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 /* extract 16-bit address bus from 64-bit pins */
 #define Z80_ADDR(p) ((uint16_t)p)
 /* merge 16-bit address bus value into 64-bit pins */
-#define Z80_SET_ADDR(p,a) {p=((p&~0xFFFF)|(a));}
+#define Z80_SET_ADDR(p,a) {p=((p&~0xFFFF)|(a&0xFFFF));}
 /* extract 8-bit data bus from 64-bit pins */
 #define Z80_DATA(p) ((uint8_t)(p>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define Z80_SET_DATA(p,d) {p=((p&~0xFF0000)|(((uint8_t)d)<<16));}
+#define Z80_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -165,10 +164,8 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-/*-- INSTRUCTION DECODER ----------------------------------------------------*/
 #include "_z80_opcodes.h"
 
-/*-- PUBLIC FUNCTIONS --------------------------------------------------------*/
 void z80_init(z80* c, z80_desc* desc) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT(desc);
