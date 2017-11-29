@@ -80,7 +80,7 @@ extern "C" {
 #define Z80PIO_MODE_OUTPUT           (0)
 #define Z80PIO_MODE_INPUT            (1)
 #define Z80PIO_MODE_BIDIRECTIONAL    (2)
-#define Z80PIO_MODE_CONTROL          (3) /* only port A */
+#define Z80PIO_MODE_BITCONTROL       (3) /* only port A */
 
 /*
     Interrupt control word bits.
@@ -121,6 +121,8 @@ typedef struct {
     uint8_t int_vector;     /* 8-bit interrupt vector */
     uint8_t int_control;    /* interrupt control word (Z80PIO_INTCTRL_*) */
     uint8_t int_mask;       /* 8-bit interrupt control mask */
+    bool int_enabled;       /* definitive interrupt enabled flag */
+    bool int_pending;       /* interrupt is pending */
     bool expect_io_select;  /* next control word will be io_select */
     bool expect_int_mask;   /* next control word will be  mask */
 } z80pio_port;
@@ -206,6 +208,8 @@ void z80pio_reset(z80pio* pio) {
         pio->PORT[p].io_select = 0;
         pio->PORT[p].int_control &= ~Z80PIO_INTCTRL_EI;
         pio->PORT[p].int_mask = 0xFF;
+        pio->PORT[p].int_enabled = false;
+        pio->PORT[p].int_pending = false;
         pio->PORT[p].expect_int_mask = false;
         pio->PORT[p].expect_io_select = false;
     }
@@ -213,50 +217,74 @@ void z80pio_reset(z80pio* pio) {
 }
 
 /* get port A or B from Z80PIO_ABSEL pin */
-static z80pio_port* _z80pio_select_port(z80pio* pio, uint64_t pins) {
-    return (pins & Z80PIO_BASEL) ? &pio->PORT[Z80PIO_PORT_B] : &pio->PORT[Z80PIO_PORT_A];
+static int _z80pio_select_port(z80pio* pio, uint64_t pins) {
+    return (pins & Z80PIO_BASEL) ? Z80PIO_PORT_B : Z80PIO_PORT_A;
 }
 
 /* new control word received from CPU */
 static void _z80pio_write_control(z80pio* pio) {
     pio->reset_active = false;
-    z80pio_port* port = _z80pio_select_port(pio, pio->PINS);
+    int port = _z80pio_select_port(pio, pio->PINS);
+    z80pio_port* p = &pio->PORT[port];
     const uint8_t val = Z80PIO_GET_DATA(pio->PINS);
-    if (port->expect_io_select) {
+    if (p->expect_io_select) {
         /* followup io_select mask */
-        port->io_select = val;
-        port->expect_io_select = false;
+        p->io_select = val;
+        p->int_enabled = (p->int_control & Z80PIO_INTCTRL_EI) ? true:false;
+        p->expect_io_select = false;
     } 
-    else if (port->expect_int_mask) {
+    else if (p->expect_int_mask) {
         /* followup interrupt mask */
-        port->int_mask = val;
-        port->expect_int_mask = false;
+        p->int_mask = val;
+        p->int_enabled = (p->int_control & Z80PIO_INTCTRL_EI) ? true:false;
+        p->expect_int_mask = false;
     }
     else {
         const uint8_t ctrl = val & 0x0F;
         if ((ctrl & 1) == 0) {
             /* set interrupt vector */
-            port->int_vector = val;
+            p->int_vector = val;
+            /* according to MAME setting the interrupt vector
+               also enables interrupts, but this doesn't seem to
+               be mentioned in the spec
+            */
+            p->int_control |= Z80PIO_INTCTRL_EI;
+            p->int_enabled = true;
         }
         else if (ctrl == 0x0F) {
             /* set operating mode (Z80PIO_MODE_*) */
-            port->mode = val>>6;
-            if (Z80PIO_MODE_BIDIRECTIONAL == port->mode) {
+            p->mode = val>>6;
+            if (p->mode == Z80PIO_MODE_OUTPUT) {
+                /* make output register visible on pins */
+                Z80PIO_SET_PORT(pio->PINS,port,p->output);
+                Z80PIO_ON(pio->PINS,Z80PIO_ARDY);
+            }
+            else if (p->mode == Z80PIO_MODE_BITCONTROL) {
                 /* next control word is the io_select mask */
-                port->expect_io_select = true;
+                p->expect_io_select = true;
+                /* temporarly disable interrupt until io_select mask written */
+                p->int_enabled = false;
             }
         }
         else if (ctrl == 0x07) {
             /* set interrupt control word (Z80PIO_INTCTRL_*) */
-            port->int_control = val & 0xF0;
+            p->int_control = val & 0xF0;
             if (val & Z80PIO_INTCTRL_MASK_FOLLOWS) {
                 /* next control word is the interrupt control mask */
-                port->expect_int_mask = true;
+                p->expect_int_mask = true;
+                /* temporarly disable interrupt until mask is written */
+                p->int_enabled = false;
+                /* reset pending interrupt */
+                p->int_pending = false;
+            }
+            else {
+                p->int_enabled = (p->int_control & Z80PIO_INTCTRL_EI) ? true:false;
             }
         }
         else if (ctrl == 0x03) {
             /* only set interrupt enable bit */
-            port->int_control = (val & Z80PIO_INTCTRL_EI)|(port->int_control & ~Z80PIO_INTCTRL_EI);
+            p->int_control = (val & Z80PIO_INTCTRL_EI)|(p->int_control & ~Z80PIO_INTCTRL_EI);
+            p->int_enabled = (p->int_control & Z80PIO_INTCTRL_EI) ? true:false;
         }
     }
 }
