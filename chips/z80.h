@@ -130,7 +130,7 @@ typedef struct {
 } z80;
 
 typedef struct {
-    tick_callback tick_func;
+    tick_callback tick_cb;
 } z80_desc;
 
 /* initialize a new z80 instance */
@@ -169,10 +169,10 @@ extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 void z80_init(z80* c, z80_desc* desc) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT(desc);
-    CHIPS_ASSERT(desc->tick_func);
+    CHIPS_ASSERT(desc->tick_cb);
     memset(c, 0, sizeof(z80));
     z80_reset(c);
-    c->tick = desc->tick_func;
+    c->tick = desc->tick_cb;
     /* init SZP flags table */
     for (int val = 0; val < 256; val++) {
         int p = 0;
@@ -200,9 +200,9 @@ void z80_reset(z80* c) {
     c->BC = c->DE = c->HL = 0xFFFF;
     c->IX = c->IY = 0xFFFF;
     c->BC_ = c->DE_ = c->HL_ = c->AF_ = 0xFFFF;
-    c->WZ = c->IR = 0xFFFF;
+    c->WZ = 0xFFFF;
     /* after power-on or reset, R is set to 0 (see z80-documented.pdf) */
-    c->R = 0;
+    c->IR = 0;
     c->ei_pending = false;
 }
 
@@ -215,8 +215,11 @@ uint32_t z80_step(z80* c) {
 }
 
 uint32_t z80_run(z80* c, uint32_t t) {
-    // FIXME
-    return 0;
+    uint32_t ticks_executed = 0;
+    while (ticks_executed < t) {
+        ticks_executed += z80_step(c);
+    }
+    return ticks_executed;
 }
 
 #endif /* CHIPS_IMPL */

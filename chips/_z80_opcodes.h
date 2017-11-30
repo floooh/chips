@@ -244,7 +244,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
     case 0xc4:/*CALL NZ,nn*/_IMM16();if (!(c->F&Z80_ZF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
     case 0xc5:/*PUSH BC*/_T();_MW(--c->SP,(uint8_t)(c->BC>>8));_MW(--c->SP,(uint8_t)c->BC);break;
     case 0xc6:/*ADD n*/_MR(c->PC++,v);{int res=c->A+v;c->F=_ADD_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-    case 0xc7:/*RST 0x0*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x0;break;
+    case 0xc7:/*RST 0x0*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x0;break;
     case 0xc8:/*RET Z*/_T();if((c->F&Z80_ZF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
     case 0xc9:/*RET*/{uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
     case 0xca:/*JP Z,nn*/_IMM16();if ((c->F&Z80_ZF)) { c->PC=c->WZ; }break;
@@ -514,7 +514,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
     case 0xcc:/*CALL Z,nn*/_IMM16();if ((c->F&Z80_ZF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
     case 0xcd:/*CALL nn*/_IMM16();_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;break;
     case 0xce:/*ADC n*/_MR(c->PC++,v);{int res=c->A+v+(c->F&Z80_CF);c->F=_ADD_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-    case 0xcf:/*RST 0x8*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x8;break;
+    case 0xcf:/*RST 0x8*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x8;break;
     case 0xd0:/*RET NC*/_T();if(!(c->F&Z80_CF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
     case 0xd1:/*POP DE*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->DE=(h<<8)|l;}break;
     case 0xd2:/*JP NC,nn*/_IMM16();if (!(c->F&Z80_CF)) { c->PC=c->WZ; }break;
@@ -522,7 +522,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
     case 0xd4:/*CALL NC,nn*/_IMM16();if (!(c->F&Z80_CF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
     case 0xd5:/*PUSH DE*/_T();_MW(--c->SP,(uint8_t)(c->DE>>8));_MW(--c->SP,(uint8_t)c->DE);break;
     case 0xd6:/*SUB n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v;c->F=_SUB_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-    case 0xd7:/*RST 0x10*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x10;break;
+    case 0xd7:/*RST 0x10*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x10;break;
     case 0xd8:/*RET C*/_T();if((c->F&Z80_CF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
     case 0xd9:/*EXX*/{uint16_t tmp=c->BC;c->BC=c->BC_;c->BC_=tmp;}{uint16_t tmp=c->DE;c->DE=c->DE_;c->DE_=tmp;}{uint16_t tmp=c->HL;c->HL=c->HL_;c->HL_=tmp;}break;
     case 0xda:/*JP C,nn*/_IMM16();if ((c->F&Z80_CF)) { c->PC=c->WZ; }break;
@@ -731,7 +731,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xc4:/*CALL NZ,nn*/_IMM16();if (!(c->F&Z80_ZF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xc5:/*PUSH BC*/_T();_MW(--c->SP,(uint8_t)(c->BC>>8));_MW(--c->SP,(uint8_t)c->BC);break;
         case 0xc6:/*ADD n*/_MR(c->PC++,v);{int res=c->A+v;c->F=_ADD_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0xc7:/*RST 0x0*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x0;break;
+        case 0xc7:/*RST 0x0*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x0;break;
         case 0xc8:/*RET Z*/_T();if((c->F&Z80_ZF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xc9:/*RET*/{uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xca:/*JP Z,nn*/_IMM16();if ((c->F&Z80_ZF)) { c->PC=c->WZ; }break;
@@ -1002,7 +1002,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xcc:/*CALL Z,nn*/_IMM16();if ((c->F&Z80_ZF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xcd:/*CALL nn*/_IMM16();_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;break;
         case 0xce:/*ADC n*/_MR(c->PC++,v);{int res=c->A+v+(c->F&Z80_CF);c->F=_ADD_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0xcf:/*RST 0x8*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x8;break;
+        case 0xcf:/*RST 0x8*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x8;break;
         case 0xd0:/*RET NC*/_T();if(!(c->F&Z80_CF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xd1:/*POP DE*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->DE=(h<<8)|l;}break;
         case 0xd2:/*JP NC,nn*/_IMM16();if (!(c->F&Z80_CF)) { c->PC=c->WZ; }break;
@@ -1010,14 +1010,14 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xd4:/*CALL NC,nn*/_IMM16();if (!(c->F&Z80_CF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xd5:/*PUSH DE*/_T();_MW(--c->SP,(uint8_t)(c->DE>>8));_MW(--c->SP,(uint8_t)c->DE);break;
         case 0xd6:/*SUB n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v;c->F=_SUB_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0xd7:/*RST 0x10*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x10;break;
+        case 0xd7:/*RST 0x10*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x10;break;
         case 0xd8:/*RET C*/_T();if((c->F&Z80_CF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xd9:/*EXX*/{uint16_t tmp=c->BC;c->BC=c->BC_;c->BC_=tmp;}{uint16_t tmp=c->DE;c->DE=c->DE_;c->DE_=tmp;}{uint16_t tmp=c->HL;c->HL=c->HL_;c->HL_=tmp;}break;
         case 0xda:/*JP C,nn*/_IMM16();if ((c->F&Z80_CF)) { c->PC=c->WZ; }break;
         case 0xdb:/*IN A,(n)*/_MR(c->PC++,v);c->WZ=((c->A<<8)|v);_IN(c->WZ++,c->A);break;
         case 0xdc:/*CALL C,nn*/_IMM16();if ((c->F&Z80_CF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xde:/*SBC n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v-(c->F&Z80_CF);c->F=_SUB_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0xdf:/*RST 0x18*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x18;break;
+        case 0xdf:/*RST 0x18*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x18;break;
         case 0xe0:/*RET PO*/_T();if(!(c->F&Z80_PF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xe1:/*POP IX*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->IX=(h<<8)|l;}break;
         case 0xe2:/*JP PO,nn*/_IMM16();if (!(c->F&Z80_PF)) { c->PC=c->WZ; }break;
@@ -1025,14 +1025,14 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xe4:/*CALL PO,nn*/_IMM16();if (!(c->F&Z80_PF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xe5:/*PUSH IX*/_T();_MW(--c->SP,(uint8_t)(c->IX>>8));_MW(--c->SP,(uint8_t)c->IX);break;
         case 0xe6:/*AND n*/_MR(c->PC++,v);c->A&=v;c->F=c->szp[c->A]|Z80_HF;break;
-        case 0xe7:/*RST 0x20*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x20;break;
+        case 0xe7:/*RST 0x20*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x20;break;
         case 0xe8:/*RET PE*/_T();if((c->F&Z80_PF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xe9:/*JP IX*/c->PC=c->IX;break;
         case 0xea:/*JP PE,nn*/_IMM16();if ((c->F&Z80_PF)) { c->PC=c->WZ; }break;
         case 0xeb:/*EX DE,HL*/{uint16_t tmp=c->DE;c->DE=c->HL;c->HL=tmp;}break;
         case 0xec:/*CALL PE,nn*/_IMM16();if ((c->F&Z80_PF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xee:/*XOR n*/_MR(c->PC++,v);c->A^=v;c->F=c->szp[c->A];break;
-        case 0xef:/*RST 0x28*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x28;break;
+        case 0xef:/*RST 0x28*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x28;break;
         case 0xf0:/*RET P*/_T();if(!(c->F&Z80_SF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xf1:/*POP AF*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->AF=(h<<8)|l;}break;
         case 0xf2:/*JP P,nn*/_IMM16();if (!(c->F&Z80_SF)) { c->PC=c->WZ; }break;
@@ -1040,19 +1040,19 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xf4:/*CALL P,nn*/_IMM16();if (!(c->F&Z80_SF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xf5:/*PUSH AF*/_T();_MW(--c->SP,(uint8_t)(c->AF>>8));_MW(--c->SP,(uint8_t)c->AF);break;
         case 0xf6:/*OR n*/_MR(c->PC++,v);c->A|=v;c->F=c->szp[c->A];break;
-        case 0xf7:/*RST 0x30*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x30;break;
+        case 0xf7:/*RST 0x30*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x30;break;
         case 0xf8:/*RET M*/_T();if((c->F&Z80_SF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xf9:/*LD SP,IX*/_T();_T();c->SP=c->IX;break;
         case 0xfa:/*JP M,nn*/_IMM16();if ((c->F&Z80_SF)) { c->PC=c->WZ; }break;
         case 0xfb:/*EI*/c->ei_pending=true;break;
         case 0xfc:/*CALL M,nn*/_IMM16();if ((c->F&Z80_SF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xfe:/*CP n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v;c->F=_CP_FLAGS(c->A,v,res);}break;
-        case 0xff:/*RST 0x38*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x38;break;
+        case 0xff:/*RST 0x38*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x38;break;
         default: break;
       } }
       break;
     case 0xde:/*SBC n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v-(c->F&Z80_CF);c->F=_SUB_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-    case 0xdf:/*RST 0x18*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x18;break;
+    case 0xdf:/*RST 0x18*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x18;break;
     case 0xe0:/*RET PO*/_T();if(!(c->F&Z80_PF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
     case 0xe1:/*POP HL*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->HL=(h<<8)|l;}break;
     case 0xe2:/*JP PO,nn*/_IMM16();if (!(c->F&Z80_PF)) { c->PC=c->WZ; }break;
@@ -1060,7 +1060,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
     case 0xe4:/*CALL PO,nn*/_IMM16();if (!(c->F&Z80_PF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
     case 0xe5:/*PUSH HL*/_T();_MW(--c->SP,(uint8_t)(c->HL>>8));_MW(--c->SP,(uint8_t)c->HL);break;
     case 0xe6:/*AND n*/_MR(c->PC++,v);c->A&=v;c->F=c->szp[c->A]|Z80_HF;break;
-    case 0xe7:/*RST 0x20*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x20;break;
+    case 0xe7:/*RST 0x20*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x20;break;
     case 0xe8:/*RET PE*/_T();if((c->F&Z80_PF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
     case 0xe9:/*JP HL*/c->PC=c->HL;break;
     case 0xea:/*JP PE,nn*/_IMM16();if ((c->F&Z80_PF)) { c->PC=c->WZ; }break;
@@ -1147,7 +1147,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
       } }
       break;
     case 0xee:/*XOR n*/_MR(c->PC++,v);c->A^=v;c->F=c->szp[c->A];break;
-    case 0xef:/*RST 0x28*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x28;break;
+    case 0xef:/*RST 0x28*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x28;break;
     case 0xf0:/*RET P*/_T();if(!(c->F&Z80_SF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
     case 0xf1:/*POP AF*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->AF=(h<<8)|l;}break;
     case 0xf2:/*JP P,nn*/_IMM16();if (!(c->F&Z80_SF)) { c->PC=c->WZ; }break;
@@ -1155,7 +1155,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
     case 0xf4:/*CALL P,nn*/_IMM16();if (!(c->F&Z80_SF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
     case 0xf5:/*PUSH AF*/_T();_MW(--c->SP,(uint8_t)(c->AF>>8));_MW(--c->SP,(uint8_t)c->AF);break;
     case 0xf6:/*OR n*/_MR(c->PC++,v);c->A|=v;c->F=c->szp[c->A];break;
-    case 0xf7:/*RST 0x30*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x30;break;
+    case 0xf7:/*RST 0x30*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x30;break;
     case 0xf8:/*RET M*/_T();if((c->F&Z80_SF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
     case 0xf9:/*LD SP,HL*/_T();_T();c->SP=c->HL;break;
     case 0xfa:/*JP M,nn*/_IMM16();if ((c->F&Z80_SF)) { c->PC=c->WZ; }break;
@@ -1364,7 +1364,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xc4:/*CALL NZ,nn*/_IMM16();if (!(c->F&Z80_ZF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xc5:/*PUSH BC*/_T();_MW(--c->SP,(uint8_t)(c->BC>>8));_MW(--c->SP,(uint8_t)c->BC);break;
         case 0xc6:/*ADD n*/_MR(c->PC++,v);{int res=c->A+v;c->F=_ADD_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0xc7:/*RST 0x0*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x0;break;
+        case 0xc7:/*RST 0x0*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x0;break;
         case 0xc8:/*RET Z*/_T();if((c->F&Z80_ZF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xc9:/*RET*/{uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xca:/*JP Z,nn*/_IMM16();if ((c->F&Z80_ZF)) { c->PC=c->WZ; }break;
@@ -1635,7 +1635,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xcc:/*CALL Z,nn*/_IMM16();if ((c->F&Z80_ZF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xcd:/*CALL nn*/_IMM16();_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;break;
         case 0xce:/*ADC n*/_MR(c->PC++,v);{int res=c->A+v+(c->F&Z80_CF);c->F=_ADD_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0xcf:/*RST 0x8*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x8;break;
+        case 0xcf:/*RST 0x8*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x8;break;
         case 0xd0:/*RET NC*/_T();if(!(c->F&Z80_CF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xd1:/*POP DE*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->DE=(h<<8)|l;}break;
         case 0xd2:/*JP NC,nn*/_IMM16();if (!(c->F&Z80_CF)) { c->PC=c->WZ; }break;
@@ -1643,14 +1643,14 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xd4:/*CALL NC,nn*/_IMM16();if (!(c->F&Z80_CF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xd5:/*PUSH DE*/_T();_MW(--c->SP,(uint8_t)(c->DE>>8));_MW(--c->SP,(uint8_t)c->DE);break;
         case 0xd6:/*SUB n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v;c->F=_SUB_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0xd7:/*RST 0x10*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x10;break;
+        case 0xd7:/*RST 0x10*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x10;break;
         case 0xd8:/*RET C*/_T();if((c->F&Z80_CF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xd9:/*EXX*/{uint16_t tmp=c->BC;c->BC=c->BC_;c->BC_=tmp;}{uint16_t tmp=c->DE;c->DE=c->DE_;c->DE_=tmp;}{uint16_t tmp=c->HL;c->HL=c->HL_;c->HL_=tmp;}break;
         case 0xda:/*JP C,nn*/_IMM16();if ((c->F&Z80_CF)) { c->PC=c->WZ; }break;
         case 0xdb:/*IN A,(n)*/_MR(c->PC++,v);c->WZ=((c->A<<8)|v);_IN(c->WZ++,c->A);break;
         case 0xdc:/*CALL C,nn*/_IMM16();if ((c->F&Z80_CF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xde:/*SBC n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v-(c->F&Z80_CF);c->F=_SUB_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0xdf:/*RST 0x18*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x18;break;
+        case 0xdf:/*RST 0x18*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x18;break;
         case 0xe0:/*RET PO*/_T();if(!(c->F&Z80_PF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xe1:/*POP IY*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->IY=(h<<8)|l;}break;
         case 0xe2:/*JP PO,nn*/_IMM16();if (!(c->F&Z80_PF)) { c->PC=c->WZ; }break;
@@ -1658,14 +1658,14 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xe4:/*CALL PO,nn*/_IMM16();if (!(c->F&Z80_PF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xe5:/*PUSH IY*/_T();_MW(--c->SP,(uint8_t)(c->IY>>8));_MW(--c->SP,(uint8_t)c->IY);break;
         case 0xe6:/*AND n*/_MR(c->PC++,v);c->A&=v;c->F=c->szp[c->A]|Z80_HF;break;
-        case 0xe7:/*RST 0x20*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x20;break;
+        case 0xe7:/*RST 0x20*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x20;break;
         case 0xe8:/*RET PE*/_T();if((c->F&Z80_PF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xe9:/*JP IY*/c->PC=c->IY;break;
         case 0xea:/*JP PE,nn*/_IMM16();if ((c->F&Z80_PF)) { c->PC=c->WZ; }break;
         case 0xeb:/*EX DE,HL*/{uint16_t tmp=c->DE;c->DE=c->HL;c->HL=tmp;}break;
         case 0xec:/*CALL PE,nn*/_IMM16();if ((c->F&Z80_PF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xee:/*XOR n*/_MR(c->PC++,v);c->A^=v;c->F=c->szp[c->A];break;
-        case 0xef:/*RST 0x28*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x28;break;
+        case 0xef:/*RST 0x28*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x28;break;
         case 0xf0:/*RET P*/_T();if(!(c->F&Z80_SF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xf1:/*POP AF*/{uint8_t l,h;_MR(c->SP++,l);_MR(c->SP++,h);c->AF=(h<<8)|l;}break;
         case 0xf2:/*JP P,nn*/_IMM16();if (!(c->F&Z80_SF)) { c->PC=c->WZ; }break;
@@ -1673,19 +1673,19 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0xf4:/*CALL P,nn*/_IMM16();if (!(c->F&Z80_SF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xf5:/*PUSH AF*/_T();_MW(--c->SP,(uint8_t)(c->AF>>8));_MW(--c->SP,(uint8_t)c->AF);break;
         case 0xf6:/*OR n*/_MR(c->PC++,v);c->A|=v;c->F=c->szp[c->A];break;
-        case 0xf7:/*RST 0x30*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x30;break;
+        case 0xf7:/*RST 0x30*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x30;break;
         case 0xf8:/*RET M*/_T();if((c->F&Z80_SF)){uint8_t w,z;_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0xf9:/*LD SP,IY*/_T();_T();c->SP=c->IY;break;
         case 0xfa:/*JP M,nn*/_IMM16();if ((c->F&Z80_SF)) { c->PC=c->WZ; }break;
         case 0xfb:/*EI*/c->ei_pending=true;break;
         case 0xfc:/*CALL M,nn*/_IMM16();if ((c->F&Z80_SF)){_T();_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->PC=c->WZ;}break;
         case 0xfe:/*CP n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v;c->F=_CP_FLAGS(c->A,v,res);}break;
-        case 0xff:/*RST 0x38*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x38;break;
+        case 0xff:/*RST 0x38*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x38;break;
         default: break;
       } }
       break;
     case 0xfe:/*CP n*/_MR(c->PC++,v);{int res=(int)c->A-(int)v;c->F=_CP_FLAGS(c->A,v,res);}break;
-    case 0xff:/*RST 0x38*/_MW(--c->SP,(uint8_t)c->PC<<8);_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x38;break;
+    case 0xff:/*RST 0x38*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x38;break;
     default: break;
   } }
   c->PINS = pins;

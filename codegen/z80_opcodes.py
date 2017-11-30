@@ -838,7 +838,7 @@ def ret_cc(y):
 #   rst()
 #
 def rst(y):
-    src =wr('--c->SP','(uint8_t)c->PC<<8')
+    src =wr('--c->SP','(uint8_t)(c->PC>>8)')
     src+=wr('--c->SP','(uint8_t)c->PC')
     src+='c->WZ=c->PC=(uint16_t)'+hex(y*8)+';'
     return src
