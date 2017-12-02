@@ -2,9 +2,8 @@
 /*
     keyboard_matrix.h -- keyboard matrix helpers
 
-
     A keyboard_matrix instance maps key codes to the cross-sections of
-    an up to 12x12 keyboard matrix with up to 4 shift keys.
+    an up to 12x12 keyboard matrix with up to 4 modifier keys (shift, ctrl, ...)
 
         C0  C1  C1  C2  C3 ... C12
          /   /   /   /   /       |
@@ -14,8 +13,8 @@
          .   .   .   .   .       .
     L12--+---+---+---+---+-....--+
 
-    First register host-system key codes with the keyboard matrix (how are keys
-    positioned in the matrix) by calling kbd_register_shift() and
+    First register host-system key codes with the keyboard matrix (where are keys
+    positioned in the matrix) by calling kbd_register_modifier() and
     kbd_register_key().
 
     Feed 'host system key presses' into the keyboard_matrix instance
@@ -35,7 +34,7 @@ extern "C" {
 
 #define KBD_MAX_COLUMNS (12)
 #define KBD_MAX_LINES (12)
-#define KBD_MAX_SHIFT_KEYS (4)
+#define KBD_MAX_MOD_KEYS (4)
 #define KBD_MAX_KEYS (256)
 #define KBD_MAX_PRESSED_KEYS (4)
 
@@ -49,7 +48,7 @@ typedef struct {
 typedef struct {
     /* key code of the pressed key */
     int key;
-    /* mask bit layout is 8-bits shift, and 12-bits each columns and lines */
+    /* mask bit layout is 8-bits modifier, and 12-bits each columns and lines */
     /* |SSSSSSSS|CCCCCCCCCCCC|LLLLLLLLLLLL| */
     uint32_t mask;
     /* the frame-count when the key was pressed down */
@@ -64,10 +63,10 @@ typedef struct {
     uint32_t frame_count;
     /* number of frames a key will at least remain pressed */
     int sticky_count;
-    /* map key ASCII code to shift/column/line bits */
+    /* map key ASCII code to modifier/column/line bits */
     uint32_t key_masks[KBD_MAX_KEYS];
-    /* column/line bits of up to 8 shift keys */
-    uint32_t shift_masks[KBD_MAX_SHIFT_KEYS];
+    /* column/line bits for modifier keys */
+    uint32_t mod_masks[KBD_MAX_MOD_KEYS];
     /* currently pressed keys (bitmask==0 is empty slot) */
     key_state key_buffer[KBD_MAX_PRESSED_KEYS];
 } keyboard_matrix;
@@ -76,10 +75,10 @@ typedef struct {
 extern void kbd_init(keyboard_matrix* kbd, keyboard_matrix_desc* desc);
 /* update keyboard matrix state (releases sticky keys), usually call once per frame */
 extern void kbd_update(keyboard_matrix* kbd);
-/* register a shift key, shift_layer 0 is reserved! */
-extern void kbd_register_shift(keyboard_matrix* kbd, int shift_layer, int column, int line);
+/* register a modifier key, layers are between from 0 to KBD_MAX_MOD_KEYS-1 */
+extern void kbd_register_modifier(keyboard_matrix* kbd, int layer, int column, int line);
 /* register a key */
-extern void kbg_register_key(keyboard_matrix* kbd, int key, int column, int line, int shift_layer);
+extern void kbg_register_key(keyboard_matrix* kbd, int key, int column, int line, int mod_mask);
 /* add a key to the pressed-key buffer */
 extern void kbd_key_down(keyboard_matrix* kbd, int key);
 /* remove a key from the pressed-key buffer */
@@ -124,21 +123,20 @@ void kbd_update(keyboard_matrix* kbd) {
     }
 }
 
-void kbd_register_shift(keyboard_matrix* kbd, int shift_layer, int column, int line) {
+void kbd_register_modifier(keyboard_matrix* kbd, int layer, int column, int line) {
     CHIPS_ASSERT(kbd);
     CHIPS_ASSERT((column >= 0) && (column < KBD_MAX_COLUMNS));
     CHIPS_ASSERT((line >= 0) && (line < KBD_MAX_LINES));
-    CHIPS_ASSERT((shift_layer >= 1) && (shift_layer < (KBD_MAX_SHIFT_KEYS+1)));
-    const int shift_index = shift_layer - 1;
-    kbd->shift_masks[shift_index] = (1<<(shift_index+KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
+    CHIPS_ASSERT((layer >= 0) && (layer < KBD_MAX_MOD_KEYS));
+    kbd->mod_masks[layer] = (1<<(layer+KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
 }
 
-void kbd_register_key(keyboard_matrix* kbd, int key, int column, int line, uint8_t shift_mask) {
+void kbd_register_key(keyboard_matrix* kbd, int key, int column, int line, uint8_t mod_mask) {
     CHIPS_ASSERT(kbd);
     CHIPS_ASSERT((key >= 0) && (key < KBD_MAX_KEYS));
     CHIPS_ASSERT((column >= 0) && (column < KBD_MAX_COLUMNS));
     CHIPS_ASSERT((line >= 0) && (line < KBD_MAX_LINES));
-    kbd->key_masks[key] = (shift_mask << (KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
+    kbd->key_masks[key] = (mod_mask << (KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
 }
 
 void kbd_key_down(keyboard_matrix* kbd, int key) {
@@ -177,9 +175,9 @@ static uint16_t _kbd_lines(uint32_t key_mask) {
     return key_mask & ((1<<KBD_MAX_LINES)-1);
 }
 
-/* extract shift mask bits from a 32-bit key mask */
-static uint32_t _kbd_shift(uint32_t key_mask) {
-    return key_mask & ((1<<KBD_MAX_SHIFT_KEYS)-1)<<(KBD_MAX_COLUMNS+KBD_MAX_LINES);
+/* extract modifier mask bits from a 32-bit key mask */
+static uint32_t _kbd_mod(uint32_t key_mask) {
+    return key_mask & ((1<<KBD_MAX_MOD_KEYS)-1)<<(KBD_MAX_COLUMNS+KBD_MAX_LINES);
 }
 
 /* scan keyboard matrix */
@@ -193,14 +191,14 @@ uint16_t kbd_test_lines(keyboard_matrix* kbd, uint16_t column_mask) {
             if ((key_col_mask & column_mask) == key_col_mask) {
                 line_bits |= _kbd_lines(key_mask);
             }
-            const uint32_t key_shift_mask = _kbd_shift(key_mask);
-            if (key_shift_mask) {
-                for (int shift_index = 0; shift_index < KBD_MAX_SHIFT_KEYS; shift_index++) {
-                    const uint32_t shift_mask = kbd->shift_masks[shift_index];
-                    if (shift_mask & key_shift_mask) {
-                        const uint16_t shift_col_mask = _kbd_columns(shift_mask);
-                        if ((shift_col_mask & column_mask) == (shift_col_mask)) {
-                            line_bits |= _kbd_lines(shift_mask);
+            const uint32_t key_mod_mask = _kbd_mod(key_mask);
+            if (key_mod_mask) {
+                for (int mod_index = 0; mod_index < KBD_MAX_MOD_KEYS; mod_index++) {
+                    const uint32_t mod_mask = kbd->mod_masks[mod_index];
+                    if (mod_mask & key_mod_mask) {
+                        const uint16_t mod_col_mask = _kbd_columns(mod_mask);
+                        if ((mod_col_mask & column_mask) == (mod_col_mask)) {
+                            line_bits |= _kbd_lines(mod_mask);
                         }
                     }
                 }
