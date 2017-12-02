@@ -17,7 +17,7 @@
            IEO <--|           |
                   +-----------+
 
-    FIXME: pins emulation, ready/strobe, interrupts, bidirectional, bitcontrol
+    FIXME: pins emulation, ready/strobe, interrupts, bidirectional
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -289,7 +289,10 @@ void z80pio_write_data(z80pio* pio, int port_id, uint8_t data) {
             // FIXME
             break;
         case Z80PIO_MODE_BITCONTROL:
-            // FIXME
+            p->output = data;
+            if (pio->out_cb) {
+                pio->out_cb(port_id, p->io_select | (p->output & ~p->io_select));
+            }
             break;
     }
 }
@@ -313,7 +316,10 @@ uint8_t z80pio_read_data(z80pio* pio, int port_id) {
             // FIXME
             break;
         case Z80PIO_MODE_BITCONTROL:
-            // FIXME
+            if (pio->in_cb) {
+                p->input = pio->in_cb(port_id);
+            }
+            data = (p->input & p->io_select) | (p->output & ~p->io_select);
             break;
     }
     return data;
