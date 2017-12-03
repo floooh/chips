@@ -1,6 +1,6 @@
 #pragma once
 /*
-    z80pio.h -- emulates the Z80 PIO
+    z80pio.h -- emulates the Z80 PIO (Parallel Input/Output)
 
                   +-----------+
             D0 <->|           |<-> A0
@@ -28,37 +28,41 @@ extern "C" {
 #endif
 
 /*
-    Bus line definitions. All pin locations from 0 to 36 are shared with 
-    the CPU. Chip-type specific pins start at position 40. This enabled
-    efficient bus-sharing with the CPU and other Z80-family chips.
+    Pin definitions. 
+    
+    All pin locations from 0 to 36 are shared with the CPU. Chip-type
+    specific pins start at position 40. This enables efficient bus-sharing
+    with the CPU and other Z80-family chips.
 
     Thus the Z80 PIO pin layout is as follows:
 
-    0..15:      address bus
-    16..23:     data bus
-    24..46:     CPU pins (some of those shared directly with PIO)
-    40..
+    0..15:      address bus A0..A15 (not connected)
+    16..23:     data bus D0..D7
+    24..36:     CPU pins (some of those shared directly with PIO)
+    40..46:     PIO-specific pins
 
     FIXME: it probably makes sense to also directly share the IEI/IEO
     interrupt daisy chain pins that way
 */
 
-/* control directly shared with CPU */
+/* control pins directly shared with CPU */
 #define Z80PIO_M1       (1UL<<24)   /* CPU Machine Cycle One, same as Z80_M1 */
 #define Z80PIO_IORQ     (1UL<<26)   /* IO Request from CPU, same as Z80_IORQ */
 #define Z80PIO_RD       (1UL<<27)   /* Read Cycle Status from CPU, same as Z80_RD */
 #define Z80PIO_INT      (1UL<<32)   /* Interrupt Request, same as Z80_INT */
 
+/* Z80 interrupt daisy chain shared pins */
+#define Z80PIO_IEI      (1UL<<37)   /* Interrupt Enable In */
+#define Z80PIO_IEO      (1UL<<38)   /* Interrupt Enable Out */
+
 /* PIO specific pins start at bit 40 */
 #define Z80PIO_CE       (1UL<<40)   /* Chip Enable */
 #define Z80PIO_BASEL    (1UL<<41)   /* Port A/B Select (inactive: A, active: B) */
 #define Z80PIO_CDSEL    (1UL<<42)   /* Control/Data Select (inactive: data, active: control) */
-#define Z80PIO_IEI      (1UL<<43)   /* Interrupt Enable In */
-#define Z80PIO_IEO      (1UL<<44)   /* Interrupt Enable Out */
-#define Z80PIO_ARDY     (1UL<<45)   /* Port A Ready */
-#define Z80PIO_BRDY     (1UL<<46)   /* Port B Ready */
-#define Z80PIO_ASTB     (1UL<<47)   /* Port A Strobe */
-#define Z80PIO_BSTB     (1UL<<48)   /* Port B Strobe */
+#define Z80PIO_ARDY     (1UL<<43)   /* Port A Ready */
+#define Z80PIO_BRDY     (1UL<<44)   /* Port B Ready */
+#define Z80PIO_ASTB     (1UL<<45)   /* Port A Strobe */
+#define Z80PIO_BSTB     (1UL<<46)   /* Port B Strobe */
 
 /* FIXME: Port A/B 8-bit port pins? these are currently not needed because
    port in/out is handled through callback functions
@@ -148,9 +152,8 @@ typedef struct {
 } z80pio;
 
 /*
-    init-desc structure, communication with devices
-    is done with callbacks, not passively through pins
-    (at least for now)
+    Z80 PIO initialization struct, defines callbacks to read
+    or write data on the PIOs I/O ports.
 */
 typedef struct {
     /* input on port A or B requested */
@@ -185,9 +188,9 @@ uint64_t z80pio_tick(z80pio* pio, uint64_t pins);
 #endif
 
 /*
-    void z80pio_init(z80pio* pio);
+    z80pio_init
 
-    Calls this once to initialize a new Z80 PIO instance, this will
+    Call this once to initialize a new Z80 PIO instance, this will
     clear the z80pio structure and go into reset state.
 */
 void z80pio_init(z80pio* pio, z80pio_desc* desc) {
@@ -199,7 +202,7 @@ void z80pio_init(z80pio* pio, z80pio_desc* desc) {
 }
 
 /*
-    void z80pio_reset(z80pio* pio);
+    z80pio_reset
 
     The Z80-PIO automatically enters a reset state when power is applied.
     The reset state performs the following functions:
@@ -360,6 +363,8 @@ static uint8_t _z80pio_read_data(z80pio* pio, int port_id) {
 }
 
 /*
+    z80pio_tick
+
     Per-tick function, before calling this function the pins argument
     must be prepared with the functions the PIO should control. Usually
     the PIO control pins Z80PIO_BASEL and Z80PIO_CDSEL are connected
