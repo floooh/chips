@@ -84,6 +84,9 @@ typedef uint64_t (*tick_callback)(uint64_t);
 #define  Z80_BUSREQ (1UL<<35)     /* bus request */
 #define  Z80_BUSACK (1UL<<36)     /* bus acknowledge */
 
+/* bit mask for all CPU bus pins */
+#define Z80_PIN_MASK ((1UL<<37)-1)
+
 /*--- status indicator flags ---*/
 #define Z80_CF (1<<0)           /* carry */
 #define Z80_NF (1<<1)           /* add/subtract */
