@@ -46,23 +46,23 @@ extern "C" {
 */
 
 /* control pins directly shared with CPU */
-#define Z80PIO_M1       (1UL<<24)   /* CPU Machine Cycle One, same as Z80_M1 */
-#define Z80PIO_IORQ     (1UL<<26)   /* IO Request from CPU, same as Z80_IORQ */
-#define Z80PIO_RD       (1UL<<27)   /* Read Cycle Status from CPU, same as Z80_RD */
-#define Z80PIO_INT      (1UL<<32)   /* Interrupt Request, same as Z80_INT */
+#define Z80PIO_M1       (1ULL<<24UL)   /* CPU Machine Cycle One, same as Z80_M1 */
+#define Z80PIO_IORQ     (1ULL<<26UL)   /* IO Request from CPU, same as Z80_IORQ */
+#define Z80PIO_RD       (1ULL<<27UL)   /* Read Cycle Status from CPU, same as Z80_RD */
+#define Z80PIO_INT      (1ULL<<32UL)   /* Interrupt Request, same as Z80_INT */
 
 /* Z80 interrupt daisy chain shared pins */
-#define Z80PIO_IEI      (1UL<<37)   /* Interrupt Enable In */
-#define Z80PIO_IEO      (1UL<<38)   /* Interrupt Enable Out */
+#define Z80PIO_IEI      (1ULL<<37UL)   /* Interrupt Enable In */
+#define Z80PIO_IEO      (1ULL<<38UL)   /* Interrupt Enable Out */
 
 /* PIO specific pins start at bit 40 */
-#define Z80PIO_CE       (1UL<<40)   /* Chip Enable */
-#define Z80PIO_BASEL    (1UL<<41)   /* Port A/B Select (inactive: A, active: B) */
-#define Z80PIO_CDSEL    (1UL<<42)   /* Control/Data Select (inactive: data, active: control) */
-#define Z80PIO_ARDY     (1UL<<43)   /* Port A Ready */
-#define Z80PIO_BRDY     (1UL<<44)   /* Port B Ready */
-#define Z80PIO_ASTB     (1UL<<45)   /* Port A Strobe */
-#define Z80PIO_BSTB     (1UL<<46)   /* Port B Strobe */
+#define Z80PIO_CE       (1ULL<<40UL)   /* Chip Enable */
+#define Z80PIO_BASEL    (1ULL<<41UL)   /* Port A/B Select (inactive: A, active: B) */
+#define Z80PIO_CDSEL    (1ULL<<42UL)   /* Control/Data Select (inactive: data, active: control) */
+#define Z80PIO_ARDY     (1ULL<<43UL)   /* Port A Ready */
+#define Z80PIO_BRDY     (1ULL<<44UL)   /* Port B Ready */
+#define Z80PIO_ASTB     (1ULL<<45UL)   /* Port A Strobe */
+#define Z80PIO_BSTB     (1ULL<<46UL)   /* Port B Strobe */
 
 /* FIXME: Port A/B 8-bit port pins? these are currently not needed because
    port in/out is handled through callback functions

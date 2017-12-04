@@ -66,26 +66,26 @@ typedef uint64_t (*tick_callback)(uint64_t);
 /*--- pin functions ---*/
 
 /* system control pins */
-#define  Z80_M1    (1UL<<24)      /* machine cycle 1 */
-#define  Z80_MREQ  (1UL<<25)      /* memory request */
-#define  Z80_IORQ  (1UL<<26)      /* input/output request */
-#define  Z80_RD    (1UL<<27)      /* read */
-#define  Z80_WR    (1UL<<28)      /* write */
-#define  Z80_RFSH  (1UL<<29)      /* refresh */
+#define  Z80_M1    (1ULL<<24)      /* machine cycle 1 */
+#define  Z80_MREQ  (1ULL<<25)      /* memory request */
+#define  Z80_IORQ  (1ULL<<26)      /* input/output request */
+#define  Z80_RD    (1ULL<<27)      /* read */
+#define  Z80_WR    (1ULL<<28)      /* write */
+#define  Z80_RFSH  (1ULL<<29)      /* refresh */
 
 /* CPU control pins */
-#define  Z80_HALT  (1UL<<30)      /* halt state */
-#define  Z80_WAIT  (1UL<<31)      /* wait state */
-#define  Z80_INT   (1UL<<32)      /* interrupt request */
-#define  Z80_NMI   (1UL<<33)      /* non-maskable interrupt */
-#define  Z80_RESET (1UL<<34)      /* reset */
+#define  Z80_HALT  (1ULL<<30)      /* halt state */
+#define  Z80_WAIT  (1ULL<<31)      /* wait state */
+#define  Z80_INT   (1ULL<<32)      /* interrupt request */
+#define  Z80_NMI   (1ULL<<33)      /* non-maskable interrupt */
+#define  Z80_RESET (1ULL<<34)      /* reset */
 
 /* CPU bus control pins */
-#define  Z80_BUSREQ (1UL<<35)     /* bus request */
-#define  Z80_BUSACK (1UL<<36)     /* bus acknowledge */
+#define  Z80_BUSREQ (1ULL<<35)     /* bus request */
+#define  Z80_BUSACK (1ULL<<36)     /* bus acknowledge */
 
 /* bit mask for all CPU bus pins */
-#define Z80_PIN_MASK ((1UL<<37)-1)
+#define Z80_PIN_MASK ((1ULL<<37)-1)
 
 /*--- status indicator flags ---*/
 #define Z80_CF (1<<0)           /* carry */

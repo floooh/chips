@@ -40,28 +40,28 @@ extern "C" {
 */
 
 /* control pins directly shared with CPU */
-#define Z80CTC_M1       (1UL<<24)   /* CPU Machine Cycle One (same as Z80_M1) */
-#define Z80CTC_IORQ     (1UL<<26)   /* CPU IO Request (same as Z80_IORQ) */
-#define Z80CTC_RD       (1UL<<27)   /* CPU Read Cycle Status (same as Z80_RD) */
-#define Z80CTC_INT      (1UL<<32)   /* Interrupt Request (same as Z80_INT) */
-#define Z80CTC_RESET    (1UL<<34)   /* put CTC into reset state (same as Z80_RESET) */
+#define Z80CTC_M1       (1ULL<<24)   /* CPU Machine Cycle One (same as Z80_M1) */
+#define Z80CTC_IORQ     (1ULL<<26)   /* CPU IO Request (same as Z80_IORQ) */
+#define Z80CTC_RD       (1ULL<<27)   /* CPU Read Cycle Status (same as Z80_RD) */
+#define Z80CTC_INT      (1ULL<<32)   /* Interrupt Request (same as Z80_INT) */
+#define Z80CTC_RESET    (1ULL<<34)   /* put CTC into reset state (same as Z80_RESET) */
 
 /* Z80 interrupt daisy chain shared pins */
-#define Z80CTC_IEI      (1UL<<37)   /* Interrupt Enable In (same as Z80PIO_IEI) */
-#define Z80CTC_IEO      (1UL<<38)   /* Interrupt Enable Out (same as Z80PIO_IEO) */
+#define Z80CTC_IEI      (1ULL<<37)   /* Interrupt Enable In (same as Z80PIO_IEI) */
+#define Z80CTC_IEO      (1ULL<<38)   /* Interrupt Enable Out (same as Z80PIO_IEO) */
 
 /* CTC specific pins starting at bit 40 */
-#define Z80CTC_CE       (1UL<<40)   /* Chip Enable */
+#define Z80CTC_CE       (1ULL<<40)   /* Chip Enable */
 #define Z80CTC_CS0_PIN  (41)
-#define Z80CTC_CS0      (1UL<<41)   /* Channel Select Bit 0 */
-#define Z80CTC_CS1      (1UL<<42)   /* Channel Select Bit 1 */
-#define Z80CTC_CLKTRG0  (1UL<<43)   /* Clock/Timer Trigger 0 */
-#define Z80CTC_CLKTRG1  (1UL<<44)   /* Clock/Timer Trigger 1 */
-#define Z80CTC_CLKTRG2  (1UL<<45)   /* Clock/Timer Trigger 2 */
-#define Z80CTC_CLKTRG3  (1UL<<46)   /* Clock/Timer Trigger 3 */
-#define Z80CTC_ZCTO0    (1UL<<47)   /* Zero Count/Timeout 0 */
-#define Z80CTC_ZCTO1    (1UL<<48)   /* Zero Count/Timeout 1 */
-#define Z80CTC_ZCTO2    (1UL<<49)   /* Zero Count/Timeout 2 */
+#define Z80CTC_CS0      (1ULL<<41)   /* Channel Select Bit 0 */
+#define Z80CTC_CS1      (1ULL<<42)   /* Channel Select Bit 1 */
+#define Z80CTC_CLKTRG0  (1ULL<<43)   /* Clock/Timer Trigger 0 */
+#define Z80CTC_CLKTRG1  (1ULL<<44)   /* Clock/Timer Trigger 1 */
+#define Z80CTC_CLKTRG2  (1ULL<<45)   /* Clock/Timer Trigger 2 */
+#define Z80CTC_CLKTRG3  (1ULL<<46)   /* Clock/Timer Trigger 3 */
+#define Z80CTC_ZCTO0    (1ULL<<47)   /* Zero Count/Timeout 0 */
+#define Z80CTC_ZCTO1    (1ULL<<48)   /* Zero Count/Timeout 1 */
+#define Z80CTC_ZCTO2    (1ULL<<49)   /* Zero Count/Timeout 2 */
 
 /*
     Z80 CTC control register bits
@@ -181,7 +181,7 @@ void _z80ctc_tick_timer(z80ctc* ctc, uint64_t pins, int chn_id) {
     //    the wait_for_trigger flag
     //  - when in counter mode, decrement the counter without
     //    prescale, when at zero, int-request and cb
-    bool trg = 0 != (pins & Z80CTC_CLKTRG0<<chn_id);
+    bool trg = 0 != (pins & (Z80CTC_CLKTRG0<<chn_id));
     if (trg != chn->ext_trigger) {
         chn->ext_trigger = trg;
         // FIXME check rising/falling egde
