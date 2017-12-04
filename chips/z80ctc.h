@@ -16,6 +16,16 @@
            IEI -->|           |
            IEO <--|           |
                   +-----------+
+
+    FIXME: the spec says "After initialization, channels may be reprogrammed
+    at any time. If updated control and time constant words are written
+    to a channel during the count operation, the count continues to
+    zero before the new time constant is loaded into the counter".
+
+    The current implementation doesn't behave like this, instead it behaves
+    like MAME. Needs more research!
+
+    FIXME: interrupts
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -36,7 +46,7 @@ extern "C" {
     0..16       address bus A0..A15 (not connected)
     16..23      data bus D0..D7
     24..36      CPU pins (some shared directly with CTC)
-    40..        CTC-specific pins
+    40..49      CTC-specific pins
 */
 
 /* control pins directly shared with CPU */
@@ -77,6 +87,9 @@ extern "C" {
 #define Z80CTC_CTRL_PRESCALER_16    (0)
 
 #define Z80CTC_CTRL_EDGE            (1<<4)  /* 1: rising edge, 0: falling edge */
+#define Z80CTC_CTRL_EDGE_RISING     (1<<4)
+#define Z80CTC_CTRL_EDGE_FALLING    (0)
+
 #define Z80CTC_CTRL_TRIGGER         (1<<3)  /* 1: CLK/TRG pulse starts timer, 0: trigger when time constant loaded */
 #define Z80CTC_CTRL_TRIGGER_WAIT    (1<<3)
 #define Z80CTC_CTRL_TRIGGER_AUTO    (0)
@@ -106,16 +119,7 @@ typedef struct {
 */
 typedef struct {
     z80ctc_channel chn[Z80CTC_NUM_CHANNELS];
-    void (*zcto_cb)(int chn_id);
 } z80ctc;
-
-/*
-    Z80 CTC initialization struct. Defines callbacks for the
-    ZCTO0..3 output pins.
-*/
-typedef struct {
-    void (*zcto_cb)(int chn_id);
-} z80ctc_desc;
 
 /* extract 8-bit data bus from 64-bit pins */
 #define Z80CTC_DATA(p) ((uint8_t)(p>>16))
@@ -123,7 +127,7 @@ typedef struct {
 #define Z80CTC_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
 /* initialize a new Z80 CTC instance */
-extern void z80ctc_init(z80ctc* ctc, z80ctc_desc* desc);
+extern void z80ctc_init(z80ctc* ctc);
 /* reset an existing Z80 CTC instance */
 extern void z80ctc_reset(z80ctc* ctc);
 /* per-tick function, call this always, not only when CTC is reprogrammed! */
@@ -148,10 +152,9 @@ extern uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins);
     Call this once to initialize a new Z80 CTC instance, this will
     clear the z80ctc struct and go into a reset state.
 */
-void z80ctc_init(z80ctc* ctc, z80ctc_desc* desc) {
+void z80ctc_init(z80ctc* ctc) {
     CHIPS_ASSERT(ctc);
     memset(ctc, 0, sizeof(z80ctc));
-    ctc->zcto_cb = desc->zcto_cb;
     z80ctc_reset(ctc);
 }
 
@@ -166,68 +169,106 @@ void z80ctc_reset(z80ctc* ctc) {
         z80ctc_channel* chn = &ctc->chn[i];
         chn->control = Z80CTC_CTRL_RESET;
         chn->constant = 0;
-        chn->down_counter =0;
+        chn->down_counter = 0;
         chn->waiting_for_trigger = false;
     }
 }
 
-/* tick a single channel in timer mode */
-void _z80ctc_tick_timer(z80ctc* ctc, uint64_t pins, int chn_id) {
+/*
+    called when the downcounter reaches zero, request interrupt,
+    trigger ZCTO pin and reload downcounter
+*/
+uint64_t _z80ctc_counter_zero(z80ctc_channel* chn, uint64_t pins, int chn_id) {
+    /* down counter has reached zero, trigger interrupt and ZCTO pin */
+    if (chn->control & Z80CTC_CTRL_EI) {
+        /* interrupt enabled */
+        /* FIXME: request interrupt */
+    }
+    /* last channel doesn't have a ZCTO pin */
+    if (chn_id < 4) {
+        /* set the zcto pin */
+        pins |= Z80CTC_ZCTO0<<chn_id;
+    }
+    /* reload the down counter */
+    chn->down_counter = chn->constant;
+    return pins;
+}
+
+/* Issue an 'active edge' on a channel, this happens when a CLKTRG pin
+   is triggered, or when reprogramming the Z80CTC_CTRL_EDGE control bit.
+
+   This results in:
+   - if the channel is in timer mode and waiting for trigger,
+     the waiting flag is cleared and timing starts
+   - if the channel is in counter mode, the counter decrements
+*/
+uint64_t _z80ctc_active_edge(z80ctc* ctc, uint64_t pins, int chn_id) {
     z80ctc_channel* chn = &ctc->chn[chn_id];
-
-    // FIXME: check if the channel's CLKTRG has changed (against
-    // RISING/FALLING egde flag:
-    //  - when in timer mode and wait_for_trigger is set, clear
-    //    the wait_for_trigger flag
-    //  - when in counter mode, decrement the counter without
-    //    prescale, when at zero, int-request and cb
-    bool trg = 0 != (pins & (Z80CTC_CLKTRG0<<chn_id));
-    if (trg != chn->ext_trigger) {
-        chn->ext_trigger = trg;
-        // FIXME check rising/falling egde
-        // FIXME: handle wait_for_trigger if in timer mode
-    }
-    // FIXME: counter vs timer mode
-
-    /* if not in timer mode, nothing happens */
     if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
-        return;
-    }
-    /* if reset active or waiting for constant, nothing happens */
-    if (chn->control & (Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) {
-        return;
-    }
-    /* if waiting for trigger, nothing happens */
-    if (chn->waiting_for_trigger) {
-        return;
-    }
-
-    /* decrement the prescaler and tick the down counter 
-       every 16 or 256 prescaler ticks
-    */
-    uint8_t p = --chn->prescaler;
-    if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
-        p &= 0x0F;
-    }
-    if (0 == p) {
-        /* prescaler has reached zero, tick the down counter */
+        /* counter mode */
         if (0 == --chn->down_counter) {
-            /* down counter has reached zero, trigger interrupt and ZCTO pin */
-            if (chn->control & Z80CTC_CTRL_EI) {
-                /* interrupt enabled */
-                /* FIXME: request interrupt */
-            }
-            if (ctc->zcto_cb) {
-                ctc->zcto_cb(chn_id);
-            }
-            /* reload the down counter */
+            pins = _z80ctc_counter_zero(chn, pins, chn_id);
+        }
+    }
+    else {
+        /* timer mode and waiting for trigger? */
+        if (chn->waiting_for_trigger) {
+            chn->waiting_for_trigger = false;
             chn->down_counter = chn->constant;
         }
     }
+    return pins;
+}
+
+/* tick a single channel */
+uint64_t _z80ctc_tick_channel(z80ctc* ctc, uint64_t pins, int chn_id) {
+    z80ctc_channel* chn = &ctc->chn[chn_id];
+    /* last channel doesn't have a ZCTO pin */
+    if (chn_id < 4) {
+        pins &= ~(Z80CTC_ZCTO0<<chn_id);
+    }
+    /* check if externally triggered */
+    bool trg = 0 != (pins & (Z80CTC_CLKTRG0<<chn_id));
+    bool triggered = false;
+    if (trg != chn->ext_trigger) {
+        chn->ext_trigger = trg;
+        /* rising/falling edge trigger */
+        if ((((chn->control & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_RISING) && trg) ||
+            (((chn->control & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_FALLING) && !trg))
+        {
+            triggered = true;
+        }
+    }
+
+    /* if triggered, may need to update the counter or clear the wait_for_trigger flag */
+    if (triggered) {
+        pins = _z80ctc_active_edge(ctc, pins, chn_id);
+    }
+
+    /* handle timer mode downcounting */
+    if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
+        if (chn->waiting_for_trigger || (chn->control & (Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS))) {
+            return pins;
+        }
+        /* decrement the prescaler and tick the down counter every
+           16 or 256 prescaler ticks
+        */
+        uint8_t p = --chn->prescaler;
+        if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
+            p &= 0x0F;
+        }
+        if (0 == p) {
+            /* prescaler has reached zero, tick the down counter */
+            if (0 == --chn->down_counter) {
+                pins = _z80ctc_counter_zero(chn, pins, chn_id);
+            }
+        }
+    }
+    return pins;
 }
 
 /* write to CTC channel */
-void _z80ctc_write(z80ctc* ctc, int chn_id, uint8_t data) {
+uint64_t _z80ctc_write(z80ctc* ctc, uint64_t pins, int chn_id, uint8_t data) {
     z80ctc_channel* chn = &ctc->chn[chn_id];
     if (chn->control & Z80CTC_CTRL_CONST_FOLLOWS) {
         /* timer constant following control word */
@@ -241,10 +282,19 @@ void _z80ctc_write(z80ctc* ctc, int chn_id, uint8_t data) {
                 chn->down_counter = chn->constant;
             }
         }
+        else {
+            chn->down_counter = chn->constant;
+        }
     }
     else if (data & Z80CTC_CTRL_CONTROL) {
         /* a control word */
+        const uint8_t old_ctrl = chn->control;
         chn->control = data;
+
+        /* changing the Trigger Slope trigger an 'active edge' */
+        if ((old_ctrl & Z80CTC_CTRL_EDGE) != (chn->control & Z80CTC_CTRL_EDGE)) {
+            pins = _z80ctc_active_edge(ctc, pins, chn_id);
+        }
     }
     else {
         /* the interrupt vector for the entire CTC must be written
@@ -257,6 +307,7 @@ void _z80ctc_write(z80ctc* ctc, int chn_id, uint8_t data) {
             }
         }
     }
+    return pins;
 }
 
 /* read from CTC channel */
@@ -268,7 +319,7 @@ uint8_t _z80ctc_read(z80ctc* ctc, int chn_id) {
 uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
     /* tick all channels */
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-        _z80ctc_tick_timer(ctc, pins, i);
+        pins = _z80ctc_tick_channel(ctc, pins, i);
     }
     /* read or write the CTC? */
     if ((pins & (Z80CTC_CE|Z80CTC_IORQ)) == (Z80CTC_CE|Z80CTC_IORQ)) {
@@ -281,7 +332,7 @@ uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
         else {
             /* write mode */
             const uint8_t data = Z80CTC_DATA(pins);
-            _z80ctc_write(ctc, chn_id, data);
+            pins = _z80ctc_write(ctc, pins, chn_id, data);
         }
     }
     return pins;
