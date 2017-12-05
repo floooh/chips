@@ -279,7 +279,7 @@ def out(addr,val):
 #   INT MODE 2: 19 cycles
 #
 def check_interrupt():
-    l('if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c->IFF2) {')
+    l('if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c->IFF1) {')
     l('  pins &= ~Z80_INT;')
     l('  c->IFF1=c->IFF2=false;')
     l('  if (pins & Z80_HALT) { pins &= ~Z80_HALT; c->PC++; }')

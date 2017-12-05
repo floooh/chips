@@ -1688,7 +1688,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
     case 0xff:/*RST 0x38*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x38;break;
     default: break;
   } }
-if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c->IFF2) {
+if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c->IFF1) {
   pins &= ~Z80_INT;
   c->IFF1=c->IFF2=false;
   if (pins & Z80_HALT) { pins &= ~Z80_HALT; c->PC++; }
