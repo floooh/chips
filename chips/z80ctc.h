@@ -46,7 +46,8 @@ extern "C" {
     0..16       address bus A0..A15 (not connected)
     16..23      data bus D0..D7
     24..36      CPU pins (some shared directly with CTC)
-    40..49      CTC-specific pins
+    37..40      'virtual' interrupt system pins
+    44..53      CTC-specific pins
 */
 
 /* control pins directly shared with CPU */
@@ -61,17 +62,17 @@ extern "C" {
 #define Z80CTC_IEO      (1ULL<<38)   /* Interrupt Enable Out (same as Z80PIO_IEO) */
 
 /* CTC specific pins starting at bit 40 */
-#define Z80CTC_CE       (1ULL<<40)   /* Chip Enable */
-#define Z80CTC_CS0_PIN  (41)
-#define Z80CTC_CS0      (1ULL<<41)   /* Channel Select Bit 0 */
-#define Z80CTC_CS1      (1ULL<<42)   /* Channel Select Bit 1 */
-#define Z80CTC_CLKTRG0  (1ULL<<43)   /* Clock/Timer Trigger 0 */
-#define Z80CTC_CLKTRG1  (1ULL<<44)   /* Clock/Timer Trigger 1 */
-#define Z80CTC_CLKTRG2  (1ULL<<45)   /* Clock/Timer Trigger 2 */
-#define Z80CTC_CLKTRG3  (1ULL<<46)   /* Clock/Timer Trigger 3 */
-#define Z80CTC_ZCTO0    (1ULL<<47)   /* Zero Count/Timeout 0 */
-#define Z80CTC_ZCTO1    (1ULL<<48)   /* Zero Count/Timeout 1 */
-#define Z80CTC_ZCTO2    (1ULL<<49)   /* Zero Count/Timeout 2 */
+#define Z80CTC_CE       (1ULL<<44)   /* Chip Enable */
+#define Z80CTC_CS0_PIN  (45)
+#define Z80CTC_CS0      (1ULL<<45)   /* Channel Select Bit 0 */
+#define Z80CTC_CS1      (1ULL<<46)   /* Channel Select Bit 1 */
+#define Z80CTC_CLKTRG0  (1ULL<<47)   /* Clock/Timer Trigger 0 */
+#define Z80CTC_CLKTRG1  (1ULL<<48)   /* Clock/Timer Trigger 1 */
+#define Z80CTC_CLKTRG2  (1ULL<<49)   /* Clock/Timer Trigger 2 */
+#define Z80CTC_CLKTRG3  (1ULL<<50)   /* Clock/Timer Trigger 3 */
+#define Z80CTC_ZCTO0    (1ULL<<51)   /* Zero Count/Timeout 0 */
+#define Z80CTC_ZCTO1    (1ULL<<52)   /* Zero Count/Timeout 1 */
+#define Z80CTC_ZCTO2    (1ULL<<53)   /* Zero Count/Timeout 2 */
 
 /*
     Z80 CTC control register bits

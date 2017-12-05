@@ -1082,7 +1082,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
         case 0x4a:/*ADC HL,BC*/{c->WZ=c->HL+1;uint32_t r=c->HL+c->BC+(c->F&Z80_CF);c->F=(((c->HL^r^c->BC)>>8)&Z80_HF)|((r>>16)&Z80_CF)|((r>>8)&(Z80_SF|Z80_YF|Z80_XF))|((r&0xFFFF)?0:Z80_ZF)|(((c->BC^c->HL^0x8000)&(c->BC^r)&0x8000)>>13);c->HL=r;}_T();_T();_T();_T();_T();_T();_T();break;
         case 0x4b:/*LD BC,(nn)*/_IMM16();{uint8_t l,h;_MR(c->WZ++,l);_MR(c->WZ,h);c->BC=(h<<8)|l;}break;
         case 0x4c:/*NEG*/v=c->A;c->A=0;{int res=(int)c->A-(int)v;c->F=_SUB_FLAGS(c->A,v,res);c->A=(uint8_t)res;}break;
-        case 0x4d:/*RETI*//*FIXME!*/break;
+        case 0x4d:/*RETI*/{uint8_t w,z;_ON(Z80_RETI);_MR(c->SP++,z);_MR(c->SP++,w);c->PC=c->WZ=(w<<8)|z;}break;
         case 0x4e:/*IM 0*/c->IM=0;break;
         case 0x4f:/*LD R,A*/_T();c->R=c->A;break;
         case 0x50:/*IN D,(C)*/c->WZ=c->BC;_IN(c->WZ++,c->D);c->F=c->szp[c->D]|(c->F&Z80_CF);break;
@@ -1688,6 +1688,38 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
     case 0xff:/*RST 0x38*/_MW(--c->SP,(uint8_t)(c->PC>>8));_MW(--c->SP,(uint8_t)c->PC);c->WZ=c->PC=(uint16_t)0x38;break;
     default: break;
   } }
+if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c->IFF2) {
+  pins &= ~Z80_INT;
+  c->IFF1=c->IFF2=false;
+  if (pins & Z80_HALT) { pins &= ~Z80_HALT; c->PC++; }
+  _ON(Z80_M1);
+  _SA(c->PC);
+  _T();_T();_T()
+  _ON(Z80_IORQ);
+  _TW();
+  const uint8_t int_vec=_GD();
+  _OFF(Z80_M1|Z80_IORQ);
+  _ON(Z80_RFSH);
+  _T();
+  _ON(Z80_MREQ);
+  _SA(c->IR);
+  _T();
+  _OFF(Z80_RFSH|Z80_MREQ);
+  c->R=(c->R&0x80)|((c->R+1)&0x7F);
+  if (c->IM==2) {
+    _MW(--c->SP,(uint8_t)(c->PC>>8));
+    _MW(--c->SP,(uint8_t)(c->PC));
+    a=(c->I<<8)|(int_vec&0xFE);
+    {
+      uint8_t w,z;
+      _MR(a++,z);
+      _MR(a,w);
+      c->PC=c->WZ=(w<<8)|z;
+    }
+  } else {
+    CHIPS_ASSERT(false);
+  }
+}
   c->PINS = pins;
   return ticks;
 }

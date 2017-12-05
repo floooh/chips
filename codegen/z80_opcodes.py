@@ -246,6 +246,73 @@ def out(addr,val):
     return '_OUT('+addr+','+val+');'
 
 #-------------------------------------------------------------------------------
+#   Generate code for checking and handling an interrupt request at
+#   the end of an instruction:
+#
+#   An interrupt response cycle looks a lot like an opcode fetch machine cycle.
+#
+#   NOTE: The INT pint is normally checked at the start of the last time-cycle
+#   of an instruction. The emulator moves this check to the start
+#   of the next time cycle (so it will check right *after* the last instruction
+#   time-cycle.
+#
+#              T1   T2   TW   TW   T3   T4
+#    --------+----+----+----+----+----+----+
+#    CLK     |--**|--**|--**|--**|--**|--**|
+#    INT    *|*   |    |    |    |    |    |
+#    A15-A0  |        PC         |  RFRSH  |
+#    M1      |****|****|****|****|    |    |
+#    MREG    |    |    |    |    |  **|**  |
+#    IORQ    |    |    |  **|****|    |    |
+#    RD      |    |    |    |    |    |    |
+#    WR      |    |    |    |    |    |    |
+#    D7-D0   |    |    |    |  XX|XX..|    |
+#    WAIT    |    |    |    | -- |    |    |
+#    RFSH    |    |    |    |    |****|****|
+#
+#   Interrupt controllers must check for the M1|IORQ pin combination 
+#   being set (with neither the RD nor WR being set, and the highest 
+#   priority interrupt controller must place the interrupt vector on the
+#   data bus.
+#
+#   INT MODE 1: 13 cycles
+#   INT MODE 2: 19 cycles
+#
+def check_interrupt():
+    l('if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c->IFF2) {')
+    l('  pins &= ~Z80_INT;')
+    l('  c->IFF1=c->IFF2=false;')
+    l('  if (pins & Z80_HALT) { pins &= ~Z80_HALT; c->PC++; }')
+    l('  _ON(Z80_M1);')
+    l('  _SA(c->PC);')
+    l('  _T();_T();_T()')
+    l('  _ON(Z80_IORQ);')
+    l('  _TW();')
+    l('  const uint8_t int_vec=_GD();')
+    l('  _OFF(Z80_M1|Z80_IORQ);')
+    l('  _ON(Z80_RFSH);')
+    l('  _T();')
+    l('  _ON(Z80_MREQ);')
+    l('  _SA(c->IR);')
+    l('  _T();')
+    l('  _OFF(Z80_RFSH|Z80_MREQ);')
+    l('  c->R=(c->R&0x80)|((c->R+1)&0x7F);')
+    l('  if (c->IM==2) {')
+    l('    _MW(--c->SP,(uint8_t)(c->PC>>8));')
+    l('    _MW(--c->SP,(uint8_t)(c->PC));')
+    l('    a=(c->I<<8)|(int_vec&0xFE);')
+    l('    {')
+    l('      uint8_t w,z;')
+    l('      _MR(a++,z);')
+    l('      _MR(a,w);')
+    l('      c->PC=c->WZ=(w<<8)|z;')
+    l('    }')
+    l('  } else {')
+    l('    CHIPS_ASSERT(false);')
+    l('  }')
+    l('}')
+
+#-------------------------------------------------------------------------------
 # return comment string for (HL), (IX+d), (IY+d)
 #
 def iHLcmt(ext) :
@@ -1237,7 +1304,13 @@ def ei():
     return 'c->ei_pending=true;'
 
 def reti():
-    return '/*FIXME!*/'
+    # same as RET, but also set the virtual Z80_RETI pin
+    src ='{uint8_t w,z;'
+    src+='_ON(Z80_RETI);'
+    src+=rd('c->SP++','z')
+    src+=rd('c->SP++','w')
+    src+='c->PC=c->WZ=(w<<8)|z;}'
+    return src
 
 #-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
@@ -1748,5 +1821,6 @@ for i in range(0, 256) :
     else:
         write_op(indent, enc_op(i, False, 'cc_op'))
 write_end_group(indent, 1)
+check_interrupt()
 write_footer()
 

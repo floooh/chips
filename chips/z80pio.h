@@ -39,10 +39,8 @@ extern "C" {
     0..15:      address bus A0..A15 (not connected)
     16..23:     data bus D0..D7
     24..36:     CPU pins (some of those shared directly with PIO)
-    40..46:     PIO-specific pins
-
-    FIXME: it probably makes sense to also directly share the IEI/IEO
-    interrupt daisy chain pins that way
+    37..40      'virtual' interrupt system pins
+    44..50      PIO-specific pins
 */
 
 /* control pins directly shared with CPU */
@@ -56,13 +54,13 @@ extern "C" {
 #define Z80PIO_IEO      (1ULL<<38UL)   /* Interrupt Enable Out */
 
 /* PIO specific pins start at bit 40 */
-#define Z80PIO_CE       (1ULL<<40UL)   /* Chip Enable */
-#define Z80PIO_BASEL    (1ULL<<41UL)   /* Port A/B Select (inactive: A, active: B) */
-#define Z80PIO_CDSEL    (1ULL<<42UL)   /* Control/Data Select (inactive: data, active: control) */
-#define Z80PIO_ARDY     (1ULL<<43UL)   /* Port A Ready */
-#define Z80PIO_BRDY     (1ULL<<44UL)   /* Port B Ready */
-#define Z80PIO_ASTB     (1ULL<<45UL)   /* Port A Strobe */
-#define Z80PIO_BSTB     (1ULL<<46UL)   /* Port B Strobe */
+#define Z80PIO_CE       (1ULL<<44UL)   /* Chip Enable */
+#define Z80PIO_BASEL    (1ULL<<45UL)   /* Port A/B Select (inactive: A, active: B) */
+#define Z80PIO_CDSEL    (1ULL<<46UL)   /* Control/Data Select (inactive: data, active: control) */
+#define Z80PIO_ARDY     (1ULL<<47UL)   /* Port A Ready */
+#define Z80PIO_BRDY     (1ULL<<48UL)   /* Port B Ready */
+#define Z80PIO_ASTB     (1ULL<<49UL)   /* Port A Strobe */
+#define Z80PIO_BSTB     (1ULL<<40UL)   /* Port B Strobe */
 
 /* FIXME: Port A/B 8-bit port pins? these are currently not needed because
    port in/out is handled through callback functions
