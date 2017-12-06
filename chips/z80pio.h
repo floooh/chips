@@ -17,7 +17,7 @@
            IEO <--|           |
                   +-----------+
 
-    FIXME: pins emulation, ready/strobe, interrupts, bidirectional
+    FIXME: interrupts, bidirectional
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -30,8 +30,8 @@ extern "C" {
 /*
     Pin definitions. 
     
-    All pin locations from 0 to 36 are shared with the CPU. Chip-type
-    specific pins start at position 40. This enables efficient bus-sharing
+    All pin locations from 0 to 39 are shared with the CPU. Chip-type
+    specific pins start at position 44. This enables efficient bus-sharing
     with the CPU and other Z80-family chips.
 
     Thus the Z80 PIO pin layout is as follows:
@@ -39,28 +39,28 @@ extern "C" {
     0..15:      address bus A0..A15 (not connected)
     16..23:     data bus D0..D7
     24..36:     CPU pins (some of those shared directly with PIO)
-    37..40      'virtual' interrupt system pins
+    37..39      'virtual' interrupt system pins
     44..50      PIO-specific pins
 */
 
 /* control pins directly shared with CPU */
-#define Z80PIO_M1       (1ULL<<24UL)   /* CPU Machine Cycle One, same as Z80_M1 */
-#define Z80PIO_IORQ     (1ULL<<26UL)   /* IO Request from CPU, same as Z80_IORQ */
-#define Z80PIO_RD       (1ULL<<27UL)   /* Read Cycle Status from CPU, same as Z80_RD */
-#define Z80PIO_INT      (1ULL<<32UL)   /* Interrupt Request, same as Z80_INT */
+#define Z80PIO_M1       (1ULL<<24)      /* CPU Machine Cycle One, same as Z80_M1 */
+#define Z80PIO_IORQ     (1ULL<<26)      /* IO Request from CPU, same as Z80_IORQ */
+#define Z80PIO_RD       (1ULL<<27)      /* Read Cycle Status from CPU, same as Z80_RD */
+#define Z80PIO_INT      (1ULL<<32)      /* Interrupt Request, same as Z80_INT */
 
 /* Z80 interrupt daisy chain shared pins */
-#define Z80PIO_IEI      (1ULL<<37UL)   /* Interrupt Enable In */
-#define Z80PIO_IEO      (1ULL<<38UL)   /* Interrupt Enable Out */
+#define Z80PIO_IEIO     (1ULL<<37)      /* combined Interrupt Enable In/Out (same as Z80_IEIO) */
+#define Z80PIO_RETI     (1ULL<<38)      /* CPU has decoded a RETI instruction (same as Z80_RETI) */
 
 /* PIO specific pins start at bit 40 */
-#define Z80PIO_CE       (1ULL<<44UL)   /* Chip Enable */
-#define Z80PIO_BASEL    (1ULL<<45UL)   /* Port A/B Select (inactive: A, active: B) */
-#define Z80PIO_CDSEL    (1ULL<<46UL)   /* Control/Data Select (inactive: data, active: control) */
-#define Z80PIO_ARDY     (1ULL<<47UL)   /* Port A Ready */
-#define Z80PIO_BRDY     (1ULL<<48UL)   /* Port B Ready */
-#define Z80PIO_ASTB     (1ULL<<49UL)   /* Port A Strobe */
-#define Z80PIO_BSTB     (1ULL<<40UL)   /* Port B Strobe */
+#define Z80PIO_CE       (1ULL<<44)      /* Chip Enable */
+#define Z80PIO_BASEL    (1ULL<<45)      /* Port A/B Select (inactive: A, active: B) */
+#define Z80PIO_CDSEL    (1ULL<<46)      /* Control/Data Select (inactive: data, active: control) */
+#define Z80PIO_ARDY     (1ULL<<47)      /* Port A Ready */
+#define Z80PIO_BRDY     (1ULL<<48)      /* Port B Ready */
+#define Z80PIO_ASTB     (1ULL<<49)      /* Port A Strobe */
+#define Z80PIO_BSTB     (1ULL<<40)      /* Port B Strobe */
 
 /* FIXME: Port A/B 8-bit port pins? these are currently not needed because
    port in/out is handled through callback functions
@@ -381,7 +381,8 @@ static uint8_t _z80pio_read_data(z80pio* pio, int port_id) {
     cpu_pins = z80pio_tick(&pio, pio_pins) & Z80_PIN_MASK;
 */
 uint64_t z80pio_tick(z80pio* pio, uint64_t pins) {
-    if ((pins & (Z80PIO_CE|Z80PIO_IORQ)) == (Z80PIO_CE|Z80PIO_IORQ)) {
+    /* NOTE: IORQ|M1 is an interrupt acknowledge cycle! */
+    if ((pins & (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_CE|Z80PIO_IORQ)) {
         const int port_id = (pins & Z80PIO_BASEL) ? Z80PIO_PORT_B : Z80PIO_PORT_A;
         if (pins & Z80PIO_RD) {
             /* read mode */

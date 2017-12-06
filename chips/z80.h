@@ -86,9 +86,8 @@ typedef uint64_t (*tick_callback)(uint64_t);
 #define  Z80_BUSACK (1ULL<<36)      /* bus acknowledge */
 
 /* interrupt-related 'virtual pins', these don't exist on the Z80 */
-#define Z80_IEI     (1ULL<<37)      /* daisy chain 'Interrupt Enable In' */
-#define Z80_IEO     (1ULL<<38)      /* daisy chain 'Interrupt Enable Out' */
-#define Z80_RETI    (1ULL<<39)      /* cpu has decoded a RETI instruction */
+#define Z80_IEIO    (1ULL<<37)      /* unified daisy chain 'Interrupt Enable In+Out' */
+#define Z80_RETI    (1ULL<<38)      /* cpu has decoded a RETI instruction */
 
 /* bit mask for all CPU bus pins */
 #define Z80_PIN_MASK ((1ULL<<40)-1)

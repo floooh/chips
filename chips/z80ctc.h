@@ -38,7 +38,7 @@ extern "C" {
     Pin definitions.
 
     All pin locations from 0 to 36 are shared with the CPU. Chip-type
-    specific pins start at position 40. This enables efficient bus-sharing
+    specific pins start at position 44 This enables efficient bus-sharing
     with the CPU and other Z80-family chips.
 
     The Z80 CTC pin layout is as follows:
@@ -46,7 +46,7 @@ extern "C" {
     0..16       address bus A0..A15 (not connected)
     16..23      data bus D0..D7
     24..36      CPU pins (some shared directly with CTC)
-    37..40      'virtual' interrupt system pins
+    37..39      'virtual' interrupt system pins
     44..53      CTC-specific pins
 */
 
@@ -58,8 +58,8 @@ extern "C" {
 #define Z80CTC_RESET    (1ULL<<34)   /* put CTC into reset state (same as Z80_RESET) */
 
 /* Z80 interrupt daisy chain shared pins */
-#define Z80CTC_IEI      (1ULL<<37)   /* Interrupt Enable In (same as Z80PIO_IEI) */
-#define Z80CTC_IEO      (1ULL<<38)   /* Interrupt Enable Out (same as Z80PIO_IEO) */
+#define Z80CTC_IEIO     (1ULL<<37)   /* combined Interrupt Enable In/Out (same as Z80_IEIO) */
+#define Z80CTC_RETI     (1ULL<<38)   /* CPU has decoded a RETI instruction (same as Z80_RETI) */
 
 /* CTC specific pins starting at bit 40 */
 #define Z80CTC_CE       (1ULL<<44)   /* Chip Enable */
@@ -111,6 +111,9 @@ typedef struct {
     uint8_t int_vector;
     bool waiting_for_trigger;
     bool ext_trigger;
+    bool int_needed;        /* channel needs interrupt */
+    bool int_requested;     /* interrupt for this channel is pending */
+    bool int_servicing;     /* interrupt for this channel is under service */
 } z80ctc_channel;
 
 #define Z80CTC_NUM_CHANNELS (4)
@@ -182,8 +185,8 @@ void z80ctc_reset(z80ctc* ctc) {
 uint64_t _z80ctc_counter_zero(z80ctc_channel* chn, uint64_t pins, int chn_id) {
     /* down counter has reached zero, trigger interrupt and ZCTO pin */
     if (chn->control & Z80CTC_CTRL_EI) {
-        /* interrupt enabled */
-        /* FIXME: request interrupt */
+        /* interrupt enabled, request an interrupt */
+        chn->int_needed = true;
     }
     /* last channel doesn't have a ZCTO pin */
     if (chn_id < 4) {
@@ -221,6 +224,63 @@ uint64_t _z80ctc_active_edge(z80ctc* ctc, uint64_t pins, int chn_id) {
     return pins;
 }
 
+/* interrupt daisy chain handling for a channel */
+uint64_t _z80ctc_int(z80ctc_channel* chn, uint64_t pins) {
+    /* 
+        - set status of IEO pin depending on IEI pin and current
+          channel's interrupt request/acknowledge status, this
+          'ripples' to the next channel and downstream interrupt
+          controllers
+
+        - the IEO pin will be set to inactive (interrupt disabled)
+          when: (1) the IEI pin is inactive, or (2) the IEI pin is
+          active and and an interrupt has been requested 
+    */
+
+    /* if any higher priority device in the daisy chain has cleared
+       the IEIO pin, skip interrupt handling
+    */
+    if (pins & Z80CTC_IEIO) {
+        /* these steps are in reverse order, first handle an 
+           interrupt that's already servicing, then requested, then needed
+        */
+        if (chn->int_servicing) {
+            /* check if CPU has decoded a RETI, if yes, enable 
+               interrupts for downstream devices
+            */
+            if (pins & Z80CTC_RETI) {
+                chn->int_servicing = false;
+                pins &= ~Z80CTC_RETI;
+            }
+            else {
+                /* keep interrupt for downstream devices disabled */
+                pins &= ~Z80CTC_IEIO;
+            }
+        }
+        else if (chn->int_requested) {
+            /* disable downstream devices while interrupt is not ackowledged */
+            pins &= ~Z80CTC_IEIO;
+            /* check if the CPU has acknowledged the interrupt, if yes,
+               place interrupt vector on the data bus
+            */
+            if ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1)) {
+                Z80CTC_SET_DATA(pins, chn->int_vector);
+                chn->int_requested = false;
+                chn->int_servicing = true;
+            }
+        }
+        else if (chn->int_needed) {
+            /* request interrupt */
+            pins |= Z80CTC_INT;
+            /* disable interrupt for downstream devices */
+            pins &= ~Z80CTC_IEIO;
+            chn->int_needed = false;
+            chn->int_requested = true;
+        } 
+    }
+    return pins;
+}
+
 /* tick a single channel */
 uint64_t _z80ctc_tick_channel(z80ctc* ctc, uint64_t pins, int chn_id) {
     z80ctc_channel* chn = &ctc->chn[chn_id];
@@ -248,23 +308,26 @@ uint64_t _z80ctc_tick_channel(z80ctc* ctc, uint64_t pins, int chn_id) {
 
     /* handle timer mode downcounting */
     if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
-        if (chn->waiting_for_trigger || (chn->control & (Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS))) {
-            return pins;
-        }
-        /* decrement the prescaler and tick the down counter every
-           16 or 256 prescaler ticks
-        */
-        uint8_t p = --chn->prescaler;
-        if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
-            p &= 0x0F;
-        }
-        if (0 == p) {
-            /* prescaler has reached zero, tick the down counter */
-            if (0 == --chn->down_counter) {
-                pins = _z80ctc_counter_zero(chn, pins, chn_id);
+        if (!(chn->waiting_for_trigger || (chn->control & (Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)))) {
+            /* decrement the prescaler and tick the down counter every
+               16 or 256 prescaler ticks
+            */
+            uint8_t p = --chn->prescaler;
+            if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
+                p &= 0x0F;
+            }
+            if (0 == p) {
+                /* prescaler has reached zero, tick the down counter */
+                if (0 == --chn->down_counter) {
+                    pins = _z80ctc_counter_zero(chn, pins, chn_id);
+                }
             }
         }
     }
+
+    /* interrupt handling for this channel */
+    pins = _z80ctc_int(chn, pins);
+
     return pins;
 }
 
@@ -322,8 +385,8 @@ uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
         pins = _z80ctc_tick_channel(ctc, pins, i);
     }
-    /* read or write the CTC? */
-    if ((pins & (Z80CTC_CE|Z80CTC_IORQ)) == (Z80CTC_CE|Z80CTC_IORQ)) {
+    /* read or write the CTC? (if IORQ and M1 is active, this is an interrupt acknowledge! */
+    if ((pins & (Z80CTC_CE|Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_CE|Z80CTC_IORQ)) {
         const int chn_id = (pins>>Z80CTC_CS0_PIN) & 3;
         if (pins & Z80CTC_RD) {
             /* read mode */
