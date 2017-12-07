@@ -63,6 +63,10 @@ typedef struct {
     uint32_t frame_count;
     /* number of frames a key will at least remain pressed */
     int sticky_count;
+    /* currently active columns */
+    uint16_t active_columns;
+    /* currently active lines */
+    uint16_t active_lines;
     /* map key ASCII code to modifier/column/line bits */
     uint32_t key_masks[KBD_MAX_KEYS];
     /* column/line bits for modifier keys */
@@ -85,6 +89,14 @@ extern void kbd_key_down(keyboard_matrix* kbd, int key);
 extern void kbd_key_up(keyboard_matrix* kbd, int key);
 /* activate columns and return which lines are lit */
 extern uint16_t kbd_test_lines(keyboard_matrix* kbd, uint16_t column_mask);
+/* set active column mask (use together with kbd_scan_lines */
+extern void kbd_set_active_columns(keyboard_matrix* kbd, uint16_t column_mask);
+/* scan active lines (used together with kbd_set_active_columns */
+extern uint16_t kbd_scan_lines(keyboard_matrix* kbd);
+/* set active lines mask (use together with kbd_scan_columns */
+extern void kbd_set_active_lines(keyboard_matrix* kbd, uint16_t line_mask);
+/* scan active columns (used together with kbd_set_active_lines */
+extern uint16_t kbd_scan_columns(keyboard_matrix* kbd);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -180,7 +192,7 @@ static uint32_t _kbd_mod(uint32_t key_mask) {
     return key_mask & ((1<<KBD_MAX_MOD_KEYS)-1)<<(KBD_MAX_COLUMNS+KBD_MAX_LINES);
 }
 
-/* scan keyboard matrix */
+/* scan keyboard matrix lines by column mask */
 uint16_t kbd_test_lines(keyboard_matrix* kbd, uint16_t column_mask) {
     CHIPS_ASSERT(kbd);
     uint16_t line_bits = 0;
@@ -207,6 +219,55 @@ uint16_t kbd_test_lines(keyboard_matrix* kbd, uint16_t column_mask) {
     }
     return line_bits;
 }
+
+/* scan keyboard matrix lines by column mask */
+uint16_t kbd_test_columns(keyboard_matrix* kbd, uint16_t line_mask) {
+    CHIPS_ASSERT(kbd);
+    uint16_t column_bits = 0;
+    for (int key_index = 0; key_index < KBD_MAX_PRESSED_KEYS; key_index++) {
+        const uint32_t key_mask = kbd->key_buffer[key_index].mask;
+        if (key_mask) {
+            const uint16_t key_line_mask = _kbd_lines(key_mask);
+            if ((key_line_mask & line_mask) == key_line_mask) {
+                column_bits |= _kbd_columns(key_mask);
+            }
+            const uint32_t key_mod_mask = _kbd_mod(key_mask);
+            if (key_mod_mask) {
+                for (int mod_index = 0; mod_index < KBD_MAX_MOD_KEYS; mod_index++) {
+                    const uint32_t mod_mask = kbd->mod_masks[mod_index];
+                    if (mod_mask & key_mod_mask) {
+                        const uint16_t mod_line_mask = _kbd_lines(mod_mask);
+                        if ((mod_line_mask & line_mask) == (mod_line_mask)) {
+                            column_bits |= _kbd_columns(mod_mask);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return column_bits;
+}
+
+/* set currently active columns */
+void kbd_set_active_columns(keyboard_matrix* kbd, uint16_t column_mask) {
+    kbd->active_columns = column_mask;
+}
+
+/* scan the keyboard matrix using currently active columns */
+uint16_t kbd_scan_lines(keyboard_matrix* kbd) {
+    return kbd_test_lines(kbd, kbd->active_columns);
+}
+
+/* set currently active lines */
+void kbd_set_active_lines(keyboard_matrix* kbd, uint16_t line_mask) {
+    kbd->active_lines = line_mask;
+}
+
+/* scan the keyboard matrix using currently active lines */
+uint16_t kbd_scan_columns(keyboard_matrix* kbd) {
+    return kbd_test_columns(kbd, kbd->active_lines);
+}
+
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
