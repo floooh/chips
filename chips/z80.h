@@ -64,6 +64,34 @@ extern "C" {
 */
 typedef uint64_t (*tick_callback)(uint64_t);
 
+/*--- address lines ---*/
+#define Z80_A0  (1ULL<<0)
+#define Z80_A1  (1ULL<<1)
+#define Z80_A2  (1ULL<<2)
+#define Z80_A3  (1ULL<<3)
+#define Z80_A4  (1ULL<<4)
+#define Z80_A5  (1ULL<<5)
+#define Z80_A6  (1ULL<<6)
+#define Z80_A7  (1ULL<<7)
+#define Z80_A8  (1ULL<<8)
+#define Z80_A9  (1ULL<<9)
+#define Z80_A10 (1ULL<<10)
+#define Z80_A11 (1ULL<<11)
+#define Z80_A12 (1ULL<<12)
+#define Z80_A13 (1ULL<<13)
+#define Z80_A14 (1ULL<<14)
+#define Z80_A15 (1ULL<<15)
+
+/*--- data lines ------*/
+#define Z80_D0  (1ULL<<16)
+#define Z80_D1  (1ULL<<17)
+#define Z80_D2  (1ULL<<18)
+#define Z80_D3  (1ULL<<19)
+#define Z80_D4  (1ULL<<20)
+#define Z80_D5  (1ULL<<21)
+#define Z80_D6  (1ULL<<22)
+#define Z80_D7  (1ULL<<23)
+
 /*--- pin functions ---*/
 
 /* system control pins */
