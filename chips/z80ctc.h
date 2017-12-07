@@ -100,6 +100,12 @@ extern "C" {
 #define Z80CTC_CTRL_CONTROL         (1<<0)  /* 1: control, 0: vector */
 #define Z80CTC_CTRL_VECTOR          (0)
 
+/* Interrupt Handling State */
+#define Z80CTC_INT_NONE (0)
+#define Z80CTC_INT_NEEDED (1)
+#define Z80CTC_INT_REQUESTED (2)
+#define Z80CTC_INT_SERVICING (3)
+
 /*
     Z80 CTC channel state
 */
@@ -111,9 +117,7 @@ typedef struct {
     uint8_t int_vector;
     bool waiting_for_trigger;
     bool ext_trigger;
-    bool int_needed;        /* channel needs interrupt */
-    bool int_requested;     /* interrupt for this channel is pending */
-    bool int_servicing;     /* interrupt for this channel is under service */
+    int int_state;          /* interrupt handling state */
 } z80ctc_channel;
 
 #define Z80CTC_NUM_CHANNELS (4)
@@ -186,7 +190,9 @@ uint64_t _z80ctc_counter_zero(z80ctc_channel* chn, uint64_t pins, int chn_id) {
     /* down counter has reached zero, trigger interrupt and ZCTO pin */
     if (chn->control & Z80CTC_CTRL_EI) {
         /* interrupt enabled, request an interrupt */
-        chn->int_needed = true;
+        if (chn->int_state == Z80CTC_INT_NONE) {
+            chn->int_state = Z80CTC_INT_NEEDED;
+        }
     }
     /* last channel doesn't have a ZCTO pin */
     if (chn_id < 4) {
@@ -206,8 +212,7 @@ uint64_t _z80ctc_counter_zero(z80ctc_channel* chn, uint64_t pins, int chn_id) {
      the waiting flag is cleared and timing starts
    - if the channel is in counter mode, the counter decrements
 */
-uint64_t _z80ctc_active_edge(z80ctc* ctc, uint64_t pins, int chn_id) {
-    z80ctc_channel* chn = &ctc->chn[chn_id];
+uint64_t _z80ctc_active_edge(z80ctc_channel* chn, uint64_t pins, int chn_id) {
     if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
         /* counter mode */
         if (0 == --chn->down_counter) {
@@ -240,50 +245,49 @@ uint64_t _z80ctc_int(z80ctc_channel* chn, uint64_t pins) {
     /* if any higher priority device in the daisy chain has cleared
        the IEIO pin, skip interrupt handling
     */
-    if (pins & Z80CTC_IEIO) {
+    if ((pins & Z80CTC_IEIO) && (chn->int_state != Z80CTC_INT_NONE)) {
         /* these steps are in reverse order, first handle an 
            interrupt that's already servicing, then requested, then needed
         */
-        if (chn->int_servicing) {
-            /* check if CPU has decoded a RETI, if yes, enable 
-               interrupts for downstream devices
-            */
-            if (pins & Z80CTC_RETI) {
-                chn->int_servicing = false;
-                pins &= ~Z80CTC_RETI;
-            }
-            else {
-                /* keep interrupt for downstream devices disabled */
+        switch (chn->int_state) {
+            case Z80CTC_INT_SERVICING:
+                /* check if CPU has decoded a RETI, if yes, enable
+                   interrupts for downstream devices
+                */
+                if (pins & Z80CTC_RETI) {
+                    chn->int_state = Z80CTC_INT_NONE;
+                    pins &= ~Z80CTC_RETI;
+                }
+                else {
+                    /* keep interrupt for downstream devices disabled */
+                    pins &= ~Z80CTC_IEIO;
+                }
+                break;
+            case Z80CTC_INT_REQUESTED:
+                /* disable downstream devices while interrupt is not ackowledged */
                 pins &= ~Z80CTC_IEIO;
-            }
+                /* check if the CPU has acknowledged the interrupt, if yes,
+                   place interrupt vector on the data bus
+                */
+                if ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1)) {
+                    Z80CTC_SET_DATA(pins, chn->int_vector);
+                    chn->int_state = Z80CTC_INT_SERVICING;
+                }
+                break;
+            case Z80CTC_INT_NEEDED:
+                /* request interrupt */
+                pins |= Z80CTC_INT;
+                /* disable interrupt for downstream devices */
+                pins &= ~Z80CTC_IEIO;
+                chn->int_state = Z80CTC_INT_REQUESTED;
+                break;
         }
-        else if (chn->int_requested) {
-            /* disable downstream devices while interrupt is not ackowledged */
-            pins &= ~Z80CTC_IEIO;
-            /* check if the CPU has acknowledged the interrupt, if yes,
-               place interrupt vector on the data bus
-            */
-            if ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1)) {
-                Z80CTC_SET_DATA(pins, chn->int_vector);
-                chn->int_requested = false;
-                chn->int_servicing = true;
-            }
-        }
-        else if (chn->int_needed) {
-            /* request interrupt */
-            pins |= Z80CTC_INT;
-            /* disable interrupt for downstream devices */
-            pins &= ~Z80CTC_IEIO;
-            chn->int_needed = false;
-            chn->int_requested = true;
-        } 
     }
     return pins;
 }
 
 /* tick a single channel */
-uint64_t _z80ctc_tick_channel(z80ctc* ctc, uint64_t pins, int chn_id) {
-    z80ctc_channel* chn = &ctc->chn[chn_id];
+uint64_t _z80ctc_tick_channel(z80ctc_channel* chn, uint64_t pins, int chn_id) {
     /* last channel doesn't have a ZCTO pin */
     if (chn_id < 4) {
         pins &= ~(Z80CTC_ZCTO0<<chn_id);
@@ -303,7 +307,7 @@ uint64_t _z80ctc_tick_channel(z80ctc* ctc, uint64_t pins, int chn_id) {
 
     /* if triggered, may need to update the counter or clear the wait_for_trigger flag */
     if (triggered) {
-        pins = _z80ctc_active_edge(ctc, pins, chn_id);
+        pins = _z80ctc_active_edge(chn, pins, chn_id);
     }
 
     /* handle timer mode downcounting */
@@ -324,10 +328,6 @@ uint64_t _z80ctc_tick_channel(z80ctc* ctc, uint64_t pins, int chn_id) {
             }
         }
     }
-
-    /* interrupt handling for this channel */
-    pins = _z80ctc_int(chn, pins);
-
     return pins;
 }
 
@@ -357,7 +357,7 @@ uint64_t _z80ctc_write(z80ctc* ctc, uint64_t pins, int chn_id, uint8_t data) {
 
         /* changing the Trigger Slope trigger an 'active edge' */
         if ((old_ctrl & Z80CTC_CTRL_EDGE) != (chn->control & Z80CTC_CTRL_EDGE)) {
-            pins = _z80ctc_active_edge(ctc, pins, chn_id);
+            pins = _z80ctc_active_edge(chn, pins, chn_id);
         }
     }
     else {
@@ -381,23 +381,22 @@ uint8_t _z80ctc_read(z80ctc* ctc, int chn_id) {
 
 /* tick the CTC, this must be called for each CPU tick */
 uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
-    /* tick all channels */
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-        pins = _z80ctc_tick_channel(ctc, pins, i);
+        pins = _z80ctc_tick_channel(&ctc->chn[i], pins, i);
     }
-    /* read or write the CTC? (if IORQ and M1 is active, this is an interrupt acknowledge! */
     if ((pins & (Z80CTC_CE|Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_CE|Z80CTC_IORQ)) {
         const int chn_id = (pins>>Z80CTC_CS0_PIN) & 3;
         if (pins & Z80CTC_RD) {
-            /* read mode */
             const uint8_t data = _z80ctc_read(ctc, chn_id);
             Z80CTC_SET_DATA(pins, data);
         }
         else {
-            /* write mode */
             const uint8_t data = Z80CTC_DATA(pins);
             pins = _z80ctc_write(ctc, pins, chn_id, data);
         }
+    }
+    for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
+        pins = _z80ctc_int(&ctc->chn[i], pins);
     }
     return pins;
 }
