@@ -118,6 +118,12 @@ extern "C" {
 #define Z80PIO_INTCTRL_HILO         (1<<5)
 #define Z80PIO_INTCTRL_MASK_FOLLOWS (1<<4)
 
+/* Interrupt Handling State */
+#define Z80PIO_INT_NONE (0)
+#define Z80PIO_INT_NEEDED (1)
+#define Z80PIO_INT_REQUESTED (2)
+#define Z80PIO_INT_SERVICING (3)
+
 /*
     I/O port registers
 */
@@ -129,10 +135,11 @@ typedef struct {
     uint8_t int_vector;     /* 8-bit interrupt vector */
     uint8_t int_control;    /* interrupt control word (Z80PIO_INTCTRL_*) */
     uint8_t int_mask;       /* 8-bit interrupt control mask */
+    int int_state;          /* current interrupt handling state */
     bool int_enabled;       /* definitive interrupt enabled flag */
-    bool int_pending;       /* interrupt is pending */
     bool expect_io_select;  /* next control word will be io_select */
     bool expect_int_mask;   /* next control word will be  mask */
+    bool bctrl_match;       /* bitcontrol logic equation result */
 } z80pio_port;
 
 /*
@@ -170,7 +177,9 @@ extern void z80pio_init(z80pio* pio, z80pio_desc* desc);
 /* reset an existing z80pio instance */
 extern void z80pio_reset(z80pio* pio);
 /* per-tick function, reads or writes data/control bytes from/to PIO controlled by pins */
-uint64_t z80pio_tick(z80pio* pio, uint64_t pins);
+extern uint64_t z80pio_tick(z80pio* pio, uint64_t pins);
+/* write a value to a pio port, may trigger an interrupt */
+extern void z80pio_write_port(z80pio* pio, int port_id, uint8_t data);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -221,15 +230,16 @@ void z80pio_reset(z80pio* pio) {
         pio->PORT[p].int_control &= ~Z80PIO_INTCTRL_EI;
         pio->PORT[p].int_mask = 0xFF;
         pio->PORT[p].int_enabled = false;
-        pio->PORT[p].int_pending = false;
         pio->PORT[p].expect_int_mask = false;
         pio->PORT[p].expect_io_select = false;
+        pio->PORT[p].bctrl_match = false;
+        pio->PORT[p].int_state = Z80PIO_INT_NONE;
     }
     pio->reset_active = true;
 }
 
 /* new control word received from CPU */
-static void _z80pio_write_ctrl(z80pio* pio, int port_id, uint8_t data) {
+void _z80pio_write_ctrl(z80pio* pio, int port_id, uint8_t data) {
     CHIPS_ASSERT((port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
     pio->reset_active = false;
     z80pio_port* p = &pio->PORT[port_id];
@@ -271,6 +281,7 @@ static void _z80pio_write_ctrl(z80pio* pio, int port_id, uint8_t data) {
                 p->expect_io_select = true;
                 /* temporarly disable interrupt until io_select mask written */
                 p->int_enabled = false;
+                p->bctrl_match = false;
             }
         }
         else if (ctrl == 0x07) {
@@ -282,7 +293,8 @@ static void _z80pio_write_ctrl(z80pio* pio, int port_id, uint8_t data) {
                 /* temporarly disable interrupt until mask is written */
                 p->int_enabled = false;
                 /* reset pending interrupt */
-                p->int_pending = false;
+                p->int_state = Z80PIO_INT_NONE;
+                p->bctrl_match = false;
             }
             else {
                 p->int_enabled = (p->int_control & Z80PIO_INTCTRL_EI) ? true:false;
@@ -297,7 +309,7 @@ static void _z80pio_write_ctrl(z80pio* pio, int port_id, uint8_t data) {
 }
 
 /* read control word back to CPU */
-static uint8_t _z80pio_read_ctrl(z80pio* pio) {
+uint8_t _z80pio_read_ctrl(z80pio* pio) {
     /* I haven't found documentation about what is
        returned when reading the control word, this
        is what MAME does
@@ -307,7 +319,7 @@ static uint8_t _z80pio_read_ctrl(z80pio* pio) {
 }
 
 /* new data word received from CPU */
-static void _z80pio_write_data(z80pio* pio, int port_id, uint8_t data) {
+void _z80pio_write_data(z80pio* pio, int port_id, uint8_t data) {
     CHIPS_ASSERT((port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
     z80pio_port* p = &pio->PORT[port_id];
     switch (p->mode) {
@@ -333,7 +345,7 @@ static void _z80pio_write_data(z80pio* pio, int port_id, uint8_t data) {
 }
 
 /* read port data back to CPU */
-static uint8_t _z80pio_read_data(z80pio* pio, int port_id) {
+uint8_t _z80pio_read_data(z80pio* pio, int port_id) {
     CHIPS_ASSERT((port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
     z80pio_port* p = &pio->PORT[port_id];
     uint8_t data = 0xFF;
@@ -360,6 +372,63 @@ static uint8_t _z80pio_read_data(z80pio* pio, int port_id) {
     return data;
 }
 
+/* interrupt daisy chain handling for a channel */
+uint64_t _z80pio_int(z80pio_port* p, uint64_t pins) {
+    /*
+        - set status of IEO pin depending on IEI pin and current
+          channel's interrupt request/acknowledge status, this
+          'ripples' to the next channel and downstream interrupt
+          controllers
+
+        - the IEO pin will be set to inactive (interrupt disabled)
+          when: (1) the IEI pin is inactive, or (2) the IEI pin is
+          active and and an interrupt has been requested
+    */
+
+    /* if any higher priority device in the daisy chain has cleared
+       the IEIO pin, skip interrupt handling
+    */
+    if ((pins & Z80PIO_IEIO) && (p->int_state != Z80PIO_INT_NONE)) {
+        /* these steps are in reverse order, first handle an
+           interrupt that's already servicing, then requested, then needed
+        */
+        switch (p->int_state) {
+            case Z80PIO_INT_SERVICING:
+                /* check if CPU has decoded a RETI, if yes, enable
+                   interrupts for downstream devices
+                */
+                if (pins & Z80PIO_RETI) {
+                    p->int_state = Z80PIO_INT_NONE;
+                    pins &= ~Z80PIO_RETI;
+                }
+                else {
+                    /* keep interrupt for downstream devices disabled */
+                    pins &= ~Z80PIO_IEIO;
+                }
+                break;
+            case Z80PIO_INT_REQUESTED:
+                /* disable downstream devices while interrupt is not ackowledged */
+                pins &= ~Z80PIO_IEIO;
+                /* check if the CPU has acknowledged the interrupt, if yes,
+                   place interrupt vector on the data bus
+                */
+                if ((pins & (Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_IORQ|Z80PIO_M1)) {
+                    Z80PIO_SET_DATA(pins, p->int_vector);
+                    p->int_state = Z80PIO_INT_SERVICING;
+                }
+                break;
+            case Z80PIO_INT_NEEDED:
+                /* request interrupt */
+                pins |= Z80PIO_INT;
+                /* disable interrupt for downstream devices */
+                pins &= ~Z80PIO_IEIO;
+                p->int_state = Z80PIO_INT_REQUESTED;
+                break;
+        }
+    }
+    return pins;
+}
+
 /*
     z80pio_tick
 
@@ -381,37 +450,59 @@ static uint8_t _z80pio_read_data(z80pio* pio, int port_id) {
     cpu_pins = z80pio_tick(&pio, pio_pins) & Z80_PIN_MASK;
 */
 uint64_t z80pio_tick(z80pio* pio, uint64_t pins) {
-    /* NOTE: IORQ|M1 is an interrupt acknowledge cycle! */
     if ((pins & (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_CE|Z80PIO_IORQ)) {
         const int port_id = (pins & Z80PIO_BASEL) ? Z80PIO_PORT_B : Z80PIO_PORT_A;
         if (pins & Z80PIO_RD) {
-            /* read mode */
             uint8_t data;
             if (pins & Z80PIO_CDSEL) {
-                /* select control mode */
                 data = _z80pio_read_ctrl(pio);
             }
             else {
-                /* select data mode */
                 data = _z80pio_read_data(pio, port_id);
             }
             Z80PIO_SET_DATA(pins, data);
         }
         else {
-            /* write mode */
             const uint8_t data = Z80PIO_DATA(pins);
             if (pins & Z80PIO_CDSEL) {
-                /* select control mode */
                 _z80pio_write_ctrl(pio, port_id, data);
             }
             else {
-                /* select data mode */
                 _z80pio_write_data(pio, port_id, data);
             }
         }
     }
+    for (int i = 0; i < Z80PIO_NUM_PORTS; i++) {
+        pins = _z80pio_int(&pio->PORT[i], pins);
+    }
     return pins;
 }
+
+/* write value to a port, this may trigger an interrupt */
+void z80pio_write_port(z80pio* pio, int port_id, uint8_t data) {
+    CHIPS_ASSERT(pio && (port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
+    z80pio_port* p = &pio->PORT[port_id];
+    if (Z80PIO_MODE_BITCONTROL == p->mode) {
+        p->input = data;
+        uint8_t val = (p->input & p->io_select) | (p->output & ~p->io_select);
+        uint8_t mask = ~p->int_mask;
+        bool match = false;
+        val &= mask;
+
+        const uint8_t ictrl = p->int_control & 0x60;
+        if ((ictrl == 0) && (val != mask)) match = true;
+        else if ((ictrl == 0x20) && (val != 0)) match = true;
+        else if ((ictrl == 0x40) && (val == 0)) match = true;
+        else if ((ictrl == 0x60) && (val == mask)) match = true;
+        if (!p->bctrl_match && match && (p->int_control & 0x80)) {
+            if (Z80PIO_INT_NONE == p->int_state) {
+                p->int_state = Z80PIO_INT_NEEDED;
+            }
+        }
+        p->bctrl_match = match;
+    }
+}
+
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
