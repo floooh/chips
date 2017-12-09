@@ -31,8 +31,10 @@ extern "C" {
 #endif
 
 /*
-    The tick function is called for every time cycle and
-    connects the Z80 to the outside world. The CPU pins
+    The tick function is called for one or multiple time cycles
+    connects the Z80 to the outside world (usually one call
+    of the tick function corresponds to one machine cycle, 
+    but this is not always the case). The CPU pins
     (control pins, data bus and address bus) are communicated
     as a single 64-bit integer. The tick callback function
     must inspect the pins, and modify the pin state 
@@ -53,7 +55,9 @@ extern "C" {
       is on the data bus
     - to inject a wait state, set the WAIT pin in the tick callback,
       note that the WAIT pin is only checked during read or write
-      time cycle
+      cycles
+    - to request an interrupt, set the INT pin, note that the 
+      state of the interrupt pin is tested at the end of an instruction
 
     The pin-layout of the 64-bit integer is as follows:
 
@@ -62,7 +66,7 @@ extern "C" {
     - bits 24..36:  control pins
     - bits 37..40:  interrupt system 'virtual pins'
 */
-typedef uint64_t (*tick_callback)(uint64_t);
+typedef uint64_t (*tick_callback)(int num_ticks, uint64_t pins);
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -133,6 +137,8 @@ typedef uint64_t (*tick_callback)(uint64_t);
 
 /* Z80 CPU state */
 typedef struct {
+    /* tick function */
+    tick_callback tick;
     /* the CPU pins (control, address and data) */
     uint64_t PINS;
     /* program counter */
@@ -159,8 +165,6 @@ typedef struct {
     /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
 
-    /* tick function */
-    tick_callback tick;
     /* flag lookup table for SZP flag combinations */
     uint8_t szp[256];
 } z80;

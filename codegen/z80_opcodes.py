@@ -84,22 +84,22 @@ def defines():
     l('#define _ON(m) pins|=(m)')
     l('/* disable control pins */')
     l('#define _OFF(m) pins&=~(m)')
-    l('/* a normal tick (no wait state detection) */')
-    l('#define _T() pins=tick(pins);ticks++;')
-    l('/* a tick with wait-state handling */')
-    l('#define _TW() do{pins=tick(pins);ticks++;}while(pins&Z80_WAIT);')
-    l('/* a memory read machine cycle */')
-    l('#define _MR(addr,data) _SA(addr);_T();_ON(Z80_MREQ|Z80_RD);_TW();data=_GD();_OFF(Z80_MREQ|Z80_RD);_T()')
-    l('/* a memory write machine cycle */')
-    l('#define _MW(addr,data) _SA(addr);_T();_ON(Z80_MREQ|Z80_WR);_SD(data);_TW();_OFF(Z80_MREQ|Z80_WR);_T()')
-    l('/* an input machine cycle */')
-    l('#define _IN(addr,data) _SA(addr);_T();_T();_ON(Z80_IORQ|Z80_RD);_TW();data=_GD();_OFF(Z80_IORQ|Z80_RD);_T()')
-    l('/* an output machine cycle */')
-    l('#define _OUT(addr,data) _SA(addr);_T();_T();_ON(Z80_IORQ|Z80_WR);_SD(data);_TW();_OFF(Z80_IORQ|Z80_WR);_T()')
-    l('/* an opcode fetch machine cycle */')
-    l('#define _FETCH(op) _ON(Z80_M1|Z80_IEIO);_SA(c->PC++);_T();_ON(Z80_MREQ|Z80_RD);_TW();op=_GD();_OFF(Z80_M1|Z80_MREQ|Z80_RD);_ON(Z80_RFSH);_T();_ON(Z80_MREQ);_SA(c->IR);_T();_OFF(Z80_RFSH|Z80_MREQ);c->R=(c->R&0x80)|((c->R+1)&0x7F);')
+    l('/* execute a number of ticks without wait-state detection */')
+    l('#define _T(num) pins=tick(num,pins);ticks+=num')
+    l('/* execute a number of ticks with wait-state detection */')
+    l('#define _TW(num) pins=tick(num,pins);ticks+=num;while(pins&Z80_WAIT){pins=tick(1,pins);ticks++;}')
+    l('/* a memory read machine cycle (3 ticks with wait-state detection) */')
+    l('#define _MR(addr,data) _SA(addr);_ON(Z80_MREQ|Z80_RD);_TW(3);_OFF(Z80_MREQ|Z80_RD);data=_GD()')
+    l('/* a memory write machine cycle (3 ticks with wait-state detection) */')
+    l('#define _MW(addr,data) _SA(addr);_SD(data);_ON(Z80_MREQ|Z80_WR);_TW(3);_OFF(Z80_MREQ|Z80_WR)')
+    l('/* an input machine cycle (4 ticks with wait-state detection) */')
+    l('#define _IN(addr,data) _SA(addr);_ON(Z80_IORQ|Z80_RD);_TW(4);_OFF(Z80_IORQ|Z80_RD);data=_GD()')
+    l('/* an output machine cycle (4 ticks with wait-state detection) */')
+    l('#define _OUT(addr,data) _SA(addr);_ON(Z80_IORQ|Z80_WR);_SD(data);_TW(4);_OFF(Z80_IORQ|Z80_WR)')
+    l('/* an opcode fetch machine cycle (4 ticks with wait-state detection, no refresh cycle emulated, bump R) */')
+    l('#define _FETCH(op) _ON(Z80_M1|Z80_MREQ|Z80_RD);_SA(c->PC++);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();c->R=(c->R&0x80)|((c->R+1)&0x7F)')
     l('/* a special opcode fetch for DD/FD+CB instructions without incrementing R */')
-    l('#define _FETCH_CB(op) _ON(Z80_M1|Z80_IEIO);_SA(c->PC++);_T();_ON(Z80_MREQ|Z80_RD);_TW();op=_GD();_OFF(Z80_M1|Z80_MREQ|Z80_RD);_ON(Z80_RFSH);_T();_ON(Z80_MREQ);_SA(c->IR);_T();_OFF(Z80_RFSH|Z80_MREQ);')
+    l('#define _FETCH_CB(op) _ON(Z80_M1|Z80_MREQ|Z80_RD);_SA(c->PC++);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD()')
     l('/* a 16-bit immediate load from (PC) into WZ */')
     l('#define _IMM16() {uint8_t w,z;_MR(c->PC++,z);_MR(c->PC++,w);c->WZ=(w<<8)|z;}')
     l('/* evaluate the S and Z flags */')
@@ -140,16 +140,7 @@ def undefines():
 #   the ticks counter.
 #
 def tick(num=1):
-    return '_T();'*num
-
-#-------------------------------------------------------------------------------
-#   Generate a tick() call optionally looping on the WAIT pin. Usually
-#   only one time cycle in a machine cycle is waitable:
-#   - opcode fetch, memory read/write: T2
-#   - in/out: TW
-#
-def tick_wait():
-    return '_TW();'
+    return '_T('+str(num)+');'
 
 #-------------------------------------------------------------------------------
 #   Generate code for an opcode fetch. If xxcb_ext is true, the special
@@ -283,19 +274,11 @@ def check_interrupt():
     l('    pins &= ~Z80_INT;')
     l('    c->IFF1=c->IFF2=false;')
     l('    if (pins & Z80_HALT) { pins &= ~Z80_HALT; c->PC++; }')
-    l('    _ON(Z80_M1);')
+    l('    _ON(Z80_M1|Z80_IORQ);')
     l('    _SA(c->PC);')
-    l('    _T();_T();_T()')
-    l('    _ON(Z80_IORQ|Z80_IEIO);')
-    l('    _TW();')
+    l('    _TW(6);')
     l('    const uint8_t int_vec=_GD();')
     l('    _OFF(Z80_M1|Z80_IORQ);')
-    l('    _ON(Z80_RFSH);')
-    l('    _T();')
-    l('    _ON(Z80_MREQ);')
-    l('    _SA(c->IR);')
-    l('    _T();')
-    l('    _OFF(Z80_RFSH|Z80_MREQ);')
     l('    c->R=(c->R&0x80)|((c->R+1)&0x7F);')
     l('    if (c->IM==2) {')
     l('      _MW(--c->SP,(uint8_t)(c->PC>>8));')
@@ -1306,7 +1289,7 @@ def ei():
 def reti():
     # same as RET, but also set the virtual Z80_RETI pin
     src ='{uint8_t w,z;'
-    src+='_ON(Z80_RETI|Z80_IEIO);'
+    src+='_ON(Z80_RETI);'
     src+=rd('c->SP++','z')
     src+=rd('c->SP++','w')
     src+='c->PC=c->WZ=(w<<8)|z;}'
@@ -1723,7 +1706,6 @@ def write_header() :
     l('// machine generated, do not edit!')
     defines()
     l('static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {')
-    l('  /* set the virtual IEIO pin for the highest priority interrupt controller */')
     l('  uint64_t pins = c->PINS;')
     l('  _OFF(Z80_RETI);')
     l('  const tick_callback tick = c->tick;')

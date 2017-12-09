@@ -138,7 +138,11 @@ typedef struct {
 extern void z80ctc_init(z80ctc* ctc);
 /* reset an existing Z80 CTC instance */
 extern void z80ctc_reset(z80ctc* ctc);
-/* per-tick function, call this always, not only when CTC is reprogrammed! */
+/* perform an IORQ machine cycle */
+extern uint64_t z80ctc_iorq(z80ctc* ctc, uint64_t pins);
+/* call this once per machine cycle to handle the interrupt daisy chain */
+extern uint64_t z80ctc_int(z80ctc* ctc, uint64_t pins);
+/* call this on each CPU tick, performs CTC channel counter/timer operations */
 extern uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -224,63 +228,6 @@ uint64_t _z80ctc_active_edge(z80ctc_channel* chn, uint64_t pins, int chn_id) {
         if (chn->waiting_for_trigger) {
             chn->waiting_for_trigger = false;
             chn->down_counter = chn->constant;
-        }
-    }
-    return pins;
-}
-
-/* interrupt daisy chain handling for a channel */
-uint64_t _z80ctc_int(z80ctc_channel* chn, uint64_t pins) {
-    /* 
-        - set status of IEO pin depending on IEI pin and current
-          channel's interrupt request/acknowledge status, this
-          'ripples' to the next channel and downstream interrupt
-          controllers
-
-        - the IEO pin will be set to inactive (interrupt disabled)
-          when: (1) the IEI pin is inactive, or (2) the IEI pin is
-          active and and an interrupt has been requested 
-    */
-
-    /* if any higher priority device in the daisy chain has cleared
-       the IEIO pin, skip interrupt handling
-    */
-    if ((pins & Z80CTC_IEIO) && (chn->int_state != Z80CTC_INT_NONE)) {
-        /* these steps are in reverse order, first handle an 
-           interrupt that's already servicing, then requested, then needed
-        */
-        switch (chn->int_state) {
-            case Z80CTC_INT_SERVICING:
-                /* check if CPU has decoded a RETI, if yes, enable
-                   interrupts for downstream devices
-                */
-                if (pins & Z80CTC_RETI) {
-                    chn->int_state = Z80CTC_INT_NONE;
-                    pins &= ~Z80CTC_RETI;
-                }
-                else {
-                    /* keep interrupt for downstream devices disabled */
-                    pins &= ~Z80CTC_IEIO;
-                }
-                break;
-            case Z80CTC_INT_REQUESTED:
-                /* disable downstream devices while interrupt is not ackowledged */
-                pins &= ~Z80CTC_IEIO;
-                /* check if the CPU has acknowledged the interrupt, if yes,
-                   place interrupt vector on the data bus
-                */
-                if ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1)) {
-                    Z80CTC_SET_DATA(pins, chn->int_vector);
-                    chn->int_state = Z80CTC_INT_SERVICING;
-                }
-                break;
-            case Z80CTC_INT_NEEDED:
-                /* request interrupt */
-                pins |= Z80CTC_INT;
-                /* disable interrupt for downstream devices */
-                pins &= ~Z80CTC_IEIO;
-                chn->int_state = Z80CTC_INT_REQUESTED;
-                break;
         }
     }
     return pins;
@@ -379,11 +326,8 @@ uint8_t _z80ctc_read(z80ctc* ctc, int chn_id) {
     return ctc->chn[chn_id].down_counter;
 }
 
-/* tick the CTC, this must be called for each CPU tick */
-uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
-    for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-        pins = _z80ctc_tick_channel(&ctc->chn[i], pins, i);
-    }
+/* perform an IORQ machine cycle */
+uint64_t z80ctc_iorq(z80ctc* ctc, uint64_t pins) {
     if ((pins & (Z80CTC_CE|Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_CE|Z80CTC_IORQ)) {
         const int chn_id = (pins>>Z80CTC_CS0_PIN) & 3;
         if (pins & Z80CTC_RD) {
@@ -395,8 +339,73 @@ uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
             pins = _z80ctc_write(ctc, pins, chn_id, data);
         }
     }
+    return pins;
+}
+
+/* perform a tick on the CTC, handles counters and timers */
+uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
+    for (int c = 0; c < Z80CTC_NUM_CHANNELS; c++) {
+        pins = _z80ctc_tick_channel(&ctc->chn[c], pins, c);
+    }
+    return pins;
+}
+
+/* perform interrupt handling, call this once per CPU tick */
+uint64_t z80ctc_int(z80ctc* ctc, uint64_t pins) {
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-        pins = _z80ctc_int(&ctc->chn[i], pins);
+        z80ctc_channel* chn = &ctc->chn[i];
+        /*
+            - set status of IEO pin depending on IEI pin and current
+              channel's interrupt request/acknowledge status, this
+              'ripples' to the next channel and downstream interrupt
+              controllers
+
+            - the IEO pin will be set to inactive (interrupt disabled)
+              when: (1) the IEI pin is inactive, or (2) the IEI pin is
+              active and and an interrupt has been requested
+        */
+
+        /* if any higher priority device in the daisy chain has cleared
+           the IEIO pin, skip interrupt handling
+        */
+        if ((pins & Z80CTC_IEIO) && (chn->int_state != Z80CTC_INT_NONE)) {
+            /* these steps are in reverse order, first handle an
+               interrupt that's already servicing, then requested, then needed
+            */
+            switch (chn->int_state) {
+                case Z80CTC_INT_SERVICING:
+                    /* check if CPU has decoded a RETI, if yes, enable
+                       interrupts for downstream devices
+                    */
+                    if (pins & Z80CTC_RETI) {
+                        chn->int_state = Z80CTC_INT_NONE;
+                        pins &= ~Z80CTC_RETI;
+                    }
+                    else {
+                        /* keep interrupt for downstream devices disabled */
+                        pins &= ~Z80CTC_IEIO;
+                    }
+                    break;
+                case Z80CTC_INT_REQUESTED:
+                    /* disable downstream devices while interrupt is not ackowledged */
+                    pins &= ~Z80CTC_IEIO;
+                    /* check if the CPU has acknowledged the interrupt, if yes,
+                       place interrupt vector on the data bus
+                    */
+                    if ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1)) {
+                        Z80CTC_SET_DATA(pins, chn->int_vector);
+                        chn->int_state = Z80CTC_INT_SERVICING;
+                    }
+                    break;
+                case Z80CTC_INT_NEEDED:
+                    /* request interrupt */
+                    pins |= Z80CTC_INT;
+                    /* disable interrupt for downstream devices */
+                    pins &= ~Z80CTC_IEIO;
+                    chn->int_state = Z80CTC_INT_REQUESTED;
+                    break;
+            }
+        }
     }
     return pins;
 }
