@@ -1626,21 +1626,7 @@ def enc_cb_op(op, ext) :
     y = (op>>3)&7
     z = op&7
 
-    if x == 0:
-        # rotates and shifts
-        if z == 6:
-            # ROT (HL); ROT (IX+d); ROT (IY+d)
-            o.cmt = '{} {}'.format(rot_cmt[y],iHLcmt(ext))
-            o.src = rot_idd(ext,y)
-        elif ext:
-            # undocumented: ROT (IX|IY+d),r (also stores result in a register)
-            o.cmt = '{} {},{}'.format(rot_cmt[y],iHLcmt(ext),r2[z])
-            o.src = rot_idd_r(y,z) 
-        else:
-            # ROT r
-            o.cmt = '{} {}'.format(rot_cmt[y],r2[z])
-            o.src = rot(y,'c->'+r2[z])
-    # NOTE x==1 (BIT), x==2 (RES) and x==3 (SET) instructions are
+    # NOTE x==0 (ROT), x==1 (BIT), x==2 (RES) and x==3 (SET) instructions are
     # handled dynamically in the fallthrough path!
     return o
 
@@ -1668,6 +1654,32 @@ def dyn_bit_res_set(indent):
     l(tab(indent)+'  }')
     l(tab(indent)+'  uint8_t y=(opcode>>3)&7;')
     l(tab(indent)+'  switch (opcode>>6) {')
+    l(tab(indent)+'    case 0:')
+    l(tab(indent)+'      /* ROT n,r */')
+    l(tab(indent)+'      if (vptr) {')
+    l(tab(indent)+'        switch (y) {')
+    l(tab(indent)+'          case 0:/*RLC r*/{uint8_t r=*vptr<<1|*vptr>>7;c->F=c->szp[r]|(*vptr>>7&Z80_CF);*vptr=r;}break;')
+    l(tab(indent)+'          case 1:/*RRC r*/{uint8_t r=*vptr>>1|*vptr<<7;c->F=c->szp[r]|(*vptr&Z80_CF);*vptr=r;}break;')
+    l(tab(indent)+'          case 2:/*RL  r*/{uint8_t r=*vptr<<1|(c->F&Z80_CF);c->F=(*vptr>>7&Z80_CF)|c->szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 3:/*RR  r*/{uint8_t r=*vptr>>1|((c->F&Z80_CF)<<7);c->F=(*vptr&Z80_CF)|c->szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 4:/*SLA r*/{uint8_t r=*vptr<<1;c->F=(*vptr>>7&Z80_CF)|c->szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 5:/*SRA r*/{uint8_t r=*vptr>>1|(*vptr&0x80);c->F=(*vptr&Z80_CF)|c->szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 6:/*SLL r*/{uint8_t r=(*vptr<<1)|1;c->F=(*vptr>>7&Z80_CF)|c->szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 7:/*SRL r*/{uint8_t r=*vptr>>1;c->F=(*vptr&Z80_CF)|c->szp[r];*vptr=r;}break;')
+    l(tab(indent)+'        }')
+    l(tab(indent)+'      } else {')
+    l(tab(indent)+'        switch (y) {')
+    l(tab(indent)+'          case 0:/*RLC (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=c->szp[r]|(v>>7&Z80_CF);v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 1:/*RRC (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=c->szp[r]|(v&Z80_CF);v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 2:/*RL  (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 3:/*RR  (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 4:/*SLA (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 5:/*SRA (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 6:/*SLL (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 7:/*SRL (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'        }')
+    l(tab(indent)+'      }')
+    l(tab(indent)+'      break;')
     l(tab(indent)+'    case 1:')
     l(tab(indent)+'      /* BIT n,r */')
     l(tab(indent)+'      if (vptr) {')
@@ -1714,6 +1726,32 @@ def dyn_bit_res_set_ixiy(indent):
     l(tab(indent)+'  }')
     l(tab(indent)+'  uint8_t y=(opcode>>3)&7;')
     l(tab(indent)+'  switch (opcode>>6) {')
+    l(tab(indent)+'    case 0:')
+    l(tab(indent)+'      /* ROT n,r */')
+    l(tab(indent)+'      if (vptr) {')
+    l(tab(indent)+'        switch (y) {')
+    l(tab(indent)+'          case 0:/*RLC ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=c->szp[r]|(v>>7&Z80_CF);v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 1:/*RRC ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=c->szp[r]|(v&Z80_CF);v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 2:/*RL  ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 3:/*RR  ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 4:/*SLA ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 5:/*SRA ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 6:/*SLL ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 7:/*SRL ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'        }')
+    l(tab(indent)+'      } else {')
+    l(tab(indent)+'        switch (y) {')
+    l(tab(indent)+'          case 0:/*RLC ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=c->szp[r]|(v>>7&Z80_CF);v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 1:/*RRC ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=c->szp[r]|(v&Z80_CF);v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 2:/*RL  ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 3:/*RR  ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 4:/*SLA ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 5:/*SRA ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 6:/*SLL ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 7:/*SRL ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'        }')
+    l(tab(indent)+'      }')
+    l(tab(indent)+'      break;')
     l(tab(indent)+'    case 1:')
     l(tab(indent)+'      /* BIT n,(IX|IY+d) */')
     l(tab(indent)+'      a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);v&=(1<<y);f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|((c->WZ>>8)&(Z80_YF|Z80_XF));c->F=f|(c->F&Z80_CF);')
