@@ -1,10 +1,10 @@
 // machine generated, do not edit!
 /* set 16-bit address in 64-bit pin mask*/
-#define _SA(addr) pins=(pins&~0xFFFF)|(uint16_t)addr
+#define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
-#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|(((uint8_t)data)<<16)|(uint16_t)addr
+#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
 /* extract 8-bit data from 64-bit pin mask */
-#define _GD() ((uint8_t)(pins>>16))
+#define _GD() ((pins&0xFF0000ULL)>>16)
 /* enable control pins */
 #define _ON(m) pins|=(m)
 /* disable control pins */
@@ -38,10 +38,12 @@
 /* evaluate flags for CP */
 #define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
 
-static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
+uint32_t z80_step(z80* __restrict c) {
+  if (c->ei_pending) { c->IFF1=c->IFF2=true; c->ei_pending=false; }
+  uint32_t ticks = 0;
+  const tick_callback tick = c->tick;
   uint64_t pins = c->PINS;
   _OFF(Z80_RETI);
-  const tick_callback tick = c->tick;
   uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;
   {
   _FETCH(opcode);

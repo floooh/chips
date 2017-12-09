@@ -75,11 +75,11 @@ def l(s) :
 #
 def defines():
     l('/* set 16-bit address in 64-bit pin mask*/')
-    l('#define _SA(addr) pins=(pins&~0xFFFF)|(uint16_t)addr')
+    l('#define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)')
     l('/* set 16-bit address and 8-bit data in 64-bit pin mask */')
-    l('#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|(((uint8_t)data)<<16)|(uint16_t)addr')
+    l('#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)')
     l('/* extract 8-bit data from 64-bit pin mask */')
-    l('#define _GD() ((uint8_t)(pins>>16))')
+    l('#define _GD() ((pins&0xFF0000ULL)>>16)')
     l('/* enable control pins */')
     l('#define _ON(m) pins|=(m)')
     l('/* disable control pins */')
@@ -1706,10 +1706,12 @@ def tab(indent) :
 def write_header() :
     l('// machine generated, do not edit!')
     defines()
-    l('static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {')
+    l('uint32_t z80_step(z80* __restrict c) {')
+    l('  if (c->ei_pending) { c->IFF1=c->IFF2=true; c->ei_pending=false; }')
+    l('  uint32_t ticks = 0;')
+    l('  const tick_callback tick = c->tick;')
     l('  uint64_t pins = c->PINS;')
     l('  _OFF(Z80_RETI);')
-    l('  const tick_callback tick = c->tick;')
     l('  uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;')
 
 #-------------------------------------------------------------------------------

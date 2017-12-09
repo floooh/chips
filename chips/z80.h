@@ -183,13 +183,13 @@ extern uint32_t z80_step(z80* cpu);
 extern uint32_t z80_run(z80* cpu, uint32_t ticks);
 
 /* extract 16-bit address bus from 64-bit pins */
-#define Z80_ADDR(p) ((uint16_t)p)
+#define Z80_ADDR(p) (p&0xFFFFULL)
 /* merge 16-bit address bus value into 64-bit pins */
-#define Z80_SET_ADDR(p,a) {p=((p&~0xFFFF)|(a&0xFFFF));}
+#define Z80_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|(a&0xFFFFULL));}
 /* extract 8-bit data bus from 64-bit pins */
-#define Z80_DATA(p) ((uint8_t)(p>>16))
+#define Z80_DATA(p) ((p&0xFF0000ULL)>>16)
 /* merge 8-bit data bus value into 64-bit pins */
-#define Z80_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+#define Z80_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|((d<<16)&0xFF0000ULL));}
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -246,15 +246,7 @@ void z80_reset(z80* c) {
     c->ei_pending = false;
 }
 
-uint32_t z80_step(z80* c) {
-    if (c->ei_pending) {
-        c->IFF1 = c->IFF2 = true;
-        c->ei_pending = false;
-    }
-    return _z80_op(c, 0);
-}
-
-uint32_t z80_run(z80* c, uint32_t t) {
+uint32_t z80_run(z80* __restrict c, uint32_t t) {
     uint32_t ticks_executed = 0;
     while (ticks_executed < t) {
         ticks_executed += z80_step(c);
