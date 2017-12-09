@@ -493,7 +493,7 @@ def bit_n_idd(ext, y):
 #
 #   Generate code for BIT n,r
 #
-def bit_n_r(ext,y,z):
+def bit_n_r(y,z):
     src ='v=c->'+r2[z]+'&'+hex(1<<y)+';'
     src+='f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|(c->'+r2[z]+'&(Z80_YF|Z80_XF));'
     src+='c->F=f|(c->F&Z80_CF);'
@@ -1302,7 +1302,7 @@ def reti():
 # the opcode object will be in its default state (opcode.src==None).
 # cc is the name of the cycle-count table.
 #
-def enc_op(op, ext, cc) :
+def enc_op(op, ext) :
 
     o = opcode(op)
 
@@ -1619,7 +1619,7 @@ def enc_ed_op(op) :
 #-------------------------------------------------------------------------------
 #   CB prefix instructions
 #
-def enc_cb_op(op, ext, cc) :
+def enc_cb_op(op, ext) :
     o = opcode(op)
 
     x = op>>6
@@ -1633,52 +1633,111 @@ def enc_cb_op(op, ext, cc) :
             o.cmt = '{} {}'.format(rot_cmt[y],iHLcmt(ext))
             o.src = rot_idd(ext,y)
         elif ext:
-            # undocumented: ROT (IX+d),(IY+d),r (also stores result in a register)
+            # undocumented: ROT (IX|IY+d),r (also stores result in a register)
             o.cmt = '{} {},{}'.format(rot_cmt[y],iHLcmt(ext),r2[z])
             o.src = rot_idd_r(y,z) 
         else:
             # ROT r
             o.cmt = '{} {}'.format(rot_cmt[y],r2[z])
             o.src = rot(y,'c->'+r2[z])
-    elif x == 1:
-        # BIT n
-        if z == 6 or ext:
-            # BIT n,(HL); BIT n,(IX+d); BIT n,(IY+d)
-            o.cmt = 'BIT {},{}'.format(y,iHLcmt(ext))
-            o.src = bit_n_idd(ext,y) 
-        else:
-            # BIT n,r
-            o.cmt = 'BIT {},{}'.format(y,r2[z])
-            o.src = bit_n_r(ext,y,z)
-    elif x == 2:
-        # RES n
-        if z == 6:
-            # RES n,(HL); RES n,(IX+d); RES n,(IY+d)
-            o.cmt = 'RES {},{}'.format(y,iHLcmt(ext))
-            o.src = res_n_idd(ext,y)
-        elif ext:
-            # undocumented: RES n,(IX+d),r; RES n,(IY+d),r
-            o.cmt = 'RES {},{},{}'.format(y,iHLcmt(ext),r2[z])
-            o.src = res_n_idd_r(ext,y,z)
-        else:
-            # RES n,r
-            o.cmt = 'RES {},{}'.format(y,r2[z])
-            o.src = 'c->{}&=~{};'.format(r2[z], hex(1<<y))
-    elif x == 3:
-        # SET n
-        if z == 6:
-            # SET n,(HL); RES n,(IX+d); RES n,(IY+d)
-            o.cmt = 'SET {},{}'.format(y,iHLcmt(ext))
-            o.src = set_n_idd(ext,y)
-        elif ext:
-            # undocumented: SET n,(IX+d),r; SET n,(IY+d),r
-            o.cmt = 'SET {},{},{}'.format(y,iHLcmt(ext),r2[z])
-            o.src = set_n_idd_r(ext,y,z)
-        else:
-            # SET n,r
-            o.cmt = 'SET {},{}'.format(y,r2[z])
-            o.src = 'c->{}|={};'.format(r2[z], hex(1<<y))
+    # NOTE x==1 (BIT), x==2 (RES) and x==3 (SET) instructions are
+    # handled dynamically in the fallthrough path!
     return o
+
+#-------------------------------------------------------------------------------
+# return a tab-string for given indent level
+#
+def tab(indent) :
+    return ' '*TabWidth*indent
+
+#-------------------------------------------------------------------------------
+# generate code to dynamically decode a bit/res/set instruction (unextended)
+#
+def dyn_bit_res_set(indent):
+    l(tab(indent)+'{')
+    l(tab(indent)+'  uint8_t* vptr;')
+    l(tab(indent)+'  switch (opcode&7) {')
+    l(tab(indent)+'    case 0: vptr=&c->B; break;')
+    l(tab(indent)+'    case 1: vptr=&c->C; break;')
+    l(tab(indent)+'    case 2: vptr=&c->D; break;')
+    l(tab(indent)+'    case 3: vptr=&c->E; break;')
+    l(tab(indent)+'    case 4: vptr=&c->H; break;')
+    l(tab(indent)+'    case 5: vptr=&c->L; break;')
+    l(tab(indent)+'    case 6: vptr=0; break;')
+    l(tab(indent)+'    case 7: vptr=&c->A; break;')
+    l(tab(indent)+'  }')
+    l(tab(indent)+'  uint8_t y=(opcode>>3)&7;')
+    l(tab(indent)+'  switch (opcode>>6) {')
+    l(tab(indent)+'    case 1:')
+    l(tab(indent)+'      /* BIT n,r */')
+    l(tab(indent)+'      if (vptr) {')
+    l(tab(indent)+'        v=*vptr&(1<<y);f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|(*vptr&(Z80_YF|Z80_XF));c->F=f|(c->F&Z80_CF);')
+    l(tab(indent)+'      } else {')
+    l(tab(indent)+'        a=c->HL;_T(1);_MR(a,v);v&=(1<<y);f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|((c->WZ>>8)&(Z80_YF|Z80_XF));c->F=f|(c->F&Z80_CF);')
+    l(tab(indent)+'      }')
+    l(tab(indent)+'      break;')
+    l(tab(indent)+'    case 2:')
+    l(tab(indent)+'      /* RES n,r */')
+    l(tab(indent)+'      if (vptr) {')
+    l(tab(indent)+'        *vptr&=~(1<<y);')
+    l(tab(indent)+'      } else {')
+    l(tab(indent)+'        a=c->HL;_T(1);_MR(a,v);_MW(a,v&~(1<<y));')
+    l(tab(indent)+'      }')
+    l(tab(indent)+'      break;')
+    l(tab(indent)+'    case 3:')
+    l(tab(indent)+'      /* RES n,r */')
+    l(tab(indent)+'      if (vptr) {')
+    l(tab(indent)+'        *vptr|=(1<<y);')
+    l(tab(indent)+'      } else {')
+    l(tab(indent)+'        a=c->HL;_T(1);_MR(a,v);_MW(a,v|(1<<y));')
+    l(tab(indent)+'      }')
+    l(tab(indent)+'      break;')
+    l(tab(indent)+'  }')
+    l(tab(indent)+'}')
+
+#-------------------------------------------------------------------------------
+# generate code to dynamically decode a bit/res/set instruction (unextended)
+#
+def dyn_bit_res_set_ixiy(indent):
+    i = r[6]    # IX or IY
+    l(tab(indent)+'{')
+    l(tab(indent)+'  uint8_t* vptr;')
+    l(tab(indent)+'  switch (opcode&7) {')
+    l(tab(indent)+'    case 0: vptr=&c->B; break;')
+    l(tab(indent)+'    case 1: vptr=&c->C; break;')
+    l(tab(indent)+'    case 2: vptr=&c->D; break;')
+    l(tab(indent)+'    case 3: vptr=&c->E; break;')
+    l(tab(indent)+'    case 4: vptr=&c->H; break;')
+    l(tab(indent)+'    case 5: vptr=&c->L; break;')
+    l(tab(indent)+'    case 6: vptr=0; break;')
+    l(tab(indent)+'    case 7: vptr=&c->A; break;')
+    l(tab(indent)+'  }')
+    l(tab(indent)+'  uint8_t y=(opcode>>3)&7;')
+    l(tab(indent)+'  switch (opcode>>6) {')
+    l(tab(indent)+'    case 1:')
+    l(tab(indent)+'      /* BIT n,(IX|IY+d) */')
+    l(tab(indent)+'      a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);v&=(1<<y);f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|((c->WZ>>8)&(Z80_YF|Z80_XF));c->F=f|(c->F&Z80_CF);')
+    l(tab(indent)+'      break;')
+    l(tab(indent)+'    case 2:')
+    l(tab(indent)+'      if (vptr) {')
+    l(tab(indent)+'        /* RES n,(IX|IY+d),r (undocumented) */')
+    l(tab(indent)+'        a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);*vptr=v&~(1<<y);_MW(a,*vptr);')
+    l(tab(indent)+'      } else {')
+    l(tab(indent)+'        /* RES n,(IX|IY+d) */')
+    l(tab(indent)+'        a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);_MW(a,v&~(1<<y));')
+    l(tab(indent)+'      }')
+    l(tab(indent)+'      break;')
+    l(tab(indent)+'    case 3:')
+    l(tab(indent)+'      if (vptr) {')
+    l(tab(indent)+'        /* SET n,(IX|IY+d),r (undocumented) */')
+    l(tab(indent)+'        a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);*vptr=v|(1<<y);_MW(a,*vptr);')
+    l(tab(indent)+'      } else {')
+    l(tab(indent)+'        /* RES n,(IX|IY+d) */')
+    l(tab(indent)+'        a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);_MW(a,v|(1<<y));')
+    l(tab(indent)+'      }')
+    l(tab(indent)+'      break;')
+    l(tab(indent)+'  }')
+    l(tab(indent)+'}')
 
 #-------------------------------------------------------------------------------
 # patch register lookup tables for IX or IY instructions
@@ -1693,12 +1752,6 @@ def patch_reg_tables(reg) :
 def unpatch_reg_tables() :
     r[4] = 'H'; r[5] = 'L'; r[6] = 'HL'
     rp[2] = rp2[2] = 'HL'
-
-#-------------------------------------------------------------------------------
-# return a tab-string for given indent level
-#
-def tab(indent) :
-    return ' '*TabWidth*indent
 
 #-------------------------------------------------------------------------------
 # write source header
@@ -1746,12 +1799,15 @@ def write_op(indent, op) :
 #-------------------------------------------------------------------------------
 # finish an instruction group (ends current statement)
 #
-def write_end_group(indent, inv_op_bytes, ext_byte=None) :
-    l(tab(indent)+'default: break;')
+def write_end_group(indent, inv_op_bytes, ext, fallthrough_func) :
+    l(tab(indent)+'default:')
+    if fallthrough_func:
+        fallthrough_func(indent+2)
+    l(tab(indent)+'  break;')
     indent -= 1
     l(tab(indent)+'} }')
     # if this was a prefix instruction, need to write a final break
-    if ext_byte:
+    if ext:
         l(tab(indent)+'break;')
     indent -= 1
     return indent
@@ -1779,35 +1835,33 @@ for i in range(0, 256) :
     if i == 0xDD or i == 0xFD:
         indent = write_begin_group(indent, i)
         patch_reg_tables('IX' if i==0xDD else 'IY')
-        cc_ix_table = 'cc_dd' if i==0xDD else 'cc_fd'
-        cc_ixcb_table = 'cc_ddcb' if i==0xDD else 'cc_fdcb'
         for ii in range(0, 256) :
             if ii == 0xCB:
                 # DD/FD CB prefix
                 indent = write_begin_group(indent, ii, True)
                 for iii in range(0, 256) :
-                    write_op(indent, enc_cb_op(iii, True, cc_ixcb_table))
-                indent = write_end_group(indent, 4, True)
+                    write_op(indent, enc_cb_op(iii, True))
+                indent = write_end_group(indent, 4, True, dyn_bit_res_set_ixiy)
             else:
-                write_op(indent, enc_op(ii, True, cc_ix_table))
+                write_op(indent, enc_op(ii, True))
         unpatch_reg_tables()
-        indent = write_end_group(indent, 2, True)
+        indent = write_end_group(indent, 2, True, None)
     # ED prefix instructions
     elif i == 0xED:
         indent = write_begin_group(indent, i)
         for ii in range(0, 256) :
             write_op(indent, enc_ed_op(ii))
-        indent = write_end_group(indent, 2, True)
+        indent = write_end_group(indent, 2, True, None)
     # CB prefix instructions
     elif i == 0xCB:
         indent = write_begin_group(indent, i, False)
         for ii in range(0, 256) :
-            write_op(indent, enc_cb_op(ii, False, 'cc_cb'))
-        indent = write_end_group(indent, 2, True)
+            write_op(indent, enc_cb_op(ii, False))
+        indent = write_end_group(indent, 2, True, dyn_bit_res_set)
     # non-prefixed instruction
     else:
-        write_op(indent, enc_op(i, False, 'cc_op'))
-write_end_group(indent, 1)
+        write_op(indent, enc_op(i, False))
+write_end_group(indent, 1, False, None)
 check_interrupt()
 write_footer()
 
