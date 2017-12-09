@@ -1,8 +1,8 @@
 // machine generated, do not edit!
 /* set 16-bit address in 64-bit pin mask*/
 #define _SA(addr) pins=(pins&~0xFFFF)|(uint16_t)addr
-/* set 8-bit data in 64-bit pin mask */
-#define _SD(data) pins=(pins&~0xFF0000)|(((uint8_t)data)<<16)
+/* set 16-bit address and 8-bit data in 64-bit pin mask */
+#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|(((uint8_t)data)<<16)|(uint16_t)addr
 /* extract 8-bit data from 64-bit pin mask */
 #define _GD() ((uint8_t)(pins>>16))
 /* enable control pins */
@@ -16,11 +16,11 @@
 /* a memory read machine cycle (3 ticks with wait-state detection) */
 #define _MR(addr,data) _SA(addr);_ON(Z80_MREQ|Z80_RD);_TW(3);_OFF(Z80_MREQ|Z80_RD);data=_GD()
 /* a memory write machine cycle (3 ticks with wait-state detection) */
-#define _MW(addr,data) _SA(addr);_SD(data);_ON(Z80_MREQ|Z80_WR);_TW(3);_OFF(Z80_MREQ|Z80_WR)
+#define _MW(addr,data) _SAD(addr,data);_ON(Z80_MREQ|Z80_WR);_TW(3);_OFF(Z80_MREQ|Z80_WR)
 /* an input machine cycle (4 ticks with wait-state detection) */
 #define _IN(addr,data) _SA(addr);_ON(Z80_IORQ|Z80_RD);_TW(4);_OFF(Z80_IORQ|Z80_RD);data=_GD()
 /* an output machine cycle (4 ticks with wait-state detection) */
-#define _OUT(addr,data) _SA(addr);_ON(Z80_IORQ|Z80_WR);_SD(data);_TW(4);_OFF(Z80_IORQ|Z80_WR)
+#define _OUT(addr,data) _SAD(addr,data);_ON(Z80_IORQ|Z80_WR);_TW(4);_OFF(Z80_IORQ|Z80_WR)
 /* an opcode fetch machine cycle (4 ticks with wait-state detection, no refresh cycle emulated, bump R) */
 #define _FETCH(op) _ON(Z80_M1|Z80_MREQ|Z80_RD);_SA(c->PC++);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();c->R=(c->R&0x80)|((c->R+1)&0x7F)
 /* a special opcode fetch for DD/FD+CB instructions without incrementing R */
@@ -1695,10 +1695,11 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
     if (pins & Z80_HALT) { pins &= ~Z80_HALT; c->PC++; }
     _ON(Z80_M1|Z80_IORQ);
     _SA(c->PC);
-    _TW(6);
+    _TW(4);
     const uint8_t int_vec=_GD();
     _OFF(Z80_M1|Z80_IORQ);
     c->R=(c->R&0x80)|((c->R+1)&0x7F);
+    _T(2);
     if (c->IM==2) {
       _MW(--c->SP,(uint8_t)(c->PC>>8));
       _MW(--c->SP,(uint8_t)(c->PC));
@@ -1717,7 +1718,7 @@ static uint32_t _z80_op(z80* __restrict c, uint32_t ticks) {
   return ticks;
 }
 #undef _SA
-#undef _SD
+#undef _SAD
 #undef _GD
 #undef _ON
 #undef _OFF
