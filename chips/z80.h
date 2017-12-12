@@ -161,9 +161,11 @@ typedef struct {
     uint8_t IM;
     /* interrupt enable bits */
     bool IFF1, IFF2;
-
     /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
+    /* break out of z80_exec() if (PINS & break_mask) */
+    uint64_t break_mask;
+
 } z80;
 
 typedef struct {
@@ -174,10 +176,8 @@ typedef struct {
 extern void z80_init(z80* cpu, z80_desc* desc);
 /* reset an existing z80 instance */
 extern void z80_reset(z80* cpu);
-/* execute the next instruction, return number of time cycles */
-extern uint32_t z80_step(z80* cpu);
-/* execute instructions for (at least) given number of ticks, return executed ticks */
-extern uint32_t z80_run(z80* cpu, uint32_t ticks);
+/* execute instructions for at least 'ticks', but at least one, return executed ticks */
+extern uint32_t z80_exec(z80* cpu, uint32_t ticks);
 
 /* extract 16-bit address bus from 64-bit pins */
 #define Z80_ADDR(p) (p&0xFFFFULL)
@@ -230,14 +230,6 @@ void z80_reset(z80* c) {
     /* after power-on or reset, R is set to 0 (see z80-documented.pdf) */
     c->IR = 0;
     c->ei_pending = false;
-}
-
-uint32_t z80_run(z80* __restrict c, uint32_t t) {
-    uint32_t ticks_executed = 0;
-    while (ticks_executed < t) {
-        ticks_executed += z80_step(c);
-    }
-    return ticks_executed;
 }
 
 #endif /* CHIPS_IMPL */
