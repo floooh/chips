@@ -164,9 +164,6 @@ typedef struct {
 
     /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
-
-    /* flag lookup table for SZP flag combinations */
-    uint8_t szp[256];
 } z80;
 
 typedef struct {
@@ -213,17 +210,6 @@ void z80_init(z80* c, z80_desc* desc) {
     memset(c, 0, sizeof(z80));
     z80_reset(c);
     c->tick = desc->tick_cb;
-    /* init SZP flags table */
-    for (int val = 0; val < 256; val++) {
-        int p = 0;
-        for (int i = 0; i < 8; i++) {
-            if (val & (1<<i)) p++;
-        }
-        uint8_t f = val ? (val & Z80_SF) : Z80_ZF;
-        f |= (val & (Z80_YF|Z80_XF));   // undocumented flag bits 3 and 5
-        f |= p & 1 ? 0 : Z80_PF;
-        c->szp[val] = f;
-    }
 }
 
 void z80_reset(z80* c) {

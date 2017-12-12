@@ -136,6 +136,32 @@ def undefines():
     l('#undef _CP_FLAGS')
 
 #-------------------------------------------------------------------------------
+#   Generate the SZP flags lookup table.
+#
+def szp_table():
+    Z80_PF =  (1<<2)
+    Z80_XF =  (1<<3)
+    Z80_YF =  (1<<5)
+    Z80_ZF =  (1<<6)
+    Z80_SF =  (1<<7)
+    s = ''
+    l('static uint8_t _z80_szp[256] = {')
+    for v in range(0, 256):
+        p = 0
+        for i in range(0, 8):
+            if v & (1<<i):
+                p += 1
+        f = (v & Z80_SF) if v else Z80_ZF
+        f |= v & (Z80_YF|Z80_XF)
+        if (p & 1) == 0:
+            f |= Z80_PF
+        s += '0x{:02x},'.format(f)
+        if (v % 16) == 15:
+            l('  '+s)
+            s = ''
+    l('};')
+
+#-------------------------------------------------------------------------------
 #   Generate code for one or more 'ticks', call tick callback and increment 
 #   the ticks counter.
 #
@@ -716,7 +742,7 @@ def ini_ind_flags(io_val,c_add):
     src+='{';
     src+='uint32_t t=(uint32_t)((c->C+('+c_add+'))&0xFF)+(uint32_t)'+io_val+';'
     src+='if(t&0x100){f|=(Z80_HF|Z80_CF);}'
-    src+='f|=c->szp[((uint8_t)(t&0x07))^c->B]&Z80_PF;'
+    src+='f|=_z80_szp[((uint8_t)(t&0x07))^c->B]&Z80_PF;'
     src+='}'
     src+='c->F=f;'
     return src
@@ -727,7 +753,7 @@ def outi_outd_flags(io_val):
     src+='{';
     src+='uint32_t t=(uint32_t)c->L+(uint32_t)'+io_val+';'
     src+='if(t&0x100){f|=(Z80_HF|Z80_CF);}'
-    src+='f|=c->szp[((uint8_t)(t&0x07))^c->B]&Z80_PF;'
+    src+='f|=_z80_szp[((uint8_t)(t&0x07))^c->B]&Z80_PF;'
     src+='}'
     src+='c->F=f;'
     return src
@@ -901,7 +927,7 @@ def rst(y):
 def in_ic():
     src ='c->WZ=c->BC;'
     src+=inp('c->WZ++','v')
-    src+='c->F=c->szp[v]|(c->F&Z80_CF);'
+    src+='c->F=_z80_szp[v]|(c->F&Z80_CF);'
     return src
 
 #-------------------------------------------------------------------------------
@@ -911,7 +937,7 @@ def in_ic():
 def in_r_ic(y):
     src ='c->WZ=c->BC;'
     src+=inp('c->WZ++','c->'+r[y])
-    src+='c->F=c->szp[c->'+r[y]+']|(c->F&Z80_CF);'
+    src+='c->F=_z80_szp[c->'+r[y]+']|(c->F&Z80_CF);'
     return src
 
 #-------------------------------------------------------------------------------
@@ -976,15 +1002,15 @@ def cp8(val):
     return src
 
 def and8(val):
-    src='c->A&='+val+';c->F=c->szp[c->A]|Z80_HF;' 
+    src='c->A&='+val+';c->F=_z80_szp[c->A]|Z80_HF;' 
     return src
 
 def or8(val):
-    src='c->A|='+val+';c->F=c->szp[c->A];' 
+    src='c->A|='+val+';c->F=_z80_szp[c->A];' 
     return src
 
 def xor8(val):
-    src='c->A^='+val+';c->F=c->szp[c->A];' 
+    src='c->A^='+val+';c->F=_z80_szp[c->A];' 
     return src
 
 def alu8(y,val):
@@ -1087,7 +1113,7 @@ def rrd():
     src+='v=(v>>4)|(l<<4);'
     src+=tick(4)
     src+=wr('c->HL','v')
-    src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    src+='c->F=_z80_szp[c->A]|(c->F&Z80_CF);'
     src+='}'
     return src
 
@@ -1100,7 +1126,7 @@ def rld():
     src+='v=(v<<4)|l;'
     src+=tick(4)
     src+=wr('c->HL','v')
-    src+='c->F=c->szp[c->A]|(c->F&Z80_CF);'
+    src+='c->F=_z80_szp[c->A]|(c->F&Z80_CF);'
     src+='}'
     return src
 
@@ -1139,7 +1165,7 @@ def rra():
 def rlc(val):
     src ='{'
     src+='uint8_t r='+val+'<<1|'+val+'>>7;'
-    src+='c->F=c->szp[r]|('+val+'>>7&Z80_CF);'
+    src+='c->F=_z80_szp[r]|('+val+'>>7&Z80_CF);'
     src+=val+'=r;'
     src+='}'
     return src
@@ -1147,7 +1173,7 @@ def rlc(val):
 def rrc(val):
     src ='{'
     src+='uint8_t r='+val+'>>1|'+val+'<<7;'
-    src+='c->F=c->szp[r]|('+val+'&Z80_CF);'
+    src+='c->F=_z80_szp[r]|('+val+'&Z80_CF);'
     src+=val+'=r;'
     src+='}'
     return src
@@ -1155,7 +1181,7 @@ def rrc(val):
 def rl(val):
     src ='{'
     src+='uint8_t r='+val+'<<1|(c->F&Z80_CF);'
-    src+='c->F=('+val+'>>7&Z80_CF)|c->szp[r];'
+    src+='c->F=('+val+'>>7&Z80_CF)|_z80_szp[r];'
     src+=val+'=r;'
     src+='}'
     return src
@@ -1163,7 +1189,7 @@ def rl(val):
 def rr(val):
     src ='{'
     src+='uint8_t r='+val+'>>1|((c->F & Z80_CF)<<7);'
-    src+='c->F=('+val+'&Z80_CF)|c->szp[r];'
+    src+='c->F=('+val+'&Z80_CF)|_z80_szp[r];'
     src+=val+'=r;'
     src+='}'
     return src
@@ -1171,7 +1197,7 @@ def rr(val):
 def sla(val):
     src ='{'
     src+='uint8_t r='+val+'<<1;'
-    src+='c->F=('+val+'>>7&Z80_CF)|c->szp[r];'
+    src+='c->F=('+val+'>>7&Z80_CF)|_z80_szp[r];'
     src+=val+'=r;'
     src+='}'
     return src
@@ -1179,7 +1205,7 @@ def sla(val):
 def sra(val):
     src ='{'
     src+='uint8_t r='+val+'>>1|('+val+'&0x80);'
-    src+='c->F=('+val+'&Z80_CF)|c->szp[r];'
+    src+='c->F=('+val+'&Z80_CF)|_z80_szp[r];'
     src+=val+'=r;'
     src+='}'
     return src
@@ -1188,7 +1214,7 @@ def sra(val):
 def sll(val):
     src ='{'
     src+='uint8_t r=('+val+'<<1)|1;'
-    src+='c->F=('+val+'>>7&Z80_CF)|c->szp[r];'
+    src+='c->F=('+val+'>>7&Z80_CF)|_z80_szp[r];'
     src+=val+'=r;'
     src+='}'
     return src
@@ -1196,7 +1222,7 @@ def sll(val):
 def srl(val):
     src ='{'
     src+='uint8_t r='+val+'>>1;'
-    src+='c->F=('+val+'&Z80_CF)|c->szp[r];'
+    src+='c->F=('+val+'&Z80_CF)|_z80_szp[r];'
     src+=val+'=r;'
     src+='}'
     return src
@@ -1274,7 +1300,7 @@ def daa():
     src+='c->F&=Z80_CF|Z80_NF;'
     src+='c->F|=(c->A>0x99)?Z80_CF:0;'
     src+='c->F|=(c->A^v)&Z80_HF;'
-    src+='c->F|=c->szp[v];'
+    src+='c->F|=_z80_szp[v];'
     src+='c->A=v;'
     return src
 
@@ -1658,25 +1684,25 @@ def dyn_bit_res_set(indent):
     l(tab(indent)+'      /* ROT n,r */')
     l(tab(indent)+'      if (vptr) {')
     l(tab(indent)+'        switch (y) {')
-    l(tab(indent)+'          case 0:/*RLC r*/{uint8_t r=*vptr<<1|*vptr>>7;c->F=c->szp[r]|(*vptr>>7&Z80_CF);*vptr=r;}break;')
-    l(tab(indent)+'          case 1:/*RRC r*/{uint8_t r=*vptr>>1|*vptr<<7;c->F=c->szp[r]|(*vptr&Z80_CF);*vptr=r;}break;')
-    l(tab(indent)+'          case 2:/*RL  r*/{uint8_t r=*vptr<<1|(c->F&Z80_CF);c->F=(*vptr>>7&Z80_CF)|c->szp[r];*vptr=r;}break;')
-    l(tab(indent)+'          case 3:/*RR  r*/{uint8_t r=*vptr>>1|((c->F&Z80_CF)<<7);c->F=(*vptr&Z80_CF)|c->szp[r];*vptr=r;}break;')
-    l(tab(indent)+'          case 4:/*SLA r*/{uint8_t r=*vptr<<1;c->F=(*vptr>>7&Z80_CF)|c->szp[r];*vptr=r;}break;')
-    l(tab(indent)+'          case 5:/*SRA r*/{uint8_t r=*vptr>>1|(*vptr&0x80);c->F=(*vptr&Z80_CF)|c->szp[r];*vptr=r;}break;')
-    l(tab(indent)+'          case 6:/*SLL r*/{uint8_t r=(*vptr<<1)|1;c->F=(*vptr>>7&Z80_CF)|c->szp[r];*vptr=r;}break;')
-    l(tab(indent)+'          case 7:/*SRL r*/{uint8_t r=*vptr>>1;c->F=(*vptr&Z80_CF)|c->szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 0:/*RLC r*/{uint8_t r=*vptr<<1|*vptr>>7;c->F=_z80_szp[r]|(*vptr>>7&Z80_CF);*vptr=r;}break;')
+    l(tab(indent)+'          case 1:/*RRC r*/{uint8_t r=*vptr>>1|*vptr<<7;c->F=_z80_szp[r]|(*vptr&Z80_CF);*vptr=r;}break;')
+    l(tab(indent)+'          case 2:/*RL  r*/{uint8_t r=*vptr<<1|(c->F&Z80_CF);c->F=(*vptr>>7&Z80_CF)|_z80_szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 3:/*RR  r*/{uint8_t r=*vptr>>1|((c->F&Z80_CF)<<7);c->F=(*vptr&Z80_CF)|_z80_szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 4:/*SLA r*/{uint8_t r=*vptr<<1;c->F=(*vptr>>7&Z80_CF)|_z80_szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 5:/*SRA r*/{uint8_t r=*vptr>>1|(*vptr&0x80);c->F=(*vptr&Z80_CF)|_z80_szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 6:/*SLL r*/{uint8_t r=(*vptr<<1)|1;c->F=(*vptr>>7&Z80_CF)|_z80_szp[r];*vptr=r;}break;')
+    l(tab(indent)+'          case 7:/*SRL r*/{uint8_t r=*vptr>>1;c->F=(*vptr&Z80_CF)|_z80_szp[r];*vptr=r;}break;')
     l(tab(indent)+'        }')
     l(tab(indent)+'      } else {')
     l(tab(indent)+'        switch (y) {')
-    l(tab(indent)+'          case 0:/*RLC (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=c->szp[r]|(v>>7&Z80_CF);v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 1:/*RRC (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=c->szp[r]|(v&Z80_CF);v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 2:/*RL  (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 3:/*RR  (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 4:/*SLA (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 5:/*SRA (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 6:/*SLL (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 7:/*SRL (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 0:/*RLC (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=_z80_szp[r]|(v>>7&Z80_CF);v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 1:/*RRC (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=_z80_szp[r]|(v&Z80_CF);v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 2:/*RL  (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 3:/*RR  (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 4:/*SLA (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 5:/*SRA (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 6:/*SLL (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 7:/*SRL (HL)*/a=c->HL;_T(1);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
     l(tab(indent)+'        }')
     l(tab(indent)+'      }')
     l(tab(indent)+'      break;')
@@ -1730,25 +1756,25 @@ def dyn_bit_res_set_ixiy(indent):
     l(tab(indent)+'      /* ROT n,r */')
     l(tab(indent)+'      if (vptr) {')
     l(tab(indent)+'        switch (y) {')
-    l(tab(indent)+'          case 0:/*RLC ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=c->szp[r]|(v>>7&Z80_CF);v=r;}*vptr=v;_MW(a,v);break;')
-    l(tab(indent)+'          case 1:/*RRC ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=c->szp[r]|(v&Z80_CF);v=r;}*vptr=v;_MW(a,v);break;')
-    l(tab(indent)+'          case 2:/*RL  ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
-    l(tab(indent)+'          case 3:/*RR  ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
-    l(tab(indent)+'          case 4:/*SLA ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
-    l(tab(indent)+'          case 5:/*SRA ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
-    l(tab(indent)+'          case 6:/*SLL ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
-    l(tab(indent)+'          case 7:/*SRL ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|c->szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 0:/*RLC ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=_z80_szp[r]|(v>>7&Z80_CF);v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 1:/*RRC ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=_z80_szp[r]|(v&Z80_CF);v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 2:/*RL  ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 3:/*RR  ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|_z80_szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 4:/*SLA ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 5:/*SRA ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|_z80_szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 6:/*SLL ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}*vptr=v;_MW(a,v);break;')
+    l(tab(indent)+'          case 7:/*SRL ('+i+'+d),r*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|_z80_szp[r];v=r;}*vptr=v;_MW(a,v);break;')
     l(tab(indent)+'        }')
     l(tab(indent)+'      } else {')
     l(tab(indent)+'        switch (y) {')
-    l(tab(indent)+'          case 0:/*RLC ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=c->szp[r]|(v>>7&Z80_CF);v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 1:/*RRC ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=c->szp[r]|(v&Z80_CF);v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 2:/*RL  ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 3:/*RR  ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 4:/*SLA ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 5:/*SRA ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 6:/*SLL ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
-    l(tab(indent)+'          case 7:/*SRL ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|c->szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 0:/*RLC ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|v>>7;c->F=_z80_szp[r]|(v>>7&Z80_CF);v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 1:/*RRC ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|v<<7;c->F=_z80_szp[r]|(v&Z80_CF);v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 2:/*RL  ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1|(c->F&Z80_CF);c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 3:/*RR  ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|((c->F & Z80_CF)<<7);c->F=(v&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 4:/*SLA ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v<<1;c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 5:/*SRA ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1|(v&0x80);c->F=(v&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 6:/*SLL ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=(v<<1)|1;c->F=(v>>7&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
+    l(tab(indent)+'          case 7:/*SRL ('+i+'+d)*/a=c->WZ=c->'+i+'+d;_T(2);_MR(a,v);{uint8_t r=v>>1;c->F=(v&Z80_CF)|_z80_szp[r];v=r;}_MW(a,v);break;')
     l(tab(indent)+'        }')
     l(tab(indent)+'      }')
     l(tab(indent)+'      break;')
@@ -1796,6 +1822,7 @@ def unpatch_reg_tables() :
 #
 def write_header() :
     l('// machine generated, do not edit!')
+    szp_table()
     defines()
     l('uint32_t z80_step(z80* __restrict c) {')
     l('  if (c->ei_pending) { c->IFF1=c->IFF2=true; c->ei_pending=false; }')
