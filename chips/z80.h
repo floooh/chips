@@ -66,7 +66,7 @@ extern "C" {
     - bits 24..36:  control pins
     - bits 37..40:  interrupt system 'virtual pins'
 */
-typedef uint64_t (*tick_callback)(int num_ticks, uint64_t pins);
+typedef uint64_t (*z80_tick_callback)(int num_ticks, uint64_t pins);
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -138,7 +138,7 @@ typedef uint64_t (*tick_callback)(int num_ticks, uint64_t pins);
 /* Z80 CPU state */
 typedef struct {
     /* tick function */
-    tick_callback tick;
+    z80_tick_callback tick;
     /* the CPU pins (control, address and data) */
     uint64_t PINS;
     /* program counter */
@@ -169,7 +169,7 @@ typedef struct {
 } z80;
 
 typedef struct {
-    tick_callback tick_cb;
+    z80_tick_callback tick_cb;
 } z80_desc;
 
 /* initialize a new z80 instance */

@@ -22,9 +22,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef __cpluscplus
+#ifdef __cplusplus
 extern "C" {
-}
 #endif
 
 /*
@@ -145,15 +144,18 @@ typedef struct {
 /*
     Z80 PIO state
 */
+typedef uint8_t (*z80pio_in_callback)(int port_id);
+typedef void (*z80pio_out_callback)(int port_id, uint8_t data);
+
 typedef struct {
     /* port A and B register sets */
     z80pio_port PORT[Z80PIO_NUM_PORTS];
     /* currently in reset state? (until a control word is received) */
     bool reset_active;
     /* port-input callback */
-    uint8_t (*in_cb)(int port_id);
+    z80pio_in_callback in_cb;
     /* port-output callback */
-    void (*out_cb)(int port_id, uint8_t data);
+    z80pio_out_callback out_cb;
 } z80pio;
 
 /*

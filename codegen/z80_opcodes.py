@@ -1828,7 +1828,7 @@ def write_header() :
     l('  z80 c = *cpu;')
     l('  uint32_t ticks = 0;')
     l('  uint64_t pins = c.PINS;')
-    l('  const tick_callback tick = c.tick;')
+    l('  const z80_tick_callback tick = c.tick;')
     l('  uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;')
     l('  do {')
     l('    if (c.ei_pending) { c.IFF1=c.IFF2=true; c.ei_pending=false; }')

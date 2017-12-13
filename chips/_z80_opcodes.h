@@ -60,7 +60,7 @@ uint32_t z80_exec(z80* cpu, uint32_t num_ticks) {
   z80 c = *cpu;
   uint32_t ticks = 0;
   uint64_t pins = c.PINS;
-  const tick_callback tick = c.tick;
+  const z80_tick_callback tick = c.tick;
   uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;
   do {
     if (c.ei_pending) { c.IFF1=c.IFF2=true; c.ei_pending=false; }
