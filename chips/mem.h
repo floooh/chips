@@ -67,12 +67,12 @@ extern const uint8_t* mem_readptr(memory* mem, uint16_t addr);
 extern void mem_write_range(memory* mem, uint16_t addr, const uint8_t* src, int num_bytes);
 
 /* read a byte at address without memory-mapped-io support */
-static inline uint8_t mem_rd(memory* mem, uint16_t addr) {
+static inline uint8_t mem_rd(const memory* mem, uint16_t addr) {
     return mem->page_table[addr>>MEM_PAGE_SHIFT].read_ptr[addr & MEM_PAGE_MASK];
 }
 /* read a byte at address with memory-mapped-io support */
-static inline uint8_t mem_rdio(memory* mem, uint16_t addr) {
-    mem_page* page = &mem->page_table[addr>>MEM_PAGE_SHIFT];
+static inline uint8_t mem_rdio(const memory* mem, uint16_t addr) {
+    const mem_page* page = &mem->page_table[addr>>MEM_PAGE_SHIFT];
     if (page->write_ptr) {
         /* a regular memory page */
         return page->read_ptr[addr & MEM_PAGE_MASK];

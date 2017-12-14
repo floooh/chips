@@ -82,7 +82,7 @@ extern void kbd_update(keyboard_matrix* kbd);
 /* register a modifier key, layers are between from 0 to KBD_MAX_MOD_KEYS-1 */
 extern void kbd_register_modifier(keyboard_matrix* kbd, int layer, int column, int line);
 /* register a key */
-extern void kbg_register_key(keyboard_matrix* kbd, int key, int column, int line, int mod_mask);
+extern void kbd_register_key(keyboard_matrix* kbd, int key, int column, int line, int mod_mask);
 /* add a key to the pressed-key buffer */
 extern void kbd_key_down(keyboard_matrix* kbd, int key);
 /* remove a key from the pressed-key buffer */
@@ -143,7 +143,7 @@ void kbd_register_modifier(keyboard_matrix* kbd, int layer, int column, int line
     kbd->mod_masks[layer] = (1<<(layer+KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
 }
 
-void kbd_register_key(keyboard_matrix* kbd, int key, int column, int line, uint8_t mod_mask) {
+void kbd_register_key(keyboard_matrix* kbd, int key, int column, int line, int mod_mask) {
     CHIPS_ASSERT(kbd);
     CHIPS_ASSERT((key >= 0) && (key < KBD_MAX_KEYS));
     CHIPS_ASSERT((column >= 0) && (column < KBD_MAX_COLUMNS));
