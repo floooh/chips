@@ -180,11 +180,11 @@ extern void z80_reset(z80* cpu);
 extern uint32_t z80_exec(z80* cpu, uint32_t ticks);
 
 /* extract 16-bit address bus from 64-bit pins */
-#define Z80_ADDR(p) (p&0xFFFFULL)
+#define Z80_ADDR(p) ((uint16_t)(p&0xFFFFULL))
 /* merge 16-bit address bus value into 64-bit pins */
 #define Z80_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|(a&0xFFFFULL));}
 /* extract 8-bit data bus from 64-bit pins */
-#define Z80_DATA(p) ((p&0xFF0000ULL)>>16)
+#define Z80_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define Z80_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|((d<<16)&0xFF0000ULL));}
 

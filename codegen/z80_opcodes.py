@@ -79,7 +79,7 @@ def defines():
     l('/* set 16-bit address and 8-bit data in 64-bit pin mask */')
     l('#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)')
     l('/* extract 8-bit data from 64-bit pin mask */')
-    l('#define _GD() ((pins&0xFF0000ULL)>>16)')
+    l('#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))')
     l('/* enable control pins */')
     l('#define _ON(m) pins|=(m)')
     l('/* disable control pins */')
