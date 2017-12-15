@@ -1,6 +1,6 @@
 #pragma once
 /*
-    keyboard_matrix.h -- keyboard matrix helpers
+    kbd.h -- keyboard matrix helpers
 
     A keyboard_matrix instance maps key codes to the cross-sections of
     an up to 12x12 keyboard matrix with up to 4 modifier keys (shift, ctrl, ...)
@@ -42,7 +42,7 @@ extern "C" {
 typedef struct {
     /* the number of kbd_update() ticks a key will at least remain down, default is 2 */
     int sticky_count;
-} keyboard_matrix_desc;
+} kbd_desc_t;
 
 /* a pressed-key state */
 typedef struct {
@@ -55,7 +55,7 @@ typedef struct {
     uint32_t pressed_frame;
     /* the frame-count when the key was released, 0 if not yet released */
     uint32_t released_frame;
-} key_state;
+} key_state_t;
 
 /* keyboard matrix state */
 typedef struct {
@@ -72,31 +72,31 @@ typedef struct {
     /* column/line bits for modifier keys */
     uint32_t mod_masks[KBD_MAX_MOD_KEYS];
     /* currently pressed keys (bitmask==0 is empty slot) */
-    key_state key_buffer[KBD_MAX_PRESSED_KEYS];
-} keyboard_matrix;
+    key_state_t key_buffer[KBD_MAX_PRESSED_KEYS];
+} kbd_t;
 
 /* initialize a keyboard matrix instance */
-extern void kbd_init(keyboard_matrix* kbd, keyboard_matrix_desc* desc);
+extern void kbd_init(kbd_t* kbd, kbd_desc_t* desc);
 /* update keyboard matrix state (releases sticky keys), usually call once per frame */
-extern void kbd_update(keyboard_matrix* kbd);
+extern void kbd_update(kbd_t* kbd);
 /* register a modifier key, layers are between from 0 to KBD_MAX_MOD_KEYS-1 */
-extern void kbd_register_modifier(keyboard_matrix* kbd, int layer, int column, int line);
+extern void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line);
 /* register a key */
-extern void kbd_register_key(keyboard_matrix* kbd, int key, int column, int line, int mod_mask);
+extern void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_mask);
 /* add a key to the pressed-key buffer */
-extern void kbd_key_down(keyboard_matrix* kbd, int key);
+extern void kbd_key_down(kbd_t* kbd, int key);
 /* remove a key from the pressed-key buffer */
-extern void kbd_key_up(keyboard_matrix* kbd, int key);
+extern void kbd_key_up(kbd_t* kbd, int key);
 /* activate columns and return which lines are lit */
-extern uint16_t kbd_test_lines(keyboard_matrix* kbd, uint16_t column_mask);
+extern uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask);
 /* set active column mask (use together with kbd_scan_lines */
-extern void kbd_set_active_columns(keyboard_matrix* kbd, uint16_t column_mask);
+extern void kbd_set_active_columns(kbd_t* kbd, uint16_t column_mask);
 /* scan active lines (used together with kbd_set_active_columns */
-extern uint16_t kbd_scan_lines(keyboard_matrix* kbd);
+extern uint16_t kbd_scan_lines(kbd_t* kbd);
 /* set active lines mask (use together with kbd_scan_columns */
-extern void kbd_set_active_lines(keyboard_matrix* kbd, uint16_t line_mask);
+extern void kbd_set_active_lines(kbd_t* kbd, uint16_t line_mask);
 /* scan active columns (used together with kbd_set_active_lines */
-extern uint16_t kbd_scan_columns(keyboard_matrix* kbd);
+extern uint16_t kbd_scan_columns(kbd_t* kbd);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -111,19 +111,19 @@ extern uint16_t kbd_scan_columns(keyboard_matrix* kbd);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void kbd_init(keyboard_matrix* kbd, keyboard_matrix_desc* desc) {
+void kbd_init(kbd_t* kbd, kbd_desc_t* desc) {
     CHIPS_ASSERT(kbd && desc);
-    memset(kbd, 0, sizeof(keyboard_matrix));
+    memset(kbd, 0, sizeof(*kbd));
     kbd->frame_count = 1;
     kbd->sticky_count = (desc->sticky_count == 0) ? 2 : desc->sticky_count;
 }
 
-void kbd_update(keyboard_matrix* kbd) {
+void kbd_update(kbd_t* kbd) {
     CHIPS_ASSERT(kbd);
     kbd->frame_count++;
     /* check for sticky keys that should be released */
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
-        key_state* k = &kbd->key_buffer[i];
+        key_state_t* k = &kbd->key_buffer[i];
         if (k->released_frame != 0) {
             if (kbd->frame_count > (k->pressed_frame + kbd->sticky_count)) {
                 k->mask = 0;
@@ -135,7 +135,7 @@ void kbd_update(keyboard_matrix* kbd) {
     }
 }
 
-void kbd_register_modifier(keyboard_matrix* kbd, int layer, int column, int line) {
+void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line) {
     CHIPS_ASSERT(kbd);
     CHIPS_ASSERT((column >= 0) && (column < KBD_MAX_COLUMNS));
     CHIPS_ASSERT((line >= 0) && (line < KBD_MAX_LINES));
@@ -143,7 +143,7 @@ void kbd_register_modifier(keyboard_matrix* kbd, int layer, int column, int line
     kbd->mod_masks[layer] = (1<<(layer+KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
 }
 
-void kbd_register_key(keyboard_matrix* kbd, int key, int column, int line, int mod_mask) {
+void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_mask) {
     CHIPS_ASSERT(kbd);
     CHIPS_ASSERT((key >= 0) && (key < KBD_MAX_KEYS));
     CHIPS_ASSERT((column >= 0) && (column < KBD_MAX_COLUMNS));
@@ -151,11 +151,11 @@ void kbd_register_key(keyboard_matrix* kbd, int key, int column, int line, int m
     kbd->key_masks[key] = (mod_mask << (KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
 }
 
-void kbd_key_down(keyboard_matrix* kbd, int key) {
+void kbd_key_down(kbd_t* kbd, int key) {
     CHIPS_ASSERT(kbd && (key >= 0) && (key < KBD_MAX_KEYS));
     /* find a free keybuffer slot */
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
-        key_state* k = &kbd->key_buffer[i];
+        key_state_t* k = &kbd->key_buffer[i];
         if (0 == k->mask) {
             k->key = key;
             k->mask = kbd->key_masks[key];
@@ -166,11 +166,11 @@ void kbd_key_down(keyboard_matrix* kbd, int key) {
     }
 }
 
-void kbd_key_up(keyboard_matrix* kbd, int key) {
+void kbd_key_up(kbd_t* kbd, int key) {
     CHIPS_ASSERT(kbd && (key >= 0) && (key < KBD_MAX_KEYS));
     /* find the key in the keybuffer, just set released_frame */
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
-        key_state* k = &kbd->key_buffer[i];
+        key_state_t* k = &kbd->key_buffer[i];
         if (key == k->key) {
             k->released_frame = kbd->frame_count;
         }
@@ -193,7 +193,7 @@ static uint32_t _kbd_mod(uint32_t key_mask) {
 }
 
 /* scan keyboard matrix lines by column mask */
-uint16_t kbd_test_lines(keyboard_matrix* kbd, uint16_t column_mask) {
+uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask) {
     CHIPS_ASSERT(kbd);
     uint16_t line_bits = 0;
     for (int key_index = 0; key_index < KBD_MAX_PRESSED_KEYS; key_index++) {
@@ -221,7 +221,7 @@ uint16_t kbd_test_lines(keyboard_matrix* kbd, uint16_t column_mask) {
 }
 
 /* scan keyboard matrix lines by column mask */
-uint16_t kbd_test_columns(keyboard_matrix* kbd, uint16_t line_mask) {
+uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask) {
     CHIPS_ASSERT(kbd);
     uint16_t column_bits = 0;
     for (int key_index = 0; key_index < KBD_MAX_PRESSED_KEYS; key_index++) {
@@ -249,22 +249,22 @@ uint16_t kbd_test_columns(keyboard_matrix* kbd, uint16_t line_mask) {
 }
 
 /* set currently active columns */
-void kbd_set_active_columns(keyboard_matrix* kbd, uint16_t column_mask) {
+void kbd_set_active_columns(kbd_t* kbd, uint16_t column_mask) {
     kbd->active_columns = column_mask;
 }
 
 /* scan the keyboard matrix using currently active columns */
-uint16_t kbd_scan_lines(keyboard_matrix* kbd) {
+uint16_t kbd_scan_lines(kbd_t* kbd) {
     return kbd_test_lines(kbd, kbd->active_columns);
 }
 
 /* set currently active lines */
-void kbd_set_active_lines(keyboard_matrix* kbd, uint16_t line_mask) {
+void kbd_set_active_lines(kbd_t* kbd, uint16_t line_mask) {
     kbd->active_lines = line_mask;
 }
 
 /* scan the keyboard matrix using currently active lines */
-uint16_t kbd_scan_columns(keyboard_matrix* kbd) {
+uint16_t kbd_scan_columns(kbd_t* kbd) {
     return kbd_test_columns(kbd, kbd->active_lines);
 }
 

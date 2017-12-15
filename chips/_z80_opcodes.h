@@ -56,11 +56,11 @@ static uint8_t _z80_szp[256] = {
 /* evaluate flags for CP */
 #define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
 
-uint32_t z80_exec(z80* cpu, uint32_t num_ticks) {
-  z80 c = *cpu;
+uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
+  z80_t c = *cpu;
   uint32_t ticks = 0;
   uint64_t pins = c.PINS;
-  const z80_tick_callback tick = c.tick;
+  const z80_tick_t tick = c.tick;
   uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;
   do {
     if (c.ei_pending) { c.IFF1=c.IFF2=true; c.ei_pending=false; }

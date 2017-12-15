@@ -118,7 +118,7 @@ typedef struct {
     bool waiting_for_trigger;
     bool ext_trigger;
     int int_state;          /* interrupt handling state */
-} z80ctc_channel;
+} z80ctc_channel_t;
 
 #define Z80CTC_NUM_CHANNELS (4)
 
@@ -126,8 +126,8 @@ typedef struct {
     Z80 CTC state 
 */
 typedef struct {
-    z80ctc_channel chn[Z80CTC_NUM_CHANNELS];
-} z80ctc;
+    z80ctc_channel_t chn[Z80CTC_NUM_CHANNELS];
+} z80ctc_t;
 
 /* extract 8-bit data bus from 64-bit pins */
 #define Z80CTC_DATA(p) ((uint8_t)(p>>16))
@@ -135,15 +135,15 @@ typedef struct {
 #define Z80CTC_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
 /* initialize a new Z80 CTC instance */
-extern void z80ctc_init(z80ctc* ctc);
+extern void z80ctc_init(z80ctc_t* ctc);
 /* reset an existing Z80 CTC instance */
-extern void z80ctc_reset(z80ctc* ctc);
+extern void z80ctc_reset(z80ctc_t* ctc);
 /* perform an IORQ machine cycle */
-extern uint64_t z80ctc_iorq(z80ctc* ctc, uint64_t pins);
+extern uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins);
 /* call this once per machine cycle to handle the interrupt daisy chain */
-extern uint64_t z80ctc_int(z80ctc* ctc, uint64_t pins);
+extern uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins);
 /* call this on each CPU tick, performs CTC channel counter/timer operations */
-extern uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins);
+extern uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -164,9 +164,9 @@ extern uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins);
     Call this once to initialize a new Z80 CTC instance, this will
     clear the z80ctc struct and go into a reset state.
 */
-void z80ctc_init(z80ctc* ctc) {
+void z80ctc_init(z80ctc_t* ctc) {
     CHIPS_ASSERT(ctc);
-    memset(ctc, 0, sizeof(z80ctc));
+    memset(ctc, 0, sizeof(*ctc));
     z80ctc_reset(ctc);
 }
 
@@ -175,10 +175,10 @@ void z80ctc_init(z80ctc* ctc) {
 
     Puts the Z80 CTC into the reset state.
 */
-void z80ctc_reset(z80ctc* ctc) {
+void z80ctc_reset(z80ctc_t* ctc) {
     CHIPS_ASSERT(ctc);
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-        z80ctc_channel* chn = &ctc->chn[i];
+        z80ctc_channel_t* chn = &ctc->chn[i];
         chn->control = Z80CTC_CTRL_RESET;
         chn->constant = 0;
         chn->down_counter = 0;
@@ -190,7 +190,7 @@ void z80ctc_reset(z80ctc* ctc) {
     called when the downcounter reaches zero, request interrupt,
     trigger ZCTO pin and reload downcounter
 */
-uint64_t _z80ctc_counter_zero(z80ctc_channel* chn, uint64_t pins, int chn_id) {
+uint64_t _z80ctc_counter_zero(z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
     /* down counter has reached zero, trigger interrupt and ZCTO pin */
     if (chn->control & Z80CTC_CTRL_EI) {
         /* interrupt enabled, request an interrupt */
@@ -216,7 +216,7 @@ uint64_t _z80ctc_counter_zero(z80ctc_channel* chn, uint64_t pins, int chn_id) {
      the waiting flag is cleared and timing starts
    - if the channel is in counter mode, the counter decrements
 */
-uint64_t _z80ctc_active_edge(z80ctc_channel* chn, uint64_t pins, int chn_id) {
+uint64_t _z80ctc_active_edge(z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
     if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
         /* counter mode */
         if (0 == --chn->down_counter) {
@@ -234,7 +234,7 @@ uint64_t _z80ctc_active_edge(z80ctc_channel* chn, uint64_t pins, int chn_id) {
 }
 
 /* tick a single channel */
-uint64_t _z80ctc_tick_channel(z80ctc_channel* chn, uint64_t pins, int chn_id) {
+uint64_t _z80ctc_tick_channel(z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
     /* last channel doesn't have a ZCTO pin */
     if (chn_id < 4) {
         pins &= ~(Z80CTC_ZCTO0<<chn_id);
@@ -279,8 +279,8 @@ uint64_t _z80ctc_tick_channel(z80ctc_channel* chn, uint64_t pins, int chn_id) {
 }
 
 /* write to CTC channel */
-uint64_t _z80ctc_write(z80ctc* ctc, uint64_t pins, int chn_id, uint8_t data) {
-    z80ctc_channel* chn = &ctc->chn[chn_id];
+uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn_id, uint8_t data) {
+    z80ctc_channel_t* chn = &ctc->chn[chn_id];
     if (chn->control & Z80CTC_CTRL_CONST_FOLLOWS) {
         /* timer constant following control word */
         chn->control &= ~(Z80CTC_CTRL_CONST_FOLLOWS|Z80CTC_CTRL_RESET);
@@ -322,12 +322,12 @@ uint64_t _z80ctc_write(z80ctc* ctc, uint64_t pins, int chn_id, uint8_t data) {
 }
 
 /* read from CTC channel */
-uint8_t _z80ctc_read(z80ctc* ctc, int chn_id) {
+uint8_t _z80ctc_read(z80ctc_t* ctc, int chn_id) {
     return ctc->chn[chn_id].down_counter;
 }
 
 /* perform an IORQ machine cycle */
-uint64_t z80ctc_iorq(z80ctc* ctc, uint64_t pins) {
+uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
     if ((pins & (Z80CTC_CE|Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_CE|Z80CTC_IORQ)) {
         const int chn_id = (pins>>Z80CTC_CS0_PIN) & 3;
         if (pins & Z80CTC_RD) {
@@ -343,7 +343,7 @@ uint64_t z80ctc_iorq(z80ctc* ctc, uint64_t pins) {
 }
 
 /* perform a tick on the CTC, handles counters and timers */
-uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
+uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
     for (int c = 0; c < Z80CTC_NUM_CHANNELS; c++) {
         pins = _z80ctc_tick_channel(&ctc->chn[c], pins, c);
     }
@@ -351,9 +351,9 @@ uint64_t z80ctc_tick(z80ctc* ctc, uint64_t pins) {
 }
 
 /* perform interrupt handling, call this once per CPU tick */
-uint64_t z80ctc_int(z80ctc* ctc, uint64_t pins) {
+uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-        z80ctc_channel* chn = &ctc->chn[i];
+        z80ctc_channel_t* chn = &ctc->chn[i];
         /*
             - set status of IEO pin depending on IEI pin and current
               channel's interrupt request/acknowledge status, this

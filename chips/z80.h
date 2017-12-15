@@ -66,7 +66,7 @@ extern "C" {
     - bits 24..36:  control pins
     - bits 37..40:  interrupt system 'virtual pins'
 */
-typedef uint64_t (*z80_tick_callback)(int num_ticks, uint64_t pins);
+typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -138,7 +138,7 @@ typedef uint64_t (*z80_tick_callback)(int num_ticks, uint64_t pins);
 /* Z80 CPU state */
 typedef struct {
     /* tick function */
-    z80_tick_callback tick;
+    z80_tick_t tick;
     /* the CPU pins (control, address and data) */
     uint64_t PINS;
     /* program counter */
@@ -166,18 +166,18 @@ typedef struct {
     /* break out of z80_exec() if (PINS & break_mask) */
     uint64_t break_mask;
 
-} z80;
+} z80_t;
 
 typedef struct {
-    z80_tick_callback tick_cb;
-} z80_desc;
+    z80_tick_t tick_cb;
+} z80_desc_t;
 
 /* initialize a new z80 instance */
-extern void z80_init(z80* cpu, z80_desc* desc);
+extern void z80_init(z80_t* cpu, z80_desc_t* desc);
 /* reset an existing z80 instance */
-extern void z80_reset(z80* cpu);
+extern void z80_reset(z80_t* cpu);
 /* execute instructions for at least 'ticks', but at least one, return executed ticks */
-extern uint32_t z80_exec(z80* cpu, uint32_t ticks);
+extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 
 /* extract 16-bit address bus from 64-bit pins */
 #define Z80_ADDR(p) ((uint16_t)(p&0xFFFFULL))
@@ -203,16 +203,16 @@ extern uint32_t z80_exec(z80* cpu, uint32_t ticks);
 
 #include "_z80_opcodes.h"
 
-void z80_init(z80* c, z80_desc* desc) {
+void z80_init(z80_t* c, z80_desc_t* desc) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT(desc);
     CHIPS_ASSERT(desc->tick_cb);
-    memset(c, 0, sizeof(z80));
+    memset(c, 0, sizeof(*c));
     z80_reset(c);
     c->tick = desc->tick_cb;
 }
 
-void z80_reset(z80* c) {
+void z80_reset(z80_t* c) {
     CHIPS_ASSERT(c);
     /* AF and SP are set to 0xFFFF */
     c->AF = c->SP = 0xFFFF;
