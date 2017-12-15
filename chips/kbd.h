@@ -38,12 +38,6 @@ extern "C" {
 #define KBD_MAX_KEYS (256)
 #define KBD_MAX_PRESSED_KEYS (4)
 
-/* desc structure for kbd_setup() */
-typedef struct {
-    /* the number of kbd_update() ticks a key will at least remain down, default is 2 */
-    int sticky_count;
-} kbd_desc_t;
-
 /* a pressed-key state */
 typedef struct {
     /* key code of the pressed key */
@@ -76,7 +70,7 @@ typedef struct {
 } kbd_t;
 
 /* initialize a keyboard matrix instance */
-extern void kbd_init(kbd_t* kbd, kbd_desc_t* desc);
+extern void kbd_init(kbd_t* kbd, int sticky_count);
 /* update keyboard matrix state (releases sticky keys), usually call once per frame */
 extern void kbd_update(kbd_t* kbd);
 /* register a modifier key, layers are between from 0 to KBD_MAX_MOD_KEYS-1 */
@@ -111,11 +105,22 @@ extern uint16_t kbd_scan_columns(kbd_t* kbd);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void kbd_init(kbd_t* kbd, kbd_desc_t* desc) {
-    CHIPS_ASSERT(kbd && desc);
+/*
+    kbd_init(kbd_t* kbd, int sticky_count)
+
+    Initialize a kbd instance:
+
+    kbd             -- pointer to kbd_t instance
+    sticky_count    -- number of calls to kbd_update a key will
+                       at least remain pressed even when calling kbd_key_up()
+                       to give emulated system enough time to sample the
+                       keyboard matrix
+*/
+void kbd_init(kbd_t* kbd, int sticky_count) {
+    CHIPS_ASSERT(kbd);
     memset(kbd, 0, sizeof(*kbd));
     kbd->frame_count = 1;
-    kbd->sticky_count = (desc->sticky_count == 0) ? 2 : desc->sticky_count;
+    kbd->sticky_count = sticky_count;
 }
 
 void kbd_update(kbd_t* kbd) {

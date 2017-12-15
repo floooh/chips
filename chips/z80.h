@@ -165,15 +165,10 @@ typedef struct {
     bool ei_pending;
     /* break out of z80_exec() if (PINS & break_mask) */
     uint64_t break_mask;
-
 } z80_t;
 
-typedef struct {
-    z80_tick_t tick_cb;
-} z80_desc_t;
-
 /* initialize a new z80 instance */
-extern void z80_init(z80_t* cpu, z80_desc_t* desc);
+extern void z80_init(z80_t* cpu, z80_tick_t tick_cb);
 /* reset an existing z80 instance */
 extern void z80_reset(z80_t* cpu);
 /* execute instructions for at least 'ticks', but at least one, return executed ticks */
@@ -203,13 +198,12 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 
 #include "_z80_opcodes.h"
 
-void z80_init(z80_t* c, z80_desc_t* desc) {
+void z80_init(z80_t* c, z80_tick_t tick_cb) {
     CHIPS_ASSERT(c);
-    CHIPS_ASSERT(desc);
-    CHIPS_ASSERT(desc->tick_cb);
+    CHIPS_ASSERT(tick_cb);
     memset(c, 0, sizeof(*c));
     z80_reset(c);
-    c->tick = desc->tick_cb;
+    c->tick = tick_cb;
 }
 
 void z80_reset(z80_t* c) {

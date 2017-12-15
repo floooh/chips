@@ -162,20 +162,13 @@ typedef struct {
     Z80 PIO initialization struct, defines callbacks to read
     or write data on the PIOs I/O ports.
 */
-typedef struct {
-    /* input on port A or B requested */
-    z80pio_in_t in_cb;
-    /* output to port A or B */
-    z80pio_out_t out_cb;
-} z80pio_desc_t;
-
 /* extract 8-bit data bus from 64-bit pins */
 #define Z80PIO_DATA(p) ((uint8_t)(p>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define Z80PIO_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
 /* initialize a new z80pio instance */
-extern void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc);
+extern void z80pio_init(z80pio_t* pio, z80pio_in_t in_cb, z80pio_out_t out_cb);
 /* reset an existing z80pio instance */
 extern void z80pio_reset(z80pio_t* pio);
 /* perform an IORQ machine cycle */
@@ -200,13 +193,18 @@ extern uint64_t z80pio_int(z80pio_t* pio, uint64_t pins);
     z80pio_init
 
     Call this once to initialize a new Z80 PIO instance, this will
-    clear the z80pio structure and go into reset state.
+    clear the z80pio structure and go into reset state:
+
+    pio     -- pointer to a z80pio_t instance
+    in_cb   -- callback to be called when input on a port is needed
+    out_cb  -- callback to be called when output on a port is performed
+
 */
-void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc) {
-    CHIPS_ASSERT(pio);
+void z80pio_init(z80pio_t* pio, z80pio_in_t in_cb, z80pio_out_t out_cb) {
+    CHIPS_ASSERT(pio && in_cb && out_cb);
     memset(pio, 0, sizeof(*pio));
-    pio->out_cb = desc->out_cb;
-    pio->in_cb = desc->in_cb;
+    pio->out_cb = out_cb;
+    pio->in_cb = in_cb;
     z80pio_reset(pio);
 }
 
