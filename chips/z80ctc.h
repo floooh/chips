@@ -73,7 +73,6 @@ extern "C" {
 #define Z80CTC_ZCTO0    (1ULL<<51)   /* Zero Count/Timeout 0 */
 #define Z80CTC_ZCTO1    (1ULL<<52)   /* Zero Count/Timeout 1 */
 #define Z80CTC_ZCTO2    (1ULL<<53)   /* Zero Count/Timeout 2 */
-#define _Z80CTC_ZCTO3   (1ULL<<54)   /* NOTE: this pin doesn't actually exist! */
 /*
     Z80 CTC control register bits
 */
@@ -115,8 +114,11 @@ typedef struct {
     uint8_t down_counter;
     uint8_t prescaler;
     uint8_t int_vector;
+    /* optimization helpers */
+    bool trigger_edge;
     bool waiting_for_trigger;
     bool ext_trigger;
+    uint8_t prescaler_mask;
     int int_state;          /* interrupt handling state */
 } z80ctc_channel_t;
 
@@ -149,11 +151,9 @@ extern uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins);
 */
 static inline uint64_t _z80ctc_counter_zero(z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
     /* down counter has reached zero, trigger interrupt and ZCTO pin */
-    if (chn->control & Z80CTC_CTRL_EI) {
+    if ((chn->int_state == Z80CTC_INT_NONE) && (chn->control & Z80CTC_CTRL_EI)) {
         /* interrupt enabled, request an interrupt */
-        if (chn->int_state == Z80CTC_INT_NONE) {
-            chn->int_state = Z80CTC_INT_NEEDED;
-        }
+        chn->int_state = Z80CTC_INT_NEEDED;
     }
     /* last channel doesn't have a ZCTO pin */
     if (chn_id < 4) {
@@ -193,47 +193,27 @@ static inline uint64_t _z80ctc_active_edge(z80ctc_channel_t* chn, uint64_t pins,
 
 /* perform a tick on the CTC, handles counters and timers */
 static inline uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
+    pins &= ~(Z80CTC_ZCTO0|Z80CTC_ZCTO1|Z80CTC_ZCTO2);
     for (int chn_id = 0; chn_id < Z80CTC_NUM_CHANNELS; chn_id++) {
         z80ctc_channel_t* chn = &ctc->chn[chn_id];
-
-        /* last channel doesn't have a ZCTO pin */
-        pins &= ~(Z80CTC_ZCTO0<<chn_id);
 
         /* check if externally triggered */
         if (chn->waiting_for_trigger || (chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
             bool trg = 0 != (pins & (Z80CTC_CLKTRG0<<chn_id));
-            bool triggered = false;
             if (trg != chn->ext_trigger) {
                 chn->ext_trigger = trg;
                 /* rising/falling edge trigger */
-                if ((((chn->control & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_RISING) && trg) ||
-                    (((chn->control & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_FALLING) && !trg))
-                {
-                    triggered = true;
+                if (chn->trigger_edge == trg) {
+                    pins = _z80ctc_active_edge(chn, pins, chn_id);
                 }
-            }
-
-            /* if triggered, may need to update the counter or clear the wait_for_trigger flag */
-            if (triggered) {
-                pins = _z80ctc_active_edge(chn, pins, chn_id);
             }
         }
-
-        /* handle timer mode downcounting */
-        if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
-            if (!(chn->waiting_for_trigger || (chn->control & (Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)))) {
-                /* decrement the prescaler and tick the down counter every
-                16 or 256 prescaler ticks
-                */
-                uint8_t p = --chn->prescaler;
-                if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
-                    p &= 0x0F;
-                }
-                if (0 == p) {
-                    /* prescaler has reached zero, tick the down counter */
-                    if (0 == --chn->down_counter) {
-                        pins = _z80ctc_counter_zero(chn, pins, chn_id);
-                    }
+        else if ((chn->control & (Z80CTC_CTRL_MODE|Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) == Z80CTC_CTRL_MODE_TIMER) {
+            /* handle timer mode downcounting */
+            if (0 == ((--chn->prescaler) & chn->prescaler_mask)) {
+                /* prescaler has reached zero, tick the down counter */
+                if (0 == --chn->down_counter) {
+                    pins = _z80ctc_counter_zero(chn, pins, chn_id);
                 }
             }
         }
@@ -338,6 +318,8 @@ void z80ctc_reset(z80ctc_t* ctc) {
         chn->constant = 0;
         chn->down_counter = 0;
         chn->waiting_for_trigger = false;
+        chn->trigger_edge = false;
+        chn->prescaler_mask = 0x0F;
     }
 }
 
@@ -364,6 +346,13 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn_id, uint8_t data) {
         /* a control word */
         const uint8_t old_ctrl = chn->control;
         chn->control = data;
+        chn->trigger_edge = (data & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_RISING;
+        if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
+            chn->prescaler_mask = 0x0F;
+        }
+        else {
+            chn->prescaler_mask = 0xFF;
+        }
 
         /* changing the Trigger Slope trigger an 'active edge' */
         if ((old_ctrl & Z80CTC_CTRL_EDGE) != (chn->control & Z80CTC_CTRL_EDGE)) {
