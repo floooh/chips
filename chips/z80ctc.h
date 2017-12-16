@@ -73,6 +73,7 @@ extern "C" {
 #define Z80CTC_ZCTO0    (1ULL<<51)   /* Zero Count/Timeout 0 */
 #define Z80CTC_ZCTO1    (1ULL<<52)   /* Zero Count/Timeout 1 */
 #define Z80CTC_ZCTO2    (1ULL<<53)   /* Zero Count/Timeout 2 */
+
 /*
     Z80 CTC control register bits
 */
