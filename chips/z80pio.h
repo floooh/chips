@@ -204,7 +204,6 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
                     */
                     if (pins & Z80PIO_RETI) {
                         p->int_state = Z80PIO_INT_NONE;
-                        pins &= ~Z80PIO_RETI;
                     }
                     else {
                         /* keep interrupt for downstream devices disabled */

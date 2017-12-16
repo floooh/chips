@@ -64,7 +64,6 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;
   do {
     if (c.ei_pending) { c.IFF1=c.IFF2=true; c.ei_pending=false; }
-    _OFF(Z80_RETI);
     {
     _FETCH(opcode);
     switch (opcode) {

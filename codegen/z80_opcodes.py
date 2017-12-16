@@ -1832,7 +1832,6 @@ def write_header() :
     l('  uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;')
     l('  do {')
     l('    if (c.ei_pending) { c.IFF1=c.IFF2=true; c.ei_pending=false; }')
-    l('    _OFF(Z80_RETI);')
 
 #-------------------------------------------------------------------------------
 # write source footer

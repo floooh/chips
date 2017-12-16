@@ -73,7 +73,7 @@ extern "C" {
 #define Z80CTC_ZCTO0    (1ULL<<51)   /* Zero Count/Timeout 0 */
 #define Z80CTC_ZCTO1    (1ULL<<52)   /* Zero Count/Timeout 1 */
 #define Z80CTC_ZCTO2    (1ULL<<53)   /* Zero Count/Timeout 2 */
-
+#define _Z80CTC_ZCTO3   (1ULL<<54)   /* NOTE: this pin doesn't actually exist! */
 /*
     Z80 CTC control register bits
 */
@@ -183,11 +183,59 @@ static inline uint64_t _z80ctc_active_edge(z80ctc_channel_t* chn, uint64_t pins,
             pins = _z80ctc_counter_zero(chn, pins, chn_id);
         }
     }
-    else {
+    else if (chn->waiting_for_trigger) {
         /* timer mode and waiting for trigger? */
-        if (chn->waiting_for_trigger) {
-            chn->waiting_for_trigger = false;
-            chn->down_counter = chn->constant;
+        chn->waiting_for_trigger = false;
+        chn->down_counter = chn->constant;
+    }
+    return pins;
+}
+
+/* perform a tick on the CTC, handles counters and timers */
+static inline uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
+    for (int chn_id = 0; chn_id < Z80CTC_NUM_CHANNELS; chn_id++) {
+        z80ctc_channel_t* chn = &ctc->chn[chn_id];
+
+        /* last channel doesn't have a ZCTO pin */
+        pins &= ~(Z80CTC_ZCTO0<<chn_id);
+
+        /* check if externally triggered */
+        if (chn->waiting_for_trigger || (chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
+            bool trg = 0 != (pins & (Z80CTC_CLKTRG0<<chn_id));
+            bool triggered = false;
+            if (trg != chn->ext_trigger) {
+                chn->ext_trigger = trg;
+                /* rising/falling edge trigger */
+                if ((((chn->control & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_RISING) && trg) ||
+                    (((chn->control & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_FALLING) && !trg))
+                {
+                    triggered = true;
+                }
+            }
+
+            /* if triggered, may need to update the counter or clear the wait_for_trigger flag */
+            if (triggered) {
+                pins = _z80ctc_active_edge(chn, pins, chn_id);
+            }
+        }
+
+        /* handle timer mode downcounting */
+        if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
+            if (!(chn->waiting_for_trigger || (chn->control & (Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)))) {
+                /* decrement the prescaler and tick the down counter every
+                16 or 256 prescaler ticks
+                */
+                uint8_t p = --chn->prescaler;
+                if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
+                    p &= 0x0F;
+                }
+                if (0 == p) {
+                    /* prescaler has reached zero, tick the down counter */
+                    if (0 == --chn->down_counter) {
+                        pins = _z80ctc_counter_zero(chn, pins, chn_id);
+                    }
+                }
+            }
         }
     }
     return pins;
@@ -222,7 +270,6 @@ static inline uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
                     */
                     if (pins & Z80CTC_RETI) {
                         chn->int_state = Z80CTC_INT_NONE;
-                        pins &= ~Z80CTC_RETI;
                     }
                     else {
                         /* keep interrupt for downstream devices disabled */
@@ -247,55 +294,6 @@ static inline uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
                     pins &= ~Z80CTC_IEIO;
                     chn->int_state = Z80CTC_INT_REQUESTED;
                     break;
-            }
-        }
-    }
-    return pins;
-}
-
-/* perform a tick on the CTC, handles counters and timers */
-static inline uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
-    for (int chn_id = 0; chn_id < Z80CTC_NUM_CHANNELS; chn_id++) {
-        z80ctc_channel_t* chn = &ctc->chn[chn_id];
-
-        /* last channel doesn't have a ZCTO pin */
-        if (chn_id < 4) {
-            pins &= ~(Z80CTC_ZCTO0<<chn_id);
-        }
-        /* check if externally triggered */
-        bool trg = 0 != (pins & (Z80CTC_CLKTRG0<<chn_id));
-        bool triggered = false;
-        if (trg != chn->ext_trigger) {
-            chn->ext_trigger = trg;
-            /* rising/falling edge trigger */
-            if ((((chn->control & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_RISING) && trg) ||
-                (((chn->control & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_FALLING) && !trg))
-            {
-                triggered = true;
-            }
-        }
-
-        /* if triggered, may need to update the counter or clear the wait_for_trigger flag */
-        if (triggered) {
-            pins = _z80ctc_active_edge(chn, pins, chn_id);
-        }
-
-        /* handle timer mode downcounting */
-        if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
-            if (!(chn->waiting_for_trigger || (chn->control & (Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)))) {
-                /* decrement the prescaler and tick the down counter every
-                16 or 256 prescaler ticks
-                */
-                uint8_t p = --chn->prescaler;
-                if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
-                    p &= 0x0F;
-                }
-                if (0 == p) {
-                    /* prescaler has reached zero, tick the down counter */
-                    if (0 == --chn->down_counter) {
-                        pins = _z80ctc_counter_zero(chn, pins, chn_id);
-                    }
-                }
             }
         }
     }
