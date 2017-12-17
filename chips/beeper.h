@@ -34,6 +34,8 @@ typedef struct {
 
 /* initialize beeper instance */
 extern void beeper_init(beeper_t* beeper, int tick_khz, int sound_hz, float magnitude);
+/* reset the beeper instance */
+extern void beeper_reset(beeper_t* beeper);
 /* set current on/off state */
 static inline void beeper_write(beeper_t* beeper, bool state) {
     beeper->state = state;
@@ -81,6 +83,13 @@ void beeper_init(beeper_t* b, int tick_khz, int sound_hz, float magnitude) {
     b->tick_counter = b->period;
     b->super_sample_counter = BEEPER_SUPER_SAMPLES;
     b->mag = magnitude;
+}
+
+void beeper_reset(beeper_t* b) {
+    CHIPS_ASSERT(b);
+    b->state = false;
+    b->tick_counter = b->period;
+    b->super_sample_counter = BEEPER_SUPER_SAMPLES;
 }
 
 #endif /* CHIPS_IMPL */
