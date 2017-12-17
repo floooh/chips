@@ -45,7 +45,7 @@ static inline void beeper_toggle(beeper_t* beeper) {
 /* tick the beeper, return true if a new sample is ready */
 static inline bool beeper_tick(beeper_t* b, int num_ticks) {
     b->tick_counter -= num_ticks;
-    if (b->tick_counter <= 0) {
+    while (b->tick_counter <= 0) {
         b->tick_counter += b->period;
         if (b->state) {
             b->acc += b->mag;
