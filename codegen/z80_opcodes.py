@@ -323,7 +323,7 @@ def check_interrupt():
     l('        c.PC=c.WZ=(w<<8)|z;')
     l('      }')
     l('    } else {')
-    l('      CHIPS_ASSERT(false);')
+    l('      /*CHIPS_ASSERT(false);*/')
     l('    }')
     l('  }')
 

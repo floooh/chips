@@ -1170,7 +1170,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
         c.PC=c.WZ=(w<<8)|z;
       }
     } else {
-      CHIPS_ASSERT(false);
+      /*CHIPS_ASSERT(false);*/
     }
   }
   } while ((ticks < num_ticks) && ((pins & c.break_mask)==0));
