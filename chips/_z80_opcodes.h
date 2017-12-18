@@ -1154,7 +1154,12 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     _OFF(Z80_M1|Z80_IORQ);
     c.R=(c.R&0x80)|((c.R+1)&0x7F);
     _T(2);
-    if (c.IM==2) {
+    if (c.IM==1) {
+      _MW(--c.SP,(uint8_t)(c.PC>>8));
+      _MW(--c.SP,(uint8_t)(c.PC));
+      c.PC=c.WZ=0x0038;
+    }
+    else if (c.IM==2) {
       _MW(--c.SP,(uint8_t)(c.PC>>8));
       _MW(--c.SP,(uint8_t)(c.PC));
       a=(c.I<<8)|(int_vec&0xFE);
