@@ -11,31 +11,31 @@
     
     CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
 
-    Emulated pins:
+    EMULATED PINS:
 
              +-----------+
     M1    <--|           |--> A0
     MREQ  <--|           |--> A1
     IORQ  <--|           |--> A2
     RD    <--|           |--> ...
-    WR    <--|           |--> A15
+    WR    <--|    Z80    |--> A15
     HALT  <--|           |
-    WAIT  -->|    Z80    |<-> D0
+    WAIT  -->|           |<-> D0
     INT   -->|           |<-> D1
-    RESET -->|           |<-> ...
+             |           |<-> ...
              |           |<-> D7
              +-----------+
 
-    Currently *not* emulated:
+    NOT EMULATED:
 
-    - refresh cycles
-    - non-maskable interrupts (NMI)
+    - refresh cycles (RFSH pin)
+    - non-maskable interrupts (NMI pin)
     - interrupt mode 0
-    - bus request/acknowledge
+    - bus request/acknowledge (BUSRQ and BUSAK pins)
     - the RESET pin is currently not tested, call the z80_reset() 
       function instead
 
-    FUNCTIONS
+    FUNCTIONS:
 
     void z80_init(z80_t* cpu, z80_tick_t tick_func)
         Initializes a new Z80 CPU instance. The tick function will be called
@@ -52,7 +52,7 @@
         invoked one or multiple times (usually once per machine cycle, 
         but also for 'filler ticks' or wait state ticks).
 
-    THE TICK CALLBACK
+    THE TICK CALLBACK:
 
     The tick function is called for one or multiple time cycles
     and connects the Z80 to the outside world. Usually one call
@@ -170,7 +170,7 @@
     
     http://github.com/floooh/chips-test
 
-    LICENSE
+    LICENSE:
 
     MIT License
 
