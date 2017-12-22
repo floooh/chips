@@ -1144,7 +1144,6 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
         break;
     } }
   if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c.IFF1) {
-    pins &= ~Z80_INT;
     c.IFF1=c.IFF2=false;
     if (pins & Z80_HALT) { pins &= ~Z80_HALT; c.PC++; }
     _ON(Z80_M1|Z80_IORQ);
@@ -1173,6 +1172,8 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       /*CHIPS_ASSERT(false);*/
     }
   }
+  pins &= ~Z80_INT;
+
   } while ((ticks < num_ticks) && ((pins & c.break_mask)==0));
   c.PINS = pins;
   *cpu = c;

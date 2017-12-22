@@ -100,11 +100,10 @@ extern "C" {
 #define Z80CTC_CTRL_CONTROL         (1<<0)  /* 1: control, 0: vector */
 #define Z80CTC_CTRL_VECTOR          (0)
 
-/* Interrupt Handling State */
-#define Z80CTC_INT_NONE (0)
-#define Z80CTC_INT_NEEDED (1)
-#define Z80CTC_INT_REQUESTED (2)
-#define Z80CTC_INT_SERVICING (3)
+/* interrupt state bits */
+#define Z80CTC_INT_NEEDED           (1<<0)  /* interrupt request needed */
+#define Z80CTC_INT_REQUESTED        (1<<1)  /* interrupt request issued, waiting for ack from CPU */
+#define Z80CTC_INT_SERVICING        (1<<2)  /* interrupt was acknowledged, now servicing */
 
 /*
     Z80 CTC channel state
@@ -120,7 +119,7 @@ typedef struct {
     bool waiting_for_trigger;
     bool ext_trigger;
     uint8_t prescaler_mask;
-    int int_state;          /* interrupt handling state */
+    uint8_t int_state;
 } z80ctc_channel_t;
 
 #define Z80CTC_NUM_CHANNELS (4)
@@ -152,9 +151,9 @@ extern uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins);
 */
 static inline uint64_t _z80ctc_counter_zero(z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
     /* down counter has reached zero, trigger interrupt and ZCTO pin */
-    if ((chn->int_state == Z80CTC_INT_NONE) && (chn->control & Z80CTC_CTRL_EI)) {
+    if (chn->control & Z80CTC_CTRL_EI) {
         /* interrupt enabled, request an interrupt */
-        chn->int_state = Z80CTC_INT_NEEDED;
+        chn->int_state |= Z80CTC_INT_NEEDED;
     }
     /* last channel doesn't have a ZCTO pin */
     if (chn_id < 4) {
@@ -235,46 +234,52 @@ static inline uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
             - the IEO pin will be set to inactive (interrupt disabled)
               when: (1) the IEI pin is inactive, or (2) the IEI pin is
               active and and an interrupt has been requested
+
+            - if an interrupt has been requested but not ackowledged by
+              the CPU because interrupts are disabled, the RETI state
+              must be passed to downstream devices. If a RETI is 
+              received in the interrupt-requested state, the IEIO
+              pin will be set to active, so that downstream devices
+              get a chance to decode the RETI
         */
 
         /* if any higher priority device in the daisy chain has cleared
            the IEIO pin, skip interrupt handling
         */
-        if ((pins & Z80CTC_IEIO) && (chn->int_state != Z80CTC_INT_NONE)) {
-            /* these steps are in reverse order, first handle an
-               interrupt that's already servicing, then requested, then needed
-            */
-            switch (chn->int_state) {
-                case Z80CTC_INT_SERVICING:
-                    /* check if CPU has decoded a RETI, if yes, enable
-                       interrupts for downstream devices
-                    */
-                    if (pins & Z80CTC_RETI) {
-                        chn->int_state = Z80CTC_INT_NONE;
-                    }
-                    else {
-                        /* keep interrupt for downstream devices disabled */
-                        pins &= ~Z80CTC_IEIO;
-                    }
-                    break;
-                case Z80CTC_INT_REQUESTED:
-                    /* disable downstream devices while interrupt is not ackowledged */
-                    pins &= ~Z80CTC_IEIO;
-                    /* check if the CPU has acknowledged the interrupt, if yes,
-                       place interrupt vector on the data bus
-                    */
-                    if ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1)) {
-                        Z80CTC_SET_DATA(pins, chn->int_vector);
-                        chn->int_state = Z80CTC_INT_SERVICING;
-                    }
-                    break;
-                case Z80CTC_INT_NEEDED:
-                    /* request interrupt */
-                    pins |= Z80CTC_INT;
-                    /* disable interrupt for downstream devices */
-                    pins &= ~Z80CTC_IEIO;
-                    chn->int_state = Z80CTC_INT_REQUESTED;
-                    break;
+        if ((pins & Z80CTC_IEIO) && (0 != chn->int_state)) {
+            /* check if if the CPU has decoded a RETI */
+            if (pins & Z80CTC_RETI) {
+                /* if we're the device that's currently under service by
+                   the CPU, keep interrupts enabled for downstream devices and
+                   clear our interrupt state (this is basically the
+                   'HELP' logic described in the PIO and CTC manuals
+                */
+                if (chn->int_state & Z80CTC_INT_SERVICING) {
+                    chn->int_state = 0;
+                }
+                /* if we are *NOT* the device currently under service, this
+                   means we have an interrupt request pending but the CPU
+                   denied the request (because interruprs were disabled)
+                */
+            }
+            /* need to request interrupt? */
+            if (chn->int_state & Z80CTC_INT_NEEDED) {
+                pins |= Z80CTC_INT;
+                chn->int_state &= ~Z80CTC_INT_NEEDED;
+                chn->int_state |= Z80CTC_INT_REQUESTED;
+            }
+            /* need to place interrupt vector on data bus? */
+            if ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1)) {
+                /* CPU has acknowledged the interrupt, place interrupt
+                   vector on data bus
+                */
+                Z80CTC_SET_DATA(pins, chn->int_vector);
+                chn->int_state &= ~Z80CTC_INT_REQUESTED;
+                chn->int_state |= Z80CTC_INT_SERVICING;
+            }
+            /* disable interrupts for downstream devices? */
+            if (0 != chn->int_state) {
+                pins &= ~Z80CTC_IEIO;
             }
         }
     }
@@ -321,6 +326,7 @@ void z80ctc_reset(z80ctc_t* ctc) {
         chn->waiting_for_trigger = false;
         chn->trigger_edge = false;
         chn->prescaler_mask = 0x0F;
+        chn->int_state = 0;
     }
 }
 
