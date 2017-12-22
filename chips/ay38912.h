@@ -2,10 +2,63 @@
 /*
     ay38912.h   -- AY-3-8912 sound chip emulator
 
-    TODO: docs!
+
+    Do this:
+        #define CHIPS_IMPL
+    before you include this file in *one* C or C++ file to create the 
+    implementation.
+
+    Optionally provde the following macros with your own implementation
+    
+    CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+
+    EMULATED PINS:
+
+             +-----------+
+      BC1 -->|           |<-> DA0
+     BDIR -->|           |<-> DA1
+             |           |...
+             |           |<-> DA7
+             |           |
+             |           |<-> IOA7
+             |           |<-> IOA6
+             |           |...
+             |           |<-> IOA0
+             +-----------+
+
+    NOT EMULATED:
+
+    - this is a AY-3-8912 emulator, not AY-3-8910, so there's only one IO port
+    - the BC2 pin is ignored since it makes only sense when connected to
+      a CP1610 CPU
+    - the RESET pin state is ignored, instead call ay38912_reset()
+
+    LICENSE:
+
+    MIT License
+
+    Copyright (c) 2017 Andre Weissflog
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
 */
 #include <stdint.h>
-#include <stdlib.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,16 +120,18 @@ extern "C" {
 #define AY38912_REG_IO_PORT_B           (15)    /* not on AY-3-8912 */
 
 /* super-sampling precision */
-#define AY38912_SUPER_SAMPLES (2)
+#define AY38912_SUPER_SAMPLES (4)
+/* error-accumulation precision boost */
+#define AY38912_PRECISION_BOOST (16)
 /* number of registers */
-#define AY38912_NUM_REGISTERS       (16)
+#define AY38912_NUM_REGISTERS (16)
 /* number of channels */
-#define AY38912_NUM_CHANNELS    (3)
+#define AY38912_NUM_CHANNELS (3)
 
 /* a tone channel */
 typedef struct {
-    int period;
-    int counter;
+    uint16_t period;
+    uint16_t counter;
     bool bit;
     bool tone_disable;
     bool noise_disable;
@@ -84,8 +139,8 @@ typedef struct {
 
 /* the noise channel state */
 typedef struct {
-    int period;
-    int counter;
+    uint16_t period;
+    uint16_t counter;
     uint32_t rng;
     bool bit;
 } ay38912_noise;
@@ -122,7 +177,7 @@ typedef struct {
 } ay38912;
 
 /* initialize a AY-3-8912 instance */
-extern void ay38912_init(ay38912* ay, int tick_khz, int sound_hz, float magnitude);
+extern void ay38912_init(ay38912* ay, int tick_hz, int sound_hz, float magnitude);
 /* reset an existing AY-3-8912 instance */
 extern void ay38912_reset(ay38912* ay);
 /* perform an IO request machine cycle */
@@ -142,6 +197,11 @@ extern bool ay38912_tick(ay38912* ay, int num_ticks);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
+
+/* extract 8-bit data bus from 64-bit pins */
+#define AY38912_DATA(p) ((uint8_t)(p>>16))
+/* merge 8-bit data bus value into 64-bit pins */
+#define AY38912_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
 /* valid register content bitmasks */
 static const uint8_t _ay38912_reg_mask[AY38912_NUM_REGISTERS] = {
@@ -186,23 +246,34 @@ static const float _ay38911_volumes[16] = {
 /* update computed values after registers have been reprogrammed */
 static void _ay38912_update(ay38912* ay) {
     for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
-        const _ay38912_tone* chn = ay->tone[i];
+        ay38912_tone* chn = &ay->tone[i];
+        /* "...Note also that due to the design technique used in the Tone Period
+           count-down, the lowest period value is 000000000001 (divide by 1)
+           and the highest period value is 111111111111 (divide by 4095)
+        */
         chn->period = (ay->reg[2*i+1]<<8)|(ay->reg[2*i]);
+        if (0 == chn->period) {
+            chn->period = 1;
+        }
+        /* a set 'enable bit' actually means 'disabled' */
         chn->tone_disable = (ay->reg[AY38912_REG_ENABLE]>>i) & 1;
         chn->noise_disable = (ay->reg[AY38912_REG_ENABLE]>>(3+i)) & 1;
     }
-    ay->noise.period = ay->reg[AY38912_REG_NOISE];
+    ay->noise.period = ay->reg[AY38912_REG_PERIOD_NOISE];
+    if (ay->noise.period == 0) {
+        ay->noise.period = 1;
+    }
     ay->envelope.period = 16 * ((ay->reg[AY38912_REG_ENV_PERIOD_COARSE]<<8)|(ay->reg[AY38912_REG_ENV_PERIOD_FINE]));
     /* FIXME: more envelope stuff */
 }
 
-void ay38912_init(ay38912* ay, int tick_khz, int sound)hz, float magnitude) {
+void ay38912_init(ay38912* ay, int tick_hz, int sound_hz, float magnitude) {
     CHIPS_ASSERT(ay);
-    CHIPS_ASSERT((cpu_khz > 0) && (sound_hz > 0));
+    CHIPS_ASSERT((tick_hz > 0) && (sound_hz > 0));
     memset(ay, 0, sizeof(*ay));
     ay->noise.rng = 1;
-    ay->sample_period = (tick_khz * 1000) / (sound_hz * AY38912_SUPER_SAMPLES);
-    ay->sample_counter = ay->period;
+    ay->sample_period = (tick_hz * AY38912_PRECISION_BOOST) / (sound_hz * AY38912_SUPER_SAMPLES);
+    ay->sample_counter = ay->sample_period;
     ay->super_sample_counter = AY38912_SUPER_SAMPLES;
     ay->mag = magnitude;
     _ay38912_update(ay);
@@ -218,8 +289,6 @@ void ay38912_reset(ay38912* ay) {
 }
 
 bool au38912_tick(ay38912* ay, int num_ticks) {
-    bool sample_ready = false;
-
     /* main clock is divided by 16 */
     ay->main_counter -= num_ticks;
     while (ay->main_counter <= 0) {
@@ -227,9 +296,9 @@ bool au38912_tick(ay38912* ay, int num_ticks) {
 
         /* tick the tone channels */
         for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
-            const _ay38912_tone* chn = ay->tone[i];
-            if (--chn->counter <= 0) {
-                chn->counter = chn->period;
+            ay38912_tone* chn = &ay->tone[i];
+            if (++chn->counter >= chn->period) {
+                chn->counter = 0;
                 chn->bit = !chn->bit;
             }
         }
@@ -242,12 +311,67 @@ bool au38912_tick(ay38912* ay, int num_ticks) {
     }
 
     /* generate new sample? */
-    ay->sample_counter -= num_ticks;
+    ay->sample_counter -= num_ticks * AY38912_PRECISION_BOOST;
     while (ay->sample_counter < 0) {
         ay->sample_counter += ay->sample_period;
-        
+        float vol = 0.0f;
+        for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
+            const ay38912_tone* chn = &ay->tone[i];
+            if (0 == (ay->reg[AY38912_REG_AMP_A+i] & (1<<4))) {
+                /* fixed amplitude */
+                vol = _ay38911_volumes[ay->reg[AY38912_REG_AMP_A+i] & 0x0F];
+            }
+            else {
+                /* FIXME: envelope control */
+            }
+            int vol_enable = (chn->bit|chn->tone_disable) & ((ay->noise.rng&1)|(chn->noise_disable));
+            ay->acc += vol_enable ? vol : -vol;
+        }
+        if (--ay->super_sample_counter == 0) {
+            ay->super_sample_counter = AY38912_SUPER_SAMPLES;
+            ay->sample = ay->acc / AY38912_SUPER_SAMPLES;
+            ay->acc = 0.0f;
+            return true;    /* new sample is ready */
+        }
     }
-    return sample_ready;
+    /* fallthrough: no new sample ready yet */
+    return false;
+}
+
+uint64_t ay38912_iorq(ay38912* ay, uint64_t pins) {
+    if (pins & (AY38912_BDIR|AY38912_BC1)) {
+        if (pins & AY38912_BDIR) {
+            const uint8_t data = AY38912_DATA(pins);
+            if (pins & AY38912_BC1) {
+                /* latch address */
+                ay->addr = data;
+            }
+            else {
+                /* Write to register using the currently latched address.
+                   The whole 8-bit address is considered, the low 4 bits
+                   are the register index, and the upper bits are burned
+                   into the chip as a 'chip select' and are usually 0
+                   (this emulator assumes they are 0, so addresses greater
+                   are ignored for reading and writing)
+                */
+                if (ay->addr < AY38912_NUM_REGISTERS) {
+                    ay->reg[ay->addr] = data & _ay38912_reg_mask[ay->addr];
+                    _ay38912_update(ay);
+                }
+            }
+        }
+        else {
+            /* Read from register using the currently latched address.
+               See 'write' for why the latched address must be in the
+               valid register range to have an effect.
+            */
+            if (ay->addr < AY38912_NUM_REGISTERS) {
+                const uint8_t data = ay->reg[ay->addr];
+                AY38912_SET_DATA(pins, data);
+            }
+        }
+    }
+    return pins;
 }
 
 #endif /* CHIPS_IMPL */
