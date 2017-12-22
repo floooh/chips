@@ -35,13 +35,24 @@
     - the RESET pin is currently not tested, call the z80_reset() 
       function instead
 
-    HOW TO:
+    FUNCTIONS
 
-    First initialize a z80_t instance, this needs a pointer to a
-    tick-callback function:
+    void z80_init(z80_t* cpu, z80_tick_t tick_func)
+        Initializes a new Z80 CPU instance. The tick function will be called
+        from inside the z80_exec() function.
 
-        z80_t cpu;
-        z80_init(&cpu, tick);
+    void z80_reset(z80_t* cpu)
+        Resets the Z80 CPU instance. 
+
+    uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks)
+        Starts executing instructions until num_ticks is reached, returns
+        the number of executed ticks. The number of executed ticks will
+        be greater or equal to num_ticks because complete instructions
+        will be executed. During execution the tick callback will be
+        invoked one or multiple times (usually once per machine cycle, 
+        but also for 'filler ticks' or wait state ticks).
+
+    THE TICK CALLBACK
 
     The tick function is called for one or multiple time cycles
     and connects the Z80 to the outside world. Usually one call
@@ -159,7 +170,7 @@
     
     http://github.com/floooh/chips-test
 
-    --- LICENSE
+    LICENSE
 
     MIT License
 
