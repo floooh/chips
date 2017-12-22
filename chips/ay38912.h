@@ -132,9 +132,9 @@ extern "C" {
 typedef struct {
     uint16_t period;
     uint16_t counter;
-    bool bit;
-    bool tone_disable;
-    bool noise_disable;
+    uint32_t bit;
+    uint32_t tone_disable;
+    uint32_t noise_disable;
 } ay38912_tone_t;
 
 /* the noise channel state */
@@ -142,7 +142,7 @@ typedef struct {
     uint16_t period;
     uint16_t counter;
     uint32_t rng;
-    bool bit;
+    uint32_t bit;
 } ay38912_noise_t;
 
 /* the envelope channel */
@@ -157,8 +157,10 @@ typedef struct {
     uint8_t addr;
     /* 16 registers */
     uint8_t reg[AY38912_NUM_REGISTERS];
-    /* main frequency period counter of 16 */
-    int main_counter;
+    /* prescale period (16 * custom_prescale_factor) */
+    int prescale_period;
+    /* prescale counter */
+    int prescale_counter;
 
     /* the 3 tone channels */
     ay38912_tone_t tone[AY38912_NUM_CHANNELS];
@@ -177,7 +179,7 @@ typedef struct {
 } ay38912_t;
 
 /* initialize a AY-3-8912 instance */
-extern void ay38912_init(ay38912_t* ay, int tick_hz, int sound_hz, float magnitude);
+extern void ay38912_init(ay38912_t* ay, int tick_prescaler, int tick_hz, int sound_hz, float magnitude);
 /* reset an existing AY-3-8912 instance */
 extern void ay38912_reset(ay38912_t* ay);
 /* perform an IO request machine cycle */
@@ -267,12 +269,13 @@ static void _ay38912_update(ay38912_t* ay) {
     /* FIXME: more envelope stuff */
 }
 
-void ay38912_init(ay38912_t* ay, int tick_hz, int sound_hz, float magnitude) {
+void ay38912_init(ay38912_t* ay, int tick_prescaler, int tick_hz, int sound_hz, float magnitude) {
     CHIPS_ASSERT(ay);
     CHIPS_ASSERT((tick_hz > 0) && (sound_hz > 0));
     memset(ay, 0, sizeof(*ay));
+    ay->prescale_period = 8 * tick_prescaler;
     ay->noise.rng = 1;
-    ay->sample_period = (tick_hz * AY38912_PRECISION_BOOST) / (sound_hz * AY38912_SUPER_SAMPLES);
+    ay->sample_period = (tick_prescaler * tick_hz * AY38912_PRECISION_BOOST) / (sound_hz * AY38912_SUPER_SAMPLES);
     ay->sample_counter = ay->sample_period;
     ay->super_sample_counter = AY38912_SUPER_SAMPLES;
     ay->mag = magnitude;
@@ -288,22 +291,34 @@ void ay38912_reset(ay38912_t* ay) {
     _ay38912_update(ay);
 }
 
-bool au38912_tick(ay38912_t* ay, int num_ticks) {
-    /* main clock is divided by 16 */
-    ay->main_counter -= num_ticks;
-    while (ay->main_counter <= 0) {
-        ay->main_counter += 16;
+bool ay38912_tick(ay38912_t* ay, int num_ticks) {
+    ay->prescale_counter -= num_ticks;
+    while (ay->prescale_counter <= 0) {
+        ay->prescale_counter += ay->prescale_period;
 
         /* tick the tone channels */
         for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
             ay38912_tone_t* chn = &ay->tone[i];
             if (++chn->counter >= chn->period) {
                 chn->counter = 0;
-                chn->bit = !chn->bit;
+                chn->bit ^= 1;
             }
         }
 
-        /* FIXME: tick the noise channel */
+        /* tick the noise channel */
+        if (++ay->noise.counter >= ay->noise.period) {
+            ay->noise.counter = 0;
+            ay->noise.bit ^= 1;
+            if (ay->noise.bit) {
+                // random number generator from MAME:
+                // https://github.com/mamedev/mame/blob/master/src/devices/sound/ay8910.cpp
+                // The Random Number Generator of the 8910 is a 17-bit shift
+                // register. The input to the shift register is bit0 XOR bit3
+                // (bit0 is the output). This was verified on AY-3-8910 and YM2149 chips.
+                ay->noise.rng ^= (((ay->noise.rng & 1) ^ ((ay->noise.rng >> 3) & 1)) << 17);
+                ay->noise.rng >>= 1;
+            }
+        }
 
         /* FIXME: tick the envelope generator */
 
@@ -312,7 +327,7 @@ bool au38912_tick(ay38912_t* ay, int num_ticks) {
 
     /* generate new sample? */
     ay->sample_counter -= num_ticks * AY38912_PRECISION_BOOST;
-    while (ay->sample_counter < 0) {
+    while (ay->sample_counter <= 0) {
         ay->sample_counter += ay->sample_period;
         float vol = 0.0f;
         for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
@@ -325,11 +340,11 @@ bool au38912_tick(ay38912_t* ay, int num_ticks) {
                 /* FIXME: envelope control */
             }
             int vol_enable = (chn->bit|chn->tone_disable) & ((ay->noise.rng&1)|(chn->noise_disable));
-            ay->acc += vol_enable ? vol : -vol;
+            ay->acc += (vol_enable ? vol : -vol);
         }
         if (--ay->super_sample_counter == 0) {
             ay->super_sample_counter = AY38912_SUPER_SAMPLES;
-            ay->sample = ay->acc / AY38912_SUPER_SAMPLES;
+            ay->sample = (ay->mag * 0.33f * ay->acc) / AY38912_SUPER_SAMPLES;
             ay->acc = 0.0f;
             return true;    /* new sample is ready */
         }
