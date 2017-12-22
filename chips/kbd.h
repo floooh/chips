@@ -81,8 +81,10 @@ extern void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_
 extern void kbd_key_down(kbd_t* kbd, int key);
 /* remove a key from the pressed-key buffer */
 extern void kbd_key_up(kbd_t* kbd, int key);
-/* activate columns and return which lines are lit */
+/* test keyboard matrix against a column bitmask and return lit lines */
 extern uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask);
+/* test keyboard matrix against a line bitmask and return lit columns */
+extern uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask);
 /* set active column mask (use together with kbd_scan_lines */
 extern void kbd_set_active_columns(kbd_t* kbd, uint16_t column_mask);
 /* scan active lines (used together with kbd_set_active_columns */
