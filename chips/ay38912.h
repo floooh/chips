@@ -135,7 +135,7 @@ typedef struct {
     bool bit;
     bool tone_disable;
     bool noise_disable;
-} ay38912_tone;
+} ay38912_tone_t;
 
 /* the noise channel state */
 typedef struct {
@@ -143,13 +143,13 @@ typedef struct {
     uint16_t counter;
     uint32_t rng;
     bool bit;
-} ay38912_noise;
+} ay38912_noise_t;
 
 /* the envelope channel */
 typedef struct {
     int period;
     int counter;
-} ay38912_envelope;
+} ay38912_envelope_t;
 
 /* AY-3-8912 state */
 typedef struct {
@@ -161,11 +161,11 @@ typedef struct {
     int main_counter;
 
     /* the 3 tone channels */
-    ay38912_tone tone[AY38912_NUM_CHANNELS];
+    ay38912_tone_t tone[AY38912_NUM_CHANNELS];
     /* the noise generator state */
-    ay38912_noise noise;
+    ay38912_noise_t noise;
     /* the envelope generator state */
-    ay38912_envelope envelope;
+    ay38912_envelope_t envelope;
 
     /* sample generation state */
     int sample_period;
@@ -174,16 +174,16 @@ typedef struct {
     float mag;
     float acc;
     float sample;
-} ay38912;
+} ay38912_t;
 
 /* initialize a AY-3-8912 instance */
-extern void ay38912_init(ay38912* ay, int tick_hz, int sound_hz, float magnitude);
+extern void ay38912_init(ay38912_t* ay, int tick_hz, int sound_hz, float magnitude);
 /* reset an existing AY-3-8912 instance */
-extern void ay38912_reset(ay38912* ay);
+extern void ay38912_reset(ay38912_t* ay);
 /* perform an IO request machine cycle */
-extern uint64_t ay38912_iorq(ay38912* ay, uint64_t pins);
+extern uint64_t ay38912_iorq(ay38912_t* ay, uint64_t pins);
 /* tick the AY-3-8912, return true if a new sample is ready */
-extern bool ay38912_tick(ay38912* ay, int num_ticks);
+extern bool ay38912_tick(ay38912_t* ay, int num_ticks);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -244,9 +244,9 @@ static const float _ay38911_volumes[16] = {
 };
 
 /* update computed values after registers have been reprogrammed */
-static void _ay38912_update(ay38912* ay) {
+static void _ay38912_update(ay38912_t* ay) {
     for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
-        ay38912_tone* chn = &ay->tone[i];
+        ay38912_tone_t* chn = &ay->tone[i];
         /* "...Note also that due to the design technique used in the Tone Period
            count-down, the lowest period value is 000000000001 (divide by 1)
            and the highest period value is 111111111111 (divide by 4095)
@@ -267,7 +267,7 @@ static void _ay38912_update(ay38912* ay) {
     /* FIXME: more envelope stuff */
 }
 
-void ay38912_init(ay38912* ay, int tick_hz, int sound_hz, float magnitude) {
+void ay38912_init(ay38912_t* ay, int tick_hz, int sound_hz, float magnitude) {
     CHIPS_ASSERT(ay);
     CHIPS_ASSERT((tick_hz > 0) && (sound_hz > 0));
     memset(ay, 0, sizeof(*ay));
@@ -279,7 +279,7 @@ void ay38912_init(ay38912* ay, int tick_hz, int sound_hz, float magnitude) {
     _ay38912_update(ay);
 }
 
-void ay38912_reset(ay38912* ay) {
+void ay38912_reset(ay38912_t* ay) {
     CHIPS_ASSERT(ay);
     ay->addr = 0;
     for (int i = 0; i < AY38912_NUM_REGISTERS; i++) {
@@ -288,7 +288,7 @@ void ay38912_reset(ay38912* ay) {
     _ay38912_update(ay);
 }
 
-bool au38912_tick(ay38912* ay, int num_ticks) {
+bool au38912_tick(ay38912_t* ay, int num_ticks) {
     /* main clock is divided by 16 */
     ay->main_counter -= num_ticks;
     while (ay->main_counter <= 0) {
@@ -296,7 +296,7 @@ bool au38912_tick(ay38912* ay, int num_ticks) {
 
         /* tick the tone channels */
         for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
-            ay38912_tone* chn = &ay->tone[i];
+            ay38912_tone_t* chn = &ay->tone[i];
             if (++chn->counter >= chn->period) {
                 chn->counter = 0;
                 chn->bit = !chn->bit;
@@ -316,7 +316,7 @@ bool au38912_tick(ay38912* ay, int num_ticks) {
         ay->sample_counter += ay->sample_period;
         float vol = 0.0f;
         for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
-            const ay38912_tone* chn = &ay->tone[i];
+            const ay38912_tone_t* chn = &ay->tone[i];
             if (0 == (ay->reg[AY38912_REG_AMP_A+i] & (1<<4))) {
                 /* fixed amplitude */
                 vol = _ay38911_volumes[ay->reg[AY38912_REG_AMP_A+i] & 0x0F];
@@ -338,7 +338,7 @@ bool au38912_tick(ay38912* ay, int num_ticks) {
     return false;
 }
 
-uint64_t ay38912_iorq(ay38912* ay, uint64_t pins) {
+uint64_t ay38912_iorq(ay38912_t* ay, uint64_t pins) {
     if (pins & (AY38912_BDIR|AY38912_BC1)) {
         if (pins & AY38912_BDIR) {
             const uint8_t data = AY38912_DATA(pins);
