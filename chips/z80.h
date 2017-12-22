@@ -2,26 +2,186 @@
 /*
     z80.h -- Z80 CPU emulator
 
+    Do this:
+        #define CHIPS_IMPL
+    before you include this file in *one* C or C++ file to create the 
+    implementation.
+
+    Optionally provde the following macros with your own implementation
+    
+    CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+
+    Emulated pins:
+
              +-----------+
-    M1      -|           |- A0
-    MREQ    -|           |- A1
-    IORQ    -|           |- A2
-    RD      -|           |- ...
-    WR      -|           |- A15
-    RFSH    -|           |
-    HALT    -|           |
-    WAIT    -|    Z80    |- D0
-    INT     -|           |- D1
-    NMI     -|           |- D2
-    RESET   -|           |- ...
-    BUSREQ  -|           |- D7
-    BUSACK  -|           |
-    CLK     -|           |
-    +5V     -|           |
-    GND     -|           |
+    M1    <--|           |--> A0
+    MREQ  <--|           |--> A1
+    IORQ  <--|           |--> A2
+    RD    <--|           |--> ...
+    WR    <--|           |--> A15
+    HALT  <--|           |
+    WAIT  -->|    Z80    |<-> D0
+    INT   -->|           |<-> D1
+    RESET -->|           |<-> ...
+             |           |<-> D7
              +-----------+
 
-    Decoding Z80 instructions: http://z80.info/decoding.htm
+    Currently *not* emulated:
+
+    - refresh cycles
+    - non-maskable interrupts (NMI)
+    - interrupt mode 0
+    - bus request/acknowledge
+    - the RESET pin is currently not tested, call the z80_reset() 
+      function instead
+
+    HOW TO:
+
+    First initialize a z80_t instance, this needs a pointer to a
+    tick-callback function:
+
+        z80_t cpu;
+        z80_init(&cpu, tick);
+
+    The tick function is called for one or multiple time cycles
+    and connects the Z80 to the outside world. Usually one call
+    of the tick function corresponds to one machine cycle, 
+    but this is not always the case. The tick functions takes
+    2 arguments:
+
+        - num_ticks: the number of time cycles for this callback invocation
+        - pins: a 64-bit integer with CPU pins (address- and data-bus pins,
+          and control pins)
+
+    The tick callback inspects the pins, perform the requested actions
+    (memory read/write and input/output), modify the pin bitmask
+    with requests for the CPU (inject wait states, or request an
+    interrupt), and finally returns the pin bitmask back to the 
+    CPU emulation.
+
+    The following pin bitmasks are relevant for the tick callback:
+
+    - MREQ|RD: This is a memory read cycle, the tick callback must 
+      put the byte at the memory address indicated by the address
+      bus pins A0..A15 (bits 0..15) into the data bus 
+      pins (D0..D7). If the M1 pin is also set, then this
+      is an opcode fetch machine cycle (4 clock ticks), otherwise
+      this is a normal memory read machine cycle (3 clock ticks)
+    - MREQ|WR: This is a memory write machine cycle, the tick
+      callback must write the byte in the data bus pins (D0..D7)
+      to the memory location in the address bus pins (A0..A15). 
+      A memory write machine cycle is 3 clock-ticks.
+    - IORQ|RD: This is a device-input machine cycle, the 16-bit
+      port number is in the address bus pins (A0..A15), and the
+      tick callback must write the input-byte to the data bus
+      pins (D0..D7). An input machine cycle is 4 clock-ticks.
+    - IORQ|WR: This is a device-output machine cycle, the data
+      bus pins (D0..D7) contains the byte to be output
+      at the port in the address-bus pins (A0..A15). An output
+      machine cycle is 4 cycles.
+
+    Interrupt handling requires to inspect and set additional
+    pins, more on that below.
+
+    To inject a wait state into the current machine cycle, set
+    the WAIT pin before returning from the tick callback. If the
+    WAIT pin is set, the tick callback will be called in
+    single-clock-tick steps until the WAIT pin is cleared again.
+
+    Note that not all calls to the tick callback have one
+    of the above pin bit patterns set. The CPU may need
+    to execute filler- or processing ticks which are
+    not memory-, IO- or interrupt-handling operations.
+
+    This may happen in the following situations:
+    - opcode fetch machine cycles are always a single callback
+      invocation of 4 cycles with the M1|MREQ|RD pins set, however
+      in a real Z80, some opcode fetch machine cycles are 5 or 6
+      cycles long, in this case, the tick callback will be called
+      again without control pins set and a tick count of 1 or 2
+    - some instructions require additional processing ticks which
+      are not memory- or IO-operations, in this case the tick
+      callback may be called for with any number of ticks, but
+      without activated control pins
+    - if a wait state is active, the tick callback will be
+      called for single clock-ticks, until the tick callback
+      clears the wait pin.
+
+    INTERRUPT HANDLING:
+
+    The interrupt 'daisy chain protocol' is entirely implemented
+    in the tick callback (usually the actual interrupt daisy chain
+    handling happens in the Z80 chip-family emulators, but the
+    tick callback needs to invoke their interrupt handling functions).
+
+    An interrupt request/acknowledge cycle for (most common)
+    interrupt mode 2 looks like this:
+
+    - an interrupt is requested from inside the tick callback by
+      setting the INT pin in any tick callback invocation (the 
+      INT pins remains active until the end of the current instruction)
+    - the CPU emulator checks the INT pin at the end of the current
+      instruction, if the INT pin is active, an interrupt-request/acknowledge
+      machine cycle is executed which results in additional tick
+      callback invocations to perform the interrupt-acknowledge protocol
+    - the interrupt-controller device with pending interrupt scans the
+      pin bits for M1|IORQ during the tick callback, and if active,
+      places the interrupt vector low-byte on the data bus pins
+    - back in the CPU emulation, the interrupt request is completed by
+      constructing the complete 16-bit interrupt vector, reading the
+      address of the interrupt service routine from there, and setting
+      the PC register to that address (the next executed instruction
+      is then the first instruction of the interrupt service routine)
+
+    There are 2 virtual pins for the interrupt daisy chain protocol:
+
+    - IEIO (Interrupt Enable In/Out): This combines the IEI and IEO 
+      pins found on Z80 chip-family members and is used to disable
+      interrupts for lower-priority interrupt controllers in the
+      daisy chain if a higher priority device is currently negotiating
+      interrupt handling with the CPI. The IEIO pin always starts
+      in active state at the start of the daisy chain, and is handed
+      from one interrupt controller to the next in order of 
+      daisy-chain priority. The first interrupt controller with
+      active interrupt handling clears the IEIO bit, which prevent
+      the 'downstream' lower-priority interrupt controllers from
+      issuing interrupt requests.
+    - RETI (Return From Interrupt): The virtual RETI pin is set
+      by the CPU when it decodes a RETI instruction. This is scanned
+      by the interrupt controller which is currently 'under service'
+      to enable interrupt handling for lower-priority devices
+      in the daisy chain. In a real Z80 system this the interrupt
+      controller chips perform their own simple instruction decoding
+      to detect RETI instructions.
+
+    The CPU tick callback is the heart of emulation, for complete
+    tick callback examples check the emulators and tests here:
+    
+    http://github.com/floooh/chips-test
+
+    --- LICENSE
+
+    MIT License
+
+    Copyright (c) 2017 Andre Weissflog
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -31,40 +191,6 @@ extern "C" {
 #endif
 
 /*
-    The tick function is called for one or multiple time cycles
-    connects the Z80 to the outside world (usually one call
-    of the tick function corresponds to one machine cycle, 
-    but this is not always the case). The CPU pins
-    (control pins, data bus and address bus) are communicated
-    as a single 64-bit integer. The tick callback function
-    must inspect the pins, and modify the pin state 
-    accordingly:
-
-    - if MREQ|RD is set, this is a memory read cycle, the tick
-      callback must read the memory at the location indicated by
-      the address bus, and set the data bus bits with the memory content
-    - if MREQ|WR is set, this is a memory write cycle, the tick
-      callback must change the memory content at the location of
-      the address bus to the value of the data bus pins
-    - if IORQ|RD is set, this is a device input cycle, the 16-bit
-      port number is on the address bus (usually only the lower 8-bit
-      of this are used), and the tick callback must set the data bus
-      pins to the port input value
-    - if IORQ|WR is set, this is a device output cycle, the 16-bit
-      port number is on the address bus, and the 8-bit output value
-      is on the data bus
-    - to inject a wait state, set the WAIT pin in the tick callback,
-      note that the WAIT pin is only checked during read or write
-      cycles
-    - to request an interrupt, set the INT pin, note that the 
-      state of the interrupt pin is tested at the end of an instruction
-
-    The pin-layout of the 64-bit integer is as follows:
-
-    - bits 0..15:   address bus
-    - bits 16..23:  data bus
-    - bits 24..36:  control pins
-    - bits 37..40:  interrupt system 'virtual pins'
 */
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
 
