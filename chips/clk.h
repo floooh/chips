@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 /* convert microseconds to number of clock ticks */
-extern int64_t clk_ticks(int freq_khz, int micro_secs);
+extern int64_t clk_ticks(int freq_hz, int micro_secs);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -24,8 +24,8 @@ extern int64_t clk_ticks(int freq_khz, int micro_secs);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-int64_t clk_ticks(int freq_khz, int micro_secs) {
-    return ((int64_t)(freq_khz * micro_secs)) / 1000;
+int64_t clk_ticks(int freq_hz, int micro_secs) {
+    return ((int64_t)(freq_hz * micro_secs)) / 1000000;
 }
 #endif
 
