@@ -98,6 +98,12 @@ static inline void mem_wrio(mem_t* mem, uint16_t addr, uint8_t data) {
         page->memio_cb(true, addr, data);
     }
 }
+/* helper method to write a 16-bit value, does 2 mem_wr() */
+static inline void mem_wr16(mem_t* mem, uint16_t addr, uint16_t data) {
+    mem_wr(mem, addr, (uint8_t)data);
+    mem_wr(mem, addr+1, (uint8_t)(data>>8));
+}
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
