@@ -315,6 +315,8 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 #define Z80_DAISYCHAIN_BEGIN(pins) if (pins&Z80_M1) { pins|=Z80_IEIO;
 /* helper macro to end interrupt handling in tick callback */
 #define Z80_DAISYCHAIN_END(pins) pins&=~Z80_RETI; }
+/* return a pin mask with control-pins, address and data bus */
+#define Z80_MAKE_PINS(ctrl, addr, data) ((ctrl)|((data<<16)&0xFF0000ULL)|(addr&0xFFFFULL))
 /* extract 16-bit address bus from 64-bit pins */
 #define Z80_ADDR(p) ((uint16_t)(p&0xFFFFULL))
 /* merge 16-bit address bus value into 64-bit pins */
