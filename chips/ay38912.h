@@ -32,6 +32,9 @@
     - the BC2 pin is ignored since it makes only sense when connected to
       a CP1610 CPU
     - the RESET pin state is ignored, instead call ay38912_reset()
+    - the envelope generator is not emulated, I haven't found any games so far
+      which use the envelope generator to properly test this (since there's
+      only one envelope generator for all 3 tone channels it wasn't of much use)
 
     LICENSE:
 
@@ -145,12 +148,6 @@ typedef struct {
     uint32_t bit;
 } ay38912_noise_t;
 
-/* the envelope channel */
-typedef struct {
-    int period;
-    int counter;
-} ay38912_envelope_t;
-
 /* AY-3-8912 state */
 typedef struct {
     /* 4-bit address latch */
@@ -166,8 +163,6 @@ typedef struct {
     ay38912_tone_t tone[AY38912_NUM_CHANNELS];
     /* the noise generator state */
     ay38912_noise_t noise;
-    /* the envelope generator state */
-    ay38912_envelope_t envelope;
 
     /* sample generation state */
     int sample_period;
@@ -265,8 +260,7 @@ static void _ay38912_update(ay38912_t* ay) {
     if (ay->noise.period == 0) {
         ay->noise.period = 1;
     }
-    ay->envelope.period = 16 * ((ay->reg[AY38912_REG_ENV_PERIOD_COARSE]<<8)|(ay->reg[AY38912_REG_ENV_PERIOD_FINE]));
-    /* FIXME: more envelope stuff */
+    /* FIXME: envelope stuff */
 }
 
 void ay38912_init(ay38912_t* ay, int tick_prescaler, int tick_hz, int sound_hz, float magnitude) {
@@ -321,8 +315,6 @@ bool ay38912_tick(ay38912_t* ay, int num_ticks) {
         }
 
         /* FIXME: tick the envelope generator */
-
-        /* generate new sample */
     }
 
     /* generate new sample? */
