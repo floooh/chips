@@ -11,8 +11,6 @@
 extern "C" {
 #endif
 
-/* super-sampling precision */
-#define BEEPER_SUPER_SAMPLES (4)
 /* error-accumulation precision boost */
 #define BEEPER_PRECISION_BOOST (16)
 
@@ -20,17 +18,15 @@ extern "C" {
 typedef struct {
     /* current on/off state */
     bool state;
-    /* super-sample period in ticks */
+    /* current active-state accumulator */
+    uint32_t acc;
+    /* sample period in ticks */
     int period;
     /* current tick down-counter */
-    int tick_counter;
-    /* current super-sample counter */
-    int super_sample_counter;
-    /* max sample magnitude (default 1.0) */
-    float mag;
-    /* current super-sample-accumulation value */
-    float acc;
-    /* latest super-sampled audio sample value (between 0.0 and 'mag') */
+    int counter;
+    /* multiplier to get scaled sample value */
+    float mul;
+    /* latest computed sample */
     float sample;
 } beeper_t;
 
@@ -47,19 +43,16 @@ static inline void beeper_toggle(beeper_t* beeper) {
     beeper->state = !beeper->state;
 }
 /* tick the beeper, return true if a new sample is ready */
-static inline bool beeper_tick(beeper_t* b, int num_ticks) {
-    b->tick_counter -= (num_ticks * BEEPER_PRECISION_BOOST);
-    while (b->tick_counter <= 0) {
-        b->tick_counter += b->period;
-        if (b->state) {
-            b->acc += b->mag;
-        }
-        if (--b->super_sample_counter == 0) {
-            b->super_sample_counter = BEEPER_SUPER_SAMPLES;
-            b->sample = b->acc / BEEPER_SUPER_SAMPLES;
-            b->acc = 0.0f;
-            return true;
-        }
+static inline bool beeper_tick(beeper_t* b) {
+    if (b->state) {
+        b->acc++;
+    }
+    b->counter -= BEEPER_PRECISION_BOOST;
+    if (b->counter <= 0) {
+        b->counter += b->period;
+        b->sample = ((float)b->acc) * b->mul;
+        b->acc = 0;
+        return true;
     }
     return false;
 }
@@ -81,17 +74,17 @@ void beeper_init(beeper_t* b, int tick_hz, int sound_hz, float magnitude) {
     CHIPS_ASSERT(b);
     CHIPS_ASSERT((tick_hz > 0) && (sound_hz > 0));
     memset(b, 0, sizeof(*b));
-    b->period = (tick_hz * BEEPER_PRECISION_BOOST) / (sound_hz * BEEPER_SUPER_SAMPLES);
-    b->tick_counter = b->period;
-    b->super_sample_counter = BEEPER_SUPER_SAMPLES;
-    b->mag = magnitude;
+    b->period = (tick_hz * BEEPER_PRECISION_BOOST) / sound_hz;
+    b->counter = b->period;
+    b->mul = magnitude * (1.0f / ((float)tick_hz / (float)sound_hz));
 }
 
 void beeper_reset(beeper_t* b) {
     CHIPS_ASSERT(b);
+    b->acc = 0.0f;
+    b->sample = 0.0f;
     b->state = false;
-    b->tick_counter = b->period;
-    b->super_sample_counter = BEEPER_SUPER_SAMPLES;
+    b->counter = b->period;
 }
 
 #endif /* CHIPS_IMPL */
