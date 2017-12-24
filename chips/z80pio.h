@@ -148,7 +148,7 @@ typedef void (*z80pio_out_t)(int port_id, uint8_t data);
 
 typedef struct {
     /* port A and B register sets */
-    z80pio_port_t PORT[Z80PIO_NUM_PORTS];
+    z80pio_port_t port[Z80PIO_NUM_PORTS];
     /* currently in reset state? (until a control word is received) */
     bool reset_active;
     /* port-input callback */
@@ -177,7 +177,7 @@ void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data);
 /* call this once per machine cycle to handle the interrupt daisy chain */
 static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
     for (int i = 0; i < Z80PIO_NUM_PORTS; i++) {
-        z80pio_port_t* p = &pio->PORT[i];
+        z80pio_port_t* p = &pio->port[i];
         /*
             - set status of IEO pin depending on IEI pin and current
               channel's interrupt request/acknowledge status, this
@@ -290,16 +290,16 @@ void z80pio_init(z80pio_t* pio, z80pio_in_t in_cb, z80pio_out_t out_cb) {
 void z80pio_reset(z80pio_t* pio) {
     CHIPS_ASSERT(pio);
     for (int p = 0; p < Z80PIO_NUM_PORTS; p++) {
-        pio->PORT[p].mode = Z80PIO_MODE_INPUT;
-        pio->PORT[p].output = 0;
-        pio->PORT[p].io_select = 0;
-        pio->PORT[p].int_control &= ~Z80PIO_INTCTRL_EI;
-        pio->PORT[p].int_mask = 0xFF;
-        pio->PORT[p].int_enabled = false;
-        pio->PORT[p].expect_int_mask = false;
-        pio->PORT[p].expect_io_select = false;
-        pio->PORT[p].bctrl_match = false;
-        pio->PORT[p].int_state = 0;
+        pio->port[p].mode = Z80PIO_MODE_INPUT;
+        pio->port[p].output = 0;
+        pio->port[p].io_select = 0;
+        pio->port[p].int_control &= ~Z80PIO_INTCTRL_EI;
+        pio->port[p].int_mask = 0xFF;
+        pio->port[p].int_enabled = false;
+        pio->port[p].expect_int_mask = false;
+        pio->port[p].expect_io_select = false;
+        pio->port[p].bctrl_match = false;
+        pio->port[p].int_state = 0;
     }
     pio->reset_active = true;
 }
@@ -308,7 +308,7 @@ void z80pio_reset(z80pio_t* pio) {
 void _z80pio_write_ctrl(z80pio_t* pio, int port_id, uint8_t data) {
     CHIPS_ASSERT((port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
     pio->reset_active = false;
-    z80pio_port_t* p = &pio->PORT[port_id];
+    z80pio_port_t* p = &pio->port[port_id];
     if (p->expect_io_select) {
         /* followup io_select mask */
         p->io_select = data;
@@ -380,14 +380,14 @@ uint8_t _z80pio_read_ctrl(z80pio_t* pio) {
        returned when reading the control word, this
        is what MAME does
     */
-    return (pio->PORT[Z80PIO_PORT_A].int_control & 0xC0) |
-           (pio->PORT[Z80PIO_PORT_B].int_control >> 4);
+    return (pio->port[Z80PIO_PORT_A].int_control & 0xC0) |
+           (pio->port[Z80PIO_PORT_B].int_control >> 4);
 }
 
 /* new data word received from CPU */
 void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
     CHIPS_ASSERT((port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
-    z80pio_port_t* p = &pio->PORT[port_id];
+    z80pio_port_t* p = &pio->port[port_id];
     switch (p->mode) {
         case Z80PIO_MODE_OUTPUT:
             p->output = data;
@@ -413,7 +413,7 @@ void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
 /* read port data back to CPU */
 uint8_t _z80pio_read_data(z80pio_t* pio, int port_id) {
     CHIPS_ASSERT((port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
-    z80pio_port_t* p = &pio->PORT[port_id];
+    z80pio_port_t* p = &pio->port[port_id];
     uint8_t data = 0xFF;
     switch (p->mode) {
         case Z80PIO_MODE_OUTPUT:
@@ -487,7 +487,7 @@ uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins) {
 /* write value to a port, this may trigger an interrupt */
 void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data) {
     CHIPS_ASSERT(pio && (port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
-    z80pio_port_t* p = &pio->PORT[port_id];
+    z80pio_port_t* p = &pio->port[port_id];
     if (Z80PIO_MODE_BITCONTROL == p->mode) {
         p->input = data;
         uint8_t val = (p->input & p->io_select) | (p->output & ~p->io_select);
