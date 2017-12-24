@@ -25,7 +25,7 @@ extern int64_t clk_ticks(int freq_hz, int micro_secs);
 #endif
 
 int64_t clk_ticks(int freq_hz, int micro_secs) {
-    return ((int64_t)(freq_hz * micro_secs)) / 1000000;
+    return ((int64_t)freq_hz * micro_secs) / 1000000;
 }
 #endif
 
