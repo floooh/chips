@@ -2,7 +2,18 @@
 /*
     kbd.h -- keyboard matrix helpers
 
-    A keyboard_matrix instance maps key codes to the cross-sections of
+    Do this:
+        #define CHIPS_IMPL
+    before you include this file in *one* C or C++ file to create the 
+    implementation.
+
+    Optionally provide the following macros with your own implementation
+    
+        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+
+    OVERVIEW
+
+    A kbd_t instance maps key codes to the cross-sections of
     an up to 12x12 keyboard matrix with up to 4 modifier keys (shift, ctrl, ...)
 
         C0  C1  C1  C2  C3 ... C12
@@ -25,6 +36,30 @@
 
     Call the function kbd_test_lines() to check the current state of the
     keyboard matrix.
+
+    LICENSE:
+
+    MIT License
+
+    Copyright (c) 2017 Andre Weissflog
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
 */
 #include <stdint.h>
 

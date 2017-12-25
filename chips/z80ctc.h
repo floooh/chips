@@ -2,6 +2,17 @@
 /*
     z80ctc.h    -- emulates the Z80 CTC (Counter/Timer Channels)
 
+    Do this:
+        #define CHIPS_IMPL
+    before you include this file in *one* C or C++ file to create the 
+    implementation.
+
+    Optionally provide the following macros with your own implementation
+    
+        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+
+    EMULATED PINS:
+
                   +-----------+
             D0 <->|           |<-- CLK/TRG0
             .. <->|           |--> ZC/TO0
@@ -9,13 +20,15 @@
             CE -->|           |--> ZC/TO1
            CS0 -->|           |<-- CLK/TRG2
            CS1 -->|    Z80    |--> ZC/TO2
-            M1 -->|    PIO    |<-- CLK/TRG3
+            M1 -->|    CTC    |<-- CLK/TRG3
           IORQ -->|           |
             RD -->|           |<-- RESET
            INT <--|           |
            IEI -->|           |
            IEO <--|           |
                   +-----------+
+
+    FIXME: documentation
 
     FIXME: the spec says "After initialization, channels may be reprogrammed
     at any time. If updated control and time constant words are written
@@ -24,8 +37,30 @@
 
     The current implementation doesn't behave like this, instead it behaves
     like MAME. Needs more research!
+    
+    LICENSE:
 
-    FIXME: interrupts
+    MIT License
+
+    Copyright (c) 2017 Andre Weissflog
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -132,7 +167,7 @@ typedef struct {
 } z80ctc_t;
 
 /* extract 8-bit data bus from 64-bit pins */
-#define Z80CTC_DATA(p) ((uint8_t)(p>>16))
+#define Z80CTC_GET_DATA(p) ((uint8_t)(p>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define Z80CTC_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
@@ -394,7 +429,7 @@ uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
             Z80CTC_SET_DATA(pins, data);
         }
         else {
-            const uint8_t data = Z80CTC_DATA(pins);
+            const uint8_t data = Z80CTC_GET_DATA(pins);
             pins = _z80ctc_write(ctc, pins, chn_id, data);
         }
     }

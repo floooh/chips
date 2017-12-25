@@ -2,6 +2,17 @@
 /*
     z80pio.h -- emulates the Z80 PIO (Parallel Input/Output)
 
+    Do this:
+        #define CHIPS_IMPL
+    before you include this file in *one* C or C++ file to create the 
+    implementation.
+
+    Optionally provide the following macros with your own implementation
+    
+        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+
+    EMULATED PINS:
+
                   +-----------+
             D0 <->|           |<-> A0
             .. <->|           |<-> ..
@@ -17,7 +28,34 @@
            IEO <--|           |
                   +-----------+
 
-    FIXME: interrupts, bidirectional
+    NOTE EMULATED:
+        - bidirectional mode
+
+    FIXME: documentation
+
+    LICENSE:
+
+    MIT License
+
+    Copyright (c) 2017 Andre Weissflog
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -162,7 +200,7 @@ typedef struct {
     or write data on the PIOs I/O ports.
 */
 /* extract 8-bit data bus from 64-bit pins */
-#define Z80PIO_DATA(p) ((uint8_t)(p>>16))
+#define Z80PIO_GET_DATA(p) ((uint8_t)(p>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define Z80PIO_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
@@ -196,9 +234,6 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
               get a chance to decode the RETI
         */
 
-        /* if any higher priority device in the daisy chain has cleared
-           the IEIO pin, skip interrupt handling
-        */
         /* if any higher priority device in the daisy chain has cleared
            the IEIO pin, skip interrupt handling
         */
@@ -472,7 +507,7 @@ uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins) {
             Z80PIO_SET_DATA(pins, data);
         }
         else {
-            const uint8_t data = Z80PIO_DATA(pins);
+            const uint8_t data = Z80PIO_GET_DATA(pins);
             if (pins & Z80PIO_CDSEL) {
                 _z80pio_write_ctrl(pio, port_id, data);
             }

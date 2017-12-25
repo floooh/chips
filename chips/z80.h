@@ -7,9 +7,9 @@
     before you include this file in *one* C or C++ file to create the 
     implementation.
 
-    Optionally provde the following macros with your own implementation
+    Optionally provide the following macros with your own implementation
     
-    CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
 
     EMULATED PINS:
 
@@ -52,6 +52,29 @@
         invoked one or multiple times (usually once per machine cycle, 
         but also for 'filler ticks' or wait state ticks).
 
+    HELPER MACROS:
+
+        Z80_SET_ADDR(pins, addr)
+            set 16-bit address bus pins in 64-bit pin mask
+
+        Z80_GET_ADDR(pins)
+            extract 16-bit address bus value from 64-bit pin mask
+
+        Z80_SET_DATA(pins, data)
+            set 8-bit data bus pins in 64-bit pin mask
+
+        Z80_GET_DATA(pins)
+            extract 8-bit data bus value from 64-bit pin mask
+
+        Z80_MAKE_PINS(ctrl, addr, data)
+            build 64-bit pin mask from control-, address- and data-pins
+
+        Z80_DAISYCHAIN_BEGIN(pins)
+            used in tick function at start of interrupt daisy-chain block
+
+        Z80_DAISYCHAIN_END(pins)
+            used in tick function at end of interrupt daisy-chain block
+
     THE TICK CALLBACK:
 
     The tick function is called for one or multiple time cycles
@@ -64,8 +87,27 @@
         - pins: a 64-bit integer with CPU pins (address- and data-bus pins,
           and control pins)
 
-    The tick callback inspects the pins, perform the requested actions
-    (memory read/write and input/output), modify the pin bitmask
+    A simplest-possible tick callback which just performs memory read/write
+    operations on a 64kByte byte array looks like this:
+
+    uint8_t mem[1<<16] = { 0 };
+    uint64_t tick(int num_ticks, uint64_t pins) {
+        if (pins & Z80_MREQ) {
+            if (pins & Z80_RD) {
+                Z80_SET_DATA(pins, mem[Z80_GET_ADDR(pins)]);
+            }
+            else if (pins & Z80_WR) {
+                mem[Z80_GET_ADDR(pins)] = Z80_GET_DATA(pins);
+            }
+        }
+        else if (pins & Z80_IORQ) {
+            // FIXME: perform device I/O
+        }
+        return pins;
+    }
+
+    The tick callback inspects the pins, performs the requested actions
+    (memory read/write and input/output), modifies the pin bitmask
     with requests for the CPU (inject wait states, or request an
     interrupt), and finally returns the pin bitmask back to the 
     CPU emulation.
@@ -201,8 +243,7 @@
 extern "C" {
 #endif
 
-/*
-*/
+/*--- tick callback function typedef ---*/
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
 
 /*--- address lines ---*/
@@ -233,7 +274,7 @@ typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
 #define Z80_D6  (1ULL<<22)
 #define Z80_D7  (1ULL<<23)
 
-/*--- pin functions ---*/
+/*--- control pins ---*/
 
 /* system control pins */
 #define  Z80_M1    (1ULL<<24)       /* machine cycle 1 */
@@ -318,11 +359,11 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 /* return a pin mask with control-pins, address and data bus */
 #define Z80_MAKE_PINS(ctrl, addr, data) ((ctrl)|((data<<16)&0xFF0000ULL)|(addr&0xFFFFULL))
 /* extract 16-bit address bus from 64-bit pins */
-#define Z80_ADDR(p) ((uint16_t)(p&0xFFFFULL))
+#define Z80_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
 /* merge 16-bit address bus value into 64-bit pins */
 #define Z80_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|(a&0xFFFFULL));}
 /* extract 8-bit data bus from 64-bit pins */
-#define Z80_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define Z80_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define Z80_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|((d<<16)&0xFF0000ULL));}
 
