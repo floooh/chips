@@ -17,7 +17,7 @@
       IRQ -->|           |--> A0
       NMI -->|           |...
        RW <--|           |--> A15
-             |   m6502   |
+     SYNC <--|   m6502   |
              |           |--> D0
              |           |...
              |           |--> D7
@@ -88,9 +88,10 @@ typedef uint64_t (*m6502_tick_t)(uint64_t pins);
 #define M6502_D7  (1ULL<<23)
 
 /*--- control pins ---*/
-#define M6502_RW  (1ULL<<24)
-#define M6502_IRQ (1ULL<<25)
-#define M6502_NMI (1ULL<<26)
+#define M6502_RW    (1ULL<<24)
+#define M6502_SYNC  (1ULL<<25)
+#define M6502_IRQ   (1ULL<<26)
+#define M6502_NMI   (1ULL<<27)
 
 /* bit mask for all CPU pins */
 #define M6502_PIN_MASK (0xFFFFFFFF)
@@ -111,7 +112,6 @@ typedef struct {
     uint64_t PINS;
     uint8_t A,X,Y,S,P;      /* 8-bit registers */
     uint16_t PC;            /* program counter */
-    bool irq_taken;
     /* break out of m6502_exec() if (PINS & break_mask) */
     uint64_t break_mask;
 } m6502_t;
@@ -161,7 +161,6 @@ void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
 
 void m6502_reset(m6502_t* c) {
     CHIPS_ASSERT(c);
-    c->irq_taken = false;
     c->P = M6502_IF|M6502_XF;
     c->S = 0xFD;
     c->PINS = M6502_RW;
