@@ -112,6 +112,8 @@ typedef struct {
     uint8_t A,X,Y,S,P;      /* 8-bit registers */
     uint16_t PC;            /* program counter */
     bool irq_taken;
+    /* break out of m6502_exec() if (PINS & break_mask) */
+    uint64_t break_mask;
 } m6502_t;
 
 /* initialize a new m6502 instance */
@@ -145,6 +147,8 @@ extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#include "_m6502_decoder.h"
+
 void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT(tick_cb);
@@ -157,7 +161,6 @@ void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
 
 void m6502_reset(m6502_t* c) {
     CHIPS_ASSERT(c);
-    CHIPS_ASSERT(tick_cb);
     c->irq_taken = false;
     c->P = M6502_IF|M6502_XF;
     c->S = 0xFD;
