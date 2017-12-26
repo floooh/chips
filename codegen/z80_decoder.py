@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-#   z80_opcodes.py
+#   z80_decoder.py
 #   Generate huge switch/case Z80 instruction decoder.
 #   See: 
 #       http://www.z80.info/decoding.htm
@@ -15,7 +15,7 @@ import sys
 TabWidth = 2
 
 # the output path
-OutPath = '../chips/_z80_opcodes.h'
+OutPath = '../chips/_z80_decoder.h'
 
 # the target file handle
 Out = None
@@ -73,7 +73,7 @@ def l(s) :
 #-------------------------------------------------------------------------------
 #   write C defines, these make the generated code a bit more readable
 #
-def defines():
+def write_defines():
     l('/* set 16-bit address in 64-bit pin mask*/')
     l('#define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)')
     l('/* set 16-bit address and 8-bit data in 64-bit pin mask */')
@@ -116,7 +116,7 @@ def defines():
 #-------------------------------------------------------------------------------
 #   undefine the C defines
 #
-def undefines():
+def write_undefines():
     l('#undef _SA')
     l('#undef _SAD')
     l('#undef _GD')
@@ -138,7 +138,7 @@ def undefines():
 #-------------------------------------------------------------------------------
 #   Generate the SZP flags lookup table.
 #
-def szp_table():
+def write_szp_table():
     Z80_PF =  (1<<2)
     Z80_XF =  (1<<3)
     Z80_YF =  (1<<5)
@@ -295,9 +295,8 @@ def out(addr,val):
 #   INT MODE 1: 13 cycles
 #   INT MODE 2: 19 cycles
 #
-def check_interrupt():
+def write_interrupt_handling():
     l('  if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c.IFF1) {')
-    l('    pins &= ~Z80_INT;')
     l('    c.IFF1=c.IFF2=false;')
     l('    if (pins & Z80_HALT) { pins &= ~Z80_HALT; c.PC++; }')
     l('    _ON(Z80_M1|Z80_IORQ);')
@@ -326,6 +325,7 @@ def check_interrupt():
     l('      /*CHIPS_ASSERT(false);*/')
     l('    }')
     l('  }')
+    l('  pins &= ~Z80_INT;')
 
 #-------------------------------------------------------------------------------
 # return comment string for (HL), (IX+d), (IY+d)
@@ -1826,9 +1826,9 @@ def unpatch_reg_tables() :
 # write source header
 #
 def write_header() :
-    l('// machine generated, do not edit!')
-    szp_table()
-    defines()
+    l('/* machine generated, do not edit! */')
+    write_szp_table()
+    write_defines()
     l('uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {')
     l('  z80_t c = *cpu;')
     l('  uint32_t ticks = 0;')
@@ -1847,7 +1847,7 @@ def write_footer() :
     l('  *cpu = c;')
     l('  return ticks;')
     l('}')
-    undefines()
+    write_undefines()
 
 #-------------------------------------------------------------------------------
 # begin a new instruction group (begins a switch statement)
@@ -1935,6 +1935,6 @@ for i in range(0, 256) :
     else:
         write_op(indent, enc_op(i, False))
 write_end_group(indent, 1, False, None)
-check_interrupt()
+write_interrupt_handling()
 write_footer()
-
+Out.close()

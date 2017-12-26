@@ -3,8 +3,8 @@ CPU instruction decoder source code.
 
 Run:
 
-> python z80_opcodes.py
-> python m6502_opcodes.py
+> python z80_decoder.py
+> python m6502_decoder.py
 
 To generate the respective decoder source files in the '../chips' directory.
 

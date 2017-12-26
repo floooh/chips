@@ -380,7 +380,7 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#include "_z80_opcodes.h"
+#include "_z80_decoder.h"
 
 void z80_init(z80_t* c, z80_tick_t tick_cb) {
     CHIPS_ASSERT(c);
