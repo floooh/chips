@@ -216,11 +216,11 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x9d:/*STA abs,X*/_A_ABX_W();/* FIXME */break;
       case 0x9e:/*INVALID*/break;
       case 0x9f:/*INVALID*/break;
-      case 0xa0:/*LDY #*/_A_IMM();_RD();c.Y=_GD();_NZ(c.X);break;
+      case 0xa0:/*LDY #*/_A_IMM();_RD();c.Y=_GD();_NZ(c.Y);break;
       case 0xa1:/*LDA (zp,X)*/_A_IDX();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xa2:/*LDX #*/_A_IMM();_RD();c.X=_GD();_NZ(c.X);break;
       case 0xa3:/*LAX (zp,X) (undoc)*/_A_IDX();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-      case 0xa4:/*LDY zp*/_A_ZER();_RD();c.Y=_GD();_NZ(c.X);break;
+      case 0xa4:/*LDY zp*/_A_ZER();_RD();c.Y=_GD();_NZ(c.Y);break;
       case 0xa5:/*LDA zp*/_A_ZER();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xa6:/*LDX zp*/_A_ZER();_RD();c.X=_GD();_NZ(c.X);break;
       case 0xa7:/*LAX zp (undoc)*/_A_ZER();_RD();c.A=c.X=_GD();_NZ(c.A);break;
@@ -228,7 +228,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xa9:/*LDA #*/_A_IMM();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xaa:/*TAX */_A_IMP();/* FIXME */break;
       case 0xab:/*INVALID*/break;
-      case 0xac:/*LDY abs*/_A_ABS();_RD();c.Y=_GD();_NZ(c.X);break;
+      case 0xac:/*LDY abs*/_A_ABS();_RD();c.Y=_GD();_NZ(c.Y);break;
       case 0xad:/*LDA abs*/_A_ABS();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xae:/*LDX abs*/_A_ABS();_RD();c.X=_GD();_NZ(c.X);break;
       case 0xaf:/*LAX abs (undoc)*/_A_ABS();_RD();c.A=c.X=_GD();_NZ(c.A);break;
@@ -236,7 +236,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xb1:/*LDA (zp),Y*/_A_IDY_R();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xb2:/*INVALID*/break;
       case 0xb3:/*LAX (zp),Y (undoc)*/_A_IDY_R();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-      case 0xb4:/*LDY zp,X*/_A_ZPX();_RD();c.Y=_GD();_NZ(c.X);break;
+      case 0xb4:/*LDY zp,X*/_A_ZPX();_RD();c.Y=_GD();_NZ(c.Y);break;
       case 0xb5:/*LDA zp,X*/_A_ZPX();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xb6:/*LDX zp,Y*/_A_ZPY();_RD();c.X=_GD();_NZ(c.X);break;
       case 0xb7:/*LAX zp,Y (undoc)*/_A_ZPY();_RD();c.A=c.X=_GD();_NZ(c.A);break;
@@ -244,7 +244,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xb9:/*LDA abs,Y*/_A_ABY_R();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xba:/*TSX */_A_IMP();/* FIXME */break;
       case 0xbb:/*INVALID*/break;
-      case 0xbc:/*LDY abs,X*/_A_ABX_R();_RD();c.Y=_GD();_NZ(c.X);break;
+      case 0xbc:/*LDY abs,X*/_A_ABX_R();_RD();c.Y=_GD();_NZ(c.Y);break;
       case 0xbd:/*LDA abs,X*/_A_ABX_R();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xbe:/*LDX abs,Y*/_A_ABY_R();_RD();c.X=_GD();_NZ(c.X);break;
       case 0xbf:/*LAX abs,Y (undoc)*/_A_ABY_R();_RD();c.A=c.X=_GD();_NZ(c.A);break;
