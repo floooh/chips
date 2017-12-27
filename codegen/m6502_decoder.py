@@ -21,14 +21,14 @@ VF = (1<<6)
 NF = (1<<7)
 
 def flag_name(f):
-    if f == CF: return 'CF'
-    elif f == ZF: return 'ZF'
-    elif f == IF: return 'IF'
-    elif f == DF: return 'DF'
-    elif f == BF: return 'BF'
-    elif f == XF: return 'XF'
-    elif f == VF: return 'VF'
-    elif f == NF: return 'NF'
+    if f == CF: return 'C'
+    elif f == ZF: return 'Z'
+    elif f == IF: return 'I'
+    elif f == DF: return 'D'
+    elif f == BF: return 'B'
+    elif f == XF: return 'X'
+    elif f == VF: return 'V'
+    elif f == NF: return 'N'
 
 def branch_name(m, v):
     if m == NF:
@@ -56,7 +56,7 @@ A_JSR = 11      # special JSR abs
 A_INV = 12      # an invalid instruction
 
 # addressing mode strings
-addr_mode_str = ['', '#', 'zp', 'zp,X', 'zp,Y', 'abs', 'abs,X', 'abs,Y', '(zp,X)', '(zp),Y', '', '', '']
+addr_mode_str = ['', '#', 'zp', 'zp,X', 'zp,Y', 'abs', 'abs,X', 'abs,Y', '(zp,X)', '(zp),Y', '', '', 'INVALID']
 
 # memory access modes
 M___ = 0        # no memory access
@@ -269,6 +269,14 @@ def u_cmt(o,cmd):
     o.cmt += ' (undoc)'
 
 #-------------------------------------------------------------------------------
+def invalid_opcode(op):
+    cc = op & 3
+    bbb = (op>>2) & 7
+    aaa = (op>>5) & 7
+    addr_mode = ops[cc][bbb][aaa][0]
+    return addr_mode == A_INV
+
+#-------------------------------------------------------------------------------
 def enc_addr(op):
     # returns a string performing the addressing mode decode steps, 
     # result will be in the address bus pins
@@ -440,12 +448,12 @@ def i_pla(o):
 
 #-------------------------------------------------------------------------------
 def i_se(o, f):
-    cmt(o,'SE '+flag_name(f))
+    cmt(o,'SE'+flag_name(f))
     o.src += '/* FIXME */'
 
 #-------------------------------------------------------------------------------
 def i_cl(o, f):
-    cmt(o,'CL '+flag_name(f))
+    cmt(o,'CL'+flag_name(f))
     o.src += '/* FIXME */'
 
 #-------------------------------------------------------------------------------
@@ -631,6 +639,10 @@ def i_bit(o):
 #-------------------------------------------------------------------------------
 def enc_op(op):
     o = opcode(op)
+    if invalid_opcode(op):
+        o.cmt = 'INVALID'
+        o.src = ''
+        return o
     # addressing mode decoder
     o.src = enc_addr(op)
     # instruction decoding
