@@ -194,7 +194,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x85:/*STA zp*/_A_ZER();_SD(c.A);_WR();break;
       case 0x86:/*STX zp*/_A_ZER();_SD(c.X);_WR();break;
       case 0x87:/*SAX zp (undoc)*/_A_ZER();_SD(c.A&c.X);_WR();break;
-      case 0x88:/*DEY */_A_IMP();/* FIXME */break;
+      case 0x88:/*DEY */_A_IMP();_RD();c.Y--;_NZ(c.Y);break;
       case 0x89:/*NOP # (undoc)*/_A_IMM();_RD();break;
       case 0x8a:/*TXA */_A_IMP();_RD();c.A=c.X;_NZ(c.A);break;
       case 0x8b:/*INVALID*/break;
@@ -258,9 +258,9 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xc5:/*CMP zp*/_A_ZER();/* FIXME */break;
       case 0xc6:/*DEC zp*/_A_ZER();/* FIXME */break;
       case 0xc7:/*DCP zp (undoc)*/_A_ZER();/* FIXME */break;
-      case 0xc8:/*INY */_A_IMP();/* FIXME */break;
+      case 0xc8:/*INY */_A_IMP();_RD();c.Y++;_NZ(c.Y);break;
       case 0xc9:/*CMP #*/_A_IMM();/* FIXME */break;
-      case 0xca:/*DEX */_A_IMP();/* FIXME */break;
+      case 0xca:/*DEX */_A_IMP();_RD();c.X--;_NZ(c.X);break;
       case 0xcb:/*INVALID*/break;
       case 0xcc:/*CPY abs*/_A_ABS();/* FIXME */break;
       case 0xcd:/*CMP abs*/_A_ABS();/* FIXME */break;
@@ -290,7 +290,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xe5:/*SBC zp*/_A_ZER();/* FIXME */break;
       case 0xe6:/*INC zp*/_A_ZER();/* FIXME */break;
       case 0xe7:/*ISB zp (undoc)*/_A_ZER();/* FIXME */break;
-      case 0xe8:/*INX */_A_IMP();/* FIXME */break;
+      case 0xe8:/*INX */_A_IMP();_RD();c.X++;_NZ(c.X);break;
       case 0xe9:/*SBC #*/_A_IMM();/* FIXME */break;
       case 0xea:/*NOP */_A_IMP();_RD();break;
       case 0xeb:/*SBC # (undoc)*/_A_IMM();/* FIXME */break;
