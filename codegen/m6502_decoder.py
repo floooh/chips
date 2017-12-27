@@ -133,6 +133,8 @@ def write_defines():
     l('#define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)')
     l('/* set 16-bit address and 8-bit data in 64-bit pin mask */')
     l('#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)')
+    l('/* set 8-bit data in 64-bit pin mask */')
+    l('#define _SD(data) pins=((pins&~0xFF0000ULL)|(((data)<<16)&0xFF0000ULL))')
     l('/* extract 8-bit data from 64-bit pin mask */')
     l('#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))')
     l('/* enable control pins */')
@@ -381,22 +383,22 @@ def u_lax(o):
 #-------------------------------------------------------------------------------
 def i_sta(o):
     cmt(o,'STA')
-    o.src += '/* FIXME */'
+    o.src += '_SD(c.A);_WR();'
 
 #-------------------------------------------------------------------------------
 def i_stx(o):
     cmt(o,'STX')
-    o.src += '/* FIXME */'
+    o.src += '_SD(c.X);_WR();'
 
 #-------------------------------------------------------------------------------
 def i_sty(o):
     cmt(o,'STY')
-    o.src += '/* FIXME */'
+    o.src += '_SD(c.Y);_WR();'
 
 #-------------------------------------------------------------------------------
 def u_sax(o):
     u_cmt(o,'SAX')
-    o.src += '/* FIXME */'
+    o.src += '_SD(c.A&c.X);_WR();'
 
 #-------------------------------------------------------------------------------
 def i_tax(o):

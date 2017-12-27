@@ -3,6 +3,8 @@
 #define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
 #define _SAD(addr,data) pins=(pins&~0xFFFFFF)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
+/* set 8-bit data in 64-bit pin mask */
+#define _SD(data) pins=((pins&~0xFF0000ULL)|(((data)<<16)&0xFF0000ULL))
 /* extract 8-bit data from 64-bit pin mask */
 #define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
 /* enable control pins */
@@ -185,35 +187,35 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x7e:/*ROR abs,X*/_A_ABX_W();/* FIXME */break;
       case 0x7f:/*RRA abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
       case 0x80:/*NOP # (undoc)*/_A_IMM();_RD();break;
-      case 0x81:/*STA (zp,X)*/_A_IDX();/* FIXME */break;
+      case 0x81:/*STA (zp,X)*/_A_IDX();_SD(c.A);_WR();break;
       case 0x82:/*NOP # (undoc)*/_A_IMM();_RD();break;
-      case 0x83:/*SAX (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
-      case 0x84:/*STY zp*/_A_ZER();/* FIXME */break;
-      case 0x85:/*STA zp*/_A_ZER();/* FIXME */break;
-      case 0x86:/*STX zp*/_A_ZER();/* FIXME */break;
-      case 0x87:/*SAX zp (undoc)*/_A_ZER();/* FIXME */break;
+      case 0x83:/*SAX (zp,X) (undoc)*/_A_IDX();_SD(c.A&c.X);_WR();break;
+      case 0x84:/*STY zp*/_A_ZER();_SD(c.Y);_WR();break;
+      case 0x85:/*STA zp*/_A_ZER();_SD(c.A);_WR();break;
+      case 0x86:/*STX zp*/_A_ZER();_SD(c.X);_WR();break;
+      case 0x87:/*SAX zp (undoc)*/_A_ZER();_SD(c.A&c.X);_WR();break;
       case 0x88:/*DEY */_A_IMP();/* FIXME */break;
       case 0x89:/*NOP # (undoc)*/_A_IMM();_RD();break;
       case 0x8a:/*TXA */_A_IMP();/* FIXME */break;
       case 0x8b:/*INVALID*/break;
-      case 0x8c:/*STY abs*/_A_ABS();/* FIXME */break;
-      case 0x8d:/*STA abs*/_A_ABS();/* FIXME */break;
-      case 0x8e:/*STX abs*/_A_ABS();/* FIXME */break;
-      case 0x8f:/*SAX abs (undoc)*/_A_ABS();/* FIXME */break;
+      case 0x8c:/*STY abs*/_A_ABS();_SD(c.Y);_WR();break;
+      case 0x8d:/*STA abs*/_A_ABS();_SD(c.A);_WR();break;
+      case 0x8e:/*STX abs*/_A_ABS();_SD(c.X);_WR();break;
+      case 0x8f:/*SAX abs (undoc)*/_A_ABS();_SD(c.A&c.X);_WR();break;
       case 0x90:/*BCC #*/_A_IMM();/* FIXME */break;
-      case 0x91:/*STA (zp),Y*/_A_IDY_W();/* FIXME */break;
+      case 0x91:/*STA (zp),Y*/_A_IDY_W();_SD(c.A);_WR();break;
       case 0x92:/*INVALID*/break;
       case 0x93:/*INVALID*/break;
-      case 0x94:/*STY zp,X*/_A_ZPX();/* FIXME */break;
-      case 0x95:/*STA zp,X*/_A_ZPX();/* FIXME */break;
-      case 0x96:/*STX zp,Y*/_A_ZPY();/* FIXME */break;
-      case 0x97:/*SAX zp,Y (undoc)*/_A_ZPY();/* FIXME */break;
+      case 0x94:/*STY zp,X*/_A_ZPX();_SD(c.Y);_WR();break;
+      case 0x95:/*STA zp,X*/_A_ZPX();_SD(c.A);_WR();break;
+      case 0x96:/*STX zp,Y*/_A_ZPY();_SD(c.X);_WR();break;
+      case 0x97:/*SAX zp,Y (undoc)*/_A_ZPY();_SD(c.A&c.X);_WR();break;
       case 0x98:/*TYA */_A_IMP();/* FIXME */break;
-      case 0x99:/*STA abs,Y*/_A_ABY_W();/* FIXME */break;
+      case 0x99:/*STA abs,Y*/_A_ABY_W();_SD(c.A);_WR();break;
       case 0x9a:/*TXS */_A_IMP();/* FIXME */break;
       case 0x9b:/*INVALID*/break;
       case 0x9c:/*INVALID*/break;
-      case 0x9d:/*STA abs,X*/_A_ABX_W();/* FIXME */break;
+      case 0x9d:/*STA abs,X*/_A_ABX_W();_SD(c.A);_WR();break;
       case 0x9e:/*INVALID*/break;
       case 0x9f:/*INVALID*/break;
       case 0xa0:/*LDY #*/_A_IMM();_RD();c.Y=_GD();_NZ(c.Y);break;
