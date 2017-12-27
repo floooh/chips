@@ -256,7 +256,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xc3:/*DCP (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
       case 0xc4:/*CPY zp*/_A_ZER();/* FIXME */break;
       case 0xc5:/*CMP zp*/_A_ZER();/* FIXME */break;
-      case 0xc6:/*DEC zp*/_A_ZER();/* FIXME */break;
+      case 0xc6:/*DEC zp*/_A_ZER();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
       case 0xc7:/*DCP zp (undoc)*/_A_ZER();/* FIXME */break;
       case 0xc8:/*INY */_A_IMP();_RD();c.Y++;_NZ(c.Y);break;
       case 0xc9:/*CMP #*/_A_IMM();/* FIXME */break;
@@ -264,7 +264,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xcb:/*INVALID*/break;
       case 0xcc:/*CPY abs*/_A_ABS();/* FIXME */break;
       case 0xcd:/*CMP abs*/_A_ABS();/* FIXME */break;
-      case 0xce:/*DEC abs*/_A_ABS();/* FIXME */break;
+      case 0xce:/*DEC abs*/_A_ABS();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
       case 0xcf:/*DCP abs (undoc)*/_A_ABS();/* FIXME */break;
       case 0xd0:/*BNE #*/_A_IMM();/* FIXME */break;
       case 0xd1:/*CMP (zp),Y*/_A_IDY_R();/* FIXME */break;
@@ -272,7 +272,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xd3:/*DCP (zp),Y (undoc)*/_A_IDY_W();/* FIXME */break;
       case 0xd4:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
       case 0xd5:/*CMP zp,X*/_A_ZPX();/* FIXME */break;
-      case 0xd6:/*DEC zp,X*/_A_ZPX();/* FIXME */break;
+      case 0xd6:/*DEC zp,X*/_A_ZPX();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
       case 0xd7:/*DCP zp,X (undoc)*/_A_ZPX();/* FIXME */break;
       case 0xd8:/*CLD */_A_IMP();_RD();c.P&=~0x8;break;
       case 0xd9:/*CMP abs,Y*/_A_ABY_R();/* FIXME */break;
@@ -280,7 +280,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xdb:/*DCP abs,Y (undoc)*/_A_ABY_W();/* FIXME */break;
       case 0xdc:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
       case 0xdd:/*CMP abs,X*/_A_ABX_R();/* FIXME */break;
-      case 0xde:/*DEC abs,X*/_A_ABX_W();/* FIXME */break;
+      case 0xde:/*DEC abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
       case 0xdf:/*DCP abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
       case 0xe0:/*CPX #*/_A_IMM();/* FIXME */break;
       case 0xe1:/*SBC (zp,X)*/_A_IDX();/* FIXME */break;
@@ -288,7 +288,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xe3:/*ISB (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
       case 0xe4:/*CPX zp*/_A_ZER();/* FIXME */break;
       case 0xe5:/*SBC zp*/_A_ZER();/* FIXME */break;
-      case 0xe6:/*INC zp*/_A_ZER();/* FIXME */break;
+      case 0xe6:/*INC zp*/_A_ZER();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
       case 0xe7:/*ISB zp (undoc)*/_A_ZER();/* FIXME */break;
       case 0xe8:/*INX */_A_IMP();_RD();c.X++;_NZ(c.X);break;
       case 0xe9:/*SBC #*/_A_IMM();/* FIXME */break;
@@ -296,7 +296,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xeb:/*SBC # (undoc)*/_A_IMM();/* FIXME */break;
       case 0xec:/*CPX abs*/_A_ABS();/* FIXME */break;
       case 0xed:/*SBC abs*/_A_ABS();/* FIXME */break;
-      case 0xee:/*INC abs*/_A_ABS();/* FIXME */break;
+      case 0xee:/*INC abs*/_A_ABS();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
       case 0xef:/*ISB abs (undoc)*/_A_ABS();/* FIXME */break;
       case 0xf0:/*BEQ #*/_A_IMM();/* FIXME */break;
       case 0xf1:/*SBC (zp),Y*/_A_IDY_R();/* FIXME */break;
@@ -304,7 +304,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xf3:/*ISB (zp),Y (undoc)*/_A_IDY_W();/* FIXME */break;
       case 0xf4:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
       case 0xf5:/*SBC zp,X*/_A_ZPX();/* FIXME */break;
-      case 0xf6:/*INC zp,X*/_A_ZPX();/* FIXME */break;
+      case 0xf6:/*INC zp,X*/_A_ZPX();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
       case 0xf7:/*ISB zp,X (undoc)*/_A_ZPX();/* FIXME */break;
       case 0xf8:/*SED */_A_IMP();_RD();c.P|=0x8;break;
       case 0xf9:/*SBC abs,Y*/_A_ABY_R();/* FIXME */break;
@@ -312,7 +312,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xfb:/*ISB abs,Y (undoc)*/_A_ABY_W();/* FIXME */break;
       case 0xfc:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
       case 0xfd:/*SBC abs,X*/_A_ABX_R();/* FIXME */break;
-      case 0xfe:/*INC abs,X*/_A_ABX_W();/* FIXME */break;
+      case 0xfe:/*INC abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
       case 0xff:/*ISB abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
     }
     /* check for interrupt request */
