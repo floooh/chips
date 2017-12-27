@@ -171,6 +171,8 @@ def write_defines():
     l('#define _A_IDY_R() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();t=_GD()+c.Y;a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}')
     l('/* (zp),Y indirect indexed addressing mode for read/write instructions */')
     l('#define _A_IDY_W() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();t=_GD()+c.Y;a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)')
+    l('/* set N and Z flags depending on value */')
+    l('#define _NZ(v) c.P=((c.P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))')
     l('')
 
 #-------------------------------------------------------------------------------
@@ -359,22 +361,22 @@ def u_nop(o):
 #-------------------------------------------------------------------------------
 def i_lda(o):
     cmt(o,'LDA')
-    o.src += '/* FIXME */'
+    o.src += '_RD();c.A=_GD();_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def i_ldx(o):
     cmt(o,'LDX')
-    o.src += '/* FIXME */'
+    o.src += '_RD();c.X=_GD();_NZ(c.X);'
 
 #-------------------------------------------------------------------------------
 def i_ldy(o):
     cmt(o,'LDY')
-    o.src += '/* FIXME */'
+    o.src += '_RD();c.Y=_GD();_NZ(c.X);'
 
 #-------------------------------------------------------------------------------
 def u_lax(o):
     u_cmt(o,'LAX')
-    o.src += '/* FIXME */'
+    o.src += '_RD();c.A=c.X=_GD();_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def i_sta(o):
