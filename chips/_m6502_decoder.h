@@ -196,7 +196,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x87:/*SAX zp (undoc)*/_A_ZER();_SD(c.A&c.X);_WR();break;
       case 0x88:/*DEY */_A_IMP();/* FIXME */break;
       case 0x89:/*NOP # (undoc)*/_A_IMM();_RD();break;
-      case 0x8a:/*TXA */_A_IMP();/* FIXME */break;
+      case 0x8a:/*TXA */_A_IMP();_RD();c.A=c.X;_NZ(c.A);break;
       case 0x8b:/*INVALID*/break;
       case 0x8c:/*STY abs*/_A_ABS();_SD(c.Y);_WR();break;
       case 0x8d:/*STA abs*/_A_ABS();_SD(c.A);_WR();break;
@@ -210,7 +210,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x95:/*STA zp,X*/_A_ZPX();_SD(c.A);_WR();break;
       case 0x96:/*STX zp,Y*/_A_ZPY();_SD(c.X);_WR();break;
       case 0x97:/*SAX zp,Y (undoc)*/_A_ZPY();_SD(c.A&c.X);_WR();break;
-      case 0x98:/*TYA */_A_IMP();/* FIXME */break;
+      case 0x98:/*TYA */_A_IMP();_RD();c.A=c.Y;_NZ(c.A);break;
       case 0x99:/*STA abs,Y*/_A_ABY_W();_SD(c.A);_WR();break;
       case 0x9a:/*TXS */_A_IMP();/* FIXME */break;
       case 0x9b:/*INVALID*/break;
@@ -226,9 +226,9 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xa5:/*LDA zp*/_A_ZER();_RD();c.A=_GD();_NZ(c.A);break;
       case 0xa6:/*LDX zp*/_A_ZER();_RD();c.X=_GD();_NZ(c.X);break;
       case 0xa7:/*LAX zp (undoc)*/_A_ZER();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-      case 0xa8:/*TAY */_A_IMP();/* FIXME */break;
+      case 0xa8:/*TAY */_A_IMP();_RD();c.Y=c.A;_NZ(c.Y);break;
       case 0xa9:/*LDA #*/_A_IMM();_RD();c.A=_GD();_NZ(c.A);break;
-      case 0xaa:/*TAX */_A_IMP();/* FIXME */break;
+      case 0xaa:/*TAX */_A_IMP();_RD();c.X=c.A;_NZ(c.X);break;
       case 0xab:/*INVALID*/break;
       case 0xac:/*LDY abs*/_A_ABS();_RD();c.Y=_GD();_NZ(c.Y);break;
       case 0xad:/*LDA abs*/_A_ABS();_RD();c.A=_GD();_NZ(c.A);break;
