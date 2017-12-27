@@ -147,6 +147,94 @@ extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+/* BCD-aware ADC/SDC functions taken from MAME */
+#define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
+static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
+    if (cpu->P & M6502_DF) {
+        /* decimal mode */
+        uint8_t c = cpu->P & M6502_CF ? 1 : 0;
+        cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
+        uint8_t al = (cpu->A & 0x0F) + (val & 0x0F) + c;
+        if (al > 9) {
+            al += 6;
+        }
+        uint8_t ah = (cpu->A >> 4) + (val >> 4) + (al > 0x0F);
+        if (0 == (cpu->A + val + c)) {
+            cpu->P |= M6502_ZF;
+        }
+        else if (ah & 0x08) {
+            cpu->P |= M6502_NF;
+        }
+        if (~(cpu->A^val) & (cpu->A^(ah<<4)) & 0x80) {
+            cpu->P |= M6502_VF;
+        }
+        if (ah > 9) {
+            ah += 6;
+        }
+        if (ah > 15) {
+            cpu->P |= M6502_CF;
+        }
+        cpu->A = (ah<<4) | (al & 0x0F);
+    }
+    else {
+        /* default mode */
+        uint16_t sum = cpu->A + val + (cpu->P & M6502_CF ? 1:0);
+        cpu->P &= ~(M6502_VF|M6502_CF);
+        cpu->P = _M6502_NZ(cpu->P,sum);
+        if (~(cpu->A^val) & (cpu->A^sum) & 0x80) {
+            cpu->P |= M6502_VF;
+        }
+        if (sum & 0xFF00) {
+            cpu->P |= M6502_CF;
+        }
+        cpu->A = sum & 0xFF;
+    }    
+}
+
+static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
+    if (cpu->P & M6502_DF) {
+        // decimal mode
+        uint8_t c = cpu->P & M6502_CF ? 0 : 1;
+        cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
+        uint16_t diff = cpu->A - val - c;
+        uint8_t al = (cpu->A & 0x0F) - (val & 0x0F) - c;
+        if ((int8_t)al < 0) {
+            al -= 6;
+        }
+        uint8_t ah = (cpu->A>>4) - (val>>4) - ((int8_t)al < 0);
+        if (0 == (uint8_t)diff) {
+            cpu->P |= M6502_ZF;
+        }
+        else if (diff & 0x80) {
+            cpu->P |= M6502_NF;
+        }
+        if ((cpu->A^val) & (cpu->A^diff) & 0x80) {
+            cpu->P |= M6502_VF;
+        }
+        if (!(diff & 0xFF00)) {
+            cpu->P |= M6502_CF;
+        }
+        if (ah & 0x80) {
+            ah -= 6;
+        }
+        cpu->A = (ah<<4) | (al & 0x0F);
+    }
+    else {
+        // default mode
+        uint16_t diff = cpu->A - val - (cpu->P & M6502_CF ? 0 : 1);
+        cpu->P &= ~(M6502_VF|M6502_CF);
+        cpu->P = _M6502_NZ(cpu->P, (uint8_t)diff);
+        if ((cpu->A^val) & (cpu->A^diff) & 0x80) {
+            cpu->P |= M6502_VF;
+        }
+        if (!(diff & 0xFF00)) {
+            cpu->P |= M6502_CF;
+        }
+        cpu->A = diff & 0xFF;
+    }
+}
+#undef _M6502_NZ
+
 #include "_m6502_decoder.h"
 
 void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
