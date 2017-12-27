@@ -66,7 +66,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x5:/*ORA zp*/_A_ZER();_RD();c.A|=_GD();_NZ(c.A);break;
       case 0x6:/*ASL zp*/_A_ZER();/* FIXME */break;
       case 0x7:/*SLO zp (undoc)*/_A_ZER();/* FIXME */break;
-      case 0x8:/*PHP */_A_IMP();/* FIXME */break;
+      case 0x8:/*PHP */_A_IMP();_RD();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();break;
       case 0x9:/*ORA #*/_A_IMM();_RD();c.A|=_GD();_NZ(c.A);break;
       case 0xa:/*ASLA */_A_IMP();/* FIXME */break;
       case 0xb:/*INVALID*/break;
@@ -98,7 +98,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x25:/*AND zp*/_A_ZER();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x26:/*ROL zp*/_A_ZER();/* FIXME */break;
       case 0x27:/*RLA zp (undoc)*/_A_ZER();/* FIXME */break;
-      case 0x28:/*PLP */_A_IMP();/* FIXME */break;
+      case 0x28:/*PLP */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;break;
       case 0x29:/*AND #*/_A_IMM();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x2a:/*ROLA */_A_IMP();/* FIXME */break;
       case 0x2b:/*INVALID*/break;
@@ -130,7 +130,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x45:/*EOR zp*/_A_ZER();_RD();c.A^=_GD();_NZ(c.A);break;
       case 0x46:/*LSR zp*/_A_ZER();/* FIXME */break;
       case 0x47:/*SRE zp (undoc)*/_A_ZER();/* FIXME */break;
-      case 0x48:/*PHA */_A_IMP();/* FIXME */break;
+      case 0x48:/*PHA */_A_IMP();_RD();_SAD(0x0100|c.S--,c.A);_WR();break;
       case 0x49:/*EOR #*/_A_IMM();_RD();c.A^=_GD();_NZ(c.A);break;
       case 0x4a:/*LSRA */_A_IMP();/* FIXME */break;
       case 0x4b:/*INVALID*/break;
@@ -162,7 +162,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x65:/*ADC zp*/_A_ZER();/* FIXME */break;
       case 0x66:/*ROR zp*/_A_ZER();/* FIXME */break;
       case 0x67:/*RRA zp (undoc)*/_A_ZER();/* FIXME */break;
-      case 0x68:/*PLA */_A_IMP();/* FIXME */break;
+      case 0x68:/*PLA */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S);_RD();c.A=_GD();_NZ(c.A);break;
       case 0x69:/*ADC #*/_A_IMM();/* FIXME */break;
       case 0x6a:/*RORA */_A_IMP();/* FIXME */break;
       case 0x6b:/*INVALID*/break;
