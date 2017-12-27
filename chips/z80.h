@@ -357,15 +357,15 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 /* helper macro to end interrupt handling in tick callback */
 #define Z80_DAISYCHAIN_END(pins) pins&=~Z80_RETI; }
 /* return a pin mask with control-pins, address and data bus */
-#define Z80_MAKE_PINS(ctrl, addr, data) ((ctrl)|((data<<16)&0xFF0000ULL)|(addr&0xFFFFULL))
+#define Z80_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
 /* extract 16-bit address bus from 64-bit pins */
 #define Z80_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
 /* merge 16-bit address bus value into 64-bit pins */
-#define Z80_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|(a&0xFFFFULL));}
+#define Z80_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|((a)&0xFFFFULL));}
 /* extract 8-bit data bus from 64-bit pins */
 #define Z80_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define Z80_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|((d<<16)&0xFF0000ULL));}
+#define Z80_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
