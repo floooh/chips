@@ -122,7 +122,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x3d:/*AND abs,X*/_A_ABX_R();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x3e:/*ROL abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l=_m6502_rol(&c,l);_SD(l);_WR();break;
       case 0x3f:/*RLA abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
-      case 0x40:/*RTI */_A_IMP();/* FIXME */break;
+      case 0x40:/*RTI */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S++);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;_SA(0x0100|c.S++);_RD();l=_GD();_SA(0x0100|c.S);_RD();h=_GD();c.PC=(h<<8)|l;break;
       case 0x41:/*EOR (zp,X)*/_A_IDX();_RD();c.A^=_GD();_NZ(c.A);break;
       case 0x42:/*INVALID*/break;
       case 0x43:/*SRE (zp,X) (undoc)*/_A_IDX();/* FIXME */break;

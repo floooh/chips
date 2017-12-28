@@ -531,7 +531,17 @@ def i_rts(o):
 #-------------------------------------------------------------------------------
 def i_rti(o):
     cmt(o,'RTI')
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    # put SP on stack and do a junk read
+    o.src += '_SA(0x0100|c.S++);_RD();'
+    # load processor status flag from stack
+    o.src += '_SA(0x0100|c.S++);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;'
+    # load return address low byte from stack
+    o.src += '_SA(0x0100|c.S++);_RD();l=_GD();'
+    # load return address high byte from stack
+    o.src += '_SA(0x0100|c.S);_RD();h=_GD();'
+    # update PC (which is already placed on the right return-to instruction)
+    o.src += 'c.PC=(h<<8)|l;'
 
 #-------------------------------------------------------------------------------
 def i_ora(o):
