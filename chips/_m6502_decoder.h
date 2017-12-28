@@ -94,7 +94,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x21:/*AND (zp,X)*/_A_IDX();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x22:/*INVALID*/break;
       case 0x23:/*RLA (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
-      case 0x24:/*BIT zp*/_A_ZER();/* FIXME */break;
+      case 0x24:/*BIT zp*/_A_ZER();_RD();l=_GD();h=c.A&l;c.P&=~(M6502_NF|M6502_VF|M6502_ZF);if(!h){c.P|=M6502_ZF;}c.P|=l&(M6502_NF|M6502_VF);break;
       case 0x25:/*AND zp*/_A_ZER();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x26:/*ROL zp*/_A_ZER();_RD();l=_GD();_WR();l=_m6502_rol(&c,l);_SD(l);_WR();break;
       case 0x27:/*RLA zp (undoc)*/_A_ZER();/* FIXME */break;
@@ -102,7 +102,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x29:/*AND #*/_A_IMM();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x2a:/*ROLA */_A_IMP();_RD();c.A=_m6502_rol(&c,c.A);break;
       case 0x2b:/*INVALID*/break;
-      case 0x2c:/*BIT abs*/_A_ABS();/* FIXME */break;
+      case 0x2c:/*BIT abs*/_A_ABS();_RD();l=_GD();h=c.A&l;c.P&=~(M6502_NF|M6502_VF|M6502_ZF);if(!h){c.P|=M6502_ZF;}c.P|=l&(M6502_NF|M6502_VF);break;
       case 0x2d:/*AND abs*/_A_ABS();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x2e:/*ROL abs*/_A_ABS();_RD();l=_GD();_WR();l=_m6502_rol(&c,l);_SD(l);_WR();break;
       case 0x2f:/*RLA abs (undoc)*/_A_ABS();/* FIXME */break;
