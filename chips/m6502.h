@@ -242,41 +242,6 @@ static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
         cpu->A = diff & 0xFF;
     }
 }
-
-static inline uint8_t _m6502_lsr(m6502_t* cpu, uint8_t val) {
-    cpu->P = (cpu->P & ~M6502_CF) | ((val & 0x01) ? M6502_CF : 0);
-    val >>= 1;
-    cpu->P = _M6502_NZ(cpu->P, val);
-    return val;    
-}
-
-static inline uint8_t _m6502_rol(m6502_t* cpu, uint8_t val) {
-    bool c = cpu->P & M6502_CF;
-    cpu->P &= ~(M6502_NF|M6502_ZF|M6502_CF);
-    if (val & 0x80) {
-        cpu->P |= M6502_CF;
-    }
-    val <<= 1;
-    if (c) {
-        val |= 0x01;
-    }
-    cpu->P = _M6502_NZ(cpu->P, val);
-    return val;    
-}
-
-static inline uint8_t _m6502_ror(m6502_t* cpu, uint8_t val) {
-    bool c = cpu->P & M6502_CF;
-    cpu->P &= ~(M6502_NF|M6502_ZF|M6502_CF);
-    if (val & 0x01) {
-        cpu->P |= M6502_CF;
-    }
-    val >>= 1;
-    if (c) {
-        val |= 0x80;
-    }
-    cpu->P = _M6502_NZ(cpu->P, val);
-    return val;    
-}
 #undef _M6502_NZ
 
 #include "_m6502_decoder.h"
