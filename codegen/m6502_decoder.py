@@ -469,7 +469,15 @@ def i_cl(o, f):
 #-------------------------------------------------------------------------------
 def i_br(o, m, v):
     cmt(o,branch_name(m,v))
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    o.src += 'if((c.P&'+hex(m)+')=='+hex(v)+'){'
+    o.src +=   '_RD();'   # branch taken, at least 3 cycles
+    o.src +=   't=c.PC+(int8_t)_GD();'
+    o.src +=   'if((t&0xFF00)!=(c.PC&0xFF00)){' 
+    o.src +=     '_RD();' # target address not in same memory page, 4 cycles
+    o.src +=   '}'
+    o.src +=   'c.PC=t;'
+    o.src += '}'
 
 #-------------------------------------------------------------------------------
 def i_jmp(o):

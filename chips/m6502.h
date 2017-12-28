@@ -147,8 +147,10 @@ extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-/* BCD-aware ADC/SDC functions taken from MAME */
+/* helper functions for code-generated instruction decoder */
 #define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
+
+/* BCD-aware ADC/SDC functions taken from MAME */
 static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
     if (cpu->P & M6502_DF) {
         /* decimal mode */
