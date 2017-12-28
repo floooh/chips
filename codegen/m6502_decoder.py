@@ -338,8 +338,8 @@ def enc_addr(op):
         # jmp is completely handled in instruction decoding
         src = ''
     elif addr_mode == A_JSR:
-        # special case JSR, partial
-        src = '_SA(c.PC++);'
+        # jsr is completely handled in instruction decoding 
+        src = ''
     else:
         # invalid instruction
         src = ''
@@ -500,12 +500,33 @@ def i_jmpi(o):
 #-------------------------------------------------------------------------------
 def i_jsr(o):
     cmt(o,'JSR')
-    o.src += '/* FIXME */'
+    # read low byte of target address
+    o.src += '_SA(c.PC++);_RD();l=_GD();'
+    # put SP on addr bus, next cycle is a junk read
+    o.src += '_SA(0x0100|c.S);_RD();'
+    # write PC high byte to stack
+    o.src += '_SAD(0x0100|c.S--,c.PC>>8);_WR();'
+    # write PC low byte to stack
+    o.src += '_SAD(0x0100|c.S--,c.PC);_WR();'
+    # load target address high byte
+    o.src += '_SA(c.PC);_RD();h=_GD();'
+    # build new PC
+    o.src += 'c.PC=(h<<8)|l;'
 
 #-------------------------------------------------------------------------------
 def i_rts(o):
     cmt(o,'RTS')
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    # put SP on stack and do a junk read
+    o.src += '_SA(0x0100|c.S++);_RD();'
+    # load return address low byte from stack
+    o.src += '_SA(0x0100|c.S++);_RD();l=_GD();'
+    # load return address high byte from stack
+    o.src += '_SA(0x0100|c.S);_RD();h=_GD();'
+    # put return address in PC, this is one byte before next op
+    o.src += 'c.PC=(h<<8)|l;'
+    # do a junk read from PC, increment PC to actual return-to instruction
+    o.src += '_SA(c.PC++);_RD();'
 
 #-------------------------------------------------------------------------------
 def i_rti(o):

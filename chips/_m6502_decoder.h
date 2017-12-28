@@ -90,7 +90,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x1d:/*ORA abs,X*/_A_ABX_R();_RD();c.A|=_GD();_NZ(c.A);break;
       case 0x1e:/*ASL abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l=_m6502_asl(&c,l);_SD(l);_WR();break;
       case 0x1f:/*SLO abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
-      case 0x20:/*JSR */_SA(c.PC++);/* FIXME */break;
+      case 0x20:/*JSR */_SA(c.PC++);_RD();l=_GD();_SA(0x0100|c.S);_RD();_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SA(c.PC);_RD();h=_GD();c.PC=(h<<8)|l;break;
       case 0x21:/*AND (zp,X)*/_A_IDX();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x22:/*INVALID*/break;
       case 0x23:/*RLA (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
@@ -154,7 +154,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x5d:/*EOR abs,X*/_A_ABX_R();_RD();c.A^=_GD();_NZ(c.A);break;
       case 0x5e:/*LSR abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l=_m6502_lsr(&c,l);_SD(l);_WR();break;
       case 0x5f:/*SRE abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
-      case 0x60:/*RTS */_A_IMP();/* FIXME */break;
+      case 0x60:/*RTS */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S++);_RD();l=_GD();_SA(0x0100|c.S);_RD();h=_GD();c.PC=(h<<8)|l;_SA(c.PC++);_RD();break;
       case 0x61:/*ADC (zp,X)*/_A_IDX();_RD();_m6502_adc(&c,_GD());break;
       case 0x62:/*INVALID*/break;
       case 0x63:/*RRA (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
