@@ -134,7 +134,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x49:/*EOR #*/_A_IMM();_RD();c.A^=_GD();_NZ(c.A);break;
       case 0x4a:/*LSRA */_A_IMP();_RD();c.A=_m6502_lsr(&c,c.A);break;
       case 0x4b:/*INVALID*/break;
-      case 0x4c:/*JMP */_SA(c.PC++);_RD();a=_GD();_SA(c.PC++);/* FIXME */break;
+      case 0x4c:/*JMP */_SA(c.PC++);_RD();l=_GD();_SA(c.PC++);_RD();h=_GD();c.PC=(h<<8)|l;break;
       case 0x4d:/*EOR abs*/_A_ABS();_RD();c.A^=_GD();_NZ(c.A);break;
       case 0x4e:/*LSR abs*/_A_ABS();_RD();l=_GD();_WR();l=_m6502_lsr(&c,l);_SD(l);_WR();break;
       case 0x4f:/*SRE abs (undoc)*/_A_ABS();/* FIXME */break;
@@ -166,7 +166,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x69:/*ADC #*/_A_IMM();_RD();_m6502_adc(&c,_GD());break;
       case 0x6a:/*RORA */_A_IMP();_RD();c.A=_m6502_ror(&c,c.A);break;
       case 0x6b:/*INVALID*/break;
-      case 0x6c:/*JMPI */_SA(c.PC++);_RD();a=_GD();_SA(c.PC++);/* FIXME */break;
+      case 0x6c:/*JMPI */_SA(c.PC++);_RD();l=_GD();_SA(c.PC++);_RD();h=_GD();a=(h<<8)|l;_SA(a);_RD();l=_GD();a=(a&0xFF00)|((a+1)&0x00FF);_SA(a);_RD();h=_GD();c.PC=(h<<8)|l;break;
       case 0x6d:/*ADC abs*/_A_ABS();_RD();_m6502_adc(&c,_GD());break;
       case 0x6e:/*ROR abs*/_A_ABS();_RD();l=_GD();_WR();l=_m6502_ror(&c,l);_SD(l);_WR();break;
       case 0x6f:/*RRA abs (undoc)*/_A_ABS();/* FIXME */break;

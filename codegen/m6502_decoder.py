@@ -335,14 +335,14 @@ def enc_addr(op):
         else:
             src = '_A_IDY_W();'
     elif addr_mode == A_JMP:
-        # special case JMP, partial
-        src  = '_SA(c.PC++);_RD();a=_GD();_SA(c.PC++);'
+        # jmp is completely handled in instruction decoding
+        src = ''
     elif addr_mode == A_JSR:
         # special case JSR, partial
         src = '_SA(c.PC++);'
     else:
         # invalid instruction
-        src = '';
+        src = ''
     return src
 
 #-------------------------------------------------------------------------------
@@ -482,12 +482,20 @@ def i_br(o, m, v):
 #-------------------------------------------------------------------------------
 def i_jmp(o):
     cmt(o,'JMP')
-    o.src += '/* FIXME */'
+    o.src += '_SA(c.PC++);_RD();l=_GD();'
+    o.src += '_SA(c.PC++);_RD();h=_GD();'
+    o.src += 'c.PC=(h<<8)|l;'
 
 #-------------------------------------------------------------------------------
 def i_jmpi(o):
     cmt(o,'JMPI')
-    o.src += '/* FIXME */'
+    o.src += '_SA(c.PC++);_RD();l=_GD();'
+    o.src += '_SA(c.PC++);_RD();h=_GD();'
+    o.src += 'a=(h<<8)|l;'
+    o.src += '_SA(a);_RD();l=_GD();'    # load first byte of target address
+    o.src += 'a=(a&0xFF00)|((a+1)&0x00FF);'
+    o.src += '_SA(a);_RD();h=_GD();'    # load second byte of target address
+    o.src += 'c.PC=(h<<8)|l;'
 
 #-------------------------------------------------------------------------------
 def i_jsr(o):
