@@ -56,6 +56,8 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
   do {
     /* fetch opcode */
     _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
+    /* store 'delayed IRQ response' flag state */
+    c.pi = c.P;
     const uint8_t opcode = _GD();
     switch (opcode) {
       case 0x0:/*BRK */_A_IMP();_RD();c.PC++;_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();_SA(0xFFFE);_RD();l=_GD();_SA(0xFFFF);_RD();h=_GD();c.PC=(h<<8)|l;c.P|=M6502_IF;break;
@@ -64,15 +66,15 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x3:/*SLO (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
       case 0x4:/*NOP zp (undoc)*/_A_ZER();_RD();break;
       case 0x5:/*ORA zp*/_A_ZER();_RD();c.A|=_GD();_NZ(c.A);break;
-      case 0x6:/*ASL zp*/_A_ZER();_RD();l=_GD();_WR();l=_m6502_asl(&c,l);_SD(l);_WR();break;
+      case 0x6:/*ASL zp*/_A_ZER();_RD();l=_GD();_WR();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
       case 0x7:/*SLO zp (undoc)*/_A_ZER();/* FIXME */break;
       case 0x8:/*PHP */_A_IMP();_RD();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();break;
       case 0x9:/*ORA #*/_A_IMM();_RD();c.A|=_GD();_NZ(c.A);break;
-      case 0xa:/*ASLA */_A_IMP();_RD();c.A=_m6502_asl(&c,c.A);break;
+      case 0xa:/*ASLA */_A_IMP();_RD();c.P=(c.P&~M6502_CF)|((c.A&0x80)?M6502_CF:0);c.A<<=1;_NZ(c.A);break;
       case 0xb:/*INVALID*/break;
       case 0xc:/*NOP abs (undoc)*/_A_ABS();_RD();break;
       case 0xd:/*ORA abs*/_A_ABS();_RD();c.A|=_GD();_NZ(c.A);break;
-      case 0xe:/*ASL abs*/_A_ABS();_RD();l=_GD();_WR();l=_m6502_asl(&c,l);_SD(l);_WR();break;
+      case 0xe:/*ASL abs*/_A_ABS();_RD();l=_GD();_WR();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
       case 0xf:/*SLO abs (undoc)*/_A_ABS();/* FIXME */break;
       case 0x10:/*BPL #*/_A_IMM();_RD();if((c.P&0x80)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
       case 0x11:/*ORA (zp),Y*/_A_IDY_R();_RD();c.A|=_GD();_NZ(c.A);break;
@@ -80,7 +82,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x13:/*SLO (zp),Y (undoc)*/_A_IDY_W();/* FIXME */break;
       case 0x14:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
       case 0x15:/*ORA zp,X*/_A_ZPX();_RD();c.A|=_GD();_NZ(c.A);break;
-      case 0x16:/*ASL zp,X*/_A_ZPX();_RD();l=_GD();_WR();l=_m6502_asl(&c,l);_SD(l);_WR();break;
+      case 0x16:/*ASL zp,X*/_A_ZPX();_RD();l=_GD();_WR();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
       case 0x17:/*SLO zp,X (undoc)*/_A_ZPX();/* FIXME */break;
       case 0x18:/*CLC */_A_IMP();_RD();c.P&=~0x1;break;
       case 0x19:/*ORA abs,Y*/_A_ABY_R();_RD();c.A|=_GD();_NZ(c.A);break;
@@ -88,7 +90,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x1b:/*SLO abs,Y (undoc)*/_A_ABY_W();/* FIXME */break;
       case 0x1c:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
       case 0x1d:/*ORA abs,X*/_A_ABX_R();_RD();c.A|=_GD();_NZ(c.A);break;
-      case 0x1e:/*ASL abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l=_m6502_asl(&c,l);_SD(l);_WR();break;
+      case 0x1e:/*ASL abs,X*/_A_ABX_W();_RD();l=_GD();_WR();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
       case 0x1f:/*SLO abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
       case 0x20:/*JSR */_SA(c.PC++);_RD();l=_GD();_SA(0x0100|c.S);_RD();_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SA(c.PC);_RD();h=_GD();c.PC=(h<<8)|l;break;
       case 0x21:/*AND (zp,X)*/_A_IDX();_RD();c.A&=_GD();_NZ(c.A);break;
@@ -122,7 +124,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0x3d:/*AND abs,X*/_A_ABX_R();_RD();c.A&=_GD();_NZ(c.A);break;
       case 0x3e:/*ROL abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l=_m6502_rol(&c,l);_SD(l);_WR();break;
       case 0x3f:/*RLA abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
-      case 0x40:/*RTI */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S++);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;_SA(0x0100|c.S++);_RD();l=_GD();_SA(0x0100|c.S);_RD();h=_GD();c.PC=(h<<8)|l;break;
+      case 0x40:/*RTI */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S++);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;_SA(0x0100|c.S++);_RD();l=_GD();_SA(0x0100|c.S);_RD();h=_GD();c.PC=(h<<8)|l;c.pi=c.P;break;
       case 0x41:/*EOR (zp,X)*/_A_IDX();_RD();c.A^=_GD();_NZ(c.A);break;
       case 0x42:/*INVALID*/break;
       case 0x43:/*SRE (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
@@ -316,7 +318,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xff:/*ISB abs,X (undoc)*/_A_ABX_W();/* FIXME */break;
     }
     /* check for interrupt request */
-    if ((pins & M6502_NMI) || ((pins & M6502_IRQ) && !(c.P & M6502_IF))) {
+    if ((pins & M6502_NMI) || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {
       /* execute a slightly modified BRK instruction */
       _RD();
       _SAD(0x0100|c.S--, c.PC>>8); _WR();

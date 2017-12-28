@@ -216,13 +216,15 @@ def write_header():
     l('  do {')
     l('    /* fetch opcode */')
     l('    _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);')
+    l("    /* store 'delayed IRQ response' flag state */")
+    l('    c.pi = c.P;')
     l('    const uint8_t opcode = _GD();')
     l('    switch (opcode) {')
 
 #-------------------------------------------------------------------------------
 def write_interrupt_handling():
     l('    /* check for interrupt request */')
-    l('    if ((pins & M6502_NMI) || ((pins & M6502_IRQ) && !(c.P & M6502_IF))) {')
+    l('    if ((pins & M6502_NMI) || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {')
     l('      /* execute a slightly modified BRK instruction */')
     l('      _RD();')
     l('      _SAD(0x0100|c.S--, c.PC>>8); _WR();')
@@ -560,6 +562,8 @@ def i_rti(o):
     o.src += '_SA(0x0100|c.S);_RD();h=_GD();'
     # update PC (which is already placed on the right return-to instruction)
     o.src += 'c.PC=(h<<8)|l;'
+    # interrupt reponse after RTI is immediately
+    o.src += 'c.pi=c.P;'
 
 #-------------------------------------------------------------------------------
 def i_ora(o):
@@ -662,12 +666,19 @@ def u_isb(o):
     o.src += '/* FIXME */'
 
 #-------------------------------------------------------------------------------
+def _asl(val):
+    str  = 'c.P=(c.P&~M6502_CF)|(('+val+'&0x80)?M6502_CF:0);'
+    str += val+'<<=1;'
+    str += '_NZ('+val+');'
+    return str
+
+#-------------------------------------------------------------------------------
 def i_asl(o):
     cmt(o,'ASL')
     o.src += '_RD();'
     o.src += 'l=_GD();'
     o.src += '_WR();' # write unmodified value
-    o.src += 'l=_m6502_asl(&c,l);'
+    o.src += _asl('l')
     o.src += '_SD(l);'
     o.src += '_WR();'
 
@@ -675,7 +686,7 @@ def i_asl(o):
 def i_asla(o):
     cmt(o,'ASLA')
     o.src += '_RD();'
-    o.src += 'c.A=_m6502_asl(&c,c.A);'
+    o.src += _asl('c.A')
 
 #-------------------------------------------------------------------------------
 def u_slo(o):

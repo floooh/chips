@@ -110,8 +110,15 @@ typedef uint64_t (*m6502_tick_t)(uint64_t pins);
 typedef struct {
     m6502_tick_t tick;
     uint64_t PINS;
-    uint8_t A,X,Y,S,P;      /* 8-bit registers */
-    uint16_t PC;            /* program counter */
+    /* 8-bit registers */
+    uint8_t A,X,Y,S,P;
+    /* 16-bit program counter */
+    uint16_t PC;
+    /* state of interrupt enable flag at the time when the interrupt is sampled,
+       this is used to implement 'delayed IRQ response'
+       (see: https://wiki.nesdev.com/w/index.php/CPU_interrupts)
+    */
+    uint8_t pi;
     /* break out of m6502_exec() if (PINS & break_mask) */
     uint64_t break_mask;
 } m6502_t;
@@ -234,13 +241,6 @@ static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
         }
         cpu->A = diff & 0xFF;
     }
-}
-
-static inline uint8_t _m6502_asl(m6502_t* cpu, uint8_t val) {
-    cpu->P = (cpu->P & ~M6502_CF) | ((val & 0x80) ? M6502_CF : 0);
-    val <<= 1;
-    cpu->P = _M6502_NZ(cpu->P, val);
-    return val;
 }
 
 static inline uint8_t _m6502_lsr(m6502_t* cpu, uint8_t val) {
