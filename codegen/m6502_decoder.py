@@ -200,6 +200,7 @@ def write_undefines():
     l('#undef _A_IDX')
     l('#undef _A_IDY_R')
     l('#undef _A_IDY_W')
+    l('#undef _NZ')
 
 #-------------------------------------------------------------------------------
 def write_header():

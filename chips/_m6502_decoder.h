@@ -58,7 +58,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
     _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
     const uint8_t opcode = _GD();
     switch (opcode) {
-      case 0x0:/*BRK */_A_IMP();_RD();c.PC++;_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();_SA(0xFFFE);_RD();l=_GD();_SA(0xFFFF);_RD();h=_GD();c.PC=(h<<8)|l;c.P |= M6502_IF;break;
+      case 0x0:/*BRK */_A_IMP();_RD();c.PC++;_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();_SA(0xFFFE);_RD();l=_GD();_SA(0xFFFF);_RD();h=_GD();c.PC=(h<<8)|l;c.P|=M6502_IF;break;
       case 0x1:/*ORA (zp,X)*/_A_IDX();_RD();c.A|=_GD();_NZ(c.A);break;
       case 0x2:/*INVALID*/break;
       case 0x3:/*SLO (zp,X) (undoc)*/_A_IDX();/* FIXME */break;
@@ -360,3 +360,4 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
 #undef _A_IDX
 #undef _A_IDY_R
 #undef _A_IDY_W
+#undef _NZ
