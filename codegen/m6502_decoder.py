@@ -669,8 +669,12 @@ def i_iny(o):
 
 #-------------------------------------------------------------------------------
 def u_isb(o):
+    # undocumented INC+SBC instruction
     u_cmt(o,'ISB')
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    o.src += '_WR();'
+    o.src += 'l=_GD();l++;_SD(l);_WR();'
+    o.src += '_m6502_sbc(&c,l);'
 
 #-------------------------------------------------------------------------------
 def _asl(val):
@@ -683,8 +687,8 @@ def _asl(val):
 def i_asl(o):
     cmt(o,'ASL')
     o.src += '_RD();'
-    o.src += 'l=_GD();'
     o.src += '_WR();' # write unmodified value
+    o.src += 'l=_GD();'
     o.src += _asl('l')
     o.src += '_SD(l);'
     o.src += '_WR();'
@@ -697,8 +701,15 @@ def i_asla(o):
 
 #-------------------------------------------------------------------------------
 def u_slo(o):
+    # undocumented ASL+OR
     u_cmt(o,'SLO')
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    o.src += '_WR();'
+    o.src += 'l=_GD();'
+    o.src += _asl('l')
+    o.src += '_SD(l);'
+    o.src += '_WR();'
+    o.src += 'c.A|=l;_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def _lsr(val):
@@ -711,8 +722,8 @@ def _lsr(val):
 def i_lsr(o):
     cmt(o,'LSR')
     o.src += '_RD();'
-    o.src += 'l=_GD();'
     o.src += '_WR();' # write unmodified value
+    o.src += 'l=_GD();'
     o.src += _lsr('l')
     o.src += '_SD(l);'
     o.src += '_WR();'
@@ -725,8 +736,15 @@ def i_lsra(o):
 
 #-------------------------------------------------------------------------------
 def u_sre(o):
+    # undocumented LSR+EOR
     u_cmt(o,'SRE')
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    o.src += '_WR();'
+    o.src += 'l=_GD();'
+    o.src += _lsr('l')
+    o.src += '_SD(l);'
+    o.src += '_WR();'
+    o.src += 'c.A^=l;_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def _rol(val):
@@ -744,8 +762,8 @@ def _rol(val):
 def i_rol(o):
     cmt(o,'ROL')
     o.src += '_RD();'
-    o.src += 'l=_GD();'
     o.src += '_WR();' # write unmodified value
+    o.src += 'l=_GD();'
     o.src += _rol('l')
     o.src += '_SD(l);'
     o.src += '_WR();'
@@ -758,8 +776,15 @@ def i_rola(o):
 
 #-------------------------------------------------------------------------------
 def u_rla(o):
+    # uncodumented ROL+AND
     u_cmt(o,'RLA')
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    o.src += '_WR();'
+    o.src += 'l=_GD();'
+    o.src += _rol('l')
+    o.src += '_SD(l);'
+    o.src += '_WR();'
+    o.src += 'c.A&=l;_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def _ror(val):
@@ -777,8 +802,8 @@ def _ror(val):
 def i_ror(o):
     cmt(o,'ROR')
     o.src += '_RD();'
-    o.src += 'l=_GD();'
     o.src += '_WR();' # write unmodified value
+    o.src += 'l=_GD();'
     o.src += _ror('l')
     o.src += '_SD(l);'
     o.src += '_WR();'
@@ -791,8 +816,15 @@ def i_rora(o):
 
 #-------------------------------------------------------------------------------
 def u_rra(o):
+    # undocumented ROR+ADC
     u_cmt(o,'RRA')
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    o.src += '_WR();'
+    o.src += 'l=_GD();'
+    o.src += _ror('l')
+    o.src += '_SD(l);'
+    o.src += '_WR();'
+    o.src += '_m6502_adc(&c,l);'
 
 #-------------------------------------------------------------------------------
 def i_bit(o):
