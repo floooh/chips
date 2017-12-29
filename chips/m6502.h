@@ -169,7 +169,7 @@ static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
             al += 6;
         }
         uint8_t ah = (cpu->A >> 4) + (val >> 4) + (al > 0x0F);
-        if (0 == (cpu->A + val + c)) {
+        if (0 == (uint8_t)(cpu->A + val + c)) {
             cpu->P |= M6502_ZF;
         }
         else if (ah & 0x08) {
