@@ -10,9 +10,9 @@ Tests and example code is in a separate repo: https://github.com/floooh/chips-te
 This is the meaty stuff from the YAKC emulator, rewritten from
 C++ in C, moved into its own project.
 
-The YAKC emulator is here: 
-    - github repo: https://github.com/floooh/yakc
-    - asm.js/wasm demo: http://floooh.github.io/virtualkc/
+The YAKC emulator is here (porting to the chips headers is underway in the 'chips' branch): 
+- github repo: https://github.com/floooh/yakc
+- asm.js/wasm demo: http://floooh.github.io/virtualkc/
 
 ## Chip Emulators
 
