@@ -119,12 +119,14 @@ typedef struct {
        (see: https://wiki.nesdev.com/w/index.php/CPU_interrupts)
     */
     uint8_t pi;
+    /* some variations of the m6502 don't have BCD arithmetic support */
+    bool bcd_supported;
     /* break out of m6502_exec() if (PINS & break_mask) */
     uint64_t break_mask;
 } m6502_t;
 
 /* initialize a new m6502 instance */
-extern void m6502_init(m6502_t* cpu, m6502_tick_t tick_cb);
+extern void m6502_init(m6502_t* cpu, m6502_tick_t tick_cb, bool bcd_supported);
 /* reset an existing m6502 instance */
 extern void m6502_reset(m6502_t* cpu);
 /* execute instruction for at least 'ticks', return number of executed ticks */
@@ -157,10 +159,9 @@ extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 /* helper macros and functions for code-generated instruction decoder */
 #define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
-/* BCD-aware ADC/SDC functions taken from MAME */
 static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
-    if (cpu->P & M6502_DF) {
-        /* decimal mode */
+    if (cpu->bcd_supported && (cpu->P & M6502_DF)) {
+        /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 1 : 0;
         cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
         uint8_t al = (cpu->A & 0x0F) + (val & 0x0F) + c;
@@ -201,8 +202,8 @@ static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
 }
 
 static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
-    if (cpu->P & M6502_DF) {
-        /* decimal mode */
+    if (cpu->bcd_supported && (cpu->P & M6502_DF)) {
+        /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 0 : 1;
         cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
         uint16_t diff = cpu->A - val - c;
@@ -246,7 +247,7 @@ static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
 
 #include "_m6502_decoder.h"
 
-void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
+void m6502_init(m6502_t* c, m6502_tick_t tick_cb, bool bcd_supported) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT(tick_cb);
     memset(c, 0, sizeof(*c));
@@ -254,6 +255,7 @@ void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
     c->PINS = M6502_RW;
     c->P = M6502_IF|M6502_XF;
     c->S = 0xFD;
+    c->bcd_supported = bcd_supported;
 }
 
 void m6502_reset(m6502_t* c) {

@@ -629,8 +629,15 @@ def i_dec(o):
 
 #-------------------------------------------------------------------------------
 def u_dcp(o):
+    # undocumented 'decrement and compare'
     u_cmt(o,'DCP')
-    o.src += '/* FIXME */'
+    o.src += '_RD();'
+    o.src += '_WR();'
+    o.src += 'l=_GD();l--;_NZ(l);_SD(l);_WR();'
+    # do a cmp operation on the decremented value
+    o.src += 't=c.A-l;'
+    o.src += '_NZ((uint8_t)t)&~M6502_CF;'
+    o.src += 'if(!(t&0xFF00)){c.P|=M6502_CF;}'
 
 #-------------------------------------------------------------------------------
 def i_dex(o):
