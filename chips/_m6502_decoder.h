@@ -320,7 +320,8 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
     /* check for interrupt request */
     if ((pins & M6502_NMI) || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {
       /* execute a slightly modified BRK instruction */
-      _RD();
+      _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
+      _SA(c.PC); _RD();
       _SAD(0x0100|c.S--, c.PC>>8); _WR();
       _SAD(0x0100|c.S--, c.PC); _WR();
       _SAD(0x0100|c.S--, c.P&~M6502_BF); _WR();
