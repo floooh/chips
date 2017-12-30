@@ -353,7 +353,7 @@ static uint64_t _i8255_write(i8255_t* ppi, uint64_t pins, uint8_t data) {
             break;
         case I8255_A1: /* write to port C */
             ppi->output[I8255_PORT_C] = data;
-            pins = ppi->out_cb(ppi, pins, data);
+            pins = _i8255_out_c(ppi, pins);
             break;
         case (I8255_A0|I8255_A1): /* control operation*/
             if ((data & I8255_CTRL_CONTROL) == I8255_CTRL_CONTROL_MODE) {
