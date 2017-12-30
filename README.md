@@ -62,7 +62,12 @@ The MOS Technology 6502 CPU.
 - emulates all(?) quirks (like redundant and 'junk' read/write cycles, variable cycle counts in some addressing modes, page boundary wrap-around in indirect jump, etc...), mostly verified via visual6502.org
 - emulates the known and useful 'documented-undocumented' opcodes (like LAX, SAX, DCP, ...)
 - decimal mode implemented, can be disabled
-- runs through NESTEST (more tests to be added)
+- test coverage:
+    - **NESTEST**: completely working (this runs through all documented, and most 'common'
+      undocumented instructions but doesn't test decimal mode)
+    - **Wolfgang Lorenz C64 Test Suite**: CPU instruction tests working completely 
+      for documented instructions (including decimal mode), the following 
+      undocumented/unintended instructions are failing: ANE, LXA, SBX, SHA, SHX, SHY, SHS, ANC (some of these are implemented, but fail the test, some are not implemented in the emulator)
 
 ### AY-3-8912 (chips/ay38912.h)
 
