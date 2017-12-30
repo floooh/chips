@@ -56,15 +56,9 @@ extern "C" {
 #define MEM_NUM_PAGES (MEM_ADDR_RANGE / MEM_PAGE_SIZE)
 #define MEM_NUM_LAYERS (4)
 
-/* a callback pointer for memory-mapped-I/O areas */
-typedef uint8_t (*memio_t)(bool write, uint16_t addr, uint8_t inval);
-
 /* a memory page item maps a chunk of emulator memory to host memory */
 typedef struct {
-    union {
-        const uint8_t* read_ptr;
-        memio_t memio_cb;
-    };
+    const uint8_t* read_ptr;
     uint8_t* write_ptr;
 } mem_page_t;
 
@@ -88,8 +82,6 @@ extern void mem_map_ram(mem_t* mem, int layer, uint16_t addr, uint32_t size, uin
 extern void mem_map_rom(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* ptr);
 /* map a range of memory to different read/write pointers (e.g. for RAM behind ROM) */
 extern void mem_map_rw(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* read_ptr, uint8_t* write_ptr);
-/* map a range of memory to a memory-mapped-io callback function */
-extern void mem_map_io(mem_t* mem, int layer, uint16_t addr, uint32_t size, memio_t cb);
 /* unmap all memory pages in a layer, also updates the CPU-visible page-table */
 extern void mem_unmap_layer(mem_t* mem, int layer);
 /* unmap all memory pages in all layers, also updates the CPU-visible page-table */
@@ -103,38 +95,20 @@ extern void mem_write_range(mem_t* mem, uint16_t addr, const uint8_t* src, int n
 static inline uint8_t mem_rd(const mem_t* mem, uint16_t addr) {
     return mem->page_table[addr>>MEM_PAGE_SHIFT].read_ptr[addr & MEM_PAGE_MASK];
 }
-/* read a byte at address with memory-mapped-io support */
-static inline uint8_t mem_rdio(const mem_t* mem, uint16_t addr) {
-    const mem_page_t* page = &mem->page_table[addr>>MEM_PAGE_SHIFT];
-    if (page->write_ptr) {
-        /* a regular memory page */
-        return page->read_ptr[addr & MEM_PAGE_MASK];
-    }
-    else {
-        /* a memory-mapped-io page, invoke callback */
-        return page->memio_cb(false, addr, 0);
-    }
-}
 /* write a byte at address without memory-mapped-io support */
 static inline void mem_wr(mem_t* mem, uint16_t addr, uint8_t data) {
     mem->page_table[addr>>MEM_PAGE_SHIFT].write_ptr[addr & MEM_PAGE_MASK] = data;
-}
-/* write a byte at address with memory-mapped-io support */
-static inline void mem_wrio(mem_t* mem, uint16_t addr, uint8_t data) {
-    mem_page_t* page = &mem->page_table[addr>>MEM_PAGE_SHIFT];
-    if (page->write_ptr) {
-        /* a regular memory page */
-        page->write_ptr[addr&MEM_PAGE_MASK] = data;
-    }
-    else {
-        /* a memory-mapped-io page, invoke callback */
-        page->memio_cb(true, addr, data);
-    }
 }
 /* helper method to write a 16-bit value, does 2 mem_wr() */
 static inline void mem_wr16(mem_t* mem, uint16_t addr, uint16_t data) {
     mem_wr(mem, addr, (uint8_t)data);
     mem_wr(mem, addr+1, (uint8_t)(data>>8));
+}
+/* helper method to read a 16-bit value, does 2 mem_rd() */
+static inline uint16_t mem_rd16(mem_t* mem, uint16_t addr) {
+    uint8_t l = mem_rd(mem, addr);
+    uint8_t h = mem_rd(mem, addr+1);
+    return (h<<8)|l;
 }
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -178,7 +152,7 @@ static void _mem_update_page_table(mem_t* m, int page_index) {
     }
 }
 
-static void _mem_map(mem_t* m, int layer, uint16_t addr, uint32_t size, const uint8_t* read_ptr, uint8_t* write_ptr, memio_t cb) {
+static void _mem_map(mem_t* m, int layer, uint16_t addr, uint32_t size, const uint8_t* read_ptr, uint8_t* write_ptr) {
     CHIPS_ASSERT(m);
     CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
     CHIPS_ASSERT((addr & MEM_PAGE_MASK) == 0);
@@ -192,19 +166,12 @@ static void _mem_map(mem_t* m, int layer, uint16_t addr, uint32_t size, const ui
         const uint16_t page_index = ((addr+offset) & MEM_ADDR_MASK) >> MEM_PAGE_SHIFT;
         CHIPS_ASSERT(page_index <= MEM_NUM_PAGES);
         mem_page_t* page = &m->layers[layer][page_index];
-        if (cb) {
-            CHIPS_ASSERT(!read_ptr && !write_ptr);
-            page->memio_cb = cb;
-            page->write_ptr = 0;
+        page->read_ptr = read_ptr + offset;
+        if (0 != write_ptr) {
+            page->write_ptr = write_ptr + offset;
         }
         else {
-            page->read_ptr = read_ptr + offset;
-            if (0 != write_ptr) {
-                page->write_ptr = write_ptr + offset;
-            }
-            else {
-                page->write_ptr = m->junk_page;
-            }
+            page->write_ptr = m->junk_page;
         }
         _mem_update_page_table(m, page_index);
     }
@@ -212,22 +179,17 @@ static void _mem_map(mem_t* m, int layer, uint16_t addr, uint32_t size, const ui
 
 void mem_map_ram(mem_t* m, int layer, uint16_t addr, uint32_t size, uint8_t* ptr) {
     CHIPS_ASSERT(ptr);
-    _mem_map(m, layer, addr, size, ptr, ptr, 0);
+    _mem_map(m, layer, addr, size, ptr, ptr);
 }
 
 void mem_map_rom(mem_t* m, int layer, uint16_t addr, uint32_t size, const uint8_t* ptr) {
     CHIPS_ASSERT(ptr);
-    _mem_map(m, layer, addr, size, ptr, 0, 0);
+    _mem_map(m, layer, addr, size, ptr, 0);
 }
 
 void mem_map_rw(mem_t* m, int layer, uint16_t addr, uint32_t size, const uint8_t* read_ptr, uint8_t* write_ptr) {
     CHIPS_ASSERT(read_ptr && write_ptr);
-    _mem_map(m, layer, addr, size, read_ptr, write_ptr, 0);
-}
-
-void mem_map_io(mem_t* m, int layer, uint16_t addr, uint32_t size, memio_t cb) {
-    CHIPS_ASSERT(cb);
-    _mem_map(m, layer, addr, size, 0, 0, cb);
+    _mem_map(m, layer, addr, size, read_ptr, write_ptr);
 }
 
 void mem_unmap_layer(mem_t* m, int layer) {
