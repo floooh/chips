@@ -210,10 +210,10 @@ extern void i8255_reset(i8255_t* ppi);
 /*
     i8255_iorq
 
-    Performs a read or write operation on the CPU. The pins 
+    Performs a read or write operation on the PPI. The pins 
     CS|RD|WR define whether this is a read or write operation,
     the address pins A0|A1 define the port number, or
-    whether the control word is affected, and if this is a
+    whether the control word is affected. If this is a
     write operation, the data bus pins must contain the value
     to be written.
 
