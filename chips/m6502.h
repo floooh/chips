@@ -126,7 +126,7 @@ typedef struct {
 } m6502_t;
 
 /* initialize a new m6502 instance */
-extern void m6502_init(m6502_t* cpu, m6502_tick_t tick_cb, bool bcd_supported);
+extern void m6502_init(m6502_t* cpu, m6502_tick_t tick_cb);
 /* reset an existing m6502 instance */
 extern void m6502_reset(m6502_t* cpu);
 /* execute instruction for at least 'ticks', return number of executed ticks */
@@ -243,11 +243,54 @@ static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
         cpu->A = diff & 0xFF;
     }
 }
+
+static inline void _m6502_arr(m6502_t* cpu) {
+    /* undocumented, unreliable ARR instruction, but this is tested
+       by the Wolfgang Lorenz C64 test suite
+       implementation taken from MAME
+    */
+    if (cpu->bcd_supported && (cpu->P & M6502_DF)) {
+        bool c = cpu->P & M6502_CF;
+        cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
+        uint8_t a = cpu->A>>1;
+        if (c) {
+            a |= 0x80;
+        }
+        cpu->P = _M6502_NZ(cpu->P,a);
+        if ((a ^ cpu->A) & 0x40) {
+            cpu->P |= M6502_VF;
+        }
+        if ((cpu->A & 0xF) >= 5) {
+            a = ((a + 6) & 0xF) | (a & 0xF0);
+        }
+        if ((cpu->A & 0xF0) >= 0x50) {
+            a += 0x60;
+            cpu->P |= M6502_CF;
+        }
+        cpu->A = a;
+    }
+    else {
+        bool c = cpu->P & M6502_CF;
+        cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
+        cpu->A >>= 1;
+        if (c) {
+            cpu->A |= 0x80;
+        }
+        cpu->P = _M6502_NZ(cpu->P,cpu->A);
+        if (cpu->A & 0x40) {
+            cpu->P |= M6502_VF|M6502_CF;
+        }
+        if (cpu->A & 0x20) {
+            cpu->P ^= M6502_VF;
+        }
+    }
+}
+
 #undef _M6502_NZ
 
 #include "_m6502_decoder.h"
 
-void m6502_init(m6502_t* c, m6502_tick_t tick_cb, bool bcd_supported) {
+void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT(tick_cb);
     memset(c, 0, sizeof(*c));
@@ -255,7 +298,7 @@ void m6502_init(m6502_t* c, m6502_tick_t tick_cb, bool bcd_supported) {
     c->PINS = M6502_RW;
     c->P = M6502_IF|M6502_XF;
     c->S = 0xFD;
-    c->bcd_supported = bcd_supported;
+    c->bcd_supported = false;
 }
 
 void m6502_reset(m6502_t* c) {

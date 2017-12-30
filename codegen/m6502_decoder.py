@@ -76,7 +76,7 @@ ops = [
         [[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_]],  # relative branches
         [[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M__W],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_]],
         [[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___]],
-        [[A_ABX,M_R_],[A_ABX,M_R_],[A_ABS,M_R_],[A_ABS,M_R_],[A_INV,M___],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_]]        
+        [[A_ABX,M_R_],[A_ABX,M_R_],[A_ABS,M_R_],[A_ABS,M_R_],[A_ABX,M__W],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_]]        
     ],
     # cc = 01
     [
@@ -100,18 +100,18 @@ ops = [
         [[A_INV,M_RW],[A_INV,M_RW],[A_INV,M_RW],[A_INV,M_RW],[A_INV,M__W],[A_INV,M_R_],[A_INV,M_RW],[A_INV,M_RW]],
         [[A_ZPX,M_RW],[A_ZPX,M_RW],[A_ZPX,M_RW],[A_ZPX,M_RW],[A_ZPY,M__W],[A_ZPY,M_R_],[A_ZPX,M_RW],[A_ZPX,M_RW]],
         [[A____,M_R_],[A____,M_R_],[A____,M_R_],[A____,M_R_],[A____,M___],[A____,M___],[A____,M_R_],[A____,M_R_]],
-        [[A_ABX,M_RW],[A_ABX,M_RW],[A_ABX,M_RW],[A_ABX,M_RW],[A_INV,M__W],[A_ABY,M_R_],[A_ABX,M_RW],[A_ABX,M_RW]]
+        [[A_ABX,M_RW],[A_ABX,M_RW],[A_ABX,M_RW],[A_ABX,M_RW],[A_ABY,M__W],[A_ABY,M_R_],[A_ABX,M_RW],[A_ABX,M_RW]]
     ],
     # cc = 03
     [
         [[A_IDX,M_RW],[A_IDX,M_RW],[A_IDX,M_RW],[A_IDX,M_RW],[A_IDX,M__W],[A_IDX,M_R_],[A_IDX,M_RW],[A_IDX,M_RW]],
         [[A_ZER,M_RW],[A_ZER,M_RW],[A_ZER,M_RW],[A_ZER,M_RW],[A_ZER,M__W],[A_ZER,M_R_],[A_ZER,M_RW],[A_ZER,M_RW]],
-        [[A_INV,M___],[A_INV,M___],[A_INV,M___],[A_INV,M___],[A_INV,M___],[A_INV,M___],[A_INV,M___],[A_IMM,M_R_]],
+        [[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_]],
         [[A_ABS,M_RW],[A_ABS,M_RW],[A_ABS,M_RW],[A_ABS,M_RW],[A_ABS,M__W],[A_ABS,M_R_],[A_ABS,M_RW],[A_ABS,M_RW]],
-        [[A_IDY,M_RW],[A_IDY,M_RW],[A_IDY,M_RW],[A_IDY,M_RW],[A_INV,M___],[A_IDY,M_R_],[A_IDY,M_RW],[A_IDY,M_RW]],
+        [[A_IDY,M_RW],[A_IDY,M_RW],[A_IDY,M_RW],[A_IDY,M_RW],[A_IDY,M_RW],[A_IDY,M_R_],[A_IDY,M_RW],[A_IDY,M_RW]],
         [[A_ZPX,M_RW],[A_ZPX,M_RW],[A_ZPX,M_RW],[A_ZPX,M_RW],[A_ZPY,M__W],[A_ZPY,M_R_],[A_ZPX,M_RW],[A_ZPX,M_RW]],
-        [[A_ABY,M_RW],[A_ABY,M_RW],[A_ABY,M_RW],[A_ABY,M_RW],[A_INV,M___],[A_INV,M___],[A_ABY,M_RW],[A_ABY,M_RW]],
-        [[A_ABX,M_RW],[A_ABX,M_RW],[A_ABX,M_RW],[A_ABX,M_RW],[A_INV,M___],[A_ABY,M_R_],[A_ABX,M_RW],[A_ABX,M_RW]]
+        [[A_ABY,M_RW],[A_ABY,M_RW],[A_ABY,M_RW],[A_ABY,M_RW],[A_ABY,M__W],[A_ABY,M_R_],[A_ABY,M_RW],[A_ABY,M_RW]],
+        [[A_ABX,M_RW],[A_ABX,M_RW],[A_ABX,M_RW],[A_ABX,M_RW],[A_ABY,M__W],[A_ABY,M_R_],[A_ABX,M_RW],[A_ABX,M_RW]]
     ]
 ]
 
@@ -402,6 +402,14 @@ def u_lax(o):
     o.src += '_RD();c.A=c.X=_GD();_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
+def x_lxa(o):
+    # undocumented LXA
+    # and immediate byte with A, then load X with A
+    # this fails in the Wolfgang Lorenz test suite
+    u_cmt(o,'LXA')
+    o.src += '_RD();c.A&=_GD();c.X=c.A;_NZ(c.A);'
+
+#-------------------------------------------------------------------------------
 def i_sta(o):
     cmt(o,'STA')
     o.src += '_SD(c.A);_WR();'
@@ -498,6 +506,20 @@ def i_br(o, m, v):
     o.src +=     '_RD();' # target address not in same memory page, 4 cycles
     o.src +=   '}'
     o.src +=   'c.PC=t;'
+    o.src += '}'
+
+#-------------------------------------------------------------------------------
+def x_bra(o):
+    # this is 'branch always' instruction on the 65C02
+    cmt(o,'BRA (65C02 ext)')
+    o.src += '_RD();'
+    o.src += 'if(c.m65c02_mode){'
+    o.src += '_RD();'   # branch always taken, at least 3 cycles
+    o.src += 't=c.PC+(int8_t)_GD();'
+    o.src += 'if((t&0xFF00)!=(c.PC&0xFF00)){' 
+    o.src +=   '_RD();' # target address not in same memory page, 4 cycles
+    o.src += '}'
+    o.src += 'c.PC=t;'
     o.src += '}'
 
 #-------------------------------------------------------------------------------
@@ -641,6 +663,17 @@ def u_dcp(o):
     o.src += 'if(!(t&0xFF00)){c.P|=M6502_CF;}'
 
 #-------------------------------------------------------------------------------
+def x_sbx(o):
+    # undocumented SBX
+    # AND X register with accumulator and store result in X register, then
+    # subtract byte from X register (without borrow)
+    #
+    # we just ignore this for now and treat it like a imm-nop
+    #
+    u_cmt(o,'SBX (not impl)')
+    o.src += '_RD();'
+
+#-------------------------------------------------------------------------------
 def i_dex(o):
     cmt(o,'DEX')
     o.src += '_RD();c.X--;_NZ(c.X);'
@@ -736,6 +769,14 @@ def i_lsra(o):
     o.src += _lsr('c.A')
 
 #-------------------------------------------------------------------------------
+def x_asr(o):
+    # undocumented AND+LSR
+    u_cmt(o, 'ASR')
+    o.src += '_RD();'
+    o.src += 'c.A&=_GD();'
+    o.src += _lsr('c.A')
+
+#-------------------------------------------------------------------------------
 def u_sre(o):
     # undocumented LSR+EOR
     u_cmt(o,'SRE')
@@ -828,6 +869,84 @@ def u_rra(o):
     o.src += '_m6502_adc(&c,l);'
 
 #-------------------------------------------------------------------------------
+def x_arr(o):
+    # undocumented AND+ROR
+    u_cmt(o,'ARR')
+    o.src += '_RD();'
+    o.src += 'c.A&=_GD();'
+    o.src += '_m6502_arr(&c);'
+
+#-------------------------------------------------------------------------------
+def x_ane(o):
+    # undocumented ANE
+    # NOTE: this implementation fails in the Wolfgang Lorenz test suite
+    u_cmt(o,'ANE')
+    o.src += '_RD();'
+    o.src += 'l=_GD();c.A&=l&c.X;_NZ(c.A);'
+
+#-------------------------------------------------------------------------------
+def x_sha(o):
+    # undocumented SHA
+    # AND X register with accumulator then AND result with 7 and store in
+    # memory.
+    #
+    # we just ignore this for now
+    u_cmt(o,'SHA (not impl)')
+    o.src += '_RD();'
+
+#-------------------------------------------------------------------------------
+def x_shx(o):
+    # undocumented SHX
+    # AND X register with the high byte of the target address of the argument
+    # + 1. Store the result in memory.
+    #
+    # we just ignore this for now
+    u_cmt(o, 'SHX (not impl)')
+    o.src += '_RD();'
+
+#-------------------------------------------------------------------------------
+def x_shy(o):
+    # undocumented SHX
+    # AND Y register with the high byte of the target address of the argument
+    # + 1. Store the result in memory.
+    #
+    # we just ignore this for now
+    u_cmt(o, 'SHY (not impl)')
+    o.src += '_RD();'
+
+#-------------------------------------------------------------------------------
+def x_shs(o):
+    # undocumented SHS
+    # AND X register with accumulator and store result in stack pointer, then
+    # AND stack pointer with the high byte of the target address of the
+    # argument + 1. Store result in memory.
+    #
+    # we just ignore this for now
+    u_cmt(o, 'SHS (not impl)')
+    o.src += '_RD();'
+
+#-------------------------------------------------------------------------------
+def x_anc(o):
+    # undocumented ANC
+    # AND byte with accumulator. If result is negative then carry is set.
+    #
+    u_cmt(o, 'ANC')
+    o.src += '_RD();'
+    o.src += 'c.A&=_GD();'
+    o.src += '_NZ(c.A);'
+    o.src += 'if(c.A&0x80){c.P|=M6502_CF;}else{c.P&=~M6502_CF;}'
+
+#-------------------------------------------------------------------------------
+def x_las(o):
+    # undocumented LAS
+    # AND memory with stack pointer, transfer result to accumulator, X
+    # register and stack pointer.
+    #
+    # we just ignore this for now
+    u_cmt(o, 'LAS (not impl)')
+    o.src += '_RD();'
+
+#-------------------------------------------------------------------------------
 def i_bit(o):
     cmt(o,'BIT')
     o.src += '_RD();'
@@ -882,6 +1001,7 @@ def enc_op(op):
             elif bbb == 2:      i_dey(o)
             elif bbb == 4:      i_br(o, CF, 0)  # BCC
             elif bbb == 6:      i_tya(o)
+            elif bbb == 7:      x_shy(o)
             else:               i_sty(o)
         elif aaa == 5:
             if bbb == 2:        i_tay(o)
@@ -932,6 +1052,7 @@ def enc_op(op):
             if bbb == 0:    u_nop(o)
             elif bbb == 2:  i_txa(o)
             elif bbb == 6:  i_txs(o)
+            elif bbb == 7:  x_shx(o)
             else:           i_stx(o)
         elif aaa == 5:
             if bbb == 2:    i_tax(o)
@@ -947,13 +1068,30 @@ def enc_op(op):
             else:               i_inc(o)
     elif cc == 3:
         # undocumented block
-        if aaa == 0:    u_slo(o)
-        elif aaa == 1:  u_rla(o)
-        elif aaa == 2:  u_sre(o)
-        elif aaa == 3:  u_rra(o)
-        elif aaa == 4:  u_sax(o)
-        elif aaa == 5:  u_lax(o)
-        elif aaa == 6:  u_dcp(o)
+        if aaa == 0:    
+            if bbb == 2:    x_anc(o)
+            else:           u_slo(o)
+        elif aaa == 1:  
+            if bbb == 2:    x_anc(o)
+            else:           u_rla(o)
+        elif aaa == 2:
+            if bbb == 2:    x_asr(o)
+            else:           u_sre(o)
+        elif aaa == 3:  
+            if bbb == 2:    x_arr(o)
+            else:           u_rra(o)
+        elif aaa == 4:
+            if bbb == 2:        x_ane(o)
+            elif bbb == 6:      x_shs(o)
+            elif bbb in [4,7]:  x_sha(o)
+            else:               u_sax(o)
+        elif aaa == 5:
+            if bbb == 2:    x_lxa(o)
+            elif bbb == 6:  x_las(o)
+            else:           u_lax(o)
+        elif aaa == 6:
+            if bbb == 2:    x_sbx(o)
+            else:           u_dcp(o)
         elif aaa == 7:
             if bbb == 2:    u_sbc(o)
             else:           u_isb(o)
