@@ -16,7 +16,7 @@
                   +-----------+
             CS -->|           |<-> D0
             RD -->|           |...
-            WR -->|           |<-> D7
+            WR -->|   i8255   |<-> D7
             A0 -->|           |
             A1 -->|           |
                   |           |
@@ -31,6 +31,8 @@
         - mode 2 (bi-directional bus)
         - interrupts
     
+    FIXME: documentation
+
     LICENSE:
 
     MIT License
