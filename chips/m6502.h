@@ -298,7 +298,7 @@ void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
     c->PINS = M6502_RW;
     c->P = M6502_IF|M6502_XF;
     c->S = 0xFD;
-    c->bcd_supported = false;
+    c->bcd_supported = true;
 }
 
 void m6502_reset(m6502_t* c) {
