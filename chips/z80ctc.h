@@ -98,7 +98,6 @@ extern "C" {
 
 /* CTC specific pins starting at bit 40 */
 #define Z80CTC_CE       (1ULL<<44)   /* Chip Enable */
-#define Z80CTC_CS0_PIN  (45)
 #define Z80CTC_CS0      (1ULL<<45)   /* Channel Select Bit 0 */
 #define Z80CTC_CS1      (1ULL<<46)   /* Channel Select Bit 1 */
 #define Z80CTC_CLKTRG0  (1ULL<<47)   /* Clock/Timer Trigger 0 */
@@ -423,7 +422,7 @@ uint8_t _z80ctc_read(z80ctc_t* ctc, int chn_id) {
 /* perform an IORQ machine cycle */
 uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
     if ((pins & (Z80CTC_CE|Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_CE|Z80CTC_IORQ)) {
-        const int chn_id = (pins>>Z80CTC_CS0_PIN) & 3;
+        const int chn_id = (pins / Z80CTC_CS0) & 3;
         if (pins & Z80CTC_RD) {
             const uint8_t data = _z80ctc_read(ctc, chn_id);
             Z80CTC_SET_DATA(pins, data);
