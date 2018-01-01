@@ -157,16 +157,27 @@ extern "C" {
 #define MC6847_GM2      (1ULL<<49)      /* graphics mode select 2 */
 #define MC6847_CSS      (1ULL<<50)      /* color select pin */
 
-/* public constant */
+/* helper macro to set and extract address and data to/from pin mask */
+
+/* extract 13-bit address bus from 64-bit pins */
+#define MC6847_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
+/* merge 13-bit address bus value into 64-bit pins */
+#define MC6847_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|((a)&0xFFFFULL));}
+/* extract 8-bit data bus from 64-bit pins */
+#define MC6847_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+/* merge 8-bit data bus value into 64-bit pins */
+#define MC6847_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+
+/* public constants */
 #define MC6847_VBLANK_LINES         (13)    /* 13 lines vblank at top of screen */
 #define MC6847_TOP_BORDER_LINES     (25)    /* 25 lines top border */
 #define MC6847_DISPLAY_LINES        (192)   /* 192 lines visible display area */
 #define MC6847_BOTTOM_BORDER_LINES  (26)    /* 26 lines bottom border */
 #define MC6847_VRETRACE_LINES       (6)     /* 6 'lines' for vertical retrace */
 #define MC6847_ALL_LINES            (262)   /* all of the above */
-#define MC6847_DISPLAY_START        (MC6847_LINES_VBLANK+MC6847_LINES_BORDER_TOP)
-#define MC6847_DISPLAY_END          (MC6847_LINES_DISP_START+MC6847_LINES_DISPLAY)
-#define MC6847_BOTTOM_BORDER_END    (MC6847_LINES_DISPLAY_END+MC6847_LINES_BORDER_BOT)
+#define MC6847_DISPLAY_START        (MC6847_VBLANK_LINES+MC6847_TOP_BORDER_LINES)
+#define MC6847_DISPLAY_END          (MC6847_DISPLAY_START+MC6847_DISPLAY_LINES)
+#define MC6847_BOTTOM_BORDER_END    (MC6847_DISPLAY_END+MC6847_BOTTOM_BORDER_LINES)
 #define MC6847_FSYNC_START          (MC6847_DISPLAY_END)
 
 /* pixel width and height of entire visible area, including border */
@@ -176,6 +187,9 @@ extern "C" {
 /* pixel width and height of only the image area, without border */
 #define MC6847_IMAGE_WIDTH (256)
 #define MC6847_IMAGE_HEIGHT (192)
+
+/* horizontal border width */
+#define MC6847_BORDER_PIXELS ((MC6847_DISPLAY_WIDTH-MC6847_IMAGE_WIDTH)/2)
 
 /* the MC6847 is always clocked at 3.579 MHz */
 #define MC6847_TICK_HZ (3579545)
@@ -204,7 +218,7 @@ typedef struct {
     /* pins that transitioned from active-to-inactive during last tick */
     uint64_t off;
     /* the graphics mode color palette (RGBA8) */
-    uint32_t gm_colors[8];
+    uint32_t palette[8];
     /* the black color as RGBA8 */
     uint32_t black;
     /* the alpha-numeric mode bright and dark green and orange colors */
@@ -230,8 +244,8 @@ typedef struct {
 extern void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc);
 /* reset a mc6847_t instance */
 extern void mc6847_reset(mc6847_t* vdg);
-/* reprogram the mode-select pins */
-extern void mc6847_iorq(mc6847_t* vdg, uint64_t pins);
+/* set or clear control-pins */
+extern void mc6847_ctrl(mc6847_t* vdg, uint64_t pins, uint64_t mask);
 /* tick the mc6847_t instance, this will call the fetch_cb and generate the image */
 extern void mc6847_tick(mc6847_t* vdg);
 
@@ -300,14 +314,14 @@ void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc) {
 
         color intensities are slightly boosted
     */
-    vdg->gm_colors[0] = _MC6847_RGBA(19, 146, 11);      /* green */
-    vdg->gm_colors[1] = _MC6847_RGBA(155, 150, 10);     /* yellow */
-    vdg->gm_colors[2] = _MC6847_RGBA(2, 22, 175);       /* blue */
-    vdg->gm_colors[3] = _MC6847_RGBA(155, 22, 7);       /* red */
-    vdg->gm_colors[4] = _MC6847_RGBA(141, 150, 154);    /* buff */
-    vdg->gm_colors[5] = _MC6847_RGBA(15, 143, 155);     /* cyan */
-    vdg->gm_colors[6] = _MC6847_RGBA(139, 39, 155);     /* cyan */
-    vdg->gm_colors[7] = _MC6847_RGBA(140, 31, 11);      /* orange */
+    vdg->palette[0] = _MC6847_RGBA(19, 146, 11);      /* green */
+    vdg->palette[1] = _MC6847_RGBA(155, 150, 10);     /* yellow */
+    vdg->palette[2] = _MC6847_RGBA(2, 22, 175);       /* blue */
+    vdg->palette[3] = _MC6847_RGBA(155, 22, 7);       /* red */
+    vdg->palette[4] = _MC6847_RGBA(141, 150, 154);    /* buff */
+    vdg->palette[5] = _MC6847_RGBA(15, 143, 155);     /* cyan */
+    vdg->palette[6] = _MC6847_RGBA(139, 39, 155);     /* cyan */
+    vdg->palette[7] = _MC6847_RGBA(140, 31, 11);      /* orange */
 
     /* black level color, and alpha-numeric display mode colors */
     vdg->black = 0xFF111111;
@@ -321,6 +335,300 @@ void mc6847_reset(mc6847_t* vdg) {
     CHIPS_ASSERT(vdg);
     vdg->h_count = 0;
     vdg->l_count = 0;
+}
+
+void mc6847_ctrl(mc6847_t* vdg, uint64_t pins, uint64_t mask) {
+    CHIPS_ASSERT(vdg);
+    vdg->pins = (vdg->pins & ~mask) | pins;
+}
+
+/*
+    internal character ROM dump from MAME
+    (ntsc_square_fontdata8x12 in devices/video/mc6847.cpp)
+*/
+static const uint8_t _mc6847_font[64 * 12] = {
+    0x00, 0x00, 0x00, 0x1C, 0x22, 0x02, 0x1A, 0x2A, 0x2A, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x14, 0x22, 0x22, 0x3E, 0x22, 0x22, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3C, 0x12, 0x12, 0x1C, 0x12, 0x12, 0x3C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x22, 0x20, 0x20, 0x20, 0x22, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3C, 0x12, 0x12, 0x12, 0x12, 0x12, 0x3C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3E, 0x20, 0x20, 0x38, 0x20, 0x20, 0x3E, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3E, 0x20, 0x20, 0x38, 0x20, 0x20, 0x20, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1E, 0x20, 0x20, 0x26, 0x22, 0x22, 0x1E, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x22, 0x22, 0x3E, 0x22, 0x22, 0x22, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x08, 0x08, 0x08, 0x08, 0x08, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x22, 0x22, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x24, 0x28, 0x30, 0x28, 0x24, 0x22, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x3E, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x36, 0x2A, 0x2A, 0x22, 0x22, 0x22, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x32, 0x2A, 0x26, 0x22, 0x22, 0x22, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3E, 0x22, 0x22, 0x22, 0x22, 0x22, 0x3E, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3C, 0x22, 0x22, 0x3C, 0x20, 0x20, 0x20, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x22, 0x22, 0x22, 0x2A, 0x24, 0x1A, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3C, 0x22, 0x22, 0x3C, 0x28, 0x24, 0x22, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x22, 0x10, 0x08, 0x04, 0x22, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x22, 0x22, 0x14, 0x14, 0x08, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x22, 0x22, 0x2A, 0x2A, 0x36, 0x22, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x22, 0x14, 0x08, 0x14, 0x22, 0x22, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x22, 0x22, 0x14, 0x08, 0x08, 0x08, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3E, 0x02, 0x04, 0x08, 0x10, 0x20, 0x3E, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x38, 0x20, 0x20, 0x20, 0x20, 0x20, 0x38, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x20, 0x20, 0x10, 0x08, 0x04, 0x02, 0x02, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x0E, 0x02, 0x02, 0x02, 0x02, 0x02, 0x0E, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x1C, 0x2A, 0x08, 0x08, 0x08, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x08, 0x10, 0x3E, 0x10, 0x08, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x08, 0x08, 0x08, 0x08, 0x00, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x14, 0x14, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x14, 0x14, 0x36, 0x00, 0x36, 0x14, 0x14, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x1E, 0x20, 0x1C, 0x02, 0x3C, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x32, 0x32, 0x04, 0x08, 0x10, 0x26, 0x26, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x10, 0x28, 0x28, 0x10, 0x2A, 0x24, 0x1A, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x18, 0x18, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x10, 0x20, 0x20, 0x20, 0x10, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x08, 0x1C, 0x3E, 0x1C, 0x08, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x08, 0x08, 0x3E, 0x08, 0x08, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x30, 0x10, 0x20, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3E, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x30, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x02, 0x02, 0x04, 0x08, 0x10, 0x20, 0x20, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x24, 0x24, 0x24, 0x18, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x18, 0x08, 0x08, 0x08, 0x08, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x22, 0x02, 0x1C, 0x20, 0x20, 0x3E, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x22, 0x02, 0x04, 0x02, 0x22, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x04, 0x0C, 0x14, 0x3E, 0x04, 0x04, 0x04, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3E, 0x20, 0x3C, 0x02, 0x02, 0x22, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x20, 0x20, 0x3C, 0x22, 0x22, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x3E, 0x02, 0x04, 0x08, 0x10, 0x20, 0x20, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x22, 0x22, 0x1C, 0x22, 0x22, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x1C, 0x22, 0x22, 0x1E, 0x02, 0x02, 0x1C, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x08, 0x10, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x04, 0x08, 0x10, 0x20, 0x10, 0x08, 0x04, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x3E, 0x00, 0x3E, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x10, 0x08, 0x04, 0x02, 0x04, 0x08, 0x10, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x18, 0x24, 0x04, 0x08, 0x08, 0x00, 0x08, 0x00, 0x00,
+};
+
+
+static inline uint32_t _mc6847_border_color(mc6847_t* vdg) {
+    if (vdg->pins & MC6847_AG) {
+        /* a graphics mode, either green or buff, depending on CSS pin */
+        return (vdg->pins & MC6847_CSS) ? vdg->palette[4] : vdg->palette[0];
+    }
+    else {
+        /* alphanumeric or semigraphics mode, always black */
+        return vdg->black;
+    }
+}
+
+static void _mc6847_decode_border(mc6847_t* vdg, int y) {
+    uint32_t* dst = &(vdg->rgba8_buffer[y * MC6847_DISPLAY_WIDTH]);
+    uint32_t c = _mc6847_border_color(vdg);
+    for (int x = 0; x < MC6847_DISPLAY_WIDTH; x++) {
+        *dst++ = c;
+    }
+}
+
+static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
+    uint32_t* dst = &(vdg->rgba8_buffer[y * MC6847_DISPLAY_WIDTH]);
+    uint32_t bc = _mc6847_border_color(vdg);
+    uint64_t pins = vdg->pins;
+
+    /* left border */
+    for (int i = 0; i < MC6847_BORDER_PIXELS; i++) {
+        *dst++ = bc;
+    }
+
+    /* visible scanline */
+    if (pins & MC6847_AG) {
+        /* one of the 8 graphics modes */
+        uint8_t sub_mode = (pins & (MC6847_GM2|MC6847_GM1)) / MC6847_GM1;
+        if (pins & MC6847_GM0) {
+            /*  one of the 'resolution modes' (1 bit == 1 pixel block)
+                GM2|GM1:
+                    00:    RG1, 128x64, 16 bytes per row
+                    01:    RG2, 128x96, 16 bytes per row
+                    10:    RG3, 128x192, 16 bytes per row
+                    11:    RG6, 256x192, 32 bytes per row
+            */
+            int dots_per_bit  = (sub_mode < 3) ? 2 : 1;
+            int bytes_per_row = (sub_mode < 3) ? 16 : 32;
+            int row_height = (pins & MC6847_GM2) ? 1 : (pins & MC6847_GM1) ? 2 : 3;
+            uint16_t addr = (y / row_height) * bytes_per_row;
+            uint32_t fg_color = (pins & MC6847_CSS) ? vdg->palette[4] : vdg->palette[0];
+            for (int x = 0; x < bytes_per_row; x++) {
+                MC6847_SET_ADDR(pins, addr++);
+                pins = vdg->fetch_cb(pins);
+                uint8_t m = MC6847_GET_DATA(pins);
+                for (int p = 7; p >= 0; p--) {
+                    uint32_t c = ((m>>p) & 1) ? fg_color : vdg->black;
+                    for (int d = 0; d < dots_per_bit; d++) {
+                        *dst++ = c;
+                    }
+                }
+            }
+        }
+        else {
+            /*  one of the 'color modes' (2 bits per pixel == 4 colors, CSS select
+                lower or upper half of palette)
+                GM2|GM1:
+                    00: CG1, 64x64, 16 bytes per row
+                    01: CG2, 128x64, 32 bytes per row
+                    10: CG3, 128x96, 32 bytes per row
+                    11: CG6, 128x192, 32 bytes per row
+            */
+            uint32_t pal_offset = (pins & MC6847_CSS) ? 4 : 0;
+            int dots_per_2bit = (sub_mode == 0) ? 4 : 2;
+            int bytes_per_row = (sub_mode == 0) ? 16 : 32;
+            int row_height = (pins & MC6847_GM2) ? ((pins & MC6847_GM1) ? 1 : 2) : 3;
+            uint16_t addr = (y / row_height) * bytes_per_row;
+            for (int x = 0; x < bytes_per_row; x++) {
+                MC6847_SET_ADDR(pins, addr++);
+                pins = vdg->fetch_cb(pins);
+                uint8_t m = MC6847_GET_DATA(pins);
+                for (int p = 6; p >= 0; p -= 2) {
+                    const uint32_t c = vdg->palette[((m>>p) & 3) + pal_offset];
+                    for (int d = 0; d < dots_per_2bit; d++) {
+                        *dst++ = c;
+                    }
+                }
+            }
+        }
+    }
+    else {
+        /*  we're in alphanumeric/semigraphics mode, one cell is 8x12 pixels */
+
+        /* the vidmem src address and offset into the font data */
+        uint16_t addr = (y / 12) * 32;
+        uint8_t m; /* the pixel bitmask */
+        int chr_y = y % 12;
+        /* bit shifters to extract a 2x2 or 2x3 semigraphics 2-bit stack */
+        int shift_2x2 = (1 - (chr_y / 6))*2;
+        int shift_2x3 = (2 - (chr_y / 4))*2;
+        uint32_t alnum_fg = (pins & MC6847_CSS) ? vdg->alnum_orange : vdg->alnum_green;
+        uint32_t alnum_bg = (pins & MC6847_CSS) ? vdg->alnum_dark_orange : vdg->alnum_dark_green;
+        for (int x = 0; x < 32; x++) {
+            MC6847_SET_ADDR(pins, addr++);
+            pins = vdg->fetch_cb(pins);
+            uint8_t chr = MC6847_GET_DATA(pins);
+            if (pins & MC6847_AS) {
+                /* semigraphics mode */
+                uint32_t fg_color;
+                if (pins & MC6847_INTEXT) {
+                    /*  2x3 semigraphics, 2 color sets at 4 colors (selected by CSS pin)
+                        |C1|C0|L5|L4|L3|L2|L1|L0|
+                    
+                        +--+--+
+                        |L5|L4|
+                        +--+--+
+                        |L3|L2|
+                        +--+--+
+                        |L1|L0|
+                        +--+--+
+                    */
+
+                    /* extract the 2 horizontal bits from one of the 3 stacks */
+                    m = (chr>>shift_2x3) & 3;
+                    /* 2 bits of color, CSS bit selects upper or lower half of color palette */
+                    fg_color = vdg->palette[((chr>>6)&3) + ((pins&MC6847_CSS)?4:0)];
+                }
+                else {
+                    /*  2x2 semigraphics, 8 colors + black
+                        |xx|C2|C1|C0|L3|L2|L1|L0|
+                    
+                        +--+--+
+                        |L3|L2|
+                        +--+--+
+                        |L1|L0|
+                        +--+--+
+                    */
+
+                    /* extract the 2 horizontal bits from the upper or lower stack */
+                    m = (chr>>shift_2x2) & 3;
+                    /* 3 color bits directly point into the color palette */
+                    fg_color = vdg->palette[(chr>>4) & 7];
+                }
+                /* write the horizontal pixel blocks (2 blocks @ 4 pixel each) */
+                for (int p = 1; p>=0; p--) {
+                    uint32_t c = (m & (1<<p)) ? fg_color : vdg->black;
+                    *dst++=c; *dst++=c; *dst++=c; *dst++=c;
+                }
+            }
+            else {
+                /*  alphanumeric mode
+                    FIXME: INT_EXT (switch between internal and external font
+                */
+                uint8_t m = _mc6847_font[(chr&0x3F)*12 + chr_y];
+                if (pins & MC6847_INV) {
+                    m = ~m;
+                }
+                for (int p = 7; p >= 0; p--) {
+                    *dst++ = m & (1<<p) ? alnum_fg : alnum_bg;
+                }                
+            }
+        }
+    }
+
+    /* right border */
+    for (int i = 0; i < MC6847_BORDER_PIXELS; i++) {
+        *dst++ = bc;
+    }
+}
+
+void mc6847_tick(mc6847_t* vdg) {
+    uint64_t prev_pins = vdg->pins;
+    vdg->h_count += _MC6847_PRECISION_BOOST;
+
+    /* horizontal and field sync */
+    if ((vdg->h_count >= vdg->h_sync_start) && (vdg->h_count < vdg->h_sync_end)) {
+        /* horizontal sync on */
+        vdg->pins |= MC6847_HS;
+        if (vdg->l_count == MC6847_FSYNC_START) {
+            /* switch field sync on */
+            vdg->pins |= MC6847_FS;
+        }
+    }
+    else {
+        /* horizontal sync off */
+        vdg->pins &= ~MC6847_HS;
+    }
+
+    /* rewind horizontal counter? */
+    if (vdg->h_count >= vdg->h_period) {
+        vdg->h_count -= vdg->h_period;
+        vdg->l_count++;
+        if (vdg->l_count >= MC6847_ALL_LINES) {
+            /* rewind line counter, field sync off */
+            vdg->l_count = 0;
+            vdg->pins &= ~MC6847_FS;
+        }
+        if (vdg->l_count <= MC6847_VBLANK_LINES) {
+            /* inside vblank area, nothing to do */
+        }
+        else if (vdg->l_count < MC6847_DISPLAY_START) {
+            /* top border */
+            int y = vdg->l_count - MC6847_VBLANK_LINES;
+            _mc6847_decode_border(vdg, y);
+        }
+        else if (vdg->l_count < MC6847_DISPLAY_END) {
+            /* visible area */
+            int y = vdg->l_count - MC6847_VBLANK_LINES;
+            _mc6847_decode_scanline(vdg, y);
+        }
+        else if (vdg->l_count < MC6847_BOTTOM_BORDER_END) {
+            /* bottom border */
+            int y = vdg->l_count - MC6847_VBLANK_LINES;
+            _mc6847_decode_border(vdg, y);
+        }
+    }
+
+    /* raising/falling edge transitions */
+    vdg->on  = vdg->pins & (vdg->pins ^ prev_pins);
+    vdg->off = ~vdg->pins & (vdg->pins ^ prev_pins);
 }
 
 # endif /* CHIPS_IMPL */
