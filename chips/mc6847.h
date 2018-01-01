@@ -434,7 +434,7 @@ static void _mc6847_decode_border(mc6847_t* vdg, int y) {
 }
 
 static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
-    uint32_t* dst = &(vdg->rgba8_buffer[y * MC6847_DISPLAY_WIDTH]);
+    uint32_t* dst = &(vdg->rgba8_buffer[(y+MC6847_TOP_BORDER_LINES) * MC6847_DISPLAY_WIDTH]);
     uint32_t bc = _mc6847_border_color(vdg);
     uint64_t pins = vdg->pins;
 
@@ -616,7 +616,7 @@ void mc6847_tick(mc6847_t* vdg) {
         }
         else if (vdg->l_count < MC6847_DISPLAY_END) {
             /* visible area */
-            int y = vdg->l_count - MC6847_VBLANK_LINES;
+            int y = vdg->l_count - MC6847_DISPLAY_START;
             _mc6847_decode_scanline(vdg, y);
         }
         else if (vdg->l_count < MC6847_BOTTOM_BORDER_END) {
