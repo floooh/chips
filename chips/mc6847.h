@@ -194,6 +194,9 @@ extern "C" {
 /* the MC6847 is always clocked at 3.579 MHz */
 #define MC6847_TICK_HZ (3579545)
 
+/* fixed point precision for more precise error accumulation */
+#define MC6847_PRECISION_BOOST (16)
+
 /* a memory-fetch callback, used to read video memory bytes into the MC6847 */
 typedef uint64_t (*mc6847_fetch_t)(uint64_t pins);
 
@@ -262,7 +265,6 @@ extern void mc6847_tick(mc6847_t* vdg);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _MC6847_PRECISION_BOOST (16)
 #define _MC6847_CLAMP(x) ((x)>255?255:(x))
 #define _MC6847_RGBA(r,g,b) (0xFF000000|_MC6847_CLAMP((r*4)/3)|(_MC6847_CLAMP((g*4)/3)<<8)|(_MC6847_CLAMP((b*4)/3)<<16))
 
@@ -283,13 +285,13 @@ void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc) {
 
        one scanline is 228 3.5 MC6847 ticks
     */
-    int64_t tmp = (228LL * desc->tick_hz * _MC6847_PRECISION_BOOST) / MC6847_TICK_HZ;
+    int64_t tmp = (228LL * desc->tick_hz * MC6847_PRECISION_BOOST) / MC6847_TICK_HZ;
     vdg->h_period = (int) tmp;
     /* hsync starts at tick 10 of a scanline */
-    tmp = (10LL * desc->tick_hz * _MC6847_PRECISION_BOOST) / MC6847_TICK_HZ;
+    tmp = (10LL * desc->tick_hz * MC6847_PRECISION_BOOST) / MC6847_TICK_HZ;
     vdg->h_sync_start = tmp;
     /* hsync is 16 ticks long */
-    tmp = (26LL * desc->tick_hz * _MC6847_PRECISION_BOOST) / MC6847_TICK_HZ;
+    tmp = (26LL * desc->tick_hz * MC6847_PRECISION_BOOST) / MC6847_TICK_HZ;
     vdg->h_sync_end = tmp;
 
     /* the default graphics mode color palette
@@ -581,7 +583,7 @@ static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
 
 void mc6847_tick(mc6847_t* vdg) {
     uint64_t prev_pins = vdg->pins;
-    vdg->h_count += _MC6847_PRECISION_BOOST;
+    vdg->h_count += MC6847_PRECISION_BOOST;
 
     /* horizontal and field sync */
     if ((vdg->h_count >= vdg->h_sync_start) && (vdg->h_count < vdg->h_sync_end)) {
