@@ -606,7 +606,7 @@ void mc6847_tick(mc6847_t* vdg) {
             vdg->l_count = 0;
             vdg->pins &= ~MC6847_FS;
         }
-        if (vdg->l_count <= MC6847_VBLANK_LINES) {
+        if (vdg->l_count < MC6847_VBLANK_LINES) {
             /* inside vblank area, nothing to do */
         }
         else if (vdg->l_count < MC6847_DISPLAY_START) {
