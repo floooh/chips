@@ -110,6 +110,10 @@ extern void kbd_init(kbd_t* kbd, int sticky_count);
 extern void kbd_update(kbd_t* kbd);
 /* register a modifier key, layers are between from 0 to KBD_MAX_MOD_KEYS-1 */
 extern void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line);
+/* register a modifier key where the modifier is mapped to an entire keyboard line */
+extern void kbd_register_modifier_line(kbd_t* kbd, int layer, int line);
+/* register a modifier key where the modifier is mapped to an entire keyboard column */
+extern void kbd_register_modifier_column(kbd_t* kbd, int layer, int column);
 /* register a key */
 extern void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_mask);
 /* add a key to the pressed-key buffer */
@@ -182,7 +186,21 @@ void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line) {
     CHIPS_ASSERT((column >= 0) && (column < KBD_MAX_COLUMNS));
     CHIPS_ASSERT((line >= 0) && (line < KBD_MAX_LINES));
     CHIPS_ASSERT((layer >= 0) && (layer < KBD_MAX_MOD_KEYS));
-    kbd->mod_masks[layer] = (1<<(layer+KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
+    kbd->mod_masks[layer] = (1<<(layer+KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_LINES)) | (1<<line);
+}
+
+void kbd_register_modifier_line(kbd_t* kbd, int layer, int line) {
+    CHIPS_ASSERT(kbd);
+    CHIPS_ASSERT((line >= 0) && (line < KBD_MAX_LINES));
+    CHIPS_ASSERT((layer >= 0) && (layer < KBD_MAX_MOD_KEYS));
+    kbd->mod_masks[layer] = (1<<(layer+KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<line);
+}
+
+void kbd_register_modifier_column(kbd_t* kbd, int layer, int column) {
+    CHIPS_ASSERT(kbd);
+    CHIPS_ASSERT((column >= 0) && (column < KBD_MAX_COLUMNS));
+    CHIPS_ASSERT((layer >= 0) && (layer < KBD_MAX_MOD_KEYS));
+    kbd->mod_masks[layer] = (1<<(layer+KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_LINES));
 }
 
 void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_mask) {
@@ -190,7 +208,7 @@ void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_mask) {
     CHIPS_ASSERT((key >= 0) && (key < KBD_MAX_KEYS));
     CHIPS_ASSERT((column >= 0) && (column < KBD_MAX_COLUMNS));
     CHIPS_ASSERT((line >= 0) && (line < KBD_MAX_LINES));
-    kbd->key_masks[key] = (mod_mask << (KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_COLUMNS)) | (1<<line);
+    kbd->key_masks[key] = (mod_mask << (KBD_MAX_COLUMNS+KBD_MAX_LINES)) | (1<<(column+KBD_MAX_LINES)) | (1<<line);
 }
 
 void kbd_key_down(kbd_t* kbd, int key) {
@@ -221,7 +239,7 @@ void kbd_key_up(kbd_t* kbd, int key) {
 
 /* extract column bits from a 32-bit key mask */
 static uint16_t _kbd_columns(uint32_t key_mask) {
-    return (key_mask>>KBD_MAX_COLUMNS) & ((1<<KBD_MAX_COLUMNS)-1);
+    return (key_mask>>KBD_MAX_LINES) & ((1<<KBD_MAX_COLUMNS)-1);
 }
 
 /* extract line bits from a 32-bit key mask */
@@ -251,7 +269,12 @@ uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask) {
                     const uint32_t mod_mask = kbd->mod_masks[mod_index];
                     if (mod_mask & key_mod_mask) {
                         const uint16_t mod_col_mask = _kbd_columns(mod_mask);
-                        if ((mod_col_mask & column_mask) == (mod_col_mask)) {
+                        if (mod_col_mask) {
+                            if ((mod_col_mask & column_mask) == mod_col_mask) {
+                                line_bits |= _kbd_lines(mod_mask);
+                            }
+                        }
+                        else {
                             line_bits |= _kbd_lines(mod_mask);
                         }
                     }
@@ -279,7 +302,12 @@ uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask) {
                     const uint32_t mod_mask = kbd->mod_masks[mod_index];
                     if (mod_mask & key_mod_mask) {
                         const uint16_t mod_line_mask = _kbd_lines(mod_mask);
-                        if ((mod_line_mask & line_mask) == (mod_line_mask)) {
+                        if (mod_line_mask) {
+                            if ((mod_line_mask & line_mask) == mod_line_mask) {
+                                column_bits |= _kbd_columns(mod_mask);
+                            }
+                        }
+                        else {
                             column_bits |= _kbd_columns(mod_mask);
                         }
                     }
