@@ -289,10 +289,10 @@ void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc) {
     vdg->h_period = (int) tmp;
     /* hsync starts at tick 10 of a scanline */
     tmp = (10LL * desc->tick_hz * MC6847_PRECISION_BOOST) / MC6847_TICK_HZ;
-    vdg->h_sync_start = tmp;
+    vdg->h_sync_start = (int) tmp;
     /* hsync is 16 ticks long */
     tmp = (26LL * desc->tick_hz * MC6847_PRECISION_BOOST) / MC6847_TICK_HZ;
-    vdg->h_sync_end = tmp;
+    vdg->h_sync_end = (int) tmp;
 
     /* the default graphics mode color palette
 
@@ -448,7 +448,7 @@ static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
     /* visible scanline */
     if (pins & MC6847_AG) {
         /* one of the 8 graphics modes */
-        uint8_t sub_mode = (pins & (MC6847_GM2|MC6847_GM1)) / MC6847_GM1;
+        uint8_t sub_mode = (uint8_t) ((pins & (MC6847_GM2|MC6847_GM1)) / MC6847_GM1);
         if (pins & MC6847_GM0) {
             /*  one of the 'resolution modes' (1 bit == 1 pixel block)
                 GM2|GM1:
