@@ -208,6 +208,7 @@ def write_header():
     write_defines()
     l('uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {')
     l('  m6502_t c = *cpu;')
+    l('  c.trap_id = -1;')
     l('  uint8_t l, h;')
     l('  uint16_t a, t;')
     l('  uint32_t ticks = 0;')
@@ -248,7 +249,7 @@ def write_interrupt_handling():
 def write_footer():
     l('    }')
     write_interrupt_handling()
-    l('  } while ((ticks < num_ticks) && ((pins & c.break_mask)==0));')
+    l('  } while ((ticks < num_ticks) && (c.trap_id < 0));')
     l('  c.PINS = pins;')
     l('  *cpu = c;')
     l('  return ticks;')
@@ -354,6 +355,7 @@ def i_brk(o):
     # this only covers the normal instruction version of brk, not
     # an interrupt acknowlegde brk!
     cmt(o, 'BRK')
+    o.src += 'if(_m6502_check_trap(&c)){break;}'
     o.src += '_RD();'
     o.src += 'c.PC++;'
     # write PC high byte to stack

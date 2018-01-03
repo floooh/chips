@@ -106,6 +106,16 @@ typedef uint64_t (*m6502_tick_t)(uint64_t pins);
 #define M6502_VF (1<<6)   /* overflow */
 #define M6502_NF (1<<7)   /* negative */
 
+/* max number of trap points */
+#define M6502_MAX_NUM_TRAPS (8)
+
+/* a trap definition */
+typedef struct {
+    uint8_t* host_addr;
+    uint16_t addr;
+    uint8_t orig_byte;
+} _m6502_trap_t;
+
 /* M6502 CPU state */
 typedef struct {
     m6502_tick_t tick;
@@ -121,15 +131,21 @@ typedef struct {
     uint8_t pi;
     /* some variations of the m6502 don't have BCD arithmetic support */
     bool bcd_supported;
-    /* break out of m6502_exec() if (PINS & break_mask) */
-    uint64_t break_mask;
+    /* trap points */ 
+    _m6502_trap_t traps[M6502_MAX_NUM_TRAPS];
+    /* index of trap hit (-1 if no trap) */
+    int trap_id;
 } m6502_t;
 
 /* initialize a new m6502 instance */
 extern void m6502_init(m6502_t* cpu, m6502_tick_t tick_cb);
 /* reset an existing m6502 instance */
 extern void m6502_reset(m6502_t* cpu);
-/* execute instruction for at least 'ticks', return number of executed ticks */
+/* set a trap point */
+extern void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr, uint8_t* host_addr);
+/* clear a trap point */
+extern void m6502_clear_trap(m6502_t* cpu, int trap_id);
+/* execute instruction for at least 'ticks' or trap hit, return number of executed ticks */
 extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 
 /* extract 16-bit address bus from 64-bit pins */
@@ -286,6 +302,17 @@ static inline void _m6502_arr(m6502_t* cpu) {
     }
 }
 
+static inline bool _m6502_check_trap(m6502_t* c) {
+    const uint16_t pc = c->PC - 1;
+    for (int i = 0; i < M6502_MAX_NUM_TRAPS; i++) {
+        if (c->traps[i].host_addr && (c->traps[i].addr == pc)) {
+            c->trap_id = i;
+            return true;
+        }
+    }
+    return false;
+}
+
 #undef _M6502_NZ
 
 #include "_m6502_decoder.h"
@@ -299,6 +326,7 @@ void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
     c->P = M6502_IF|M6502_XF;
     c->S = 0xFD;
     c->bcd_supported = true;
+    c->trap_id = -1;
 }
 
 void m6502_reset(m6502_t* c) {
@@ -311,6 +339,32 @@ void m6502_reset(m6502_t* c) {
     uint8_t h = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00)));
     c->PC = (h<<8)|l;
 }
+
+void m6502_set_trap(m6502_t* c, int trap_id, uint16_t addr, uint8_t* host_addr) {
+    CHIPS_ASSERT(c);
+    CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
+    CHIPS_ASSERT(host_addr);
+    _m6502_trap_t* trap = &c->traps[trap_id];
+    if (trap->host_addr) {
+        m6502_clear_trap(c, trap_id);
+    }
+    trap->host_addr = host_addr;
+    trap->addr = addr;
+    trap->orig_byte = *host_addr;
+    *host_addr = 0; /* BRK instruction, this checks for traps */
+}
+
+void m6502_clear_trap(m6502_t* c, int trap_id) {
+    CHIPS_ASSERT(c);
+    CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
+    CHIPS_ASSERT(c->traps[trap_id].host_addr);
+    _m6502_trap_t* trap = &c->traps[trap_id];
+    *trap->host_addr = trap->orig_byte;
+    trap->host_addr = 0;
+    trap->addr = 0;
+    trap->orig_byte = 0;
+}
+
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus

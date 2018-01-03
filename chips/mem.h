@@ -87,7 +87,7 @@ extern void mem_unmap_layer(mem_t* mem, int layer);
 /* unmap all memory pages in all layers, also updates the CPU-visible page-table */
 extern void mem_unmap_all(mem_t* mem);
 /* get the host-memory read-ptr of a emulator memory address */
-extern const uint8_t* mem_readptr(mem_t* mem, uint16_t addr);
+extern uint8_t* mem_readptr(mem_t* mem, uint16_t addr);
 /* copy a range of bytes into memory via mem_wr() */
 extern void mem_write_range(mem_t* mem, uint16_t addr, const uint8_t* src, int num_bytes);
 
@@ -216,9 +216,9 @@ void mem_unmap_all(mem_t* m) {
     }
 }
 
-const uint8_t* mem_readptr(mem_t* m, uint16_t addr) {
+uint8_t* mem_readptr(mem_t* m, uint16_t addr) {
     CHIPS_ASSERT(m);
-    return &(m->page_table[addr>>MEM_PAGE_SHIFT].read_ptr[addr&MEM_PAGE_MASK]);
+    return (uint8_t*) &(m->page_table[addr>>MEM_PAGE_SHIFT].read_ptr[addr&MEM_PAGE_MASK]);
 } 
 
 void mem_write_range(mem_t* m, uint16_t addr, const uint8_t* src, int num_bytes) {

@@ -48,6 +48,7 @@
 
 uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
   m6502_t c = *cpu;
+  c.trap_id = -1;
   uint8_t l, h;
   uint16_t a, t;
   uint32_t ticks = 0;
@@ -60,7 +61,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
     c.pi = c.P;
     const uint8_t opcode = _GD();
     switch (opcode) {
-      case 0x0:/*BRK */_A_IMP();_RD();c.PC++;_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();_SA(0xFFFE);_RD();l=_GD();_SA(0xFFFF);_RD();h=_GD();c.PC=(h<<8)|l;c.P|=M6502_IF;break;
+      case 0x0:/*BRK */_A_IMP();if(_m6502_check_trap(&c)){break;}_RD();c.PC++;_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();_SA(0xFFFE);_RD();l=_GD();_SA(0xFFFF);_RD();h=_GD();c.PC=(h<<8)|l;c.P|=M6502_IF;break;
       case 0x1:/*ORA (zp,X)*/_A_IDX();_RD();c.A|=_GD();_NZ(c.A);break;
       case 0x2:/*INVALID*/break;
       case 0x3:/*SLO (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
@@ -337,7 +338,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       c.P |= M6502_IF;
       pins &= ~(M6502_IRQ|M6502_NMI);
     }
-  } while ((ticks < num_ticks) && ((pins & c.break_mask)==0));
+  } while ((ticks < num_ticks) && (c.trap_id < 0));
   c.PINS = pins;
   *cpu = c;
   return ticks;
