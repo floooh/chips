@@ -1,0 +1,72 @@
+<meta charset='utf-8' emacsmode='-*- markdown -*-'>
+<link rel='stylesheet' href='https://casual-effects.com/markdeep/latest/apidoc.css?'>
+# z80ctc.h
+
+Header-only emulator for the Z80 CTC (Counter/Timer Channels)
+written in C.
+
+Do this:
+~~~C
+#define CHIPS_IMPL
+~~~
+before you include this file in *one* C or C++ file to create the 
+implementation.
+
+Optionally provide the following macros with your own implementation
+~~~C
+CHIPS_ASSERT(c)
+~~~
+    your own assert macro (default: assert(c))
+
+## Emulated Pins:
+
+***************************************
+*          +-----------+              *
+*   D0 <-->|           |<--- CLKTRG0  *
+*   .. <-->|           |---> ZCTO0    *
+*   D7 <-->|           |<--- CLKTRG1  *
+*   CE --->|           |---> ZCTO1    *
+*  CS0 --->|           |<--- CLKTRG2  *
+*  CS1 --->|    Z80    |---> ZCTO2    *
+*   M1 --->|    CTC    |<--- CLKTRG3  *
+* IORQ --->|           |              *
+*   RD --->|           |              *
+*  INT <---|           |              *
+*  IEI --->|           |              *
+*  IEO <---|           |              *
+*          +-----------+              *
+***************************************
+
+!!! Note FIXME
+    functions and usage documentation
+
+!!! Note FIXME
+    the spec says "After initialization, channels may be reprogrammed
+    at any time. If updated control and time constant words are written
+    to a channel during the count operation, the count continues to
+    zero before the new time constant is loaded into the counter".
+    The current implementation doesn't behave like this, instead it behaves
+    like MAME. Needs more research!
+
+## MIT License
+
+Copyright (c) 2017 Andre Weissflog
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+<script>markdeepOptions={tocStyle:'medium'};</script><!-- Markdeep: --><script src='https://casual-effects.com/markdeep/latest/markdeep.min.js?'></script>
