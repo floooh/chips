@@ -1,41 +1,49 @@
 #pragma once
-/*
-    z80pio.h -- emulates the Z80 PIO (Parallel Input/Output)
+/*#
+    # z80pio.h
+
+    Header-only emulator for the Z80 PIO (Parallel Input/Output)
+    written in C.
 
     Do this:
-        #define CHIPS_IMPL
+    ~~~C
+    #define CHIPS_IMPL
+    ~~~
     before you include this file in *one* C or C++ file to create the 
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
-        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+    ~~~C
+    CHIPS_ASSERT(c)
+    ~~~
+        your own assert macro (default: assert(c))
 
-    EMULATED PINS:
+    ## Emulated pins:
 
-                  +-----------+
-            D0 <->|           |<-> A0
-            .. <->|           |<-> ..
-            D7 <->|           |<-> A7
-         BASEL -->|           |--> ARDY
-         CDSEL -->|           |<-- ASTB
-            CE -->|    Z80    |
-            M1 -->|    PIO    |<-> B0
-          IORQ -->|           |<-> ..
-            RD -->|           |<-> B7
-           INT <--|           |--> BRDY
-           IEI -->|           |<-- BSTB
-           IEO <--|           |
-                  +-----------+
+    *************************************
+    *           +-----------+           *
+    *    D0 <-->|           |<--> A0    *
+    *    .. <-->|           |<--> ..    *
+    *    D7 <-->|           |<--> A7    *
+    * BASEL --->|           |---> ARDY  *
+    * CDSEL --->|           |<--- ASTB  *
+    *    CE --->|    Z80    |           *
+    *    M1 --->|    PIO    |<--> B0    *
+    *  IORQ --->|           |<--> ..    *
+    *    RD --->|           |<--> B7    *
+    *   INT <---|           |---> BRDY  *
+    *   IEI --->|           |<--- BSTB  *
+    *   IEO <---|           |           *
+    *           +-----------+           *
+    *************************************
 
-    NOTE EMULATED:
+    ## Not Emulated
         - bidirectional mode
 
-    FIXME: documentation
+    !!! Note FIXME
+        function and usage documentation
 
-    LICENSE:
-
-    MIT License
+    ## MIT License
 
     Copyright (c) 2017 Andre Weissflog
 
@@ -56,7 +64,7 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-*/
+#*/
 #include <stdint.h>
 #include <stdbool.h>
 

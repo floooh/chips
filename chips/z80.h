@@ -1,33 +1,40 @@
 #pragma once
-/*
-    z80.h -- Z80 CPU emulator
+/*#
+    # z80.h
+
+    Header-only Z80 CPU emulator written in C.
 
     Do this:
-        #define CHIPS_IMPL
+    ~~~C
+    #define CHIPS_IMPL
+    ~~~
     before you include this file in *one* C or C++ file to create the 
     implementation.
 
     Optionally provide the following macros with your own implementation
     
-        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+    ~~~C
+    CHIPS_ASSERT(c)
+    ~~~
+        your own assert macro (default: assert(c))
 
-    EMULATED PINS:
+    ## Emulated Pins
+    ***********************************
+    *           +-----------+         *
+    * M1    <---|           |---> A0  *
+    * MREQ  <---|           |---> A1  *
+    * IORQ  <---|           |---> A2  *
+    * RD    <---|           |---> ..  *
+    * WR    <---|    Z80    |---> A15 *
+    * HALT  <---|           |         *
+    * WAIT  --->|           |<--> D0  *
+    * INT   --->|           |<--> D1  *
+    *           |           |<--> ... *
+    *           |           |<--> D7  *
+    *           +-----------+         *
+    ***********************************
 
-             +-----------+
-    M1    <--|           |--> A0
-    MREQ  <--|           |--> A1
-    IORQ  <--|           |--> A2
-    RD    <--|           |--> ...
-    WR    <--|    Z80    |--> A15
-    HALT  <--|           |
-    WAIT  -->|           |<-> D0
-    INT   -->|           |<-> D1
-             |           |<-> ...
-             |           |<-> D7
-             +-----------+
-
-    NOT EMULATED:
-
+    ## Not Emulated
     - refresh cycles (RFSH pin)
     - non-maskable interrupts (NMI pin)
     - interrupt mode 0
@@ -35,16 +42,21 @@
     - the RESET pin is currently not tested, call the z80_reset() 
       function instead
 
-    FUNCTIONS:
-
+    ## Functions
+    ~~~C
     void z80_init(z80_t* cpu, z80_tick_t tick_func)
+    ~~~
         Initializes a new Z80 CPU instance. The tick function will be called
         from inside the z80_exec() function.
 
+    ~~~C
     void z80_reset(z80_t* cpu)
+    ~~~
         Resets the Z80 CPU instance. 
 
+    ~~~C
     uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks)
+    ~~~
         Starts executing instructions until num_ticks is reached, returns
         the number of executed ticks. The number of executed ticks will
         be greater or equal to num_ticks because complete instructions
@@ -52,30 +64,43 @@
         invoked one or multiple times (usually once per machine cycle, 
         but also for 'filler ticks' or wait state ticks).
 
-    HELPER MACROS:
+    ## Macros
+    ~~~C
+    Z80_SET_ADDR(pins, addr)
+    ~~~
+        set 16-bit address bus pins in 64-bit pin mask
 
-        Z80_SET_ADDR(pins, addr)
-            set 16-bit address bus pins in 64-bit pin mask
+    ~~~C
+    Z80_GET_ADDR(pins)
+    ~~~
+        extract 16-bit address bus value from 64-bit pin mask
 
-        Z80_GET_ADDR(pins)
-            extract 16-bit address bus value from 64-bit pin mask
+    ~~~C
+    Z80_SET_DATA(pins, data)
+    ~~~
+        set 8-bit data bus pins in 64-bit pin mask
 
-        Z80_SET_DATA(pins, data)
-            set 8-bit data bus pins in 64-bit pin mask
+    ~~~C
+    Z80_GET_DATA(pins)
+    ~~~
+        extract 8-bit data bus value from 64-bit pin mask
 
-        Z80_GET_DATA(pins)
-            extract 8-bit data bus value from 64-bit pin mask
+    ~~~C
+    Z80_MAKE_PINS(ctrl, addr, data)
+    ~~~
+        build 64-bit pin mask from control-, address- and data-pins
 
-        Z80_MAKE_PINS(ctrl, addr, data)
-            build 64-bit pin mask from control-, address- and data-pins
+    ~~~C
+    Z80_DAISYCHAIN_BEGIN(pins)
+    ~~~
+        used in tick function at start of interrupt daisy-chain block
 
-        Z80_DAISYCHAIN_BEGIN(pins)
-            used in tick function at start of interrupt daisy-chain block
+    ~~~C
+    Z80_DAISYCHAIN_END(pins)
+    ~~~
+        used in tick function at end of interrupt daisy-chain block
 
-        Z80_DAISYCHAIN_END(pins)
-            used in tick function at end of interrupt daisy-chain block
-
-    THE TICK CALLBACK:
+    ## The Tick Callback 
 
     The tick function is called for one or multiple time cycles
     and connects the Z80 to the outside world. Usually one call
@@ -83,13 +108,14 @@
     but this is not always the case. The tick functions takes
     2 arguments:
 
-        - num_ticks: the number of time cycles for this callback invocation
-        - pins: a 64-bit integer with CPU pins (address- and data-bus pins,
-          and control pins)
+    - num_ticks: the number of time cycles for this callback invocation
+    - pins: a 64-bit integer with CPU pins (address- and data-bus pins,
+        and control pins)
 
     A simplest-possible tick callback which just performs memory read/write
     operations on a 64kByte byte array looks like this:
 
+    ~~~C
     uint8_t mem[1<<16] = { 0 };
     uint64_t tick(int num_ticks, uint64_t pins) {
         if (pins & Z80_MREQ) {
@@ -105,6 +131,7 @@
         }
         return pins;
     }
+    ~~~
 
     The tick callback inspects the pins, performs the requested actions
     (memory read/write and input/output), modifies the pin bitmask
@@ -114,21 +141,21 @@
 
     The following pin bitmasks are relevant for the tick callback:
 
-    - MREQ|RD: This is a memory read cycle, the tick callback must 
+    - **MREQ|RD**: This is a memory read cycle, the tick callback must 
       put the byte at the memory address indicated by the address
       bus pins A0..A15 (bits 0..15) into the data bus 
       pins (D0..D7). If the M1 pin is also set, then this
       is an opcode fetch machine cycle (4 clock ticks), otherwise
       this is a normal memory read machine cycle (3 clock ticks)
-    - MREQ|WR: This is a memory write machine cycle, the tick
+    - **MREQ|WR**: This is a memory write machine cycle, the tick
       callback must write the byte in the data bus pins (D0..D7)
       to the memory location in the address bus pins (A0..A15). 
       A memory write machine cycle is 3 clock-ticks.
-    - IORQ|RD: This is a device-input machine cycle, the 16-bit
+    - **IORQ|RD**: This is a device-input machine cycle, the 16-bit
       port number is in the address bus pins (A0..A15), and the
       tick callback must write the input-byte to the data bus
       pins (D0..D7). An input machine cycle is 4 clock-ticks.
-    - IORQ|WR: This is a device-output machine cycle, the data
+    - **IORQ|WR**: This is a device-output machine cycle, the data
       bus pins (D0..D7) contains the byte to be output
       at the port in the address-bus pins (A0..A15). An output
       machine cycle is 4 cycles.
@@ -160,7 +187,7 @@
       called for single clock-ticks, until the tick callback
       clears the wait pin.
 
-    INTERRUPT HANDLING:
+    ## Interrupt Handling
 
     The interrupt 'daisy chain protocol' is entirely implemented
     in the tick callback (usually the actual interrupt daisy chain
@@ -188,7 +215,7 @@
 
     There are 2 virtual pins for the interrupt daisy chain protocol:
 
-    - IEIO (Interrupt Enable In/Out): This combines the IEI and IEO 
+    - **IEIO** (Interrupt Enable In/Out): This combines the IEI and IEO 
       pins found on Z80 chip-family members and is used to disable
       interrupts for lower-priority interrupt controllers in the
       daisy chain if a higher priority device is currently negotiating
@@ -199,7 +226,7 @@
       active interrupt handling clears the IEIO bit, which prevent
       the 'downstream' lower-priority interrupt controllers from
       issuing interrupt requests.
-    - RETI (Return From Interrupt): The virtual RETI pin is set
+    - **RETI** (Return From Interrupt): The virtual RETI pin is set
       by the CPU when it decodes a RETI instruction. This is scanned
       by the interrupt controller which is currently 'under service'
       to enable interrupt handling for lower-priority devices
@@ -212,9 +239,7 @@
     
     http://github.com/floooh/chips-test
 
-    LICENSE:
-
-    MIT License
+    ## MIT License
 
     Copyright (c) 2017 Andre Weissflog
 
@@ -235,7 +260,7 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-*/
+#*/
 #include <stdint.h>
 #include <stdbool.h>
 

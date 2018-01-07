@@ -1,46 +1,54 @@
 #pragma once
-/*
-    z80ctc.h    -- emulates the Z80 CTC (Counter/Timer Channels)
+/*#
+    # z80ctc.h
+    
+    Header-only emulator for the Z80 CTC (Counter/Timer Channels)
+    written in C.
 
     Do this:
-        #define CHIPS_IMPL
+    ~~~C
+    #define CHIPS_IMPL
+    ~~~
     before you include this file in *one* C or C++ file to create the 
     implementation.
 
     Optionally provide the following macros with your own implementation
+    ~~~C
+    CHIPS_ASSERT(c)
+    ~~~
+        your own assert macro (default: assert(c))
+
+    ## Emulated Pins:
+
+    ***************************************
+    *          +-----------+              *
+    *   D0 <-->|           |<--- CLKTRG0  *
+    *   .. <-->|           |---> ZCTO0    *
+    *   D7 <-->|           |<--- CLKTRG1  *
+    *   CE --->|           |---> ZCTO1    *
+    *  CS0 --->|           |<--- CLKTRG2  *
+    *  CS1 --->|    Z80    |---> ZCTO2    *
+    *   M1 --->|    CTC    |<--- CLKTRG3  *
+    * IORQ --->|           |              *
+    *   RD --->|           |              *
+    *  INT <---|           |              *
+    *  IEI --->|           |              *
+    *  IEO <---|           |              *
+    *          +-----------+              *
+    ***************************************
+
+    !!! Note FIXME
+        functions and usage documentation
+
+    !!! Note FIXME
+        the spec says "After initialization, channels may be reprogrammed
+        at any time. If updated control and time constant words are written
+        to a channel during the count operation, the count continues to
+        zero before the new time constant is loaded into the counter".
+        The current implementation doesn't behave like this, instead it behaves
+        like MAME. Needs more research!
     
-        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
-
-    EMULATED PINS:
-
-                  +-----------+
-            D0 <->|           |<-- CLK/TRG0
-            .. <->|           |--> ZC/TO0
-            D7 <->|           |<-- CLK/TRG1
-            CE -->|           |--> ZC/TO1
-           CS0 -->|           |<-- CLK/TRG2
-           CS1 -->|    Z80    |--> ZC/TO2
-            M1 -->|    CTC    |<-- CLK/TRG3
-          IORQ -->|           |
-            RD -->|           |<-- RESET
-           INT <--|           |
-           IEI -->|           |
-           IEO <--|           |
-                  +-----------+
-
-    FIXME: documentation
-
-    FIXME: the spec says "After initialization, channels may be reprogrammed
-    at any time. If updated control and time constant words are written
-    to a channel during the count operation, the count continues to
-    zero before the new time constant is loaded into the counter".
-
-    The current implementation doesn't behave like this, instead it behaves
-    like MAME. Needs more research!
-    
-    LICENSE:
-
-    MIT License
+    ## MIT License
 
     Copyright (c) 2017 Andre Weissflog
 
@@ -61,7 +69,7 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-*/
+#*/
 #include <stdint.h>
 #include <stdbool.h>
 
