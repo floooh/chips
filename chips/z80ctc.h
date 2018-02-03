@@ -37,17 +37,98 @@
     *          +-----------+              *
     ***************************************
 
-    !!! Note FIXME
-        functions and usage documentation
+    ## Inaccuracies:
 
-    !!! Note FIXME
-        the spec says "After initialization, channels may be reprogrammed
-        at any time. If updated control and time constant words are written
-        to a channel during the count operation, the count continues to
-        zero before the new time constant is loaded into the counter".
-        The current implementation doesn't behave like this, instead it behaves
-        like MAME. Needs more research!
-    
+    - the spec says "After initialization, channels may be reprogrammed at
+      any time. If updated control and time constant words are written to a
+      channel during the count operation, the count continues to zero before
+      the new time constant is loaded into the counter". The current
+      implementation doesn't behave like this, instead it behaves like MAME.
+      Needs more research!
+
+    ## Functions:
+    ~~~C
+     void z80ctc_init(z80ctc_t* ctc)
+    ~~~
+        Initializes a new Z80 CTC instance and puts it into the reset state.
+
+    ~~~C
+    void z80ctc_reset(z80ctc_t* ctc)
+    ~~~
+        Puts the CTC instance into the reset state.
+
+    ~~~C
+    uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins)
+    ~~~
+        Call this when the CPU wants to perform an IO request on the CTC.
+        Takes a pin mask as input, and returns a potentially modified
+        pin mask.
+
+        The following input pins are read:
+
+        - **M1**:       must be unset
+        - **IORQ|CE**:  must both be set
+        - **RD**:       must be set to read data from the CTC
+        - **WR**:       must be set to write data to the CTC
+        - **CS0|CS1**:  selects the CTC channels 0..3
+        - **D0..D7**:   the data to write to the CTC
+
+        The following output pins are potentially modified:
+
+        - **D0..D7**:   the data read from the CTC
+
+    ~~~C
+    uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins)
+    ~~~
+        Perform a tick on the CTC, this function must be called
+        for every CPU tick. The CTC will check for external trigger
+        events (via the CLKTRG pins), update counters, and set the
+        ZCTO pins when counters reach zero.
+
+        The following input pins are read:
+
+        - **CLKTRG0..CLKTRG3**: used to inject an internal trigger/counter
+          event into the CTC
+        
+        The following output pins are potentially modified:
+
+        - **ZCTO0..ZCTO2**: set when the channels 0..2 are in counter
+          mode and the countdown reaches 0
+
+    ~~~C
+    uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins)
+    ~~~
+        Handle the daisychain interrupt protocol. See the z80.h
+        header for details.
+
+    ## Macros
+
+    ~~~C
+    Z80CTC_SET_DATA(p,d)
+    ~~~
+        set 8-bit data bus pins in 64-bit pin mask (identical with
+        Z80_SET_DATA() from the z80.h header)
+
+    ~~~C
+    Z80CTC_GET_DATA(p)
+    ~~~
+        extract 8-bit data bus value from 64-bit pin mask (identical with
+        Z80_GET_DATA() from the z80.h header)
+
+    ## Pin Definitions
+
+    All pin locations from 0 to 36 are shared with the CPU. Chip-type
+    specific pins start at position 44 This enables efficient bus-sharing
+    with the CPU and other Z80-family chips.
+
+    The Z80 CTC pin layout is as follows:
+
+    - 0..16:    address bus A0..A15 (not connected)
+    - 16..23:   data bus D0..D7
+    - 24..36:   CPU pins (some shared directly with CTC)
+    - 37..39:   'virtual' interrupt system pins
+    - 44..53:   CTC-specific pins
+
     ## MIT License
 
     Copyright (c) 2017 Andre Weissflog
@@ -76,22 +157,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/*
-    Pin definitions.
-
-    All pin locations from 0 to 36 are shared with the CPU. Chip-type
-    specific pins start at position 44 This enables efficient bus-sharing
-    with the CPU and other Z80-family chips.
-
-    The Z80 CTC pin layout is as follows:
-
-    0..16       address bus A0..A15 (not connected)
-    16..23      data bus D0..D7
-    24..36      CPU pins (some shared directly with CTC)
-    37..39      'virtual' interrupt system pins
-    44..53      CTC-specific pins
-*/
 
 /* control pins directly shared with CPU */
 #define Z80CTC_M1       (1ULL<<24)   /* CPU Machine Cycle One (same as Z80_M1) */
