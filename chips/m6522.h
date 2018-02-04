@@ -70,7 +70,7 @@ extern "C" {
 #endif
 
 /* control pins */
-#define M6522_CS1   (1ULL<<40)      /* chip-select 1 */
+#define M6522_CS1   (1ULL<<40)      /* chip-select 1, to select: CS1 high, CS2 low */
 #define M6522_CS2   (1ULL<<41)      /* chip-select 2 */
 #define M6522_RW    (1ULL<<42)      /* read/write select */
 #define M6522_CA1   (1ULL<<43)      /* peripheral A control 1 */
@@ -99,10 +99,10 @@ extern "C" {
 #define M6522_PB7   (1ULL<<63)
 
 /* register select same as lower 4 shared address bus bits */
-#define Z80_RS0     (1ULL<<0)
-#define Z80_RS1     (1ULL<<1)
-#define Z80_RS2     (1ULL<<2)
-#define Z80_Rs3     (1ULL<<3)
+#define M6522_RS0   (1ULL<<0)
+#define M6522_RS1   (1ULL<<1)
+#define M6522_RS2   (1ULL<<2)
+#define M6522_RS3   (1ULL<<3)
 
 /* data bus pins shared with CPU */
 #define M6522_D0    (1ULL<<16)
@@ -113,6 +113,342 @@ extern "C" {
 #define M6522_D5    (1ULL<<21)
 #define M6522_D6    (1ULL<<22)
 #define M6522_D7    (1ULL<<23)
+
+/* register indices */
+#define M6522_REG_RB        (0)     /* input/output register B */
+#define M6522_REG_RA        (1)     /* input/output register A */
+#define M6522_REG_DDRB      (2)     /* data direction B */
+#define M6522_REG_DDRA      (3)     /* data direction A */
+#define M6522_REG_T1CL      (4)     /* T1 low-order latch / counter */
+#define M6522_REG_T1CH      (5)     /* T1 high-order counter */
+#define M6522_REG_T1LL      (6)     /* T1 low-order latches */
+#define M6522_REG_T1LH      (7)     /* T1 high-order latches */
+#define M6522_REG_T2CL      (8)     /* T2 low-order latch / counter */
+#define M6522_REG_T2CH      (9)     /* T2 high-order counter */
+#define M6522_REG_SR        (10)    /* shift register */
+#define M6522_REG_ACR       (11)    /* auxiliary control register */
+#define M6522_REG_PCR       (12)    /* peripheral control register */
+#define M6522_REG_IFR       (13)    /* interrupt flag register */
+#define M6522_REG_IER       (14)    /* interrupt enable register */
+#define M6522_REG_RA_NOH    (15)    /* input/output A without handshake */
+#define M6522_NUM_REGS      (16)
+
+#define M6522_NUM_PORTS (2)
+
+/* port in/out callbacks */
+#define M6522_PORT_A (0)
+#define M6522_PORT_B (1)
+typedef uint8_t (*m6522_in_t)(int port_id);
+typedef void (*m6522_out_t)(int port_id, uint8_t data);
+
+/* m6522 state */
+typedef struct {
+    uint8_t out_b, in_b, ddr_b;
+    uint8_t out_a, in_a, ddr_a;
+    uint8_t acr, pcr;
+    uint8_t t1_pb7;         /* timer 1 toggle bit (masked into port B bit 7) */
+    uint8_t t1ll, t1lh;     /* timer 1 latch low, high */
+    uint8_t t2ll, t2lh;     /* timer 2 latch low, high */
+    uint16_t t1;            /* timer1 counter */
+    uint16_t t2;            /* timer2 counter */
+    bool t1_active;         /* timer1 active */
+    bool t2_active;         /* timer2 active */
+    m6522_in_t in_cb;
+    m6522_out_t out_cb;
+} m6522_t;
+
+/* extract 8-bit data bus from 64-bit pins */
+#define M6522_GET_DATA(p) ((uint8_t)(p>>16))
+/* merge 8-bit data bus value into 64-bit pins */
+#define M6522_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+
+/* initialize a new 6522 instance */
+extern void m6522_init(m6522_t* m6522, m6522_in_t in_cb, m6522_out_t out_cb);
+/* reset an existing 6522 instance */
+extern void m6522_reset(m6522_t* m6522);
+/* perform an IO request */
+extern uint64_t m6522_iorq(m6522_t* m6522, uint64_t pins);
+/* tick the m6522 */
+extern uint64_t m6522_tick(m6522_t* m6522, uint64_t pins);
+
+/*-- IMPLEMENTATION ----------------------------------------------------------*/
+#ifdef CHIPS_IMPL
+#include <string.h>
+#ifndef CHIPS_DEBUG
+    #ifdef _DEBUG
+        #define CHIPS_DEBUG
+    #endif
+#endif
+#ifndef CHIPS_ASSERT
+    #include <assert.h>
+    #define CHIPS_ASSERT(c) assert(c)
+#endif
+
+#define _M6522_ACR_T1_PB7()         ((m6522->acr & (1<<7)) != 0)
+#define _M6522_ACR_T1_CONT_INT()    ((m6522->acr & (1<<6)) != 0)
+#define _M6522_ACR_LATCH_B()        ((m6522->acr & (1<<1)) != 0)
+#define _M6522_ACR_LATCH_A()        ((m6522->acr & (1<<0)) != 0)
+
+void m6522_init(m6522_t* m6522, m6522_in_t in_cb, m6522_out_t out_cb) {
+    CHIPS_ASSERT(m6522);
+    memset(m6522, 0, sizeof(*m6522));
+    m6522->in_cb = in_cb;
+    m6522->out_cb = out_cb;
+}
+
+/*
+    "The RESET input clears all internal registers to logic 0, 
+    (except T1, T2 and SR). This places all peripheral interface lines
+    in the input state, disables the timers, shift registers etc. and 
+    disables interrupting from the chip"
+*/
+void m6522_reset(m6522_t* m6522) {
+    CHIPS_ASSERT(m6522);
+    m6522->out_b = m6522->in_b = m6522->ddr_b = 0;
+    m6522->out_a = m6522->in_a = m6522->ddr_a = 0;
+    m6522->acr = m6522->pcr = 0;
+    m6522->t1_pb7 = 0;
+    m6522->t1ll = m6522->t1lh = 0;
+    m6522->t2ll = m6522->t2lh = 0;
+}
+
+static uint8_t _m6522_in_a(m6522_t* m6522) {
+    uint8_t data = m6522->in_cb(M6522_PORT_A);
+    data = (m6522->out_a & m6522->ddr_a) | (data & ~m6522->ddr_a);
+    return data;
+}
+
+static void _m6522_out_a(m6522_t* m6522) {
+    /* mask output bits, set input bits to 1 */
+    uint8_t data = (m6522->out_a & m6522->ddr_a) | ~m6522->ddr_a;
+    m6522->out_cb(M6522_PORT_A, data);
+}
+
+static uint8_t _m6522_in_b(m6522_t* m6522) {
+    uint8_t data = m6522->in_cb(M6522_PORT_B);
+    data = (m6522->out_b & m6522->ddr_b) | (data & ~m6522->ddr_b);
+    if (_M6522_ACR_T1_PB7()) {
+        data = (data & 0x7F) | (m6522->t1_pb7<<7);
+    }
+    return data;
+}
+
+static void _m6522_out_b(m6522_t* m6522) {
+    /* mask output bits, set input bits to 1 */
+    uint8_t data = (m6522->out_b & m6522->ddr_b) | ~m6522->ddr_b;
+    /* timer 1 state into bit 7? */
+    if (_M6522_ACR_T1_PB7()) {
+        data = (data & 0x7F) | (m6522->t1_pb7<<7);
+    }
+    m6522->out_cb(M6522_PORT_B, data);
+}
+
+static void _m6522_write(m6522_t* m6522, uint8_t addr, uint8_t data) {
+    switch (addr) {
+        case M6522_REG_RB:
+            m6522->out_b = data;
+            if (m6522->ddr_b != 0) {
+                _m6522_out_b(m6522);
+            }
+            /* FIXME: clear interrupt, CB2 data ready handshake */
+            break;
+        
+        case M6522_REG_RA:
+            m6522->out_a = data;
+            if (m6522->ddr_a != 0) {
+                _m6522_out_a(m6522);
+            }
+            /* FIXME: clear interrupt, CA2 data ready handshake */
+            break;
+        
+        case M6522_REG_RA_NOH:
+            /* write to A, no handshake */
+            m6522->out_a = data;
+            if (m6522->ddr_a != 0) {
+                _m6522_out_a(m6522);
+            }
+            break;
+        
+        case M6522_REG_DDRB:
+            if (data != m6522->ddr_b) {
+                m6522->ddr_b = data;
+                _m6522_out_b(m6522);
+            }
+            break;
+    
+        case M6522_REG_DDRA:
+            if (data != m6522->ddr_a) {
+                m6522->ddr_a = data;
+                _m6522_out_a(m6522);
+            }
+            break;
+
+        case M6522_REG_T1CL:
+        case M6522_REG_T1LL:
+            m6522->t1ll = data;
+            break;
+
+        case M6522_REG_T1LH:
+            m6522->t1lh = data;
+            /* FIXME: clear interrupt */
+            break;
+
+        case M6522_REG_T1CH:
+            m6522->t1lh = data;
+            m6522->t1 = (m6522->t1lh<<8) | m6522->t1ll;
+            m6522->t1_pb7 = 0;
+            if (_M6522_ACR_T1_PB7()) {
+                _m6522_out_b(m6522);
+            }
+            m6522->t1_active = true;
+            break;
+
+        case M6522_REG_T2CL:
+            m6522->t2ll = data;
+            break;
+
+        case M6522_REG_T2CH:
+            /* FIXME: clear interrupt */
+            m6522->t2lh = data;
+            m6522->t2 = (m6522->t2lh<<8) | m6522->t2ll;
+            m6522->t2_active = true;
+            break;
+
+        case M6522_REG_SR:
+            /* FIXME */
+            break;
+
+        case M6522_REG_PCR:
+            m6522->pcr = data;
+            /* FIXME: CA2, CB2 */
+            break;
+
+        case M6522_REG_ACR:
+            m6522->acr = data;
+            _m6522_out_b(m6522);
+            /* FIXME: shift timer */
+            if (_M6522_ACR_T1_CONT_INT()) {
+                m6522->t1_active = true;
+            }
+            break;
+
+        case M6522_REG_IER:
+            /* FIXME */
+            break;
+
+        case M6522_REG_IFR:
+            /* FIXME */
+            break;
+    }
+}
+
+static uint8_t _m6522_read(m6522_t* m6522, uint8_t addr) {
+    uint8_t data = 0;
+    switch (addr) {
+        case M6522_REG_RB:
+            if (_M6522_ACR_LATCH_B()) {
+                data = m6522->in_b;
+            }
+            else {
+                data = _m6522_in_b(m6522);
+            }
+            /* FIXME: clear interrupt */
+            break;
+
+        case M6522_REG_RA:
+            if (_M6522_ACR_LATCH_A()) {
+                data = m6522->in_a;
+            }
+            else {
+                data = _m6522_in_a(m6522);
+            }
+            /* FIXME: clear interrupt */
+            break;
+        
+        case M6522_REG_RA_NOH:
+            if (_M6522_ACR_LATCH_A()) {
+                data = m6522->in_a;
+            }
+            else {
+                data = _m6522_in_a(m6522);
+            }
+            break;
+
+        case M6522_REG_DDRB:
+            data = m6522->ddr_b;
+            break;
+        
+        case M6522_REG_DDRA:
+            data = m6522->ddr_a;
+            break;
+
+        case M6522_REG_T1CL:
+            /* FIXME: clear interrupt */
+            data = (uint8_t) m6522->t1;
+            break;
+
+        case M6522_REG_T1CH:
+            data = (uint8_t)(m6522->t1>>8);
+            break;
+
+        case M6522_REG_T1LL:
+            data = m6522->t1ll;
+            break;
+
+        case M6522_REG_T1LH:
+            data = m6522->t1lh;
+            break;
+
+        case M6522_REG_T2CL:
+            /* FIXME: clear interrupt */
+            data = (uint8_t) m6522->t2;
+            break;
+
+        case M6522_REG_T2CH:
+            data = (uint8_t)(m6522->t2>>8);
+            break;
+
+        case M6522_REG_SR:
+            /* FIXME */
+            break;
+
+        case M6522_REG_PCR:
+            data = m6522->pcr;
+            break;
+
+        case M6522_REG_ACR:
+            data = m6522->acr;
+            break;
+
+        case M6522_REG_IER:
+            /* FIXME */
+            break;
+
+        case M6522_REG_IFR:
+            /* FIXME */
+            break;
+    }
+    return data;
+}
+
+uint64_t m6522_iorq(m6522_t* m6522, uint64_t pins) {
+    if ((pins & (M6522_CS1|M6522_CS2)) == M6522_CS1) {
+        uint8_t addr = pins & (M6522_RS0|M6522_RS1|M6522_RS2|M6522_RS3);
+        if (pins & M6522_RW) {
+            /* a write operation */
+            uint8_t val = M6522_GET_DATA(pins);
+            _m6522_write(m6522, addr, val);
+        }
+        else {
+            /* a read operation */
+            uint8_t data = _m6522_read(m6522, addr);
+            M6522_SET_DATA(pins, data);
+        }
+    }
+    return pins;
+}
+
+#endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
 } /* extern "C" */
