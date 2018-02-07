@@ -157,7 +157,7 @@ extern "C" {
 #define MC6847_GM2      (1ULL<<49)      /* graphics mode select 2 */
 #define MC6847_CSS      (1ULL<<50)      /* color select pin */
 
-/* helper macro to set and extract address and data to/from pin mask */
+/* helper macros to set and extract address and data to/from pin mask */
 
 /* extract 13-bit address bus from 64-bit pins */
 #define MC6847_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
