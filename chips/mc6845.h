@@ -124,7 +124,7 @@ extern "C" {
 #define MC6845_REG_HTOTAL           (0)
 #define MC6845_REG_HDISPLAYED       (1)
 #define MC6845_REG_HSYNCPOS         (2)
-#define MC6845_REG_HSYNCWIDTH       (3)
+#define MC6845_REG_SYNCWIDTHS       (3)
 #define MC6845_REG_VTOTAL           (4)
 #define MC6845_REG_VTOTALADJUST     (5)
 #define MC6845_REG_VDISPLAYED       (6)
@@ -147,18 +147,22 @@ extern "C" {
 
 /* chip subtypes */
 typedef enum {
-    MC6845_TYPE_UM6845,
-    MC6845_TYPE_UM6845R,
+    MC6845_TYPE_UM6845 = 0,
+    MC6845_TYPE_UM6845R,    
     MC6845_TYPE_MC6845,
+    MC6845_NUM_TYPES,
 } mc6845_type_t;
 
 /* mc6845 state */
 typedef struct {
-    mc6845_type_t type;
-    uint8_t sel;                    /* 5 bits, currently selected register */
-    uint8_t reg[MC6845_NUM_REGS];   /* 18 registers */
-    uint8_t mask[MC6845_NUM_REGS];  /* masks of register bit-widths */
-    uint8_t rw[MC6845_NUM_REGS];    /* register readable/writable */
+    uint64_t pins;                  /* state of output pins */
+    mc6845_type_t type;                       
+    uint8_t sel;                    /* selected register (5 bits) */
+    uint8_t reg[0x1F];              /* actually only 18 registers */
+    uint8_t h_ctr;                  /* horizontal counter (mod 256) */
+    uint8_t hsync_ctr;              /* horizontal sync-width counter (mod 16) */
+    uint8_t crow_ctr;               /* character row counter (mod 128) */
+    uint8_t scanline_ctr;           /* scanline counter (mod 32) */
 } mc6845_t;
 
 /* helper macros to extract address and data values from pin mask */
@@ -198,13 +202,43 @@ extern uint64_t mc6845_tick(mc6845_t* mc6845);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void mc6845_init(mc6845_t* mc6845, mc6845_type_t type) {
-    CHIPS_ASSERT(mc6845);
-    memset(mc6845, 0, sizeof(mc6845_t));
-    mc6845->type = type;
+/* some registers are not full width */
+static uint8_t _mc6845_mask[0x20] = {
+    0xFF,       /* HTOTAL */
+    0xFF,       /* HDISPLAYED */
+    0xFF,       /* HSYNCPOS */
+    0xFF,       /* SYNCWIDTHS */
+    0x7F,       /* VTOTAL */
+    0x1F,       /* VTOTALADJUST */
+    0x7F,       /* VDISPLAYED */
+    0x7F,       /* VSYNCPOS */
+    0xF3,       /* INTERLACEMODE */
+    0x1F,       /* MAXSCANLINEADDR */
+    0x7F,       /* CURSORSTART */
+    0x1F,       /* CURSOREND */
+    0x3F,       /* STARTADDRHI */
+    0xFF,       /* STARTADDRLO */
+    0x3F,       /* CURSORHI */
+    0xFF,       /* CURSORLO */
+    0x3F,       /* LIGHTPENHI */
+    0xFF,       /* LIGHTPENLO */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+/* readable/writable per chip type and register (1: writable, 2: readable, 3: read/write) */
+static uint8_t _mc6845_rw[MC6845_NUM_TYPES][0x20] = {
+    { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+};
+
+void mc6845_init(mc6845_t* c, mc6845_type_t type) {
+    CHIPS_ASSERT(c);
+    memset(c, 0, sizeof(mc6845_t));
+    c->type = type;
 }
 
-void mc6845_reset(mc6845_t* mc6845) {
+void mc6845_reset(mc6845_t* c) {
     /* reset behaviour:
         - all counters in the CRTC are cleared and the device stops 
           the display operation
@@ -215,8 +249,55 @@ void mc6845_reset(mc6845_t* mc6845) {
           the release of RESET. DE is not active until after 
           the first VS pulse occurs.
     */
-    // FIXME
+    c->pins = 0;
+    c->h_ctr = 0;
+    c->hsync_ctr = 0;
+    c->crow_ctr = 0;
+    c->scanline_ctr = 0;
 }
+
+uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
+    if (pins & MC6845_CS) {
+        if (pins & MC6845_RS) {
+            /* register address selected */
+            if (pins & MC6845_RW) {
+                /* write to address register */
+                c->sel = MC6845_GET_DATA(pins) & 0x1F;
+            }
+            else {
+                /* read on address register is not supported */
+                /* FIXME: is 0 returned here? */
+            }
+        }
+        else {
+            /* read/write register value */
+            CHIPS_ASSERT(c->type < MC6845_NUM_TYPES);
+            int i = c->sel & 0x1F;
+            if (pins & MC6845_RW) {
+                /* write register value (only if register is writable) */
+                if (_mc6845_rw[c->type][i] & (1<<0)) {
+                    c->reg[i] = MC6845_GET_DATA(pins) & _mc6845_mask[i];
+                }
+            }
+            else {
+                /* read register value (only if register is readable) */
+                uint8_t val = 0;
+                if (_mc6845_rw[c->type][i] & (1<<1)) {
+                    val = c->reg[i] & _mc6845_mask[i];
+                }
+                MC6845_SET_DATA(pins, val);
+            }
+        }
+    }
+    return pins;
+}
+
+uint64_t mc6845_tick(mc6845_t* mc6845) {
+    // FIXME!
+    return 0;
+}
+
+#endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
 } /* extern "C" */
