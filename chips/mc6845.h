@@ -61,6 +61,7 @@
 
     ## Links
 
+    - http://www.cpcwiki.eu/index.php/CRTC
     - http://www.6502.org/users/andre/hwinfo/crtc/crtc.html
     - http://www.6502.org/users/andre/hwinfo/crtc/internals/index.html
     - http://bitsavers.informatik.uni-stuttgart.de/components/motorola/_dataSheets/6845.pdf
@@ -346,8 +347,6 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
 }
 
 uint64_t mc6845_tick(mc6845_t* c) {
-    bool h_end = false;         /* h_ctr has reached (h_total+1) */
-    bool h_dend = false;        /* h_ctr has reached h_displayed) */
 
     /* bump the memory address */
     c->ma = (c->ma + 1) & 0x3FFF;
@@ -355,7 +354,10 @@ uint64_t mc6845_tick(mc6845_t* c) {
     /* handle HSYNC range */
     if (c->hs) {
         c->hsync_ctr = (c->hsync_ctr + 1) & 0xF;
-        uint8_t h_sync_width = c->sync_widths & 0x0F;
+        /* FIXME: on UM6845 and UM6845R, if 0 is programmed, no HSYNC is generated
+           (see: http://www.cpcwiki.eu/index.php/CRTC#CRTC_Differences)
+        */
+        uint8_t h_sync_width = c->sync_widths & 0xF;
         if (h_sync_width == 0) {
             h_sync_width = 16;
         }
@@ -366,6 +368,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
     }
 
     /* handle horizontal counter */
+    bool h_end = false;         /* h_ctr has reached (h_total+1) */
     c->h_ctr++;
     if (c->h_ctr == (c->h_total + 1)) {
         h_end = true;       /* end of horizontal scanline reached */
@@ -378,12 +381,16 @@ uint64_t mc6845_tick(mc6845_t* c) {
     }
     if (c->h_ctr == c->h_displayed) {
         c->h_de = false;    /* end of horizontal display-enable range */
-        h_dend = true;      /* reset linear address generator */
     }
 
     if (h_end) {
         /* new scanline starts */
         c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
+
+        /* FIXME: on UM6845R, R12/R13 (start_addr_hi/lo) is read into
+           ma_row_start at the start of each scanline during character
+           row 0.
+        */
 
         /* handle VSYNC range */
         if (c->vs) {
@@ -412,11 +419,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
             }
         }
         /* handle scanline counter */
-        bool sl_end = false;    /* scanline-counter overflow */
         if (c->scanline_ctr == (c->max_scanline_addr + 1)) {
-            sl_end = true;
-        }
-        if (sl_end) {
             /* a new character row starts */
             c->scanline_ctr = 0;
             c->row_ctr = (c->row_ctr + 1) & 0x7F;
