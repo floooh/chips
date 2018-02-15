@@ -120,30 +120,25 @@ extern "C" {
 #define MC6845_RA3      (1ULL<<51)
 #define MC6845_RA4      (1ULL<<52)
 
-/* register identifiers */
-#define MC6845_REG_HTOTAL           (0)
-#define MC6845_REG_HDISPLAYED       (1)
-#define MC6845_REG_HSYNCPOS         (2)
-#define MC6845_REG_SYNCWIDTHS       (3)
-#define MC6845_REG_VTOTAL           (4)
-#define MC6845_REG_VTOTALADJUST     (5)
-#define MC6845_REG_VDISPLAYED       (6)
-#define MC6845_REG_VSYNCPOS         (7)
-#define MC6845_REG_INTERLACEMODE    (8)
-#define MC6845_REG_MAXSCANLINEADDR  (9)
-#define MC6845_REG_CURSORSTART      (10)
-#define MC6845_REG_CURSOREND        (11)
-#define MC6845_REG_STARTADDRHI      (12)
-#define MC6845_REG_STARTADDRLO      (13)
-#define MC6845_REG_CURSORHI         (14)
-#define MC6845_REG_CURSORLO         (15)
-#define MC6845_REG_LIGHTPENHI       (16)
-#define MC6845_REG_LIGHTPENLO       (17)
-#define MC6845_NUM_REGS             (18)
-
-/* register readable/writable bits */
-#define MC6845_READABLE (0<<0)
-#define MC6845_WRITABLE (1<<1)
+/* register names */
+#define MC6845_HTOTAL           (0)
+#define MC6845_HDISPLAYED       (1)
+#define MC6845_HSYNCPOS         (2)
+#define MC6845_SYNCWIDTHS       (3)
+#define MC6845_VTOTAL           (4)
+#define MC6845_VTOTALADJ        (5)
+#define MC6845_VDISPLAYED       (6)
+#define MC6845_VSYNCPOS         (7)
+#define MC6845_INTERLACEMODE    (8)
+#define MC6845_MAXSCALINEADDR   (9)
+#define MC6845_CURSORSTART      (10)
+#define MC6845_CURSOREND        (11)
+#define MC6845_STARTADDRHI      (12)
+#define MC6845_STARTADDRLO      (13)
+#define MC6845_CURSORHI         (14)
+#define MC6845_CURSORLO         (15)
+#define MC6845_LIGHTPENHI       (16)
+#define MC6845_LIGHTPENLO       (17)
 
 /* chip subtypes */
 typedef enum {
@@ -155,14 +150,45 @@ typedef enum {
 
 /* mc6845 state */
 typedef struct {
-    uint64_t pins;                  /* state of output pins */
     mc6845_type_t type;                       
-    uint8_t sel;                    /* selected register (5 bits) */
-    uint8_t reg[0x1F];              /* actually only 18 registers */
+    /* currently selected register */
+    uint8_t sel;
+    /* register bank */
+    union {
+        uint8_t reg[0x1F];              /* only 17 registers exist */
+        struct {
+            uint8_t h_total;            /* horizontal total (minus 1) */
+            uint8_t h_displayed;        /* horizontal displayed */
+            uint8_t h_sync_pos;         /* horizontal sync pos */
+            uint8_t sync_widths;        /* horizontal, and optionally vertical sync widths */
+            uint8_t v_total;            /* vertical total (minus 1) */
+            uint8_t v_total_adjust;     /* end-of-frame scanline adjust value */
+            uint8_t v_displayed;        /* vertical displayed */
+            uint8_t v_sync_pos;          /* vertical sync pos */
+            uint8_t interlace_mode;     /* interlace and skew */
+            uint8_t max_scanline_addr;  /* max scanline ctr value (minus 1) */
+            uint8_t cursor_start;
+            uint8_t cursor_end;
+            uint8_t start_addr_hi;
+            uint8_t start_addr_lo;
+            uint8_t cursor_hi;
+            uint8_t cursor_lo;
+            uint8_t lightpen_hi;
+            uint8_t lightpen_lo;
+        };
+    };
+    /* counters and latches */
     uint8_t h_ctr;                  /* horizontal counter (mod 256) */
     uint8_t hsync_ctr;              /* horizontal sync-width counter (mod 16) */
-    uint8_t crow_ctr;               /* character row counter (mod 128) */
+    uint8_t vsync_ctr;              /* vertical sync-height counter */
+    uint8_t row_ctr;                /* character row counter (mod 128) */
     uint8_t scanline_ctr;           /* scanline counter (mod 32) */
+    uint8_t scanline_adjust_ctr;    /* scanline-adjust counter */
+    bool scanline_adjust;           /* true if inside scanline adjust range */
+    bool hs;                        /* current HSYNC state */
+    bool vs;                        /* current VSYNC state */
+    bool h_de;                      /* horizontal display enable */
+    bool v_de;                      /* vertical display enable */
 } mc6845_t;
 
 /* helper macros to extract address and data values from pin mask */
@@ -249,11 +275,16 @@ void mc6845_reset(mc6845_t* c) {
           the release of RESET. DE is not active until after 
           the first VS pulse occurs.
     */
-    c->pins = 0;
     c->h_ctr = 0;
     c->hsync_ctr = 0;
-    c->crow_ctr = 0;
+    c->row_ctr = 0;
     c->scanline_ctr = 0;
+    c->scanline_adjust_ctr = 0;
+    c->scanline_adjust = false;
+    c->hs = false;
+    c->vs = false;
+    c->h_de = false;
+    c->v_de = false;
 }
 
 uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
@@ -292,8 +323,91 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
     return pins;
 }
 
-uint64_t mc6845_tick(mc6845_t* mc6845) {
-    // FIXME!
+uint64_t mc6845_tick(mc6845_t* c) {
+    uint64_t pins = 0;
+
+    /* see MC6845 datasheet "Figure 11 - CRTC BLOCK DIAGRAM" */
+    bool h = false;         /* trigger flag for increment scanline */
+    bool h_end = false;
+    const uint8_t h_sync_width = c->sync_widths & 0x0F;
+    /* FIXME: programmable v-sync in some chip models (0=>16, 1=>1 .. 15=>15) */
+    const uint8_t v_sync_width = 16;
+
+    /* handle horizontal counter */
+    if (c->h_ctr == c->h_sync_pos) {
+        c->hs = true;   /* start of HSYNC range */
+    }
+    if (c->h_ctr == c->h_displayed) {
+        c->h_de = false;    /* end of horizontal display-enable range */
+        h_end = true;       /* reset linear address generator */
+    }
+    if (c->h_ctr == (c->h_total + 1)) {
+        c->h_ctr = 0;       /* reset horizontal counter */
+        c->h_de = true;     /* horizontal display-enable on */
+        h = true;           /* trigger scanline bump */
+    }
+    else {
+        c->h_ctr++;
+    }
+
+    /* handle HSYNC range */
+    if (c->hs) {
+        if (c->hsync_ctr == h_sync_width) {
+            c->hs = false;
+            c->hsync_ctr = 0;
+        }
+        else {
+            c->hsync_ctr = (c->hsync_ctr + 1) & 0xF;
+        }
+    }
+
+    /* bump scanline? */
+    if (h) {
+        /* handle scanline-adjust range at end of frame? */
+        if (c->scanline_adjust) {
+            /* currently in the scanline-adjust range at end of frame */
+            if (c->scanline_adjust_ctr == c->v_total_adjust) {
+                /* a new frame starts */
+                c->row_ctr = 0;
+                c->scanline_ctr = 0;
+            }
+            else {
+                c->scanline_adjust_ctr++;
+            }
+        }
+        /* handle scanline counter */
+        if (c->scanline_ctr == (c->max_scanline_addr + 1)) {
+            c->scanline_ctr = 0;
+            /* handle character row */
+            if (c->row_ctr == c->v_sync_pos) {
+                c->vs = true;   /* start of VSYNC range */
+            }
+            if (c->row_ctr == c->v_displayed) {
+                c->v_de = false;    /* end of vertical display-enabled range */
+            }
+            if (c->row_ctr == (1 + c->v_total)) {
+                c->scanline_adjust = true;
+                c->scanline_adjust_ctr = 0;
+            }
+            else {
+                c->row_ctr = (c->row_ctr + 1) & 0x7F;
+            }
+
+            /* handle VSYNC range */
+            if (c->vs) {
+                if (c->vsync_ctr == v_sync_width) {
+                    c->vs = false;
+                    c->vsync_ctr = 0;
+                }
+                else {
+                    c->vsync_ctr++;
+                }
+            }
+        }
+        else {
+            c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
+        }
+    }
     return 0;
 }
 
