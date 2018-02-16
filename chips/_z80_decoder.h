@@ -30,7 +30,7 @@ static uint8_t _z80_szp[256] = {
 /* execute a number of ticks without wait-state detection */
 #define _T(num) pins=tick(num,pins);ticks+=num
 /* execute a number of ticks with wait-state detection */
-#define _TW(num) pins=tick(num,pins);ticks+=num;while(pins&Z80_WAIT){pins=tick(1,pins);ticks++;}
+#define _TW(num) pins&=~Z80_WAIT_MASK;pins=tick(num,pins);ticks+=num+Z80_GET_WAIT(pins);
 /* a memory read machine cycle (3 ticks with wait-state detection) */
 #define _MR(addr,data) _SA(addr);_ON(Z80_MREQ|Z80_RD);_TW(3);_OFF(Z80_MREQ|Z80_RD);data=_GD()
 /* a memory write machine cycle (3 ticks with wait-state detection) */

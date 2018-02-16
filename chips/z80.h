@@ -307,18 +307,20 @@ typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
 #define  Z80_IORQ  (1ULL<<26)       /* input/output request */
 #define  Z80_RD    (1ULL<<27)       /* read */
 #define  Z80_WR    (1ULL<<28)       /* write */
-#define  Z80_RFSH  (1ULL<<29)       /* refresh */
 
 /* CPU control pins */
-#define  Z80_HALT  (1ULL<<30)       /* halt state */
-#define  Z80_WAIT  (1ULL<<31)       /* wait state */
-#define  Z80_INT   (1ULL<<32)       /* interrupt request */
-#define  Z80_NMI   (1ULL<<33)       /* non-maskable interrupt */
-#define  Z80_RESET (1ULL<<34)       /* reset */
+#define  Z80_HALT  (1ULL<<29)       /* halt state */
+#define  Z80_INT   (1ULL<<30)       /* interrupt request */
+#define  Z80_RESET (1ULL<<31)       /* reset */
+#define  Z80_BUSREQ (1ULL<<32)      /* bus request */
+#define  Z80_BUSACK (1ULL<<33)      /* bus acknowledge */
 
-/* CPU bus control pins */
-#define  Z80_BUSREQ (1ULL<<35)      /* bus request */
-#define  Z80_BUSACK (1ULL<<36)      /* bus acknowledge */
+/* up to 7 wait states can be injected per machine cycle */
+#define Z80_WAIT0   (1ULL<<34)
+#define Z80_WAIT1   (1ULL<<35)
+#define Z80_WAIT2   (1ULL<<36)
+#define Z80_WAIT_SHIFT (34)
+#define Z80_WAIT_MASK (Z80_WAIT0|Z80_WAIT1|Z80_WAIT2)
 
 /* interrupt-related 'virtual pins', these don't exist on the Z80 */
 #define Z80_IEIO    (1ULL<<37)      /* unified daisy chain 'Interrupt Enable In+Out' */
@@ -391,6 +393,10 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 #define Z80_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define Z80_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+/* extract number of wait states from pin mask */
+#define Z80_GET_WAIT(p) ((p&Z80_WAIT_MASK)>>Z80_WAIT_SHIFT)
+/* set up to 7 wait states in pin mask */
+#define Z80_SET_WAIT(p,w) {p=((p&~Z80_WAIT_MASK)|((((uint64_t)w)<<Z80_WAIT_SHIFT)&Z80_WAIT_MASK));}
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL

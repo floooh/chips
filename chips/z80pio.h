@@ -92,7 +92,7 @@ extern "C" {
 #define Z80PIO_M1       (1ULL<<24)      /* CPU Machine Cycle One, same as Z80_M1 */
 #define Z80PIO_IORQ     (1ULL<<26)      /* IO Request from CPU, same as Z80_IORQ */
 #define Z80PIO_RD       (1ULL<<27)      /* Read Cycle Status from CPU, same as Z80_RD */
-#define Z80PIO_INT      (1ULL<<32)      /* Interrupt Request, same as Z80_INT */
+#define Z80PIO_INT      (1ULL<<30)      /* Interrupt Request, same as Z80_INT */
 
 /* Z80 interrupt daisy chain shared pins */
 #define Z80PIO_IEIO     (1ULL<<37)      /* combined Interrupt Enable In/Out (same as Z80_IEIO) */

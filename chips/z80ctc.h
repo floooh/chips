@@ -162,8 +162,8 @@ extern "C" {
 #define Z80CTC_M1       (1ULL<<24)   /* CPU Machine Cycle One (same as Z80_M1) */
 #define Z80CTC_IORQ     (1ULL<<26)   /* CPU IO Request (same as Z80_IORQ) */
 #define Z80CTC_RD       (1ULL<<27)   /* CPU Read Cycle Status (same as Z80_RD) */
-#define Z80CTC_INT      (1ULL<<32)   /* Interrupt Request (same as Z80_INT) */
-#define Z80CTC_RESET    (1ULL<<34)   /* put CTC into reset state (same as Z80_RESET) */
+#define Z80CTC_INT      (1ULL<<30)   /* Interrupt Request (same as Z80_INT) */
+#define Z80CTC_RESET    (1ULL<<31)   /* put CTC into reset state (same as Z80_RESET) */
 
 /* Z80 interrupt daisy chain shared pins */
 #define Z80CTC_IEIO     (1ULL<<37)   /* combined Interrupt Enable In/Out (same as Z80_IEIO) */

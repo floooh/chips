@@ -87,7 +87,7 @@ def write_defines():
     l('/* execute a number of ticks without wait-state detection */')
     l('#define _T(num) pins=tick(num,pins);ticks+=num')
     l('/* execute a number of ticks with wait-state detection */')
-    l('#define _TW(num) pins=tick(num,pins);ticks+=num;while(pins&Z80_WAIT){pins=tick(1,pins);ticks++;}')
+    l('#define _TW(num) pins&=~Z80_WAIT_MASK;pins=tick(num,pins);ticks+=num+Z80_GET_WAIT(pins);')
     l('/* a memory read machine cycle (3 ticks with wait-state detection) */')
     l('#define _MR(addr,data) _SA(addr);_ON(Z80_MREQ|Z80_RD);_TW(3);_OFF(Z80_MREQ|Z80_RD);data=_GD()')
     l('/* a memory write machine cycle (3 ticks with wait-state detection) */')
