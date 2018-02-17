@@ -319,8 +319,12 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
                 c->sel = MC6845_GET_DATA(pins) & 0x1F;
             }
             else {
-                /* read on address register is not supported */
-                /* FIXME: is 0 returned here? */
+                /* on UM6845R, read status register
+                   bit 6: LPEN (not implemented)
+                   bit 5: currently in vertical blanking
+                */
+                uint8_t val = c->v_de ? 0: (1<<5);
+                MC6845_SET_DATA(pins, val);
             }
         }
         else {
@@ -408,7 +412,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
 
         /* inside scanline-adjust area at end of frame? */
         if (c->scanline_adjust) {
-            if (c->scanline_ctr == c->v_total_adjust) {
+            if (c->scanline_ctr >= c->v_total_adjust) {
                 /* a new frame starts */
                 c->scanline_adjust = false;
                 c->scanline_ctr = 0;

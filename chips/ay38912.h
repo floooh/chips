@@ -173,6 +173,11 @@ typedef struct {
     float sample;
 } ay38912_t;
 
+/* extract 8-bit data bus from 64-bit pins */
+#define AY38912_GET_DATA(p) ((uint8_t)(p>>16))
+/* merge 8-bit data bus value into 64-bit pins */
+#define AY38912_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+
 /* initialize a AY-3-8912 instance */
 extern void ay38912_init(ay38912_t* ay, int tick_hz, int sound_hz, float magnitude);
 /* reset an existing AY-3-8912 instance */
