@@ -392,6 +392,8 @@ extern void z80_reset(z80_t* cpu);
 extern void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr, uint8_t* host_addr);
 /* clear a trap point */
 extern void z80_clear_trap(z80_t* cpu, int trap_id);
+/* return true if a trap is valid */
+extern bool z80_has_trap(z80_t* cpu, int trap_id);
 /* execute instructions for at least 'ticks', but at least one, return executed ticks */
 extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 
@@ -491,6 +493,13 @@ void z80_clear_trap(z80_t* c, int trap_id) {
     trap->host_addr = 0;
     trap->addr = 0;
     trap->orig_byte = 0;
+}
+
+bool z80_has_trap(z80_t* c, int trap_id) {
+    CHIPS_ASSERT(c);
+    CHIPS_ASSERT((trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
+    _z80_trap_t* trap = &c->traps[trap_id];
+    return trap->host_addr != 0;
 }
 
 #endif /* CHIPS_IMPL */

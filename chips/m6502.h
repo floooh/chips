@@ -145,6 +145,8 @@ extern void m6502_reset(m6502_t* cpu);
 extern void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr, uint8_t* host_addr);
 /* clear a trap point */
 extern void m6502_clear_trap(m6502_t* cpu, int trap_id);
+/* return true if a trap is valid */
+extern bool m6502_has_trap(m6502_t* cpu, int trap_id);
 /* execute instruction for at least 'ticks' or trap hit, return number of executed ticks */
 extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 
@@ -363,6 +365,13 @@ void m6502_clear_trap(m6502_t* c, int trap_id) {
     trap->host_addr = 0;
     trap->addr = 0;
     trap->orig_byte = 0;
+}
+
+bool m6502_has_trap(m6502_t* c, int trap_id) {
+    CHIPS_ASSERT(c);
+    CHIPS_ASSERT((trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
+    _m6502_trap_t* trap = &c->traps[trap_id];
+    return trap->host_addr != 0;
 }
 
 #endif /* CHIPS_IMPL */
