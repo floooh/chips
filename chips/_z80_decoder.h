@@ -58,6 +58,7 @@ static uint8_t _z80_szp[256] = {
 
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   z80_t c = *cpu;
+  c.trap_id = -1;
   uint32_t ticks = 0;
   uint64_t pins = c.PINS;
   const z80_tick_t tick = c.tick;
@@ -185,7 +186,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0x73:/*LD (HL),E*/a=c.HL;_MW(a,c.E);break;
       case 0x74:/*LD (HL),H*/a=c.HL;_MW(a,c.H);break;
       case 0x75:/*LD (HL),L*/a=c.HL;_MW(a,c.L);break;
-      case 0x76:/*HALT*/_ON(Z80_HALT);c.PC--;break;
+      case 0x76:/*HALT*/_z80_check_trap(&c);_ON(Z80_HALT);c.PC--;break;
       case 0x77:/*LD (HL),A*/a=c.HL;_MW(a,c.A);break;
       case 0x78:/*LD A,B*/c.A=c.B;break;
       case 0x79:/*LD A,C*/c.A=c.C;break;
@@ -483,7 +484,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
           case 0x73:/*LD (IX+d),E*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IX+d;}_T(5);_MW(a,c.E);break;
           case 0x74:/*LD (IX+d),H*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IX+d;}_T(5);_MW(a,c.H);break;
           case 0x75:/*LD (IX+d),L*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IX+d;}_T(5);_MW(a,c.L);break;
-          case 0x76:/*HALT*/_ON(Z80_HALT);c.PC--;break;
+          case 0x76:/*HALT*/_z80_check_trap(&c);_ON(Z80_HALT);c.PC--;break;
           case 0x77:/*LD (IX+d),A*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IX+d;}_T(5);_MW(a,c.A);break;
           case 0x78:/*LD A,B*/c.A=c.B;break;
           case 0x79:/*LD A,C*/c.A=c.C;break;
@@ -927,7 +928,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
           case 0x73:/*LD (IY+d),E*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IY+d;}_T(5);_MW(a,c.E);break;
           case 0x74:/*LD (IY+d),H*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IY+d;}_T(5);_MW(a,c.H);break;
           case 0x75:/*LD (IY+d),L*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IY+d;}_T(5);_MW(a,c.L);break;
-          case 0x76:/*HALT*/_ON(Z80_HALT);c.PC--;break;
+          case 0x76:/*HALT*/_z80_check_trap(&c);_ON(Z80_HALT);c.PC--;break;
           case 0x77:/*LD (IY+d),A*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IY+d;}_T(5);_MW(a,c.A);break;
           case 0x78:/*LD A,B*/c.A=c.B;break;
           case 0x79:/*LD A,C*/c.A=c.C;break;
@@ -1173,7 +1174,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     }
   }
   pins &= ~Z80_INT;
-  } while ((ticks < num_ticks) && ((pins & c.break_mask)==0));
+  } while ((ticks < num_ticks) && (c.trap_id < 0));
   c.PINS = pins;
   *cpu = c;
   return ticks;

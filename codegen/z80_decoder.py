@@ -1310,7 +1310,7 @@ def daa():
     return src
 
 def halt():
-    return '_ON(Z80_HALT);c.PC--;'
+    return '_z80_check_trap(&c);_ON(Z80_HALT);c.PC--;'
 
 def di():
     return 'c.IFF1=c.IFF2=false;'
@@ -1831,6 +1831,7 @@ def write_header() :
     write_defines()
     l('uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {')
     l('  z80_t c = *cpu;')
+    l('  c.trap_id = -1;')
     l('  uint32_t ticks = 0;')
     l('  uint64_t pins = c.PINS;')
     l('  const z80_tick_t tick = c.tick;')
@@ -1842,7 +1843,7 @@ def write_header() :
 # write source footer
 #
 def write_footer() :
-    l('  } while ((ticks < num_ticks) && ((pins & c.break_mask)==0));')
+    l('  } while ((ticks < num_ticks) && (c.trap_id < 0));')
     l('  c.PINS = pins;')
     l('  *cpu = c;')
     l('  return ticks;')
