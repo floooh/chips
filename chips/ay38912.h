@@ -154,7 +154,7 @@ typedef struct {
     uint8_t addr;
     /* 16 registers */
     uint8_t reg[AY38912_NUM_REGISTERS];
-    /* prescale period (16 * custom_prescale_factor) */
+    /* prescale period */
     int prescale_period;
     /* prescale counter */
     int prescale_counter;
@@ -174,13 +174,13 @@ typedef struct {
 } ay38912_t;
 
 /* initialize a AY-3-8912 instance */
-extern void ay38912_init(ay38912_t* ay, int tick_prescaler, int tick_hz, int sound_hz, float magnitude);
+extern void ay38912_init(ay38912_t* ay, int tick_hz, int sound_hz, float magnitude);
 /* reset an existing AY-3-8912 instance */
 extern void ay38912_reset(ay38912_t* ay);
 /* perform an IO request machine cycle */
 extern uint64_t ay38912_iorq(ay38912_t* ay, uint64_t pins);
 /* tick the AY-3-8912, return true if a new sample is ready */
-extern bool ay38912_tick(ay38912_t* ay, int num_ticks);
+extern bool ay38912_tick(ay38912_t* ay);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -263,13 +263,13 @@ static void _ay38912_update(ay38912_t* ay) {
     /* FIXME: envelope stuff */
 }
 
-void ay38912_init(ay38912_t* ay, int tick_prescaler, int tick_hz, int sound_hz, float magnitude) {
+void ay38912_init(ay38912_t* ay, int tick_hz, int sound_hz, float magnitude) {
     CHIPS_ASSERT(ay);
     CHIPS_ASSERT((tick_hz > 0) && (sound_hz > 0));
     memset(ay, 0, sizeof(*ay));
-    ay->prescale_period = 8 * tick_prescaler;
+    ay->prescale_period = 8;
     ay->noise.rng = 1;
-    ay->sample_period = (tick_prescaler * tick_hz * AY38912_PRECISION_BOOST) / (sound_hz * AY38912_SUPER_SAMPLES);
+    ay->sample_period = (tick_hz * AY38912_PRECISION_BOOST) / (sound_hz * AY38912_SUPER_SAMPLES);
     ay->sample_counter = ay->sample_period;
     ay->super_sample_counter = AY38912_SUPER_SAMPLES;
     ay->mag = magnitude;
@@ -285,8 +285,8 @@ void ay38912_reset(ay38912_t* ay) {
     _ay38912_update(ay);
 }
 
-bool ay38912_tick(ay38912_t* ay, int num_ticks) {
-    ay->prescale_counter -= num_ticks;
+bool ay38912_tick(ay38912_t* ay) {
+    ay->prescale_counter--;
     while (ay->prescale_counter <= 0) {
         ay->prescale_counter += ay->prescale_period;
 
@@ -318,7 +318,7 @@ bool ay38912_tick(ay38912_t* ay, int num_ticks) {
     }
 
     /* generate new sample? */
-    ay->sample_counter -= num_ticks * AY38912_PRECISION_BOOST;
+    ay->sample_counter -= AY38912_PRECISION_BOOST;
     while (ay->sample_counter <= 0) {
         ay->sample_counter += ay->sample_period;
         float vol = 0.0f;
