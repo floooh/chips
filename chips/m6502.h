@@ -369,7 +369,7 @@ void m6502_clear_trap(m6502_t* c, int trap_id) {
 
 bool m6502_has_trap(m6502_t* c, int trap_id) {
     CHIPS_ASSERT(c);
-    CHIPS_ASSERT((trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
+    CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
     _m6502_trap_t* trap = &c->traps[trap_id];
     return trap->host_addr != 0;
 }
