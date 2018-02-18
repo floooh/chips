@@ -315,21 +315,6 @@ void mc6845_reset(mc6845_t* c) {
 uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
     if (pins & MC6845_CS) {
         if (pins & MC6845_RS) {
-            /* register address selected */
-            if (pins & MC6845_RW) {
-                /* on UM6845R, read status register
-                   bit 6: LPEN (not implemented)
-                   bit 5: currently in vertical blanking
-                */
-                uint8_t val = c->v_de ? 0: (1<<5);
-                MC6845_SET_DATA(pins, val);
-            }
-            else {
-                /* write to address register */
-                c->sel = MC6845_GET_DATA(pins) & 0x1F;
-            }
-        }
-        else {
             /* read/write register value */
             CHIPS_ASSERT(c->type < MC6845_NUM_TYPES);
             int i = c->sel & 0x1F;
@@ -346,6 +331,21 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
                 if (_mc6845_rw[c->type][i] & (1<<0)) {
                     c->reg[i] = MC6845_GET_DATA(pins) & _mc6845_mask[i];
                 }
+            }
+        }
+        else {
+            /* register address selected */
+            if (pins & MC6845_RW) {
+                /* on UM6845R, read status register
+                   bit 6: LPEN (not implemented)
+                   bit 5: currently in vertical blanking
+                */
+                uint8_t val = c->v_de ? 0: (1<<5);
+                MC6845_SET_DATA(pins, val);
+            }
+            else {
+                /* write to address register */
+                c->sel = MC6845_GET_DATA(pins) & 0x1F;
             }
         }
     }
