@@ -211,6 +211,7 @@ typedef struct {
     bool vs;                        /* current VSYNC state */
     bool h_de;                      /* horizontal display enable */
     bool v_de;                      /* vertical display enable */
+    uint64_t pins;                  /* pin state after last tick */
 } mc6845_t;
 
 /* helper macros to extract address and data values from pin mask */
@@ -445,17 +446,18 @@ uint64_t mc6845_tick(mc6845_t* c) {
         c->ma = c->ma_row_start;
     }
     /* build the return pin mask */
-    uint64_t pins = ((c->scanline_ctr & 0x1F) * MC6845_RA0)| c->ma;
+    uint64_t new_pins = ((c->scanline_ctr & 0x1F) * MC6845_RA0)| c->ma;
     if (c->hs) {
-        pins |= MC6845_HS;
+        new_pins |= MC6845_HS;
     }
     if (c->vs) {
-        pins |= MC6845_VS;
+        new_pins |= MC6845_VS;
     }
     if (c->h_de && c->v_de) {
-        pins |= MC6845_DE;
+        new_pins |= MC6845_DE;
     }
-    return pins;
+    c->pins = new_pins;
+    return new_pins;
 }
 
 #endif /* CHIPS_IMPL */
