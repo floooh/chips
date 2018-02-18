@@ -37,8 +37,9 @@
     *           +----------+         *
     **********************************
 
-    * CS:   chips select (must be set to read or write registers)
-    * RS:   register select ()
+    * CS:   chips select (1: chip is active)
+    * RS:   register select (0: select address register, 1: select register files)
+    * RW:   read/write select (0: write, 1: read)
     
     ## Not Emulated:
 
@@ -316,10 +317,6 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
         if (pins & MC6845_RS) {
             /* register address selected */
             if (pins & MC6845_RW) {
-                /* write to address register */
-                c->sel = MC6845_GET_DATA(pins) & 0x1F;
-            }
-            else {
                 /* on UM6845R, read status register
                    bit 6: LPEN (not implemented)
                    bit 5: currently in vertical blanking
@@ -327,24 +324,28 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
                 uint8_t val = c->v_de ? 0: (1<<5);
                 MC6845_SET_DATA(pins, val);
             }
+            else {
+                /* write to address register */
+                c->sel = MC6845_GET_DATA(pins) & 0x1F;
+            }
         }
         else {
             /* read/write register value */
             CHIPS_ASSERT(c->type < MC6845_NUM_TYPES);
             int i = c->sel & 0x1F;
             if (pins & MC6845_RW) {
-                /* write register value (only if register is writable) */
-                if (_mc6845_rw[c->type][i] & (1<<0)) {
-                    c->reg[i] = MC6845_GET_DATA(pins) & _mc6845_mask[i];
-                }
-            }
-            else {
                 /* read register value (only if register is readable) */
                 uint8_t val = 0;
                 if (_mc6845_rw[c->type][i] & (1<<1)) {
                     val = c->reg[i] & _mc6845_mask[i];
                 }
                 MC6845_SET_DATA(pins, val);
+            }
+            else {
+                /* write register value (only if register is writable) */
+                if (_mc6845_rw[c->type][i] & (1<<0)) {
+                    c->reg[i] = MC6845_GET_DATA(pins) & _mc6845_mask[i];
+                }
             }
         }
     }
