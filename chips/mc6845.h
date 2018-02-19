@@ -427,6 +427,9 @@ uint64_t mc6845_tick(mc6845_t* c) {
         /* handle scanline counter */
         if (c->scanline_ctr == (c->max_scanline_addr + 1)) {
             /* a new character row starts */
+            if (c->row_ctr == c->v_sync_pos) {
+                c->vs = true;
+            }
             c->scanline_ctr = 0;
             c->row_ctr = (c->row_ctr + 1) & 0x7F;
             c->ma_row_start += c->h_displayed;
@@ -434,9 +437,6 @@ uint64_t mc6845_tick(mc6845_t* c) {
                 /* last row of frame, scanline-adjust range starts */
                 c->scanline_adjust = true;
                 c->scanline_ctr = 0;
-            }
-            if (c->row_ctr == c->v_sync_pos) {
-                c->vs = true;
             }
             if (c->row_ctr == c->v_displayed) {
                 c->v_de = false;
