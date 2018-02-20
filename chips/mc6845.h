@@ -449,7 +449,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
             c->vsync_ctr = 0;
         }
         const uint8_t v_sync_width = (c->sync_widths >> 4) & 0x0F;
-        if (c->vsync_ctr == v_sync_width) {
+        if ((c->vsync_ctr == v_sync_width) && c->vs) {
             c->vs = false;
         }
     }
