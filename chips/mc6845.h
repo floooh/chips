@@ -448,7 +448,14 @@ uint64_t mc6845_tick(mc6845_t* c) {
         else {
             c->vsync_ctr = 0;
         }
-        const uint8_t v_sync_width = (c->sync_widths >> 4) & 0x0F;
+        uint8_t v_sync_width;
+        if ((c->type == MC6845_TYPE_UM6845R)||(c->type == MC6845_TYPE_MC6845)) {
+            /* on these models, VSYNC width is fixed to 0 (== 16 lines) */
+            v_sync_width = 0;
+        }
+        else {
+            v_sync_width = (c->sync_widths >> 4) & 0x0F;
+        }
         if ((c->vsync_ctr == v_sync_width) && c->vs) {
             c->vs = false;
         }
