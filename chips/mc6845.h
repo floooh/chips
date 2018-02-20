@@ -66,6 +66,7 @@
     - http://www.6502.org/users/andre/hwinfo/crtc/crtc.html
     - http://www.6502.org/users/andre/hwinfo/crtc/internals/index.html
     - http://bitsavers.informatik.uni-stuttgart.de/components/motorola/_dataSheets/6845.pdf
+    - https://github.com/hoglet67/BeebFpga/blob/master/src/common/mc6845.vhd
 
     ## MIT License
 
@@ -207,7 +208,7 @@ typedef struct {
     uint8_t vsync_ctr;              /* vertical sync-height counter */
     uint8_t row_ctr;                /* character row counter (mod 128) */
     uint8_t scanline_ctr;           /* scanline counter (mod 32) */
-    bool scanline_adjust;           /* true if inside scanline adjust range */
+    bool in_adj;                    /* true if inside scanline adjust range */
     bool hs;                        /* current HSYNC state */
     bool vs;                        /* current VSYNC state */
     bool h_de;                      /* horizontal display enable */
@@ -303,9 +304,10 @@ void mc6845_reset(mc6845_t* c) {
     c->ma_row_start = 0;
     c->h_ctr = 0;
     c->hsync_ctr = 0;
+    c->vsync_ctr = 0;
     c->row_ctr = 0;
     c->scanline_ctr = 0;
-    c->scanline_adjust = false;
+    c->in_adj = false;
     c->hs = false;
     c->vs = false;
     c->h_de = false;
@@ -367,7 +369,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
     if (c->h_ctr == 0) {
         c->h_de = true;
     }
-    else if (c->h_ctr == c->h_displayed) {
+    if (c->h_ctr == c->h_displayed) {
         c->h_de = false;    /* end of horizontal display-enable range */
     }
 
@@ -391,76 +393,67 @@ uint64_t mc6845_tick(mc6845_t* c) {
     }
 
     /* NEW SCANLINE? */
+    /* FIXME: on UM6845R, R12/R13 (start_addr_hi/lo) is read into
+       ma_row_start at the start of each scanline during character
+       row 0.
+    */
     if (c->h_ctr == 0) {
-        /* new scanline starts */
-        c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
-
-        /* FIXME: on UM6845R, R12/R13 (start_addr_hi/lo) is read into
-           ma_row_start at the start of each scanline during character
-           row 0.
-        */
-
-        /* handle VSYNC range */
-        if (c->vs) {
-            c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
-            /* FIXME: not programmable on some models!
-
-               Since counter wraps around at 16, a v_sync_width of 0
-               is treated as 16
-            */
-            uint8_t v_sync_width = (c->sync_widths >> 4) & 0x0F;
-            if (c->vsync_ctr == v_sync_width) {
-                c->vs = false;
-                c->vsync_ctr = 0;
-            }
+        bool need_adj = c->v_total_adjust != 0;
+        uint8_t max_scan_line;
+        if (c->in_adj) {
+            /* this is an adjust row */
+            max_scan_line = (c->v_total_adjust - 1) & 0x1F;
         }
-
-        /* inside scanline-adjust area at end of frame? */
-        if (c->scanline_adjust) {
-            if (c->scanline_ctr >= c->v_total_adjust) {
-                /* a new frame starts */
-                c->scanline_adjust = false;
-                c->scanline_ctr = 0;
-                c->row_ctr = 0;
-                c->v_de = true;
-                /* reset row address latch to start address of screen */
-                c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
-            }
+        else {
+            /* this is a normal row */
+            max_scan_line = c->max_scanline_addr;
         }
-
-        /* handle scanline counter */
-        if (c->scanline_ctr == ((c->max_scanline_addr + 1) & 0x1F)) {
-            /* a new character row starts */
-            if (c->row_ctr == c->v_sync_pos) {
-                c->vs = true;
-            }
+        if ((c->scanline_ctr == max_scan_line) && ((!need_adj && (c->row_ctr == c->v_total)) || c->in_adj)) {
+            /* new frame */
             c->scanline_ctr = 0;
-            c->row_ctr = (c->row_ctr + 1) & 0x7F;
+            c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
+            c->row_ctr = 0;
+            c->in_adj = false;
+        }
+        else if (!c->in_adj && (c->scanline_ctr == max_scan_line)) {
+            /* new character row */
+            c->scanline_ctr = 0;
             c->ma_row_start += c->h_displayed;
-            if (c->row_ctr == ((c->v_total + 1) & 0x7F)) {
-                /* last row of frame, scanline-adjust range starts */
-                c->scanline_ctr = 0;
-                if (c->v_total_adjust == 0) {
-                    /* no scanline adjust, start new frame now */
-                    c->scanline_ctr = 0;
-                    c->row_ctr = 0;
-                    c->v_de = true;
-                    c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
-                }
-                else {
-                    /* enable scanline-adjust handling */
-                    c->scanline_adjust = true;
-                }
+            c->row_ctr = (c->row_ctr + 1) & 0x7F;
+            if ((c->row_ctr == c->v_total) && need_adj) {
+                c->in_adj = true;
             }
-            if (c->row_ctr == c->v_displayed) {
-                c->v_de = false;
-            }
+        }
+        else {
+            /* new scanline */
+            c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
         }
 
         /* reload the memory address counter per scanline */
         c->ma = c->ma_row_start;
+
+        /* handle vertical display enabled */
+        if (c->row_ctr == 0) {
+            c->v_de = true;
+        }
+        if (c->row_ctr == c->v_displayed) {
+            c->v_de = false;
+        }
+
+        /* handle VSYNC on/off */
+        if ((c->row_ctr == c->v_sync_pos) || c->vs) {
+            c->vs = true;
+            c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
+        }
+        else {
+            c->vsync_ctr = 0;
+        }
+        const uint8_t v_sync_width = (c->sync_widths >> 4) & 0x0F;
+        if (c->vsync_ctr == v_sync_width) {
+            c->vs = false;
+        }
     }
-    
+
     /* build the return pin mask */
     uint64_t new_pins = ((c->scanline_ctr & 0x1F) * MC6845_RA0)| c->ma;
     if (c->hs) {
