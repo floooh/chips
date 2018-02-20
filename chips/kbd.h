@@ -213,7 +213,17 @@ void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_mask) {
 
 void kbd_key_down(kbd_t* kbd, int key) {
     CHIPS_ASSERT(kbd && (key >= 0) && (key < KBD_MAX_KEYS));
-    /* find a free keybuffer slot */
+    /* first check if the key is already in the key buffer,
+       if yes, just update its pressed-frame and return,
+       otherwise find a new, free keybuffer slot
+    */
+    for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
+        key_state_t* k = &kbd->key_buffer[i];
+        if (k->key == key) {
+            k->pressed_frame = kbd->frame_count;
+            return;
+        }
+    }
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
         key_state_t* k = &kbd->key_buffer[i];
         if (0 == k->mask) {
