@@ -69,9 +69,11 @@ The MOS Technology 6502 CPU.
       for documented instructions (including decimal mode), the following 
       undocumented/unintended instructions are failing: ANE, LXA, SBX, SHA, SHX, SHY, SHS, ANC (some of these are implemented, but fail the test, some are not implemented in the emulator)
 
-### AY-3-8912 (chips/ay38912.h)
+### AY-3-8910 (chips/ay38910.h)
 
-The General Instrument AY-3-8912 sound generator chip.
+The General Instrument AY-3-8910 sound generator chip and its low-cost variants
+AY-3-8912 and AY-3-8913 (the 3 variants only differ in the number of provided
+I/O ports, the 8910 has 2 ports, the 8912 has 1, and the 8913 has none.
 
 - programmable via chip-pin bitmask
 - separate tick function called from CPU tick callback, returns true when a new audio sample is ready
