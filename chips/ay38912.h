@@ -154,10 +154,8 @@ typedef struct {
     uint8_t addr;
     /* 16 registers */
     uint8_t reg[AY38912_NUM_REGISTERS];
-    /* prescale period */
-    int prescale_period;
-    /* prescale counter */
-    int prescale_counter;
+    /* tick counter for further clock division */
+    uint32_t tick;
 
     /* the 3 tone channels */
     ay38912_tone_t tone[AY38912_NUM_CHANNELS];
@@ -272,7 +270,6 @@ void ay38912_init(ay38912_t* ay, int tick_hz, int sound_hz, float magnitude) {
     CHIPS_ASSERT(ay);
     CHIPS_ASSERT((tick_hz > 0) && (sound_hz > 0));
     memset(ay, 0, sizeof(*ay));
-    ay->prescale_period = 8;
     ay->noise.rng = 1;
     ay->sample_period = (tick_hz * AY38912_PRECISION_BOOST) / (sound_hz * AY38912_SUPER_SAMPLES);
     ay->sample_counter = ay->sample_period;
@@ -291,10 +288,8 @@ void ay38912_reset(ay38912_t* ay) {
 }
 
 bool ay38912_tick(ay38912_t* ay) {
-    ay->prescale_counter--;
-    while (ay->prescale_counter <= 0) {
-        ay->prescale_counter += ay->prescale_period;
-
+    ay->tick++;
+    if ((ay->tick & 7) == 0) {
         /* tick the tone channels */
         for (int i = 0; i < AY38912_NUM_CHANNELS; i++) {
             ay38912_tone_t* chn = &ay->tone[i];
