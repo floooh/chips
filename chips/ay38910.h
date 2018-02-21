@@ -409,8 +409,35 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                    are ignored for reading and writing)
                 */
                 if (ay->addr < AY38910_NUM_REGISTERS) {
+                    /* write register content, and update dependent values */
                     ay->reg[ay->addr] = data & _ay38910_reg_mask[ay->addr];
                     _ay38910_update_values(ay);
+
+                    /* Handle port output:
+
+                        If port A or B is in output mode, call the
+                        port output callback to notify the outer world
+                        about the new register value.
+
+                        input/output mode is defined by bits 6 and 7 of
+                        the 'enable' register
+                            bit6 = 1: port A in output mode
+                            bit7 = 1: port B in output mode
+                    */
+                    if (ay->addr == AY38910_REG_IO_PORT_A) {
+                        if (ay->enable & (1<<6)) {
+                            if (ay->out_cb) {
+                                ay->out_cb(AY38910_PORT_A, ay->port_a);
+                            }
+                        }
+                    }
+                    else if (ay->addr == AY38910_REG_IO_PORT_B) {
+                        if (ay->enable & (1<<7)) {
+                            if (ay->out_cb) {
+                                ay->out_cb(AY38910_PORT_B, ay->port_b);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -420,6 +447,37 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                valid register range to have an effect.
             */
             if (ay->addr < AY38910_NUM_REGISTERS) {
+                /* Handle port input:
+
+                    If port A or B is in input mode, first call the port
+                    input callback to update the port register content.
+
+                    input/output mode is defined by bits 6 and 7 of
+                    the 'enable' register:
+                        bit6 = 0: port A in input mode
+                        bit7 = 0: port B in input mode
+                */
+                if (ay->addr == AY38910_REG_IO_PORT_A) {
+                    if ((ay->enable & (1<<6)) == 0) {
+                        if (ay->in_cb) {
+                            ay->port_a = ay->in_cb(AY38910_PORT_A);
+                        }
+                        else {
+                            ay->port_a = 0xFF;
+                        }
+                    }
+                }
+                else if (ay->addr == AY38910_REG_IO_PORT_B) {
+                    if ((ay->enable & (1<<7)) == 0) {
+                        if (ay->in_cb) {
+                            ay->port_b = ay->in_cb(AY38910_PORT_B);
+                        }
+                        else {
+                            ay->port_b = 0xFF;
+                        }
+                    }
+                }
+                /* read register content into data pins */
                 const uint8_t data = ay->reg[ay->addr];
                 AY38910_SET_DATA(pins, data);
             }
