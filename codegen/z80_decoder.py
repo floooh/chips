@@ -1310,7 +1310,7 @@ def daa():
     return src
 
 def halt():
-    return '_z80_check_trap(&c);_ON(Z80_HALT);c.PC--;'
+    return 'if(_z80_check_trap(&c)){break;};_ON(Z80_HALT);c.PC--;'
 
 def di():
     return 'c.IFF1=c.IFF2=false;'

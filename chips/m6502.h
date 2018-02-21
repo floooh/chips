@@ -308,6 +308,7 @@ static inline bool _m6502_check_trap(m6502_t* c) {
     const uint16_t pc = c->PC - 1;
     for (int i = 0; i < M6502_MAX_NUM_TRAPS; i++) {
         if (c->traps[i].host_addr && (c->traps[i].addr == pc)) {
+            c->PC -= 1;
             c->trap_id = i;
             return true;
         }

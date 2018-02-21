@@ -434,6 +434,7 @@ static inline bool _z80_check_trap(z80_t* c) {
     for (int i = 0; i < Z80_MAX_NUM_TRAPS; i++) {
         if (c->traps[i].host_addr && (c->traps[i].addr == pc)) {
             c->trap_id = i;
+            c->PC -= 1;
             return true;
         }
     }
