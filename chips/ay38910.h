@@ -172,6 +172,13 @@ typedef struct {
     uint32_t bit;
 } ay38910_noise_t;
 
+/* the envelope generator */
+typedef struct {
+    uint16_t period;
+    uint16_t counter;
+    bool holding;
+} ay38910_env_t;
+
 /* AY-3-8910 state */
 typedef struct {
     ay38910_type_t type;        /* the chip flavour */
@@ -202,6 +209,7 @@ typedef struct {
     };
     ay38910_tone_t tone[AY38910_NUM_CHANNELS];  /* the 3 tone channels */
     ay38910_noise_t noise;                      /* the noise generator state */
+    ay38910_env_t env;                          /* the envelope generator state */
 
     /* sample generation state */
     int sample_period;
@@ -300,11 +308,17 @@ static void _ay38910_update_values(ay38910_t* ay) {
         chn->tone_disable = (ay->enable>>i) & 1;
         chn->noise_disable = (ay->enable>>(3+i)) & 1;
     }
+    /* noise generator values */
     ay->noise.period = ay->period_noise;
     if (ay->noise.period == 0) {
         ay->noise.period = 1;
     }
-    /* FIXME: envelope stuff */
+    /* envelope generator values */
+    ay->env.period = (ay->period_env_coarse<<8)|ay->period_env_fine;
+    if (ay->env.period == 0) {
+        ay->env.period = 1;
+    }
+    ay->env.holding = false;
 }
 
 void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc) {
@@ -360,8 +374,16 @@ bool ay38910_tick(ay38910_t* ay) {
                 ay->noise.rng >>= 1;
             }
         }
-
-        /* FIXME: tick the envelope generator */
+        
+        /* tick the envelope generator */
+        if ((ay->tick & 15) == 0) {
+            if (!ay->env.holding) {
+                if (++ay->env.counter >= ay->env.period) {
+                    ay->env.counter = 0;
+                    // FIXME: env-step 4-bit counter
+                }
+            }
+        }
     }
 
     /* generate new sample? */
