@@ -43,7 +43,7 @@
     ## NOT EMULATED
 
     Currently this just contains the minimal required functionality to make
-    some games on the Atom work (basically just timers, and even those
+    some games on the Acorn Atom work (basically just timers, and even those
     or likely not correct). 
 
     ## MIT License
