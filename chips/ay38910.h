@@ -124,7 +124,7 @@ extern "C" {
 /* number of registers */
 #define AY38910_NUM_REGISTERS (16)
 /* super-sampling precision */
-#define AY38910_SUPER_SAMPLES (4)
+#define AY38910_SUPER_SAMPLES (1)
 /* error-accumulation precision boost */
 #define AY38910_PRECISION_BOOST (16)
 /* number of channels */
@@ -133,6 +133,12 @@ extern "C" {
 /* IO port names */
 #define AY38910_PORT_A (0)
 #define AY38910_PORT_B (1)
+
+/* envelope shape bits */
+#define AY38910_ENV_HOLD        (1<<0)
+#define AY38910_ENV_ALTERNATE   (1<<1)
+#define AY38910_ENV_ATTACK      (1<<2)
+#define AY38910_ENV_CONTINUE    (1<<3)
 
 /* callbacks for input/output on I/O ports */
 typedef uint8_t (*ay38910_in_t)(int port_id);
@@ -176,7 +182,10 @@ typedef struct {
 typedef struct {
     uint16_t period;
     uint16_t counter;
-    bool holding;
+    bool shape_holding;
+    bool shape_hold;
+    uint8_t shape_counter;
+    uint8_t shape_state;
 } ay38910_env_t;
 
 /* AY-3-8910 state */
@@ -273,7 +282,7 @@ static const uint8_t _ay38910_reg_mask[AY38910_NUM_REGISTERS] = {
 };
 
 /* volume table from: https://github.com/true-grue/ayumi/blob/master/ayumi.c */
-static const float _ay38911_volumes[16] = {
+static const float _ay38910_volumes[16] = {
   0.0f,
   0.00999465934234f,
   0.0144502937362f,
@@ -290,6 +299,37 @@ static const float _ay38911_volumes[16] = {
   0.635324635691f,
   0.805584802014f,
   1.0f
+};
+
+/* canned envelope generator shapes */
+static const uint8_t _ay38910_shapes[16][32] = {
+    /* CONTINUE ATTACK ALTERNATE HOLD */
+    /* 0 0 X X */
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    /* 0 1 X X */
+    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    /* 1 0 0 0 */
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 },
+    /* 1 0 0 1 */
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    /* 1 0 1 0 */
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
+    /* 1 0 1 1 */
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15 },
+    /* 1 1 0 0 */
+    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
+    /* 1 1 0 1 */
+    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15 },
+    /* 1 1 1 0 */
+    { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 },
+    /* 1 1 1 1 */
+    { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
 /* update computed values after registers have been reprogrammed */
@@ -318,7 +358,18 @@ static void _ay38910_update_values(ay38910_t* ay) {
     if (ay->env.period == 0) {
         ay->env.period = 1;
     }
-    ay->env.holding = false;
+}
+
+/* reset the env shape generator, only called when env-shape register is updated */
+static void _ay38910_restart_env_shape(ay38910_t* ay) {
+    ay->env.shape_holding = false;
+    ay->env.shape_counter = 0;
+    if ((ay->env_shape_cycle & (AY38910_ENV_CONTINUE|AY38910_ENV_HOLD)) == AY38910_ENV_HOLD) {
+        ay->env.shape_hold = true;
+    }
+    else {
+        ay->env.shape_hold = false;
+    }
 }
 
 void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc) {
@@ -336,6 +387,7 @@ void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc) {
     ay->super_sample_counter = AY38910_SUPER_SAMPLES;
     ay->mag = desc->magnitude;
     _ay38910_update_values(ay);
+    _ay38910_restart_env_shape(ay);
 }
 
 void ay38910_reset(ay38910_t* ay) {
@@ -346,6 +398,7 @@ void ay38910_reset(ay38910_t* ay) {
         ay->reg[i] = 0;
     }
     _ay38910_update_values(ay);
+    _ay38910_restart_env_shape(ay);
 }
 
 bool ay38910_tick(ay38910_t* ay) {
@@ -374,15 +427,19 @@ bool ay38910_tick(ay38910_t* ay) {
                 ay->noise.rng >>= 1;
             }
         }
-        
-        /* tick the envelope generator */
-        if ((ay->tick & 15) == 0) {
-            if (!ay->env.holding) {
-                if (++ay->env.counter >= ay->env.period) {
-                    ay->env.counter = 0;
-                    // FIXME: env-step 4-bit counter
+    }
+
+    /* tick the envelope generator */
+    if ((ay->tick & 15) == 0) {
+        if (++ay->env.counter >= ay->env.period) {
+            ay->env.counter = 0;
+            if (!ay->env.shape_holding) {
+                ay->env.shape_counter = (ay->env.shape_counter + 1) & 0x1F;
+                if (ay->env.shape_hold && (0x1F == ay->env.shape_counter)) {
+                    ay->env.shape_holding = true;
                 }
             }
+            ay->env.shape_state = _ay38910_shapes[ay->env_shape_cycle][ay->env.shape_counter];
         }
     }
 
@@ -395,10 +452,11 @@ bool ay38910_tick(ay38910_t* ay) {
             const ay38910_tone_t* chn = &ay->tone[i];
             if (0 == (ay->reg[AY38910_REG_AMP_A+i] & (1<<4))) {
                 /* fixed amplitude */
-                vol = _ay38911_volumes[ay->reg[AY38910_REG_AMP_A+i] & 0x0F];
+                vol = _ay38910_volumes[ay->reg[AY38910_REG_AMP_A+i] & 0x0F];
             }
             else {
-                /* FIXME: envelope control */
+                /* envelope control */
+                vol = _ay38910_volumes[ay->env.shape_state];
             }
             int vol_enable = (chn->bit|chn->tone_disable) & ((ay->noise.rng&1)|(chn->noise_disable));
             ay->acc += (vol_enable ? vol : -vol);
@@ -434,7 +492,9 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                     /* write register content, and update dependent values */
                     ay->reg[ay->addr] = data & _ay38910_reg_mask[ay->addr];
                     _ay38910_update_values(ay);
-
+                    if (ay->addr == AY38910_REG_ENV_SHAPE_CYCLE) {
+                        _ay38910_restart_env_shape(ay);
+                    }
                     /* Handle port output:
 
                         If port A or B is in output mode, call the
@@ -446,7 +506,7 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                             bit6 = 1: port A in output mode
                             bit7 = 1: port B in output mode
                     */
-                    if (ay->addr == AY38910_REG_IO_PORT_A) {
+                    else if (ay->addr == AY38910_REG_IO_PORT_A) {
                         if (ay->enable & (1<<6)) {
                             if (ay->out_cb) {
                                 ay->out_cb(AY38910_PORT_A, ay->port_a);
