@@ -86,16 +86,16 @@ extern void mem_map_rw(mem_t* mem, int layer, uint16_t addr, uint32_t size, cons
 extern void mem_unmap_layer(mem_t* mem, int layer);
 /* unmap all memory pages in all layers, also updates the CPU-visible page-table */
 extern void mem_unmap_all(mem_t* mem);
-/* get the host-memory read-ptr of a emulator memory address */
+/* get the host-memory read-ptr of an emulator memory address */
 extern uint8_t* mem_readptr(mem_t* mem, uint16_t addr);
 /* copy a range of bytes into memory via mem_wr() */
 extern void mem_write_range(mem_t* mem, uint16_t addr, const uint8_t* src, int num_bytes);
 
-/* read a byte at address without memory-mapped-io support */
+/* read a byte at 16-bit address */
 static inline uint8_t mem_rd(const mem_t* mem, uint16_t addr) {
     return mem->page_table[addr>>MEM_PAGE_SHIFT].read_ptr[addr & MEM_PAGE_MASK];
 }
-/* write a byte at address without memory-mapped-io support */
+/* write a byte to 16-bit address */
 static inline void mem_wr(mem_t* mem, uint16_t addr, uint8_t data) {
     mem->page_table[addr>>MEM_PAGE_SHIFT].write_ptr[addr & MEM_PAGE_MASK] = data;
 }
