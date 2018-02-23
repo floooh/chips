@@ -3,14 +3,12 @@
 A toolbox of chips and helper code to write 8-bit emulators in
 dependency-free C99-headers.
 
-*WORK IN PROGRESS*
-
 Tests and example code is in a separate repo: https://github.com/floooh/chips-test
 
 This is the meaty stuff from the YAKC emulator, rewritten from
 C++ in C, moved into its own project.
 
-The YAKC emulator is here (porting to the chips headers is underway in the 'chips' branch): 
+The YAKC emulator is here:
 - github repo: https://github.com/floooh/yakc
 - asm.js/wasm demo: http://floooh.github.io/virtualkc/
 
@@ -22,7 +20,8 @@ The Zilog Z80 CPU.
 
 - tick-callback with CPU-pin bitmask, called with machine-cycle or single-tick granularity
 - fast switch-case instruction decoder generated via python script
-- wait-state injection from tick-callback via WAIT pin
+- up to 7 wait states can be injected per machine cycle by setting WAIT pins in 
+  the CPU tick callback
 - all undocumented instructions supported
 - internal WZ register and undocumented XF and YF flags supported
 - support for interrupt-priority handling (daisy chain) with help from the tick callback
@@ -77,8 +76,6 @@ I/O ports, the 8910 has 2 ports, the 8912 has 1, and the 8913 has none.
 
 - programmable via chip-pin bitmask
 - separate tick function called from CPU tick callback, returns true when a new audio sample is ready
-- NOT IMPLEMENTED/TODO:
-    - the envelope generator (hard to validate since it was hardly used)
 
 ### MC6845 (chips/mc6845.h)
 

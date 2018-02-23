@@ -32,9 +32,6 @@
     - the BC2 pin is ignored since it makes only sense when connected to
       a CP1610 CPU
     - the RESET pin state is ignored, instead call ay38910_reset()
-    - the envelope generator is not emulated, I haven't found any games so far
-      which use the envelope generator to properly test this (since there's
-      only one envelope generator for all 3 tone channels it wasn't of much use)
 
     LICENSE:
 
@@ -69,10 +66,6 @@ extern "C" {
 
 /*
     Pin definitions.
-
-    The AY-3-8910 is in a smaller 28 pin package and only has one
-    I/O channel (compared to the AY-3-8910 which has 40 pins and 
-    2 I/O channels).
 
     Note that the BC2 is not emulated since it is usually always
     set to active when not connected to a CP1610 processor. The

@@ -163,10 +163,10 @@
     Interrupt handling requires to inspect and set additional
     pins, more on that below.
 
-    To inject a wait state into the current machine cycle, set
-    the WAIT pin before returning from the tick callback. If the
-    WAIT pin is set, the tick callback will be called in
-    single-clock-tick steps until the WAIT pin is cleared again.
+    To inject wait states, execute the additional cycles in the
+    CPU tick callback, and set the number of wait states
+    with the Z80_SET_WAIT() macro on the returned CPU pins.
+    Up to 7 wait states can be injected per machine cycle.
 
     Note that not all calls to the tick callback have one
     of the above pin bit patterns set. The CPU may need
@@ -183,9 +183,6 @@
       are not memory- or IO-operations, in this case the tick
       callback may be called for with any number of ticks, but
       without activated control pins
-    - if a wait state is active, the tick callback will be
-      called for single clock-ticks, until the tick callback
-      clears the wait pin.
 
     ## Interrupt Handling
 
@@ -219,7 +216,7 @@
       pins found on Z80 chip-family members and is used to disable
       interrupts for lower-priority interrupt controllers in the
       daisy chain if a higher priority device is currently negotiating
-      interrupt handling with the CPI. The IEIO pin always starts
+      interrupt handling with the CPU. The IEIO pin always starts
       in active state at the start of the daisy chain, and is handed
       from one interrupt controller to the next in order of 
       daisy-chain priority. The first interrupt controller with
@@ -238,6 +235,8 @@
     tick callback examples check the emulators and tests here:
     
     http://github.com/floooh/chips-test
+
+    http://github.com/floooh/yakc
 
     ## MIT License
 
