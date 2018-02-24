@@ -1,21 +1,163 @@
 #pragma once
-/*
-    mem.h   -- memory implementation for 8-bit systems
+/*#
+    # mem.h
+
+    memory system for emulated 8-bit computers
 
     Do this:
-        #define CHIPS_IMPL
+    ~~~C
+    #define CHIPS_IMPL
+    ~~~
     before you include this file in *one* C or C++ file to create the 
     implementation.
 
-    Optionally provide the following macros with your own implementation
+    Optionally provide the following macro with your own implementation
+    (default: assert(c))
     
-        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+    ~~~C
+    CHIPS_ASSERT(c)
+    ~~~
 
-    TODO: documentation.
+    ## Feature Overview
 
-    LICENSE:
+    - maps 16-bit addresses to host system addresses with 1 KByte page-size
+      granularity
+    - memory pages can be mapped as RAM, ROM or RAM-behind-ROM (where
+      read accesses are mapped to a different memory page then write accesses)
+    - 4 independent page-table layers to simplify bank-switching implementations
 
-    MIT License
+    ## Usage
+
+    1. call **mem_init()** to initialize a mem_t instance
+    2. call **mem_map_ram()**, **mem_map_rom()** and **mem_map_rw()** to
+       initialize the mapping from the 16-bit address space to host memory
+       locations.
+    3. call **mem_rd()** and **mem_wr()** to read and write bytes from and
+       to the 16-bit address space
+    4. if needed, call the functions from step (2) to change the memory
+       mapping (for instance to switch memory banks in and out of the
+       16-bit address space)
+
+    ## Layers, Pages and mapping to CPU-visible addresses
+
+    ****************************************************************************
+    *               Page 0   Page 1   Page 2   Page 3   Page 4  ...            *
+    *             +--------+--------+                                          *
+    *     Layer 3 |   30   |   31   |                                          *
+    *             +--------+--------+--------+--------+--------+----           *
+    *     Layer 2 |   20   |        |   22   |   23   |   24   |               *
+    *             +--------+        +--------+--------+--------+----           *
+    *     Layer 1 |   10   |        |   12   |   13   |                        *
+    *             +--------+        +--------+--------+                        *
+    *     Layer 0 |   00   |        |   02   |   03   |                        *
+    *             +--------+        +--------+--------+                        *
+    *                                                                          *
+    *             +--------+--------+--------+--------+--------+----           *
+    * CPU Visible |   00   |   31   |   02   |   03   |   23   |               *
+    *             +--------+--------+--------+--------+--------+----           *
+    *             0x0000   0x0400   0x0800   0x1000   0x1400   0x1800          *
+    ****************************************************************************
+
+
+    Each layer is an array of 64 page items (one page item covers 1 KByte of memory).
+
+    The CPU sees the highest priority valid page items (where layer 0 is 
+    highest priority and layer 3 is lowest priority).
+
+    Each page item consists of two host system pointers, one for read access,
+    and one for write access.
+
+    There are 2 internal special 'junk pages', one for write accesses to
+    read-only-memory or unmapped memory, and one for read-access from unmapped
+    memory. A read access from unmapped memory always returns 0xFF.
+
+    The different page-mapping scenarios are then implemented as follows:
+
+    - **RAM**: both read- and write-pointers point to the same host-memory
+      location
+    - **ROM**: the read-pointer points to a host-memory-location, and the
+      write-pointer points to the junk-write-page
+    - **RAM-behind-ROM**: the read- and write-pointers point to _different_
+      host-memory locations
+    - **unmapped page**: the read-pointer points to the internal junk-read-page, and
+      the write-pointer to the internal junk-write-page
+
+    ## Functions
+    ~~~C
+    void mem_init(mem_t* mem);
+    ~~~
+    Initialize a new mem_t instance.
+
+    ~~~C
+    void mem_map_ram(mem_t* mem, int layer, uint16_t addr, uint32_t size, uint8_t* ptr)
+    ~~~
+    Map a range of host memory to a 16-bit address for RAM access in a
+    given layer (0..3, 0 being the highest priority layer). Size is in bytes,
+    must be a multiple of 0x0400 (dez: 1024), and must be <= 0x10000 (dez: 65536)
+
+    ~~~C
+    void mem_map_rom(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* ptr)
+    ~~~
+    Map a range of host memory to a 16-bit address for ROM access.
+    See mem_map_ram() for more details.
+
+    ~~~C
+    void mem_map_rw(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* read_ptr, uint8_t* write_ptr)
+    ~~~
+    Map two host memory ranges to a 16-bit address for RAM-behind-ROM access.
+    Read accesses will come from _read_ptr_, and write accesses will go
+    to _write_ptr_. See mem_map_ram() for more details.
+
+    ~~~C
+    void mem_unmap_layer(mem_t* mem, int layer)
+    ~~~
+    Unmap all memory pages in a layer.
+
+    ~~~C
+    void mem_unmap_all(mem_t* mem)
+    ~~~
+    Unmap all memory pages in all layers.
+
+    ~~~C
+    uint8_t mem_rd(mem_t* mem, uint16_t addr)
+    ~~~
+    Read a byte from a 16-bit memory address from the CPU-visible
+    memory page at that location. If the location is unmapped the read will
+    come from the internal read-junk-page and  0xFF will be returned.
+
+    ~~~C
+    void mem_wr(mem_t* mem, uint16_t addr, uint8_t data)
+    ~~~
+    Write a byte to a 16-bit memory address to the CPU-visible memory
+    page at that location. If the location is unmapped or ROM, the write
+    will go the internal write-junk-page.
+
+    ~~~C
+    uint8_t* mem_readptr(mem_t* mem, uint16_t addr)
+    ~~~
+    A helper-function which returns the host-memory location of a 16-bit
+    address for a read-access. Careful, this will return a pointer into the 
+    internal read-junk-page if the page item is unmapped.
+
+    ~~~C
+    void mem_write_range(mem_t* mem, uint16_t addr, const uint8_t* src, int num_bytes)
+    ~~~
+    A helper function to copy a range of bytes from host memory to a 16-bit
+    address range. This will do a series of mem_wr() calls. 
+
+    ~~~C
+    void mem_wr16(mem_t* mem, uint16_t addr, uint16_t data)
+    ~~~
+    A helper function to write a 16-bit value in little-endian format.
+    This will do 2 calls to mem_wr().
+
+    ~~~C
+    uint16_t mem_rd16(mem_t* mem, uint16_t addr)
+    ~~~
+    A helper function to read a 16-bit value in little-endian format.
+    This will do 2 calls to mem_rd().
+
+    ## MIT License
 
     Copyright (c) 2017 Andre Weissflog
 
@@ -36,7 +178,7 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-*/
+#*/
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -92,7 +234,7 @@ extern uint8_t* mem_readptr(mem_t* mem, uint16_t addr);
 extern void mem_write_range(mem_t* mem, uint16_t addr, const uint8_t* src, int num_bytes);
 
 /* read a byte at 16-bit address */
-static inline uint8_t mem_rd(const mem_t* mem, uint16_t addr) {
+static inline uint8_t mem_rd(mem_t* mem, uint16_t addr) {
     return mem->page_table[addr>>MEM_PAGE_SHIFT].read_ptr[addr & MEM_PAGE_MASK];
 }
 /* write a byte to 16-bit address */
