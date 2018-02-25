@@ -240,6 +240,8 @@ extern void m6502_clear_trap(m6502_t* cpu, int trap_id);
 extern bool m6502_has_trap(m6502_t* cpu, int trap_id);
 /* execute instruction for at least 'ticks' or trap hit, return number of executed ticks */
 extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
+/* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
+extern uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
 
 /* extract 16-bit address bus from 64-bit pins */
 #define M6502_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
