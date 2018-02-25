@@ -1,33 +1,108 @@
 #pragma once
-/*
-    m6502.h   -- M6502 CPU emulator
+/*#
+    # m6502.h
+
+    MOS Technology 6502 / 6510 CPU emulator.
 
     Do this:
-        #define CHIPS_IMPL
+    ~~~C
+    #define CHIPS_IMPL
+    ~~~
     before you include this file in *one* C or C++ file to create the 
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
-        CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
+    ~~~C    
+    CHIPS_ASSERT(c)
+    ~~~
 
-    EMULATED PINS:
+    ## Emulated Pins
 
-             +-----------+
-      IRQ -->|           |--> A0
-      NMI -->|           |...
-       RW <--|           |--> A15
-     SYNC <--|   m6502   |
-             |           |--> D0
-             |           |...
-             |           |--> D7
-             +-----------+
-    
-    FIXME: documentation
-    
-    LICENSE:
+    ***********************************
+    *           +-----------+         *
+    *   IRQ --->|           |---> A0  *
+    *   NMI --->|           |...      *
+    *    RW <---|           |---> A15 *
+    *  SYNC <---|           |         *
+    *           |           |         *
+    *   (P0)<-->|           |<--> D0  *
+    *        ...|           |...      *
+    *   (P5)<-->|           |<--> D7  *
+    *           |           |         *
+    *           +-----------+         *
+    ***********************************
 
-    MIT License
+    The input/output pins P0..P5 only exist on the m6510
+
+    ## Functions
+    ~~~C
+    void m6502_init(m6502_t* cpu, m6502_desc_t* desc)
+    ~~~
+    Initialize a m6502_t instance, the desc structure provides initialization
+    attributes:
+        ~~~C
+        typedef struct {
+            m6502_tick_t tick_cb;  // the CPU tick callback
+            bool bcd_disabled;      // set to true if BCD mode is disabled
+            m6510_in_t in_cb;       // optional port IO input callback (only on m6510)
+            m6510_out_t out_cb;     // optional port IO output callback (only on m6510)
+        } m6502_desc_t;
+        ~~~
+
+    To emulate a vanilla m6502, provide a _tick_cb_ and set _bcd_enabled_ to true.
+
+    To emulate a m6510 you must provide port IO callbacks in _in_cb_ and _out_cb_.
+
+    ~~~C
+    void m6502_reset(m6502_t* cpu)
+    ~~~
+    Reset the m6502 instance.
+
+    ~~~C
+    uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks)
+    ~~~
+    Execute instructions until the requested number of _ticks_ is reached,
+    or a trap has been hit. Return number of executed cycles. To check if a trap
+    has been hit, check whether the m6502_t.trap_id member is >= 0. 
+    During execution the tick callback will be called for each clock cycle
+    with the current CPU pin bitmask. The tick callback function must inspect
+    the pin bitmask, perform memory requests and if necessary, update the
+    data bus pins. Finally the tick callback returns the (optionally
+    modified) pin bitmask.
+
+    ~~~C
+    uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins)
+    ~~~
+    For the m6510, call this function from inside the tick callback when the
+    CPU wants to access the special memory location 0 and 1 (these are mapped
+    to the IO port control registers of the m6510). m6510_iorq() may call the
+    input/output callback functions provided in m6510_init().
+
+    ~~~C
+    void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr, uint8_t* host_addr)
+    ~~~
+    Set a trap breakpoint at a 16-bit CPU address, and the corresponding
+    host memory location. Up to 8 trap breakpoints can be set.
+    This will replace the byte at host_addr with a BRK instruction (0x00).
+    When a BRK instruction is executed, the emulation will check against
+    all trap breakpoints, and if there is a match, m6502_exec() will
+    return early, and the trap_id member of m6502_t will be >= 0.
+    This can be used to set debugger breakpoints, or call out into 
+    native host system code for other reasons (for instance replacing
+    operating system functions like loading game files).
+
+    ~~~C
+    bool m6502_has_trap(m6502_t* cpu, int trap_id)
+    ~~~
+    Return true if a trap with number _trap_id_ is currently set.
+
+    ~~~C
+    void m6502_clear_trap(m6502_t* cpu, int trap_id)
+    ~~~
+    Clear the trap with number _trap_id_, this will write the original
+    byte back to the host_addr provided in m6502_set_trap()
+
+    ## MIT License
 
     Copyright (c) 2017 Andre Weissflog
 
@@ -48,16 +123,13 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-*/
+#*/
 #include <stdint.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* tick callback function typedef */
-typedef uint64_t (*m6502_tick_t)(uint64_t pins);
 
 /* address lines */
 #define M6502_A0  (1ULL<<0)
@@ -109,6 +181,20 @@ typedef uint64_t (*m6502_tick_t)(uint64_t pins);
 /* max number of trap points */
 #define M6502_MAX_NUM_TRAPS (8)
 
+/* tick callback function typedef */
+typedef uint64_t (*m6502_tick_t)(uint64_t pins);
+/* callbacks for M6510 port I/O */
+typedef void (*m6510_out_t)(uint8_t data);
+typedef uint8_t (*m6510_in_t)(void);
+
+/* the desc structure provided to m6502_init() */
+typedef struct {
+    m6502_tick_t tick_cb;  /* the CPU tick callback */
+    bool bcd_disabled;      // set to true if BCD mode is disabled
+    m6510_in_t in_cb;       // optional port IO input callback (only on m6510)
+    m6510_out_t out_cb;     // optional port IO output callback (only on m6510)
+} m6502_desc_t;
+
 /* a trap definition */
 typedef struct {
     uint8_t* host_addr;
@@ -130,15 +216,20 @@ typedef struct {
     */
     uint8_t pi;
     /* some variations of the m6502 don't have BCD arithmetic support */
-    bool bcd_supported;
-    /* trap points */ 
+    bool bcd_enabled;
+    /* the m6510 IO port stuff */
+    m6510_in_t in_cb;
+    m6510_out_t out_cb;
+    uint8_t io_dir;     /* 1: output, 0: input */
+    uint8_t io_port;
+    /* trap points */
     _m6502_trap_t traps[M6502_MAX_NUM_TRAPS];
     /* index of trap hit (-1 if no trap) */
     int trap_id;
 } m6502_t;
 
 /* initialize a new m6502 instance */
-extern void m6502_init(m6502_t* cpu, m6502_tick_t tick_cb);
+extern void m6502_init(m6502_t* cpu, m6502_desc_t* desc);
 /* reset an existing m6502 instance */
 extern void m6502_reset(m6502_t* cpu);
 /* set a trap point */
@@ -161,6 +252,9 @@ extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 /* return a pin mask with control-pins, address and data bus */
 #define M6502_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
 
+/* M6510: check for IO port access to address 0 or 1 */
+#define M6510_CHECK_IO(p) ((p&0xFFFEULL)==0)
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -178,7 +272,7 @@ extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 #define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
 static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
-    if (cpu->bcd_supported && (cpu->P & M6502_DF)) {
+    if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 1 : 0;
         cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
@@ -220,7 +314,7 @@ static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
 }
 
 static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
-    if (cpu->bcd_supported && (cpu->P & M6502_DF)) {
+    if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 0 : 1;
         cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
@@ -267,7 +361,7 @@ static inline void _m6502_arr(m6502_t* cpu) {
        by the Wolfgang Lorenz C64 test suite
        implementation taken from MAME
     */
-    if (cpu->bcd_supported && (cpu->P & M6502_DF)) {
+    if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         bool c = cpu->P & M6502_CF;
         cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
         uint8_t a = cpu->A>>1;
@@ -320,15 +414,17 @@ static inline bool _m6502_check_trap(m6502_t* c) {
 
 #include "_m6502_decoder.h"
 
-void m6502_init(m6502_t* c, m6502_tick_t tick_cb) {
-    CHIPS_ASSERT(c);
-    CHIPS_ASSERT(tick_cb);
+void m6502_init(m6502_t* c, m6502_desc_t* desc) {
+    CHIPS_ASSERT(c && desc);
+    CHIPS_ASSERT(desc->tick_cb);
     memset(c, 0, sizeof(*c));
-    c->tick = tick_cb;
+    c->tick = desc->tick_cb;
     c->PINS = M6502_RW;
     c->P = M6502_IF|M6502_XF;
     c->S = 0xFD;
-    c->bcd_supported = true;
+    c->bcd_enabled = !desc->bcd_disabled;
+    c->in_cb = desc->in_cb;
+    c->out_cb = desc->out_cb;
     c->trap_id = -1;
 }
 
@@ -341,6 +437,8 @@ void m6502_reset(m6502_t* c) {
     uint8_t l = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFC, 0x00)));
     uint8_t h = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00)));
     c->PC = (h<<8)|l;
+    c->io_dir = 0;
+    c->io_port = 0;
 }
 
 void m6502_set_trap(m6502_t* c, int trap_id, uint16_t addr, uint8_t* host_addr) {
@@ -375,6 +473,33 @@ bool m6502_has_trap(m6502_t* c, int trap_id) {
     return trap->host_addr != 0;
 }
 
+/* only call this when accessing address 0 or 1 (M6510_CHECK_IO(pins) evaluates to true) */
+uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
+    CHIPS_ASSERT(c->in_cb && c->out_cb);
+    if ((pins & 1) == 0) {
+        /* address 0: access to data direction register */
+        if (pins & M6502_RW) {
+            /* read IO direction bits */
+            M6502_SET_DATA(pins, c->io_dir);
+        }
+        else {
+            /* write IO direction bits */
+            c->io_dir = M6502_GET_DATA(pins);
+        }
+    }
+    else {
+        /* address 1: perform I/O */
+        if (pins & M6502_RW) {
+            /* an input operation */
+            c->io_port = (c->in_cb() & ~c->io_dir) | (c->io_port & c->io_dir);
+        }
+        else {
+            c->io_port = (M6502_GET_DATA(pins) & c->io_dir) | (c->io_port & ~c->io_dir);
+        }
+        M6502_SET_DATA(pins, c->io_port);
+    }
+    return pins;
+}
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
