@@ -478,27 +478,30 @@ bool m6502_has_trap(m6502_t* c, int trap_id) {
 /* only call this when accessing address 0 or 1 (M6510_CHECK_IO(pins) evaluates to true) */
 uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
     CHIPS_ASSERT(c->in_cb && c->out_cb);
-    if ((pins & 1) == 0) {
+    if ((pins & M6502_A0) == 0) {
         /* address 0: access to data direction register */
         if (pins & M6502_RW) {
             /* read IO direction bits */
             M6502_SET_DATA(pins, c->io_dir);
         }
         else {
-            /* write IO direction bits */
+            /* write IO direction bits and update outside world */
             c->io_dir = M6502_GET_DATA(pins);
+            c->out_cb((c->io_port & c->io_dir) | ~c->io_dir);
         }
     }
     else {
         /* address 1: perform I/O */
         if (pins & M6502_RW) {
-            /* an input operation */
-            c->io_port = (c->in_cb() & ~c->io_dir) | (c->io_port & c->io_dir);
+            /* an input operation (FIXME: is this correct?) */
+            uint8_t val = (c->in_cb() & ~c->io_dir) | (c->io_port & c->io_dir);
+            M6502_SET_DATA(pins, val);
         }
         else {
-            c->io_port = (M6502_GET_DATA(pins) & c->io_dir) | (c->io_port & ~c->io_dir);
+            /* an output operation */
+            c->io_port = M6502_GET_DATA(pins);
+            c->out_cb((c->io_port & c->io_dir) | ~c->io_dir);
         }
-        M6502_SET_DATA(pins, c->io_port);
     }
     return pins;
 }
