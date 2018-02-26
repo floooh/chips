@@ -191,6 +191,8 @@ extern void m6567_display_size(m6567_t* vic, int* out_width, int* out_height);
 extern uint64_t m6567_iorq(m6567_t* vic, uint64_t pins);
 /* tick the m6567_y instance */
 extern uint64_t m6567_tick(m6567_t* vic, uint64_t pins);
+/* get 32-bit RGBA8 value from color index (0..15) */
+extern uint32_t m6567_color(int i);
 
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -204,6 +206,27 @@ extern uint64_t m6567_tick(m6567_t* vic, uint64_t pins);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
+
+/* color palette (see: http://unusedino.de/ec64/technical/misc/vic656x/colors/) */
+#define _M6567_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
+static const uint32_t _m6567_colors[16] = {
+    _M6567_RGBA8(0x00,0x00,0x00),     /* 0: black */
+    _M6567_RGBA8(0xFF,0xFF,0xFF),     /* 1: white */
+    _M6567_RGBA8(0x68,0x37,0x2B),     /* 2: red */
+    _M6567_RGBA8(0x70,0xA4,0xB2),     /* 3: cyan */
+    _M6567_RGBA8(0x6F,0x3D,0x86),     /* 4: purple */
+    _M6567_RGBA8(0x58,0x8D,0x43),     /* 5: green */
+    _M6567_RGBA8(0x35,0x28,0x79),     /* 6: blue */
+    _M6567_RGBA8(0xB8,0xC7,0x6F),     /* 7: yellow */
+    _M6567_RGBA8(0x6F,0x4F,0x25),     /* 8: orange */
+    _M6567_RGBA8(0x43,0x39,0x00),     /* 9: brown */
+    _M6567_RGBA8(0x9A,0x67,0x59),     /* A: light red */
+    _M6567_RGBA8(0x44,0x44,0x44),     /* B: dark grey */
+    _M6567_RGBA8(0x6C,0x6C,0x6C),     /* C: grey */
+    _M6567_RGBA8(0x9A,0xD2,0x84),     /* D: light green */
+    _M6567_RGBA8(0x6C,0x5E,0xB5),     /* E: light blue */
+    _M6567_RGBA8(0x95,0x95,0x95)      /* F: light grey */
+};
 
 /* valid register bits */
 static const uint8_t _m6567_reg_mask[M6567_NUM_REGS] = {
@@ -322,6 +345,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
     }
     return pins;
+}
+
+uint32_t m6567_color(int i) {
+    CHIPS_ASSERT((i >= 0) && (i < 16));
+    return _m6567_colors[i];
 }
 #endif /* CHIPS_IMPL */
 
