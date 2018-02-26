@@ -138,6 +138,8 @@ typedef struct {
     uint32_t* rgba8_buffer;
     /* size of the RGBA framebuffer (must be at least 418x284) */
     uint32_t rgba8_buffer_size;
+    /* visible CRT area blitted to rgba8_buffer */
+    uint16_t vis_x0, vis_y0, vis_w, vis_h;
     /* the memory-fetch callback */
     m6567_fetch_t fetch_cb;
 } m6567_desc_t;
@@ -172,11 +174,32 @@ typedef struct {
         };
     };
     /* internal counters */
-    uint16_t h_count;
-    uint16_t h_period;
-    uint16_t l_count;
-    uint16_t l_period;
+    uint16_t h_count;           /* horizontal count */
+    uint16_t v_count;           /* vertical count */
 
+    /* internal trigger points */
+    uint16_t h_total;
+    uint16_t h_disppos;
+    uint16_t h_dispend;
+    uint16_t h_syncpos;
+    uint16_t h_syncend;
+    uint16_t v_total;
+    uint16_t v_disppos;
+    uint16_t v_dispend;
+    uint16_t v_syncpos;
+    uint16_t v_syncend;
+    bool hs;            /* true during hsync */
+    bool vs;            /* true during vsync */
+    bool h_de;          /* true when in valid hori display area */
+    bool v_de;          /* true when in valid vert display area */
+
+    uint16_t crt_retrace_h;     /* hori retrace counter, started with h_sync */
+    uint16_t crt_retrace_v;     /* vert retrace counter, started with v_sync */
+    uint16_t crt_x, crt_y;      /* bream pos reset on crt_retrace_h/crt_retrace_v zero */
+    uint16_t vis_x, vis_y;      /* current position in visible area */
+    bool vis_enabled;           /* beam is currently in visible area */
+    uint16_t vis_x0, vis_y0, vis_x1, vis_y1;  /* the visible area */
+    uint16_t vis_w, vis_h;      /* width of visible area */
     m6567_fetch_t fetch_cb;
     uint32_t* rgba8_buffer;
 } m6567_t;
@@ -256,37 +279,58 @@ void m6567_init(m6567_t* vic, m6567_desc_t* desc) {
     vic->type = desc->type;
     vic->fetch_cb = desc->fetch_cb;
     vic->rgba8_buffer = desc->rgba8_buffer;
+    vic->vis_x0 = desc->vis_x0;
+    vic->vis_y0 = desc->vis_y0;
+    vic->vis_x1 = desc->vis_x0 + desc->vis_w;
+    vic->vis_y1 = desc->vis_y0 + desc->vis_h;
+    vic->vis_w = desc->vis_w;
+    vic->vis_h = desc->vis_h;
     if (vic->type == M6567_TYPE_6569) {
         /* PAL-B */
-        vic->h_period = 63;     /* 63 cycles per line */
-        vic->l_period = 312;    /* 312 lines per frame */
+        vic->h_total = 63;          /* 63 cycles per line */
+        vic->h_disppos = 0;
+        vic->h_dispend = 40;
+        vic->h_syncpos = 45;        /* start of hsync (4,5 chars right border) */
+        vic->h_syncend = 57;        /* left border is 6 characters wide */
+
+        vic->v_total = 312;         /* 312 lines total (PAL) */
+        vic->v_syncpos = 300;
+        vic->v_syncend = 7;
+        vic->v_disppos = 50;        /* 43 lines top border */
+        vic->v_dispend = 250;       /* 200 lines displayed */
     }
     else {
         /* NTSC */
-        vic->h_period = 65;     /* 65 cycles per line */
-        vic->l_period = 263;    /* 263 lines per frame */
+        vic->h_total = 65;          /* 65 cycles per line */
+        vic->h_disppos = 0;
+        vic->h_dispend = 40;
+        vic->h_syncpos = 46;        /* start of hsync (6 chars right border) */
+        vic->h_syncend = 57;        /* left border is 6 characters wide */
+
+        vic->v_total = 263;         /* 263 lines total (NTSC) */
+        vic->v_syncpos = 13;
+        vic->v_syncend = 40;        /* this can't be right? */
+        vic->v_disppos = 60;        /* this is a guess */
+        vic->v_dispend = 260;       /* this is a guess */
     }
 }
 
 void m6567_reset(m6567_t* vic) {
     CHIPS_ASSERT(vic);
-    vic->h_count = 0;
-    vic->l_count = 0;
     memset(vic->regs, 0, sizeof(vic->regs));
+    vic->h_count = 0; vic->v_count = 0;
+    vic->hs = false; vic->vs = false;
+    vic->h_de = false; vic->v_de = false;
+    vic->crt_retrace_h = 0; vic->crt_retrace_v = 0;
+    vic->crt_x = 0; vic->crt_y = 0;
+    vic->vis_x = 0; vic->vis_y = 0;
+    vic->vis_enabled = false;
 }
 
 void m6567_display_size(m6567_t* vic, int* out_width, int* out_height) {
     CHIPS_ASSERT(vic && out_width && out_height);
-    if (vic->type == M6567_TYPE_6569) {
-        /* PAL-B */
-        *out_width = 403;
-        *out_height = 284;
-    }
-    else {
-        /* NTSC */
-        *out_width = 418;
-        *out_height = 235;
-    }
+    *out_width = vic->vis_w;
+    *out_height = vic->vis_h;
 }
 
 uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
@@ -298,11 +342,11 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
             switch (reg_addr) {
                 case 0x11:
                     /* bit 7 of 0x11 is bit 8 of the current raster counter */
-                    data = (vic->regs[0x11] & 0x7F) | ((vic->l_count & 0x100)>>1);
+                    data = (vic->regs[0x11] & 0x7F) | ((vic->v_count & 0x100)>>1);
                     break;
                 case 0x12:
                     /* reading 0x12 returns bits 0..7 of current raster position */
-                    data = (uint8_t)vic->l_count;
+                    data = (uint8_t)vic->v_count;
                     break;
                 case 0x1E:
                 case 0x1F:
@@ -333,15 +377,104 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
     return pins;
 }
 
-uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
-    vic->h_count++;
-    if (vic->h_count >= vic->h_period) {
-        /* new raster line */
+/* handle horizontal counter and vertical counters */
+void _m6567_update_counters(m6567_t* vic) {
+    if (vic->h_count == vic->h_total) {
         vic->h_count = 0;
-        vic->l_count++;
-        if (vic->l_count >= vic->l_period) {
-            /* new frame */
-            vic->l_count = 0;
+    }
+    else {
+        vic->h_count++;
+    }
+    if (vic->h_count == vic->h_disppos) {
+        vic->h_de = true;
+    }
+    if (vic->h_count == vic->h_dispend) {
+        vic->h_de = false;
+    }
+    if (vic->h_count == vic->h_syncpos) {
+        vic->hs = true;
+        vic->crt_retrace_h = 7;
+    }
+    if (vic->h_count == vic->h_syncend) {
+        vic->hs = false;
+    }
+
+    if (vic->h_count == 0) {
+        /* new scanline */
+        if (vic->v_count == vic->v_total) {
+            vic->v_count = 0;
+        }
+        else {
+            vic->v_count++;
+        }
+        if (vic->v_count == vic->v_disppos) {
+            vic->v_de = true;
+        }
+        if (vic->v_count == vic->v_dispend) {
+            vic->v_de = false;
+        }
+        if (vic->v_count == vic->v_syncpos) {
+            vic->vs = true;
+            vic->crt_retrace_v = 3;
+        }
+        if (vic->v_count == vic->v_syncend) {
+            vic->vs = false;
+        }
+    }
+}
+
+/* handle CRT beam position update */
+void _m6567_update_crt(m6567_t* vic) {
+    /* update current beam pos */
+    vic->crt_x++;
+    if (vic->crt_retrace_h > 0) {
+        if (--vic->crt_retrace_h == 0) {
+            vic->crt_x = 0;
+            vic->crt_y++;
+            if (vic->crt_retrace_v > 0) {
+                if (--vic->crt_retrace_v == 0) {
+                    vic->crt_y = 0;
+                }
+            }
+        }
+    }
+    /* update visible-area coordinates and enabled-state */
+    if ((vic->crt_x >= vic->vis_x0) && (vic->crt_x < vic->vis_x1) &&
+        (vic->crt_y >= vic->vis_y0) && (vic->crt_y < vic->vis_y1))
+    {
+        vic->vis_enabled = true;
+        vic->vis_x = vic->crt_x - vic->vis_x0;
+        vic->vis_y = vic->crt_y - vic->vis_y0;
+    }
+    else {
+        vic->vis_enabled = false;
+    }
+}
+
+uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
+    _m6567_update_counters(vic);
+    _m6567_update_crt(vic);
+
+    /* decode pixels for current tick */
+    if (vic->vis_enabled) {
+        int dst_x = vic->vis_x * 8;
+        int dst_y = vic->vis_y;
+        uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w + dst_x;
+        uint32_t c;
+        if (vic->hs || vic->vs) {
+            /* vertical/horizontal blank */
+            c = 0xFF444444;
+        }
+        else if (vic->h_de && vic->v_de) {
+            /* display area */
+            c = _m6567_colors[vic->background_color[0] & 0xF];
+        }
+        else {
+            /* border */
+            c = _m6567_colors[vic->border_color & 0xF];
+        }
+        for (int i = 0; i < 8; i++) {
+            *dst++ = c;
         }
     }
     return pins;
