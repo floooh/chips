@@ -34,6 +34,9 @@
 
     The input/output pins P0..P5 only exist on the m6510
 
+    FIXME: implement the RDY pin of the m6510 (stops the 
+    processor during read accesses)
+
     ## Functions
     ~~~C
     void m6502_init(m6502_t* cpu, m6502_desc_t* desc)
