@@ -173,11 +173,9 @@ typedef struct {
             uint8_t unused[17];                 /* not writable, return 0xFF on read */
         };
     };
-    /* internal counters */
+    /* internal state */
     uint16_t h_count;           /* horizontal count */
     uint16_t v_count;           /* vertical count */
-
-    /* internal trigger points */
     uint16_t h_total;
     uint16_t h_disppos;
     uint16_t h_dispend;
@@ -194,6 +192,8 @@ typedef struct {
     bool vs;            /* true during vsync */
     bool main_border;   /* main border flip-flop */
     bool vert_border;   /* vertical border flip flop */
+    bool badline;       /* true when the badline state is active */
+    bool frame_badlines_enabled;    /* true when badlines are enabled in frame */
 
     uint16_t crt_retrace_h;     /* hori retrace counter, started with h_sync */
     uint16_t crt_retrace_v;     /* vert retrace counter, started with v_sync */
@@ -433,6 +433,26 @@ void _m6567_update_counters(m6567_t* vic) {
     }
 }
 
+/* update the badline state
+   (see 3.5 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
+*/
+void _m6567_update_badline(m6567_t* vic) {
+    if ((vic->v_count >= 0x30) && (vic->v_count <= 0xF7)) {
+        /* DEN bit must have been set in raster line 30 */
+        if ((vic->v_count == 0x30) && (vic->ctrl_1 & (1<<4))) {
+            vic->frame_badlines_enabled = true;
+        }
+        /* a badline is active when the low 3 bits of raster position
+           are identical with YSCROLL
+        */
+        vic->badline = (vic->frame_badlines_enabled && ((vic->v_count&7)==(vic->ctrl_1&7)));
+    }
+    else {
+        vic->frame_badlines_enabled = false;
+        vic->badline = false;
+    }
+}
+
 /* update the border flip-flops
    (see 3.9 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
 */
@@ -511,6 +531,7 @@ void _m6567_update_crt(m6567_t* vic) {
 
 uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     _m6567_update_counters(vic);
+    _m6567_update_badline(vic);
     _m6567_update_border(vic);
     _m6567_update_crt(vic);
 
@@ -522,7 +543,12 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         uint32_t c;
         if (vic->hs || vic->vs) {
             /* vertical/horizontal blank */
-            c = 0xFF444444;
+            if (vic->badline) {
+                c = 0xFF4444FF;
+            }
+            else {
+                c = 0xFF444444;
+            }
         }
         else if (vic->main_border) {
             /* border */
