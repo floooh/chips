@@ -188,10 +188,12 @@ typedef struct {
     uint16_t v_dispend;
     uint16_t v_syncpos;
     uint16_t v_syncend;
+    uint16_t border_left, border_right;
+    uint16_t border_top, border_bottom;
     bool hs;            /* true during hsync */
     bool vs;            /* true during vsync */
-    bool h_de;          /* true when in valid hori display area */
-    bool v_de;          /* true when in valid vert display area */
+    bool main_border;   /* main border flip-flop */
+    bool vert_border;   /* vertical border flip flop */
 
     uint16_t crt_retrace_h;     /* hori retrace counter, started with h_sync */
     uint16_t crt_retrace_v;     /* vert retrace counter, started with v_sync */
@@ -288,30 +290,22 @@ void m6567_init(m6567_t* vic, m6567_desc_t* desc) {
     if (vic->type == M6567_TYPE_6569) {
         /* PAL-B */
         vic->h_total = 63;          /* 63 cycles per line */
-        vic->h_disppos = 0;
-        vic->h_dispend = 40;
-        vic->h_syncpos = 45;        /* start of hsync (4,5 chars right border) */
-        vic->h_syncend = 57;        /* left border is 6 characters wide */
+        vic->h_syncpos = 48;        /* start of hsync (4,5 chars right border) */
+        vic->h_syncend = 60;        /* left border is 6 characters wide */
 
         vic->v_total = 312;         /* 312 lines total (PAL) */
         vic->v_syncpos = 300;
         vic->v_syncend = 7;
-        vic->v_disppos = 50;        /* 43 lines top border */
-        vic->v_dispend = 250;       /* 200 lines displayed */
     }
     else {
         /* NTSC */
         vic->h_total = 65;          /* 65 cycles per line */
-        vic->h_disppos = 0;
-        vic->h_dispend = 40;
-        vic->h_syncpos = 46;        /* start of hsync (6 chars right border) */
-        vic->h_syncend = 57;        /* left border is 6 characters wide */
+        vic->h_syncpos = 48;        /* start of hsync (6 chars right border) */
+        vic->h_syncend = 60;        /* left border is 6 characters wide */
 
         vic->v_total = 263;         /* 263 lines total (NTSC) */
         vic->v_syncpos = 13;
         vic->v_syncend = 40;        /* this can't be right? */
-        vic->v_disppos = 60;        /* this is a guess */
-        vic->v_dispend = 260;       /* this is a guess */
     }
 }
 
@@ -320,7 +314,8 @@ void m6567_reset(m6567_t* vic) {
     memset(vic->regs, 0, sizeof(vic->regs));
     vic->h_count = 0; vic->v_count = 0;
     vic->hs = false; vic->vs = false;
-    vic->h_de = false; vic->v_de = false;
+    vic->main_border = false;
+    vic->vert_border = false;
     vic->crt_retrace_h = 0; vic->crt_retrace_v = 0;
     vic->crt_x = 0; vic->crt_y = 0;
     vic->vis_x = 0; vic->vis_y = 0;
@@ -363,14 +358,41 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
         }
         else {
             /* write register, with special cases */
+            const uint8_t data = M6567_GET_DATA(pins) & _m6567_reg_mask[reg_addr];
+            bool write = true;
             switch (reg_addr) {
+                case 0x11:
+                    if (data & (1<<3)) {
+                        /* RSEL 1: 25 rows */
+                        vic->border_top = 51;
+                        vic->border_bottom = 251;
+                    }
+                    else {
+                        /* RSEL 0: 24 rows */
+                        vic->border_top = 55;
+                        vic->border_bottom = 247;
+                    }
+                    break;
+                case 0x16:
+                    if (data & (1<<3)) {
+                        /* CSEL 1: 40 columns */
+                        vic->border_left = 3;
+                        vic->border_right = 43;
+                    }
+                    else {
+                        /* CSEL 0: 38 columns */
+                        vic->border_left = 4;
+                        vic->border_right = 42;
+                    }
+                    break;
                 case 0x1E:
                 case 0x1F:
                     /* mob collision registers cannot be written */
+                    write = false;
                     break;
-                default:
-                    vic->regs[reg_addr] = M6567_GET_DATA(pins) & _m6567_reg_mask[reg_addr];
-                    break;
+            }
+            if (write) {
+                vic->regs[reg_addr] = data;
             }
         }
     }
@@ -384,12 +406,6 @@ void _m6567_update_counters(m6567_t* vic) {
     }
     else {
         vic->h_count++;
-    }
-    if (vic->h_count == vic->h_disppos) {
-        vic->h_de = true;
-    }
-    if (vic->h_count == vic->h_dispend) {
-        vic->h_de = false;
     }
     if (vic->h_count == vic->h_syncpos) {
         vic->hs = true;
@@ -407,18 +423,60 @@ void _m6567_update_counters(m6567_t* vic) {
         else {
             vic->v_count++;
         }
-        if (vic->v_count == vic->v_disppos) {
-            vic->v_de = true;
-        }
-        if (vic->v_count == vic->v_dispend) {
-            vic->v_de = false;
-        }
         if (vic->v_count == vic->v_syncpos) {
             vic->vs = true;
             vic->crt_retrace_v = 3;
         }
         if (vic->v_count == vic->v_syncend) {
             vic->vs = false;
+        }
+    }
+}
+
+/* update the border flip-flops
+   (see 3.9 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
+*/
+void _m6567_update_border(m6567_t* vic) {
+    /* 1. If the X coordinate reaches the right comparison value, the main border
+          flip flop is set.
+    */
+    if (vic->h_count == vic->border_right) {
+        vic->main_border = true;
+    }
+    if (vic->h_count == 0) {
+        /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
+              vertical border flip flop is set.
+        */
+        if (vic->v_count == vic->border_bottom) {
+            vic->vert_border = true;
+        }
+        /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
+              DEN bit in register $d011 is set, the vertical border flip flop is
+              reset.
+        */
+        if ((vic->v_count == vic->border_top) && (vic->ctrl_1 & (1<<4))) {
+            vic->vert_border = false;
+        }
+    }
+    if (vic->h_count == vic->border_left) {
+        /* 4. If the X coordinate reaches the left comparison value and the Y
+              coordinate reaches the bottom one, the vertical border flip flop is set.
+        */
+        if (vic->v_count == vic->border_bottom) {
+            vic->vert_border = true;
+        }
+        /* 5. If the X coordinate reaches the left comparison value and the Y
+              coordinate reaches the top one and the DEN bit in register $d011 is set,
+              the vertical border flip flop is reset.
+        */
+        if ((vic->v_count == vic->border_top) && (vic->ctrl_1 & (1<<4))) {
+            vic->vert_border = false;
+        }
+        /* 6. If the X coordinate reaches the left comparison value and the vertical
+              border flip flop is not set, the main flip flop is reset.
+        */
+        if (!vic->vert_border) {
+            vic->main_border = false;
         }
     }
 }
@@ -453,6 +511,7 @@ void _m6567_update_crt(m6567_t* vic) {
 
 uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     _m6567_update_counters(vic);
+    _m6567_update_border(vic);
     _m6567_update_crt(vic);
 
     /* decode pixels for current tick */
@@ -465,13 +524,13 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             /* vertical/horizontal blank */
             c = 0xFF444444;
         }
-        else if (vic->h_de && vic->v_de) {
-            /* display area */
-            c = _m6567_colors[vic->background_color[0] & 0xF];
-        }
-        else {
+        else if (vic->main_border) {
             /* border */
             c = _m6567_colors[vic->border_color & 0xF];
+        }
+        else {
+            /* display area */
+            c = _m6567_colors[vic->background_color[0] & 0xF];
         }
         for (int i = 0; i < 8; i++) {
             *dst++ = c;
