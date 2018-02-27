@@ -109,6 +109,7 @@ extern "C" {
 #define M6522_RS1   (1ULL<<1)
 #define M6522_RS2   (1ULL<<2)
 #define M6522_RS3   (1ULL<<3)
+#define M6522_RS    (M6522_RS3|M6522_RS2|M6522_RS1|M6522_RS0)
 
 /* data bus pins shared with CPU */
 #define M6522_D0    (1ULL<<16)
@@ -450,7 +451,7 @@ static uint8_t _m6522_read(m6522_t* m6522, uint8_t addr) {
 
 uint64_t m6522_iorq(m6522_t* m6522, uint64_t pins) {
     if ((pins & (M6522_CS1|M6522_CS2)) == M6522_CS1) {
-        uint8_t addr = pins & (M6522_RS0|M6522_RS1|M6522_RS2|M6522_RS3);
+        uint8_t addr = pins & M6522_RS;
         if (pins & M6522_RW) {
             /* a read operation */
             uint8_t data = _m6522_read(m6522, addr);
@@ -458,8 +459,8 @@ uint64_t m6522_iorq(m6522_t* m6522, uint64_t pins) {
         }
         else {
             /* a write operation */
-            uint8_t val = M6522_GET_DATA(pins);
-            _m6522_write(m6522, addr, val);
+            uint8_t data = M6522_GET_DATA(pins);
+            _m6522_write(m6522, addr, data);
         }
     }
     return pins;
