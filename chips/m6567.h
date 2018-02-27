@@ -214,6 +214,7 @@ typedef struct {
     uint16_t vis_w, vis_h;      /* width of visible area */
 
     uint16_t line_buffer[64];   /* 40x 8+4 bits line buffer (64 items because vmli is a 6-bit ctr) */
+    uint8_t g_byte;             /* the last read byte with a g-access */
 
     m6567_fetch_t fetch_cb;
     uint32_t* rgba8_buffer;
@@ -394,13 +395,13 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                 case 0x16:
                     if (data & (1<<3)) {
                         /* CSEL 1: 40 columns */
-                        vic->border_left = 16;
-                        vic->border_right = 56;
+                        vic->border_left = 15;
+                        vic->border_right = 55;
                     }
                     else {
                         /* CSEL 0: 38 columns */
-                        vic->border_left = 17;
-                        vic->border_right = 55;
+                        vic->border_left = 16;
+                        vic->border_right = 54;
                     }
                     break;
                 case 0x1E:
@@ -601,13 +602,16 @@ void _m6567_update_counters(m6567_t* vic) {
 */
 void _m6567_fetch(m6567_t* vic) {
     if (vic->c_access) {
+        /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
         uint16_t addr = ((vic->mem_ptrs & 0xF0)<<6) | (vic->vc & 0x3FF);
         vic->line_buffer[vic->vmli] = vic->fetch_cb(addr);
     }
     if (vic->g_access) {
-        // FIXME: the mem access!
-        vic->vc = (vic->vc + 1) & 0x3FF;        /* VS is a 10-bit counter */
-        vic->vmli = (vic->vmli + 1) & 0x3F;     /* VMLI is a 6-bit counter */
+        /* addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
+        uint16_t addr = ((vic->mem_ptrs & 0x0E) << 10) |
+                        ((vic->line_buffer[vic->vmli] & 0xFF) << 3) |
+                        (vic->rc & 7);
+        vic->g_byte = vic->fetch_cb(addr);
     }
 }
 
@@ -639,15 +643,8 @@ void _m6567_update_crt(m6567_t* vic) {
     }
 }
 
-uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
-    _m6567_update_raster_counters(vic);
-    _m6567_update_badline(vic);
-    _m6567_update_display_idle(vic);
-    _m6567_update_counters(vic);
-    _m6567_fetch(vic);
-    _m6567_update_border(vic);
-    _m6567_update_crt(vic);
-
+/* decode the next 8 pixels */
+void _m6567_decode_pixels(m6567_t* vic) {
     /* decode pixels for current tick */
     if (vic->vis_enabled) {
         int dst_x = vic->vis_x * 8;
@@ -662,18 +659,48 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             else {
                 c = 0xFF444444;
             }
+            for (int i = 0; i < 8; i++) {
+                *dst++ = c;
+            }
         }
         else if (vic->main_border) {
             /* border */
             c = _m6567_colors[vic->border_color & 0xF];
+            for (int i = 0; i < 8; i++) {
+                *dst++ = c;
+            }
         }
         else {
             /* display area */
-            c = _m6567_colors[vic->background_color[0] & 0xF];
+            uint32_t fg = _m6567_colors[(vic->line_buffer[vic->vmli]>>8)&0xF];
+            uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
+            uint8_t mask = vic->g_byte;
+            dst[0] = mask & 0x80 ? fg : bg;
+            dst[1] = mask & 0x40 ? fg : bg;
+            dst[2] = mask & 0x20 ? fg : bg;
+            dst[3] = mask & 0x10 ? fg : bg;
+            dst[4] = mask & 0x08 ? fg : bg;
+            dst[5] = mask & 0x04 ? fg : bg;
+            dst[6] = mask & 0x02 ? fg : bg;
+            dst[7] = mask & 0x01 ? fg : bg;
         }
-        for (int i = 0; i < 8; i++) {
-            *dst++ = c;
-        }
+    }
+}
+
+uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
+    _m6567_update_raster_counters(vic);
+    _m6567_update_badline(vic);
+    _m6567_update_display_idle(vic);
+    _m6567_update_counters(vic);
+    _m6567_fetch(vic);
+    _m6567_update_border(vic);
+    _m6567_update_crt(vic);
+    _m6567_decode_pixels(vic);
+
+    /* bump the VC and vmli counters */
+    if (vic->g_access) {
+        vic->vc = (vic->vc + 1) & 0x3FF;        /* VS is a 10-bit counter */
+        vic->vmli = (vic->vmli + 1) & 0x3F;     /* VMLI is a 6-bit counter */
     }
 
     /* set CPU pins */
