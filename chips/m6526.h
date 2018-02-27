@@ -43,6 +43,11 @@
     - time of day clock
     - serial port
     - no external counter trigger via CNT pin
+    - there are various "delay-pipelines" in the chip for counters and
+      interrupts, these are currently not implemented!
+
+    ## LINKS:
+    - https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
 
     TODO: Documentation
     
@@ -209,13 +214,15 @@ typedef void (*m6526_out_t)(int port_id, uint8_t data);
 
 /* m6526 state */
 typedef struct {
-    uint8_t out_a, in_a, ddr_a;
-    uint8_t out_b, in_b, ddr_b;
+    uint8_t pra, ddra, pa, pa_in;
+    uint8_t prb, ddrb, pb, pb_in;
     uint16_t ta_latch, tb_latch;
     uint16_t ta_counter, tb_counter;
-    uint8_t icr, cra, crb;
-    bool ta_active, tb_active;
-    bool ta_pb6, tb_pb7;
+    uint8_t cra, crb;
+    uint8_t icr_mask, icr_data;
+    uint8_t ta_bit, tb_bit;     /* toggles when counter reaches 0 */
+    uint8_t ta_nul, tb_nul;     /* set to 1 for 1 tick when counter reaches 0 */
+    bool irq;
     m6526_in_t in_cb;
     m6526_out_t out_cb;
 } m6526_t;
@@ -250,32 +257,233 @@ extern uint64_t m6526_tick(m6526_t* c, uint64_t pins);
 #endif
 
 void m6526_init(m6526_t* c, m6526_in_t in_cb, m6526_out_t out_cb) {
-    CHIPS_ASSERT(c);
+    CHIPS_ASSERT(c && in_cb && out_cb);
     memset(c, 0, sizeof(*c));
     c->in_cb = in_cb;
     c->out_cb = out_cb;
     c->ta_latch = 0xFFFF;
     c->tb_latch = 0xFFFF;
+    c->pa = c->pb = 0xFF;
 }
 
 void m6526_reset(m6526_t* c) {
     CHIPS_ASSERT(c);
-    c->out_a = c->in_a = c->ddr_a = 0;
-    c->out_b = c->in_b = c->ddr_b = 0;
+    c->pra = c->ddra = c->pa_in = 0; c->pa = 0xFF;
+    c->prb = c->ddrb = c->pb_in = 0; c->pb = 0xFF;
     c->ta_latch = c->tb_latch = 0xFFFF;
     c->ta_counter = c->tb_counter = 0;
-    c->icr = c->cra = c->crb = 0;
-    c->ta_active = c->tb_active = false;
-    c->ta_pb6 = c->tb_pb7 = false;
+    c->cra = c->crb = 0;
+    c->icr_mask = c->icr_data = 0;
+    c->irq = false;
+    c->ta_bit = c->tb_bit = 0;
+    c->ta_nul = c->tb_nul = 0;
 }
 
-static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
+static void _m6526_out_a(m6526_t* c) {
+    uint8_t data = c->pra | (c->pa_in & ~c->ddra);
+    if (data != c->pa) {
+        c->pa = data;
+        c->out_cb(M6526_PORT_A, data);
+    }
+}
 
-    return 0xFF;
+static void _m6526_out_b(m6526_t* c) {
+    uint8_t data = c->prb | (c->pb_in & ~c->ddrb);
+    if ((c->cra & M6526_CRA_PBON) == M6526_CRA_PBON_PB6ON) {
+        uint8_t pb6 = (c->cra & M6526_CRA_OUTMODE) ? c->ta_bit : c->ta_nul;
+        data = (data & ~(1<<6)) | (pb6<<6);
+    }
+    if ((c->crb & M6526_CRB_PBON) == M6526_CRB_PBON_PB7ON) {
+        uint8_t pb7 = (c->crb & M6526_CRB_OUTMODE) ? c->tb_bit : c->tb_nul;
+        data = (data & ~(1<<7)) | (pb7<<7);
+    }
+    if (data != c->pb) {
+        c->pb = data;
+        c->out_cb(M6526_PORT_B, data);
+    }
+}
+
+static uint8_t _m6526_in_a(m6526_t* c) {
+    uint8_t data;
+    if (c->ddra != 0xFF) {
+        data = (c->in_cb(M6526_PORT_A) & ~c->ddra) | (c->pra & c->ddra);
+    }
+    else {
+        data = c->in_cb(M6526_PORT_A) & c->pra;
+    }
+    c->pa_in = data;
+    return data;
+}
+
+static uint8_t _m6526_in_b(m6526_t* c) {
+    uint8_t data;
+    if (c->ddrb != 0xFF) {
+        data = (c->in_cb(M6526_PORT_B) & ~c->ddrb) | (c->prb & c->ddrb);
+    }
+    else {
+        data = c->in_cb(M6526_PORT_B) & c->prb;
+    }
+    c->pb_in = data;
+    if ((c->cra & M6526_CRA_PBON) == M6526_CRA_PBON_PB6ON) {
+        uint8_t pb6 = (c->cra & M6526_CRA_OUTMODE) ? c->ta_bit : c->ta_nul;
+        data = (data & ~(1<<6)) | (pb6<<6);
+    }
+    if ((c->crb & M6526_CRB_PBON) == M6526_CRB_PBON_PB7ON) {
+        uint8_t pb7 = (c->crb & M6526_CRB_OUTMODE) ? c->tb_bit : c->tb_nul;
+        data = (data & ~(1<<7)) | (pb7<<7);
+    }
+    return data;
+}
+
+static void _m6526_set_cra(m6526_t* c, uint8_t data) {
+    /* triggering the timer state bit is not mentioned in the data sheet,
+       but MAME does this
+       FIXME: 2 clock cycle delay until timer starts
+    */
+    if (((c->cra & M6526_CRA_START) == 0) && (data & M6526_CRA_START)) {
+        c->ta_bit = 1;
+    }
+    if (data & M6526_CRA_FORCE_LOAD) {
+        c->ta_counter = c->ta_latch;
+        data &= ~M6526_CRA_FORCE_LOAD;
+    }
+    c->cra = data;
+    _m6526_out_b(c);
+}
+
+static void _m6526_set_crb(m6526_t* c, uint8_t data) {
+    /* FIXME: 2 clock cycle delay until timer starts */
+    if (((c->crb & M6526_CRB_START) == 0) && (data & M6526_CRB_START)) {
+        c->tb_bit = 1;
+    }
+    if (data & M6526_CRB_FORCE_LOAD) {
+        c->tb_counter = c->tb_latch;
+        data &= ~M6526_CRB_FORCE_LOAD;
+    }
+    c->crb = data;
+    _m6526_out_b(c);
 }
 
 static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
+    switch (addr) {
+        case M6526_REG_PRA:
+            c->pra = data;
+            _m6526_out_a(c);
+            break;
+        case M6526_REG_PRB:
+            c->prb = data;
+            _m6526_out_b(c);
+            break;
+        case M6526_REG_DDRA:
+            c->ddra = data;
+            _m6526_out_a(c);
+            break;
+        case M6526_REG_DDRB:
+            c->ddrb = data;
+            _m6526_out_b(c);
+            break;
+        case M6526_REG_TALO:
+            c->ta_latch   = (c->ta_latch & 0xFF00) | data;
+            /* if timer is not running, update counter as well */
+            if ((c->cra & M6526_CRA_START) == 0) {
+                c->ta_counter = (c->ta_counter & 0xFF00) | data;
+            }
+            break;
+        case M6526_REG_TAHI:
+            c->ta_latch   = (c->ta_latch & 0xFF) | (data<<8);
+            /* if timer is not running, update counter as well */
+            if ((c->cra & M6526_CRA_START) == 0) {
+                c->ta_counter = (c->ta_counter & 0xFF) | (data<<8);
+            }
+            /* in oneshot mode, start timer (this is not mentioned in the
+               datasheet, but MAME seems to do this?
+            */
+            if ((c->cra & M6526_CRA_RUNMODE) == M6526_CRA_RUNMODE_ONESHOT) {
+                c->ta_counter = c->ta_latch;
+                _m6526_set_cra(c, c->cra|M6526_CRA_START);
+            }
+            break;
+        case M6526_REG_TBLO:
+            c->tb_latch = (c->tb_latch & 0xFF00) | data;
+            /* if timer is not running, update counter as well */
+            if ((c->crb & M6526_CRB_START) == 0) {
+                c->tb_counter = (c->tb_counter & 0xFF00) | data;
+            }
+            break;
+        case M6526_REG_TBHI:
+            c->tb_latch = (c->tb_latch & 0xFF) | (data<<8);
+            /* if timer is not running, update counter as well */
+            if ((c->crb & M6526_CRB_START) == 0) {
+                c->tb_counter = (c->tb_counter & 0xFF) | (data<<8);
+            }
+            /* in oneshot mode, start timer (this is not mentioned in the
+               datasheet, but MAME seems to do this?
+            */
+            if ((c->crb & M6526_CRB_RUNMODE) == M6526_CRB_RUNMODE_ONESHOT) {
+                c->tb_counter = c->tb_latch;
+                _m6526_set_crb(c, c->crb|M6526_CRB_START);
+            }
+            break;
+        case M6526_REG_ICR:
+            /* bit 7 is set/clear */
+            if (data & (1<<7)) {
+                /* set interrupt control mask bits */
+                c->icr_mask |= data;
+            }
+            else {
+                /* clear interrupt control mask bits */
+                c->icr_mask &= ~data;
+            }
+            break;
+        case M6526_REG_CRA:
+            _m6526_set_cra(c, data);
+            break;
+        case M6526_REG_CRB:
+            _m6526_set_crb(c, data);
+            break;
+    }
+}
 
+static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
+    uint8_t data = 0xFF;
+    switch (addr) {
+        case M6526_REG_PRA:
+            data = _m6526_in_a(c);
+            break;
+        case M6526_REG_PRB:
+            data = _m6526_in_b(c);
+            break;
+        case M6526_REG_DDRA:
+            data = c->ddra;
+            break;
+        case M6526_REG_DDRB:
+            data = c->ddrb;
+            break;
+        case M6526_REG_TALO:
+            data = c->ta_counter & 0xFF;
+            break;
+        case M6526_REG_TAHI:
+            data = c->ta_counter >> 8;
+            break;
+        case M6526_REG_TBLO:
+            data = c->tb_counter & 0xFF;
+            break;
+        case M6526_REG_TBHI:
+            data = c->tb_counter >> 8;
+            break;
+        case M6526_REG_ICR:
+            data = c->icr_data;
+            c->irq = false;
+            c->icr_data = 0;
+            break;
+        case M6526_REG_CRA:
+            data = c->cra;
+            break;
+        case M6526_REG_CRB:
+            data = c->crb;
+            break;
+    }
+    return data;
 }
 
 uint64_t m6526_iorq(m6526_t* c, uint64_t pins) {
@@ -295,6 +503,10 @@ uint64_t m6526_iorq(m6526_t* c, uint64_t pins) {
     return pins;
 }
 
+uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
+    // FIXME!
+    return pins;
+}
 
 #endif /* CHIPS_IMPL */
 
