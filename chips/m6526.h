@@ -268,8 +268,8 @@ void m6526_init(m6526_t* c, m6526_in_t in_cb, m6526_out_t out_cb) {
 
 void m6526_reset(m6526_t* c) {
     CHIPS_ASSERT(c);
-    c->pra = c->ddra = c->pa_in = 0; c->pa = 0xFF;
-    c->prb = c->ddrb = c->pb_in = 0; c->pb = 0xFF;
+    c->pra = c->ddra = c->pa_in = 0;
+    c->prb = c->ddrb = c->pb_in = 0;
     c->ta_latch = c->tb_latch = 0xFFFF;
     c->ta_counter = c->tb_counter = 0;
     c->cra = c->crb = 0;
@@ -281,10 +281,7 @@ void m6526_reset(m6526_t* c) {
 
 static void _m6526_out_a(m6526_t* c) {
     uint8_t data = c->pra | (c->pa_in & ~c->ddra);
-    if (data != c->pa) {
-        c->pa = data;
-        c->out_cb(M6526_PORT_A, data);
-    }
+    c->out_cb(M6526_PORT_A, data);
 }
 
 static void _m6526_out_b(m6526_t* c) {
@@ -297,32 +294,23 @@ static void _m6526_out_b(m6526_t* c) {
         uint8_t pb7 = (c->crb & M6526_CRB_OUTMODE) ? c->tb_bit : c->tb_nul;
         data = (data & ~(1<<7)) | (pb7<<7);
     }
-    if (data != c->pb) {
-        c->pb = data;
-        c->out_cb(M6526_PORT_B, data);
-    }
+    c->out_cb(M6526_PORT_B, data);
 }
 
 static uint8_t _m6526_in_a(m6526_t* c) {
-    uint8_t data;
-    if (c->ddra != 0xFF) {
-        data = (c->in_cb(M6526_PORT_A) & ~c->ddra) | (c->pra & c->ddra);
-    }
-    else {
-        data = c->in_cb(M6526_PORT_A) & c->pra;
-    }
+    /* FIXME: datasheet says "On a READ, the PR reflects the information present
+       on the actual port pins (PA0-PA7, PB0-PB7) for both input and output bits.
+    */
+    /* FIXME: MAME has a special case when ddra is 0xFF, but this is not
+       mentioned in the datasheet?
+    */
+    uint8_t data = (c->in_cb(M6526_PORT_A) & ~c->ddra) | (c->pra & c->ddra);
     c->pa_in = data;
     return data;
 }
 
 static uint8_t _m6526_in_b(m6526_t* c) {
-    uint8_t data;
-    if (c->ddrb != 0xFF) {
-        data = (c->in_cb(M6526_PORT_B) & ~c->ddrb) | (c->prb & c->ddrb);
-    }
-    else {
-        data = c->in_cb(M6526_PORT_B) & c->prb;
-    }
+    uint8_t data = (c->in_cb(M6526_PORT_B) & ~c->ddrb) | (c->prb & c->ddrb);
     c->pb_in = data;
     if ((c->cra & M6526_CRA_PBON) == M6526_CRA_PBON_PB6ON) {
         uint8_t pb6 = (c->cra & M6526_CRA_OUTMODE) ? c->ta_bit : c->ta_nul;
@@ -336,7 +324,7 @@ static uint8_t _m6526_in_b(m6526_t* c) {
 }
 
 static void _m6526_set_cra(m6526_t* c, uint8_t data) {
-    /* triggering the timer state bit is not mentioned in the data sheet,
+    /* setting the timer state bit is not mentioned in the data sheet,
        but MAME does this
        FIXME: 2 clock cycle delay until timer starts
     */
