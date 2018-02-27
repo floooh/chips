@@ -419,7 +419,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
 }
 
 /* handle horizontal counter and vertical counters */
-void _m6567_update_raster_counters(m6567_t* vic) {
+static void _m6567_update_raster_counters(m6567_t* vic) {
     if (vic->h_count == vic->h_total) {
         vic->h_count = 0;
         /* FIXME: only if raster interrupt enabled!
@@ -459,7 +459,7 @@ void _m6567_update_raster_counters(m6567_t* vic) {
 /* update the badline state
    (see 3.5 http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
 */
-void _m6567_update_badline(m6567_t* vic) {
+static void _m6567_update_badline(m6567_t* vic) {
     if ((vic->v_count >= 0x30) && (vic->v_count <= 0xF7)) {
         /* DEN bit must have been set in raster line 30 */
         if ((vic->v_count == 0x30) && (vic->ctrl_1 & (1<<4))) {
@@ -479,7 +479,7 @@ void _m6567_update_badline(m6567_t* vic) {
 /* update the display/idle state
    (see 3.7.1 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
 */
-void _m6567_update_display_idle(m6567_t* vic) {
+static void _m6567_update_display_idle(m6567_t* vic) {
     if (vic->badline) {
         vic->display_state = true;
     }
@@ -491,7 +491,7 @@ void _m6567_update_display_idle(m6567_t* vic) {
 /* update the border flip-flops
    (see 3.9 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
 */
-void _m6567_update_border(m6567_t* vic) {
+static void _m6567_update_border(m6567_t* vic) {
     /* 1. If the X coordinate reaches the right comparison value, the main border
           flip flop is set.
     */
@@ -540,7 +540,7 @@ void _m6567_update_border(m6567_t* vic) {
    and decide what memory accessed are necessary
    (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
 */
-void _m6567_update_counters(m6567_t* vic) {
+static void _m6567_update_counters(m6567_t* vic) {
     /* 1. Once somewhere outside of the range of raster lines $30-$f7 (i.e.
         outside of the Bad Line range), VCBASE is reset to zero. This is
         presumably done in raster line 0, the exact moment cannot be determined
@@ -600,7 +600,7 @@ void _m6567_update_counters(m6567_t* vic) {
     perform the requested memory fetch operations
     (see 3.6.3. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
 */
-void _m6567_fetch(m6567_t* vic) {
+static void _m6567_fetch(m6567_t* vic) {
     if (vic->c_access) {
         /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
         uint16_t addr = ((vic->mem_ptrs & 0xF0)<<6) | (vic->vc & 0x3FF);
@@ -616,7 +616,7 @@ void _m6567_fetch(m6567_t* vic) {
 }
 
 /* handle CRT beam position update */
-void _m6567_update_crt(m6567_t* vic) {
+static void _m6567_update_crt(m6567_t* vic) {
     /* update current beam pos */
     vic->crt_x++;
     if (vic->crt_retrace_h > 0) {
@@ -644,7 +644,7 @@ void _m6567_update_crt(m6567_t* vic) {
 }
 
 /* decode the next 8 pixels */
-void _m6567_decode_pixels(m6567_t* vic) {
+static void _m6567_decode_pixels(m6567_t* vic) {
     /* decode pixels for current tick */
     if (vic->vis_enabled) {
         int dst_x = vic->vis_x * 8;
