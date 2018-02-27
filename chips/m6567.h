@@ -122,7 +122,7 @@ extern "C" {
 #define M6567_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
 /* memory fetch callback, used to feed pixel- and color-data into the m6567 */
-typedef uint64_t (*m6567_fetch_t)(uint64_t pins);
+typedef uint16_t (*m6567_fetch_t)(uint16_t addr);
 
 /* chip subtypes */
 typedef enum {
@@ -596,12 +596,13 @@ void _m6567_update_counters(m6567_t* vic) {
 }
 
 /*
-    perform memory accesses
+    perform the requested memory fetch operations
     (see 3.6.3. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
 */
-void _m6567_memory_access(m6567_t* vic) {
+void _m6567_fetch(m6567_t* vic) {
     if (vic->c_access) {
-        // FIXME: the mem access!
+        uint16_t addr = ((vic->mem_ptrs & 0xF0)<<6) | (vic->vc & 0x3FF);
+        vic->line_buffer[vic->vmli] = vic->fetch_cb(addr);
     }
     if (vic->g_access) {
         // FIXME: the mem access!
@@ -643,7 +644,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     _m6567_update_badline(vic);
     _m6567_update_display_idle(vic);
     _m6567_update_counters(vic);
-    _m6567_memory_access(vic);
+    _m6567_fetch(vic);
     _m6567_update_border(vic);
     _m6567_update_crt(vic);
 
