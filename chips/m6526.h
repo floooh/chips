@@ -315,15 +315,6 @@ static void _m6526_timer_tick(m6526_timer_t* t) {
         t->t_bit = !t->t_bit;
     }
 
-    /* push timer-active state into counter-pipeline
-       FIXME: CNT pin counting not implemented
-    */
-    /*
-    bool timer_active_now = !_m6526_ta_inmode_count(c->ta.cr);
-    timer_active_now &= _m6526_timer_start(c->ta.cr);
-    _m6526_pip_set(&c->ta.pip_count, 2, timer_active_now);
-    */
-
     /* push one-shot state into the oneshot-pipeline */
     bool oneshot_active_now = _m6526_runmode_oneshot(t->cr);
     _m6526_pip_set(&t->pip_oneshot, 1, oneshot_active_now);
@@ -431,23 +422,21 @@ static uint8_t _m6526_read_pb(m6526_t* c) {
     return data;
 }
 
-static void _m6526_write_cra(m6526_t* c, uint8_t data) {
+static void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
     /* bit 4 (force load) isn't stored, so we need to handle this here right away,
        there's a 1 cycle delay for force-load
     */
     bool force_load = data & (1<<4);
-    _m6526_pip_set(&c->ta.pip_load, 1, force_load);
+    _m6526_pip_set(&t->pip_load, 1, force_load);
+
+    /* if the start bit goes from 0 to 1, set the current toggle-bit-state to 1 */
+    if (!_m6526_timer_start(t->cr) && _m6526_timer_start(data)) {
+        t->t_bit = true;
+    }
 
     /* bit 4 (force load) isn't stored */
-    c->ta.cr = data & ~(1<<4);
+    t->cr = data & ~(1<<4);
     /* state of port B output might be changed because of PB6/PB7 */
-    _m6526_write_pb(c, c->pb.reg);
-}
-
-static void _m6526_write_crb(m6526_t* c, uint8_t data) {
-    bool force_load = data & (1<<5);
-    _m6526_pip_set(&c->tb.pip_load, 1, force_load);
-    c->ta.cr = data & (1<<4);
     _m6526_write_pb(c, c->pb.reg);
 }
 
@@ -480,10 +469,10 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             c->tb.latch = (c->tb.latch & 0x00FF) | (data<<8);
             break;
         case M6526_REG_CRA:
-            _m6526_write_cra(c, data);
+            _m6526_write_cr(c, &c->ta, data);
             break;
         case M6526_REG_CRB:
-            _m6526_write_crb(c, data);
+            _m6526_write_cr(c, &c->tb, data);
             break;
     }
 }
