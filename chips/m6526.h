@@ -329,12 +329,14 @@ static void _m6526_timer_tick(m6526_timer_t* t) {
     _m6526_pip_set(&t->pip_oneshot, 1, oneshot_active_now);
 
     /* clear start flag if oneshot and 0 reached */
-    if (t->t_out && (oneshot_active_now || _m6526_pip_pop(&t->pip_oneshot))) {
+    bool oneshot_active_pip = _m6526_pip_pop(&t->pip_oneshot);
+    if (t->t_out && (oneshot_active_now || oneshot_active_pip)) {
         t->cr &= ~(1<<0);
     }
 
     /* reload from latch? */
-    if (t->t_out || _m6526_pip_pop(&t->pip_load)) {
+    bool load_active_pip = _m6526_pip_pop(&t->pip_load);
+    if (t->t_out || load_active_pip) {
         t->counter = t->latch;
         _m6526_pip_set(&t->pip_count, 2, false);
     }
@@ -345,7 +347,7 @@ static void _m6526_tick_ta(m6526_t* c) {
        FIXME: CNT pin counting is not implemented
     */
     bool timer_active_now = !_m6526_ta_inmode_count(c->ta.cr);
-    timer_active_now |= _m6526_timer_start(c->ta.cr);
+    timer_active_now &= _m6526_timer_start(c->ta.cr);
     _m6526_pip_set(&c->ta.pip_count, 2, timer_active_now);
     _m6526_timer_tick(&c->ta);
 }
@@ -355,10 +357,10 @@ static void _m6526_tick_tb(m6526_t* c) {
        FIXME: CNT pin counting not implemented
        FIXME: underflow from time A not yet implemented!
     */
-    bool timer_active_now = !_m6526_ta_inmode_count(c->ta.cr);
-    timer_active_now |= _m6526_timer_start(c->ta.cr);
-    _m6526_pip_set(&c->ta.pip_count, 2, timer_active_now);
-    _m6526_timer_tick(&c->ta);
+    bool timer_active_now = !_m6526_ta_inmode_count(c->tb.cr);
+    timer_active_now &= _m6526_timer_start(c->tb.cr);
+    _m6526_pip_set(&c->tb.pip_count, 2, timer_active_now);
+    _m6526_timer_tick(&c->tb);
 }
 
 /*--- port implementation ---*/
