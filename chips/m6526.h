@@ -99,7 +99,7 @@ extern "C" {
 
 /* control pins shared with CPU */
 #define M6526_RW    (1ULL<<24)      /* same as M6502_RW */
-#define M6522_IRQ   (1ULL<<26)      /* same as M6502_IRQ */
+#define M6526_IRQ   (1ULL<<26)      /* same as M6502_IRQ */
 
 /* chip-specific control pins */
 #define M6526_CS    (1ULL<<40)
@@ -172,14 +172,21 @@ typedef struct {
     uint8_t pip_load;       /* 1-cycle delay pipeline, output is 'force load' */
 } m6526_timer_t;
 
+/* interrupt state */
+typedef struct {
+    uint8_t imr;        /* interrupt mask */
+    uint8_t icr;        /* interrupt control */
+    uint8_t pip_irq;    /* 1-cycle delay pipeline to request irq */
+    bool irq;           /* true if interrupt request is active */
+} m6526_int_t;
+
 /* m6526 state */
 typedef struct {
     m6526_port_t pa;
     m6526_port_t pb;
     m6526_timer_t ta;
     m6526_timer_t tb;
-    uint8_t icr_mask, icr_data;
-    bool irq;
+    m6526_int_t intr;
     m6526_in_t in_cb;
     m6526_out_t out_cb;
 } m6526_t;
@@ -197,8 +204,8 @@ extern void m6526_init(m6526_t* c, m6526_in_t in_cb, m6526_out_t out_cb);
 extern void m6526_reset(m6526_t* c);
 /* perform an IO request */
 extern uint64_t m6526_iorq(m6526_t* c, uint64_t pins);
-/* tick the m6526_t instance, this may trigger the IRQ pin */
-extern uint64_t m6526_tick(m6526_t* c, uint64_t pins);
+/* tick the m6526_t instance, return true if interrupt requested */
+extern bool m6526_tick(m6526_t* c);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -230,6 +237,13 @@ static void _m6526_init_timer(m6526_timer_t* t) {
     t->pip_load = 0;
 }
 
+static void _m6526_init_interrupt(m6526_int_t* intr) {
+    intr->imr = 0;
+    intr->icr = 0;
+    intr->pip_irq = 0;
+    intr->irq = false;
+}
+
 void m6526_init(m6526_t* c, m6526_in_t in_cb, m6526_out_t out_cb) {
     CHIPS_ASSERT(c && in_cb && out_cb);
     memset(c, 0, sizeof(*c));
@@ -239,6 +253,7 @@ void m6526_init(m6526_t* c, m6526_in_t in_cb, m6526_out_t out_cb) {
     _m6526_init_port(&c->pb);
     _m6526_init_timer(&c->ta);
     _m6526_init_timer(&c->tb);
+    _m6526_init_interrupt(&c->intr);
     c->ta.latch = 0xFFFF;
     c->tb.latch = 0xFFFF;
 }
@@ -249,8 +264,7 @@ void m6526_reset(m6526_t* c) {
     _m6526_init_port(&c->pb);
     _m6526_init_timer(&c->ta);
     _m6526_init_timer(&c->tb);
-    c->icr_mask = c->icr_data = 0;
-    c->irq = false;
+    _m6526_init_interrupt(&c->intr);
 }
 
 /*--- control-register utility functions */
@@ -352,6 +366,60 @@ static void _m6526_tick_tb(m6526_t* c) {
     timer_active_now &= _m6526_timer_start(c->tb.cr);
     _m6526_pip_set(&c->tb.pip_count, 2, timer_active_now);
     _m6526_timer_tick(&c->tb);
+}
+
+/*--- interrupt implementation ---*/
+static void _m6526_write_icr(m6526_t* c, uint8_t data) {
+    /* from datasheet: When writing to the MASK register, if bit 7 (SET/CLEAR)
+       of data written is a ZERO, any mask bit written with a on will be cleared,
+       while those mask bits written with a zero will be unaffected. If bit 7
+       of the data written is a ONE, any mask bit written with a one will be set,
+       while those mask bits written with a zero will be unaffected.
+    */
+    if (data & (1<<7)) {
+        c->intr.imr |= (data & 0x7F);
+    }
+    else {
+        c->intr.imr &= (~data) & 0x7F;
+    }
+}
+
+static uint8_t _m6526_read_icr(m6526_t* c) {
+    /* the icr register is cleared after reading, this will also cause the
+       IRQ line to go inactive, also the irq 1-cycle-delay pipeline is
+       set to cleared state.
+       see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
+    */
+    uint8_t data = c->intr.icr;
+    c->intr.icr = 0;
+    c->intr.irq = false;
+    /* cancel an interrupt pending in the pipeline */
+    _m6526_pip_set(&c->intr.pip_irq, 0, false);
+    return data;
+}
+
+static void _m6526_update_irq(m6526_t* c) {
+    /* see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html */
+
+    /* timer A underflow interrupt? */
+    if (c->ta.t_out) {
+        c->intr.icr |= (1<<0);
+    }
+    /* timer B underflow interrupt flag? */
+    if (c->tb.t_out) {
+        c->intr.icr |= (1<<1);
+    }
+    /* FIXME: ALARM, SP, FLG interrupt conditions */
+
+    /* feed the interrupt-request state into the 1-cycle-delay irq-pipeline */
+    bool irq = 0 != ((c->intr.imr & c->intr.icr) & 3);
+    _m6526_pip_set(&c->intr.pip_irq, 1, irq);
+
+    /* pop delayed irq state from pipeline */
+    if (_m6526_pip_pop(&c->intr.pip_irq)) {
+        c->intr.icr |= (1<<7);
+        c->intr.irq = true;
+    }
 }
 
 /*--- port implementation ---*/
@@ -468,6 +536,9 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
         case M6526_REG_TBHI:
             c->tb.latch = (c->tb.latch & 0x00FF) | (data<<8);
             break;
+        case M6526_REG_ICR:
+            _m6526_write_icr(c, data);
+            break;
         case M6526_REG_CRA:
             _m6526_write_cr(c, &c->ta, data);
             break;
@@ -504,6 +575,9 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
         case M6526_REG_TBHI:
             data = c->tb.counter >> 8;
             break;
+        case M6526_REG_ICR:
+            data = _m6526_read_icr(c);
+            break;
         case M6526_REG_CRA:
             data = c->ta.cr;
             break;
@@ -531,11 +605,11 @@ uint64_t m6526_iorq(m6526_t* c, uint64_t pins) {
     return pins;
 }
 
-uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
+bool m6526_tick(m6526_t* c) {
     _m6526_tick_ta(c);
     _m6526_tick_tb(c);
-    // FIXME: interrupt!
-    return pins;
+    _m6526_update_irq(c);
+    return c->intr.irq;
 }
 
 #endif /* CHIPS_IMPL */
