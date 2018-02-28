@@ -226,8 +226,8 @@ def write_header():
 def write_interrupt_handling():
     l('    /* check for interrupt request */')
     l('    if ((pins & M6502_NMI) || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {')
-    l('      /* execute a slightly modified BRK instruction */')
-    l('      _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);')
+    l('      /* execute a slightly modified BRK instruction, do NOT increment PC! */')
+    l('      _SA(c.PC);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);')
     l('      _SA(c.PC); _RD();')
     l('      _SAD(0x0100|c.S--, c.PC>>8); _WR();')
     l('      _SAD(0x0100|c.S--, c.PC); _WR();')
@@ -242,8 +242,8 @@ def write_interrupt_handling():
     l('      }')
     l('      c.PC = (h<<8)|l;')
     l('      c.P |= M6502_IF;')
-    l('      pins &= ~(M6502_IRQ|M6502_NMI);')
     l('    }')
+    l('    pins &= ~(M6502_IRQ|M6502_NMI);')
 
 #-------------------------------------------------------------------------------
 def write_footer():
