@@ -138,8 +138,8 @@ typedef struct {
     uint32_t* rgba8_buffer;
     /* size of the RGBA framebuffer (must be at least 418x284) */
     uint32_t rgba8_buffer_size;
-    /* visible CRT area blitted to rgba8_buffer */
-    uint16_t vis_x0, vis_y0, vis_w, vis_h;
+    /* visible CRT area blitted to rgba8_buffer (in pixels) */
+    uint16_t vis_x, vis_y, vis_w, vis_h;
     /* the memory-fetch callback */
     m6567_fetch_t fetch_cb;
 } m6567_desc_t;
@@ -291,16 +291,19 @@ void m6567_init(m6567_t* vic, m6567_desc_t* desc) {
     CHIPS_ASSERT(vic && desc);
     CHIPS_ASSERT(desc->rgba8_buffer_size >= (418*284));
     CHIPS_ASSERT((desc->type == M6567_TYPE_6567R8) || (desc->type == M6567_TYPE_6569));
+    /* vis area horizontal coords must be multiple of 8 */
+    CHIPS_ASSERT((desc->vis_x & 7) == 0);
+    CHIPS_ASSERT((desc->vis_w & 7) == 0);
     memset(vic, 0, sizeof(*vic));
     vic->type = desc->type;
     vic->fetch_cb = desc->fetch_cb;
     vic->rgba8_buffer = desc->rgba8_buffer;
-    vic->vis_x0 = desc->vis_x0;
-    vic->vis_y0 = desc->vis_y0;
-    vic->vis_x1 = desc->vis_x0 + desc->vis_w;
-    vic->vis_y1 = desc->vis_y0 + desc->vis_h;
-    vic->vis_w = desc->vis_w;
+    vic->vis_x0 = desc->vis_x/8;
+    vic->vis_y0 = desc->vis_y;
+    vic->vis_w = desc->vis_w/8;
     vic->vis_h = desc->vis_h;
+    vic->vis_x1 = vic->vis_x0 + vic->vis_w;
+    vic->vis_y1 = vic->vis_y0 + vic->vis_h;
     if (vic->type == M6567_TYPE_6569) {
         /* PAL-B */
         vic->h_total = 63;          /* 63 cycles per line */
@@ -343,7 +346,7 @@ void m6567_reset(m6567_t* vic) {
 
 void m6567_display_size(m6567_t* vic, int* out_width, int* out_height) {
     CHIPS_ASSERT(vic && out_width && out_height);
-    *out_width = vic->vis_w;
+    *out_width = vic->vis_w*8;
     *out_height = vic->vis_h;
 }
 
@@ -649,7 +652,7 @@ static void _m6567_decode_pixels(m6567_t* vic) {
     if (vic->vis_enabled) {
         int dst_x = vic->vis_x * 8;
         int dst_y = vic->vis_y;
-        uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w + dst_x;
+        uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w*8 + dst_x;
         uint32_t c;
         if (vic->hs || vic->vs) {
             /* vertical/horizontal blank */
