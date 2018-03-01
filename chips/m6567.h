@@ -642,29 +642,34 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     /*--- decode pixels into framebuffer -------------------------------------*/
     {
         if (vic->vis_enabled && !(vic->hs||vic->vs)) {
-            int dst_x = vic->vis_x * 8;
-            int dst_y = vic->vis_y;
+            const int dst_x = vic->vis_x * 8;
+            const int dst_y = vic->vis_y;
             uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w*8 + dst_x;
-            uint32_t c;
-            if (vic->main_border) {
-                /* border */
-                c = _m6567_colors[vic->border_color & 0xF];
-                dst[0] = c; dst[1] = c; dst[2] = c; dst[3] = c;
-                dst[4] = c; dst[5] = c; dst[6] = c; dst[7] = c;
+            if (g_access) {
+                const uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
+                const int xscroll = vic->ctrl_2 & 7;
+                if (vic->vmli == 0) {
+                    for (int i = 0; i < xscroll; i++) {
+                        dst[i] = bg;
+                    }
+                }
+                const uint32_t fg = _m6567_colors[(vic->line_buffer[vic->vmli]>>8)&0xF];
+                const uint8_t mask = vic->g_byte;
+                dst[0 + xscroll] = mask & 0x80 ? fg : bg;
+                dst[1 + xscroll] = mask & 0x40 ? fg : bg;
+                dst[2 + xscroll] = mask & 0x20 ? fg : bg;
+                dst[3 + xscroll] = mask & 0x10 ? fg : bg;
+                dst[4 + xscroll] = mask & 0x08 ? fg : bg;
+                dst[5 + xscroll] = mask & 0x04 ? fg : bg;
+                dst[6 + xscroll] = mask & 0x02 ? fg : bg;
+                dst[7 + xscroll] = mask & 0x01 ? fg : bg;
             }
-            else {
-                /* display area */
-                uint32_t fg = _m6567_colors[(vic->line_buffer[vic->vmli]>>8)&0xF];
-                uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
-                uint8_t mask = vic->g_byte;
-                dst[0] = mask & 0x80 ? fg : bg;
-                dst[1] = mask & 0x40 ? fg : bg;
-                dst[2] = mask & 0x20 ? fg : bg;
-                dst[3] = mask & 0x10 ? fg : bg;
-                dst[4] = mask & 0x08 ? fg : bg;
-                dst[5] = mask & 0x04 ? fg : bg;
-                dst[6] = mask & 0x02 ? fg : bg;
-                dst[7] = mask & 0x01 ? fg : bg;
+            /* the border may particle obscure valid pixels in 38 column mode */
+            if (vic->main_border) {
+                uint32_t bc = _m6567_colors[vic->border_color & 0xF];
+                for (int i = 0; i < 8; i++) {
+                    dst[i] = bc;
+                }
             }
         }
     }
