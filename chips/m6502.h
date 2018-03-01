@@ -168,7 +168,7 @@ extern "C" {
 #define M6502_SYNC  (1ULL<<25)
 #define M6502_IRQ   (1ULL<<26)
 #define M6502_NMI   (1ULL<<27)
-#define M6510_RDY   (1ULL<<28)
+#define M6502_RDY   (1ULL<<28)
 
 /* bit mask for all CPU pins */
 #define M6502_PIN_MASK (0xFFFFFFFF)

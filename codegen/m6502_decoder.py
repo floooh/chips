@@ -144,7 +144,7 @@ def write_defines():
     l('/* execute a tick */')
     l('#define _T() pins=tick(pins);ticks++;nmi=nmi||(!nmi&&(pins&M6502_NMI));')
     l('/* a memory read tick */')
-    l('#define _RD() _ON(M6502_RW);_T();')
+    l('#define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);')
     l('/* a memory write tick */')
     l('#define _WR() _OFF(M6502_RW);_T()')
     l('/* implied addressing mode, this still puts the PC on the address bus */')
