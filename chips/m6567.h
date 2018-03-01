@@ -195,10 +195,6 @@ typedef struct {
     bool badline;       /* true when the badline state is active */
     bool frame_badlines_enabled;    /* true: when badlines are enabled in frame */
     bool display_state;             /* true: in display state, false: in idle state */
-    bool c_access;      /* if true, perform a video-matrix/color memory access (during badlines */
-    bool g_access;      /* if true, perform a caracter-generator/bitmap memory access */
-    bool ba;            /* state of the BA pin */
-    bool aec;           /* state of the AEC pin */
     bool irq;           /* state of the IRQ pin */
     uint16_t vc;        /* 10-bit video counter */
     uint16_t vcbase;    /* 10-bit video counter base */
@@ -331,11 +327,7 @@ void m6567_reset(m6567_t* vic) {
     memset(vic->regs, 0, sizeof(vic->regs));
     vic->h_count = 0; vic->v_count = 0;
     vic->hs = false; vic->vs = false;
-    vic->ba = false;
-    vic->aec = false;
     vic->irq = false;
-    vic->g_access = false;
-    vic->c_access = false;
     vic->main_border = false;
     vic->vert_border = false;
     vic->crt_retrace_h = 0; vic->crt_retrace_v = 0;
@@ -348,6 +340,11 @@ void m6567_display_size(m6567_t* vic, int* out_width, int* out_height) {
     CHIPS_ASSERT(vic && out_width && out_height);
     *out_width = vic->vis_w*8;
     *out_height = vic->vis_h;
+}
+
+uint32_t m6567_color(int i) {
+    CHIPS_ASSERT((i >= 0) && (i < 16));
+    return _m6567_colors[i];
 }
 
 uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
@@ -421,281 +418,269 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
     return pins;
 }
 
-/* handle horizontal counter and vertical counters */
-static void _m6567_update_raster_counters(m6567_t* vic) {
-    if (vic->h_count == vic->h_total) {
-        vic->h_count = 0;
-        /* FIXME: only if raster interrupt enabled!
-        vic->irq = true;
-        */
-    }
-    else {
-        vic->h_count++;
-        vic->irq = false;
-    }
-    if (vic->h_count == vic->h_syncpos) {
-        vic->hs = true;
-        vic->crt_retrace_h = 7;
-    }
-    if (vic->h_count == vic->h_syncend) {
-        vic->hs = false;
-    }
-
-    if (vic->h_count == 0) {
-        /* new scanline */
-        if (vic->v_count == vic->v_total) {
-            vic->v_count = 0;
+/*=== TICK FUNCTION ==========================================================*/
+uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
+    /*--- update raster counters ---------------------------------------------*/
+    {
+        if (vic->h_count == vic->h_total) {
+            vic->h_count = 0;
+            /* FIXME: only if raster interrupt enabled!
+            vic->irq = true;
+            */
         }
         else {
-            vic->v_count++;
+            vic->h_count++;
+            vic->irq = false;
         }
-        if (vic->v_count == vic->v_syncpos) {
-            vic->vs = true;
-            vic->crt_retrace_v = 3;
+        if (vic->h_count == vic->h_syncpos) {
+            vic->hs = true;
+            /* retrace the CRT beam 7 ticks after htick starts */
+            vic->crt_retrace_h = 7;
         }
-        if (vic->v_count == vic->v_syncend) {
-            vic->vs = false;
+        if (vic->h_count == vic->h_syncend) {
+            vic->hs = false;
         }
-    }
-}
 
-/* update the badline state
-   (see 3.5 http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
-*/
-static void _m6567_update_badline(m6567_t* vic) {
-    if ((vic->v_count >= 0x30) && (vic->v_count <= 0xF7)) {
-        /* DEN bit must have been set in raster line 30 */
-        if ((vic->v_count == 0x30) && (vic->ctrl_1 & (1<<4))) {
-            vic->frame_badlines_enabled = true;
-        }
-        /* a badline is active when the low 3 bits of raster position
-           are identical with YSCROLL
-        */
-        vic->badline = (vic->frame_badlines_enabled && ((vic->v_count&7)==(vic->ctrl_1&7)));
-    }
-    else {
-        vic->frame_badlines_enabled = false;
-        vic->badline = false;
-    }
-}
-
-/* update the display/idle state
-   (see 3.7.1 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
-*/
-static void _m6567_update_display_idle(m6567_t* vic) {
-    if (vic->badline) {
-        vic->display_state = true;
-    }
-    else if ((vic->h_count == 58) && (vic->rc == 7)) {
-        vic->display_state = false;
-    }
-}
-
-/* update the border flip-flops
-   (see 3.9 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
-*/
-static void _m6567_update_border(m6567_t* vic) {
-    /* 1. If the X coordinate reaches the right comparison value, the main border
-          flip flop is set.
-    */
-    if (vic->h_count == vic->border_right) {
-        vic->main_border = true;
-    }
-    if (vic->h_count == 0) {
-        /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
-              vertical border flip flop is set.
-        */
-        if (vic->v_count == vic->border_bottom) {
-            vic->vert_border = true;
-        }
-        /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
-              DEN bit in register $d011 is set, the vertical border flip flop is
-              reset.
-        */
-        if ((vic->v_count == vic->border_top) && (vic->ctrl_1 & (1<<4))) {
-            vic->vert_border = false;
-        }
-    }
-    if (vic->h_count == vic->border_left) {
-        /* 4. If the X coordinate reaches the left comparison value and the Y
-              coordinate reaches the bottom one, the vertical border flip flop is set.
-        */
-        if (vic->v_count == vic->border_bottom) {
-            vic->vert_border = true;
-        }
-        /* 5. If the X coordinate reaches the left comparison value and the Y
-              coordinate reaches the top one and the DEN bit in register $d011 is set,
-              the vertical border flip flop is reset.
-        */
-        if ((vic->v_count == vic->border_top) && (vic->ctrl_1 & (1<<4))) {
-            vic->vert_border = false;
-        }
-        /* 6. If the X coordinate reaches the left comparison value and the vertical
-              border flip flop is not set, the main flip flop is reset.
-        */
-        if (!vic->vert_border) {
-            vic->main_border = false;
-        }
-    }
-}
-
-/* update VC, VCBASE, RC counters set BA/AEC pins
-   and decide what memory accessed are necessary
-   (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
-*/
-static void _m6567_update_counters(m6567_t* vic) {
-    /* 1. Once somewhere outside of the range of raster lines $30-$f7 (i.e.
-        outside of the Bad Line range), VCBASE is reset to zero. This is
-        presumably done in raster line 0, the exact moment cannot be determined
-        and is irrelevant.
-    */
-    if (vic->v_count == 0) {
-        vic->vcbase = 0;
-    }
-    /* 2. In the first phase of cycle 14 of each line, VC is loaded from VCBASE
-        (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
-        this phase, RC is also reset to zero.
-    */
-    if (vic->h_count == 14) {
-        vic->vc = vic->vcbase;
-        vic->vmli = 0;
-        if (vic->badline) {
-            vic->rc = 0;
-        }
-    }
-    /* 3. If there is a Bad Line Condition in cycles 12-54, BA is set low and the
-          c-accesses are started.
-          Also set the AEC pin 3 cycles later.
-    */
-    vic->ba = false;
-    vic->aec = false;
-    vic->c_access = false;
-    vic->g_access = false;
-    if ((vic->h_count >= 12) && (vic->h_count <= 54)) {
-        if (vic->badline) {
-            vic->ba = true;
-            if (vic->h_count >= 15) {
-                vic->aec = vic->ba;
-                vic->c_access = true;
+        if (vic->h_count == 0) {
+            /* new scanline */
+            if (vic->v_count == vic->v_total) {
+                vic->v_count = 0;
+            }
+            else {
+                vic->v_count++;
+            }
+            if (vic->v_count == vic->v_syncpos) {
+                vic->vs = true;
+                vic->crt_retrace_v = 3;
+            }
+            if (vic->v_count == vic->v_syncend) {
+                vic->vs = false;
             }
         }
-        if (vic->display_state && (vic->h_count >= 15)) {
-            vic->g_access = true;
+    }
+
+    /*--- update badline state -----------------------------------------------*/
+    /* (see 3.5 http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
+    {
+        if ((vic->v_count >= 0x30) && (vic->v_count <= 0xF7)) {
+            /* DEN bit must have been set in raster line 30 */
+            if ((vic->v_count == 0x30) && (vic->ctrl_1 & (1<<4))) {
+                vic->frame_badlines_enabled = true;
+            }
+            /* a badline is active when the low 3 bits of raster position
+               are identical with YSCROLL
+            */
+            vic->badline = (vic->frame_badlines_enabled && ((vic->v_count&7)==(vic->ctrl_1&7)));
+        }
+        else {
+            vic->frame_badlines_enabled = false;
+            vic->badline = false;
         }
     }
 
-    /* 5. In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
-        logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE). If
-        the video logic is in display state afterwards (this is always the case
-        if there is a Bad Line Condition), RC is incremented.
-    */
-    if (vic->h_count == 58) {
-        if (vic->rc == 7) {
-            vic->vcbase = vic->vc;
+    /*--- update the display/idle state --------------------------------------*/
+    /* (see 3.7.1 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
+    {
+        if (vic->badline) {
+            vic->display_state = true;
         }
-        if (vic->display_state) {
-            vic->rc = (vic->rc + 1) & 7;
+        else if ((vic->h_count == 58) && (vic->rc == 7)) {
+            vic->display_state = false;
         }
     }
-}
 
-/*
-    perform the requested memory fetch operations
-    (see 3.6.3. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
-*/
-static void _m6567_fetch(m6567_t* vic) {
-    if (vic->c_access) {
-        /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
-        uint16_t addr = ((vic->mem_ptrs & 0xF0)<<6) | (vic->vc & 0x3FF);
-        vic->line_buffer[vic->vmli] = vic->fetch_cb(addr);
-    }
-    if (vic->g_access) {
-        /* addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
-        uint16_t addr = ((vic->mem_ptrs & 0x0E) << 10) |
-                        ((vic->line_buffer[vic->vmli] & 0xFF) << 3) |
-                        (vic->rc & 7);
-        vic->g_byte = vic->fetch_cb(addr);
-    }
-}
+    /*--- update counters and memory accesses --------------------------------*/
+    /* (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
+    bool ba = false;
+    bool aec = false;
+    bool c_access = false;
+    bool g_access = false;
+    {
+        /* 1. Once somewhere outside of the range of raster lines $30-$f7 (i.e.
+            outside of the Bad Line range), VCBASE is reset to zero. This is
+            presumably done in raster line 0, the exact moment cannot be determined
+            and is irrelevant.
+        */
+        if (vic->v_count == 0) {
+            vic->vcbase = 0;
+        }
+        /* 2. In the first phase of cycle 14 of each line, VC is loaded from VCBASE
+            (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
+            this phase, RC is also reset to zero.
+        */
+        if (vic->h_count == 14) {
+            vic->vc = vic->vcbase;
+            vic->vmli = 0;
+            if (vic->badline) {
+                vic->rc = 0;
+            }
+        }
+        /* 3. If there is a Bad Line Condition in cycles 12-54, BA is set low and the
+              c-accesses are started.
+              Also set the AEC pin 3 cycles later.
+        */
+        if ((vic->h_count >= 12) && (vic->h_count <= 54)) {
+            if (vic->badline) {
+                ba = true;
+                if (vic->h_count >= 15) {
+                    aec = ba;
+                    c_access = true;
+                }
+            }
+            if (vic->display_state && (vic->h_count >= 15)) {
+                g_access = true;
+            }
+        }
 
-/* handle CRT beam position update */
-static void _m6567_update_crt(m6567_t* vic) {
-    /* update current beam pos */
-    vic->crt_x++;
-    if (vic->crt_retrace_h > 0) {
-        if (--vic->crt_retrace_h == 0) {
-            vic->crt_x = 0;
-            vic->crt_y++;
-            if (vic->crt_retrace_v > 0) {
-                if (--vic->crt_retrace_v == 0) {
-                    vic->crt_y = 0;
+        /* 5. In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
+            logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE). If
+            the video logic is in display state afterwards (this is always the case
+            if there is a Bad Line Condition), RC is incremented.
+        */
+        if (vic->h_count == 58) {
+            if (vic->rc == 7) {
+                vic->vcbase = vic->vc;
+            }
+            if (vic->display_state) {
+                vic->rc = (vic->rc + 1) & 7;
+            }
+        }
+    }
+
+    /*--- perform memory fetches ---------------------------------------------*/
+    /* (see 3.6.3. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
+    {
+        if (c_access) {
+            /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
+            uint16_t addr = ((vic->mem_ptrs & 0xF0)<<6) | (vic->vc & 0x3FF);
+            vic->line_buffer[vic->vmli] = vic->fetch_cb(addr);
+        }
+        if (g_access) {
+            /* addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
+            uint16_t addr = ((vic->mem_ptrs & 0x0E) << 10) |
+                            ((vic->line_buffer[vic->vmli] & 0xFF) << 3) |
+                            (vic->rc & 7);
+            vic->g_byte = vic->fetch_cb(addr);
+        }
+    }
+
+    /*--- update the border flip-flops ---------------------------------------*/
+    /* (see 3.9 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
+    {
+        /* 1. If the X coordinate reaches the right comparison value, the main border
+              flip flop is set.
+        */
+        if (vic->h_count == vic->border_right) {
+            vic->main_border = true;
+        }
+        if (vic->h_count == 0) {
+            /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
+                  vertical border flip flop is set.
+            */
+            if (vic->v_count == vic->border_bottom) {
+                vic->vert_border = true;
+            }
+            /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
+                  DEN bit in register $d011 is set, the vertical border flip flop is
+                  reset.
+            */
+            if ((vic->v_count == vic->border_top) && (vic->ctrl_1 & (1<<4))) {
+                vic->vert_border = false;
+            }
+        }
+        if (vic->h_count == vic->border_left) {
+            /* 4. If the X coordinate reaches the left comparison value and the Y
+                  coordinate reaches the bottom one, the vertical border flip flop is set.
+            */
+            if (vic->v_count == vic->border_bottom) {
+                vic->vert_border = true;
+            }
+            /* 5. If the X coordinate reaches the left comparison value and the Y
+                  coordinate reaches the top one and the DEN bit in register $d011 is set,
+                  the vertical border flip flop is reset.
+            */
+            if ((vic->v_count == vic->border_top) && (vic->ctrl_1 & (1<<4))) {
+                vic->vert_border = false;
+            }
+            /* 6. If the X coordinate reaches the left comparison value and the vertical
+                  border flip flop is not set, the main flip flop is reset.
+            */
+            if (!vic->vert_border) {
+                vic->main_border = false;
+            }
+        }
+    }
+
+    /*--- update the CRT beam position ---------------------------------------*/
+    {
+        /* update current beam pos */
+        vic->crt_x++;
+        if (vic->crt_retrace_h > 0) {
+            if (--vic->crt_retrace_h == 0) {
+                vic->crt_x = 0;
+                vic->crt_y++;
+                if (vic->crt_retrace_v > 0) {
+                    if (--vic->crt_retrace_v == 0) {
+                        vic->crt_y = 0;
+                    }
                 }
             }
         }
-    }
-    /* update visible-area coordinates and enabled-state */
-    if ((vic->crt_x >= vic->vis_x0) && (vic->crt_x < vic->vis_x1) &&
-        (vic->crt_y >= vic->vis_y0) && (vic->crt_y < vic->vis_y1))
-    {
-        vic->vis_enabled = true;
-        vic->vis_x = vic->crt_x - vic->vis_x0;
-        vic->vis_y = vic->crt_y - vic->vis_y0;
-    }
-    else {
-        vic->vis_enabled = false;
-    }
-}
-
-/* decode the next 8 pixels */
-static void _m6567_decode_pixels(m6567_t* vic) {
-    /* decode pixels for current tick, only for visible area and not blanking */
-    if (vic->vis_enabled && !(vic->hs||vic->vs)) {
-        int dst_x = vic->vis_x * 8;
-        int dst_y = vic->vis_y;
-        uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w*8 + dst_x;
-        uint32_t c;
-        if (vic->main_border) {
-            /* border */
-            c = _m6567_colors[vic->border_color & 0xF];
-            dst[0] = c; dst[1] = c; dst[2] = c; dst[3] = c;
-            dst[4] = c; dst[5] = c; dst[6] = c; dst[7] = c;
+        /* update visible-area coordinates and enabled-state */
+        if ((vic->crt_x >= vic->vis_x0) && (vic->crt_x < vic->vis_x1) &&
+            (vic->crt_y >= vic->vis_y0) && (vic->crt_y < vic->vis_y1))
+        {
+            vic->vis_enabled = true;
+            vic->vis_x = vic->crt_x - vic->vis_x0;
+            vic->vis_y = vic->crt_y - vic->vis_y0;
         }
         else {
-            /* display area */
-            uint32_t fg = _m6567_colors[(vic->line_buffer[vic->vmli]>>8)&0xF];
-            uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
-            uint8_t mask = vic->g_byte;
-            dst[0] = mask & 0x80 ? fg : bg;
-            dst[1] = mask & 0x40 ? fg : bg;
-            dst[2] = mask & 0x20 ? fg : bg;
-            dst[3] = mask & 0x10 ? fg : bg;
-            dst[4] = mask & 0x08 ? fg : bg;
-            dst[5] = mask & 0x04 ? fg : bg;
-            dst[6] = mask & 0x02 ? fg : bg;
-            dst[7] = mask & 0x01 ? fg : bg;
+            vic->vis_enabled = false;
         }
     }
-}
 
-uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
-    _m6567_update_raster_counters(vic);
-    _m6567_update_badline(vic);
-    _m6567_update_display_idle(vic);
-    _m6567_update_counters(vic);
-    _m6567_fetch(vic);
-    _m6567_update_border(vic);
-    _m6567_update_crt(vic);
-    _m6567_decode_pixels(vic);
+    /*--- decode pixels into framebuffer -------------------------------------*/
+    {
+        if (vic->vis_enabled && !(vic->hs||vic->vs)) {
+            int dst_x = vic->vis_x * 8;
+            int dst_y = vic->vis_y;
+            uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w*8 + dst_x;
+            uint32_t c;
+            if (vic->main_border) {
+                /* border */
+                c = _m6567_colors[vic->border_color & 0xF];
+                dst[0] = c; dst[1] = c; dst[2] = c; dst[3] = c;
+                dst[4] = c; dst[5] = c; dst[6] = c; dst[7] = c;
+            }
+            else {
+                /* display area */
+                uint32_t fg = _m6567_colors[(vic->line_buffer[vic->vmli]>>8)&0xF];
+                uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
+                uint8_t mask = vic->g_byte;
+                dst[0] = mask & 0x80 ? fg : bg;
+                dst[1] = mask & 0x40 ? fg : bg;
+                dst[2] = mask & 0x20 ? fg : bg;
+                dst[3] = mask & 0x10 ? fg : bg;
+                dst[4] = mask & 0x08 ? fg : bg;
+                dst[5] = mask & 0x04 ? fg : bg;
+                dst[6] = mask & 0x02 ? fg : bg;
+                dst[7] = mask & 0x01 ? fg : bg;
+            }
+        }
+    }
 
-    /* bump the VC and vmli counters */
-    if (vic->g_access) {
+    /*--- bump the VC and vmli counters --------------------------------------*/
+    if (g_access) {
         vic->vc = (vic->vc + 1) & 0x3FF;        /* VS is a 10-bit counter */
         vic->vmli = (vic->vmli + 1) & 0x3F;     /* VMLI is a 6-bit counter */
     }
 
-    /* set CPU pins */
-    if (vic->ba) {
+    /*--- set CPU pins -------------------------------------------------------*/
+    if (ba) {
         pins |= M6567_BA;
+    }
+    if (aec) {
+        pins |= M6567_AEC;
     }
     /* FIXME
     if (vic->irq) {
@@ -703,11 +688,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     }
     */
     return pins;
-}
-
-uint32_t m6567_color(int i) {
-    CHIPS_ASSERT((i >= 0) && (i < 16));
-    return _m6567_colors[i];
 }
 #endif /* CHIPS_IMPL */
 
