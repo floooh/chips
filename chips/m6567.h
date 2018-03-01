@@ -648,30 +648,17 @@ static void _m6567_update_crt(m6567_t* vic) {
 
 /* decode the next 8 pixels */
 static void _m6567_decode_pixels(m6567_t* vic) {
-    /* decode pixels for current tick */
-    if (vic->vis_enabled) {
+    /* decode pixels for current tick, only for visible area and not blanking */
+    if (vic->vis_enabled && !(vic->hs||vic->vs)) {
         int dst_x = vic->vis_x * 8;
         int dst_y = vic->vis_y;
         uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w*8 + dst_x;
         uint32_t c;
-        if (vic->hs || vic->vs) {
-            /* vertical/horizontal blank */
-            if (vic->badline) {
-                c = 0xFF4444FF;
-            }
-            else {
-                c = 0xFF444444;
-            }
-            for (int i = 0; i < 8; i++) {
-                *dst++ = c;
-            }
-        }
-        else if (vic->main_border) {
+        if (vic->main_border) {
             /* border */
             c = _m6567_colors[vic->border_color & 0xF];
-            for (int i = 0; i < 8; i++) {
-                *dst++ = c;
-            }
+            dst[0] = c; dst[1] = c; dst[2] = c; dst[3] = c;
+            dst[4] = c; dst[5] = c; dst[6] = c; dst[7] = c;
         }
         else {
             /* display area */
