@@ -246,48 +246,23 @@ void m6526_reset(m6526_t* c) {
     _m6526_init_interrupt(&c->intr);
 }
 
-/*--- control-register utility functions */
-static bool _m6526_timer_start(uint8_t cr) {
-    return cr & (1<<0);
-}
+/*--- control-register flag testing macros ---*/
+#define _M6526_TIMER_STARTED(cr)    ((cr)&(1<<0))
+#define _M6526_PBON(cr)             ((cr)&(1<<1))
+#define _M6526_OUTMODE_TOGGLE(cr)   ((cr)&(1<<2))
+#define _M6526_RUNMODE_ONESHOT(cr)  ((cr)&(1<<3))
+#define _M6526_TA_INMODE_PHI2(cra)  (((cra)&(1<<5))==0)
+#define _M6526_TB_INMODE_PHI2(crb)  (((crb)&((1<<6)|(1<<5)))==0)
 
-static bool _m6526_pbon(uint8_t cr) {
-    return cr & (1<<1);
-}
-
-static bool _m6526_outmode_toggle(uint8_t cr) {
-    return cr & (1<<2);
-}
-
-static bool _m6526_runmode_oneshot(uint8_t cr) {
-    return cr & (1<<3);
-}
-
-static bool _m6526_ta_inmode_count(uint8_t cra) {
-    return cra & (1<<5);
-}
-
-/*--- delay-pipeline functions */
-static void _m6526_pip_set(uint8_t* pip, int pos, bool state) {
-    /* push a new state into the pipeline at delay-position */
-    if (state) {
-        *pip |= (1<<pos);
-    }
-    else {
-        *pip &= ~(1<<pos);
-    }
-}
-
+/*--- delay-pipeline macros and functions ---*/
+/* push a new state into pipeline at position */
+#define _M6526_PIP_SET(pip,pos,state) {if(state){pip|=(1<<pos);}else{pip&=~(1<<pos);}}
+#define _M6526_PIP_PEEK(pip,pos) (pip&(1<<pos))
 static bool _m6526_pip_pop(uint8_t* pip) {
     /* pop current state from pipeline and advance the pipeline */
     bool state = *pip & 1;
     *pip >>= 1;
     return state;
-}
-
-static bool _m6526_pip_peek(uint8_t* pip, int pos) {
-    /* take a peek at any pipeline slot */
-    return *pip & (1<<pos);
 }
 
 /*--- timer implementation ---*/
@@ -303,14 +278,14 @@ static void _m6526_timer_tick(m6526_timer_t* t) {
     }
 
     /* timer output and toggle-state */
-    t->t_out = (0 == t->counter) && _m6526_pip_peek(&t->pip_count, 1);
+    t->t_out = (0 == t->counter) && _M6526_PIP_PEEK(t->pip_count, 1);
     if (t->t_out) {
         t->t_bit = !t->t_bit;
     }
 
     /* push one-shot state into the oneshot-pipeline */
-    bool oneshot_active_now = _m6526_runmode_oneshot(t->cr);
-    _m6526_pip_set(&t->pip_oneshot, 1, oneshot_active_now);
+    bool oneshot_active_now = _M6526_RUNMODE_ONESHOT(t->cr);
+    _M6526_PIP_SET(t->pip_oneshot, 1, oneshot_active_now);
 
     /* clear start flag if oneshot and 0 reached */
     bool oneshot_active_pip = _m6526_pip_pop(&t->pip_oneshot);
@@ -322,7 +297,7 @@ static void _m6526_timer_tick(m6526_timer_t* t) {
     bool load_active_pip = _m6526_pip_pop(&t->pip_load);
     if (t->t_out || load_active_pip) {
         t->counter = t->latch;
-        _m6526_pip_set(&t->pip_count, 2, false);
+        _M6526_PIP_SET(t->pip_count, 2, false);
     }
 }
 
@@ -330,9 +305,8 @@ static void _m6526_tick_ta(m6526_t* c) {
     /* push timer-active state into the count-pipeline
        FIXME: CNT pin counting is not implemented
     */
-    bool timer_active_now = !_m6526_ta_inmode_count(c->ta.cr);
-    timer_active_now &= _m6526_timer_start(c->ta.cr);
-    _m6526_pip_set(&c->ta.pip_count, 2, timer_active_now);
+    bool timer_active_now = _M6526_TA_INMODE_PHI2(c->ta.cr) && _M6526_TIMER_STARTED(c->ta.cr);
+    _M6526_PIP_SET(c->ta.pip_count, 2, timer_active_now);
     _m6526_timer_tick(&c->ta);
 }
 
@@ -341,9 +315,8 @@ static void _m6526_tick_tb(m6526_t* c) {
        FIXME: CNT pin counting not implemented
        FIXME: underflow from time A not yet implemented!
     */
-    bool timer_active_now = !_m6526_ta_inmode_count(c->tb.cr);
-    timer_active_now &= _m6526_timer_start(c->tb.cr);
-    _m6526_pip_set(&c->tb.pip_count, 2, timer_active_now);
+    bool timer_active_now = _M6526_TB_INMODE_PHI2(c->tb.cr) && _M6526_TIMER_STARTED(c->tb.cr);
+    _M6526_PIP_SET(c->tb.pip_count, 2, timer_active_now);
     _m6526_timer_tick(&c->tb);
 }
 
@@ -373,7 +346,7 @@ static uint8_t _m6526_read_icr(m6526_t* c) {
     c->intr.icr = 0;
     c->intr.irq = false;
     /* cancel an interrupt pending in the pipeline */
-    _m6526_pip_set(&c->intr.pip_irq, 0, false);
+    _M6526_PIP_SET(c->intr.pip_irq, 0, false);
     return data;
 }
 
@@ -392,7 +365,7 @@ static void _m6526_update_irq(m6526_t* c) {
 
     /* feed the interrupt-request state into the 1-cycle-delay irq-pipeline */
     bool irq = 0 != ((c->intr.imr & c->intr.icr) & 3);
-    _m6526_pip_set(&c->intr.pip_irq, 1, irq);
+    _M6526_PIP_SET(c->intr.pip_irq, 1, irq);
 
     /* pop delayed irq state from pipeline */
     if (_m6526_pip_pop(&c->intr.pip_irq)) {
@@ -404,9 +377,9 @@ static void _m6526_update_irq(m6526_t* c) {
 /*--- port implementation ---*/
 static uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
     /* merge timer state bits into data byte */
-    if (_m6526_pbon(c->ta.cr)) {
+    if (_M6526_PBON(c->ta.cr)) {
         data &= ~(1<<6);
-        if (_m6526_outmode_toggle(c->ta.cr)) {
+        if (_M6526_OUTMODE_TOGGLE(c->ta.cr)) {
             /* timer A toggle state into bit 6 */
             if (c->ta.t_bit) {
                 data |= (1<<6);
@@ -419,9 +392,9 @@ static uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
             }
         }
     }
-    if (_m6526_pbon(c->tb.cr)) {
+    if (_M6526_PBON(c->tb.cr)) {
         data &= ~(1<<7);
-        if (_m6526_outmode_toggle(c->tb.cr)) {
+        if (_M6526_OUTMODE_TOGGLE(c->tb.cr)) {
             /* timer B toggle state into bit 7 */
             if (c->tb.t_bit) {
                 data |= (1<<7);
@@ -474,10 +447,10 @@ static void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
        there's a 1 cycle delay for force-load
     */
     bool force_load = data & (1<<4);
-    _m6526_pip_set(&t->pip_load, 1, force_load);
+    _M6526_PIP_SET(t->pip_load, 1, force_load);
 
     /* if the start bit goes from 0 to 1, set the current toggle-bit-state to 1 */
-    if (!_m6526_timer_start(t->cr) && _m6526_timer_start(data)) {
+    if (!_M6526_TIMER_STARTED(t->cr) && _M6526_TIMER_STARTED(data)) {
         t->t_bit = true;
     }
 
