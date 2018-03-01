@@ -97,7 +97,7 @@ extern "C" {
 /* shared control pins */
 #define M6567_RW    (1ULL<<24)      /* shared with m6502 CPU */
 #define M6567_IRQ   (1ULL<<26)      /* shared with m6502 CPU */
-#define M6567_BA    (1ULL<<28)      /* shared with m6510 RDY */
+#define M6567_BA    (1ULL<<28)      /* shared with m6502 RDY */
 
 /* m6567 specific control pins */
 #define M6567_CS    (1ULL<<40)
