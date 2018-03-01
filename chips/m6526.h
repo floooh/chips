@@ -43,10 +43,9 @@
     - time of day clock
     - serial port
     - no external counter trigger via CNT pin
-    - there are various "delay-pipelines" in the chip for counters and
-      interrupts, these are currently not implemented!
 
     ## LINKS:
+    - https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
     - https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
 
     TODO: Documentation
@@ -109,26 +108,6 @@ extern "C" {
 #define M6526_TOD   (1ULL<<44)
 #define M6526_CNT   (1ULL<<45)
 
-/* port A in/out pins */
-#define M6526_PA0   (1ULL<<48)
-#define M6526_PA1   (1ULL<<49)
-#define M6526_PA2   (1ULL<<50)
-#define M6526_PA3   (1ULL<<51)
-#define M6526_PA4   (1ULL<<52)
-#define M6526_PA5   (1ULL<<53)
-#define M6526_PA6   (1ULL<<54)
-#define M6526_PA7   (1ULL<<55)
-
-/* port B in/out pins */
-#define M6526_PB0   (1ULL<<56)
-#define M6526_PB1   (1ULL<<57)
-#define M6526_PB2   (1ULL<<58)
-#define M6526_PB3   (1ULL<<59)
-#define M6526_PB4   (1ULL<<60)
-#define M6526_PB5   (1ULL<<61)
-#define M6526_PB6   (1ULL<<62)
-#define M6526_PB7   (1ULL<<63)
-
 /* register indices */
 #define M6526_REG_PRA       (0)     /* peripheral data reg A */
 #define M6526_REG_PRB       (1)     /* peripheral data reg B */
@@ -166,7 +145,7 @@ typedef struct {
     uint16_t counter;   /* 16-bit counter */
     uint8_t cr;         /* control register */
     bool t_bit;         /* toggles between true and false when counter underflows */
-    bool t_out;         /* set to true for 1 cycle when counter underflow */
+    bool t_out;         /* true for 1 cycle when counter underflow */
     uint8_t pip_count;      /* 2-cycle delay pipeline, output is 'counter active' */
     uint8_t pip_oneshot;    /* 1-cycle delay pipeline, output is 'oneshot mode active' */
     uint8_t pip_load;       /* 1-cycle delay pipeline, output is 'force load' */
@@ -175,7 +154,7 @@ typedef struct {
 /* interrupt state */
 typedef struct {
     uint8_t imr;        /* interrupt mask */
-    uint8_t icr;        /* interrupt control */
+    uint8_t icr;        /* interrupt control register */
     uint8_t pip_irq;    /* 1-cycle delay pipeline to request irq */
     bool irq;           /* true if interrupt request is active */
 } m6526_int_t;

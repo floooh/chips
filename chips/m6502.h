@@ -22,20 +22,20 @@
     *           +-----------+         *
     *   IRQ --->|           |---> A0  *
     *   NMI --->|           |...      *
-    *    RW <---|           |---> A15 *
+    *    RDY--->|           |---> A15 *
+    *    RW <---|           |         *
     *  SYNC <---|           |         *
-    *           |           |         *
-    *   (P0)<-->|           |<--> D0  *
-    *        ...|           |...      *
-    *   (P5)<-->|           |<--> D7  *
-    *           |           |         *
+    *           |           |<--> D0  *
+    *   (P0)<-->|           |...      *
+    *        ...|           |<--> D7  *
+    *   (P5)<-->|           |         *
     *           +-----------+         *
     ***********************************
 
-    The input/output pins P0..P5 only exist on the m6510
+    The input/output P0..P5 pins only exist on the m6510.
 
-    FIXME: implement the RDY pin of the m6510 (stops the 
-    processor during read accesses)
+    If the RDY pin is active (1) the CPU will loop on the next read
+    access until the pin goes inactive.
 
     ## Functions
     ~~~C
@@ -52,8 +52,6 @@
         } m6502_desc_t;
         ~~~
 
-    To emulate a vanilla m6502, provide a _tick_cb_ and set _bcd_enabled_ to true.
-
     To emulate a m6510 you must provide port IO callbacks in _in_cb_ and _out_cb_.
 
     ~~~C
@@ -66,12 +64,15 @@
     ~~~
     Execute instructions until the requested number of _ticks_ is reached,
     or a trap has been hit. Return number of executed cycles. To check if a trap
-    has been hit, check whether the m6502_t.trap_id member is >= 0. 
+    has been hit, test the m6502_t.trap_id member on >= 0. 
     During execution the tick callback will be called for each clock cycle
     with the current CPU pin bitmask. The tick callback function must inspect
-    the pin bitmask, perform memory requests and if necessary, update the
+    the pin bitmask, perform memory requests and if necessary update the
     data bus pins. Finally the tick callback returns the (optionally
-    modified) pin bitmask.
+    modified) pin bitmask. If the tick callback sets the RDY pin (1),
+    and the current tick is a read-access, the CPU will loop until the
+    RDY pin is (0). The RDY pin is automatically cleared before the
+    tick function is called for a read-access.
 
     ~~~C
     uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins)
@@ -167,7 +168,7 @@ extern "C" {
 #define M6502_SYNC  (1ULL<<25)
 #define M6502_IRQ   (1ULL<<26)
 #define M6502_NMI   (1ULL<<27)
-#define M6510_RDY   (1ULL<<28)  /* m6510 only: if active, wait after next read cycle until RDY is inactive */
+#define M6510_RDY   (1ULL<<28)
 
 /* bit mask for all CPU pins */
 #define M6502_PIN_MASK (0xFFFFFFFF)
@@ -193,10 +194,10 @@ typedef uint8_t (*m6510_in_t)(void);
 
 /* the desc structure provided to m6502_init() */
 typedef struct {
-    m6502_tick_t tick_cb;  /* the CPU tick callback */
-    bool bcd_disabled;      // set to true if BCD mode is disabled
-    m6510_in_t in_cb;       // optional port IO input callback (only on m6510)
-    m6510_out_t out_cb;     // optional port IO output callback (only on m6510)
+    m6502_tick_t tick_cb;   /* the CPU tick callback */
+    bool bcd_disabled;      /* set to true if BCD mode is disabled */
+    m6510_in_t in_cb;       /* optional port IO input callback (only on m6510) */
+    m6510_out_t out_cb;     /* optional port IO output callback (only on m6510) */
 } m6502_desc_t;
 
 /* a trap definition */
@@ -210,26 +211,24 @@ typedef struct {
 typedef struct {
     m6502_tick_t tick;
     uint64_t PINS;
-    /* 8-bit registers */
-    uint8_t A,X,Y,S,P;
-    /* 16-bit program counter */
-    uint16_t PC;
-    /* state of interrupt enable flag at the time when the interrupt is sampled,
+    uint8_t A,X,Y,S,P;      /* 8-bit registers */
+    uint16_t PC;            /* 16-bit program counter */
+    /* state of interrupt enable flag at the time when the IRQ pin is sampled,
        this is used to implement 'delayed IRQ response'
        (see: https://wiki.nesdev.com/w/index.php/CPU_interrupts)
     */
     uint8_t pi;
-    /* some variations of the m6502 don't have BCD arithmetic support */
+    bool nmi;               /* an nmi was detected */
     bool bcd_enabled;
     /* the m6510 IO port stuff */
     m6510_in_t in_cb;
     m6510_out_t out_cb;
     uint8_t io_dir;     /* 1: output, 0: input */
     uint8_t io_port;
-    /* trap points */
+
+    /* trap stuff */
     _m6502_trap_t traps[M6502_MAX_NUM_TRAPS];
-    /* index of trap hit (-1 if no trap) */
-    int trap_id;
+    int trap_id;        /* index of trap hit (-1 if no trap) */
 } m6502_t;
 
 /* initialize a new m6502 instance */
