@@ -196,6 +196,10 @@ typedef struct {
     bool frame_badlines_enabled;    /* true: when badlines are enabled in frame */
     bool display_state;             /* true: in display state, false: in idle state */
     bool irq;           /* state of the IRQ pin */
+    uint16_t c_addr_or;     /* OR-mask for c-accesses, computed from mem_ptrs */
+    uint16_t g_addr_and;    /* AND-mask for g-accesses, computed from mem_ptrs */
+    uint16_t g_addr_or;     /* OR-mask for g-accesses, computed from ECM bit */
+    uint16_t i_addr;        /* address for i-accesses, 0x3FFF or 0x39FF (if ECM bit set) */
     uint16_t vc;        /* 10-bit video counter */
     uint16_t vcbase;    /* 10-bit video counter base */
     uint8_t rc;         /* 3-bit raster counter */
@@ -348,6 +352,24 @@ uint32_t m6567_color(int i) {
     return _m6567_colors[i];
 }
 
+/* computes g-access mask, and address for idle accesses */
+void _m6567_update_fetch_addr(m6567_t* vic, uint8_t mem_ptrs, uint8_t ctrl_1) {
+    /* c-access: addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
+    vic->c_addr_or = (vic->mem_ptrs & 0xF0)<<6;
+    /* g-access: addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
+    vic->g_addr_or = (mem_ptrs & 0x0E)<<10;
+    vic->g_addr_and = 0xFFFF;
+    vic->i_addr = 0x3FFF;
+    /* "...If the ECM bit is set, the address generator always holds the
+        address lines 9 and 10 low without any other changes to the
+        addressing scheme"
+    */
+    if (ctrl_1 & (1<<6)) {
+        vic->g_addr_and &= ~((1<<10)|(1<<9));
+        vic->i_addr &= ~((1<<10)|(1<<9));
+    }
+}
+
 uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
     if (pins & M6567_CS) {
         uint8_t reg_addr = pins & M6567_REG_MASK;
@@ -392,6 +414,8 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                         vic->border_top = 55;
                         vic->border_bottom = 247;
                     }
+                    /* ECM bit updates the precomputed fetch address masks */
+                    _m6567_update_fetch_addr(vic, vic->mem_ptrs, data);
                     break;
                 case 0x16:
                     if (data & (1<<3)) {
@@ -405,6 +429,11 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                         vic->border_right = 54;
                     }
                     break;
+                case 0x18:
+                    /* memory-ptrs register , update precomputed fetch address masks */
+                    _m6567_update_fetch_addr(vic, data, vic->ctrl_1);
+                    break;
+
                 case 0x1E:
                 case 0x1F:
                     /* mob collision registers cannot be written */
@@ -554,21 +583,20 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     {
         if (c_access) {
             /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
-            uint16_t addr = ((vic->mem_ptrs & 0xF0)<<6) | (vic->vc & 0x3FF);
+            uint16_t addr = (vic->vc & 0x3FF) | vic->c_addr_or;
             vic->line_buffer[vic->vmli] = vic->fetch_cb(addr);
         }
         vic->g_byte_prev = vic->g_byte;
         if (g_access) {
             /* addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
-            uint16_t addr = ((vic->mem_ptrs & 0x0E) << 10) |
-                            ((vic->line_buffer[vic->vmli] & 0xFF) << 3) |
-                            (vic->rc & 7);
+            uint16_t addr = ((vic->line_buffer[vic->vmli]&0xFF)<<3) | (vic->rc&7);
+            addr = (addr | vic->g_addr_or) & vic->g_addr_and;
             vic->g_byte = vic->fetch_cb(addr);
         }
         else {
             /* an idle access (all 14 address bits active) */
             /* FIXME: 0x39FF if the ECM bit is set */
-            vic->g_byte = vic->fetch_cb(0x3FFF);
+            vic->g_byte = vic->fetch_cb(vic->i_addr);
             i_access = true;
         }
     }
@@ -654,26 +682,42 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             const int dst_x = vic->vis_x * 8;
             const int dst_y = vic->vis_y;
             uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w*8 + dst_x;
+            /*
+                "The main border flip flop controls the border display. If it is set, the
+                VIC displays the color stored in register $d020, otherwise it displays the
+                color that the priority multiplexer switches through from the graphics or
+                sprite data sequencer. So the border overlays the text/bitmap graphics as
+                well as the sprites. It has the highest display priority."
+            */
             if (vic->main_border) {
                 uint32_t bc = _m6567_colors[vic->border_color & 0xF];
                 for (int i = 0; i < 8; i++) {
                     dst[i] = bc;
                 }
             }
-            else if (vic->display_state) {
+            /*
+                "...the vertical border flip flop controls the output of the graphics
+                data sequencer. The sequencer only outputs data if the flip flop is
+                not set..."
+            */
+            else if (!vic->vert_border) {
                 const uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
                 const int xscroll = vic->ctrl_2 & 7;
                 /* on idle access, video-matrix-data is treated as a '0' */
                 const uint32_t fg = _m6567_colors[i_access ? 0 : (vic->line_buffer[vic->vmli]>>8)&0xF];
-                const uint8_t mask = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
-                dst[0] = mask & 0x80 ? fg : bg;
-                dst[1] = mask & 0x40 ? fg : bg;
-                dst[2] = mask & 0x20 ? fg : bg;
-                dst[3] = mask & 0x10 ? fg : bg;
-                dst[4] = mask & 0x08 ? fg : bg;
-                dst[5] = mask & 0x04 ? fg : bg;
-                dst[6] = mask & 0x02 ? fg : bg;
-                dst[7] = mask & 0x01 ? fg : bg;
+                const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
+                for (int i = 0; i < 8; i++) {
+                    dst[i] = pixels & (1<<(7-i)) ? fg : bg;
+                }
+            }
+            /*
+                "...otherwise it displays the background color"
+            */
+            else {
+                const uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
+                for (int i = 0; i < 8; i++) {
+                    dst[i] = bg;
+                }
             }
         }
     }
