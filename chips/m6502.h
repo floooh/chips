@@ -207,9 +207,8 @@ typedef struct {
     uint8_t orig_byte;
 } _m6502_trap_t;
 
-/* M6502 CPU state */
+/* mutable tick state */
 typedef struct {
-    m6502_tick_t tick;
     uint64_t PINS;
     uint8_t A,X,Y,S,P;      /* 8-bit registers */
     uint16_t PC;            /* 16-bit program counter */
@@ -219,7 +218,14 @@ typedef struct {
     */
     uint8_t pi;
     bool nmi;               /* an nmi was detected */
-    bool bcd_enabled;
+    bool bcd_enabled;       /* this is actually not mutable but needed when ticking */
+} _m6502_state_t;
+
+/* M6502 CPU state */
+typedef struct {
+    _m6502_state_t state;
+    m6502_tick_t tick;
+
     /* the m6510 IO port stuff */
     m6510_in_t in_cb;
     m6510_out_t out_cb;
@@ -276,7 +282,7 @@ extern uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
 /* helper macros and functions for code-generated instruction decoder */
 #define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
-static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
+static inline void _m6502_adc(_m6502_state_t* cpu, uint8_t val) {
     if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 1 : 0;
@@ -318,7 +324,7 @@ static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
     }    
 }
 
-static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
+static inline void _m6502_sbc(_m6502_state_t* cpu, uint8_t val) {
     if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 0 : 1;
@@ -361,7 +367,7 @@ static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
     }
 }
 
-static inline void _m6502_arr(m6502_t* cpu) {
+static inline void _m6502_arr(_m6502_state_t* cpu) {
     /* undocumented, unreliable ARR instruction, but this is tested
        by the Wolfgang Lorenz C64 test suite
        implementation taken from MAME
@@ -403,12 +409,12 @@ static inline void _m6502_arr(m6502_t* cpu) {
     }
 }
 
-static inline bool _m6502_check_trap(m6502_t* c) {
-    const uint16_t pc = c->PC - 1;
+static inline bool _m6502_check_trap(m6502_t* cpu, _m6502_state_t* state) {
+    const uint16_t pc = state->PC - 1;
     for (int i = 0; i < M6502_MAX_NUM_TRAPS; i++) {
-        if (c->traps[i].host_addr && (c->traps[i].addr == pc)) {
-            c->PC -= 1;
-            c->trap_id = i;
+        if (cpu->traps[i].host_addr && (cpu->traps[i].addr == pc)) {
+            state->PC -= 1;
+            cpu->trap_id = i;
             return true;
         }
     }
@@ -424,10 +430,10 @@ void m6502_init(m6502_t* c, m6502_desc_t* desc) {
     CHIPS_ASSERT(desc->tick_cb);
     memset(c, 0, sizeof(*c));
     c->tick = desc->tick_cb;
-    c->PINS = M6502_RW;
-    c->P = M6502_IF|M6502_XF;
-    c->S = 0xFD;
-    c->bcd_enabled = !desc->bcd_disabled;
+    c->state.PINS = M6502_RW;
+    c->state.P = M6502_IF|M6502_XF;
+    c->state.S = 0xFD;
+    c->state.bcd_enabled = !desc->bcd_disabled;
     c->in_cb = desc->in_cb;
     c->out_cb = desc->out_cb;
     c->trap_id = -1;
@@ -435,13 +441,13 @@ void m6502_init(m6502_t* c, m6502_desc_t* desc) {
 
 void m6502_reset(m6502_t* c) {
     CHIPS_ASSERT(c);
-    c->P = M6502_IF|M6502_XF;
-    c->S = 0xFD;
-    c->PINS = M6502_RW;
+    c->state.P = M6502_IF|M6502_XF;
+    c->state.S = 0xFD;
+    c->state.PINS = M6502_RW;
     /* load reset vector from 0xFFFD into PC */
     uint8_t l = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFC, 0x00)));
     uint8_t h = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00)));
-    c->PC = (h<<8)|l;
+    c->state.PC = (h<<8)|l;
     c->io_dir = 0;
     c->io_port = 0;
 }
