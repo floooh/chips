@@ -196,10 +196,15 @@ typedef struct {
     bool frame_badlines_enabled;    /* true: when badlines are enabled in frame */
     bool display_state;             /* true: in display state, false: in idle state */
     bool irq;           /* state of the IRQ pin */
+
     uint16_t c_addr_or;     /* OR-mask for c-accesses, computed from mem_ptrs */
     uint16_t g_addr_and;    /* AND-mask for g-accesses, computed from mem_ptrs */
     uint16_t g_addr_or;     /* OR-mask for g-accesses, computed from ECM bit */
     uint16_t i_addr;        /* address for i-accesses, 0x3FFF or 0x39FF (if ECM bit set) */
+    uint8_t g_mode;         /* mode 0..7 precomputed from ECM/BMM/MCM bits */
+    uint32_t bc_rgba8;      /* border color as RGBA8, udpated when border color register is updated */
+    uint32_t bg_rgba8[4];   /* background colors as RGBA8 */
+
     uint16_t vc;        /* 10-bit video counter */
     uint16_t vcbase;    /* 10-bit video counter base */
     uint8_t rc;         /* 3-bit raster counter */
@@ -330,6 +335,11 @@ void m6567_init(m6567_t* vic, m6567_desc_t* desc) {
 void m6567_reset(m6567_t* vic) {
     CHIPS_ASSERT(vic);
     memset(vic->regs, 0, sizeof(vic->regs));
+    vic->g_mode = 0;
+    vic->bc_rgba8 = _m6567_colors[0];
+    for (int i = 0; i < 4; i++) {
+        vic->bg_rgba8[i] = _m6567_colors[0];
+    }
     vic->h_count = 0; vic->v_count = 0;
     vic->hs = false; vic->vs = false;
     vic->irq = false;
@@ -370,6 +380,11 @@ void _m6567_update_fetch_addr(m6567_t* vic, uint8_t mem_ptrs, uint8_t ctrl_1) {
     }
 }
 
+/* updates the current display mode (0..7) from the ECM/BMM/MCM bits */
+void _m6567_update_mode(m6567_t* vic, uint8_t ctrl_1, uint8_t ctrl_2) {
+    vic->g_mode = ((ctrl_1&((1<<6)|(1<<5)))|(ctrl_2&(1<<4)))>>4;
+}
+
 uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
     if (pins & M6567_CS) {
         uint8_t reg_addr = pins & M6567_REG_MASK;
@@ -404,6 +419,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
             bool write = true;
             switch (reg_addr) {
                 case 0x11:
+                    /* ctrl_1 */
                     if (data & (1<<3)) {
                         /* RSEL 1: 25 rows */
                         vic->border_top = 51;
@@ -416,8 +432,11 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     }
                     /* ECM bit updates the precomputed fetch address masks */
                     _m6567_update_fetch_addr(vic, vic->mem_ptrs, data);
+                    /* update the graphics mode */
+                    _m6567_update_mode(vic, data, vic->ctrl_2);
                     break;
                 case 0x16:
+                    /* ctrl_2 */
                     if (data & (1<<3)) {
                         /* CSEL 1: 40 columns */
                         vic->border_left = 15;
@@ -428,16 +447,28 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                         vic->border_left = 16;
                         vic->border_right = 54;
                     }
+                    /* update the graphics mode */
+                    _m6567_update_mode(vic, vic->ctrl_1, data);
                     break;
                 case 0x18:
                     /* memory-ptrs register , update precomputed fetch address masks */
                     _m6567_update_fetch_addr(vic, data, vic->ctrl_1);
                     break;
-
                 case 0x1E:
                 case 0x1F:
                     /* mob collision registers cannot be written */
                     write = false;
+                    break;
+                case 0x20:
+                    /* border color */
+                    vic->bc_rgba8 = _m6567_colors[data & 0xF];
+                    break;
+                case 0x21:
+                case 0x22:
+                case 0x23:
+                case 0x24:
+                    /* background colors */
+                    vic->bg_rgba8[reg_addr-0x21] = _m6567_colors[data & 0xF];
                     break;
             }
             if (write) {
@@ -690,9 +721,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 well as the sprites. It has the highest display priority."
             */
             if (vic->main_border) {
-                uint32_t bc = _m6567_colors[vic->border_color & 0xF];
+                const uint32_t c = vic->bc_rgba8;
                 for (int i = 0; i < 8; i++) {
-                    dst[i] = bc;
+                    dst[i] = c;
                 }
             }
             /*
@@ -701,22 +732,59 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 not set..."
             */
             else if (!vic->vert_border) {
-                const uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
-                const int xscroll = vic->ctrl_2 & 7;
-                /* on idle access, video-matrix-data is treated as a '0' */
-                const uint32_t fg = _m6567_colors[i_access ? 0 : (vic->line_buffer[vic->vmli]>>8)&0xF];
-                const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
-                for (int i = 0; i < 8; i++) {
-                    dst[i] = pixels & (1<<(7-i)) ? fg : bg;
+                switch (vic->g_mode) {
+                    case 0:
+                        /* ECM/BMM/MCM=000, standard text mode */
+                        {
+                            const uint32_t bg = vic->bg_rgba8[0];
+                            const int xscroll = vic->ctrl_2 & 7;
+                            /* on idle access, video-matrix-data is treated as a '0' */
+                            const uint32_t fg = _m6567_colors[i_access ? 0 : (vic->line_buffer[vic->vmli]>>8)&0xF];
+                            const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
+                            for (int i = 0; i < 8; i++) {
+                                dst[i] = pixels & (1<<(7-i)) ? fg : bg;
+                            }
+                        }
+                        break;
+                    case 1:
+                        /* ECM/BMM/MCM=001, multicolor text mode */
+                        {
+                            const uint32_t bg = vic->bg_rgba8[0];
+                            const int xscroll = vic->ctrl_2 & 7;
+                            /* only 3 bits for foreground color of '11' pixels */
+                            const uint16_t c_data = vic->line_buffer[vic->vmli];
+                            const uint32_t fg = _m6567_colors[i_access ? 0 : (c_data>>8)&0x7];
+                            const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
+                            if (c_data & (1<<11)) {
+                                /* multi-color character at half resolution */
+                                dst[0] = dst[1] = (pixels&0xC0)==0xC0?fg:vic->bg_rgba8[(pixels&0xC0)>>6];
+                                dst[2] = dst[3] = (pixels&0x30)==0x30?fg:vic->bg_rgba8[(pixels&0x30)>>4];
+                                dst[4] = dst[5] = (pixels&0x0C)==0x0C?fg:vic->bg_rgba8[(pixels&0x0C)>>2];
+                                dst[6] = dst[7] = (pixels&0x03)==0x03?fg:vic->bg_rgba8[(pixels&0x03)];
+                            }
+                            else {
+                                /* standard-text-mode character */
+                                for (int i = 0; i < 8; i++) {
+                                    dst[i] = pixels & (1<<(7-i)) ? fg : bg;
+                                }
+                            }
+                        }
+                        break;
+                    default:
+                        /* invalid mode */
+                        for (int i = 0; i < 8; i++) {
+                            dst[i] = 0xFFFF00FF;
+                        }
+                        break;
                 }
             }
             /*
                 "...otherwise it displays the background color"
             */
             else {
-                const uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
+                const uint32_t c = vic->bg_rgba8[0];
                 for (int i = 0; i < 8; i++) {
-                    dst[i] = bg;
+                    dst[i] = c;
                 }
             }
         }
