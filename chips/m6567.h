@@ -222,8 +222,8 @@ typedef struct {
     uint8_t g_byte;             /* byte read by current g-access */
     uint8_t g_byte_prev;        /* previous g-access byte */
     uint8_t seq_counter;        /* count down from 8 to 0, on 0 bump seq_vmli, load seq_pixels */
-    int8_t seq_vmli;
-    uint16_t seq_pixels;         /* loaded from g_byte */
+    uint16_t seq_code;          /* line buffer value */
+    uint16_t seq_pixels;        /* loaded from g_byte */
 
     m6567_fetch_t fetch_cb;
     uint32_t* rgba8_buffer;
@@ -576,7 +576,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         if (vic->h_count == 14) {
             vic->vc = vic->vcbase;
             vic->vmli = 0;
-            vic->seq_vmli = -1;
+            vic->seq_code = 0;
             vic->seq_pixels = 0;
             vic->seq_counter = vic->ctrl_2 & 7;
             if (vic->badline) {
@@ -600,6 +600,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 if (vic->h_count == 15) {
                     /* prevent ghost-byte from leaking into display area */
                     vic->g_byte_prev = 0;
+                    vic->seq_pixels = 0;
                 }
                 else {
                     vic->g_byte_prev = vic->g_byte;
@@ -754,12 +755,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                                 if (vic->seq_counter-- == 0) {
                                     vic->seq_counter = 7;
                                     vic->seq_pixels = vic->g_byte;
-                                    vic->seq_vmli++;
+                                    vic->seq_code = i_access ? 0 : vic->line_buffer[vic->vmli];
                                 }
-                                if (vic->seq_vmli >= 0) {
-                                    /* on idle access, video-matrix-data is treated as a '0' */
-                                    fg = _m6567_colors[i_access ? 0 : (vic->line_buffer[vic->seq_vmli]>>8)&0xF];
-                                }
+                                /* on idle access, video-matrix-data is treated as a '0' */
+                                fg = _m6567_colors[(vic->seq_code>>8)&0xF];
                                 dst[i] = (vic->seq_pixels & 0x80) ? fg : bg;
                                 vic->seq_pixels <<= 1;
                             }
