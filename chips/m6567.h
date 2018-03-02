@@ -600,6 +600,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 if (vic->h_count == 15) {
                     /* prevent ghost-byte from leaking into display area */
                     vic->g_byte_prev = 0;
+                    /* clear the sequencer pixels, in case there's an XSCROLL active */
                     vic->seq_pixels = 0;
                 }
                 else {
@@ -647,7 +648,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
         else {
             /* an idle access (all 14 address bits active) */
-            /* FIXME: 0x39FF if the ECM bit is set */
             vic->g_byte = vic->fetch_cb(vic->i_addr);
             i_access = true;
         }
@@ -744,21 +744,19 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 not set..."
             */
             if (!vic->vert_border) {
-                const int xscroll = vic->ctrl_2 & 7;
                 switch (vic->g_mode) {
                     case 0:
                         /* ECM/BMM/MCM=000, standard text mode */
                         {
                             const uint32_t bg = vic->bg_rgba8[0];
-                            uint32_t fg = 0xFFFF00FF;
                             for (int i = 0; i < 8; i++) {
                                 if (vic->seq_counter-- == 0) {
                                     vic->seq_counter = 7;
                                     vic->seq_pixels = vic->g_byte;
+                                    /* on idle access, video-matrix-data is treated as a '0' */
                                     vic->seq_code = i_access ? 0 : vic->line_buffer[vic->vmli];
                                 }
-                                /* on idle access, video-matrix-data is treated as a '0' */
-                                fg = _m6567_colors[(vic->seq_code>>8)&0xF];
+                                uint32_t fg = _m6567_colors[(vic->seq_code>>8)&0xF];
                                 dst[i] = (vic->seq_pixels & 0x80) ? fg : bg;
                                 vic->seq_pixels <<= 1;
                             }
@@ -766,20 +764,19 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                         break;
                     case 1:
                         /* ECM/BMM/MCM=001, multicolor text mode */
+                        /* FIXME FIXME FIXME
                         {
-                            /* only 3 bits for foreground color of '11' pixels */
+                            const int xscroll = vic->ctrl_2 & 7;
                             const uint16_t c_data = i_access ? 0 : vic->line_buffer[vic->vmli];
                             const uint32_t fg = _m6567_colors[(c_data>>8) & 0x7];
                             const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
                             if (c_data & (1<<11)) {
-                                /* multi-color character at half resolution */
                                 dst[0] = dst[1] = (pixels&0xC0)==0xC0 ? fg : vic->bg_rgba8[(pixels&0xC0)>>6];
                                 dst[2] = dst[3] = (pixels&0x30)==0x30 ? fg : vic->bg_rgba8[(pixels&0x30)>>4];
                                 dst[4] = dst[5] = (pixels&0x0C)==0x0C ? fg : vic->bg_rgba8[(pixels&0x0C)>>2];
                                 dst[6] = dst[7] = (pixels&0x03)==0x03 ? fg : vic->bg_rgba8[(pixels&0x03)];
                             }
                             else {
-                                /* standard-text-mode character */
                                 const uint32_t bg = vic->bg_rgba8[0];
                                 dst[0] = (pixels & 0x80) ? fg : bg;
                                 dst[1] = (pixels & 0x40) ? fg : bg;
@@ -791,22 +788,23 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                                 dst[7] = (pixels & 0x01) ? fg : bg;
                             }
                         }
+                        */
                         break;
                     case 2:
                         /* ECM/BMM/MCM=010, standard bitmap mode */
                         {
-                            const uint16_t c_data = i_access ? 0 : vic->line_buffer[vic->vmli];
-                            const uint32_t fg = _m6567_colors[(c_data>>4) & 0xF];
-                            const uint32_t bg = _m6567_colors[c_data & 0xF];
-                            const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
-                            dst[0] = (pixels & 0x80) ? fg : bg;
-                            dst[1] = (pixels & 0x40) ? fg : bg;
-                            dst[2] = (pixels & 0x20) ? fg : bg;
-                            dst[3] = (pixels & 0x10) ? fg : bg;
-                            dst[4] = (pixels & 0x08) ? fg : bg;
-                            dst[5] = (pixels & 0x04) ? fg : bg;
-                            dst[6] = (pixels & 0x02) ? fg : bg;
-                            dst[7] = (pixels & 0x01) ? fg : bg;
+                            for (int i = 0; i < 8; i++) {
+                                if (vic->seq_counter-- == 0) {
+                                    vic->seq_counter = 7;
+                                    vic->seq_pixels = vic->g_byte;
+                                    vic->seq_code = i_access ? 0 : vic->line_buffer[vic->vmli];
+                                }
+                                uint16_t c_data = vic->seq_code;
+                                uint32_t fg = _m6567_colors[(c_data>>4) & 0xF];
+                                uint32_t bg = _m6567_colors[c_data & 0xF];
+                                dst[i] = (vic->seq_pixels & 0x80) ? fg : bg;
+                                vic->seq_pixels <<= 1;
+                            }
                         }
                         break;
                     default:
