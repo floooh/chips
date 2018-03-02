@@ -221,6 +221,9 @@ typedef struct {
     uint16_t line_buffer[64];   /* 40x 8+4 bits line buffer (64 items because vmli is a 6-bit ctr) */
     uint8_t g_byte;             /* byte read by current g-access */
     uint8_t g_byte_prev;        /* previous g-access byte */
+    uint8_t seq_counter;        /* count down from 8 to 0, on 0 bump seq_vmli, load seq_pixels */
+    int8_t seq_vmli;
+    uint16_t seq_pixels;         /* loaded from g_byte */
 
     m6567_fetch_t fetch_cb;
     uint32_t* rgba8_buffer;
@@ -573,6 +576,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         if (vic->h_count == 14) {
             vic->vc = vic->vcbase;
             vic->vmli = 0;
+            vic->seq_vmli = -1;
+            vic->seq_pixels = 0;
+            vic->seq_counter = vic->ctrl_2 & 7;
             if (vic->badline) {
                 vic->rc = 0;
             }
@@ -732,41 +738,31 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             const int dst_y = vic->vis_y;
             uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w*8 + dst_x;
             /*
-                "The main border flip flop controls the border display. If it is set, the
-                VIC displays the color stored in register $d020, otherwise it displays the
-                color that the priority multiplexer switches through from the graphics or
-                sprite data sequencer. So the border overlays the text/bitmap graphics as
-                well as the sprites. It has the highest display priority."
-            */
-            if (vic->main_border) {
-                const uint32_t c = vic->bc_rgba8;
-                for (int i = 0; i < 8; i++) {
-                    dst[i] = c;
-                }
-            }
-            /*
                 "...the vertical border flip flop controls the output of the graphics
                 data sequencer. The sequencer only outputs data if the flip flop is
                 not set..."
             */
-            else if (!vic->vert_border) {
+            if (!vic->vert_border) {
                 const int xscroll = vic->ctrl_2 & 7;
                 switch (vic->g_mode) {
                     case 0:
                         /* ECM/BMM/MCM=000, standard text mode */
                         {
                             const uint32_t bg = vic->bg_rgba8[0];
-                            /* on idle access, video-matrix-data is treated as a '0' */
-                            const uint32_t fg = _m6567_colors[i_access ? 0 : (vic->line_buffer[vic->vmli]>>8)&0xF];
-                            const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
-                            dst[0] = (pixels & 0x80) ? fg : bg;
-                            dst[1] = (pixels & 0x40) ? fg : bg;
-                            dst[2] = (pixels & 0x20) ? fg : bg;
-                            dst[3] = (pixels & 0x10) ? fg : bg;
-                            dst[4] = (pixels & 0x08) ? fg : bg;
-                            dst[5] = (pixels & 0x04) ? fg : bg;
-                            dst[6] = (pixels & 0x02) ? fg : bg;
-                            dst[7] = (pixels & 0x01) ? fg : bg;
+                            uint32_t fg = 0xFFFF00FF;
+                            for (int i = 0; i < 8; i++) {
+                                if (vic->seq_counter-- == 0) {
+                                    vic->seq_counter = 7;
+                                    vic->seq_pixels = vic->g_byte;
+                                    vic->seq_vmli++;
+                                }
+                                if (vic->seq_vmli >= 0) {
+                                    /* on idle access, video-matrix-data is treated as a '0' */
+                                    fg = _m6567_colors[i_access ? 0 : (vic->line_buffer[vic->seq_vmli]>>8)&0xF];
+                                }
+                                dst[i] = (vic->seq_pixels & 0x80) ? fg : bg;
+                                vic->seq_pixels <<= 1;
+                            }
                         }
                         break;
                     case 1:
@@ -827,6 +823,19 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             */
             else {
                 const uint32_t c = vic->bg_rgba8[0];
+                for (int i = 0; i < 8; i++) {
+                    dst[i] = c;
+                }
+            }
+            /*
+                "The main border flip flop controls the border display. If it is set, the
+                VIC displays the color stored in register $d020, otherwise it displays the
+                color that the priority multiplexer switches through from the graphics or
+                sprite data sequencer. So the border overlays the text/bitmap graphics as
+                well as the sprites. It has the highest display priority."
+            */
+            if (vic->main_border) {
+                const uint32_t c = vic->bc_rgba8;
                 for (int i = 0; i < 8; i++) {
                     dst[i] = c;
                 }
