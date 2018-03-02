@@ -210,7 +210,8 @@ typedef struct {
     uint16_t vis_w, vis_h;      /* width of visible area */
 
     uint16_t line_buffer[64];   /* 40x 8+4 bits line buffer (64 items because vmli is a 6-bit ctr) */
-    uint8_t g_byte;             /* the last read byte with a g-access */
+    uint8_t g_byte;             /* byte read by current g-access */
+    uint8_t g_byte_prev;        /* byte read by previous g-access */
 
     m6567_fetch_t fetch_cb;
     uint32_t* rgba8_buffer;
@@ -495,6 +496,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     bool aec = false;
     bool c_access = false;
     bool g_access = false;
+    bool i_access = false;
     {
         /* 1. Once somewhere outside of the range of raster lines $30-$f7 (i.e.
             outside of the Bad Line range), VCBASE is reset to zero. This is
@@ -555,12 +557,19 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             uint16_t addr = ((vic->mem_ptrs & 0xF0)<<6) | (vic->vc & 0x3FF);
             vic->line_buffer[vic->vmli] = vic->fetch_cb(addr);
         }
+        vic->g_byte_prev = vic->g_byte;
         if (g_access) {
             /* addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
             uint16_t addr = ((vic->mem_ptrs & 0x0E) << 10) |
                             ((vic->line_buffer[vic->vmli] & 0xFF) << 3) |
                             (vic->rc & 7);
             vic->g_byte = vic->fetch_cb(addr);
+        }
+        else {
+            /* an idle access (all 14 address bits active) */
+            /* FIXME: 0x39FF if the ECM bit is set */
+            vic->g_byte = vic->fetch_cb(0x3FFF);
+            i_access = true;
         }
     }
 
@@ -645,31 +654,26 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             const int dst_x = vic->vis_x * 8;
             const int dst_y = vic->vis_y;
             uint32_t* dst = vic->rgba8_buffer + dst_y*vic->vis_w*8 + dst_x;
-            if (g_access) {
-                const uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
-                const int xscroll = vic->ctrl_2 & 7;
-                if (vic->vmli == 0) {
-                    for (int i = 0; i < xscroll; i++) {
-                        dst[i] = bg;
-                    }
-                }
-                const uint32_t fg = _m6567_colors[(vic->line_buffer[vic->vmli]>>8)&0xF];
-                const uint8_t mask = vic->g_byte;
-                dst[0 + xscroll] = mask & 0x80 ? fg : bg;
-                dst[1 + xscroll] = mask & 0x40 ? fg : bg;
-                dst[2 + xscroll] = mask & 0x20 ? fg : bg;
-                dst[3 + xscroll] = mask & 0x10 ? fg : bg;
-                dst[4 + xscroll] = mask & 0x08 ? fg : bg;
-                dst[5 + xscroll] = mask & 0x04 ? fg : bg;
-                dst[6 + xscroll] = mask & 0x02 ? fg : bg;
-                dst[7 + xscroll] = mask & 0x01 ? fg : bg;
-            }
-            /* the border may particle obscure valid pixels in 38 column mode */
             if (vic->main_border) {
                 uint32_t bc = _m6567_colors[vic->border_color & 0xF];
                 for (int i = 0; i < 8; i++) {
                     dst[i] = bc;
                 }
+            }
+            else if (vic->display_state) {
+                const uint32_t bg = _m6567_colors[vic->background_color[0]&0xF];
+                const int xscroll = vic->ctrl_2 & 7;
+                /* on idle access, video-matrix-data is treated as a '0' */
+                const uint32_t fg = _m6567_colors[i_access ? 0 : (vic->line_buffer[vic->vmli]>>8)&0xF];
+                const uint8_t mask = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
+                dst[0] = mask & 0x80 ? fg : bg;
+                dst[1] = mask & 0x40 ? fg : bg;
+                dst[2] = mask & 0x20 ? fg : bg;
+                dst[3] = mask & 0x10 ? fg : bg;
+                dst[4] = mask & 0x08 ? fg : bg;
+                dst[5] = mask & 0x04 ? fg : bg;
+                dst[6] = mask & 0x02 ? fg : bg;
+                dst[7] = mask & 0x01 ? fg : bg;
             }
         }
     }
