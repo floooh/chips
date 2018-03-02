@@ -220,7 +220,7 @@ typedef struct {
 
     uint16_t line_buffer[64];   /* 40x 8+4 bits line buffer (64 items because vmli is a 6-bit ctr) */
     uint8_t g_byte;             /* byte read by current g-access */
-    uint8_t g_byte_prev;        /* byte read by previous g-access */
+    uint8_t g_byte_prev;        /* previous g-access byte */
 
     m6567_fetch_t fetch_cb;
     uint32_t* rgba8_buffer;
@@ -591,6 +591,13 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             }
             if (vic->display_state && (vic->h_count >= 15)) {
                 g_access = true;
+                if (vic->h_count == 15) {
+                    /* prevent ghost-byte from leaking into display area */
+                    vic->g_byte_prev = 0;
+                }
+                else {
+                    vic->g_byte_prev = vic->g_byte;
+                }
             }
         }
 
@@ -612,16 +619,23 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     /*--- perform memory fetches ---------------------------------------------*/
     /* (see 3.6.3. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
     {
+        uint16_t addr;
         if (c_access) {
             /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
-            uint16_t addr = (vic->vc & 0x3FF) | vic->c_addr_or;
+            addr = vic->vc | vic->c_addr_or;
             vic->line_buffer[vic->vmli] = vic->fetch_cb(addr);
         }
-        vic->g_byte_prev = vic->g_byte;
         if (g_access) {
-            /* addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
-            uint16_t addr = ((vic->line_buffer[vic->vmli]&0xFF)<<3) | (vic->rc&7);
-            addr = (addr | vic->g_addr_or) & vic->g_addr_and;
+            if (vic->ctrl_1 & (1<<5)) {
+                /* bitmap mode: addr=|CB13|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0|RC2|RC1|RC0| */
+                addr = vic->vc<<3 | vic->rc;
+                addr = (addr | (vic->g_addr_or & (1<<13))) & vic->g_addr_and;
+            }
+            else {
+                /* text mode: addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
+                addr = ((vic->line_buffer[vic->vmli]&0xFF)<<3) | vic->rc;
+                addr = (addr | vic->g_addr_or) & vic->g_addr_and;
+            }
             vic->g_byte = vic->fetch_cb(addr);
         }
         else {
@@ -709,6 +723,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
 
     /*--- decode pixels into framebuffer -------------------------------------*/
     {
+        /* FIXME: when XSCROLLing, the background color must scroll as well
+           in bitmap mode!
+        */
+
         if (vic->vis_enabled && !(vic->hs||vic->vs)) {
             const int dst_x = vic->vis_x * 8;
             const int dst_y = vic->vis_y;
@@ -732,42 +750,68 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 not set..."
             */
             else if (!vic->vert_border) {
+                const int xscroll = vic->ctrl_2 & 7;
                 switch (vic->g_mode) {
                     case 0:
                         /* ECM/BMM/MCM=000, standard text mode */
                         {
                             const uint32_t bg = vic->bg_rgba8[0];
-                            const int xscroll = vic->ctrl_2 & 7;
                             /* on idle access, video-matrix-data is treated as a '0' */
                             const uint32_t fg = _m6567_colors[i_access ? 0 : (vic->line_buffer[vic->vmli]>>8)&0xF];
                             const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
-                            for (int i = 0; i < 8; i++) {
-                                dst[i] = pixels & (1<<(7-i)) ? fg : bg;
-                            }
+                            dst[0] = (pixels & 0x80) ? fg : bg;
+                            dst[1] = (pixels & 0x40) ? fg : bg;
+                            dst[2] = (pixels & 0x20) ? fg : bg;
+                            dst[3] = (pixels & 0x10) ? fg : bg;
+                            dst[4] = (pixels & 0x08) ? fg : bg;
+                            dst[5] = (pixels & 0x04) ? fg : bg;
+                            dst[6] = (pixels & 0x02) ? fg : bg;
+                            dst[7] = (pixels & 0x01) ? fg : bg;
                         }
                         break;
                     case 1:
                         /* ECM/BMM/MCM=001, multicolor text mode */
                         {
-                            const uint32_t bg = vic->bg_rgba8[0];
-                            const int xscroll = vic->ctrl_2 & 7;
                             /* only 3 bits for foreground color of '11' pixels */
-                            const uint16_t c_data = vic->line_buffer[vic->vmli];
-                            const uint32_t fg = _m6567_colors[i_access ? 0 : (c_data>>8)&0x7];
+                            const uint16_t c_data = i_access ? 0 : vic->line_buffer[vic->vmli];
+                            const uint32_t fg = _m6567_colors[(c_data>>8) & 0x7];
                             const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
                             if (c_data & (1<<11)) {
                                 /* multi-color character at half resolution */
-                                dst[0] = dst[1] = (pixels&0xC0)==0xC0?fg:vic->bg_rgba8[(pixels&0xC0)>>6];
-                                dst[2] = dst[3] = (pixels&0x30)==0x30?fg:vic->bg_rgba8[(pixels&0x30)>>4];
-                                dst[4] = dst[5] = (pixels&0x0C)==0x0C?fg:vic->bg_rgba8[(pixels&0x0C)>>2];
-                                dst[6] = dst[7] = (pixels&0x03)==0x03?fg:vic->bg_rgba8[(pixels&0x03)];
+                                dst[0] = dst[1] = (pixels&0xC0)==0xC0 ? fg : vic->bg_rgba8[(pixels&0xC0)>>6];
+                                dst[2] = dst[3] = (pixels&0x30)==0x30 ? fg : vic->bg_rgba8[(pixels&0x30)>>4];
+                                dst[4] = dst[5] = (pixels&0x0C)==0x0C ? fg : vic->bg_rgba8[(pixels&0x0C)>>2];
+                                dst[6] = dst[7] = (pixels&0x03)==0x03 ? fg : vic->bg_rgba8[(pixels&0x03)];
                             }
                             else {
                                 /* standard-text-mode character */
-                                for (int i = 0; i < 8; i++) {
-                                    dst[i] = pixels & (1<<(7-i)) ? fg : bg;
-                                }
+                                const uint32_t bg = vic->bg_rgba8[0];
+                                dst[0] = (pixels & 0x80) ? fg : bg;
+                                dst[1] = (pixels & 0x40) ? fg : bg;
+                                dst[2] = (pixels & 0x20) ? fg : bg;
+                                dst[3] = (pixels & 0x10) ? fg : bg;
+                                dst[4] = (pixels & 0x08) ? fg : bg;
+                                dst[5] = (pixels & 0x04) ? fg : bg;
+                                dst[6] = (pixels & 0x02) ? fg : bg;
+                                dst[7] = (pixels & 0x01) ? fg : bg;
                             }
+                        }
+                        break;
+                    case 2:
+                        /* ECM/BMM/MCM=010, standard bitmap mode */
+                        {
+                            const uint16_t c_data = i_access ? 0 : vic->line_buffer[vic->vmli];
+                            const uint32_t fg = _m6567_colors[(c_data>>4) & 0xF];
+                            const uint32_t bg = _m6567_colors[c_data & 0xF];
+                            const uint8_t pixels = (uint8_t) (((uint16_t)((vic->g_byte_prev<<8)|vic->g_byte))>>xscroll);
+                            dst[0] = (pixels & 0x80) ? fg : bg;
+                            dst[1] = (pixels & 0x40) ? fg : bg;
+                            dst[2] = (pixels & 0x20) ? fg : bg;
+                            dst[3] = (pixels & 0x10) ? fg : bg;
+                            dst[4] = (pixels & 0x08) ? fg : bg;
+                            dst[5] = (pixels & 0x04) ? fg : bg;
+                            dst[6] = (pixels & 0x02) ? fg : bg;
+                            dst[7] = (pixels & 0x01) ? fg : bg;
                         }
                         break;
                     default:
