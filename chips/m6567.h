@@ -232,7 +232,7 @@ typedef struct {
     uint8_t count;              /* counts from 0..8 */
     uint16_t shift;             /* pixel mask shifter, bits > 8 are the 'shift-out' result */
     uint16_t shift2;            /* copied from pixel mask shifter every even tick */
-    uint16_t vm;                /* loaded from video matrix line buffer */
+    uint16_t c_data;            /* loaded from video matrix line buffer */
     uint32_t bg_rgba8[4];       /* background colors as RGBA8 */
 } _m6567_graphics_sequencer_t;
 
@@ -553,7 +553,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
 */
 static inline void _m6567_gseq_start(_m6567_graphics_sequencer_t* gseq, uint8_t xscroll) {
     gseq->enabled = true;
-    gseq->vm = 0;
+    gseq->c_data = 0;
     gseq->shift = 0;
     gseq->shift2 = 0;
     gseq->count = xscroll;
@@ -562,7 +562,7 @@ static inline void _m6567_gseq_start(_m6567_graphics_sequencer_t* gseq, uint8_t 
 /* stop the graphics sequencer, this will set the video-matrix-value to 0 */
 static inline void _m6567_gseq_stop(_m6567_graphics_sequencer_t* gseq) {
     gseq->enabled = false;
-    gseq->vm = 0;
+    gseq->c_data = 0;
 }
 
 /* Tick the graphics sequencer, this will countdown a counter, when it
@@ -577,7 +577,7 @@ static inline uint16_t _m6567_gseq_tick(m6567_t* vic) {
     if (vic->gseq.count-- == 0) {
         vic->gseq.count = 7;
         vic->gseq.shift |= vic->mem.g_data;
-        vic->gseq.vm = vic->gseq.enabled ? vic->vm.line[vic->vm.vmli] : 0;
+        vic->gseq.c_data = vic->gseq.enabled ? vic->vm.line[vic->vm.vmli] : 0;
     }
     vic->gseq.shift <<= 1;
     /* store the last 'bit pair' shift value for half-resolution modes */
@@ -822,7 +822,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                         {
                             const uint32_t bg = gseq->bg_rgba8[0];
                             for (int i = 0; i < 8; i++) {
-                                dst[i] = _m6567_gseq_tick(vic) & 0x100 ? _m6567_colors[(gseq->vm>>8)&0xF] : bg;
+                                dst[i] = _m6567_gseq_tick(vic) & 0x100 ? _m6567_colors[(gseq->c_data>>8)&0xF] : bg;
                             }
                         }
                         break;
@@ -833,10 +833,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                             for (int i = 0; i < 8; i++) {
                                 _m6567_gseq_tick(vic);
                                 /* only seven colors in multicolor mode */
-                                const uint32_t fg = _m6567_colors[(gseq->vm>>8) & 0x7];
-                                if (gseq->vm & (1<<11)) {
+                                const uint32_t fg = _m6567_colors[(gseq->c_data>>8) & 0x7];
+                                if (gseq->c_data & (1<<11)) {
                                     /* shift 2 is only updated every 2 ticks */
-                                    uint16_t bits = gseq->shift2;
+                                    uint16_t bits = ((gseq->shift2)>>8) & 3;
                                     /* half resolution multicolor char
                                        need 2 bits from the pixel sequencer
                                             "00": Background color 0 ($d021)
@@ -844,13 +844,13 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                                             "10": Background color 2 ($d023)
                                             "11": Color from bits 8-10 of c-data
                                     */
-                                    if ((bits & 0x300) == 0x300) {
+                                    if (bits == 3) {
                                         /* special case '11' */
                                         dst[i] = fg;
                                     }
                                     else {
                                         /* one of the 3 background colors */
-                                        dst[i] = gseq->bg_rgba8[(bits>>8)&3];
+                                        dst[i] = gseq->bg_rgba8[bits];
                                     }
                                 }
                                 else {
@@ -866,11 +866,35 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                             for (int i = 0; i < 8; i++) {
                                 if (_m6567_gseq_tick(vic) & 0x100) {
                                     /* foreground pixel */
-                                    dst[i] = _m6567_colors[(gseq->vm >> 4) & 0xF];
+                                    dst[i] = _m6567_colors[(gseq->c_data >> 4) & 0xF];
                                 }
                                 else {
                                     /* background pixel */
-                                    dst[i] = _m6567_colors[gseq->vm & 0xF];
+                                    dst[i] = _m6567_colors[gseq->c_data & 0xF];
+                                }
+                            }
+                        }
+                        break;
+                    case 3:
+                        /* ECM/BMM/MCM=011, multicolor bitmap mode */
+                        {
+                            const uint32_t bg = gseq->bg_rgba8[0];
+                            for (int i = 0; i < 8; i++) {
+                                _m6567_gseq_tick(vic);
+                                /* shift 2 is only updated every 2 ticks */
+                                uint16_t bits = gseq->shift2;
+                                /* half resolution multicolor char
+                                   need 2 bits from the pixel sequencer
+                                        "00": Background color 0 ($d021)
+                                        "01": Color from bits 4-7 of c-data
+                                        "10": Color from bits 0-3 of c-data
+                                        "11": Color from bits 8-11 of c-data
+                                */
+                                switch ((bits>>8)&3) {
+                                    case 0: dst[i] = bg; break;
+                                    case 1: dst[i] = _m6567_colors[(gseq->c_data>>4) & 0xF]; break;
+                                    case 2: dst[i] = _m6567_colors[gseq->c_data & 0xF]; break;
+                                    case 3: dst[i] = _m6567_colors[(gseq->c_data>>8) & 0xF]; break;
                                 }
                             }
                         }
