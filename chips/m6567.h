@@ -176,9 +176,8 @@ typedef struct {
 
 /* raster unit state */
 typedef struct {
-    uint16_t h_count, h_total, h_syncpos, h_syncend;
-    uint16_t v_count, v_total, v_syncpos, v_syncend;
-    bool h_sync, v_sync;
+    uint16_t h_count, h_total, h_retracepos;
+    uint16_t v_count, v_total, v_retracepos;
     uint16_t vc;            /* 10-bit video counter */
     uint16_t vc_base;       /* 10-bit video counter base */
     uint8_t rc;             /* 3-bit raster counter */
@@ -214,8 +213,6 @@ typedef struct {
 
 /* CRT state tracking */
 typedef struct {
-    uint16_t h_retrace;         /* hori retrace counter, started with h_sync */
-    uint16_t v_retrace;         /* vert retrace counter, started with v_sync */
     uint16_t x, y;              /* bream pos reset on crt_retrace_h/crt_retrace_v zero */
     uint16_t vis_x, vis_y;      /* current position in visible area */
     bool vis_enabled;           /* beam is currently in visible area */
@@ -317,20 +314,16 @@ static void _m6567_init_raster_unit(_m6567_raster_unit_t* r, m6567_desc_t* desc)
     if (desc->type == M6567_TYPE_6569) {
         /* PAL-B */
         r->h_total = 63;          /* 63 cycles per line */
-        r->h_syncpos = 61;
-        r->h_syncend = 10;
+        r->h_retracepos = 3;
         r->v_total = 312;         /* 312 lines total (PAL) */
-        r->v_syncpos = 300;
-        r->v_syncend = 7;
+        r->v_retracepos = 303;
     }
     else {
         /* NTSC */
         r->h_total = 65;          /* 65 cycles per line */
-        r->h_syncpos = 63;        /* start of hsync (6 chars right border) */
-        r->h_syncend = 10;        /* left border is 6 characters wide */
+        r->h_retracepos = 3;
         r->v_total = 263;         /* 263 lines total (NTSC) */
-        r->v_syncpos = 13;
-        r->v_syncend = 40;        /* this can't be right? */
+        r->v_retracepos = 16;
     }
 }
 
@@ -365,7 +358,6 @@ static void _m6567_reset_register_bank(_m6567_registers_t* r) {
 
 static void _m6567_reset_raster_unit(_m6567_raster_unit_t* r) {
     r->h_count = r->v_count = 0;
-    r->h_sync = r->v_sync = 0;
     r->vc = r->vc_base = 0;
     r->rc = 0;
     r->display_state = false;
@@ -395,7 +387,6 @@ static void _m6567_reset_border_unit(_m6567_border_unit_t* b) {
 }
 
 static void _m6567_reset_crt(_m6567_crt_t* c) {
-    c->h_retrace = c->v_retrace = 0;
     c->x = c->y = 0;
     c->vis_x = c->vis_y = 0;
     c->vis_enabled = false;
@@ -563,28 +554,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         _m6567_video_matrix_t* vm = &vic->vm;
         _m6567_graphics_sequencer_t* gseq = &vic->gseq;
 
-        /* update horizontal counter and hsync state */
+        /* update horizontal and vertical counters */
         if (rs->h_count == rs->h_total) {
             rs->h_count = 0;
-            /* FIXME: only if raster interrupt enabled!
-            vic->irq = true;
-            */
-        }
-        else {
-            rs->h_count++;
-            rs->irq = false;
-        }
-        if (rs->h_count == rs->h_syncpos) {
-            rs->h_sync = true;
-            /* retrace the CRT beam 7 ticks after htick starts */
-            crt->h_retrace = 7;
-        }
-        if (rs->h_count == rs->h_syncend) {
-            rs->h_sync = false;
-        }
-
-        /* new scanline? */
-        if (rs->h_count == 0) {
+            /* new scanline */
             if (rs->v_count == rs->v_total) {
                 rs->v_count = 0;
                 rs->vc_base = 0;
@@ -592,13 +565,36 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             else {
                 rs->v_count++;
             }
-            if (rs->v_count == rs->v_syncpos) {
-                rs->v_sync = true;
-                crt->v_retrace = 3;
+        }
+        else {
+            rs->h_count++;
+            rs->irq = false;
+        }
+
+        /* update the crt beam position */
+        if (rs->h_count == rs->h_retracepos) {
+            crt->x = 0;
+            if (rs->v_count == rs->v_retracepos) {
+                crt->y = 0;
             }
-            if (rs->v_count == rs->v_syncend) {
-                rs->v_sync = false;
+            else {
+                crt->y++;
             }
+        }
+        else {
+            crt->x++;
+        }
+
+        /* update visible-area coordinates and enabled-state */
+        if ((crt->x >= crt->vis_x0) && (crt->x < crt->vis_x1) &&
+            (crt->y >= crt->vis_y0) && (crt->y < crt->vis_y1))
+        {
+            crt->vis_enabled = true;
+            crt->vis_x = crt->x - crt->vis_x0;
+            crt->vis_y = crt->y - crt->vis_y0;
+        }
+        else {
+            crt->vis_enabled = false;
         }
 
         /* badline state ((see 3.5 http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
@@ -756,34 +752,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             if (!brd->vert) {
                 brd->main = false;
             }
-        }
-    }
-
-    /*--- update the CRT beam position ---------------------------------------*/
-    {
-        _m6567_crt_t* crt = &vic->crt;
-        crt->x++;
-        if (crt->h_retrace > 0) {
-            if (--crt->h_retrace == 0) {
-                crt->x = 0;
-                crt->y++;
-                if (crt->v_retrace > 0) {
-                    if (--crt->v_retrace == 0) {
-                        crt->y = 0;
-                    }
-                }
-            }
-        }
-        /* update visible-area coordinates and enabled-state */
-        if ((crt->x >= crt->vis_x0) && (crt->x < crt->vis_x1) &&
-            (crt->y >= crt->vis_y0) && (crt->y < crt->vis_y1))
-        {
-            crt->vis_enabled = true;
-            crt->vis_x = crt->x - crt->vis_x0;
-            crt->vis_y = crt->y - crt->vis_y0;
-        }
-        else {
-            crt->vis_enabled = false;
         }
     }
 
