@@ -899,6 +899,18 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                             }
                         }
                         break;
+                    case 4:
+                        /* ECM/BMM/MCM=100, ECM text mode */
+                        for (int i = 0; i < 8; i++) {
+                            const uint16_t bits = _m6567_gseq_tick(vic);
+                            /* bg color selected by bits 6 and 7 of c_data */
+                            const uint32_t bg = gseq->bg_rgba8[(gseq->c_data>>6) & 3];
+                            /* foreground color as usual bits 8..11 of c_data */
+                            const uint32_t fg = _m6567_colors[(gseq->c_data>>8) & 0xF];
+                            dst[i] = bits & 0x100 ? fg : bg;
+                        }
+                        break;
+
                     default:
                         /* invalid mode */
                         for (int i = 0; i < 8; i++) {
