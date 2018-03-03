@@ -158,8 +158,8 @@ typedef struct {
             uint8_t ctrl_2;                     /* control register 2 */
             uint8_t mob_yexp;                   /* sprite Y expansion */
             uint8_t mem_ptrs;                   /* memory pointers */
-            uint8_t interrupt;                  /* interrupt register */
-            uint8_t int_enable;                 /* interrupt enabled bits */
+            uint8_t int_latch;                  /* interrupt latch */
+            uint8_t int_mask;                   /* interrupt-enabled mask */
             uint8_t mob_data_priority;          /* sprite data priority bits */
             uint8_t mob_multicolor;             /* sprite multicolor bits */
             uint8_t mob_xexp;                   /* sprite X expansion */
@@ -178,13 +178,13 @@ typedef struct {
 typedef struct {
     uint16_t h_count, h_total, h_retracepos;
     uint16_t v_count, v_total, v_retracepos;
+    uint16_t v_irq;         /* raster interrupt line, updated when ctrl_1 or raster is written */
     uint16_t vc;            /* 10-bit video counter */
     uint16_t vc_base;       /* 10-bit video counter base */
     uint8_t rc;             /* 3-bit raster counter */
     bool display_state;             /* true: in display state, false: in idle state */
     bool badline;                   /* true when the badline state is active */
     bool frame_badlines_enabled;    /* true when badlines are enabled in frame */
-    bool irq;               /* true when IRQ requested */
 } _m6567_raster_unit_t;
 
 /* address generator / memory interface state */
@@ -274,6 +274,8 @@ extern uint32_t m6567_color(int i);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#include <stdio.h>
+
 /* color palette (see: http://unusedino.de/ec64/technical/misc/vic656x/colors/) */
 #define _M6567_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
 static const uint32_t _m6567_colors[16] = {
@@ -303,8 +305,8 @@ static const uint8_t _m6567_reg_mask[M6567_NUM_REGS] = {
     0x3F,   /* ctrl2 */
     0xFF,   /* mob y expansion */
     0xFE,   /* memory pointers */
-    0x8F,   /* interrupt register */
-    0x0F,   /* interrupt enabled */
+    0x8F,   /* interrupt latch */
+    0x0F,   /* interrupt enabled mask */
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF,   /* mob data pri, multicolor, x expansion, mob-mob coll, mob-data coll */
     0x0F,                       /* border color */
     0x0F, 0x0F, 0x0F, 0x0F,     /* background colors */
@@ -364,12 +366,12 @@ static void _m6567_reset_register_bank(_m6567_registers_t* r) {
 
 static void _m6567_reset_raster_unit(_m6567_raster_unit_t* r) {
     r->h_count = r->v_count = 0;
+    r->v_irq = 0;
     r->vc = r->vc_base = 0;
     r->rc = 0;
     r->display_state = false;
     r->badline = false;
     r->frame_badlines_enabled = false;
-    r->irq = false;
 }
 
 static void _m6567_reset_memory_unit(_m6567_memory_unit_t* m) {
@@ -414,6 +416,11 @@ void m6567_reset(m6567_t* vic) {
 }
 
 /*--- I/O requests -----------------------------------------------------------*/
+
+/* update the raster-interrupt line from ctrl_1 and raster register updates */
+static void _m6567_io_update_irq_line(_m6567_raster_unit_t* rs, uint8_t ctrl_1, uint8_t rast) {
+    rs->v_irq = ((ctrl_1 & 0x80)<<1) | rast;
+}
 
 /* update memory unit values after update mem_ptrs or ctrl_1 registers */
 static void _m6567_io_update_memory_unit(_m6567_memory_unit_t* m, uint8_t mem_ptrs, uint8_t ctrl_1) {
@@ -503,7 +510,9 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
             const uint8_t data = M6567_GET_DATA(pins) & _m6567_reg_mask[reg_addr];
             bool write = true;
             switch (reg_addr) {
-                case 0x11:
+                case 0x11:  /* ctrl_1 */
+                    /* update raster interrupt line */
+                    _m6567_io_update_irq_line(&vic->rs, data, rb->raster);
                     /* update border top/bottom from RSEL flag */
                     _m6567_io_update_border_rsel(&vic->brd, data);
                     /* ECM bit updates the precomputed fetch address masks */
@@ -511,7 +520,11 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     /* update the graphics mode */
                     _m6567_io_update_gseq_mode(&vic->gseq, data, rb->ctrl_2);
                     break;
-                case 0x16:
+                case 0x12:
+                    /* raster irq value lower 8 bits */
+                    _m6567_io_update_irq_line(&vic->rs, rb->ctrl_1, data);
+                    break;
+                case 0x16: /* ctrl_2 */
                     /* update border left/right from CSEL flag */
                     _m6567_io_update_border_csel(&vic->brd, data);
                     /* update the graphics mode */
@@ -520,6 +533,13 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                 case 0x18:
                     /* memory-ptrs register , update precomputed fetch address masks */
                     _m6567_io_update_memory_unit(&vic->mem, data, rb->ctrl_1);
+                    break;
+                case 0x19:
+                    /* interrupt latch: to clear a bit in the latch, a 1-bit
+                       must be written to the latch!
+                    */
+                    rb->int_latch = (rb->int_latch & ~data) & _m6567_reg_mask[0x19];
+                    write = false;
                     break;
                 case 0x1E:
                 case 0x1F:
@@ -602,6 +622,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         _m6567_memory_unit_t* mem = &vic->mem;
 
         /* update horizontal and vertical counters */
+        /* FIXME: "Raster line 0 is, however, an exception: In this line, IRQ
+            and incrementing (resp. resetting) of RASTER are performed one cycle later
+            than in the other lines.
+        */
         if (rs->h_count == rs->h_total) {
             rs->h_count = 0;
             /* new scanline */
@@ -612,10 +636,13 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             else {
                 rs->v_count++;
             }
+            /* check for raster interrupt */
+            if ((rs->v_count == rs->v_irq) && (vic->reg.int_mask & (1<<0))) {
+                vic->reg.int_latch |= (1<<7)|(1<<0);
+            }
         }
         else {
             rs->h_count++;
-            rs->irq = false;
         }
 
         /* update the crt beam position */
@@ -912,9 +939,12 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                         break;
 
                     default:
-                        /* invalid mode */
+                        /*
+                            All other modes are 'invalid modes' and output black.
+                            FIXME: those invalid modes still trigger the sprite collision.
+                        */
                         for (int i = 0; i < 8; i++) {
-                            dst[i] = 0xFFFF00FF;
+                            dst[i] = 0xFF000000;
                         }
                         break;
                 }
@@ -957,11 +987,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     if (vic->mem.aec_pin) {
         pins |= M6567_AEC;
     }
-    /* FIXME
-    if (vic->irq) {
+    if (vic->reg.int_latch & (1<<7)) {
         pins |= M6567_IRQ;
     }
-    */
     return pins;
 }
 
