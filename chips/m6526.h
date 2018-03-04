@@ -156,6 +156,7 @@ typedef struct {
     uint8_t imr;        /* interrupt mask */
     uint8_t icr;        /* interrupt control register */
     uint8_t pip_irq;    /* 1-cycle delay pipeline to request irq */
+    bool flag;          /* last state of flag bit, to detect edge */
     bool irq;           /* true if interrupt request is active */
 } m6526_int_t;
 
@@ -220,6 +221,7 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->imr = 0;
     intr->icr = 0;
     intr->pip_irq = 0;
+    intr->flag = false;
     intr->irq = false;
 }
 
@@ -350,7 +352,7 @@ static uint8_t _m6526_read_icr(m6526_t* c) {
     return data;
 }
 
-static void _m6526_update_irq(m6526_t* c) {
+static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
     /* see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html */
 
     /* timer A underflow interrupt? */
@@ -361,10 +363,16 @@ static void _m6526_update_irq(m6526_t* c) {
     if (c->tb.t_out) {
         c->intr.icr |= (1<<1);
     }
-    /* FIXME: ALARM, SP, FLG interrupt conditions */
+    /* check for FLAG pin trigger */
+    if ((pins & M6526_FLAG) && (!c->intr.flag)) {
+        c->intr.icr |= (1<<4);
+    }
+    c->intr.flag = (pins & M6526_FLAG);
+
+    /* FIXME: ALARM, SP interrupt conditions */
 
     /* feed the interrupt-request state into the 1-cycle-delay irq-pipeline */
-    bool irq = 0 != ((c->intr.imr & c->intr.icr) & 3);
+    bool irq = 0 != ((c->intr.imr & c->intr.icr) & 0x1F);
     _M6526_PIP_SET(c->intr.pip_irq, 1, irq);
 
     /* pop delayed irq state from pipeline */
@@ -560,7 +568,7 @@ uint64_t m6526_iorq(m6526_t* c, uint64_t pins) {
 uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
     _m6526_tick_ta(c);
     _m6526_tick_tb(c);
-    _m6526_update_irq(c);
+    _m6526_update_irq(c, pins);
     if (c->intr.irq) {
         pins |= M6526_IRQ;
     }
