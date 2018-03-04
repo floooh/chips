@@ -39,7 +39,7 @@
 
     ## NOT IMPLEMENTED:
 
-    - handshake (FLAG and PC pin)
+    - PC pin
     - time of day clock
     - serial port
     - no external counter trigger via CNT pin
@@ -184,7 +184,7 @@ extern void m6526_reset(m6526_t* c);
 /* perform an IO request */
 extern uint64_t m6526_iorq(m6526_t* c, uint64_t pins);
 /* tick the m6526_t instance, return true if interrupt requested */
-extern bool m6526_tick(m6526_t* c);
+extern uint64_t m6526_tick(m6526_t* c, uint64_t pins);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -557,13 +557,15 @@ uint64_t m6526_iorq(m6526_t* c, uint64_t pins) {
     return pins;
 }
 
-bool m6526_tick(m6526_t* c) {
+uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
     _m6526_tick_ta(c);
     _m6526_tick_tb(c);
     _m6526_update_irq(c);
-    return c->intr.irq;
+    if (c->intr.irq) {
+        pins |= M6526_IRQ;
+    }
+    return pins;
 }
-
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
