@@ -274,8 +274,6 @@ extern uint32_t m6567_color(int i);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#include <stdio.h>
-
 /* color palette (see: http://unusedino.de/ec64/technical/misc/vic656x/colors/) */
 #define _M6567_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
 static const uint32_t _m6567_colors[16] = {
