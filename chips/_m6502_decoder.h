@@ -56,6 +56,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
   bool nmi = c.nmi;
   const m6502_tick_t tick = cpu->tick;
   do {
+    _OFF(M6502_IRQ|M6502_NMI);
     /* fetch opcode */
     _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
     /* store 'delayed IRQ response' flag state */
@@ -340,7 +341,6 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       c.PC = (h<<8)|l;
       nmi = false;
     }
-    pins &= ~(M6502_IRQ|M6502_NMI);
   } while ((ticks < num_ticks) && (cpu->trap_id < 0));
   c.PINS = pins;
   c.nmi = nmi;

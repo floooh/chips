@@ -325,7 +325,6 @@ def write_interrupt_handling():
     l('      /*CHIPS_ASSERT(false);*/')
     l('    }')
     l('  }')
-    l('  pins &= ~Z80_INT;')
 
 #-------------------------------------------------------------------------------
 # return comment string for (HL), (IX+d), (IY+d)
@@ -1837,6 +1836,7 @@ def write_header() :
     l('  const z80_tick_t tick = c.tick;')
     l('  uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;')
     l('  do {')
+    l('    _OFF(Z80_INT);')
     l('    if (c.ei_pending) { c.IFF1=c.IFF2=true; c.ei_pending=false; }')
 
 #-------------------------------------------------------------------------------

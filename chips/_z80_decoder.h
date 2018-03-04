@@ -64,6 +64,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   const z80_tick_t tick = c.tick;
   uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;
   do {
+    _OFF(Z80_INT);
     if (c.ei_pending) { c.IFF1=c.IFF2=true; c.ei_pending=false; }
     {
     _FETCH(opcode);
@@ -1173,7 +1174,6 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       /*CHIPS_ASSERT(false);*/
     }
   }
-  pins &= ~Z80_INT;
   } while ((ticks < num_ticks) && (c.trap_id < 0));
   c.PINS = pins;
   *cpu = c;

@@ -216,6 +216,7 @@ def write_header():
     l('  bool nmi = c.nmi;')
     l('  const m6502_tick_t tick = cpu->tick;')
     l('  do {')
+    l('    _OFF(M6502_IRQ|M6502_NMI);')
     l('    /* fetch opcode */')
     l('    _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);')
     l("    /* store 'delayed IRQ response' flag state */")
@@ -246,7 +247,6 @@ def write_interrupt_handling():
     l('      c.PC = (h<<8)|l;')
     l('      nmi = false;')
     l('    }')
-    l('    pins &= ~(M6502_IRQ|M6502_NMI);')
 
 #-------------------------------------------------------------------------------
 def write_footer():
