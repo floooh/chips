@@ -98,10 +98,10 @@ extern "C" {
 #define M6567_RW    (1ULL<<24)      /* shared with m6502 CPU */
 #define M6567_IRQ   (1ULL<<26)      /* shared with m6502 CPU */
 #define M6567_BA    (1ULL<<28)      /* shared with m6502 RDY */
+#define M6567_AEC   (1ULL<<29)      /* shared with m6510 AEC */
 
 /* m6567 specific control pins */
 #define M6567_CS    (1ULL<<40)
-#define M6567_AEC   (1ULL<<42)
 
 /* remaining data bus pins (input only) */
 #define M6567_DB8   (1ULL<<48)
@@ -185,6 +185,9 @@ typedef struct {
     bool display_state;             /* true: in display state, false: in idle state */
     bool badline;                   /* true when the badline state is active */
     bool frame_badlines_enabled;    /* true when badlines are enabled in frame */
+    /* debugging */
+    int badline_ticks;
+    int max_badline_ticks;
 } _m6567_raster_unit_t;
 
 /* address generator / memory interface state */
@@ -987,6 +990,15 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     }
     if (vic->reg.int_latch & (1<<7)) {
         pins |= M6567_IRQ;
+    }
+    if (pins & M6567_BA) {
+        vic->rs.badline_ticks++;
+        if (vic->rs.badline_ticks > vic->rs.max_badline_ticks) {
+            vic->rs.max_badline_ticks = vic->rs.badline_ticks;
+        }
+    }
+    else {
+        vic->rs.badline_ticks = 0;
     }
     return pins;
 }
