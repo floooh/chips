@@ -185,9 +185,6 @@ typedef struct {
     bool display_state;             /* true: in display state, false: in idle state */
     bool badline;                   /* true when the badline state is active */
     bool frame_badlines_enabled;    /* true when badlines are enabled in frame */
-    /* debugging */
-    int badline_ticks;
-    int max_badline_ticks;
 } _m6567_raster_unit_t;
 
 /* address generator / memory interface state */
@@ -990,15 +987,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     }
     if (vic->reg.int_latch & (1<<7)) {
         pins |= M6567_IRQ;
-    }
-    if (pins & M6567_BA) {
-        vic->rs.badline_ticks++;
-        if (vic->rs.badline_ticks > vic->rs.max_badline_ticks) {
-            vic->rs.max_badline_ticks = vic->rs.badline_ticks;
-        }
-    }
-    else {
-        vic->rs.badline_ticks = 0;
     }
     return pins;
 }
