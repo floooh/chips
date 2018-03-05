@@ -157,7 +157,6 @@ typedef struct {
     uint8_t icr;        /* interrupt control register */
     uint8_t pip_irq;    /* 1-cycle delay pipeline to request irq */
     bool flag;          /* last state of flag bit, to detect edge */
-    bool irq;           /* true if interrupt request is active */
 } m6526_int_t;
 
 /* m6526 state */
@@ -222,7 +221,6 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->icr = 0;
     intr->pip_irq = 0;
     intr->flag = false;
-    intr->irq = false;
 }
 
 void m6526_init(m6526_t* c, m6526_in_t in_cb, m6526_out_t out_cb) {
@@ -341,7 +339,6 @@ static uint8_t _m6526_read_icr(m6526_t* c) {
     */
     uint8_t data = c->intr.icr;
     c->intr.icr = 0;
-    c->intr.irq = false;
     /* cancel an interrupt pending in the pipeline */
     _M6526_PIP_SET(c->intr.pip_irq, 0, false);
     return data;
@@ -373,7 +370,6 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
     /* pop delayed irq state from pipeline */
     if (_M6526_PIP_POP(c->intr.pip_irq)) {
         c->intr.icr |= (1<<7);
-        c->intr.irq = true;
     }
 }
 
@@ -564,7 +560,7 @@ uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
     _m6526_tick_ta(c);
     _m6526_tick_tb(c);
     _m6526_update_irq(c, pins);
-    if (c->intr.irq) {
+    if (0 != (c->intr.icr & (1<<7))) {
         pins |= M6526_IRQ;
     }
     return pins;
