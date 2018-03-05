@@ -440,7 +440,14 @@ static inline bool _z80_check_trap(z80_t* c) {
     return false;
 }
 
+#ifdef _MSC_VER
+#pragma warning (push)
+#pragma warning (disable: 4065) // switch statement contains 'default' but no 'case' labels
+#endif
 #include "_z80_decoder.h"
+#ifdef _MSC_VER
+#pragma warning (pop)
+#endif
 
 void z80_init(z80_t* c, z80_tick_t tick_cb) {
     CHIPS_ASSERT(c);

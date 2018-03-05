@@ -81,8 +81,8 @@ void beeper_init(beeper_t* b, int tick_hz, int sound_hz, float magnitude) {
 
 void beeper_reset(beeper_t* b) {
     CHIPS_ASSERT(b);
-    b->acc = 0.0f;
-    b->sample = 0.0f;
+    b->acc = 0;
+    b->sample = 0;
     b->state = false;
     b->counter = b->period;
 }

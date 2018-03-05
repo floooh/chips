@@ -249,12 +249,12 @@ void m6526_reset(m6526_t* c) {
 }
 
 /*--- control-register flag testing macros ---*/
-#define _M6526_TIMER_STARTED(cr)    ((cr)&(1<<0))
-#define _M6526_PBON(cr)             ((cr)&(1<<1))
-#define _M6526_OUTMODE_TOGGLE(cr)   ((cr)&(1<<2))
-#define _M6526_RUNMODE_ONESHOT(cr)  ((cr)&(1<<3))
-#define _M6526_TA_INMODE_PHI2(cra)  (((cra)&(1<<5))==0)
-#define _M6526_TB_INMODE_PHI2(crb)  (((crb)&((1<<6)|(1<<5)))==0)
+#define _M6526_TIMER_STARTED(cr)    (0!=((cr)&(1<<0)))
+#define _M6526_PBON(cr)             (0!=((cr)&(1<<1)))
+#define _M6526_OUTMODE_TOGGLE(cr)   (0!=((cr)&(1<<2)))
+#define _M6526_RUNMODE_ONESHOT(cr)  (0!=((cr)&(1<<3)))
+#define _M6526_TA_INMODE_PHI2(cra)  (0==((cra)&(1<<5)))
+#define _M6526_TB_INMODE_PHI2(crb)  (0==((crb)&((1<<6)|(1<<5))))
 
 /*--- delay-pipeline macros and functions ---*/
 /* push a new state into pipeline at position */
@@ -367,7 +367,7 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
     if ((pins & M6526_FLAG) && (!c->intr.flag)) {
         c->intr.icr |= (1<<4);
     }
-    c->intr.flag = (pins & M6526_FLAG);
+    c->intr.flag = 0 != (pins & M6526_FLAG);
 
     /* FIXME: ALARM, SP interrupt conditions */
 
@@ -454,7 +454,7 @@ static void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
     /* bit 4 (force load) isn't stored, so we need to handle this here right away,
        there's a 1 cycle delay for force-load
     */
-    bool force_load = data & (1<<4);
+    bool force_load = 0 != (data & (1<<4));
     _M6526_PIP_SET(t->pip_load, 1, force_load);
 
     /* if the start bit goes from 0 to 1, set the current toggle-bit-state to 1 */

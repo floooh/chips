@@ -608,7 +608,7 @@ static inline uint16_t _m6567_gseq_tick(m6567_t* vic) {
 /*=== TICK FUNCTION ==========================================================*/
 uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     /*--- raster unit --------------------------------------------------------*/
-    const bool den = vic->reg.ctrl_1 & (1<<4);
+    const bool den = 0 != (vic->reg.ctrl_1 & (1<<4));
     const uint8_t yscroll = vic->reg.ctrl_1 & 7;
     const uint8_t xscroll = vic->reg.ctrl_2 & 7;
     {
@@ -747,7 +747,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     /*--- perform memory fetches ---------------------------------------------*/
     /* (see 3.6.3. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
     {
-        const bool bmm = vic->reg.ctrl_1 & (1<<5);
+        const bool bmm = 0 != (vic->reg.ctrl_1 & (1<<5));
         const _m6567_raster_unit_t* rs = &vic->rs;
         _m6567_memory_unit_t* mem = &vic->mem;
         _m6567_video_matrix_t* vm = &vic->vm;
@@ -768,11 +768,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 addr = ((vm->line[vm->vmli]&0xFF)<<3) | rs->rc;
                 addr = (addr | mem->g_addr_or) & mem->g_addr_and;
             }
-            mem->g_data = mem->fetch_cb(addr);
+            mem->g_data = (uint8_t) mem->fetch_cb(addr);
         }
         else {
             /* an idle access */
-            mem->g_data = mem->fetch_cb(mem->i_addr);
+            mem->g_data = (uint8_t) mem->fetch_cb(mem->i_addr);
         }
     }
 
