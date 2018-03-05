@@ -258,14 +258,9 @@ void m6526_reset(m6526_t* c) {
 
 /*--- delay-pipeline macros and functions ---*/
 /* push a new state into pipeline at position */
-#define _M6526_PIP_SET(pip,pos,state) {if(state){pip|=(1<<pos);}else{pip&=~(1<<pos);}}
-#define _M6526_PIP_PEEK(pip,pos) (pip&(1<<pos))
-static bool _m6526_pip_pop(uint8_t* pip) {
-    /* pop current state from pipeline and advance the pipeline */
-    bool state = *pip & 1;
-    *pip >>= 1;
-    return state;
-}
+#define _M6526_PIP_SET(pip,pos,state) {if(state){pip|=(2<<pos);}else{pip&=~(2<<pos);}}
+#define _M6526_PIP_PEEK(pip,pos) (pip&(2<<pos))
+#define _M6526_PIP_POP(pip) (0!=(pip>>=1,pip&1))
 
 /*--- timer implementation ---*/
 
@@ -275,7 +270,7 @@ static bool _m6526_pip_pop(uint8_t* pip) {
 */
 static void _m6526_timer_tick(m6526_timer_t* t) {
     /* if timer is active, decrement the counter */
-    if (_m6526_pip_pop(&t->pip_count)) {
+    if (_M6526_PIP_POP(t->pip_count)) {
         t->counter--;
     }
 
@@ -290,13 +285,13 @@ static void _m6526_timer_tick(m6526_timer_t* t) {
     _M6526_PIP_SET(t->pip_oneshot, 1, oneshot_active_now);
 
     /* clear start flag if oneshot and 0 reached */
-    bool oneshot_active_pip = _m6526_pip_pop(&t->pip_oneshot);
+    bool oneshot_active_pip = _M6526_PIP_POP(t->pip_oneshot);
     if (t->t_out && (oneshot_active_now || oneshot_active_pip)) {
         t->cr &= ~(1<<0);
     }
 
     /* reload from latch? */
-    bool load_active_pip = _m6526_pip_pop(&t->pip_load);
+    bool load_active_pip = _M6526_PIP_POP(t->pip_load);
     if (t->t_out || load_active_pip) {
         t->counter = t->latch;
         _M6526_PIP_SET(t->pip_count, 2, false);
@@ -376,7 +371,7 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
     _M6526_PIP_SET(c->intr.pip_irq, 1, irq);
 
     /* pop delayed irq state from pipeline */
-    if (_m6526_pip_pop(&c->intr.pip_irq)) {
+    if (_M6526_PIP_POP(c->intr.pip_irq)) {
         c->intr.icr |= (1<<7);
         c->intr.irq = true;
     }
