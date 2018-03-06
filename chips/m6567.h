@@ -230,8 +230,9 @@ typedef struct {
     uint8_t mode;               /* display mode 0..7 precomputed from ECM/BMM/MCM bits */
     bool enabled;               /* true while g_accesses are happening */
     uint8_t count;              /* counts from 0..8 */
-    uint16_t shift;             /* pixel mask shifter, bits > 8 are the 'shift-out' result */
-    uint16_t shift2;            /* copied from pixel mask shifter every even tick */
+    uint8_t shift;              /* current pixel shifter */
+    uint8_t outp;               /* current output byte (bit 7) */
+    uint8_t outp2;              /* current output byte at half frequency (bits 7 and 6) */
     uint16_t c_data;            /* loaded from video matrix line buffer */
     uint32_t bg_rgba8[4];       /* background colors as RGBA8 */
 } _m6567_graphics_sequencer_t;
@@ -569,40 +570,40 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
 /* start the graphics sequencer, this happens at the first g_access,
    the graphics sequencer must be delayed by xscroll
 */
-static inline void _m6567_gseq_start(_m6567_graphics_sequencer_t* gseq, uint8_t xscroll) {
-    gseq->enabled = true;
-    gseq->c_data = 0;
-    gseq->shift = 0;
-    gseq->shift2 = 0;
-    gseq->count = xscroll;
+static inline void _m6567_gseq_start(m6567_t* vic, uint8_t xscroll) {
+    vic->gseq.enabled = true;
+    vic->gseq.count = xscroll;
+    vic->gseq.shift = 0;
+    vic->gseq.outp = 0;
+    vic->gseq.outp2 = 0;
+    vic->gseq.c_data = 0;
 }
 
 /* stop the graphics sequencer, this will set the video-matrix-value to 0 */
-static inline void _m6567_gseq_stop(_m6567_graphics_sequencer_t* gseq) {
-    gseq->enabled = false;
-    gseq->c_data = 0;
+static inline void _m6567_gseq_stop(m6567_t* vic) {
+    vic->gseq.enabled = false;
+    vic->gseq.c_data = 0;
 }
 
 /* Tick the graphics sequencer, this will countdown a counter, when it
    hits 0 the pixel shifter will be reloaded from the last g_access data
    byte, and the video-matrix value with the current video-matrix-value
    (or 0 if the graphics sequencer is idle).
-
-   The function returns the complete 16-bit shift register, bit 8 is the
-   last 'out-shifted' bit.
 */
-static inline uint16_t _m6567_gseq_tick(m6567_t* vic) {
-    if (vic->gseq.count-- == 0) {
+static inline void _m6567_gseq_tick(m6567_t* vic) {
+    if (vic->gseq.count == 0) {
         vic->gseq.count = 7;
         vic->gseq.shift |= vic->mem.g_data;
         vic->gseq.c_data = vic->gseq.enabled ? vic->vm.line[vic->vm.vmli] : 0;
     }
-    vic->gseq.shift <<= 1;
-    /* store the last 'bit pair' shift value for half-resolution modes */
-    if (0 == (vic->gseq.count & 1)) {
-        vic->gseq.shift2 = vic->gseq.shift;
+    else {
+        vic->gseq.count--;
     }
-    return vic->gseq.shift;
+    vic->gseq.outp = vic->gseq.shift;
+    if (1 == (vic->gseq.count & 1)) {
+        vic->gseq.outp2 = vic->gseq.shift;
+    }
+    vic->gseq.shift <<= 1;
 }
 
 /*=== TICK FUNCTION ==========================================================*/
@@ -616,7 +617,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         _m6567_raster_unit_t* rs = &vic->rs;
         _m6567_crt_t* crt = &vic->crt;
         _m6567_video_matrix_t* vm = &vic->vm;
-        _m6567_graphics_sequencer_t* gseq = &vic->gseq;
         _m6567_memory_unit_t* mem = &vic->mem;
 
         /* update horizontal and vertical counters */
@@ -713,10 +713,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             if (rs->h_count == 15) {
                 mem->g_access = true;
                 /* reset the graphics sequencer, potentially delayed by xscroll value */
-                _m6567_gseq_start(gseq, xscroll);
+                _m6567_gseq_start(vic, xscroll);
             }
             else if (rs->h_count == 55) {
-                _m6567_gseq_stop(gseq);
+                _m6567_gseq_stop(vic);
                 mem->g_access = false;
                 mem->c_access = false;
                 mem->ba_pin = false;
@@ -847,7 +847,8 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                         {
                             const uint32_t bg = gseq->bg_rgba8[0];
                             for (int i = 0; i < 8; i++) {
-                                dst[i] = _m6567_gseq_tick(vic) & 0x100 ? _m6567_colors[(gseq->c_data>>8)&0xF] : bg;
+                                _m6567_gseq_tick(vic);
+                                dst[i] = gseq->outp & 0x80 ? _m6567_colors[(gseq->c_data>>8)&0xF] : bg;
                             }
                         }
                         break;
@@ -860,8 +861,8 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                                 /* only seven colors in multicolor mode */
                                 const uint32_t fg = _m6567_colors[(gseq->c_data>>8) & 0x7];
                                 if (gseq->c_data & (1<<11)) {
-                                    /* shift 2 is only updated every 2 ticks */
-                                    uint16_t bits = ((gseq->shift2)>>8) & 3;
+                                    /* outp2 is only updated every 2 ticks */
+                                    uint8_t bits = ((gseq->outp2)>>6) & 3;
                                     /* half resolution multicolor char
                                        need 2 bits from the pixel sequencer
                                             "00": Background color 0 ($d021)
@@ -880,7 +881,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                                 }
                                 else {
                                     /* standard text mode char */
-                                    dst[i] = gseq->shift & 0x100 ? fg : bg;
+                                    dst[i] = gseq->outp & 0x80 ? fg : bg;
                                 }
                             }
                         }
@@ -889,7 +890,8 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                         /* ECM/BMM/MCM=010, standard bitmap mode */
                         {
                             for (int i = 0; i < 8; i++) {
-                                if (_m6567_gseq_tick(vic) & 0x100) {
+                                _m6567_gseq_tick(vic);
+                                if (gseq->outp & 0x80) {
                                     /* foreground pixel */
                                     dst[i] = _m6567_colors[(gseq->c_data >> 4) & 0xF];
                                 }
@@ -907,7 +909,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                             for (int i = 0; i < 8; i++) {
                                 _m6567_gseq_tick(vic);
                                 /* shift 2 is only updated every 2 ticks */
-                                uint16_t bits = gseq->shift2;
+                                uint8_t bits = gseq->outp2;
                                 /* half resolution multicolor char
                                    need 2 bits from the pixel sequencer
                                         "00": Background color 0 ($d021)
@@ -915,7 +917,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                                         "10": Color from bits 0-3 of c-data
                                         "11": Color from bits 8-11 of c-data
                                 */
-                                switch ((bits>>8)&3) {
+                                switch ((bits>>6)&3) {
                                     case 0: dst[i] = bg; break;
                                     case 1: dst[i] = _m6567_colors[(gseq->c_data>>4) & 0xF]; break;
                                     case 2: dst[i] = _m6567_colors[gseq->c_data & 0xF]; break;
@@ -927,12 +929,12 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                     case 4:
                         /* ECM/BMM/MCM=100, ECM text mode */
                         for (int i = 0; i < 8; i++) {
-                            const uint16_t bits = _m6567_gseq_tick(vic);
+                            _m6567_gseq_tick(vic);
                             /* bg color selected by bits 6 and 7 of c_data */
                             const uint32_t bg = gseq->bg_rgba8[(gseq->c_data>>6) & 3];
                             /* foreground color as usual bits 8..11 of c_data */
                             const uint32_t fg = _m6567_colors[(gseq->c_data>>8) & 0xF];
-                            dst[i] = bits & 0x100 ? fg : bg;
+                            dst[i] = gseq->outp & 0x80 ? fg : bg;
                         }
                         break;
 
