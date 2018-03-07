@@ -218,7 +218,6 @@ typedef struct {
        (see: https://wiki.nesdev.com/w/index.php/CPU_interrupts)
     */
     uint8_t pi;
-    bool nmi;               /* an nmi was detected */
     bool bcd_enabled;       /* this is actually not mutable but needed when ticking */
 } _m6502_state_t;
 

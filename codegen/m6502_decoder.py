@@ -142,7 +142,7 @@ def write_defines():
     l('/* disable control pins */')
     l('#define _OFF(m) pins&=~(m)')
     l('/* execute a tick */')
-    l('#define _T() pins=tick(pins);ticks++;nmi=nmi||(!nmi&&(pins&M6502_NMI));')
+    l('#define _T() pins=tick(pins);ticks++;')
     l('/* a memory read tick */')
     l('#define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);')
     l('/* a memory write tick */')
@@ -213,9 +213,9 @@ def write_header():
     l('  uint16_t a, t;')
     l('  uint32_t ticks = 0;')
     l('  uint64_t pins = c.PINS;')
-    l('  bool nmi = c.nmi;')
     l('  const m6502_tick_t tick = cpu->tick;')
     l('  do {')
+    l('    uint64_t pre_pins = pins;')
     l('    _OFF(M6502_IRQ|M6502_NMI);')
     l('    /* fetch opcode */')
     l('    _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);')
@@ -226,6 +226,8 @@ def write_header():
 
 #-------------------------------------------------------------------------------
 def write_interrupt_handling():
+    l('    /* edge detection for NMI pin */')
+    l('    bool nmi = 0 != ((pins & (pre_pins ^ pins)) & M6502_NMI);')
     l('    /* check for interrupt request */')
     l('    if (nmi || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {')
     l('      /* execute a slightly modified BRK instruction, do NOT increment PC! */')
@@ -245,7 +247,6 @@ def write_interrupt_handling():
     l('        _SA(0xFFFF); _RD(); h=_GD();')
     l('      }')
     l('      c.PC = (h<<8)|l;')
-    l('      nmi = false;')
     l('    }')
 
 #-------------------------------------------------------------------------------
@@ -254,7 +255,6 @@ def write_footer():
     write_interrupt_handling()
     l('  } while ((ticks < num_ticks) && (cpu->trap_id < 0));')
     l('  c.PINS = pins;')
-    l('  c.nmi = nmi;')
     l('  cpu->state = c;')
     l('  return ticks;')
     l('}')

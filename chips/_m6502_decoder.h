@@ -12,7 +12,7 @@
 /* disable control pins */
 #define _OFF(m) pins&=~(m)
 /* execute a tick */
-#define _T() pins=tick(pins);ticks++;nmi=nmi||(!nmi&&(pins&M6502_NMI));
+#define _T() pins=tick(pins);ticks++;
 /* a memory read tick */
 #define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);
 /* a memory write tick */
@@ -53,9 +53,9 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
   uint16_t a, t;
   uint32_t ticks = 0;
   uint64_t pins = c.PINS;
-  bool nmi = c.nmi;
   const m6502_tick_t tick = cpu->tick;
   do {
+    uint64_t pre_pins = pins;
     _OFF(M6502_IRQ|M6502_NMI);
     /* fetch opcode */
     _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
@@ -320,6 +320,8 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       case 0xfe:/*INC abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
       case 0xff:/*ISB abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
     }
+    /* edge detection for NMI pin */
+    bool nmi = 0 != ((pins & (pre_pins ^ pins)) & M6502_NMI);
     /* check for interrupt request */
     if (nmi || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {
       /* execute a slightly modified BRK instruction, do NOT increment PC! */
@@ -339,11 +341,9 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
         _SA(0xFFFF); _RD(); h=_GD();
       }
       c.PC = (h<<8)|l;
-      nmi = false;
     }
   } while ((ticks < num_ticks) && (cpu->trap_id < 0));
   c.PINS = pins;
-  c.nmi = nmi;
   cpu->state = c;
   return ticks;
 }
