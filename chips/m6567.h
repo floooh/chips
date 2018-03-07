@@ -875,9 +875,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             rs->display_state = true;
         }
         if (rs->h_count == 58) {
-            if ((rs->rc == 7) && !rs->badline) {
-                rs->display_state = false;
+            if (rs->rc == 7) {
                 rs->vc_base = rs->vc;
+                if (!rs->badline) {
+                    rs->display_state = false;
+                }
             }
             if (rs->display_state) {
                 rs->rc = (rs->rc + 1) & 7;
@@ -980,28 +982,27 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             const int w = vic->rs.h_total;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
             _m6567_decode_pixels(vic, dst);
+            dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
+            uint32_t mask = 0x00000000;
             if (vic->rs.badline) {
-                for (int i = 0; i < 8; i++) {
-                    dst[i] |= 0xFF00007F;
-                }
+                mask = 0x0000007F;
             }
             if (vic->mem.ba_pin) {
-                for (int i = 0; i < 8; i++) {
-                    dst[i] |= 0xFF0000FF;
-                }
+                mask = 0x000000FF;
             }
             /* raster interrupt bit */
             /*
             if (vic->reg.int_latch & (1<<0)) {
-                for (int i = 0; i < 8; i++) {
-                    dst[i] |= 0xFF7F0000;
-                }
+                mask = 0x007F0000;
             }
             */
             /* main interrupt bit */
             if (vic->reg.int_latch & (1<<7)) {
+                mask = 0x0000FF00;
+            }
+            if (mask != 0) {
                 for (int i = 0; i < 8; i++) {
-                    dst[i] |= 0xFF00FF00;
+                    dst[i] = (dst[i] & 0xFF000000) | mask;
                 }
             }
         }
