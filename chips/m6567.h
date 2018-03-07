@@ -136,7 +136,7 @@ typedef struct {
     m6567_type_t type;
     /* pointer to RGBA8 framebuffer for generated image */
     uint32_t* rgba8_buffer;
-    /* size of the RGBA framebuffer (must be at least 418x284) */
+    /* size of the RGBA framebuffer (must be at least 512x312) */
     uint32_t rgba8_buffer_size;
     /* visible CRT area blitted to rgba8_buffer (in pixels) */
     uint16_t vis_x, vis_y, vis_w, vis_h;
@@ -240,6 +240,7 @@ typedef struct {
 /* the m6567 state structure */
 typedef struct {
     m6567_type_t type;
+    bool debug_vis;             /* toggle this to switch debug visualization on/off */
     _m6567_registers_t reg;
     _m6567_raster_unit_t rs;
     _m6567_memory_unit_t mem;
@@ -332,6 +333,7 @@ static void _m6567_init_raster_unit(_m6567_raster_unit_t* r, m6567_desc_t* desc)
         r->v_total = 263;         /* 263 lines total (NTSC) */
         r->v_retracepos = 16;
     }
+    CHIPS_ASSERT(desc->rgba8_buffer_size >= (r->h_total*8*r->v_total*sizeof(uint32_t)));
 }
 
 static void _m6567_init_crt(_m6567_crt_t* crt, m6567_desc_t* desc) {
@@ -349,7 +351,6 @@ static void _m6567_init_crt(_m6567_crt_t* crt, m6567_desc_t* desc) {
 
 void m6567_init(m6567_t* vic, m6567_desc_t* desc) {
     CHIPS_ASSERT(vic && desc);
-    CHIPS_ASSERT(desc->rgba8_buffer_size >= (512*312));
     CHIPS_ASSERT((desc->type == M6567_TYPE_6567R8) || (desc->type == M6567_TYPE_6569));
     memset(vic, 0, sizeof(*vic));
     vic->type = desc->type;
@@ -606,6 +607,146 @@ static inline void _m6567_gseq_tick(m6567_t* vic) {
     vic->gseq.shift <<= 1;
 }
 
+/* decode the next 8 pixels */
+static void _m6567_decode_pixels(m6567_t* vic, uint32_t* dst) {
+    /*
+        "...the vertical border flip flop controls the output of the graphics
+        data sequencer. The sequencer only outputs data if the flip flop is
+        not set..."
+    */
+    if (!vic->brd.vert) {
+        switch (vic->gseq.mode) {
+            case 0:
+                /* ECM/BMM/MCM=000, standard text mode */
+                {
+                    const uint32_t bg = vic->gseq.bg_rgba8[0];
+                    for (int i = 0; i < 8; i++) {
+                        _m6567_gseq_tick(vic);
+                        dst[i] = vic->gseq.outp & 0x80 ? _m6567_colors[(vic->gseq.c_data>>8)&0xF] : bg;
+                    }
+                }
+                break;
+            case 1:
+                /* ECM/BMM/MCM=001, multicolor text mode */
+                {
+                    const uint32_t bg = vic->gseq.bg_rgba8[0];
+                    for (int i = 0; i < 8; i++) {
+                        _m6567_gseq_tick(vic);
+                        /* only seven colors in multicolor mode */
+                        const uint32_t fg = _m6567_colors[(vic->gseq.c_data>>8) & 0x7];
+                        if (vic->gseq.c_data & (1<<11)) {
+                            /* outp2 is only updated every 2 ticks */
+                            uint8_t bits = ((vic->gseq.outp2)>>6) & 3;
+                            /* half resolution multicolor char
+                               need 2 bits from the pixel sequencer
+                                    "00": Background color 0 ($d021)
+                                    "01": Background color 1 ($d022)
+                                    "10": Background color 2 ($d023)
+                                    "11": Color from bits 8-10 of c-data
+                            */
+                            if (bits == 3) {
+                                /* special case '11' */
+                                dst[i] = fg;
+                            }
+                            else {
+                                /* one of the 3 background colors */
+                                dst[i] = vic->gseq.bg_rgba8[bits];
+                            }
+                        }
+                        else {
+                            /* standard text mode char */
+                            dst[i] = vic->gseq.outp & 0x80 ? fg : bg;
+                        }
+                    }
+                }
+                break;
+            case 2:
+                /* ECM/BMM/MCM=010, standard bitmap mode */
+                {
+                    for (int i = 0; i < 8; i++) {
+                        _m6567_gseq_tick(vic);
+                        if (vic->gseq.outp & 0x80) {
+                            /* foreground pixel */
+                            dst[i] = _m6567_colors[(vic->gseq.c_data >> 4) & 0xF];
+                        }
+                        else {
+                            /* background pixel */
+                            dst[i] = _m6567_colors[vic->gseq.c_data & 0xF];
+                        }
+                    }
+                }
+                break;
+            case 3:
+                /* ECM/BMM/MCM=011, multicolor bitmap mode */
+                {
+                    const uint32_t bg = vic->gseq.bg_rgba8[0];
+                    for (int i = 0; i < 8; i++) {
+                        _m6567_gseq_tick(vic);
+                        /* shift 2 is only updated every 2 ticks */
+                        uint8_t bits = vic->gseq.outp2;
+                        /* half resolution multicolor char
+                           need 2 bits from the pixel sequencer
+                                "00": Background color 0 ($d021)
+                                "01": Color from bits 4-7 of c-data
+                                "10": Color from bits 0-3 of c-data
+                                "11": Color from bits 8-11 of c-data
+                        */
+                        switch ((bits>>6)&3) {
+                            case 0: dst[i] = bg; break;
+                            case 1: dst[i] = _m6567_colors[(vic->gseq.c_data>>4) & 0xF]; break;
+                            case 2: dst[i] = _m6567_colors[vic->gseq.c_data & 0xF]; break;
+                            case 3: dst[i] = _m6567_colors[(vic->gseq.c_data>>8) & 0xF]; break;
+                        }
+                    }
+                }
+                break;
+            case 4:
+                /* ECM/BMM/MCM=100, ECM text mode */
+                for (int i = 0; i < 8; i++) {
+                    _m6567_gseq_tick(vic);
+                    /* bg color selected by bits 6 and 7 of c_data */
+                    const uint32_t bg = vic->gseq.bg_rgba8[(vic->gseq.c_data>>6) & 3];
+                    /* foreground color as usual bits 8..11 of c_data */
+                    const uint32_t fg = _m6567_colors[(vic->gseq.c_data>>8) & 0xF];
+                    dst[i] = vic->gseq.outp & 0x80 ? fg : bg;
+                }
+                break;
+
+            default:
+                /*
+                    All other modes are 'invalid modes' and output black.
+                    FIXME: those invalid modes still trigger the sprite collision.
+                */
+                for (int i = 0; i < 8; i++) {
+                    dst[i] = 0xFF000000;
+                }
+                break;
+        }
+    }
+    /*
+        "...otherwise it displays the background color"
+    */
+    else {
+        const uint32_t c = vic->gseq.bg_rgba8[0];
+        for (int i = 0; i < 8; i++) {
+            dst[i] = c;
+        }
+    }
+    /*
+        "The main border flip flop controls the border display. If it is set, the
+        VIC displays the color stored in register $d020, otherwise it displays the
+        color that the priority multiplexer switches through from the graphics or
+        sprite data sequencer. So the border overlays the text/bitmap graphics as
+        well as the sprites. It has the highest display priority."
+    */
+    if (vic->brd.main) {
+        const uint32_t c = vic->brd.bc_rgba8;
+        for (int i = 0; i < 8; i++) {
+            dst[i] = c;
+        }
+    }
+}
+
 /*=== TICK FUNCTION ==========================================================*/
 uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     /*--- raster unit --------------------------------------------------------*/
@@ -635,8 +776,8 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 rs->v_count++;
             }
             /* check for raster interrupt */
-            if ((rs->v_count == rs->v_irq) && (vic->reg.int_mask & (1<<0))) {
-                vic->reg.int_latch |= (1<<7)|(1<<0);
+            if (rs->v_count == rs->v_irq) {
+                vic->reg.int_latch = (1<<0);
             }
         }
         else {
@@ -755,7 +896,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         if (mem->c_access) {
             /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
             addr = rs->vc | mem->c_addr_or;
-            vm->line[vm->vmli] = mem->fetch_cb(addr);
+            vm->line[vm->vmli] = mem->fetch_cb(addr) & 0x0FFF;
         }
         if (mem->g_access) {
             if (bmm) {
@@ -826,151 +967,50 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
     }
 
+    /*-- main interrupt bit --*/
+    if (0 != ((vic->reg.int_latch & vic->reg.int_mask) & 0x0F)) {
+        vic->reg.int_latch |= (1<<7);
+    }
+
     /*--- decode pixels into framebuffer -------------------------------------*/
     {
-        const _m6567_crt_t* crt = &vic->crt;
-        if (crt->vis_enabled) {
-            const int dst_x = crt->vis_x * 8;
-            const int dst_y = crt->vis_y;
-            uint32_t* dst = crt->rgba8_buffer + dst_y*crt->vis_w*8 + dst_x;
-            /*
-                "...the vertical border flip flop controls the output of the graphics
-                data sequencer. The sequencer only outputs data if the flip flop is
-                not set..."
-            */
-            const _m6567_border_unit_t* brd = &vic->brd;
-            _m6567_graphics_sequencer_t* gseq = &vic->gseq;
-            if (!brd->vert) {
-                switch (gseq->mode) {
-                    case 0:
-                        /* ECM/BMM/MCM=000, standard text mode */
-                        {
-                            const uint32_t bg = gseq->bg_rgba8[0];
-                            for (int i = 0; i < 8; i++) {
-                                _m6567_gseq_tick(vic);
-                                dst[i] = gseq->outp & 0x80 ? _m6567_colors[(gseq->c_data>>8)&0xF] : bg;
-                            }
-                        }
-                        break;
-                    case 1:
-                        /* ECM/BMM/MCM=001, multicolor text mode */
-                        {
-                            const uint32_t bg = gseq->bg_rgba8[0];
-                            for (int i = 0; i < 8; i++) {
-                                _m6567_gseq_tick(vic);
-                                /* only seven colors in multicolor mode */
-                                const uint32_t fg = _m6567_colors[(gseq->c_data>>8) & 0x7];
-                                if (gseq->c_data & (1<<11)) {
-                                    /* outp2 is only updated every 2 ticks */
-                                    uint8_t bits = ((gseq->outp2)>>6) & 3;
-                                    /* half resolution multicolor char
-                                       need 2 bits from the pixel sequencer
-                                            "00": Background color 0 ($d021)
-                                            "01": Background color 1 ($d022)
-                                            "10": Background color 2 ($d023)
-                                            "11": Color from bits 8-10 of c-data
-                                    */
-                                    if (bits == 3) {
-                                        /* special case '11' */
-                                        dst[i] = fg;
-                                    }
-                                    else {
-                                        /* one of the 3 background colors */
-                                        dst[i] = gseq->bg_rgba8[bits];
-                                    }
-                                }
-                                else {
-                                    /* standard text mode char */
-                                    dst[i] = gseq->outp & 0x80 ? fg : bg;
-                                }
-                            }
-                        }
-                        break;
-                    case 2:
-                        /* ECM/BMM/MCM=010, standard bitmap mode */
-                        {
-                            for (int i = 0; i < 8; i++) {
-                                _m6567_gseq_tick(vic);
-                                if (gseq->outp & 0x80) {
-                                    /* foreground pixel */
-                                    dst[i] = _m6567_colors[(gseq->c_data >> 4) & 0xF];
-                                }
-                                else {
-                                    /* background pixel */
-                                    dst[i] = _m6567_colors[gseq->c_data & 0xF];
-                                }
-                            }
-                        }
-                        break;
-                    case 3:
-                        /* ECM/BMM/MCM=011, multicolor bitmap mode */
-                        {
-                            const uint32_t bg = gseq->bg_rgba8[0];
-                            for (int i = 0; i < 8; i++) {
-                                _m6567_gseq_tick(vic);
-                                /* shift 2 is only updated every 2 ticks */
-                                uint8_t bits = gseq->outp2;
-                                /* half resolution multicolor char
-                                   need 2 bits from the pixel sequencer
-                                        "00": Background color 0 ($d021)
-                                        "01": Color from bits 4-7 of c-data
-                                        "10": Color from bits 0-3 of c-data
-                                        "11": Color from bits 8-11 of c-data
-                                */
-                                switch ((bits>>6)&3) {
-                                    case 0: dst[i] = bg; break;
-                                    case 1: dst[i] = _m6567_colors[(gseq->c_data>>4) & 0xF]; break;
-                                    case 2: dst[i] = _m6567_colors[gseq->c_data & 0xF]; break;
-                                    case 3: dst[i] = _m6567_colors[(gseq->c_data>>8) & 0xF]; break;
-                                }
-                            }
-                        }
-                        break;
-                    case 4:
-                        /* ECM/BMM/MCM=100, ECM text mode */
-                        for (int i = 0; i < 8; i++) {
-                            _m6567_gseq_tick(vic);
-                            /* bg color selected by bits 6 and 7 of c_data */
-                            const uint32_t bg = gseq->bg_rgba8[(gseq->c_data>>6) & 3];
-                            /* foreground color as usual bits 8..11 of c_data */
-                            const uint32_t fg = _m6567_colors[(gseq->c_data>>8) & 0xF];
-                            dst[i] = gseq->outp & 0x80 ? fg : bg;
-                        }
-                        break;
-
-                    default:
-                        /*
-                            All other modes are 'invalid modes' and output black.
-                            FIXME: those invalid modes still trigger the sprite collision.
-                        */
-                        for (int i = 0; i < 8; i++) {
-                            dst[i] = 0xFF000000;
-                        }
-                        break;
-                }
-            }
-            /*
-                "...otherwise it displays the background color"
-            */
-            else {
-                const uint32_t c = gseq->bg_rgba8[0];
+        if (vic->debug_vis) {
+            const int x = vic->rs.h_count;
+            const int y = vic->rs.v_count;
+            const int w = vic->rs.h_total;
+            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
+            _m6567_decode_pixels(vic, dst);
+            if (vic->rs.badline) {
                 for (int i = 0; i < 8; i++) {
-                    dst[i] = c;
+                    dst[i] |= 0xFF00007F;
                 }
             }
-            /*
-                "The main border flip flop controls the border display. If it is set, the
-                VIC displays the color stored in register $d020, otherwise it displays the
-                color that the priority multiplexer switches through from the graphics or
-                sprite data sequencer. So the border overlays the text/bitmap graphics as
-                well as the sprites. It has the highest display priority."
-            */
-            if (brd->main) {
-                const uint32_t c = brd->bc_rgba8;
+            if (vic->mem.ba_pin) {
                 for (int i = 0; i < 8; i++) {
-                    dst[i] = c;
+                    dst[i] |= 0xFF0000FF;
                 }
             }
+            /* raster interrupt bit */
+            /*
+            if (vic->reg.int_latch & (1<<0)) {
+                for (int i = 0; i < 8; i++) {
+                    dst[i] |= 0xFF7F0000;
+                }
+            }
+            */
+            /* main interrupt bit */
+            if (vic->reg.int_latch & (1<<7)) {
+                for (int i = 0; i < 8; i++) {
+                    dst[i] |= 0xFF00FF00;
+                }
+            }
+        }
+        else if (vic->crt.vis_enabled) {
+            const int x = vic->crt.vis_x;
+            const int y = vic->crt.vis_y;
+            const int w = vic->crt.vis_w;
+            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
+            _m6567_decode_pixels(vic, dst);
         }
     }
 
@@ -995,8 +1035,14 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
 
 void m6567_display_size(m6567_t* vic, int* out_width, int* out_height) {
     CHIPS_ASSERT(vic && out_width && out_height);
-    *out_width = vic->crt.vis_w*8;
-    *out_height = vic->crt.vis_h;
+    if (vic->debug_vis) {
+        *out_width = vic->rs.h_total*8;
+        *out_height = vic->rs.v_total;
+    }
+    else {
+        *out_width = vic->crt.vis_w*8;
+        *out_height = vic->crt.vis_h;
+    }
 }
 
 uint32_t m6567_color(int i) {
