@@ -319,20 +319,12 @@ static const uint8_t _m6567_reg_mask[M6567_NUM_REGS] = {
 
 /*--- init -------------------------------------------------------------------*/
 static void _m6567_init_raster_unit(_m6567_raster_unit_t* r, m6567_desc_t* desc) {
-    if (desc->type == M6567_TYPE_6569) {
-        /* PAL-B */
-        r->h_total = 63;          /* 63 cycles per line */
-        r->h_retracepos = 3;
-        r->v_total = 312;         /* 312 lines total (PAL) */
-        r->v_retracepos = 303;
-    }
-    else {
-        /* NTSC */
-        r->h_total = 65;          /* 65 cycles per line */
-        r->h_retracepos = 3;
-        r->v_total = 263;         /* 263 lines total (NTSC) */
-        r->v_retracepos = 16;
-    }
+    /* only allow the PAL version for now */
+    CHIPS_ASSERT(desc->type == M6567_TYPE_6569);
+    r->h_total = 63;          /* 63 cycles per line */
+    r->h_retracepos = 3;
+    r->v_total = 312;         /* 312 lines total (PAL) */
+    r->v_retracepos = 303;
     CHIPS_ASSERT(desc->rgba8_buffer_size >= (r->h_total*8*r->v_total*sizeof(uint32_t)));
 }
 
