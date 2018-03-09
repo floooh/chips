@@ -194,10 +194,6 @@ typedef struct {
     uint16_t g_addr_or;     /* OR-mask for g-accesses, computed from ECM bit */
     uint16_t i_addr;        /* address for i-accesses, 0x3FFF or 0x39FF (if ECM bit set) */
     uint8_t g_data;         /* byte read by last g-access */
-    bool g_access;          /* true when g_access needs to happen */
-    bool c_access;          /* true when c_access needs to happen */
-    bool ba_pin;            /* state of the BA pin */
-    bool aec_pin;           /* state of the AEC pin */
     m6567_fetch_t fetch_cb; /* memory-fetch callback */
 } _m6567_memory_unit_t;
 
@@ -218,8 +214,6 @@ typedef struct {
 /* CRT state tracking */
 typedef struct {
     uint16_t x, y;              /* bream pos reset on crt_retrace_h/crt_retrace_v zero */
-    uint16_t vis_x, vis_y;      /* current position in visible area */
-    bool vis_enabled;           /* beam is currently in visible area */
     uint16_t vis_x0, vis_y0, vis_x1, vis_y1;  /* the visible area */
     uint16_t vis_w, vis_h;      /* width of visible area */
     uint32_t* rgba8_buffer;
@@ -371,10 +365,6 @@ static void _m6567_reset_memory_unit(_m6567_memory_unit_t* m) {
     m->g_addr_and = 0;
     m->g_addr_or = 0;
     m->i_addr = 0;
-    m->g_access = false;
-    m->c_access = false;
-    m->ba_pin = false;
-    m->aec_pin = false;
     m->g_data = 0;
 }
 
@@ -392,8 +382,6 @@ static void _m6567_reset_border_unit(_m6567_border_unit_t* b) {
 
 static void _m6567_reset_crt(_m6567_crt_t* c) {
     c->x = c->y = 0;
-    c->vis_x = c->vis_y = 0;
-    c->vis_enabled = false;
 }
 
 void m6567_reset(m6567_t* vic) {
@@ -563,18 +551,11 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
 /* start the graphics sequencer, this happens at the first g_access,
    the graphics sequencer must be delayed by xscroll
 */
-static inline void _m6567_gseq_start(m6567_t* vic, uint8_t xscroll) {
-    vic->gseq.enabled = true;
+static inline void _m6567_gseq_reload(m6567_t* vic, uint8_t xscroll) {
     vic->gseq.count = xscroll;
     vic->gseq.shift = 0;
     vic->gseq.outp = 0;
     vic->gseq.outp2 = 0;
-    vic->gseq.c_data = 0;
-}
-
-/* stop the graphics sequencer, this will set the video-matrix-value to 0 */
-static inline void _m6567_gseq_stop(m6567_t* vic) {
-    vic->gseq.enabled = false;
     vic->gseq.c_data = 0;
 }
 
@@ -745,12 +726,15 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     const bool den = 0 != (vic->reg.ctrl_1 & (1<<4));
     const uint8_t yscroll = vic->reg.ctrl_1 & 7;
     const uint8_t xscroll = vic->reg.ctrl_2 & 7;
+    bool c_access = false;
+    bool g_access = false;
+    bool ba_pin = false;
+    bool aec_pin = false;
     {
         /* (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
         _m6567_raster_unit_t* rs = &vic->rs;
         _m6567_crt_t* crt = &vic->crt;
         _m6567_video_matrix_t* vm = &vic->vm;
-        _m6567_memory_unit_t* mem = &vic->mem;
 
         /* update horizontal and vertical counters */
         /* FIXME: "Raster line 0 is, however, an exception: In this line, IRQ
@@ -790,18 +774,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             crt->x++;
         }
 
-        /* update visible-area coordinates and enabled-state */
-        if ((crt->x >= crt->vis_x0) && (crt->x < crt->vis_x1) &&
-            (crt->y >= crt->vis_y0) && (crt->y < crt->vis_y1))
-        {
-            crt->vis_enabled = true;
-            crt->vis_x = crt->x - crt->vis_x0;
-            crt->vis_y = crt->y - crt->vis_y0;
-        }
-        else {
-            crt->vis_enabled = false;
-        }
-
         /* badline state ((see 3.5 http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
         if ((rs->v_count >= 0x30) && (rs->v_count <= 0xF7)) {
             /* DEN bit must have been set in raster line $30 */
@@ -816,45 +788,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         else {
             rs->frame_badlines_enabled = false;
             rs->badline = false;
-        }
-
-        if ((rs->h_count >= 12) && (rs->h_count <= 54)) {
-            /* If there is a Bad Line Condition in cycles 12-54, BA is set low and the
-               c-accesses are started. Also set the AEC pin 3 cycles later.
-            */
-            if (rs->badline) {
-                mem->ba_pin = true;
-                if (rs->h_count == 15) {
-                    mem->aec_pin = mem->ba_pin;
-                    mem->c_access = true;
-                }
-            }
-            /* In the first phase of cycle 14 of each line, VC is loaded from VCBASE
-               (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
-               this phase, RC is also reset to zero.
-            */
-            if (rs->h_count == 14) {
-                rs->vc = rs->vc_base;
-                vm->vmli = 0;
-                if (rs->badline) {
-                    rs->rc = 0;
-                }
-            }
-        }
-        /* g-accesses start at cycle 15 of each line in display state */
-        if (rs->display_state) {
-            if (rs->h_count == 15) {
-                mem->g_access = true;
-                /* reset the graphics sequencer, potentially delayed by xscroll value */
-                _m6567_gseq_start(vic, xscroll);
-            }
-            else if (rs->h_count == 55) {
-                _m6567_gseq_stop(vic);
-                mem->g_access = false;
-                mem->c_access = false;
-                mem->ba_pin = false;
-                mem->aec_pin = false;
-            }
         }
 
         /* display/idle state (see 3.7.1 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt )
@@ -877,6 +810,37 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 rs->rc = (rs->rc + 1) & 7;
             }
         }
+
+        if ((rs->h_count >= 12) && (rs->h_count <= 54)) {
+            /* If there is a Bad Line Condition in cycles 12-54, BA is set low and the
+               c-accesses are started. Also set the AEC pin 3 cycles later.
+            */
+            if (rs->badline) {
+                ba_pin = true;
+                if (rs->h_count >= 15) {
+                    aec_pin = true;
+                    c_access = true;
+                }
+            }
+            /* In the first phase of cycle 14 of each line, VC is loaded from VCBASE
+               (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
+               this phase, RC is also reset to zero.
+            */
+            if (rs->h_count == 14) {
+                rs->vc = rs->vc_base;
+                vm->vmli = 0;
+                if (rs->badline) {
+                    rs->rc = 0;
+                }
+            }
+        }
+        /* g-accesses start at cycle 15 of each line in display state */
+        g_access = rs->display_state && (rs->h_count >= 15) && (rs->h_count < 55);
+        vic->gseq.enabled = g_access;
+        if (rs->h_count == 15) {
+            /* reset the graphics sequencer, potentially delayed by xscroll value */
+            _m6567_gseq_reload(vic, xscroll);
+        }
     }
 
     /*--- perform memory fetches ---------------------------------------------*/
@@ -887,12 +851,12 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         _m6567_memory_unit_t* mem = &vic->mem;
         _m6567_video_matrix_t* vm = &vic->vm;
         uint16_t addr;
-        if (mem->c_access) {
+        if (c_access) {
             /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
             addr = rs->vc | mem->c_addr_or;
             vm->line[vm->vmli] = mem->fetch_cb(addr) & 0x0FFF;
         }
-        if (mem->g_access) {
+        if (g_access) {
             if (bmm) {
                 /* bitmap mode: addr=|CB13|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0|RC2|RC1|RC0| */
                 addr = rs->vc<<3 | rs->rc;
@@ -979,7 +943,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             if (vic->rs.badline) {
                 mask = 0x0000007F;
             }
-            if (vic->mem.ba_pin) {
+            if (ba_pin) {
                 mask = 0x000000FF;
             }
             /* raster interrupt bit */
@@ -998,9 +962,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 }
             }
         }
-        else if (vic->crt.vis_enabled) {
-            const int x = vic->crt.vis_x;
-            const int y = vic->crt.vis_y;
+        else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
+                (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
+        {
+            const int x = vic->crt.x - vic->crt.vis_x0;
+            const int y = vic->crt.y - vic->crt.vis_y0;
             const int w = vic->crt.vis_w;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
             _m6567_decode_pixels(vic, dst);
@@ -1008,16 +974,16 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     }
 
     /*--- bump the VC and vmli counters --------------------------------------*/
-    if (vic->mem.g_access) {
+    if (g_access) {
         vic->rs.vc = (vic->rs.vc + 1) & 0x3FF;        /* VS is a 10-bit counter */
         vic->vm.vmli = (vic->vm.vmli + 1) & 0x3F;     /* VMLI is a 6-bit counter */
     }
 
     /*--- set CPU pins -------------------------------------------------------*/
-    if (vic->mem.ba_pin) {
+    if (ba_pin) {
         pins |= M6567_BA;
     }
-    if (vic->mem.aec_pin) {
+    if (aec_pin) {
         pins |= M6567_AEC;
     }
     if (vic->reg.int_latch & (1<<7)) {
