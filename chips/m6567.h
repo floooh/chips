@@ -1,5 +1,16 @@
 #pragma once
 /*#
+    FIXME: The the origin of h_count should be 3 cycles before the first
+    p-access, and v_count should be incremented when h_count is reset.
+    But the raster register must be incremented at the IRQ check. v_count
+    and the raster counter must simple be decoupled. This will simplify
+    handling the sprite memory accesses (since otherwise the 
+    data for the first 3 sprites are loaded in a different scanline
+    from the other sprites!). Because of the different tick counts
+    there should be a macro _M6567_TICK(N) which compares h_count against
+    the tick count from the vic-ii.txt documentation.
+    A check would look like this: if (_M6567_TICK(58))...
+
     # m6567.h
 
     MOS Technology 6567 / 6569 emulator (aka VIC-II)
