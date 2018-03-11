@@ -208,6 +208,7 @@ typedef struct {
     uint16_t g_addr_and;    /* AND-mask for g-accesses, computed from mem_ptrs */
     uint16_t g_addr_or;     /* OR-mask for g-accesses, computed from ECM bit */
     uint16_t i_addr;        /* address for i-accesses, 0x3FFF or 0x39FF (if ECM bit set) */
+    uint16_t p_addr_or;     /* OR-mask for p-accesses */
     m6567_fetch_t fetch_cb; /* memory-fetch callback */
 } _m6567_memory_unit_t;
 
@@ -243,7 +244,22 @@ typedef struct {
     uint8_t outp2;              /* current output byte at half frequency (bits 7 and 6) */
     uint16_t c_data;            /* loaded from video matrix line buffer */
     uint32_t bg_rgba8[4];       /* background colors as RGBA8 */
-} _m6567_graphics_sequencer_t;
+} _m6567_graphics_unit_t;
+
+/* sprite sequencer state */
+typedef struct {
+    /* updated when setting sprite position registers */
+    uint16_t v_start;           /* first rendered scanline */
+    uint16_t v_end;             /* one-past-end rendered scanline */
+    uint8_t h_start;            /* first horizontal tick where sprite is active */
+    uint8_t h_end;              /* one-past-end horizontal tick where sprite is active */
+
+    uint8_t p_data;             /* the byte read by p_access memory fetch */
+    
+    uint8_t mc;                 /* 6-bit mob-data-counter */
+    uint8_t mc_base;            /* 6-bit mob-data-counter base */
+    uint32_t shift;             /* 24-bit shift register */
+} _m6567_sprite_unit_t;
 
 /* the m6567 state structure */
 typedef struct {
@@ -251,11 +267,12 @@ typedef struct {
     bool debug_vis;             /* toggle this to switch debug visualization on/off */
     _m6567_registers_t reg;
     _m6567_raster_unit_t rs;
+    _m6567_crt_t crt;
+    _m6567_border_unit_t brd;
     _m6567_memory_unit_t mem;
     _m6567_video_matrix_t vm;
-    _m6567_graphics_sequencer_t gseq;
-    _m6567_border_unit_t brd;
-    _m6567_crt_t crt;
+    _m6567_graphics_unit_t gunit;
+    _m6567_sprite_unit_t sunit[8];
 } m6567_t;
 
 /* initialize a new m6567_t instance */
@@ -394,14 +411,19 @@ static void _m6567_reset_memory_unit(_m6567_memory_unit_t* m) {
     m->g_addr_and = 0;
     m->g_addr_or = 0;
     m->i_addr = 0;
+    m->p_addr_or = 0;
 }
 
 static void _m6567_reset_video_matrix_unit(_m6567_video_matrix_t* vm) {
     memset(vm, 0, sizeof(*vm));
 }
 
-static void _m6567_reset_graphics_sequencer(_m6567_graphics_sequencer_t* gs) {
-    memset(gs, 0, sizeof(*gs));
+static void _m6567_reset_graphics_unit(_m6567_graphics_unit_t* gu) {
+    memset(gu, 0, sizeof(*gu));
+}
+
+static void _m6567_reset_sprite_unit(_m6567_sprite_unit_t* su) {
+    memset(su, 0, sizeof(*su));
 }
 
 static void _m6567_reset_border_unit(_m6567_border_unit_t* b) {
@@ -416,11 +438,14 @@ void m6567_reset(m6567_t* vic) {
     CHIPS_ASSERT(vic);
     _m6567_reset_register_bank(&vic->reg);
     _m6567_reset_raster_unit(&vic->rs);
+    _m6567_reset_crt(&vic->crt);
+    _m6567_reset_border_unit(&vic->brd);
     _m6567_reset_memory_unit(&vic->mem);
     _m6567_reset_video_matrix_unit(&vic->vm);
-    _m6567_reset_graphics_sequencer(&vic->gseq);
-    _m6567_reset_border_unit(&vic->brd);
-    _m6567_reset_crt(&vic->crt);
+    _m6567_reset_graphics_unit(&vic->gunit);
+    for (int i = 0; i < 8; i++) {
+        _m6567_reset_sprite_unit(&(vic->sunit[i]));
+    }
 }
 
 /*--- I/O requests -----------------------------------------------------------*/
@@ -438,6 +463,9 @@ static void _m6567_io_update_memory_unit(_m6567_memory_unit_t* m, uint8_t mem_pt
     m->g_addr_or = (mem_ptrs & 0x0E)<<10;
     m->g_addr_and = 0xFFFF;
     m->i_addr = 0x3FFF;
+    /* p-access: addr=|VM13|VM12|VM11|VM10|1|1|1|1|1|1|1|2..0:sprite-num| */
+    m->p_addr_or = ((mem_ptrs & 0xF0)<<6) | 0x3F8;
+
     /* "...If the ECM bit is set, the address generator always holds the
         address lines 9 and 10 low without any other changes to the
         addressing scheme"
@@ -477,8 +505,8 @@ static void _m6567_io_update_border_csel(_m6567_border_unit_t* b, uint8_t ctrl_2
 }
 
 /* updates the graphics sequencer display mode (0..7) from the ECM/BMM/MCM bits */
-static void _m6567_io_update_gseq_mode(_m6567_graphics_sequencer_t* gseq, uint8_t ctrl_1, uint8_t ctrl_2) {
-    gseq->mode = ((ctrl_1&(M6567_CTRL1_ECM|M6567_CTRL1_BMM))|(ctrl_2&M6567_CTRL2_MCM))>>4;
+static void _m6567_io_update_gunit_mode(_m6567_graphics_unit_t* gu, uint8_t ctrl_1, uint8_t ctrl_2) {
+    gu->mode = ((ctrl_1&(M6567_CTRL1_ECM|M6567_CTRL1_BMM))|(ctrl_2&M6567_CTRL2_MCM))>>4;
 }
 
 /* perform an I/O request on the VIC-II */
@@ -526,7 +554,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     /* ECM bit updates the precomputed fetch address masks */
                     _m6567_io_update_memory_unit(&vic->mem, rb->mem_ptrs, data);
                     /* update the graphics mode */
-                    _m6567_io_update_gseq_mode(&vic->gseq, data, rb->ctrl_2);
+                    _m6567_io_update_gunit_mode(&vic->gunit, data, rb->ctrl_2);
                     break;
                 case 0x12:
                     /* raster irq value lower 8 bits */
@@ -536,7 +564,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     /* update border left/right from CSEL flag */
                     _m6567_io_update_border_csel(&vic->brd, data);
                     /* update the graphics mode */
-                    _m6567_io_update_gseq_mode(&vic->gseq, rb->ctrl_1, data);
+                    _m6567_io_update_gunit_mode(&vic->gunit, rb->ctrl_1, data);
                     break;
                 case 0x18:
                     /* memory-ptrs register , update precomputed fetch address masks */
@@ -563,7 +591,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                 case 0x23:
                 case 0x24:
                     /* background colors */
-                    vic->gseq.bg_rgba8[reg_addr-0x21] = _m6567_colors[data & 0xF];
+                    vic->gunit.bg_rgba8[reg_addr-0x21] = _m6567_colors[data & 0xF];
                     break;
             }
             if (write) {
@@ -579,12 +607,12 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
 /* start the graphics sequencer, this happens at the first g_access,
    the graphics sequencer must be delayed by xscroll
 */
-static inline void _m6567_gseq_reload(m6567_t* vic, uint8_t xscroll) {
-    vic->gseq.count = xscroll;
-    vic->gseq.shift = 0;
-    vic->gseq.outp = 0;
-    vic->gseq.outp2 = 0;
-    vic->gseq.c_data = 0;
+static inline void _m6567_gunit_reload(m6567_t* vic, uint8_t xscroll) {
+    vic->gunit.count = xscroll;
+    vic->gunit.shift = 0;
+    vic->gunit.outp = 0;
+    vic->gunit.outp2 = 0;
+    vic->gunit.c_data = 0;
 }
 
 /* Tick the graphics sequencer, this will countdown a counter, when it
@@ -592,20 +620,20 @@ static inline void _m6567_gseq_reload(m6567_t* vic, uint8_t xscroll) {
    byte, and the video-matrix value with the current video-matrix-value
    (or 0 if the graphics sequencer is idle).
 */
-static inline void _m6567_gseq_tick(m6567_t* vic, uint8_t g_data) {
-    if (vic->gseq.count == 0) {
-        vic->gseq.count = 7;
-        vic->gseq.shift |= g_data;
-        vic->gseq.c_data = vic->gseq.enabled ? vic->vm.line[vic->vm.vmli] : 0;
+static inline void _m6567_gunit_tick(m6567_t* vic, uint8_t g_data) {
+    if (vic->gunit.count == 0) {
+        vic->gunit.count = 7;
+        vic->gunit.shift |= g_data;
+        vic->gunit.c_data = vic->gunit.enabled ? vic->vm.line[vic->vm.vmli] : 0;
     }
     else {
-        vic->gseq.count--;
+        vic->gunit.count--;
     }
-    vic->gseq.outp = vic->gseq.shift;
-    if (1 == (vic->gseq.count & 1)) {
-        vic->gseq.outp2 = vic->gseq.shift;
+    vic->gunit.outp = vic->gunit.shift;
+    if (1 == (vic->gunit.count & 1)) {
+        vic->gunit.outp2 = vic->gunit.shift;
     }
-    vic->gseq.shift <<= 1;
+    vic->gunit.shift <<= 1;
 }
 
 /* decode the next 8 pixels */
@@ -616,28 +644,28 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
         not set..."
     */
     if (!vic->brd.vert) {
-        switch (vic->gseq.mode) {
+        switch (vic->gunit.mode) {
             case 0:
                 /* ECM/BMM/MCM=000, standard text mode */
                 {
-                    const uint32_t bg = vic->gseq.bg_rgba8[0];
+                    const uint32_t bg = vic->gunit.bg_rgba8[0];
                     for (int i = 0; i < 8; i++) {
-                        _m6567_gseq_tick(vic, g_data);
-                        dst[i] = vic->gseq.outp & 0x80 ? _m6567_colors[(vic->gseq.c_data>>8)&0xF] : bg;
+                        _m6567_gunit_tick(vic, g_data);
+                        dst[i] = vic->gunit.outp & 0x80 ? _m6567_colors[(vic->gunit.c_data>>8)&0xF] : bg;
                     }
                 }
                 break;
             case 1:
                 /* ECM/BMM/MCM=001, multicolor text mode */
                 {
-                    const uint32_t bg = vic->gseq.bg_rgba8[0];
+                    const uint32_t bg = vic->gunit.bg_rgba8[0];
                     for (int i = 0; i < 8; i++) {
-                        _m6567_gseq_tick(vic, g_data);
+                        _m6567_gunit_tick(vic, g_data);
                         /* only seven colors in multicolor mode */
-                        const uint32_t fg = _m6567_colors[(vic->gseq.c_data>>8) & 0x7];
-                        if (vic->gseq.c_data & (1<<11)) {
+                        const uint32_t fg = _m6567_colors[(vic->gunit.c_data>>8) & 0x7];
+                        if (vic->gunit.c_data & (1<<11)) {
                             /* outp2 is only updated every 2 ticks */
-                            uint8_t bits = ((vic->gseq.outp2)>>6) & 3;
+                            uint8_t bits = ((vic->gunit.outp2)>>6) & 3;
                             /* half resolution multicolor char
                                need 2 bits from the pixel sequencer
                                     "00": Background color 0 ($d021)
@@ -651,12 +679,12 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
                             }
                             else {
                                 /* one of the 3 background colors */
-                                dst[i] = vic->gseq.bg_rgba8[bits];
+                                dst[i] = vic->gunit.bg_rgba8[bits];
                             }
                         }
                         else {
                             /* standard text mode char */
-                            dst[i] = vic->gseq.outp & 0x80 ? fg : bg;
+                            dst[i] = vic->gunit.outp & 0x80 ? fg : bg;
                         }
                     }
                 }
@@ -665,14 +693,14 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
                 /* ECM/BMM/MCM=010, standard bitmap mode */
                 {
                     for (int i = 0; i < 8; i++) {
-                        _m6567_gseq_tick(vic, g_data);
-                        if (vic->gseq.outp & 0x80) {
+                        _m6567_gunit_tick(vic, g_data);
+                        if (vic->gunit.outp & 0x80) {
                             /* foreground pixel */
-                            dst[i] = _m6567_colors[(vic->gseq.c_data >> 4) & 0xF];
+                            dst[i] = _m6567_colors[(vic->gunit.c_data >> 4) & 0xF];
                         }
                         else {
                             /* background pixel */
-                            dst[i] = _m6567_colors[vic->gseq.c_data & 0xF];
+                            dst[i] = _m6567_colors[vic->gunit.c_data & 0xF];
                         }
                     }
                 }
@@ -680,11 +708,11 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
             case 3:
                 /* ECM/BMM/MCM=011, multicolor bitmap mode */
                 {
-                    const uint32_t bg = vic->gseq.bg_rgba8[0];
+                    const uint32_t bg = vic->gunit.bg_rgba8[0];
                     for (int i = 0; i < 8; i++) {
-                        _m6567_gseq_tick(vic, g_data);
+                        _m6567_gunit_tick(vic, g_data);
                         /* shift 2 is only updated every 2 ticks */
-                        uint8_t bits = vic->gseq.outp2;
+                        uint8_t bits = vic->gunit.outp2;
                         /* half resolution multicolor char
                            need 2 bits from the pixel sequencer
                                 "00": Background color 0 ($d021)
@@ -694,9 +722,9 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
                         */
                         switch ((bits>>6)&3) {
                             case 0: dst[i] = bg; break;
-                            case 1: dst[i] = _m6567_colors[(vic->gseq.c_data>>4) & 0xF]; break;
-                            case 2: dst[i] = _m6567_colors[vic->gseq.c_data & 0xF]; break;
-                            case 3: dst[i] = _m6567_colors[(vic->gseq.c_data>>8) & 0xF]; break;
+                            case 1: dst[i] = _m6567_colors[(vic->gunit.c_data>>4) & 0xF]; break;
+                            case 2: dst[i] = _m6567_colors[vic->gunit.c_data & 0xF]; break;
+                            case 3: dst[i] = _m6567_colors[(vic->gunit.c_data>>8) & 0xF]; break;
                         }
                     }
                 }
@@ -704,12 +732,12 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
             case 4:
                 /* ECM/BMM/MCM=100, ECM text mode */
                 for (int i = 0; i < 8; i++) {
-                    _m6567_gseq_tick(vic, g_data);
+                    _m6567_gunit_tick(vic, g_data);
                     /* bg color selected by bits 6 and 7 of c_data */
-                    const uint32_t bg = vic->gseq.bg_rgba8[(vic->gseq.c_data>>6) & 3];
+                    const uint32_t bg = vic->gunit.bg_rgba8[(vic->gunit.c_data>>6) & 3];
                     /* foreground color as usual bits 8..11 of c_data */
-                    const uint32_t fg = _m6567_colors[(vic->gseq.c_data>>8) & 0xF];
-                    dst[i] = vic->gseq.outp & 0x80 ? fg : bg;
+                    const uint32_t fg = _m6567_colors[(vic->gunit.c_data>>8) & 0xF];
+                    dst[i] = vic->gunit.outp & 0x80 ? fg : bg;
                 }
                 break;
 
@@ -728,7 +756,7 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
         "...otherwise it displays the background color"
     */
     else {
-        const uint32_t c = vic->gseq.bg_rgba8[0];
+        const uint32_t c = vic->gunit.bg_rgba8[0];
         for (int i = 0; i < 8; i++) {
             dst[i] = c;
         }
@@ -880,10 +908,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
         /* g-accesses start at cycle 15 of each line in display state */
         g_access = vic->rs.display_state && (vic->rs.h_count >= 15) && (vic->rs.h_count < 55);
-        vic->gseq.enabled = g_access;
+        vic->gunit.enabled = g_access;
         if (vic->rs.h_count == 15) {
             /* reset the graphics sequencer, potentially delayed by xscroll value */
-            _m6567_gseq_reload(vic, vic->reg.ctrl_2 & M6567_CTRL2_XSCROLL);
+            _m6567_gunit_reload(vic, vic->reg.ctrl_2 & M6567_CTRL2_XSCROLL);
         }
     }
 
@@ -894,6 +922,19 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         uint16_t addr = vic->rs.vc | vic->mem.c_addr_or;
         vic->vm.line[vic->vm.vmli] = vic->mem.fetch_cb(addr) & 0x0FFF;
     }
+    /* check if a p-access needs to happen */
+    int ps_index;
+    if (vic->rs.h_count == 58)      { ps_index=0; }
+    else if (vic->rs.h_count == 60) { ps_index=1; } 
+    else if (vic->rs.h_count == 62) { ps_index=2; }
+    else if (vic->rs.h_count == 1)  { ps_index=3; }
+    else if (vic->rs.h_count == 3)  { ps_index=4; }
+    else if (vic->rs.h_count == 5)  { ps_index=5; }
+    else if (vic->rs.h_count == 7)  { ps_index=6; }
+    else if (vic->rs.h_count == 9)  { ps_index=7; }
+    else { ps_index = -1; }
+
+    /* in the first half-cycle, either a g_access, p_access or i_access happens */
     uint8_t g_data;
     if (g_access) {
         uint16_t addr;
@@ -908,6 +949,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             addr = (addr | vic->mem.g_addr_or) & vic->mem.g_addr_and;
         }
         g_data = (uint8_t) vic->mem.fetch_cb(addr);
+    }
+    else if (ps_index >= 0) {
+        /* a sprite p-access */
+        uint16_t addr = vic->mem.p_addr_or + ps_index;
+        vic->sunit[ps_index].p_data = (uint8_t) vic->mem.fetch_cb(addr);
     }
     else {
         /* an idle access */
