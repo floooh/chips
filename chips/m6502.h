@@ -37,6 +37,15 @@
     If the RDY pin is active (1) the CPU will loop on the next read
     access until the pin goes inactive.
 
+    ## Notes
+
+    Stored here for later referencer:
+
+    - https://www.pagetable.com/?p=39
+    
+    Maybe it makes sense to rewrite the code-generation python script with
+    a real 'decode' ROM?
+
     ## Functions
     ~~~C
     void m6502_init(m6502_t* cpu, m6502_desc_t* desc)
