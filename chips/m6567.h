@@ -354,9 +354,9 @@ static const uint8_t _m6567_reg_mask[M6567_NUM_REGS] = {
 };
 
 /* internal implementation constants */
-#define _M6567_HTOTAL               (63)    /* 63 cycles per line (PAL) */
+#define _M6567_HTOTAL               (62)    /* 63 cycles per line (PAL) */
 #define _M6567_HRETRACEPOS          (3)     /* start of horizontal beam retrace */
-#define _M6567_VTOTAL               (312)   /* 312 lines total (PAL) */
+#define _M6567_VTOTAL               (311)   /* 312 lines total (PAL) */
 #define _M6567_VRETRACEPOS          (303)   /* start of vertical beam retrace */
 
 #define _M6567_RSEL1_BORDER_TOP     (51)    /* top border when RSEL=1 (25 rows) */
@@ -819,7 +819,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         else {
             vic->rs.h_count++;
         }
-
         /* update CRT beam pos */
         if (vic->rs.h_count == vic->rs.h_retracepos) {
             vic->crt.x = 0;
@@ -1028,7 +1027,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         if (vic->debug_vis) {
             const int x = vic->rs.h_count;
             const int y = vic->rs.v_count;
-            const int w = vic->rs.h_total;
+            const int w = vic->rs.h_total + 1;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
             _m6567_decode_pixels(vic, g_data, dst);
             dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
@@ -1082,8 +1081,8 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
 void m6567_display_size(m6567_t* vic, int* out_width, int* out_height) {
     CHIPS_ASSERT(vic && out_width && out_height);
     if (vic->debug_vis) {
-        *out_width = vic->rs.h_total*8;
-        *out_height = vic->rs.v_total;
+        *out_width = (vic->rs.h_total+1)*8;
+        *out_height = vic->rs.v_total+1;
     }
     else {
         *out_width = vic->crt.vis_w*8;
