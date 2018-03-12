@@ -179,7 +179,7 @@ typedef struct {
     };
 } _m6567_registers_t;
 
-/* control register bits */
+/* control- and interrupt-register bits */
 #define M6567_CTRL1_RST8    (1<<7)
 #define M6567_CTRL1_ECM     (1<<6)
 #define M6567_CTRL1_BMM     (1<<5)
@@ -367,6 +367,13 @@ static const uint8_t _m6567_reg_mask[M6567_NUM_REGS] = {
 #define _M6567_CSEL1_BORDER_RIGHT   (55)    /* right border when CSEL=1 */
 #define _M6567_CSEL0_BORDER_LEFT    (16)    /* left border when CSEL=0 (38 columns) */
 #define _M6567_CSEL0_BORDER_RIGHT   (54)    /* right border when CSEL=0 */
+
+/* internal helper macros to check for horizontal ticks with coordinates 
+used here: http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt
+*/
+#define _M6567_HTICK(t)             (vic->rs.h_count == (t))
+#define _M6567_HTICK_GE(t)          (vic->rs.h_count >= (t))
+#define _M6567_HTICK_RANGE(t0,t1)   ((vic->rs.h_count >= (t0)) && (vic->rs.h_count <= (t1)))
 
 /*--- init -------------------------------------------------------------------*/
 static void _m6567_init_raster_unit(_m6567_raster_unit_t* r, m6567_desc_t* desc) {
@@ -834,7 +841,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
 
         /* check for raster interrupt */
-        if ((vic->rs.h_count == 0) && (vic->rs.v_count == vic->rs.v_irqline)) {
+        if (_M6567_HTICK(0) && (vic->rs.v_count == vic->rs.v_irqline)) {
             vic->reg.int_latch = M6567_INT_IRST;
         }
 
@@ -881,7 +888,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         if (vic->rs.badline) {
             vic->rs.display_state = true;
         }
-        if (vic->rs.h_count == 58) {
+        if (_M6567_HTICK(58)) {
             if (vic->rs.rc == 7) {
                 vic->rs.vc_base = vic->rs.vc;
                 if (!vic->rs.badline) {
@@ -896,10 +903,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         /* If there is a Bad Line Condition in cycles 12-54, BA is set low and the
             c-accesses are started. Also set the AEC pin 3 cycles later.
         */
-        if ((vic->rs.h_count >= 12) && (vic->rs.h_count <= 54)) {
+        if (_M6567_HTICK_RANGE(12,54)) {
             if (vic->rs.badline) {
                 ba_pin = true;
-                if (vic->rs.h_count >= 15) {
+                if (_M6567_HTICK_GE(15)) {
                     aec_pin = true;
                     c_access = true;
                 }
@@ -908,7 +915,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
                 this phase, RC is also reset to zero.
             */
-            if (vic->rs.h_count == 14) {
+            if (_M6567_HTICK(14)) {
                 vic->rs.vc = vic->rs.vc_base;
                 vic->vm.vmli = 0;
                 if (vic->rs.badline) {
@@ -917,9 +924,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             }
         }
         /* g-accesses start at cycle 15 of each line in display state */
-        g_access = vic->rs.display_state && (vic->rs.h_count >= 15) && (vic->rs.h_count < 55);
+        g_access = vic->rs.display_state && _M6567_HTICK_RANGE(15,54);
         vic->gunit.enabled = g_access;
-        if (vic->rs.h_count == 15) {
+        if (_M6567_HTICK(15)) {
             /* reset the graphics sequencer, potentially delayed by xscroll value */
             _m6567_gunit_reload(vic, vic->reg.ctrl_2 & M6567_CTRL2_XSCROLL);
         }
@@ -934,14 +941,14 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     }
     /* check if a p-access needs to happen */
     int ps_index;
-    if (vic->rs.h_count == 58)      { ps_index=0; }
-    else if (vic->rs.h_count == 60) { ps_index=1; } 
-    else if (vic->rs.h_count == 62) { ps_index=2; }
-    else if (vic->rs.h_count == 1)  { ps_index=3; }
-    else if (vic->rs.h_count == 3)  { ps_index=4; }
-    else if (vic->rs.h_count == 5)  { ps_index=5; }
-    else if (vic->rs.h_count == 7)  { ps_index=6; }
-    else if (vic->rs.h_count == 9)  { ps_index=7; }
+    if (_M6567_HTICK(58))      { ps_index=0; }
+    else if (_M6567_HTICK(60)) { ps_index=1; } 
+    else if (_M6567_HTICK(62)) { ps_index=2; }
+    else if (_M6567_HTICK(1))  { ps_index=3; }
+    else if (_M6567_HTICK(3))  { ps_index=4; }
+    else if (_M6567_HTICK(5))  { ps_index=5; }
+    else if (_M6567_HTICK(7))  { ps_index=6; }
+    else if (_M6567_HTICK(9))  { ps_index=7; }
     else { ps_index = -1; }
 
     /* in the first half-cycle, either a g_access, p_access or i_access happens */
@@ -979,7 +986,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         if (vic->rs.h_count == vic->brd.right) {
             vic->brd.main = true;
         }
-        if (vic->rs.h_count == 0) {
+        if (_M6567_HTICK(0)) {
             /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
                   vertical border flip flop is set.
             */
