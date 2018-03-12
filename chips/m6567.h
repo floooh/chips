@@ -202,8 +202,8 @@ typedef struct {
 
 /* raster unit state */
 typedef struct {
-    uint16_t h_count, h_total, h_retracepos;
-    uint16_t v_count, v_total, v_retracepos;
+    uint16_t h_count, h_total;
+    uint16_t v_count, v_total;
     uint16_t v_irqline;     /* raster interrupt line, updated when ctrl_1 or raster is written */
     uint16_t vc;            /* 10-bit video counter */
     uint16_t vc_base;       /* 10-bit video counter base */
@@ -380,9 +380,7 @@ static void _m6567_init_raster_unit(_m6567_raster_unit_t* r, m6567_desc_t* desc)
     /* only allow the PAL version for now */
     CHIPS_ASSERT(desc->type == M6567_TYPE_6569);
     r->h_total = _M6567_HTOTAL;
-    r->h_retracepos = _M6567_HRETRACEPOS;
     r->v_total = _M6567_VTOTAL;
-    r->v_retracepos = _M6567_VRETRACEPOS;
     CHIPS_ASSERT(desc->rgba8_buffer_size >= (r->h_total*8*r->v_total*sizeof(uint32_t)));
 }
 
@@ -827,9 +825,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             vic->rs.h_count++;
         }
         /* update CRT beam pos */
-        if (vic->rs.h_count == vic->rs.h_retracepos) {
+        if (vic->rs.h_count == _M6567_HRETRACEPOS) {
             vic->crt.x = 0;
-            if (vic->rs.v_count == vic->rs.v_retracepos) {
+            if (vic->rs.v_count == _M6567_VRETRACEPOS) {
                 vic->crt.y = 0;
             }
             else {
