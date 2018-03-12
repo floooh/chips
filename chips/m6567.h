@@ -1,16 +1,5 @@
 #pragma once
 /*#
-    FIXME: The the origin of h_count should be 3 cycles before the first
-    p-access, and v_count should be incremented when h_count is reset.
-    But the raster register must be incremented at the IRQ check. v_count
-    and the raster counter must simple be decoupled. This will simplify
-    handling the sprite memory accesses (since otherwise the 
-    data for the first 3 sprites are loaded in a different scanline
-    from the other sprites!). Because of the different tick counts
-    there should be a macro _M6567_TICK(N) which compares h_count against
-    the tick count from the vic-ii.txt documentation.
-    A check would look like this: if (_M6567_TICK(58))...
-
     # m6567.h
 
     MOS Technology 6567 / 6569 emulator (aka VIC-II)
@@ -154,20 +143,20 @@ typedef struct {
     union {
         uint8_t regs[M6567_NUM_REGS];
         struct {
-            uint8_t mob_xy[M6567_NUM_MOBS][2];  /* sprite X/Y coords */
-            uint8_t mob_x_msb;                  /* x coordinate MSBs */
+            uint8_t mxy[M6567_NUM_MOBS][2];     /* sprite X/Y coords */
+            uint8_t mx8;                        /* x coordinate MSBs */
             uint8_t ctrl_1;                     /* control register 1 */
             uint8_t raster;                     /* raster counter */
             uint8_t lightpen_xy[2];             /* lightpen coords */
             uint8_t mob_enabled;                /* sprite enabled bits */
             uint8_t ctrl_2;                     /* control register 2 */
-            uint8_t mob_yexp;                   /* sprite Y expansion */
+            uint8_t mye;                        /* sprite Y expansion */
             uint8_t mem_ptrs;                   /* memory pointers */
             uint8_t int_latch;                  /* interrupt latch */
             uint8_t int_mask;                   /* interrupt-enabled mask */
             uint8_t mob_data_priority;          /* sprite data priority bits */
             uint8_t mob_multicolor;             /* sprite multicolor bits */
-            uint8_t mob_xexp;                   /* sprite X expansion */
+            uint8_t mxe;                        /* sprite X expansion */
             uint8_t mob_mob_coll;               /* sprite-sprite collision bits */
             uint8_t mob_data_coll;              /* sprite-data collision bits */
             uint8_t border_color;               /* border color */
@@ -260,10 +249,13 @@ typedef struct {
 /* sprite sequencer state */
 typedef struct {
     /* updated when setting sprite position registers */
-    uint16_t v_start;           /* first rendered scanline */
-    uint16_t v_end;             /* one-past-end rendered scanline */
-    uint8_t h_start;            /* first horizontal tick where sprite is active */
-    uint8_t h_end;              /* one-past-end horizontal tick where sprite is active */
+    uint16_t v_mem_first;       /* first s-access scanline */
+    uint16_t v_mem_last;        /* last s-access scanline */
+    uint16_t v_vis_first;       /* first visible scanline */
+    uint16_t v_vis_last;        /* last visible scanline */
+    uint8_t h_first;            /* first horizontal visible tick */
+    uint8_t h_last;             /* last horizontal visible tick */
+    uint8_t h_offset;           /* x-offset within 8-pixel raster */
 
     uint8_t p_data;             /* the byte read by p_access memory fetch */
     
@@ -374,6 +366,8 @@ used here: http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt
 #define _M6567_HTICK(t)             (vic->rs.h_count == (t))
 #define _M6567_HTICK_GE(t)          (vic->rs.h_count >= (t))
 #define _M6567_HTICK_RANGE(t0,t1)   ((vic->rs.h_count >= (t0)) && (vic->rs.h_count <= (t1)))
+#define _M6567_RAST(r)              (vic->rs.v_count == (r))
+#define _M6567_RAST_RANGE(r0,r1)    (vic->rs.v_count >= (r0) && (vic->rs.v_count <= (r1)))
 
 /*--- init -------------------------------------------------------------------*/
 static void _m6567_init_raster_unit(_m6567_raster_unit_t* r, m6567_desc_t* desc) {
@@ -525,19 +519,43 @@ static void _m6567_io_update_gunit_mode(_m6567_graphics_unit_t* gu, uint8_t ctrl
     gu->mode = ((ctrl_1&(M6567_CTRL1_ECM|M6567_CTRL1_BMM))|(ctrl_2&M6567_CTRL2_MCM))>>4;
 }
 
+/* update sprite unit positions and sizes when updating registers */
+static void _m6567_io_update_sunit(m6567_t* vic, int i, uint8_t mx, uint8_t my, uint8_t mx8, uint8_t mxe, uint8_t mye) {
+    _m6567_sprite_unit_t* su = &vic->sunit[i];
+    /* mxb: MSB for each xpos */
+    uint16_t xpos = ((mx8 & (1<<i))<<(8-i)) | mx;
+    /* FIXME: the 13-tick offset is from visually checking Boulderdash,
+    where is this in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt?
+    */
+    su->h_first  = (xpos / 8) + 13;
+    su->h_offset = (xpos & 7);
+    const uint16_t w = ((mxe & (1<<i)) ? 5 : 2) + ((su->h_offset > 0) ? 1:0);
+    su->h_last   = su->h_first + w;
+    const uint16_t h = ((mye & (1<<i)) ? 41 : 20);
+    su->v_vis_first  = my;
+    su->v_vis_last   = su->v_vis_first + h;
+    /* sprites 0..2 mem accesses are on line before */
+    su->v_mem_first  = (i > 2) ? my : (my - 1);
+    su->v_mem_last   = su->v_mem_first + h;
+    if (su->v_mem_first == 0xFFFF) {
+        /* underflow */
+        su->v_mem_first = vic->rs.v_total;
+    }
+}
+
 /* perform an I/O request on the VIC-II */
 uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
     if (pins & M6567_CS) {
-        uint8_t reg_addr = pins & M6567_REG_MASK;
+        uint8_t r_addr = pins & M6567_REG_MASK;
+        _m6567_registers_t* r = &vic->reg;
         if (pins & M6567_RW) {
             /* read register, with some special cases */
-            _m6567_registers_t* rb = &vic->reg;
             const _m6567_raster_unit_t* rs = &vic->rs;
             uint8_t data;
-            switch (reg_addr) {
+            switch (r_addr) {
                 case 0x11:
                     /* bit 7 of 0x11 is bit 8 of the current raster counter */
-                    data = (rb->ctrl_1 & 0x7F) | ((rs->v_count & 0x100)>>1);
+                    data = (r->ctrl_1 & 0x7F) | ((rs->v_count & 0x100)>>1);
                     break;
                 case 0x12:
                     /* reading 0x12 returns bits 0..7 of current raster position */
@@ -546,52 +564,114 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                 case 0x1E:
                 case 0x1F:
                     /* registers 0x1E and 0x1F (mob collisions) are cleared on reading */
-                    data = rb->regs[reg_addr];
-                    rb->regs[reg_addr] = 0;
+                    data = r->regs[r_addr];
+                    r->regs[r_addr] = 0;
                     break;
                 default:
                     /* unconnected bits are returned as 1 */
-                    data = rb->regs[reg_addr] | ~_m6567_reg_mask[reg_addr];
+                    data = r->regs[r_addr] | ~_m6567_reg_mask[r_addr];
                     break;
             }
             M6567_SET_DATA(pins, data);
         }
         else {
             /* write register, with special cases */
-            _m6567_registers_t* rb = &vic->reg;
-            const uint8_t data = M6567_GET_DATA(pins) & _m6567_reg_mask[reg_addr];
+            const uint8_t data = M6567_GET_DATA(pins) & _m6567_reg_mask[r_addr];
             bool write = true;
-            switch (reg_addr) {
+            switch (r_addr) {
+                case 0x00:  /* m0x */
+                    _m6567_io_update_sunit(vic, 0, data, r->mxy[0][1], r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x01:  /* m0y */
+                    _m6567_io_update_sunit(vic, 0, r->mxy[0][0], data, r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x02:  /* m1x */
+                    _m6567_io_update_sunit(vic, 1, data, r->mxy[1][1], r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x03:  /* m1y */
+                    _m6567_io_update_sunit(vic, 1, r->mxy[1][0], data, r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x04:  /* m2x */
+                    _m6567_io_update_sunit(vic, 2, data, r->mxy[2][1], r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x05:  /* m2y */
+                    _m6567_io_update_sunit(vic, 2, r->mxy[2][0], data, r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x06:  /* m3x */
+                    _m6567_io_update_sunit(vic, 3, data, r->mxy[3][1], r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x07:  /* m3y */
+                    _m6567_io_update_sunit(vic, 3, r->mxy[3][0], data, r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x08:  /* m4x */
+                    _m6567_io_update_sunit(vic, 4, data, r->mxy[4][1], r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x09:  /* m4y */
+                    _m6567_io_update_sunit(vic, 4, r->mxy[4][0], data, r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x0A:  /* m5x */
+                    _m6567_io_update_sunit(vic, 5, data, r->mxy[5][1], r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x0B:  /* m5y */
+                    _m6567_io_update_sunit(vic, 5, r->mxy[5][0], data, r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x0C:  /* m6x */
+                    _m6567_io_update_sunit(vic, 6, data, r->mxy[6][1], r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x0D:  /* m6y */
+                    _m6567_io_update_sunit(vic, 6, r->mxy[6][0], data, r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x0E:  /* m7x */
+                    _m6567_io_update_sunit(vic, 7, data, r->mxy[7][1], r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x0F:  /* m7y */
+                    _m6567_io_update_sunit(vic, 7, r->mxy[7][0], data, r->mx8, r->mxe, r->mye);
+                    break;
+                case 0x10:  /* mx8 */
+                    for (int i = 0; i < 8; i++) {
+                        _m6567_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], data, r->mxe, r->mye);
+                    }
+                    break;
                 case 0x11:  /* ctrl_1 */
                     /* update raster interrupt line */
-                    _m6567_io_update_irq_line(&vic->rs, data, rb->raster);
+                    _m6567_io_update_irq_line(&vic->rs, data, r->raster);
                     /* update border top/bottom from RSEL flag */
                     _m6567_io_update_border_rsel(&vic->brd, data);
                     /* ECM bit updates the precomputed fetch address masks */
-                    _m6567_io_update_memory_unit(&vic->mem, rb->mem_ptrs, data);
+                    _m6567_io_update_memory_unit(&vic->mem, r->mem_ptrs, data);
                     /* update the graphics mode */
-                    _m6567_io_update_gunit_mode(&vic->gunit, data, rb->ctrl_2);
+                    _m6567_io_update_gunit_mode(&vic->gunit, data, r->ctrl_2);
                     break;
                 case 0x12:
                     /* raster irq value lower 8 bits */
-                    _m6567_io_update_irq_line(&vic->rs, rb->ctrl_1, data);
+                    _m6567_io_update_irq_line(&vic->rs, r->ctrl_1, data);
                     break;
                 case 0x16: /* ctrl_2 */
                     /* update border left/right from CSEL flag */
                     _m6567_io_update_border_csel(&vic->brd, data);
                     /* update the graphics mode */
-                    _m6567_io_update_gunit_mode(&vic->gunit, rb->ctrl_1, data);
+                    _m6567_io_update_gunit_mode(&vic->gunit, r->ctrl_1, data);
+                    break;
+                case 0x17:  /* mye */
+                    for (int i = 0; i < 8; i++) {
+                        _m6567_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, r->mxe, data);
+                    }
                     break;
                 case 0x18:
                     /* memory-ptrs register , update precomputed fetch address masks */
-                    _m6567_io_update_memory_unit(&vic->mem, data, rb->ctrl_1);
+                    _m6567_io_update_memory_unit(&vic->mem, data, r->ctrl_1);
                     break;
                 case 0x19:
                     /* interrupt latch: to clear a bit in the latch, a 1-bit
                        must be written to the latch!
                     */
-                    rb->int_latch = (rb->int_latch & ~data) & _m6567_reg_mask[0x19];
+                    r->int_latch = (r->int_latch & ~data) & _m6567_reg_mask[0x19];
                     write = false;
+                    break;
+                case 0x1D:  /* mxe */
+                    for (int i = 0; i < 8; i++) {
+                        _m6567_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, data, r->mye);
+                    }
                     break;
                 case 0x1E:
                 case 0x1F:
@@ -607,11 +687,11 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                 case 0x23:
                 case 0x24:
                     /* background colors */
-                    vic->gunit.bg_rgba8[reg_addr-0x21] = _m6567_colors[data & 0xF];
+                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6567_colors[data & 0xF];
                     break;
             }
             if (write) {
-                rb->regs[reg_addr] = data;
+                r->regs[r_addr] = data;
             }
         }
     }
@@ -853,9 +933,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             <= $f7 (247) and the lower three bits of RASTER are equal to YSCROLL and if the
             DEN bit was set during an arbitrary cycle of raster line $30."
         */
-        if ((vic->rs.v_count >= 48) && (vic->rs.v_count <= 247)) {
+        if (_M6567_RAST_RANGE(48, 247)) {
             /* DEN bit must have been set in raster line $30 */
-            if ((vic->rs.v_count == 48) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
+            if (_M6567_RAST(48) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
                 vic->rs.frame_badlines_enabled = true;
             }
             /* a badline is active when the low 3 bits of raster position
@@ -1030,6 +1110,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     /*--- decode pixels into framebuffer -------------------------------------*/
     {
         if (vic->debug_vis) {
+            /*=== DEBUG VISUALIZATION ===*/
             const int x = vic->rs.h_count;
             const int y = vic->rs.v_count;
             const int w = vic->rs.h_total + 1;
@@ -1042,6 +1123,17 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             }
             if (ba_pin) {
                 mask = 0x000000FF;
+            }
+            /* sprites */
+            for (int si = 0; si < 8; si++) {
+                if (vic->reg.mob_enabled & (1<<si)) {
+                    const _m6567_sprite_unit_t* su = &vic->sunit[si];
+                    if (_M6567_HTICK_RANGE(su->h_first, su->h_last) && 
+                        _M6567_RAST_RANGE(su->v_vis_first, su->v_vis_last))
+                    {
+                        mask |= 0xFFFF00FF;
+                    }
+                }
             }
             /* main interrupt bit */
             if (vic->reg.int_latch & (1<<7)) {
