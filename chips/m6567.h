@@ -148,7 +148,7 @@ typedef struct {
             uint8_t ctrl_1;                     /* control register 1 */
             uint8_t raster;                     /* raster counter */
             uint8_t lightpen_xy[2];             /* lightpen coords */
-            uint8_t mob_enabled;                /* sprite enabled bits */
+            uint8_t me;                         /* sprite enabled bits */
             uint8_t ctrl_2;                     /* control register 2 */
             uint8_t mye;                        /* sprite Y expansion */
             uint8_t mem_ptrs;                   /* memory pointers */
@@ -194,6 +194,7 @@ typedef struct {
     uint16_t h_count, h_total;
     uint16_t v_count, v_total;
     uint16_t v_irqline;     /* raster interrupt line, updated when ctrl_1 or raster is written */
+    uint16_t sh_count;      /* separate counter for sprite, reset at h_count=55 */
     uint16_t vc;            /* 10-bit video counter */
     uint16_t vc_base;       /* 10-bit video counter base */
     uint8_t rc;             /* 3-bit raster counter */
@@ -249,16 +250,15 @@ typedef struct {
 /* sprite sequencer state */
 typedef struct {
     /* updated when setting sprite position registers */
-    uint16_t v_mem_first;       /* first s-access scanline */
-    uint16_t v_mem_last;        /* last s-access scanline */
-    uint16_t v_vis_first;       /* first visible scanline */
-    uint16_t v_vis_last;        /* last visible scanline */
     uint8_t h_first;            /* first horizontal visible tick */
     uint8_t h_last;             /* last horizontal visible tick */
     uint8_t h_offset;           /* x-offset within 8-pixel raster */
 
     uint8_t p_data;             /* the byte read by p_access memory fetch */
     
+    bool dma_enabled;           /* sprite dma is enabled */
+    bool disp_enabled;          /* sprite display is enabled */
+    bool expand;                /* expand flip-flop */
     uint8_t mc;                 /* 6-bit mob-data-counter */
     uint8_t mc_base;            /* 6-bit mob-data-counter base */
     uint32_t shift;             /* 24-bit shift register */
@@ -367,7 +367,7 @@ used here: http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt
 #define _M6567_HTICK_GE(t)          (vic->rs.h_count >= (t))
 #define _M6567_HTICK_RANGE(t0,t1)   ((vic->rs.h_count >= (t0)) && (vic->rs.h_count <= (t1)))
 #define _M6567_RAST(r)              (vic->rs.v_count == (r))
-#define _M6567_RAST_RANGE(r0,r1)    (vic->rs.v_count >= (r0) && (vic->rs.v_count <= (r1)))
+#define _M6567_RAST_RANGE(r0,r1)    ((vic->rs.v_count >= (r0)) && (vic->rs.v_count <= (r1)))
 
 /*--- init -------------------------------------------------------------------*/
 static void _m6567_init_raster_unit(_m6567_raster_unit_t* r, m6567_desc_t* desc) {
@@ -408,6 +408,7 @@ static void _m6567_reset_register_bank(_m6567_registers_t* r) {
 
 static void _m6567_reset_raster_unit(_m6567_raster_unit_t* r) {
     r->h_count = r->v_count = 0;
+    r->sh_count = 0;
     r->v_irqline = 0;
     r->vc = r->vc_base = 0;
     r->rc = 0;
@@ -531,15 +532,11 @@ static void _m6567_io_update_sunit(m6567_t* vic, int i, uint8_t mx, uint8_t my, 
     su->h_offset = (xpos & 7);
     const uint16_t w = ((mxe & (1<<i)) ? 5 : 2) + ((su->h_offset > 0) ? 1:0);
     su->h_last   = su->h_first + w;
-    const uint16_t h = ((mye & (1<<i)) ? 41 : 20);
-    su->v_vis_first  = my;
-    su->v_vis_last   = su->v_vis_first + h;
-    /* sprites 0..2 mem accesses are on line before */
-    su->v_mem_first  = (i > 2) ? my : (my - 1);
-    su->v_mem_last   = su->v_mem_first + h;
-    if (su->v_mem_first == 0xFFFF) {
-        /* underflow */
-        su->v_mem_first = vic->rs.v_total;
+    /* 1. The expansion flip flip is set as long as the bit in MxYE in register
+        $d017 corresponding to the sprite is cleared.
+    */
+    if ((mye & (1<<i)) == 0) {
+        su->expand = true;
     }
 }
 
@@ -1010,24 +1007,140 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
     }
 
+    /*--- sprite unit preparations -------------------------------------------*/
+    /* (see 3.8. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
+    /* run separate sprite raster counters which wrap around at h_count=55 */
+    if (vic->rs.h_count == 55) {
+        vic->rs.sh_count = 0;
+    }
+    else {
+        vic->rs.sh_count++;
+    }
+
+    /* p-accesses happen in each scanline */
+    int p_index = -1;
+    for (int i = 0; i < 8; i++) {
+        if (vic->rs.sh_count == 3+i*2) {
+            p_index = i;
+            break;
+        }
+    }
+
+    /* 1. The expansion flip flip is set as long as the bit in MxYE in register
+        $d017 corresponding to the sprite is cleared.
+        (FIXME: this is currently only done when updating the MxYE register)
+    */
+
+    /*
+       2. If the MxYE bit is set in the first phase of cycle 55, the expansion
+        flip flop is inverted.
+       3. In the first phases of cycle 55 and 56, the VIC checks for every sprite
+        if the corresponding MxE bit in register $d015 is set and the Y
+        coordinate of the sprite (odd registers $d001-$d00f) match the lower 8
+        bits of RASTER. If this is the case and the DMA for the sprite is still
+        off, the DMA is switched on, MCBASE is cleared, and if the MxYE bit is
+        set the expansion flip flip is reset.
+    */
+    if (_M6567_HTICK(55)) {
+        const uint8_t me = vic->reg.me;
+        const uint8_t mye = vic->reg.mye;
+        for (int i = 0; i < 8; i++) {
+            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            const uint8_t mask = (1<<i);
+            if (mye & mask) {
+                su->expand = !su->expand;
+            }
+            if ((me & mask) && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
+                if (!su->dma_enabled) {
+                    su->dma_enabled = true;
+                    su->mc_base = 0;
+                    if (mye & mask) {
+                        su->expand = false;
+                    }
+                }
+            }
+        }
+    }
+
+    /* 4. In the first phase of cycle 58, the MC of every sprite is loaded from
+        its belonging MCBASE (MCBASE->MC) and it is checked if the DMA for the
+        sprite is turned on and the Y coordinate of the sprite matches the lower
+        8 bits of RASTER. If this is the case, the display of the sprite is
+        turned on.
+    */
+    if (_M6567_HTICK(58)) {
+        for (int i = 0; i < 8; i++) {
+            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            su->mc = su->mc_base;
+            if (su->dma_enabled && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
+                su->disp_enabled = true;
+            }
+        }
+    }
+
+    /* 7. In the first phase of cycle 15, it is checked if the expansion flip flop
+        is set. If so, MCBASE is incremented by 2.
+    */
+    if (_M6567_HTICK(15)) {
+        for (int i = 0; i < 8; i++) {
+            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            if (su->expand) {
+                su->mc_base = (su->mc_base + 2) & 0x3F;
+            }
+        }
+    }
+    /* 8. In the first phase of cycle 16, it is checked if the expansion flip flop
+        is set. If so, MCBASE is incremented by 1. After that, the VIC checks if
+        MCBASE is equal to 63 and turns of the DMA and the display of the sprite
+        if it is.
+    */
+    if (_M6567_HTICK(16)) {
+        for (int i = 0; i < 8; i++) {
+            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            if (su->expand) {
+                su->mc_base = (su->mc_base + 1) & 0x3F;
+            }
+            if (su->mc_base == 63) {
+                su->dma_enabled = false;
+                su->disp_enabled = false;
+            }
+        }
+    }
+
+    /* s-access and ba/aec pins for s-accesses, only for enabled sprites */
+    int s_index = -1;
+    if (vic->rs.sh_count < (2*8 + 3)) {
+        uint16_t sh = 3;
+        for (int i = 0; i < 8; i++, sh+=2) {
+            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            if (su->dma_enabled) {
+                if ((vic->rs.sh_count >= (sh-3)) && (vic->rs.sh_count <= (sh+1))) {
+                    ba_pin = true;
+                    if (vic->rs.sh_count >= sh) {
+                        aec_pin = true;
+                        s_index = i;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     /*--- perform memory fetches ---------------------------------------------*/
     /* (see 3.6.3. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
+    bool i_access = true;
     if (c_access) {
         /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
         uint16_t addr = vic->rs.vc | vic->mem.c_addr_or;
         vic->vm.line[vic->vm.vmli] = vic->mem.fetch_cb(addr) & 0x0FFF;
+        i_access = false;
     }
-    /* check if a p-access needs to happen */
-    int ps_index;
-    if (_M6567_HTICK(58))      { ps_index=0; }
-    else if (_M6567_HTICK(60)) { ps_index=1; } 
-    else if (_M6567_HTICK(62)) { ps_index=2; }
-    else if (_M6567_HTICK(1))  { ps_index=3; }
-    else if (_M6567_HTICK(3))  { ps_index=4; }
-    else if (_M6567_HTICK(5))  { ps_index=5; }
-    else if (_M6567_HTICK(7))  { ps_index=6; }
-    else if (_M6567_HTICK(9))  { ps_index=7; }
-    else { ps_index = -1; }
+    else if (p_index >= 0) {
+        /* a sprite p-access */
+        uint16_t addr = vic->mem.p_addr_or + p_index;
+        vic->sunit[p_index].p_data = (uint8_t) vic->mem.fetch_cb(addr);
+        i_access = false;
+    }
 
     /* in the first half-cycle, either a g_access, p_access or i_access happens */
     uint8_t g_data;
@@ -1044,14 +1157,19 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             addr = (addr | vic->mem.g_addr_or) & vic->mem.g_addr_and;
         }
         g_data = (uint8_t) vic->mem.fetch_cb(addr);
+        i_access = false;
     }
-    else if (ps_index >= 0) {
-        /* a sprite p-access */
-        uint16_t addr = vic->mem.p_addr_or + ps_index;
-        vic->sunit[ps_index].p_data = (uint8_t) vic->mem.fetch_cb(addr);
+    else if (s_index >= 0) {
+        /* sprite s-access: |MP7|MP6|MP5|MP4|MP3|MP2|MP1|MP0|MC5|MC4|MC3|MC2|MC1|MC0| */
+        _m6567_sprite_unit_t* su = &vic->sunit[s_index];
+        uint16_t addr = (su->p_data<<6) | su->mc;
+        uint8_t s_data = vic->mem.fetch_cb(addr);
+        su->shift = (su->shift<<8) | s_data;
+        su->mc = (su->mc + 1) & 0x3F;
     }
-    else {
-        /* an idle access */
+
+    /* if no other accesses happened, do an i-access */
+    if (i_access) {
         g_data = (uint8_t) vic->mem.fetch_cb(vic->mem.i_addr);
     }
 
@@ -1126,11 +1244,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             }
             /* sprites */
             for (int si = 0; si < 8; si++) {
-                if (vic->reg.mob_enabled & (1<<si)) {
-                    const _m6567_sprite_unit_t* su = &vic->sunit[si];
-                    if (_M6567_HTICK_RANGE(su->h_first, su->h_last) && 
-                        _M6567_RAST_RANGE(su->v_vis_first, su->v_vis_last))
-                    {
+                const _m6567_sprite_unit_t* su = &vic->sunit[si];
+                if (su->disp_enabled) {
+                    if (_M6567_HTICK_RANGE(su->h_first, su->h_last)) {
                         mask |= 0xFFFF00FF;
                     }
                 }
