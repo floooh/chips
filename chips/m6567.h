@@ -525,10 +525,7 @@ static void _m6567_io_update_sunit(m6567_t* vic, int i, uint8_t mx, uint8_t my, 
     _m6567_sprite_unit_t* su = &vic->sunit[i];
     /* mxb: MSB for each xpos */
     uint16_t xpos = ((mx8 & (1<<i))<<(8-i)) | mx;
-    /* FIXME: the 13-tick offset is from visually checking Boulderdash,
-    where is this in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt?
-    */
-    su->h_first  = (xpos / 8) + 13;
+    su->h_first  = (xpos / 8) + 12;
     su->h_offset = (xpos & 7);
     const uint16_t w = ((mxe & (1<<i)) ? 5 : 2) + ((su->h_offset > 0) ? 1:0);
     su->h_last   = su->h_first + w;
