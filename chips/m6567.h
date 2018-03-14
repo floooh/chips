@@ -261,7 +261,10 @@ typedef struct {
     bool expand;                /* expand flip-flop */
     uint8_t mc;                 /* 6-bit mob-data-counter */
     uint8_t mc_base;            /* 6-bit mob-data-counter base */
+    uint8_t even_odd;           /* even/odd pixel counter, only bit 0 matters */
     uint32_t shift;             /* 24-bit shift register */
+    uint32_t outp;              /* current shifter output (bit 31) */
+    uint32_t outp2;             /* current shifter output at half frequency (bits 31 and 30) */
 } _m6567_sprite_unit_t;
 
 /* the m6567 state structure */
@@ -304,7 +307,9 @@ extern uint32_t m6567_color(int i);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-/* color palette (see: http://unusedino.de/ec64/technical/misc/vic656x/colors/) */
+/*
+    color palette (see: http://unusedino.de/ec64/technical/misc/vic656x/colors/)
+*/
 #define _M6567_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
 static const uint32_t _m6567_colors[16] = {
     _M6567_RGBA8(0x00,0x00,0x00),     /* 0: black */
@@ -726,6 +731,125 @@ static inline void _m6567_gunit_tick(m6567_t* vic, uint8_t g_data) {
     vic->gunit.shift <<= 1;
 }
 
+/* graphics sequencer decoding functions for 1 pixel */
+static inline uint32_t _m6567_gunit_decode_mode0(m6567_t* vic, uint8_t g_data) {
+    _m6567_gunit_tick(vic, g_data);
+    if (vic->gunit.outp & 0x80) {
+        /* foreground color */
+        return _m6567_colors[(vic->gunit.c_data>>8)&0xF];
+    }
+    else {
+        /* background color */
+        return vic->gunit.bg_rgba8[0];
+    }
+}
+
+static inline uint32_t _m6567_gunit_decode_mode1(m6567_t* vic, uint8_t g_data) {
+    _m6567_gunit_tick(vic, g_data);
+    /* only seven colors in multicolor mode */
+    const uint32_t fg = _m6567_colors[(vic->gunit.c_data>>8) & 0x7];
+    if (vic->gunit.c_data & (1<<11)) {
+        /* outp2 is only updated every 2 ticks */
+        uint8_t bits = ((vic->gunit.outp2)>>6) & 3;
+        /* half resolution multicolor char
+            need 2 bits from the pixel sequencer
+                "00": Background color 0 ($d021)
+                "01": Background color 1 ($d022)
+                "10": Background color 2 ($d023)
+                "11": Color from bits 8-10 of c-data
+        */
+        if (bits == 3) {
+            /* special case '11' */
+            return fg;
+        }
+        else {
+            /* one of the 3 background colors */
+            return vic->gunit.bg_rgba8[bits];
+        }
+    }
+    else {
+        /* standard text mode char, but with only 7 foreground colors */
+        if (vic->gunit.outp & 0x80) {
+            /* foreground color */
+            return fg;
+        }
+        else {
+            /* background color */
+            return vic->gunit.bg_rgba8[0];
+        }
+    }
+}
+
+static inline uint32_t _m6567_gunit_decode_mode2(m6567_t* vic, uint8_t g_data) {
+    _m6567_gunit_tick(vic, g_data);
+    if (vic->gunit.outp & 0x80) {
+        /* foreground pixel */
+        return _m6567_colors[(vic->gunit.c_data >> 4) & 0xF];
+    }
+    else {
+        /* background pixel */
+        return _m6567_colors[vic->gunit.c_data & 0xF];
+    }
+}
+
+static inline uint32_t _m6567_gunit_decode_mode3(m6567_t* vic, uint8_t g_data) {
+    _m6567_gunit_tick(vic, g_data);
+    /* shift 2 is only updated every 2 ticks */
+    uint8_t bits = vic->gunit.outp2;
+    /* half resolution multicolor char
+        need 2 bits from the pixel sequencer
+            "00": Background color 0 ($d021)
+            "01": Color from bits 4-7 of c-data
+            "10": Color from bits 0-3 of c-data
+            "11": Color from bits 8-11 of c-data
+    */
+    switch ((bits>>6)&3) {
+        case 0:     return vic->gunit.bg_rgba8[0]; break;
+        case 1:     return _m6567_colors[(vic->gunit.c_data>>4) & 0xF]; break;
+        case 2:     return _m6567_colors[vic->gunit.c_data & 0xF]; break;
+        default:    return _m6567_colors[(vic->gunit.c_data>>8) & 0xF]; break;
+    }
+}
+
+static inline uint32_t _m6567_gunit_decode_mode4(m6567_t* vic, uint8_t g_data) {
+    _m6567_gunit_tick(vic, g_data);
+    if (vic->gunit.outp & 0x80) {
+        /* foreground color as usual bits 8..11 of c_data */
+        return _m6567_colors[(vic->gunit.c_data>>8) & 0xF];
+    }
+    else {
+        /* bg color selected by bits 6 and 7 of c_data */
+        return vic->gunit.bg_rgba8[(vic->gunit.c_data>>6) & 3];
+    }
+}
+
+/*--- sprite sequencer helper ------------------------------------------------*/
+static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
+    /* this will tick all the sprite units and return the color
+        of the highest-priority sprite color for the current pixel,
+        or 0 if the sprite units didn't produce a color 
+    */
+    uint32_t c = 0;
+    for (int i = 0; i < 8; i++) {
+        _m6567_sprite_unit_t* su = &vic->sunit[i];
+        if (su->disp_enabled && _M6567_HTICK_RANGE(su->h_first, su->h_last)) {
+            /* bit 31 of outp is the current shifter output */
+            su->outp = su->shift;
+            /* bits 31 and 30 of outp is half-frequency shifter output */
+            if (1 == (su->even_odd++ & 1)) {
+                su->outp2 = su->shift;
+            }
+            su->shift <<= 1;
+
+            /* FIXME */
+            if (su->outp & (1<<31)) {
+                c = 0xFFFFFFFF;
+            }
+        }
+    }
+    return c;
+}
+
 /* decode the next 8 pixels */
 static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* dst) {
     /*
@@ -737,104 +861,50 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
         switch (vic->gunit.mode) {
             case 0:
                 /* ECM/BMM/MCM=000, standard text mode */
-                {
-                    const uint32_t bg = vic->gunit.bg_rgba8[0];
-                    for (int i = 0; i < 8; i++) {
-                        _m6567_gunit_tick(vic, g_data);
-                        dst[i] = vic->gunit.outp & 0x80 ? _m6567_colors[(vic->gunit.c_data>>8)&0xF] : bg;
-                    }
+                for (int i = 0; i < 8; i++) {
+                    uint32_t bm = _m6567_gunit_decode_mode0(vic, g_data);
+                    uint32_t sm = _m6567_sunit_decode(vic);
+                    dst[i] = sm ? sm : bm;
                 }
                 break;
             case 1:
                 /* ECM/BMM/MCM=001, multicolor text mode */
-                {
-                    const uint32_t bg = vic->gunit.bg_rgba8[0];
-                    for (int i = 0; i < 8; i++) {
-                        _m6567_gunit_tick(vic, g_data);
-                        /* only seven colors in multicolor mode */
-                        const uint32_t fg = _m6567_colors[(vic->gunit.c_data>>8) & 0x7];
-                        if (vic->gunit.c_data & (1<<11)) {
-                            /* outp2 is only updated every 2 ticks */
-                            uint8_t bits = ((vic->gunit.outp2)>>6) & 3;
-                            /* half resolution multicolor char
-                               need 2 bits from the pixel sequencer
-                                    "00": Background color 0 ($d021)
-                                    "01": Background color 1 ($d022)
-                                    "10": Background color 2 ($d023)
-                                    "11": Color from bits 8-10 of c-data
-                            */
-                            if (bits == 3) {
-                                /* special case '11' */
-                                dst[i] = fg;
-                            }
-                            else {
-                                /* one of the 3 background colors */
-                                dst[i] = vic->gunit.bg_rgba8[bits];
-                            }
-                        }
-                        else {
-                            /* standard text mode char */
-                            dst[i] = vic->gunit.outp & 0x80 ? fg : bg;
-                        }
-                    }
+                for (int i = 0; i < 8; i++) {
+                    uint32_t bm = _m6567_gunit_decode_mode1(vic, g_data);
+                    uint32_t sm = _m6567_sunit_decode(vic);
+                    dst[i] = sm ? sm : bm;
                 }
                 break;
             case 2:
                 /* ECM/BMM/MCM=010, standard bitmap mode */
-                {
-                    for (int i = 0; i < 8; i++) {
-                        _m6567_gunit_tick(vic, g_data);
-                        if (vic->gunit.outp & 0x80) {
-                            /* foreground pixel */
-                            dst[i] = _m6567_colors[(vic->gunit.c_data >> 4) & 0xF];
-                        }
-                        else {
-                            /* background pixel */
-                            dst[i] = _m6567_colors[vic->gunit.c_data & 0xF];
-                        }
-                    }
+                for (int i = 0; i < 8; i++) {
+                    uint32_t bm = _m6567_gunit_decode_mode2(vic, g_data);
+                    dst[i] = bm;
                 }
                 break;
             case 3:
                 /* ECM/BMM/MCM=011, multicolor bitmap mode */
                 {
-                    const uint32_t bg = vic->gunit.bg_rgba8[0];
                     for (int i = 0; i < 8; i++) {
-                        _m6567_gunit_tick(vic, g_data);
-                        /* shift 2 is only updated every 2 ticks */
-                        uint8_t bits = vic->gunit.outp2;
-                        /* half resolution multicolor char
-                           need 2 bits from the pixel sequencer
-                                "00": Background color 0 ($d021)
-                                "01": Color from bits 4-7 of c-data
-                                "10": Color from bits 0-3 of c-data
-                                "11": Color from bits 8-11 of c-data
-                        */
-                        switch ((bits>>6)&3) {
-                            case 0: dst[i] = bg; break;
-                            case 1: dst[i] = _m6567_colors[(vic->gunit.c_data>>4) & 0xF]; break;
-                            case 2: dst[i] = _m6567_colors[vic->gunit.c_data & 0xF]; break;
-                            case 3: dst[i] = _m6567_colors[(vic->gunit.c_data>>8) & 0xF]; break;
-                        }
+                        uint32_t bm = _m6567_gunit_decode_mode3(vic, g_data);
+                        dst[i] = bm;
                     }
                 }
                 break;
             case 4:
                 /* ECM/BMM/MCM=100, ECM text mode */
                 for (int i = 0; i < 8; i++) {
-                    _m6567_gunit_tick(vic, g_data);
-                    /* bg color selected by bits 6 and 7 of c_data */
-                    const uint32_t bg = vic->gunit.bg_rgba8[(vic->gunit.c_data>>6) & 3];
-                    /* foreground color as usual bits 8..11 of c_data */
-                    const uint32_t fg = _m6567_colors[(vic->gunit.c_data>>8) & 0xF];
-                    dst[i] = vic->gunit.outp & 0x80 ? fg : bg;
+                    uint32_t bm = _m6567_gunit_decode_mode4(vic, g_data);
+                    dst[i] = bm;
                 }
                 break;
 
             default:
                 /*
                     All other modes are 'invalid modes' and output black.
-                    FIXME: those invalid modes still trigger the sprite collision.
+                    FIXME: those invalid modes still trigger the sprite collision,
+                    may and output black bitmap foreground pixels in front 
+                    of sprites
                 */
                 for (int i = 0; i < 8; i++) {
                     dst[i] = 0xFF000000;
@@ -1105,6 +1175,8 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         _m6567_sprite_unit_t* su = &vic->sunit[i];
         if (_M6567_HTICK(su->h_first) && su->disp_enabled) {
             su->shift >>= su->h_offset;
+            /* only bit 0 matters here */
+            su->even_odd = su->h_offset;
         }
     }
 
@@ -1167,6 +1239,13 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         uint8_t s_data = vic->mem.fetch_cb(addr);
         su->shift = (su->shift<<8) | (s_data<<8);
         su->mc = (su->mc + 1) & 0x3F;
+        /* in the tick *after* the p-access, need to do 2 s-accesses (one each half-tick) */
+        if (p_index == -1) {
+            uint16_t addr = (su->p_data<<6) | su->mc;
+            uint8_t s_data = vic->mem.fetch_cb(addr);
+            su->shift = (su->shift<<8) | (s_data<<8);
+            su->mc = (su->mc + 1) & 0x3F;
+        }
     }
 
     /* if no other accesses happened, do an i-access */
