@@ -1077,25 +1077,18 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
 
     /* 7. In the first phase of cycle 15, it is checked if the expansion flip flop
         is set. If so, MCBASE is incremented by 2.
+       8. In the first phase of cycle 16, it is checked if the expansion flip flop
+        is set. If so, MCBASE is incremented by 1. After that, the VIC checks if
+        MCBASE is equal to 63 and turns of the DMA and the display of the sprite
+        if it is.
+
+        (FIXME: we have merged both actions into cycle 15)
     */
     if (_M6567_HTICK(15)) {
         for (int i = 0; i < 8; i++) {
             _m6567_sprite_unit_t* su = &vic->sunit[i];
             if (su->expand) {
-                su->mc_base = (su->mc_base + 2) & 0x3F;
-            }
-        }
-    }
-    /* 8. In the first phase of cycle 16, it is checked if the expansion flip flop
-        is set. If so, MCBASE is incremented by 1. After that, the VIC checks if
-        MCBASE is equal to 63 and turns of the DMA and the display of the sprite
-        if it is.
-    */
-    if (_M6567_HTICK(16)) {
-        for (int i = 0; i < 8; i++) {
-            _m6567_sprite_unit_t* su = &vic->sunit[i];
-            if (su->expand) {
-                su->mc_base = (su->mc_base + 1) & 0x3F;
+                su->mc_base = (su->mc_base + 3) & 0x3F;
             }
             if (su->mc_base == 63) {
                 su->dma_enabled = false;
@@ -1104,7 +1097,18 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
     }
 
-    /* s-access and ba/aec pins for s-accesses, only for enabled sprites */
+    /* on the first visible-sprite tick each line, pre-shift by the
+       sprites position inside the tick's 8-pixel grid (same idea as
+       the xscroll delay for vertical scrolling)
+    */
+    for (int i = 0; i < 8; i++) {
+        _m6567_sprite_unit_t* su = &vic->sunit[i];
+        if (_M6567_HTICK(su->h_first) && su->disp_enabled) {
+            su->shift >>= su->h_offset;
+        }
+    }
+
+    /* s-access, ba/aec, for dma_enabled sprites */
     int s_index = -1;
     if (vic->rs.sh_count < (2*8 + 3)) {
         uint16_t sh = 3;
@@ -1161,7 +1165,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         _m6567_sprite_unit_t* su = &vic->sunit[s_index];
         uint16_t addr = (su->p_data<<6) | su->mc;
         uint8_t s_data = vic->mem.fetch_cb(addr);
-        su->shift = (su->shift<<8) | s_data;
+        su->shift = (su->shift<<8) | (s_data<<8);
         su->mc = (su->mc + 1) & 0x3F;
     }
 
