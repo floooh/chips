@@ -261,10 +261,13 @@ typedef struct {
     bool expand;                /* expand flip-flop */
     uint8_t mc;                 /* 6-bit mob-data-counter */
     uint8_t mc_base;            /* 6-bit mob-data-counter base */
-    uint8_t even_odd;           /* even/odd pixel counter, only bit 0 matters */
+    uint8_t delay_count;        /* 0..7 delay pixels */
+    uint8_t outp2_count;        /* outp2 is updated when bit 0 is on */
+    uint8_t xexp_count;         /* if x stretched, only shift every second pixel tick */
     uint32_t shift;             /* 24-bit shift register */
     uint32_t outp;              /* current shifter output (bit 31) */
     uint32_t outp2;             /* current shifter output at half frequency (bits 31 and 30) */
+    uint32_t color;             /* current sprite color */
 } _m6567_sprite_unit_t;
 
 /* the m6567 state structure */
@@ -672,8 +675,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                         _m6567_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, data, r->mye);
                     }
                     break;
-                case 0x1E:
-                case 0x1F:
+                case 0x1E: case 0x1F:
                     /* mob collision registers cannot be written */
                     write = false;
                     break;
@@ -681,12 +683,14 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     /* border color */
                     vic->brd.bc_rgba8 = _m6567_colors[data & 0xF];
                     break;
-                case 0x21:
-                case 0x22:
-                case 0x23:
-                case 0x24:
+                case 0x21: case 0x22: case 0x23: case 0x24:
                     /* background colors */
                     vic->gunit.bg_rgba8[r_addr-0x21] = _m6567_colors[data & 0xF];
+                    break;
+                case 0x27: case 0x28: case 0x29: case 0x2A: 
+                case 0x2B: case 0x2C: case 0x2D: case 0x2E:
+                    /* sprite colors */
+                    vic->sunit[r_addr-0x27].color = _m6567_colors[data & 0xF];
                     break;
             }
             if (write) {
@@ -833,17 +837,24 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
     for (int i = 0; i < 8; i++) {
         _m6567_sprite_unit_t* su = &vic->sunit[i];
         if (su->disp_enabled && _M6567_HTICK_RANGE(su->h_first, su->h_last)) {
-            /* bit 31 of outp is the current shifter output */
-            su->outp = su->shift;
-            /* bits 31 and 30 of outp is half-frequency shifter output */
-            if (1 == (su->even_odd++ & 1)) {
-                su->outp2 = su->shift;
-            }
-            su->shift <<= 1;
+            if (su->delay_count == 0) {
+                if ((0 == (su->xexp_count++ & 1)) || (0 == (vic->reg.mxe & (1<<i)))) {
+                    /* bit 31 of outp is the current shifter output */
+                    su->outp = su->shift;
+                    /* bits 31 and 30 of outp is half-frequency shifter output */
+                    if (1 == (su->outp2_count++ & 1)) {
+                        su->outp2 = su->shift;
+                    }
+                    su->shift <<= 1;
+                }
 
-            /* FIXME */
-            if (su->outp & (1<<31)) {
-                c = 0xFFFFFFFF;
+                /* FIXME */
+                if (su->outp & (1<<31)) {
+                    c = su->color;
+                }
+            }
+            else {
+                su->delay_count--;
             }
         }
     }
@@ -1174,9 +1185,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     for (int i = 0; i < 8; i++) {
         _m6567_sprite_unit_t* su = &vic->sunit[i];
         if (_M6567_HTICK(su->h_first) && su->disp_enabled) {
-            su->shift >>= su->h_offset;
-            /* only bit 0 matters here */
-            su->even_odd = su->h_offset;
+            su->delay_count = su->h_offset;
+            su->outp2_count = 0;
+            su->xexp_count = 0;
         }
     }
 
