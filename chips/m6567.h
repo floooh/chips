@@ -692,7 +692,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     break;
                 case 0x23: case 0x24:
                     /* background colors (alpha bits 1 because these count as MCM FG colors) */
-                    vic->gunit.bg_rgba8[r_addr-0x23] = _m6567_colors[data & 0xF];
+                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6567_colors[data & 0xF];
                     break;
                 case 0x25:
                     /* sprite multicolor 0 */
