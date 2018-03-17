@@ -155,14 +155,14 @@ typedef struct {
             uint8_t int_latch;                  /* interrupt latch */
             uint8_t int_mask;                   /* interrupt-enabled mask */
             uint8_t mob_data_priority;          /* sprite data priority bits */
-            uint8_t mob_multicolor;             /* sprite multicolor bits */
+            uint8_t mmc;                        /* sprite multicolor bits */
             uint8_t mxe;                        /* sprite X expansion */
             uint8_t mob_mob_coll;               /* sprite-sprite collision bits */
             uint8_t mob_data_coll;              /* sprite-data collision bits */
-            uint8_t border_color;               /* border color */
-            uint8_t background_color[4];        /* background colors */
-            uint8_t mob_mc[2];                  /* sprite multicolor 0 */
-            uint8_t mob_color[8];               /* sprite colors */
+            uint8_t ec;                         /* border color */
+            uint8_t bc[4];                      /* background colors */
+            uint8_t mm[2];                      /* sprite multicolor 0 */
+            uint8_t mc[8];                      /* sprite colors */
             uint8_t unused[17];                 /* not writable, return 0xFF on read */
         };
     };
@@ -267,7 +267,7 @@ typedef struct {
     uint32_t shift;             /* 24-bit shift register */
     uint32_t outp;              /* current shifter output (bit 31) */
     uint32_t outp2;             /* current shifter output at half frequency (bits 31 and 30) */
-    uint32_t color;             /* current sprite color */
+    uint32_t colors[4];         /* 0: unused, 1: multicolor0, 2: main color, 3: multicolor1 */
 } _m6567_sprite_unit_t;
 
 /* the m6567 state structure */
@@ -687,10 +687,22 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     /* background colors */
                     vic->gunit.bg_rgba8[r_addr-0x21] = _m6567_colors[data & 0xF];
                     break;
+                case 0x25:
+                    /* sprite multicolor 0 */
+                    for (int i = 0; i < 8; i++) {
+                        vic->sunit[i].colors[1] = _m6567_colors[data & 0xF];
+                    }
+                    break;
+                case 0x26:
+                    /* sprite multicolor 1*/
+                    for (int i = 0; i < 8; i++) {
+                        vic->sunit[i].colors[3] = _m6567_colors[data & 0xF];
+                    }
+                    break;
                 case 0x27: case 0x28: case 0x29: case 0x2A: 
                 case 0x2B: case 0x2C: case 0x2D: case 0x2E:
-                    /* sprite colors */
-                    vic->sunit[r_addr-0x27].color = _m6567_colors[data & 0xF];
+                    /* sprite main color */
+                    vic->sunit[r_addr-0x27].colors[2] = _m6567_colors[data & 0xF];
                     break;
             }
             if (write) {
@@ -842,15 +854,25 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
                     /* bit 31 of outp is the current shifter output */
                     su->outp = su->shift;
                     /* bits 31 and 30 of outp is half-frequency shifter output */
-                    if (1 == (su->outp2_count++ & 1)) {
+                    if (0 == (su->outp2_count++ & 1)) {
                         su->outp2 = su->shift;
                     }
                     su->shift <<= 1;
                 }
-
-                /* FIXME */
-                if (su->outp & (1<<31)) {
-                    c = su->color;
+                if (0 == c) {
+                    if (vic->reg.mmc & (1<<i)) {
+                        /* multicolor mode */
+                        uint32_t ci = (su->outp2 & ((1<<31)|(1<<30)))>>30;
+                        if (ci != 0) {
+                            c = su->colors[ci];
+                        }
+                    }
+                    else {
+                        /* standard color mode */
+                        if (su->outp & (1<<31)) {
+                            c = su->colors[2];
+                        }
+                    }
                 }
             }
             else {
