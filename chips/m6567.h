@@ -1118,6 +1118,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         bits of RASTER. If this is the case and the DMA for the sprite is still
         off, the DMA is switched on, MCBASE is cleared, and if the MxYE bit is
         set the expansion flip flip is reset.
+
+        NOTE: sprite display_enabled flag is turned off here if dma flag is off,
+        this is different from the recipe in vic-ii.txt (switching off display
+        in tick 15/16 as described in the recipe turns off rendering the
+        last line of a sprite)
     */
     if (_M6567_HTICK(55)) {
         const uint8_t me = vic->reg.me;
@@ -1136,6 +1141,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                         su->expand = false;
                     }
                 }
+            }
+            if (!su->dma_enabled) {
+                su->disp_enabled = false;
             }
         }
     }
@@ -1163,7 +1171,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         MCBASE is equal to 63 and turns of the DMA and the display of the sprite
         if it is.
 
-        (FIXME: we have merged both actions into cycle 15)
+        NOTE: 
+            - I have merged actions of cycle 15 and 16 into cycle 15
+            - I have moved switching off the display enable flag at the end
+              of line into tick 55
     */
     if (_M6567_HTICK(15)) {
         for (int i = 0; i < 8; i++) {
@@ -1173,7 +1184,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             }
             if (su->mc_base == 63) {
                 su->dma_enabled = false;
-                su->disp_enabled = false;
             }
         }
     }
