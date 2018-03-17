@@ -154,7 +154,7 @@ typedef struct {
             uint8_t mem_ptrs;                   /* memory pointers */
             uint8_t int_latch;                  /* interrupt latch */
             uint8_t int_mask;                   /* interrupt-enabled mask */
-            uint8_t mob_data_priority;          /* sprite data priority bits */
+            uint8_t mdp;                        /* sprite data priority bits */
             uint8_t mmc;                        /* sprite multicolor bits */
             uint8_t mxe;                        /* sprite X expansion */
             uint8_t mob_mob_coll;               /* sprite-sprite collision bits */
@@ -267,7 +267,10 @@ typedef struct {
     uint32_t shift;             /* 24-bit shift register */
     uint32_t outp;              /* current shifter output (bit 31) */
     uint32_t outp2;             /* current shifter output at half frequency (bits 31 and 30) */
-    uint32_t colors[4];         /* 0: unused, 1: multicolor0, 2: main color, 3: multicolor1 */
+    uint32_t colors[4];         /* 0: unused, 1: multicolor0, 2: main color, 3: multicolor1
+                                   the alpha channel is cleared and used as bitmask for the sprite
+                                   which produced the color!
+                                */
 } _m6567_sprite_unit_t;
 
 /* the m6567 state structure */
@@ -683,26 +686,30 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     /* border color */
                     vic->brd.bc_rgba8 = _m6567_colors[data & 0xF];
                     break;
-                case 0x21: case 0x22: case 0x23: case 0x24:
-                    /* background colors */
-                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6567_colors[data & 0xF];
+                case 0x21: case 0x22:
+                    /* background colors (alpha bits 0 because these count as MCM BG colors) */
+                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6567_colors[data & 0xF] & 0x00FFFFFF;
+                    break;
+                case 0x23: case 0x24:
+                    /* background colors (alpha bits 1 because these count as MCM FG colors) */
+                    vic->gunit.bg_rgba8[r_addr-0x23] = _m6567_colors[data & 0xF];
                     break;
                 case 0x25:
                     /* sprite multicolor 0 */
                     for (int i = 0; i < 8; i++) {
-                        vic->sunit[i].colors[1] = _m6567_colors[data & 0xF];
+                        vic->sunit[i].colors[1] = _m6567_colors[data & 0xF] & 0x00FFFFFF;
                     }
                     break;
                 case 0x26:
                     /* sprite multicolor 1*/
                     for (int i = 0; i < 8; i++) {
-                        vic->sunit[i].colors[3] = _m6567_colors[data & 0xF];
+                        vic->sunit[i].colors[3] = _m6567_colors[data & 0xF] & 0x00FFFFFF;
                     }
                     break;
                 case 0x27: case 0x28: case 0x29: case 0x2A: 
                 case 0x2B: case 0x2C: case 0x2D: case 0x2E:
                     /* sprite main color */
-                    vic->sunit[r_addr-0x27].colors[2] = _m6567_colors[data & 0xF];
+                    vic->sunit[r_addr-0x27].colors[2] = _m6567_colors[data & 0xF] & 0x00FFFFFF;
                     break;
             }
             if (write) {
@@ -747,15 +754,22 @@ static inline void _m6567_gunit_tick(m6567_t* vic, uint8_t g_data) {
     vic->gunit.shift <<= 1;
 }
 
-/* graphics sequencer decoding functions for 1 pixel */
+/* 
+    graphics sequencer decoding functions for 1 pixel
+
+    NOTE: the graphics sequencer returns alpha bits = 0 for background
+    colors, and alpha bits = 0xFF for foregreound colors, this is important
+    for the color multiplexer which selectes between the color
+    produced by the graphics- and sprite-units
+*/
 static inline uint32_t _m6567_gunit_decode_mode0(m6567_t* vic, uint8_t g_data) {
     _m6567_gunit_tick(vic, g_data);
     if (vic->gunit.outp & 0x80) {
-        /* foreground color */
+        /* foreground color (alpha bits set) */
         return _m6567_colors[(vic->gunit.c_data>>8)&0xF];
     }
     else {
-        /* background color */
+        /* background color (alpha bits clear) */
         return vic->gunit.bg_rgba8[0];
     }
 }
@@ -769,10 +783,10 @@ static inline uint32_t _m6567_gunit_decode_mode1(m6567_t* vic, uint8_t g_data) {
         uint8_t bits = ((vic->gunit.outp2)>>6) & 3;
         /* half resolution multicolor char
             need 2 bits from the pixel sequencer
-                "00": Background color 0 ($d021)
-                "01": Background color 1 ($d022)
-                "10": Background color 2 ($d023)
-                "11": Color from bits 8-10 of c-data
+                "00": Background color 0 ($d021) (alpha bits clear)
+                "01": Background color 1 ($d022) (alpha bits clear)
+                "10": Background color 2 ($d023) (alpha bits set)
+                "11": Color from bits 8-10 of c-data (alpha bits set)
         */
         if (bits == 3) {
             /* special case '11' */
@@ -786,11 +800,11 @@ static inline uint32_t _m6567_gunit_decode_mode1(m6567_t* vic, uint8_t g_data) {
     else {
         /* standard text mode char, but with only 7 foreground colors */
         if (vic->gunit.outp & 0x80) {
-            /* foreground color */
+            /* foreground color (alpha bits set) */
             return fg;
         }
         else {
-            /* background color */
+            /* background color (alpha bits clear) */
             return vic->gunit.bg_rgba8[0];
         }
     }
@@ -803,8 +817,8 @@ static inline uint32_t _m6567_gunit_decode_mode2(m6567_t* vic, uint8_t g_data) {
         return _m6567_colors[(vic->gunit.c_data >> 4) & 0xF];
     }
     else {
-        /* background pixel */
-        return _m6567_colors[vic->gunit.c_data & 0xF];
+        /* background pixel (alpha bits must be clear for multiplexer) */
+        return _m6567_colors[vic->gunit.c_data & 0xF] & 0x00FFFFFF;
     }
 }
 
@@ -814,14 +828,14 @@ static inline uint32_t _m6567_gunit_decode_mode3(m6567_t* vic, uint8_t g_data) {
     uint8_t bits = vic->gunit.outp2;
     /* half resolution multicolor char
         need 2 bits from the pixel sequencer
-            "00": Background color 0 ($d021)
-            "01": Color from bits 4-7 of c-data
-            "10": Color from bits 0-3 of c-data
-            "11": Color from bits 8-11 of c-data
+            "00": Background color 0 ($d021) (alpha bits clear)
+            "01": Color from bits 4-7 of c-data (alpha bits clear)
+            "10": Color from bits 0-3 of c-data (alpha bits set)
+            "11": Color from bits 8-11 of c-data (alpha bits set)
     */
     switch ((bits>>6)&3) {
         case 0:     return vic->gunit.bg_rgba8[0]; break;
-        case 1:     return _m6567_colors[(vic->gunit.c_data>>4) & 0xF]; break;
+        case 1:     return _m6567_colors[(vic->gunit.c_data>>4) & 0xF] & 0x00FFFFFF; break;
         case 2:     return _m6567_colors[vic->gunit.c_data & 0xF]; break;
         default:    return _m6567_colors[(vic->gunit.c_data>>8) & 0xF]; break;
     }
@@ -835,6 +849,10 @@ static inline uint32_t _m6567_gunit_decode_mode4(m6567_t* vic, uint8_t g_data) {
     }
     else {
         /* bg color selected by bits 6 and 7 of c_data */
+        /* FIXME: is the foreground/background selection right? 
+            values 00 and 01 would return as background color,
+            and 10 and 11 as foreground color?
+        */
         return vic->gunit.bg_rgba8[(vic->gunit.c_data>>6) & 3];
     }
 }
@@ -844,6 +862,10 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
     /* this will tick all the sprite units and return the color
         of the highest-priority sprite color for the current pixel,
         or 0 if the sprite units didn't produce a color 
+
+        NOTE: The alpha channel bits of the color are cleared, and 
+        instead a bit is set for the highest-priority sprite color
+        which produced the color!
     */
     uint32_t c = 0;
     for (int i = 0; i < 8; i++) {
@@ -859,18 +881,19 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
                     }
                     su->shift <<= 1;
                 }
+                /* this check takes care of the sprite priority */
                 if (0 == c) {
                     if (vic->reg.mmc & (1<<i)) {
                         /* multicolor mode */
                         uint32_t ci = (su->outp2 & ((1<<31)|(1<<30)))>>30;
                         if (ci != 0) {
-                            c = su->colors[ci];
+                            c = su->colors[ci] | (1<<(24+i));
                         }
                     }
                     else {
                         /* standard color mode */
                         if (su->outp & (1<<31)) {
-                            c = su->colors[2];
+                            c = su->colors[2] | (1<<(24+i));
                         }
                     }
                 }
@@ -883,52 +906,98 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
     return c;
 }
 
+/* 
+    The graphics/sprite color priority multiplexer.
+
+    - the sprite color is 0 if the sprite unit didn't produce a color
+    - the alpha channel bits of the sprite color have a bit set for the
+      sprite unit which produced the color
+    - the alpha channel bits of the bitmap color are 0x00 for a background
+      color, or 0xFF for a foreground color
+*/
+static inline uint32_t _m6567_color_multiplex(uint32_t bmc, uint32_t sc, uint8_t mdp) {
+    uint32_t c;
+    if (sc == 0) {
+        /* sprite unit didn't produce a color, use the bitmap color */
+        c = bmc;
+    }
+    else if ((sc>>24) & mdp) {
+        /* data priority bit is set, sprite color is behind bitmap foreground color */
+        if ((bmc & 0xFF000000) == 0) {
+            /* bitmap color is background, use sprite color */
+            c = sc;
+        }
+        else {
+            /* bitmap color is foreground */
+            c = bmc;
+        }
+    }
+    else {
+        /* sprite color is in front of bitmap color */
+        c = sc;
+    }
+    return c | 0xFF000000;
+}
+
 /* decode the next 8 pixels */
 static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* dst) {
     /*
         "...the vertical border flip flop controls the output of the graphics
         data sequencer. The sequencer only outputs data if the flip flop is
         not set..."
+
+        NOTES about colors:
+            - if none of the sprite units produced a color the returned
+              color is 0
+            - the alpha channel of the sprite color is discarded and instead
+              used as bitmask to communicate which of the sprite units
+              produced the color, this is used to check the priority bit
+              for this sprite
+            - likewise the alpha channel bits for the graphics sequencer
+              are used to communicate whether the returned color is a 
+              background or foreground colors (fg: alpha == 0xFF, bg: alpha == 0)
     */
     if (!vic->brd.vert) {
+        const uint8_t mdp = vic->reg.mdp;
         switch (vic->gunit.mode) {
             case 0:
                 /* ECM/BMM/MCM=000, standard text mode */
                 for (int i = 0; i < 8; i++) {
-                    uint32_t bm = _m6567_gunit_decode_mode0(vic, g_data);
-                    uint32_t sm = _m6567_sunit_decode(vic);
-                    dst[i] = sm ? sm : bm;
+                    uint32_t sc = _m6567_sunit_decode(vic);
+                    uint32_t bmc = _m6567_gunit_decode_mode0(vic, g_data);
+                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
             case 1:
                 /* ECM/BMM/MCM=001, multicolor text mode */
                 for (int i = 0; i < 8; i++) {
-                    uint32_t bm = _m6567_gunit_decode_mode1(vic, g_data);
-                    uint32_t sm = _m6567_sunit_decode(vic);
-                    dst[i] = sm ? sm : bm;
+                    uint32_t sc = _m6567_sunit_decode(vic);
+                    uint32_t bmc = _m6567_gunit_decode_mode1(vic, g_data);
+                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
             case 2:
                 /* ECM/BMM/MCM=010, standard bitmap mode */
                 for (int i = 0; i < 8; i++) {
-                    uint32_t bm = _m6567_gunit_decode_mode2(vic, g_data);
-                    dst[i] = bm;
+                    uint32_t sc = _m6567_sunit_decode(vic);
+                    uint32_t bmc = _m6567_gunit_decode_mode2(vic, g_data);
+                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
             case 3:
                 /* ECM/BMM/MCM=011, multicolor bitmap mode */
-                {
-                    for (int i = 0; i < 8; i++) {
-                        uint32_t bm = _m6567_gunit_decode_mode3(vic, g_data);
-                        dst[i] = bm;
-                    }
+                for (int i = 0; i < 8; i++) {
+                    uint32_t sc = _m6567_sunit_decode(vic);
+                    uint32_t bmc = _m6567_gunit_decode_mode3(vic, g_data);
+                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
             case 4:
                 /* ECM/BMM/MCM=100, ECM text mode */
                 for (int i = 0; i < 8; i++) {
-                    uint32_t bm = _m6567_gunit_decode_mode4(vic, g_data);
-                    dst[i] = bm;
+                    uint32_t sc = _m6567_sunit_decode(vic);
+                    uint32_t bmc = _m6567_gunit_decode_mode4(vic, g_data);
+                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
 
@@ -1370,7 +1439,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 const _m6567_sprite_unit_t* su = &vic->sunit[si];
                 if (su->disp_enabled) {
                     if (_M6567_HTICK_RANGE(su->h_first, su->h_last)) {
-                        mask |= 0xFFFF00FF;
+                        mask |= 0x00440044;
                     }
                 }
             }
