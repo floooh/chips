@@ -157,8 +157,8 @@ typedef struct {
             uint8_t mdp;                        /* sprite data priority bits */
             uint8_t mmc;                        /* sprite multicolor bits */
             uint8_t mxe;                        /* sprite X expansion */
-            uint8_t mob_mob_coll;               /* sprite-sprite collision bits */
-            uint8_t mob_data_coll;              /* sprite-data collision bits */
+            uint8_t mcm;                        /* sprite-sprite collision bits */
+            uint8_t mcd;                        /* sprite-data collision bits */
             uint8_t ec;                         /* border color */
             uint8_t bc[4];                      /* background colors */
             uint8_t mm[2];                      /* sprite multicolor 0 */
@@ -268,8 +268,8 @@ typedef struct {
     uint32_t outp;              /* current shifter output (bit 31) */
     uint32_t outp2;             /* current shifter output at half frequency (bits 31 and 30) */
     uint32_t colors[4];         /* 0: unused, 1: multicolor0, 2: main color, 3: multicolor1
-                                   the alpha channel is cleared and used as bitmask for the sprite
-                                   which produced the color!
+                                   the alpha channel is cleared and used as bitmask for sprites
+                                   which produced a color
                                 */
 } _m6567_sprite_unit_t;
 
@@ -868,6 +868,7 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
         which produced the color!
     */
     uint32_t c = 0;
+    bool collision = false;
     for (int i = 0; i < 8; i++) {
         _m6567_sprite_unit_t* su = &vic->sunit[i];
         if (su->disp_enabled && _M6567_HTICK_RANGE(su->h_first, su->h_last)) {
@@ -881,20 +882,31 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
                     }
                     su->shift <<= 1;
                 }
-                /* this check takes care of the sprite priority */
-                if (0 == c) {
-                    if (vic->reg.mmc & (1<<i)) {
-                        /* multicolor mode */
-                        uint32_t ci = (su->outp2 & ((1<<31)|(1<<30)))>>30;
-                        if (ci != 0) {
-                            c = su->colors[ci] | (1<<(24+i));
+                if (vic->reg.mmc & (1<<i)) {
+                    /* multicolor mode */
+                    uint32_t ci = (su->outp2 & ((1<<31)|(1<<30)))>>30;
+                    if (ci != 0) {
+                        /* don't overwrite higher-priority colors */
+                        if (0 == c) {
+                            c = su->colors[ci];
                         }
+                        else {
+                            collision = true;
+                        }
+                        c |= (1<<(24+i));
                     }
-                    else {
-                        /* standard color mode */
-                        if (su->outp & (1<<31)) {
+                }
+                else {
+                    /* standard color mode */
+                    if (su->outp & (1<<31)) {
+                        /* don't overwrite higher-priority colors */
+                        if (0 == c) {
                             c = su->colors[2] | (1<<(24+i));
                         }
+                        else {
+                            collision = true;
+                        }
+                        c |= (1<<(24+i));
                     }
                 }
             }
@@ -903,7 +915,26 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
             }
         }
     }
+    if (collision) {
+        vic->reg.mcm |= (c>>24);
+        vic->reg.int_latch |= M6567_INT_IMMC;
+    }
     return c;
+}
+
+/*
+    Check for mob-data collision.
+
+    Takes the bitmap color bmc (alpha bits 0 if background color)
+    the sprite color sc (alpha bits set for each sprite which
+    produced a non-transparant color), and sets the md
+    collision bitmask, and the IMBC interrupt bit.
+*/
+static inline void _m6567_test_mob_data_col(m6567_t* vic, uint32_t bmc, uint32_t sc) {
+    if ((sc & bmc & 0xFF000000) != 0) {
+        vic->reg.mcd |= (sc>>24);
+        vic->reg.int_latch |= M6567_INT_IMBC;
+    }
 }
 
 /* 
@@ -965,6 +996,7 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
                 for (int i = 0; i < 8; i++) {
                     uint32_t sc = _m6567_sunit_decode(vic);
                     uint32_t bmc = _m6567_gunit_decode_mode0(vic, g_data);
+                    _m6567_test_mob_data_col(vic, bmc, sc);
                     dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
@@ -973,6 +1005,7 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
                 for (int i = 0; i < 8; i++) {
                     uint32_t sc = _m6567_sunit_decode(vic);
                     uint32_t bmc = _m6567_gunit_decode_mode1(vic, g_data);
+                    _m6567_test_mob_data_col(vic, bmc, sc);
                     dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
@@ -981,6 +1014,7 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
                 for (int i = 0; i < 8; i++) {
                     uint32_t sc = _m6567_sunit_decode(vic);
                     uint32_t bmc = _m6567_gunit_decode_mode2(vic, g_data);
+                    _m6567_test_mob_data_col(vic, bmc, sc);
                     dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
@@ -989,6 +1023,7 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
                 for (int i = 0; i < 8; i++) {
                     uint32_t sc = _m6567_sunit_decode(vic);
                     uint32_t bmc = _m6567_gunit_decode_mode3(vic, g_data);
+                    _m6567_test_mob_data_col(vic, bmc, sc);
                     dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
@@ -997,19 +1032,32 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
                 for (int i = 0; i < 8; i++) {
                     uint32_t sc = _m6567_sunit_decode(vic);
                     uint32_t bmc = _m6567_gunit_decode_mode4(vic, g_data);
+                    _m6567_test_mob_data_col(vic, bmc, sc);
                     dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
                 }
                 break;
 
-            default:
-                /*
-                    All other modes are 'invalid modes' and output black.
-                    FIXME: those invalid modes still trigger the sprite collision,
-                    may and output black bitmap foreground pixels in front 
-                    of sprites
-                */
+            case 5:
+                /* ECM/BMM/MCM=101 invalid mode */
+                /* FIXME! */
                 for (int i = 0; i < 8; i++) {
-                    dst[i] = 0xFF000000;
+                    dst[i] = 0xFFFF00FF;
+                }
+                break;
+            
+            case 6:
+                /* ECM/BMM/MCM=110 invalid mode */
+                /* FIXME! */
+                for (int i = 0; i < 8; i++) {
+                    dst[i] = 0xFFFF0000;
+                }
+                break;
+
+            case 7:
+                /* ECM/BMM/MCM=111 invalid mode */
+                /* FIXME! */
+                for (int i = 0; i < 8; i++) {
+                    dst[i] = 0xFF00FF00;
                 }
                 break;
         }
@@ -1086,7 +1134,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
 
         /* check for raster interrupt */
         if (_M6567_HTICK(0) && (vic->rs.v_count == vic->rs.v_irqline)) {
-            vic->reg.int_latch = M6567_INT_IRST;
+            vic->reg.int_latch |= M6567_INT_IRST;
         }
 
         /*
@@ -1413,7 +1461,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     }
 
     /*-- main interrupt bit --*/
-    if (0 != ((vic->reg.int_latch & vic->reg.int_mask) & 0x0F)) {
+    if (vic->reg.int_latch & vic->reg.int_mask & 0x0F) {
         vic->reg.int_latch |= M6567_INT_IRQ;
     }
 
