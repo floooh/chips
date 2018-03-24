@@ -1464,6 +1464,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     if (vic->reg.int_latch & vic->reg.int_mask & 0x0F) {
         vic->reg.int_latch |= M6567_INT_IRQ;
     }
+    else {
+        vic->reg.int_latch &= ~M6567_INT_IRQ;
+    }
 
     /*--- decode pixels into framebuffer -------------------------------------*/
     {
@@ -1487,17 +1490,17 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 const _m6567_sprite_unit_t* su = &vic->sunit[si];
                 if (su->disp_enabled) {
                     if (_M6567_HTICK_RANGE(su->h_first, su->h_last)) {
-                        mask |= 0x00440044;
+                        mask |= 0x00880088;
                     }
                 }
             }
             /* main interrupt bit */
             if (vic->reg.int_latch & (1<<7)) {
-                mask = 0x0000FF00;
+                mask |= 0x00008800;
             }
             if (mask != 0) {
                 for (int i = 0; i < 8; i++) {
-                    dst[i] = (dst[i] & 0xFF000000) | mask;
+                    dst[i] = (dst[i] & 0xFF888888) | mask;
                 }
             }
         }
