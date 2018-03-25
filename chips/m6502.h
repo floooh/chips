@@ -208,6 +208,8 @@ typedef struct {
     bool bcd_disabled;      /* set to true if BCD mode is disabled */
     m6510_in_t in_cb;       /* optional port IO input callback (only on m6510) */
     m6510_out_t out_cb;     /* optional port IO output callback (only on m6510) */
+    uint8_t m6510_io_pullup;    /* IO port bits that are 1 when reading */
+    uint8_t m6510_io_floating;  /* unconnected IO port pins */
 } m6502_desc_t;
 
 /* a trap definition */
@@ -238,8 +240,11 @@ typedef struct {
     /* the m6510 IO port stuff */
     m6510_in_t in_cb;
     m6510_out_t out_cb;
-    uint8_t io_dir;     /* 1: output, 0: input */
+    uint8_t io_ddr;     /* 1: output, 0: input */
     uint8_t io_port;
+    uint8_t io_pullup;
+    uint8_t io_floating;
+    uint8_t io_drive;
 
     /* trap stuff */
     _m6502_trap_t traps[M6502_MAX_NUM_TRAPS];
@@ -445,6 +450,8 @@ void m6502_init(m6502_t* c, m6502_desc_t* desc) {
     c->state.bcd_enabled = !desc->bcd_disabled;
     c->in_cb = desc->in_cb;
     c->out_cb = desc->out_cb;
+    c->io_pullup = desc->m6510_io_pullup;
+    c->io_floating = desc->m6510_io_floating;
     c->trap_id = -1;
 }
 
@@ -457,7 +464,7 @@ void m6502_reset(m6502_t* c) {
     uint8_t l = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFC, 0x00)));
     uint8_t h = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00)));
     c->state.PC = (h<<8)|l;
-    c->io_dir = 0;
+    c->io_ddr = 0;
     c->io_port = 0;
 }
 
@@ -500,25 +507,27 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
         /* address 0: access to data direction register */
         if (pins & M6502_RW) {
             /* read IO direction bits */
-            M6502_SET_DATA(pins, c->io_dir);
+            M6502_SET_DATA(pins, c->io_ddr);
         }
         else {
             /* write IO direction bits and update outside world */
-            c->io_dir = M6502_GET_DATA(pins);
-            c->out_cb((c->io_port & c->io_dir) | ~c->io_dir);
+            c->io_ddr = M6502_GET_DATA(pins);
+            c->io_drive = (c->io_port & c->io_ddr) | (c->io_drive & ~c->io_ddr);
+            c->out_cb((c->io_port & c->io_ddr) | (c->io_pullup & ~c->io_ddr));
         }
     }
     else {
         /* address 1: perform I/O */
         if (pins & M6502_RW) {
-            /* an input operation (FIXME: is this correct?) */
-            uint8_t val = (c->in_cb() & ~c->io_dir) | (c->io_port & c->io_dir);
+            /* an input operation */
+            uint8_t val = ((c->in_cb() | (c->io_floating & c->io_drive)) & ~c->io_ddr) | (c->io_port & c->io_ddr);
             M6502_SET_DATA(pins, val);
         }
         else {
             /* an output operation */
             c->io_port = M6502_GET_DATA(pins);
-            c->out_cb((c->io_port & c->io_dir) | ~c->io_dir);
+            c->io_drive = (c->io_port & c->io_ddr) | (c->io_drive & ~c->io_ddr);
+            c->out_cb((c->io_port & c->io_ddr) | (c->io_pullup & ~c->io_ddr));
         }
     }
     return pins;
