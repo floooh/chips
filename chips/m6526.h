@@ -426,16 +426,13 @@ static uint8_t _m6526_read_pa(m6526_t* c) {
     /* datasheet: "On a READ, the PR reflects the information present
        on the actual port pins (PA0-PA7, PB0-PB7) for both input and output bits.
     */
-    /* FIXME: MAME has a special case when ddra is 0xFF, but this is not
-       mentioned anywhere?
-    */
     /* the input callback should put a 1 into all unconnected pins */
-    c->pa.inp = c->in_cb(M6526_PORT_A);
+    c->pa.inp = (c->in_cb(M6526_PORT_A) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
     return c->pa.inp;
 }
 
 static uint8_t _m6526_read_pb(m6526_t* c) {
-    uint8_t data = c->in_cb(M6526_PORT_B);
+    uint8_t data = (c->in_cb(M6526_PORT_B) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);;
     c->pb.inp = data;
     data = _m6526_merge_pb67(c, data);
     return data;
