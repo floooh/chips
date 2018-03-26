@@ -267,6 +267,13 @@ void m6526_reset(m6526_t* c) {
    check here for the details: https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
 */
 static void _m6526_timer_tick(m6526_timer_t* t) {
+    /* reload from latch? */
+    const bool load_active_pip = _M6526_PIP_POP(t->pip_load);
+    if (t->t_out || load_active_pip) {
+        t->counter = t->latch;
+        _M6526_PIP_SET(t->pip_count, 1, false);
+    }
+
     /* if timer is active, decrement the counter */
     if (_M6526_PIP_POP(t->pip_count)) {
         t->counter--;
@@ -277,22 +284,15 @@ static void _m6526_timer_tick(m6526_timer_t* t) {
     if (t->t_out) {
         t->t_bit = !t->t_bit;
     }
-
+    
     /* push one-shot state into the oneshot-pipeline */
-    bool oneshot_active_now = _M6526_RUNMODE_ONESHOT(t->cr);
+    const bool oneshot_active_now = _M6526_RUNMODE_ONESHOT(t->cr);
     _M6526_PIP_SET(t->pip_oneshot, 1, oneshot_active_now);
 
     /* clear start flag if oneshot and 0 reached */
-    bool oneshot_active_pip = _M6526_PIP_POP(t->pip_oneshot);
+    const bool oneshot_active_pip = _M6526_PIP_POP(t->pip_oneshot);
     if (t->t_out && (oneshot_active_now || oneshot_active_pip)) {
         t->cr &= ~(1<<0);
-    }
-
-    /* reload from latch? */
-    bool load_active_pip = _M6526_PIP_POP(t->pip_load);
-    if (t->t_out || load_active_pip) {
-        t->counter = t->latch;
-        _M6526_PIP_SET(t->pip_count, 2, false);
     }
 }
 
@@ -443,7 +443,7 @@ static void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
        there's a 1 cycle delay for force-load
     */
     bool force_load = 0 != (data & (1<<4));
-    _M6526_PIP_SET(t->pip_load, 1, force_load);
+    _M6526_PIP_SET(t->pip_load, 2, force_load);
 
     /* if the start bit goes from 0 to 1, set the current toggle-bit-state to 1 */
     if (!_M6526_TIMER_STARTED(t->cr) && _M6526_TIMER_STARTED(data)) {
