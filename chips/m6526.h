@@ -268,29 +268,33 @@ void m6526_reset(m6526_t* c) {
 */
 static void _m6526_timer_tick(m6526_timer_t* t) {
     /* reload from latch? */
-    const bool load_active_pip = _M6526_PIP_POP(t->pip_load);
-    if (t->t_out || load_active_pip) {
-        t->counter = t->latch;
-        _M6526_PIP_SET(t->pip_count, 1, false);
-    }
+    const bool count_1 = _M6526_PIP_PEEK(t->pip_count, 1);
+    const bool count_active = _M6526_PIP_POP(t->pip_count);
+    const bool load_active = _M6526_PIP_POP(t->pip_load);
+    const bool oneshot_active_pip = _M6526_PIP_POP(t->pip_oneshot);
 
-    /* if timer is active, decrement the counter */
-    if (_M6526_PIP_POP(t->pip_count)) {
+    /* decrement counter */
+    if (count_active) {
         t->counter--;
     }
 
-    /* timer output and toggle-state */
-    t->t_out = (0 == t->counter) && _M6526_PIP_PEEK(t->pip_count, 1);
+    /* timer undeflow? */
+    t->t_out = (0 == t->counter) && count_1;
     if (t->t_out) {
         t->t_bit = !t->t_bit;
     }
-    
+
+    /* reload counter from latch */
+    if (t->t_out || load_active) {
+        t->counter = t->latch;
+        _M6526_PIP_SET(t->pip_count, 2, false);
+    }
+
     /* push one-shot state into the oneshot-pipeline */
     const bool oneshot_active_now = _M6526_RUNMODE_ONESHOT(t->cr);
     _M6526_PIP_SET(t->pip_oneshot, 1, oneshot_active_now);
 
     /* clear start flag if oneshot and 0 reached */
-    const bool oneshot_active_pip = _M6526_PIP_POP(t->pip_oneshot);
     if (t->t_out && (oneshot_active_now || oneshot_active_pip)) {
         t->cr &= ~(1<<0);
     }
@@ -441,9 +445,11 @@ static uint8_t _m6526_read_pb(m6526_t* c) {
 static void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
     /* bit 4 (force load) isn't stored, so we need to handle this here right away,
        there's a 1 cycle delay for force-load
+       NOTE: setting the delay here to 2 fixes some parts of the
+       cia1ta test, but breaks the cputiming test from the W.Lorenz test suite!
     */
     bool force_load = 0 != (data & (1<<4));
-    _M6526_PIP_SET(t->pip_load, 2, force_load);
+    _M6526_PIP_SET(t->pip_load, 1, force_load);
 
     /* if the start bit goes from 0 to 1, set the current toggle-bit-state to 1 */
     if (!_M6526_TIMER_STARTED(t->cr) && _M6526_TIMER_STARTED(data)) {
