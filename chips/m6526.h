@@ -253,6 +253,9 @@ void m6526_reset(m6526_t* c) {
 #define _M6526_RUNMODE_ONESHOT(cr)  (0!=((cr)&(1<<3)))
 #define _M6526_TA_INMODE_PHI2(cra)  (0==((cra)&(1<<5)))
 #define _M6526_TB_INMODE_PHI2(crb)  (0==((crb)&((1<<6)|(1<<5))))
+#define _M6526_TB_INMODE_CNT(crb)   ((1<<5)==((crb)&((1<<6)|(1<<5))))
+#define _M6526_TB_INMODE_TA(crb)    ((1<<6)==((crb)&((1<<6)|(1<<5))))
+#define _M6526_TB_INMODE_TACNT(crb) (((1<<6)|(1<<5))==((crb)&((1<<6)|(1<<5))))
 
 /*--- delay-pipeline macros and functions ---*/
 /* push a new state into pipeline at position */
@@ -310,11 +313,19 @@ static void _m6526_tick_ta(m6526_t* c) {
 }
 
 static void _m6526_tick_tb(m6526_t* c) {
-    /* push timer-active state into the count-pipeline
-       FIXME: CNT pin counting not implemented
-       FIXME: underflow from time A not yet implemented!
-    */
-    bool timer_active_now = _M6526_TB_INMODE_PHI2(c->tb.cr) && _M6526_TIMER_STARTED(c->tb.cr);
+    /* push timer-active state into the count-pipeline */
+    bool timer_active_now = false;
+    if (_M6526_TIMER_STARTED(c->tb.cr)) {
+        if (_M6526_TB_INMODE_PHI2(c->tb.cr)) {
+            timer_active_now = true;
+        }
+        else if (_M6526_TB_INMODE_TA(c->tb.cr)) {
+            /* count timer A underflows */
+            timer_active_now = c->ta.t_out;
+        }
+        /* FIXME: _M6526_TB_INMODE_CNT and _M6526_TB_INMODE_TACNT */
+    }
+
     _M6526_PIP_SET(c->tb.pip_count, 2, timer_active_now);
     _m6526_timer_tick(&c->tb);
 }
