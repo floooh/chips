@@ -483,12 +483,20 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             break;
         case M6526_REG_TAHI:
             c->ta.latch = (c->ta.latch & 0x00FF) | (data<<8);
+            /* if timer is not running, writing hi-byte writes latch */
+            if (!_M6526_TIMER_STARTED(c->ta.cr)) {
+                _M6526_PIP_SET(c->ta.pip_load, 1, true);
+            }
             break;
         case M6526_REG_TBLO:
             c->tb.latch = (c->tb.latch & 0xFF00) | data;
             break;
         case M6526_REG_TBHI:
             c->tb.latch = (c->tb.latch & 0x00FF) | (data<<8);
+            /* if timer is not running, writing hi-byte writes latch */
+            if (!_M6526_TIMER_STARTED(c->tb.cr)) {
+                _M6526_PIP_SET(c->tb.pip_load, 1, true);
+            }
             break;
         case M6526_REG_ICR:
             _m6526_write_icr(c, data);
