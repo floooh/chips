@@ -1396,13 +1396,13 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         /* sprite s-access: |MP7|MP6|MP5|MP4|MP3|MP2|MP1|MP0|MC5|MC4|MC3|MC2|MC1|MC0| */
         _m6567_sprite_unit_t* su = &vic->sunit[s_index];
         uint16_t addr = (su->p_data<<6) | su->mc;
-        uint8_t s_data = vic->mem.fetch_cb(addr);
+        uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr);
         su->shift = (su->shift<<8) | (s_data<<8);
         su->mc = (su->mc + 1) & 0x3F;
         /* in the tick *after* the p-access, need to do 2 s-accesses (one each half-tick) */
         if (p_index == -1) {
             uint16_t addr = (su->p_data<<6) | su->mc;
-            uint8_t s_data = vic->mem.fetch_cb(addr);
+            uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr);
             su->shift = (su->shift<<8) | (s_data<<8);
             su->mc = (su->mc + 1) & 0x3F;
         }

@@ -260,7 +260,7 @@ void m6526_reset(m6526_t* c) {
 /*--- delay-pipeline macros and functions ---*/
 /* push a new state into pipeline at position */
 #define _M6526_PIP_SET(pip,pos,state) {if(state){pip|=(2<<pos);}else{pip&=~(2<<pos);}}
-#define _M6526_PIP_PEEK(pip,pos) (pip&(2<<pos))
+#define _M6526_PIP_PEEK(pip,pos) (0!=(pip&(2<<pos)))
 #define _M6526_PIP_POP(pip) (0!=(pip>>=1,pip&1))
 
 /*--- timer implementation ---*/
