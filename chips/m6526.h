@@ -134,9 +134,10 @@ typedef void (*m6526_out_t)(int port_id, uint8_t data);
 
 /* I/O port state */
 typedef struct {
-    uint8_t reg;    /* port register */
-    uint8_t ddr;    /* data direction register */
-    uint8_t inp;    /* input latch */
+    uint8_t reg;        /* port register */
+    uint8_t ddr;        /* data direction register */
+    uint8_t inp;        /* input latch */
+    uint8_t last_out;   /* last value to reduce call to out callback */
 } m6526_port_t;
 
 /* timer state */
@@ -203,6 +204,7 @@ static void _m6526_init_port(m6526_port_t* p) {
     p->reg = 0;
     p->ddr = 0;
     p->inp = 0;
+    p->last_out = 0xFF;
 }
 
 static void _m6526_init_timer(m6526_timer_t* t) {
@@ -251,6 +253,7 @@ void m6526_reset(m6526_t* c) {
 #define _M6526_PBON(cr)             (0!=((cr)&(1<<1)))
 #define _M6526_OUTMODE_TOGGLE(cr)   (0!=((cr)&(1<<2)))
 #define _M6526_RUNMODE_ONESHOT(cr)  (0!=((cr)&(1<<3)))
+#define _M6526_FORCE_LOAD(cr)       (0!=((cr)&(1<<4)))
 #define _M6526_TA_INMODE_PHI2(cra)  (0==((cra)&(1<<5)))
 #define _M6526_TB_INMODE_PHI2(crb)  (0==((crb)&((1<<6)|(1<<5))))
 #define _M6526_TB_INMODE_CNT(crb)   ((1<<5)==((crb)&((1<<6)|(1<<5))))
@@ -258,135 +261,12 @@ void m6526_reset(m6526_t* c) {
 #define _M6526_TB_INMODE_TACNT(crb) (((1<<6)|(1<<5))==((crb)&((1<<6)|(1<<5))))
 
 /*--- delay-pipeline macros and functions ---*/
-/* push a new state into pipeline at position */
-#define _M6526_PIP_SET(pip,pos,state) {if(state){pip|=(2<<pos);}else{pip&=~(2<<pos);}}
-#define _M6526_PIP_PEEK(pip,pos) (0!=(pip&(2<<pos)))
-#define _M6526_PIP_POP(pip) (0!=(pip>>=1,pip&1))
-
-/*--- timer implementation ---*/
-
-/* generic timer tick, doesn't handle counter pipeline input
-   (since this is different for timer A and B)
-   check here for the details: https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
-*/
-static void _m6526_timer_tick(m6526_timer_t* t) {
-    /* reload from latch? */
-    const bool count_1 = _M6526_PIP_PEEK(t->pip_count, 1);
-    const bool count_active = _M6526_PIP_POP(t->pip_count);
-    const bool load_active = _M6526_PIP_POP(t->pip_load);
-    const bool oneshot_active_pip = _M6526_PIP_POP(t->pip_oneshot);
-
-    /* decrement counter */
-    if (count_active) {
-        t->counter--;
-    }
-
-    /* timer undeflow? */
-    t->t_out = (0 == t->counter) && count_1;
-    if (t->t_out) {
-        t->t_bit = !t->t_bit;
-    }
-
-    /* reload counter from latch */
-    if (t->t_out || load_active) {
-        t->counter = t->latch;
-        _M6526_PIP_SET(t->pip_count, 2, false);
-    }
-
-    /* push one-shot state into the oneshot-pipeline */
-    const bool oneshot_active_now = _M6526_RUNMODE_ONESHOT(t->cr);
-    _M6526_PIP_SET(t->pip_oneshot, 1, oneshot_active_now);
-
-    /* clear start flag if oneshot and 0 reached */
-    if (t->t_out && (oneshot_active_now || oneshot_active_pip)) {
-        t->cr &= ~(1<<0);
-    }
-}
-
-static void _m6526_tick_ta(m6526_t* c) {
-    /* push timer-active state into the count-pipeline
-       FIXME: CNT pin counting is not implemented
-    */
-    bool timer_active_now = _M6526_TA_INMODE_PHI2(c->ta.cr) && _M6526_TIMER_STARTED(c->ta.cr);
-    _M6526_PIP_SET(c->ta.pip_count, 2, timer_active_now);
-    _m6526_timer_tick(&c->ta);
-}
-
-static void _m6526_tick_tb(m6526_t* c) {
-    /* push timer-active state into the count-pipeline */
-    bool timer_active_now = false;
-    if (_M6526_TIMER_STARTED(c->tb.cr)) {
-        if (_M6526_TB_INMODE_PHI2(c->tb.cr)) {
-            timer_active_now = true;
-        }
-        else if (_M6526_TB_INMODE_TA(c->tb.cr)) {
-            /* count timer A underflows */
-            timer_active_now = c->ta.t_out;
-        }
-        /* FIXME: _M6526_TB_INMODE_CNT and _M6526_TB_INMODE_TACNT */
-    }
-
-    _M6526_PIP_SET(c->tb.pip_count, 2, timer_active_now);
-    _m6526_timer_tick(&c->tb);
-}
-
-/*--- interrupt implementation ---*/
-static void _m6526_write_icr(m6526_t* c, uint8_t data) {
-    /* from datasheet: When writing to the MASK register, if bit 7 (SET/CLEAR)
-       of data written is a ZERO, any mask bit written with a on will be cleared,
-       while those mask bits written with a zero will be unaffected. If bit 7
-       of the data written is a ONE, any mask bit written with a one will be set,
-       while those mask bits written with a zero will be unaffected.
-    */
-    if (data & (1<<7)) {
-        c->intr.imr |= (data & 0x7F);
-    }
-    else {
-        c->intr.imr &= (~data) & 0x7F;
-    }
-}
-
-static uint8_t _m6526_read_icr(m6526_t* c) {
-    /* the icr register is cleared after reading, this will also cause the
-       IRQ line to go inactive, also the irq 1-cycle-delay pipeline is
-       set to cleared state.
-       see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
-    */
-    uint8_t data = c->intr.icr;
-    c->intr.icr = 0;
-    /* cancel an interrupt pending in the pipeline */
-    _M6526_PIP_SET(c->intr.pip_irq, 0, false);
-    return data;
-}
-
-static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
-    /* see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html */
-
-    /* timer A underflow interrupt? */
-    if (c->ta.t_out) {
-        c->intr.icr |= (1<<0);
-    }
-    /* timer B underflow interrupt flag? */
-    if (c->tb.t_out) {
-        c->intr.icr |= (1<<1);
-    }
-    /* check for FLAG pin trigger */
-    if ((pins & M6526_FLAG) && (!c->intr.flag)) {
-        c->intr.icr |= (1<<4);
-    }
-    c->intr.flag = 0 != (pins & M6526_FLAG);
-
-    /* FIXME: ALARM, SP interrupt conditions */
-
-    /* feed the interrupt-request state into the 1-cycle-delay irq-pipeline */
-    bool irq = 0 != ((c->intr.imr & c->intr.icr) & 0x1F);
-    _M6526_PIP_SET(c->intr.pip_irq, 1, irq);
-
-    /* pop delayed irq state from pipeline */
-    if (_M6526_PIP_POP(c->intr.pip_irq)) {
-        c->intr.icr |= (1<<7);
-    }
-}
+/* set a new state at pipeline pos */
+#define _M6526_PIP_SET(pip,pos,state) {if(state){pip|=(1<<pos);}else{pip&=~(1<<pos);}}
+/* test pipeline state, pos 0 is the 'output bit' */
+#define _M6526_PIP_TEST(pip,pos) (0!=(pip&(1<<pos)))
+/* step a pipeline */
+#define _M6526_PIP_STEP(pip) (pip>>=1)
 
 /*--- port implementation ---*/
 static uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
@@ -424,17 +304,23 @@ static uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
     return data;
 }
 
-static void _m6526_write_pa(m6526_t* c, uint8_t data) {
-    c->pa.reg = data;
+static void _m6526_update_pa(m6526_t* c) {
+    uint8_t data = c->pa.reg;
     data |= c->pa.inp & ~c->pa.ddr;
-    c->out_cb(M6526_PORT_A, data);
+    if (data != c->pa.last_out) {
+        c->pa.last_out = data;
+        c->out_cb(M6526_PORT_A, data);
+    }
 }
 
-static void _m6526_write_pb(m6526_t* c, uint8_t data) {
-    c->pb.reg = data;
+static void _m6526_update_pb(m6526_t* c) {
+    uint8_t data = c->pb.reg;
     data |= c->pb.inp & ~c->pb.ddr;
     data = _m6526_merge_pb67(c, data);
-    c->out_cb(M6526_PORT_B, data);
+    if (data != c->pb.last_out) {
+        c->pb.last_out = data;
+        c->out_cb(M6526_PORT_B, data);
+    }
 }
 
 static uint8_t _m6526_read_pa(m6526_t* c) {
@@ -453,60 +339,245 @@ static uint8_t _m6526_read_pb(m6526_t* c) {
     return data;
 }
 
-static void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
-    /* bit 4 (force load) isn't stored, so we need to handle this here right away,
-       there's a 1 cycle delay for force-load
-       NOTE: setting the delay here to 2 fixes some parts of the
-       cia1ta test, but breaks the cputiming test from the W.Lorenz test suite!
+/*--- interrupt implementation ---*/
+static void _m6526_write_icr(m6526_t* c, uint8_t data) {
+    /* from datasheet: When writing to the MASK register, if bit 7 (SET/CLEAR)
+       of data written is a ZERO, any mask bit written with a on will be cleared,
+       while those mask bits written with a zero will be unaffected. If bit 7
+       of the data written is a ONE, any mask bit written with a one will be set,
+       while those mask bits written with a zero will be unaffected.
     */
-    bool force_load = 0 != (data & (1<<4));
-    _M6526_PIP_SET(t->pip_load, 1, force_load);
+    if (data & (1<<7)) {
+        c->intr.imr |= (data & 0x1F);
+    }
+    else {
+        c->intr.imr &= ~(data & 0x1F);
+    }
+    if (!c->intr.imr && (c->intr.icr & c->intr.imr)) {
+        _M6526_PIP_SET(c->intr.pip_irq, 1, true);
+    }
+}
+
+static uint8_t _m6526_read_icr(m6526_t* c) {
+    /* the icr register is cleared after reading, this will also cause the
+       IRQ line to go inactive, also the irq 1-cycle-delay pipeline is
+       set to cleared state.
+       see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
+    */
+    uint8_t data = c->intr.icr;
+    if (_M6526_PIP_TEST(c->intr.pip_irq, 0)) {
+        data |= (1<<7);
+    }
+    c->intr.icr = 0;
+    /* cancel an interrupt pending in the pipeline */
+    c->intr.pip_irq = 0;
+    return data;
+}
+
+static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
+    /* see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html */
+
+    /* timer A underflow interrupt? */
+    if (c->ta.t_out) {
+        c->intr.icr |= (1<<0);
+    }
+    /* timer B underflow interrupt flag? */
+    if (c->tb.t_out) {
+        c->intr.icr |= (1<<1);
+    }
+    /* check for FLAG pin trigger */
+    if ((pins & M6526_FLAG) && (!c->intr.flag)) {
+        c->intr.icr |= (1<<4);
+    }
+    c->intr.flag = 0 != (pins & M6526_FLAG);
+
+    /* FIXME: ALARM, SP interrupt conditions */
+
+    /* set the main interrupt flag */
+    bool irq = 0 != ((c->intr.imr & c->intr.icr) & 0x1F);
+    if (irq && _M6526_PIP_TEST(c->intr.pip_irq, 0)) {
+        c->intr.icr |= (1<<7);
+    }
+    if (0 != (c->intr.icr & (1<<7))) {
+        pins |= M6526_IRQ;
+    }
+    return pins;
+}
+
+/*--- timer implementation ---*/
+
+/* generic timer tick, doesn't handle counter pipeline input
+   (since this is different for timer A and B)
+   check here for the details: https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
+*/
+static void _m6526_tick_timer(m6526_timer_t* t) {
+    /* decrement counter? */
+    if (_M6526_PIP_TEST(t->pip_count,0)) {
+        t->counter--;
+    }
+
+    /* timer undeflow? */
+    t->t_out = (0 == t->counter) && _M6526_PIP_TEST(t->pip_count,1);
+    if (t->t_out) {
+        t->t_bit = !t->t_bit;
+        /* reset started flag if in one-shot mode */
+        if (_M6526_RUNMODE_ONESHOT(t->cr) || _M6526_PIP_TEST(t->pip_oneshot,0)) {
+            t->cr &= ~(1<<0);
+            _M6526_PIP_SET(t->pip_count,1,false);
+        }
+        _M6526_PIP_SET(t->pip_load, 0, true);
+    }
+
+    /* reload counter from latch? */
+    if (_M6526_PIP_TEST(t->pip_load, 0)) {
+        t->counter = t->latch;
+        _M6526_PIP_SET(t->pip_count,1,false);
+    }
+}
+
+static void _m6526_tick_pipeline(m6526_t* c) {
+    /* timer A counter pipeline (FIXME: CNT) */
+    _M6526_PIP_STEP(c->ta.pip_count);
+    if (_M6526_TA_INMODE_PHI2(c->ta.cr)) {
+        _M6526_PIP_SET(c->ta.pip_count, 1, true);
+    }
+    if (!_M6526_TIMER_STARTED(c->ta.cr)) {
+        _M6526_PIP_SET(c->ta.pip_count, 1, false);
+    }
+    /* timer A load-from-latch pipeline */
+    _M6526_PIP_STEP(c->ta.pip_load);
+    if (_M6526_FORCE_LOAD(c->ta.cr)) {
+        _M6526_PIP_SET(c->ta.pip_load, 2, true);
+        c->ta.cr &= ~(1<<4);
+    }
+    /* timer A oneshot pipeline */
+    _M6526_PIP_STEP(c->ta.pip_oneshot);
+    if (_M6526_RUNMODE_ONESHOT(c->ta.cr)) {
+        _M6526_PIP_SET(c->ta.pip_oneshot, 0, true);
+    }    
+
+    /* timer B counter pipeline (FIMXE: CNT) */
+    _M6526_PIP_STEP(c->tb.pip_count);
+    bool tb_active = false;
+    if (_M6526_TB_INMODE_PHI2(c->tb.cr)) {
+        tb_active = true;
+    }
+    else if (_M6526_TB_INMODE_TA(c->tb.cr)) {
+        tb_active = c->ta.t_out;
+    }
+    else if (_M6526_TB_INMODE_CNT(c->tb.cr)) {
+        tb_active = true;   // FIXME: CNT always true for now
+    }
+    else if (_M6526_TB_INMODE_TACNT(c->tb.cr)) {
+        tb_active = c->ta.t_out; // FIXME: CNT always true
+    }
+    _M6526_PIP_SET(c->tb.pip_count, 1, tb_active);
+    if (!_M6526_TIMER_STARTED(c->tb.cr)) {
+        _M6526_PIP_SET(c->tb.pip_count, 1, false);
+    }
+
+    /* timer B load-from-latch pipeline */
+    _M6526_PIP_STEP(c->tb.pip_load);
+    if (_M6526_FORCE_LOAD(c->tb.cr)) {
+        _M6526_PIP_SET(c->tb.pip_load, 2, true);
+        c->tb.cr &= ~(1<<4);
+    }
+
+    /* timer B oneshot pipeline */
+    _M6526_PIP_STEP(c->tb.pip_oneshot);
+    if (_M6526_RUNMODE_ONESHOT(c->tb.cr)) {
+        _M6526_PIP_SET(c->tb.pip_oneshot, 0, true);
+    }    
+
+    /* interrupt pipeline, the frontmost pipeline stage is 'sticky'
+       until the interrupt state is read by the CPU
+    */
+    if (_M6526_PIP_TEST(c->intr.pip_irq,1)) {
+        _M6526_PIP_SET(c->intr.pip_irq, 0, true);
+    }
+    bool irq = c->intr.icr & c->intr.imr;
+    _M6526_PIP_SET(c->intr.pip_irq, 1, irq);
+}
+
+uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
+    _m6526_tick_timer(&c->ta);
+    _m6526_tick_timer(&c->tb);
+    _m6526_update_pb(c);    /* state of PB6/PB7 might have changed */
+    pins = _m6526_update_irq(c, pins);
+    _m6526_tick_pipeline(c);
+    return pins;
+}
+
+static void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
 
     /* if the start bit goes from 0 to 1, set the current toggle-bit-state to 1 */
     if (!_M6526_TIMER_STARTED(t->cr) && _M6526_TIMER_STARTED(data)) {
         t->t_bit = true;
     }
+    t->cr = data;
 
-    /* bit 4 (force load) isn't stored */
-    t->cr = data & ~(1<<4);
     /* state of port B output might be changed because of PB6/PB7 */
-    _m6526_write_pb(c, c->pb.reg);
+    _m6526_update_pb(c);
 }
 
 static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
     switch (addr) {
         case M6526_REG_PRA:
-            _m6526_write_pa(c, data);
+            c->pa.reg = data;
+            _m6526_update_pa(c);
             break;
         case M6526_REG_PRB:
-            _m6526_write_pb(c, data);
+            c->pb.reg = data;
+            _m6526_update_pb(c);
             break;
         case M6526_REG_DDRA:
             c->pa.ddr = data;
-            _m6526_write_pa(c, c->pa.reg);
+            _m6526_update_pa(c);
             break;
         case M6526_REG_DDRB:
             c->pb.ddr = data;
-            _m6526_write_pb(c, c->pb.reg);
+            _m6526_update_pb(c);
             break;
         case M6526_REG_TALO:
             c->ta.latch = (c->ta.latch & 0xFF00) | data;
+            if (_M6526_PIP_TEST(c->ta.pip_load,0)) {
+                c->ta.counter = (c->ta.counter & 0xFF00) | data;
+            }
             break;
         case M6526_REG_TAHI:
-            c->ta.latch = (c->ta.latch & 0x00FF) | (data<<8);
+            c->ta.latch = (data<<8) | (c->ta.latch & 0x00FF);
             /* if timer is not running, writing hi-byte writes latch */
             if (!_M6526_TIMER_STARTED(c->ta.cr)) {
-                _M6526_PIP_SET(c->ta.pip_load, 1, true);
+                _M6526_PIP_SET(c->ta.pip_load, 2, true);
+            }
+            /* in oneshot mode, writing HI starts timer */
+            if (_M6526_RUNMODE_ONESHOT(c->ta.cr)) {
+                c->ta.counter = c->ta.latch;
+                _m6526_write_cr(c, &c->ta, c->ta.cr | (1<<0));
+            }
+            if (_M6526_PIP_TEST(c->ta.pip_load,0)) {
+                c->ta.counter = (data<<8) | (c->ta.counter & 0x00FF);
             }
             break;
         case M6526_REG_TBLO:
             c->tb.latch = (c->tb.latch & 0xFF00) | data;
+            if (_M6526_PIP_TEST(c->tb.pip_load,0)) {
+                c->tb.counter = (c->tb.counter & 0xFF00) | data;
+            }
             break;
         case M6526_REG_TBHI:
             c->tb.latch = (c->tb.latch & 0x00FF) | (data<<8);
             /* if timer is not running, writing hi-byte writes latch */
             if (!_M6526_TIMER_STARTED(c->tb.cr)) {
-                _M6526_PIP_SET(c->tb.pip_load, 1, true);
+                _M6526_PIP_SET(c->tb.pip_load, 2, true);
+            }
+            /* in oneshot mode, writing HI starts timer */
+            if (_M6526_RUNMODE_ONESHOT(c->tb.cr)) {
+                c->tb.counter = c->tb.latch;
+                _m6526_write_cr(c, &c->tb, c->tb.cr | (1<<0));
+            }
+            if (_M6526_PIP_TEST(c->tb.pip_load,0)) {
+                c->tb.counter = (data<<8) | (c->tb.counter & 0x00FF);
             }
             break;
         case M6526_REG_ICR:
@@ -552,10 +623,12 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
             data = _m6526_read_icr(c);
             break;
         case M6526_REG_CRA:
-            data = c->ta.cr;
+            /* force-load bit always returns zero */
+            data = c->ta.cr & ~(1<<4);
             break;
         case M6526_REG_CRB:
-            data = c->tb.cr;
+            /* force-load bit always returns zero */
+            data = c->tb.cr & ~(1<<4);
             break;
     }
     return data;
@@ -578,15 +651,6 @@ uint64_t m6526_iorq(m6526_t* c, uint64_t pins) {
     return pins;
 }
 
-uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
-    _m6526_tick_ta(c);
-    _m6526_tick_tb(c);
-    _m6526_update_irq(c, pins);
-    if (0 != (c->intr.icr & (1<<7))) {
-        pins |= M6526_IRQ;
-    }
-    return pins;
-}
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
