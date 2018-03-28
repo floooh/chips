@@ -550,11 +550,6 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             if (!_M6526_TIMER_STARTED(c->ta.cr)) {
                 _M6526_PIP_SET(c->ta.pip_load, 2, true);
             }
-            /* in oneshot mode, writing HI starts timer */
-            if (_M6526_RUNMODE_ONESHOT(c->ta.cr)) {
-                c->ta.counter = c->ta.latch;
-                _m6526_write_cr(c, &c->ta, c->ta.cr | (1<<0));
-            }
             if (_M6526_PIP_TEST(c->ta.pip_load,0)) {
                 c->ta.counter = (data<<8) | (c->ta.counter & 0x00FF);
             }
@@ -566,15 +561,10 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             }
             break;
         case M6526_REG_TBHI:
-            c->tb.latch = (c->tb.latch & 0x00FF) | (data<<8);
+            c->tb.latch = (data<<8) | (c->tb.latch & 0x00FF);
             /* if timer is not running, writing hi-byte writes latch */
             if (!_M6526_TIMER_STARTED(c->tb.cr)) {
                 _M6526_PIP_SET(c->tb.pip_load, 2, true);
-            }
-            /* in oneshot mode, writing HI starts timer */
-            if (_M6526_RUNMODE_ONESHOT(c->tb.cr)) {
-                c->tb.counter = c->tb.latch;
-                _m6526_write_cr(c, &c->tb, c->tb.cr | (1<<0));
             }
             if (_M6526_PIP_TEST(c->tb.pip_load,0)) {
                 c->tb.counter = (data<<8) | (c->tb.counter & 0x00FF);
