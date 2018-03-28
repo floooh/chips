@@ -153,7 +153,7 @@ MOS Technology 6526 Complex Interface Adapter
   - _flipos_: OK
   - _icr01_: **FAIL**
   - _imr_: OK
-  - _loadth_: **FAIL**
+  - _loadth_: OK
   - _oneshot_: OK
 - **NOT IMPLEMENTED:**
   - time-of-day features

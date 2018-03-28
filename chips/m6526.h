@@ -466,10 +466,10 @@ static void _m6526_tick_pipeline(m6526_t* c) {
         tb_active = c->ta.t_out;
     }
     else if (_M6526_TB_INMODE_CNT(c->tb.cr)) {
-        tb_active = true;   // FIXME: CNT always true for now
+        tb_active = false;   // FIXME: CNT always high for now
     }
     else if (_M6526_TB_INMODE_TACNT(c->tb.cr)) {
-        tb_active = c->ta.t_out; // FIXME: CNT always true
+        tb_active = c->ta.t_out; // FIXME: CNT always high for now
     }
     _M6526_PIP_SET(c->tb.pip_count, 1, tb_active);
     if (!_M6526_TIMER_STARTED(c->tb.cr)) {
@@ -540,9 +540,6 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             break;
         case M6526_REG_TALO:
             c->ta.latch = (c->ta.latch & 0xFF00) | data;
-            if (_M6526_PIP_TEST(c->ta.pip_load,0)) {
-                c->ta.counter = (c->ta.counter & 0xFF00) | data;
-            }
             break;
         case M6526_REG_TAHI:
             c->ta.latch = (data<<8) | (c->ta.latch & 0x00FF);
@@ -550,24 +547,15 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             if (!_M6526_TIMER_STARTED(c->ta.cr)) {
                 _M6526_PIP_SET(c->ta.pip_load, 2, true);
             }
-            if (_M6526_PIP_TEST(c->ta.pip_load,0)) {
-                c->ta.counter = (data<<8) | (c->ta.counter & 0x00FF);
-            }
             break;
         case M6526_REG_TBLO:
             c->tb.latch = (c->tb.latch & 0xFF00) | data;
-            if (_M6526_PIP_TEST(c->tb.pip_load,0)) {
-                c->tb.counter = (c->tb.counter & 0xFF00) | data;
-            }
             break;
         case M6526_REG_TBHI:
             c->tb.latch = (data<<8) | (c->tb.latch & 0x00FF);
             /* if timer is not running, writing hi-byte writes latch */
             if (!_M6526_TIMER_STARTED(c->tb.cr)) {
                 _M6526_PIP_SET(c->tb.pip_load, 2, true);
-            }
-            if (_M6526_PIP_TEST(c->tb.pip_load,0)) {
-                c->tb.counter = (data<<8) | (c->tb.counter & 0x00FF);
             }
             break;
         case M6526_REG_ICR:
