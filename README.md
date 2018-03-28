@@ -64,9 +64,29 @@ The MOS Technology 6502 CPU.
 - test coverage:
     - **NESTEST**: completely working (this runs through all documented, and most 'common'
       undocumented instructions but doesn't test decimal mode)
-    - **Wolfgang Lorenz C64 Test Suite**: CPU instruction tests working completely 
-      for documented instructions (including decimal mode), the following 
-      undocumented/unintended instructions are failing: ANE, LXA, SBX, SHA, SHX, SHY, SHS, ANC (some of these are implemented, but fail the test, some are not implemented in the emulator)
+    - **Wolfgang Lorenz C64 Test Suite**, all CPU tests working except:
+      - _adc*_: OK
+      - _alrb, ancb_: OK
+      - _and*_: OK
+      - _aneb_: **FAIL**
+      - _arrb_: OK
+      - _asl*_: OK
+      - _aso*_: OK
+      - _axs*_: OK
+      - _b*r_ (branches): OK
+      - _bit*_: OK
+      - _branchwrap_: OK
+      - _brkn_: OK
+      - _cl*_, se*_ (set/clear flags): OK
+      - _cmp*_: OK
+      - _cpuport_: OK (m6510 CPU port)
+      - _cputiming_: **FAIL** (opcodes 5C and 7C show 'clocks: 8 right: 9')
+      - _dcm*_: OK
+      - _dec*, dexn, deyn_: OK
+      - _eor*_: OK
+      - _inc*, inxn, inyn_: OK
+      - _ins*_: OK
+      - TO BE CONTINUED...
 
 ### AY-3-8910 (chips/ay38910.h)
 
@@ -117,6 +137,37 @@ MOS Technology 6522 Versatile Interface Adapter.
 Currently this just contains the minimal required functionality to make
 some games on the Acorn Atom work (basically just timers, and even those
 or likely not correct). 
+
+### MOS 6526 CIA (chips/m6526.h)
+
+MOS Technology 6526 Complex Interface Adapter
+
+(Work In Progress)
+
+- **Wolfgang Lorenz C64 Test Suite Status**:
+  - _cia1pb6, cia1pb7, cia2pb6, cia2pb7_: OK
+  - _cia1ta, cia1tb, cia2ta, cia2tb_: **FAIL** (off by 1..2 cycles)
+  - _cia1tab_: OK
+  - _cia1tb123, cia2tb123_: **FAIL**
+  - _cntdef, cnto2_: OK (but note that CNT pin is not emulated, it's always high)
+  - _flipos_: OK
+  - _icr01_: **FAIL**
+  - _imr_: OK
+  - _loadth_: **FAIL**
+  - _oneshot_: OK
+- **NOT IMPLEMENTED:**
+  - time-of-day features
+  - serial port
+  - PC pin
+  - CNT pin is always high
+
+### MOS 6567 VIC-II (chips/m6567.h)
+
+MOS Technology 6567 Versatile Interface Chip VIC-II
+
+(Work In Progress)
+
+- currently only the PAL variant 6569 is implemented
 
 ## Helper Code
 
