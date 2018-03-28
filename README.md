@@ -163,7 +163,7 @@ MOS Technology 6526 Complex Interface Adapter
 
 ### MOS 6567 VIC-II (chips/m6567.h)
 
-MOS Technology 6567 Versatile Interface Chip VIC-II
+MOS Technology 6567 Video Interface Chip VIC-II
 
 (Work In Progress)
 
