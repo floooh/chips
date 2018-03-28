@@ -64,7 +64,7 @@ The MOS Technology 6502 CPU.
 - test coverage:
     - **NESTEST**: completely working (this runs through all documented, and most 'common'
       undocumented instructions but doesn't test decimal mode)
-    - **Wolfgang Lorenz C64 Test Suite**, all CPU tests working except:
+    - **Wolfgang Lorenz C64 Test Suite** (CPU tests):
       - _adc*_: OK
       - _alrb, ancb_: OK
       - _and*_: OK
