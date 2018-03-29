@@ -353,9 +353,6 @@ static void _m6526_write_icr(m6526_t* c, uint8_t data) {
     else {
         c->intr.imr &= ~(data & 0x1F);
     }
-    if (!c->intr.imr && (c->intr.icr & c->intr.imr)) {
-        _M6526_PIP_SET(c->intr.pip_irq, 1, true);
-    }
 }
 
 static uint8_t _m6526_read_icr(m6526_t* c) {
@@ -365,9 +362,6 @@ static uint8_t _m6526_read_icr(m6526_t* c) {
        see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
     */
     uint8_t data = c->intr.icr;
-    if (_M6526_PIP_TEST(c->intr.pip_irq, 0)) {
-        data |= (1<<7);
-    }
     c->intr.icr = 0;
     /* cancel an interrupt pending in the pipeline */
     c->intr.pip_irq = 0;
@@ -393,13 +387,12 @@ static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
 
     /* FIXME: ALARM, SP interrupt conditions */
 
-    /* set the main interrupt flag */
-    bool irq = 0 != ((c->intr.imr & c->intr.icr) & 0x1F);
-    if (irq && _M6526_PIP_TEST(c->intr.pip_irq, 0)) {
-        c->intr.icr |= (1<<7);
+    /* handle main interrupt bit */
+    if (c->intr.icr & c->intr.imr) {
+        _M6526_PIP_SET(c->intr.pip_irq, 1, true);
     }
-    if (0 != (c->intr.icr & (1<<7))) {
-        pins |= M6526_IRQ;
+    if (_M6526_PIP_TEST(c->intr.pip_irq, 0)) {
+        c->intr.icr |= (1<<7);
     }
     return pins;
 }
@@ -489,14 +482,8 @@ static void _m6526_tick_pipeline(m6526_t* c) {
         _M6526_PIP_SET(c->tb.pip_oneshot, 0, true);
     }    
 
-    /* interrupt pipeline, the frontmost pipeline stage is 'sticky'
-       until the interrupt state is read by the CPU
-    */
-    if (_M6526_PIP_TEST(c->intr.pip_irq,1)) {
-        _M6526_PIP_SET(c->intr.pip_irq, 0, true);
-    }
-    bool irq = c->intr.icr & c->intr.imr;
-    _M6526_PIP_SET(c->intr.pip_irq, 1, irq);
+    /* interrupt pipeline */
+    _M6526_PIP_STEP(c->intr.pip_irq);
 }
 
 uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
@@ -505,6 +492,9 @@ uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
     _m6526_update_pb(c);    /* state of PB6/PB7 might have changed */
     pins = _m6526_update_irq(c, pins);
     _m6526_tick_pipeline(c);
+    if (0 != (c->intr.icr & (1<<7))) {
+        pins |= M6526_IRQ;
+    }
     return pins;
 }
 

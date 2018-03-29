@@ -66,10 +66,9 @@ The MOS Technology 6502 CPU.
       undocumented instructions but doesn't test decimal mode)
     - **Wolfgang Lorenz C64 Test Suite** (CPU tests):
       - _adc*_: OK
-      - _alrb, ancb_: OK
+      - _alrb, arrb, ancb_: OK
       - _and*_: OK
       - _aneb_: **FAIL**
-      - _arrb_: OK
       - _asl*_: OK
       - _aso*_: OK
       - _axs*_: OK
@@ -86,7 +85,20 @@ The MOS Technology 6502 CPU.
       - _eor*_: OK
       - _inc*, inxn, inyn_: OK
       - _ins*_: OK
-      - TO BE CONTINUED...
+      - _inxn, inyn_: OK
+      - _irq_: **FAIL**
+      - _jmpi, jmpw, jsrw_: OK
+      - _lasay_: **FAIL**
+      - _lax*_: OK
+      - _lda*_: OK
+      - _ldx*, ldy*_: OK
+      - _lse*_: OK
+      - _lsr*_: OK
+      - _lxab_: **FAIL**
+      - _nmi_: **FAIL**
+      - _nop*_: OK
+      - _ora*_: OK
+      - ...
 
 ### AY-3-8910 (chips/ay38910.h)
 
@@ -151,8 +163,8 @@ MOS Technology 6526 Complex Interface Adapter
   - _cia1tb123, cia2tb123_: **FAIL**
   - _cntdef, cnto2_: OK (but note that CNT pin is not emulated, it's always high)
   - _flipos_: OK
-  - _icr01_: **FAIL**
-  - _imr_: OK
+  - _icr01_: OK
+  - _imr_: **FAIL**
   - _loadth_: OK
   - _oneshot_: OK
 - **NOT IMPLEMENTED:**
