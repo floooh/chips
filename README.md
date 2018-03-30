@@ -158,9 +158,9 @@ MOS Technology 6526 Complex Interface Adapter
 
 - **Wolfgang Lorenz C64 Test Suite Status**:
   - _cia1pb6, cia1pb7, cia2pb6, cia2pb7_: OK
-  - _cia1ta, cia1tb, cia2ta, cia2tb_: **FAIL** (off by 1..2 cycles)
+  - _cia1ta, cia1tb, cia2ta, cia2tb_: **FAIL** (but improved, doesn't fail immediately)
   - _cia1tab_: OK
-  - _cia1tb123, cia2tb123_: **FAIL**
+  - _cia1tb123, cia2tb123_: OK
   - _cntdef, cnto2_: OK (but note that CNT pin is not emulated, it's always high)
   - _flipos_: OK
   - _icr01_: OK

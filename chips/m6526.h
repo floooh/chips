@@ -429,27 +429,26 @@ static void _m6526_tick_timer(m6526_timer_t* t) {
 
 static void _m6526_tick_pipeline(m6526_t* c) {
     /* timer A counter pipeline (FIXME: CNT) */
-    _M6526_PIP_STEP(c->ta.pip_count);
     if (_M6526_TA_INMODE_PHI2(c->ta.cr)) {
-        _M6526_PIP_SET(c->ta.pip_count, 1, true);
+        _M6526_PIP_SET(c->ta.pip_count, 2, true);
     }
     if (!_M6526_TIMER_STARTED(c->ta.cr)) {
-        _M6526_PIP_SET(c->ta.pip_count, 1, false);
+        _M6526_PIP_SET(c->ta.pip_count, 2, false);
     }
+    _M6526_PIP_STEP(c->ta.pip_count);
     /* timer A load-from-latch pipeline */
-    _M6526_PIP_STEP(c->ta.pip_load);
     if (_M6526_FORCE_LOAD(c->ta.cr)) {
-        _M6526_PIP_SET(c->ta.pip_load, 0, true);
+        _M6526_PIP_SET(c->ta.pip_load, 1, true);
         c->ta.cr &= ~(1<<4);
     }
+    _M6526_PIP_STEP(c->ta.pip_load);
     /* timer A oneshot pipeline */
-    _M6526_PIP_STEP(c->ta.pip_oneshot);
     if (_M6526_RUNMODE_ONESHOT(c->ta.cr)) {
-        _M6526_PIP_SET(c->ta.pip_oneshot, 0, true);
+        _M6526_PIP_SET(c->ta.pip_oneshot, 1, true);
     }    
+    _M6526_PIP_STEP(c->ta.pip_oneshot);
 
     /* timer B counter pipeline (FIMXE: CNT) */
-    _M6526_PIP_STEP(c->tb.pip_count);
     bool tb_active = false;
     if (_M6526_TB_INMODE_PHI2(c->tb.cr)) {
         tb_active = true;
@@ -463,23 +462,24 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     else if (_M6526_TB_INMODE_TACNT(c->tb.cr)) {
         tb_active = c->ta.t_out; // FIXME: CNT always high for now
     }
-    _M6526_PIP_SET(c->tb.pip_count, 1, tb_active);
+    _M6526_PIP_SET(c->tb.pip_count, 2, tb_active);
     if (!_M6526_TIMER_STARTED(c->tb.cr)) {
-        _M6526_PIP_SET(c->tb.pip_count, 1, false);
+        _M6526_PIP_SET(c->tb.pip_count, 2, false);
     }
+    _M6526_PIP_STEP(c->tb.pip_count);
 
     /* timer B load-from-latch pipeline */
-    _M6526_PIP_STEP(c->tb.pip_load);
     if (_M6526_FORCE_LOAD(c->tb.cr)) {
-        _M6526_PIP_SET(c->tb.pip_load, 0, true);
+        _M6526_PIP_SET(c->tb.pip_load, 1, true);
         c->tb.cr &= ~(1<<4);
     }
+    _M6526_PIP_STEP(c->tb.pip_load);
 
     /* timer B oneshot pipeline */
-    _M6526_PIP_STEP(c->tb.pip_oneshot);
     if (_M6526_RUNMODE_ONESHOT(c->tb.cr)) {
-        _M6526_PIP_SET(c->tb.pip_oneshot, 0, true);
+        _M6526_PIP_SET(c->tb.pip_oneshot, 1, true);
     }    
+    _M6526_PIP_STEP(c->tb.pip_oneshot);
 
     /* interrupt pipeline */
     _M6526_PIP_STEP(c->intr.pip_irq);
@@ -532,9 +532,9 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             break;
         case M6526_REG_TAHI:
             c->ta.latch = (data<<8) | (c->ta.latch & 0x00FF);
-            /* if timer is not running, writing hi-byte writes latch */
+            /* if timer is not running, writing hi-byte load counter form latch */
             if (!_M6526_TIMER_STARTED(c->ta.cr)) {
-                _M6526_PIP_SET(c->ta.pip_load, 2, true);
+                _M6526_PIP_SET(c->ta.pip_load, 1, true);
             }
             break;
         case M6526_REG_TBLO:
@@ -544,7 +544,7 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             c->tb.latch = (data<<8) | (c->tb.latch & 0x00FF);
             /* if timer is not running, writing hi-byte writes latch */
             if (!_M6526_TIMER_STARTED(c->tb.cr)) {
-                _M6526_PIP_SET(c->tb.pip_load, 2, true);
+                _M6526_PIP_SET(c->tb.pip_load, 1, true);
             }
             break;
         case M6526_REG_ICR:
