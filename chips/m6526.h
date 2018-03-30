@@ -416,7 +416,6 @@ static void _m6526_tick_timer(m6526_timer_t* t) {
         /* reset started flag if in one-shot mode */
         if (_M6526_RUNMODE_ONESHOT(t->cr) || _M6526_PIP_TEST(t->pip_oneshot,0)) {
             t->cr &= ~(1<<0);
-            _M6526_PIP_SET(t->pip_count,1,false);
         }
         _M6526_PIP_SET(t->pip_load, 0, true);
     }
