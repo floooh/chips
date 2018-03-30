@@ -439,7 +439,7 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     /* timer A load-from-latch pipeline */
     _M6526_PIP_STEP(c->ta.pip_load);
     if (_M6526_FORCE_LOAD(c->ta.cr)) {
-        _M6526_PIP_SET(c->ta.pip_load, 2, true);
+        _M6526_PIP_SET(c->ta.pip_load, 0, true);
         c->ta.cr &= ~(1<<4);
     }
     /* timer A oneshot pipeline */
@@ -471,7 +471,7 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     /* timer B load-from-latch pipeline */
     _M6526_PIP_STEP(c->tb.pip_load);
     if (_M6526_FORCE_LOAD(c->tb.cr)) {
-        _M6526_PIP_SET(c->tb.pip_load, 2, true);
+        _M6526_PIP_SET(c->tb.pip_load, 0, true);
         c->tb.cr &= ~(1<<4);
     }
 
