@@ -155,6 +155,7 @@ typedef struct {
 /* interrupt state */
 typedef struct {
     uint8_t imr;        /* interrupt mask */
+    uint8_t imr1;       /* one cycle delay for imr updates */
     uint8_t icr;        /* interrupt control register */
     uint8_t pip_irq;    /* 1-cycle delay pipeline to request irq */
     bool flag;          /* last state of flag bit, to detect edge */
@@ -220,6 +221,7 @@ static void _m6526_init_timer(m6526_timer_t* t) {
 
 static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->imr = 0;
+    intr->imr1 = 0;
     intr->icr = 0;
     intr->pip_irq = 0;
     intr->flag = false;
@@ -348,10 +350,10 @@ static void _m6526_write_icr(m6526_t* c, uint8_t data) {
        while those mask bits written with a zero will be unaffected.
     */
     if (data & (1<<7)) {
-        c->intr.imr |= (data & 0x1F);
+        c->intr.imr1 |= (data & 0x1F);
     }
     else {
-        c->intr.imr &= ~(data & 0x1F);
+        c->intr.imr1 &= ~(data & 0x1F);
     }
 }
 
@@ -388,9 +390,6 @@ static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
     /* FIXME: ALARM, SP interrupt conditions */
 
     /* handle main interrupt bit */
-    if (c->intr.icr & c->intr.imr) {
-        _M6526_PIP_SET(c->intr.pip_irq, 1, true);
-    }
     if (_M6526_PIP_TEST(c->intr.pip_irq, 0)) {
         c->intr.icr |= (1<<7);
     }
@@ -482,7 +481,11 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     _M6526_PIP_STEP(c->tb.pip_oneshot);
 
     /* interrupt pipeline */
+    if (c->intr.icr & c->intr.imr) {
+        _M6526_PIP_SET(c->intr.pip_irq, 1, true);
+    }
     _M6526_PIP_STEP(c->intr.pip_irq);
+    c->intr.imr = c->intr.imr1;
 }
 
 uint64_t m6526_tick(m6526_t* c, uint64_t pins) {

@@ -164,7 +164,7 @@ MOS Technology 6526 Complex Interface Adapter
   - _cntdef, cnto2_: OK (but note that CNT pin is not emulated, it's always high)
   - _flipos_: OK
   - _icr01_: OK
-  - _imr_: **FAIL**
+  - _imr_: OK
   - _loadth_: OK
   - _oneshot_: OK
 - **NOT IMPLEMENTED:**
