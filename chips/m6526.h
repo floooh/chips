@@ -330,12 +330,23 @@ static uint8_t _m6526_read_pa(m6526_t* c) {
        on the actual port pins (PA0-PA7, PB0-PB7) for both input and output bits.
     */
     /* the input callback should put a 1 into all unconnected pins */
-    c->pa.inp = (c->in_cb(M6526_PORT_A) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
+    if (c->pa.ddr != 0xFF) {
+        c->pa.inp = (c->in_cb(M6526_PORT_A) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
+    }
+    else {
+        c->pa.inp = c->in_cb(M6526_PORT_A) & c->pa.reg;
+    }
     return c->pa.inp;
 }
 
 static uint8_t _m6526_read_pb(m6526_t* c) {
-    uint8_t data = (c->in_cb(M6526_PORT_B) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);;
+    uint8_t data;
+    if (c->pb.ddr != 0xFF) {
+        data = (c->in_cb(M6526_PORT_B) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);
+    }
+    else {
+        data = c->in_cb(M6526_PORT_B) & c->pb.reg;
+    }
     c->pb.inp = data;
     data = _m6526_merge_pb67(c, data);
     return data;
