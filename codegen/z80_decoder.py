@@ -296,35 +296,35 @@ def out(addr,val):
 #   INT MODE 2: 19 cycles
 #
 def write_interrupt_handling():
-    l('  if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c.IFF1) {')
-    l('    c.IFF1=c.IFF2=false;')
-    l('    if (pins & Z80_HALT) { pins &= ~Z80_HALT; c.PC++; }')
-    l('    _ON(Z80_M1|Z80_IORQ);')
-    l('    _SA(c.PC);')
-    l('    _TW(4);')
-    l('    const uint8_t int_vec=_GD();')
-    l('    _OFF(Z80_M1|Z80_IORQ);')
-    l('    c.R=(c.R&0x80)|((c.R+1)&0x7F);')
-    l('    _T(2);')
-    l('    if (c.IM==1) {')
-    l('      _MW(--c.SP,(uint8_t)(c.PC>>8));')
-    l('      _MW(--c.SP,(uint8_t)(c.PC));')
-    l('      c.PC=c.WZ=0x0038;')
-    l('    }')
-    l('    else if (c.IM==2) {')
-    l('      _MW(--c.SP,(uint8_t)(c.PC>>8));')
-    l('      _MW(--c.SP,(uint8_t)(c.PC));')
-    l('      a=(c.I<<8)|(int_vec&0xFE);')
-    l('      {')
-    l('        uint8_t w,z;')
-    l('        _MR(a++,z);')
-    l('        _MR(a,w);')
-    l('        c.PC=c.WZ=(w<<8)|z;')
+    l('    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c.IFF1) {')
+    l('      c.IFF1=c.IFF2=false;')
+    l('      if (pins & Z80_HALT) { pins &= ~Z80_HALT; c.PC++; }')
+    l('      _ON(Z80_M1|Z80_IORQ);')
+    l('      _SA(c.PC);')
+    l('      _TW(4);')
+    l('      const uint8_t int_vec=_GD();')
+    l('      _OFF(Z80_M1|Z80_IORQ);')
+    l('      c.R=(c.R&0x80)|((c.R+1)&0x7F);')
+    l('      _T(2);')
+    l('      if (c.IM==1) {')
+    l('        _MW(--c.SP,(uint8_t)(c.PC>>8));')
+    l('        _MW(--c.SP,(uint8_t)(c.PC));')
+    l('        c.PC=c.WZ=0x0038;')
     l('      }')
-    l('    } else {')
-    l('      /*CHIPS_ASSERT(false);*/')
+    l('      else if (c.IM==2) {')
+    l('        _MW(--c.SP,(uint8_t)(c.PC>>8));')
+    l('        _MW(--c.SP,(uint8_t)(c.PC));')
+    l('        a=(c.I<<8)|(int_vec&0xFE);')
+    l('        {')
+    l('          uint8_t w,z;')
+    l('          _MR(a++,z);')
+    l('          _MR(a,w);')
+    l('          c.PC=c.WZ=(w<<8)|z;')
+    l('        }')
+    l('      } else {')
+    l('        /*CHIPS_ASSERT(false);*/')
+    l('      }')
     l('    }')
-    l('  }')
 
 #-------------------------------------------------------------------------------
 # return comment string for (HL), (IX+d), (IY+d)
@@ -1309,7 +1309,7 @@ def daa():
     return src
 
 def halt():
-    return 'if(_z80_check_trap(&c)){break;};_ON(Z80_HALT);c.PC--;'
+    return '_ON(Z80_HALT);c.PC--;'
 
 def di():
     return 'c.IFF1=c.IFF2=false;'
@@ -1830,7 +1830,7 @@ def write_header() :
     write_defines()
     l('uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {')
     l('  z80_t c = *cpu;')
-    l('  c.trap_id = -1;')
+    l('  int trap_id = -1;')
     l('  uint32_t ticks = 0;')
     l('  uint64_t pins = c.PINS;')
     l('  const z80_tick_t tick = c.tick;')
@@ -1843,8 +1843,14 @@ def write_header() :
 # write source footer
 #
 def write_footer() :
-    l('  } while ((ticks < num_ticks) && (c.trap_id < 0));')
+    l('    for (int i=0; i<Z80_MAX_NUM_TRAPS; i++) {') 
+    l('      if (c.trap_valid[i] && (c.PC==c.trap_addr[i])) {')
+    l('        trap_id=i;') 
+    l('      }')
+    l('    }')
+    l('  } while ((ticks < num_ticks) && (trap_id < 0));')
     l('  c.PINS = pins;')
+    l('  c.trap_id = trap_id;')
     l('  *cpu = c;')
     l('  return ticks;')
     l('}')

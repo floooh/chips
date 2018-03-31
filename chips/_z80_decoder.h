@@ -58,7 +58,7 @@ static uint8_t _z80_szp[256] = {
 
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   z80_t c = *cpu;
-  c.trap_id = -1;
+  int trap_id = -1;
   uint32_t ticks = 0;
   uint64_t pins = c.PINS;
   const z80_tick_t tick = c.tick;
@@ -187,7 +187,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0x73:/*LD (HL),E*/a=c.HL;_MW(a,c.E);break;
       case 0x74:/*LD (HL),H*/a=c.HL;_MW(a,c.H);break;
       case 0x75:/*LD (HL),L*/a=c.HL;_MW(a,c.L);break;
-      case 0x76:/*HALT*/if(_z80_check_trap(&c)){break;};_ON(Z80_HALT);c.PC--;break;
+      case 0x76:/*HALT*/_ON(Z80_HALT);c.PC--;break;
       case 0x77:/*LD (HL),A*/a=c.HL;_MW(a,c.A);break;
       case 0x78:/*LD A,B*/c.A=c.B;break;
       case 0x79:/*LD A,C*/c.A=c.C;break;
@@ -485,7 +485,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
           case 0x73:/*LD (IX+d),E*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IX+d;}_T(5);_MW(a,c.E);break;
           case 0x74:/*LD (IX+d),H*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IX+d;}_T(5);_MW(a,c.H);break;
           case 0x75:/*LD (IX+d),L*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IX+d;}_T(5);_MW(a,c.L);break;
-          case 0x76:/*HALT*/if(_z80_check_trap(&c)){break;};_ON(Z80_HALT);c.PC--;break;
+          case 0x76:/*HALT*/_ON(Z80_HALT);c.PC--;break;
           case 0x77:/*LD (IX+d),A*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IX+d;}_T(5);_MW(a,c.A);break;
           case 0x78:/*LD A,B*/c.A=c.B;break;
           case 0x79:/*LD A,C*/c.A=c.C;break;
@@ -929,7 +929,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
           case 0x73:/*LD (IY+d),E*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IY+d;}_T(5);_MW(a,c.E);break;
           case 0x74:/*LD (IY+d),H*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IY+d;}_T(5);_MW(a,c.H);break;
           case 0x75:/*LD (IY+d),L*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IY+d;}_T(5);_MW(a,c.L);break;
-          case 0x76:/*HALT*/if(_z80_check_trap(&c)){break;};_ON(Z80_HALT);c.PC--;break;
+          case 0x76:/*HALT*/_ON(Z80_HALT);c.PC--;break;
           case 0x77:/*LD (IY+d),A*/{int8_t d;_MR(c.PC++,d);;a=c.WZ=c.IY+d;}_T(5);_MW(a,c.A);break;
           case 0x78:/*LD A,B*/c.A=c.B;break;
           case 0x79:/*LD A,C*/c.A=c.C;break;
@@ -1145,37 +1145,43 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       default:
         break;
     } }
-  if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c.IFF1) {
-    c.IFF1=c.IFF2=false;
-    if (pins & Z80_HALT) { pins &= ~Z80_HALT; c.PC++; }
-    _ON(Z80_M1|Z80_IORQ);
-    _SA(c.PC);
-    _TW(4);
-    const uint8_t int_vec=_GD();
-    _OFF(Z80_M1|Z80_IORQ);
-    c.R=(c.R&0x80)|((c.R+1)&0x7F);
-    _T(2);
-    if (c.IM==1) {
-      _MW(--c.SP,(uint8_t)(c.PC>>8));
-      _MW(--c.SP,(uint8_t)(c.PC));
-      c.PC=c.WZ=0x0038;
-    }
-    else if (c.IM==2) {
-      _MW(--c.SP,(uint8_t)(c.PC>>8));
-      _MW(--c.SP,(uint8_t)(c.PC));
-      a=(c.I<<8)|(int_vec&0xFE);
-      {
-        uint8_t w,z;
-        _MR(a++,z);
-        _MR(a,w);
-        c.PC=c.WZ=(w<<8)|z;
+    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c.IFF1) {
+      c.IFF1=c.IFF2=false;
+      if (pins & Z80_HALT) { pins &= ~Z80_HALT; c.PC++; }
+      _ON(Z80_M1|Z80_IORQ);
+      _SA(c.PC);
+      _TW(4);
+      const uint8_t int_vec=_GD();
+      _OFF(Z80_M1|Z80_IORQ);
+      c.R=(c.R&0x80)|((c.R+1)&0x7F);
+      _T(2);
+      if (c.IM==1) {
+        _MW(--c.SP,(uint8_t)(c.PC>>8));
+        _MW(--c.SP,(uint8_t)(c.PC));
+        c.PC=c.WZ=0x0038;
       }
-    } else {
-      /*CHIPS_ASSERT(false);*/
+      else if (c.IM==2) {
+        _MW(--c.SP,(uint8_t)(c.PC>>8));
+        _MW(--c.SP,(uint8_t)(c.PC));
+        a=(c.I<<8)|(int_vec&0xFE);
+        {
+          uint8_t w,z;
+          _MR(a++,z);
+          _MR(a,w);
+          c.PC=c.WZ=(w<<8)|z;
+        }
+      } else {
+        /*CHIPS_ASSERT(false);*/
+      }
     }
-  }
-  } while ((ticks < num_ticks) && (c.trap_id < 0));
+    for (int i=0; i<Z80_MAX_NUM_TRAPS; i++) {
+      if (c.trap_valid[i] && (c.PC==c.trap_addr[i])) {
+        trap_id=i;
+      }
+    }
+  } while ((ticks < num_ticks) && (trap_id < 0));
   c.PINS = pins;
+  c.trap_id = trap_id;
   *cpu = c;
   return ticks;
 }

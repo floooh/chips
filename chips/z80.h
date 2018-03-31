@@ -57,12 +57,35 @@
     ~~~C
     uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks)
     ~~~
-        Starts executing instructions until num_ticks is reached, returns
-        the number of executed ticks. The number of executed ticks will
-        be greater or equal to num_ticks because complete instructions
-        will be executed. During execution the tick callback will be
-        invoked one or multiple times (usually once per machine cycle, 
-        but also for 'filler ticks' or wait state ticks).
+        Starts executing instructions until num_ticks is reached or the PC
+        hits a trap, returns the number of executed ticks. The number of
+        executed ticks will be greater or equal to num_ticks (unless a trap
+        has been hit), because complete instructions will be executed. During
+        execution the tick callback will be invoked one or multiple times
+        (usually once per machine cycle, but also for 'filler ticks' or wait
+        state ticks). To check if a trap has been hit, test whether the 
+        z80_t.trap_id is >= 0.
+
+    ~~~C
+    void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr)
+    ~~~
+        Set a trap breakpoint at a 16-bit CPU address. Up to 8 trap breakpoints
+        can be set. After each instruction, the current PC will be checked
+        against all valid trap points, and if there is a match, z80_exec() will
+        return early, and the trap_id member of z80_t will be >= 0. This can be
+        used to set debugger breakpoints, or call out into native host system
+        code for other reasons (for instance replacing operating system functions
+        like loading game files).
+
+    ~~~C
+    void z80_clear_trap(z80_t* cpu, int trap_id)
+    ~~~
+        Clear a trap point.
+
+    ~~~C
+    bool z80_has_trap(z80_t* cpu, int trap_id)
+    ~~~
+        Return true if a trap has been set for the given trap_id.
 
     ## Macros
     ~~~C
@@ -339,15 +362,7 @@ typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
 #define Z80_ZF (1<<6)           /* zero */
 #define Z80_SF (1<<7)           /* sign */
 
-/* max number of trap points */
 #define Z80_MAX_NUM_TRAPS (8)
-
-/* a trap definition */
-typedef struct {
-    uint8_t* host_addr;
-    uint16_t addr;
-    uint8_t orig_byte;
-} _z80_trap_t;
 
 /* Z80 CPU state */
 typedef struct {
@@ -378,7 +393,8 @@ typedef struct {
     /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
     /* trap points */
-    _z80_trap_t traps[Z80_MAX_NUM_TRAPS];
+    bool trap_valid[Z80_MAX_NUM_TRAPS];
+    uint16_t trap_addr[Z80_MAX_NUM_TRAPS];
     /* index of trap hit, or -1 if no trap hit */
     int trap_id;
 } z80_t;
@@ -388,7 +404,7 @@ extern void z80_init(z80_t* cpu, z80_tick_t tick_cb);
 /* reset an existing z80 instance */
 extern void z80_reset(z80_t* cpu);
 /* set a trap point */
-extern void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr, uint8_t* host_addr);
+extern void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr);
 /* clear a trap point */
 extern void z80_clear_trap(z80_t* cpu, int trap_id);
 /* return true if a trap is valid */
@@ -428,18 +444,6 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-static inline bool _z80_check_trap(z80_t* c) {
-    const uint16_t pc = c->PC - 1;
-    for (int i = 0; i < Z80_MAX_NUM_TRAPS; i++) {
-        if (c->traps[i].host_addr && (c->traps[i].addr == pc)) {
-            c->trap_id = i;
-            c->PC -= 1;
-            return true;
-        }
-    }
-    return false;
-}
-
 #ifdef _MSC_VER
 #pragma warning (push)
 #pragma warning (disable: 4065) // switch statement contains 'default' but no 'case' labels
@@ -477,36 +481,23 @@ void z80_reset(z80_t* c) {
     c->ei_pending = false;
 }
 
-void z80_set_trap(z80_t* c, int trap_id, uint16_t addr, uint8_t* host_addr) {
+void z80_set_trap(z80_t* c, int trap_id, uint16_t addr) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT((trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
-    CHIPS_ASSERT(host_addr);
-    _z80_trap_t* trap = &c->traps[trap_id];
-    if (trap->host_addr) {
-        z80_clear_trap(c, trap_id);
-    }
-    trap->host_addr = host_addr;
-    trap->addr = addr;
-    trap->orig_byte = *host_addr;
-    *host_addr = 0x76; /* HALT instruction, this checks for traps */
+    c->trap_valid[trap_id] = true;
+    c->trap_addr[trap_id] = addr;
 }
 
 void z80_clear_trap(z80_t* c, int trap_id) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT((trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
-    CHIPS_ASSERT(c->traps[trap_id].host_addr);
-    _z80_trap_t* trap = &c->traps[trap_id];
-    *trap->host_addr = trap->orig_byte;
-    trap->host_addr = 0;
-    trap->addr = 0;
-    trap->orig_byte = 0;
+    c->trap_valid[trap_id] = false;
 }
 
 bool z80_has_trap(z80_t* c, int trap_id) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT((trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
-    _z80_trap_t* trap = &c->traps[trap_id];
-    return trap->host_addr != 0;
+    return c->trap_valid[trap_id];
 }
 
 #endif /* CHIPS_IMPL */

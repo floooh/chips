@@ -50,70 +50,70 @@
     ~~~C
     void m6502_init(m6502_t* cpu, m6502_desc_t* desc)
     ~~~
-    Initialize a m6502_t instance, the desc structure provides initialization
-    attributes:
-        ~~~C
-        typedef struct {
-            m6502_tick_t tick_cb;  // the CPU tick callback
-            bool bcd_disabled;      // set to true if BCD mode is disabled
-            m6510_in_t in_cb;       // optional port IO input callback (only on m6510)
-            m6510_out_t out_cb;     // optional port IO output callback (only on m6510)
-        } m6502_desc_t;
-        ~~~
+        Initialize a m6502_t instance, the desc structure provides initialization
+        attributes:
+            ~~~C
+            typedef struct {
+                m6502_tick_t tick_cb;  /    / the CPU tick callback
+                bool bcd_disabled;          // set to true if BCD mode is disabled
+                m6510_in_t in_cb;           // optional port IO input callback (only on m6510)
+                m6510_out_t out_cb;         // optional port IO output callback (only on m6510)
+                uint8_t m6510_io_pullup;    // IO port bits that are 1 when reading
+                uint8_t m6510_io_floating;  // unconnected IO port pins
+            } m6502_desc_t;
+            ~~~
 
-    To emulate a m6510 you must provide port IO callbacks in _in_cb_ and _out_cb_.
+        To emulate a m6510 you must provide port IO callbacks in _in_cb_ and _out_cb_,
+        and should initialize the m6510_io_pullup and m6510_io_floating members.
 
     ~~~C
     void m6502_reset(m6502_t* cpu)
     ~~~
-    Reset the m6502 instance.
+        Reset the m6502 instance.
 
     ~~~C
     uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks)
     ~~~
-    Execute instructions until the requested number of _ticks_ is reached,
-    or a trap has been hit. Return number of executed cycles. To check if a trap
-    has been hit, test the m6502_t.trap_id member on >= 0. 
-    During execution the tick callback will be called for each clock cycle
-    with the current CPU pin bitmask. The tick callback function must inspect
-    the pin bitmask, perform memory requests and if necessary update the
-    data bus pins. Finally the tick callback returns the (optionally
-    modified) pin bitmask. If the tick callback sets the RDY pin (1),
-    and the current tick is a read-access, the CPU will loop until the
-    RDY pin is (0). The RDY pin is automatically cleared before the
-    tick function is called for a read-access.
+        Execute instructions until the requested number of _ticks_ is reached,
+        or a trap has been hit. Return number of executed cycles. To check if a trap
+        has been hit, test the m6502_t.trap_id member on >= 0. 
+        During execution the tick callback will be called for each clock cycle
+        with the current CPU pin bitmask. The tick callback function must inspect
+        the pin bitmask, perform memory requests and if necessary update the
+        data bus pins. Finally the tick callback returns the (optionally
+        modified) pin bitmask. If the tick callback sets the RDY pin (1),
+        and the current tick is a read-access, the CPU will loop until the
+        RDY pin is (0). The RDY pin is automatically cleared before the
+        tick function is called for a read-access.
 
     ~~~C
     uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins)
     ~~~
-    For the m6510, call this function from inside the tick callback when the
-    CPU wants to access the special memory location 0 and 1 (these are mapped
-    to the IO port control registers of the m6510). m6510_iorq() may call the
-    input/output callback functions provided in m6510_init().
+        For the m6510, call this function from inside the tick callback when the
+        CPU wants to access the special memory location 0 and 1 (these are mapped
+        to the IO port control registers of the m6510). m6510_iorq() may call the
+        input/output callback functions provided in m6510_init().
 
     ~~~C
-    void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr, uint8_t* host_addr)
+    void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr)
     ~~~
-    Set a trap breakpoint at a 16-bit CPU address, and the corresponding
-    host memory location. Up to 8 trap breakpoints can be set.
-    This will replace the byte at host_addr with a BRK instruction (0x00).
-    When a BRK instruction is executed, the emulation will check against
-    all trap breakpoints, and if there is a match, m6502_exec() will
-    return early, and the trap_id member of m6502_t will be >= 0.
-    This can be used to set debugger breakpoints, or call out into 
-    native host system code for other reasons (for instance replacing
-    operating system functions like loading game files).
+        Set a trap breakpoint at a 16-bit CPU address. Up to 8 trap breakpoints
+        can be set. After each instruction, the current PC will be checked
+        against all valid trap points, and if there is a match, m6502_exec() will
+        return early, and the trap_id member of m6502_t will be >= 0. This can be
+        used to set debugger breakpoints, or call out into native host system
+        code for other reasons (for instance replacing operating system functions
+        like loading game files).
 
     ~~~C
     bool m6502_has_trap(m6502_t* cpu, int trap_id)
     ~~~
-    Return true if a trap with number _trap_id_ is currently set.
+        Return true if a trap with number _trap_id_ is currently set.
 
     ~~~C
     void m6502_clear_trap(m6502_t* cpu, int trap_id)
     ~~~
-    Clear the trap with number _trap_id_, this will write the original
-    byte back to the host_addr provided in m6502_set_trap()
+        Clear the trap with number _trap_id_.
 
     ## MIT License
 
@@ -212,13 +212,6 @@ typedef struct {
     uint8_t m6510_io_floating;  /* unconnected IO port pins */
 } m6502_desc_t;
 
-/* a trap definition */
-typedef struct {
-    uint8_t* host_addr;
-    uint16_t addr;
-    uint8_t orig_byte;
-} _m6502_trap_t;
-
 /* mutable tick state */
 typedef struct {
     uint64_t PINS;
@@ -246,8 +239,9 @@ typedef struct {
     uint8_t io_floating;
     uint8_t io_drive;
 
-    /* trap stuff */
-    _m6502_trap_t traps[M6502_MAX_NUM_TRAPS];
+    /* trap points */
+    bool trap_valid[M6502_MAX_NUM_TRAPS];
+    uint16_t trap_addr[M6502_MAX_NUM_TRAPS];
     int trap_id;        /* index of trap hit (-1 if no trap) */
 } m6502_t;
 
@@ -256,7 +250,7 @@ extern void m6502_init(m6502_t* cpu, m6502_desc_t* desc);
 /* reset an existing m6502 instance */
 extern void m6502_reset(m6502_t* cpu);
 /* set a trap point */
-extern void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr, uint8_t* host_addr);
+extern void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr);
 /* clear a trap point */
 extern void m6502_clear_trap(m6502_t* cpu, int trap_id);
 /* return true if a trap is valid */
@@ -423,18 +417,6 @@ static inline void _m6502_arr(_m6502_state_t* cpu) {
     }
 }
 
-static inline bool _m6502_check_trap(m6502_t* cpu, _m6502_state_t* state) {
-    const uint16_t pc = state->PC - 1;
-    for (int i = 0; i < M6502_MAX_NUM_TRAPS; i++) {
-        if (cpu->traps[i].host_addr && (cpu->traps[i].addr == pc)) {
-            state->PC -= 1;
-            cpu->trap_id = i;
-            return true;
-        }
-    }
-    return false;
-}
-
 #undef _M6502_NZ
 
 #include "_m6502_decoder.h"
@@ -468,36 +450,23 @@ void m6502_reset(m6502_t* c) {
     c->io_port = 0;
 }
 
-void m6502_set_trap(m6502_t* c, int trap_id, uint16_t addr, uint8_t* host_addr) {
+void m6502_set_trap(m6502_t* c, int trap_id, uint16_t addr) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
-    CHIPS_ASSERT(host_addr);
-    _m6502_trap_t* trap = &c->traps[trap_id];
-    if (trap->host_addr) {
-        m6502_clear_trap(c, trap_id);
-    }
-    trap->host_addr = host_addr;
-    trap->addr = addr;
-    trap->orig_byte = *host_addr;
-    *host_addr = 0; /* BRK instruction, this checks for traps */
+    c->trap_valid[trap_id] = true;
+    c->trap_addr[trap_id] = addr;
 }
 
 void m6502_clear_trap(m6502_t* c, int trap_id) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
-    CHIPS_ASSERT(c->traps[trap_id].host_addr);
-    _m6502_trap_t* trap = &c->traps[trap_id];
-    *trap->host_addr = trap->orig_byte;
-    trap->host_addr = 0;
-    trap->addr = 0;
-    trap->orig_byte = 0;
+    c->trap_valid[trap_id] = false;
 }
 
 bool m6502_has_trap(m6502_t* c, int trap_id) {
     CHIPS_ASSERT(c);
     CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
-    _m6502_trap_t* trap = &c->traps[trap_id];
-    return trap->host_addr != 0;
+    return c->trap_valid[trap_id];
 }
 
 /* only call this when accessing address 0 or 1 (M6510_CHECK_IO(pins) evaluates to true) */

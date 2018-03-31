@@ -208,7 +208,7 @@ def write_header():
     write_defines()
     l('uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {')
     l('  _m6502_state_t c = cpu->state;')
-    l('  cpu->trap_id = -1;')
+    l('  int trap_id = -1;')
     l('  uint8_t l, h;')
     l('  uint16_t a, t;')
     l('  uint32_t ticks = 0;')
@@ -250,12 +250,23 @@ def write_interrupt_handling():
     l('    }')
 
 #-------------------------------------------------------------------------------
+def write_trap_handling():
+    l('    for (int i=0; i<M6502_MAX_NUM_TRAPS; i++) {') 
+    l('      if (cpu->trap_valid[i] && (c.PC==cpu->trap_addr[i])) {')
+    l('        trap_id=i;') 
+    l('      }')
+    l('    }')
+
+
+#-------------------------------------------------------------------------------
 def write_footer():
     l('    }')
     write_interrupt_handling()
-    l('  } while ((ticks < num_ticks) && (cpu->trap_id < 0));')
+    write_trap_handling();
+    l('  } while ((ticks < num_ticks) && (trap_id < 0));')
     l('  c.PINS = pins;')
     l('  cpu->state = c;')
+    l('  cpu->trap_id = trap_id;')
     l('  return ticks;')
     l('}')
     write_undefines()
@@ -359,7 +370,6 @@ def i_brk(o):
     # this only covers the normal instruction version of brk, not
     # an interrupt acknowlegde brk!
     cmt(o, 'BRK')
-    o.src += 'if(_m6502_check_trap(cpu, &c)){break;}'
     o.src += '_RD();'
     o.src += 'c.PC++;'
     # write PC high byte to stack
