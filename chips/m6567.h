@@ -473,12 +473,12 @@ void m6567_reset(m6567_t* vic) {
 /*--- I/O requests -----------------------------------------------------------*/
 
 /* update the raster-interrupt line from ctrl_1 and raster register updates */
-static void _m6567_io_update_irq_line(_m6567_raster_unit_t* rs, uint8_t ctrl_1, uint8_t rast) {
+static inline void _m6567_io_update_irq_line(_m6567_raster_unit_t* rs, uint8_t ctrl_1, uint8_t rast) {
     rs->v_irqline = ((ctrl_1 & M6567_CTRL1_RST8)<<1) | rast;
 }
 
 /* update memory unit values after update mem_ptrs or ctrl_1 registers */
-static void _m6567_io_update_memory_unit(_m6567_memory_unit_t* m, uint8_t mem_ptrs, uint8_t ctrl_1) {
+static inline void _m6567_io_update_memory_unit(_m6567_memory_unit_t* m, uint8_t mem_ptrs, uint8_t ctrl_1) {
     /* c-access: addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
     m->c_addr_or = (mem_ptrs & 0xF0)<<6;
     /* g-access: addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
@@ -499,7 +499,7 @@ static void _m6567_io_update_memory_unit(_m6567_memory_unit_t* m, uint8_t mem_pt
 }
 
 /* update the border top/bottom position when updating csel */
-static void _m6567_io_update_border_rsel(_m6567_border_unit_t* b, uint8_t ctrl_1) {
+static inline void _m6567_io_update_border_rsel(_m6567_border_unit_t* b, uint8_t ctrl_1) {
     if (ctrl_1 & M6567_CTRL1_RSEL) {
         /* RSEL 1: 25 rows */
         b->top = _M6567_RSEL1_BORDER_TOP;
@@ -513,7 +513,7 @@ static void _m6567_io_update_border_rsel(_m6567_border_unit_t* b, uint8_t ctrl_1
 }
 
 /* update the border left/right position when updating csel */
-static void _m6567_io_update_border_csel(_m6567_border_unit_t* b, uint8_t ctrl_2) {
+static inline void _m6567_io_update_border_csel(_m6567_border_unit_t* b, uint8_t ctrl_2) {
     if (ctrl_2 & M6567_CTRL2_CSEL) {
         /* CSEL 1: 40 columns */
         b->left = _M6567_CSEL1_BORDER_LEFT;
@@ -527,7 +527,7 @@ static void _m6567_io_update_border_csel(_m6567_border_unit_t* b, uint8_t ctrl_2
 }
 
 /* updates the graphics sequencer display mode (0..7) from the ECM/BMM/MCM bits */
-static void _m6567_io_update_gunit_mode(_m6567_graphics_unit_t* gu, uint8_t ctrl_1, uint8_t ctrl_2) {
+static inline void _m6567_io_update_gunit_mode(_m6567_graphics_unit_t* gu, uint8_t ctrl_1, uint8_t ctrl_2) {
     gu->mode = ((ctrl_1&(M6567_CTRL1_ECM|M6567_CTRL1_BMM))|(ctrl_2&M6567_CTRL2_MCM))>>4;
 }
 
@@ -748,7 +748,7 @@ static inline void _m6567_gunit_tick(m6567_t* vic, uint8_t g_data) {
         vic->gunit.count--;
     }
     vic->gunit.outp = vic->gunit.shift;
-    if (1 == (vic->gunit.count & 1)) {
+    if (0 != (vic->gunit.count & 1)) {
         vic->gunit.outp2 = vic->gunit.shift;
     }
     vic->gunit.shift <<= 1;
@@ -762,8 +762,7 @@ static inline void _m6567_gunit_tick(m6567_t* vic, uint8_t g_data) {
     for the color multiplexer which selectes between the color
     produced by the graphics- and sprite-units
 */
-static inline uint32_t _m6567_gunit_decode_mode0(m6567_t* vic, uint8_t g_data) {
-    _m6567_gunit_tick(vic, g_data);
+static inline uint32_t _m6567_gunit_decode_mode0(m6567_t* vic) {
     if (vic->gunit.outp & 0x80) {
         /* foreground color (alpha bits set) */
         return _m6567_colors[(vic->gunit.c_data>>8)&0xF];
@@ -774,8 +773,7 @@ static inline uint32_t _m6567_gunit_decode_mode0(m6567_t* vic, uint8_t g_data) {
     }
 }
 
-static inline uint32_t _m6567_gunit_decode_mode1(m6567_t* vic, uint8_t g_data) {
-    _m6567_gunit_tick(vic, g_data);
+static inline uint32_t _m6567_gunit_decode_mode1(m6567_t* vic) {
     /* only seven colors in multicolor mode */
     const uint32_t fg = _m6567_colors[(vic->gunit.c_data>>8) & 0x7];
     if (vic->gunit.c_data & (1<<11)) {
@@ -810,8 +808,7 @@ static inline uint32_t _m6567_gunit_decode_mode1(m6567_t* vic, uint8_t g_data) {
     }
 }
 
-static inline uint32_t _m6567_gunit_decode_mode2(m6567_t* vic, uint8_t g_data) {
-    _m6567_gunit_tick(vic, g_data);
+static inline uint32_t _m6567_gunit_decode_mode2(m6567_t* vic) {
     if (vic->gunit.outp & 0x80) {
         /* foreground pixel */
         return _m6567_colors[(vic->gunit.c_data >> 4) & 0xF];
@@ -822,8 +819,7 @@ static inline uint32_t _m6567_gunit_decode_mode2(m6567_t* vic, uint8_t g_data) {
     }
 }
 
-static inline uint32_t _m6567_gunit_decode_mode3(m6567_t* vic, uint8_t g_data) {
-    _m6567_gunit_tick(vic, g_data);
+static inline uint32_t _m6567_gunit_decode_mode3(m6567_t* vic) {
     /* shift 2 is only updated every 2 ticks */
     uint8_t bits = vic->gunit.outp2;
     /* half resolution multicolor char
@@ -841,8 +837,7 @@ static inline uint32_t _m6567_gunit_decode_mode3(m6567_t* vic, uint8_t g_data) {
     }
 }
 
-static inline uint32_t _m6567_gunit_decode_mode4(m6567_t* vic, uint8_t g_data) {
-    _m6567_gunit_tick(vic, g_data);
+static inline uint32_t _m6567_gunit_decode_mode4(m6567_t* vic) {
     if (vic->gunit.outp & 0x80) {
         /* foreground color as usual bits 8..11 of c_data */
         return _m6567_colors[(vic->gunit.c_data>>8) & 0xF];
@@ -990,76 +985,21 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
     */
     if (!vic->brd.vert) {
         const uint8_t mdp = vic->reg.mdp;
-        switch (vic->gunit.mode) {
-            case 0:
-                /* ECM/BMM/MCM=000, standard text mode */
-                for (int i = 0; i < 8; i++) {
-                    uint32_t sc = _m6567_sunit_decode(vic);
-                    uint32_t bmc = _m6567_gunit_decode_mode0(vic, g_data);
-                    _m6567_test_mob_data_col(vic, bmc, sc);
-                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
-                }
-                break;
-            case 1:
-                /* ECM/BMM/MCM=001, multicolor text mode */
-                for (int i = 0; i < 8; i++) {
-                    uint32_t sc = _m6567_sunit_decode(vic);
-                    uint32_t bmc = _m6567_gunit_decode_mode1(vic, g_data);
-                    _m6567_test_mob_data_col(vic, bmc, sc);
-                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
-                }
-                break;
-            case 2:
-                /* ECM/BMM/MCM=010, standard bitmap mode */
-                for (int i = 0; i < 8; i++) {
-                    uint32_t sc = _m6567_sunit_decode(vic);
-                    uint32_t bmc = _m6567_gunit_decode_mode2(vic, g_data);
-                    _m6567_test_mob_data_col(vic, bmc, sc);
-                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
-                }
-                break;
-            case 3:
-                /* ECM/BMM/MCM=011, multicolor bitmap mode */
-                for (int i = 0; i < 8; i++) {
-                    uint32_t sc = _m6567_sunit_decode(vic);
-                    uint32_t bmc = _m6567_gunit_decode_mode3(vic, g_data);
-                    _m6567_test_mob_data_col(vic, bmc, sc);
-                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
-                }
-                break;
-            case 4:
-                /* ECM/BMM/MCM=100, ECM text mode */
-                for (int i = 0; i < 8; i++) {
-                    uint32_t sc = _m6567_sunit_decode(vic);
-                    uint32_t bmc = _m6567_gunit_decode_mode4(vic, g_data);
-                    _m6567_test_mob_data_col(vic, bmc, sc);
-                    dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
-                }
-                break;
-
-            case 5:
-                /* ECM/BMM/MCM=101 invalid mode */
-                /* FIXME! */
-                for (int i = 0; i < 8; i++) {
-                    dst[i] = 0xFFFF00FF;
-                }
-                break;
-            
-            case 6:
-                /* ECM/BMM/MCM=110 invalid mode */
-                /* FIXME! */
-                for (int i = 0; i < 8; i++) {
-                    dst[i] = 0xFFFF0000;
-                }
-                break;
-
-            case 7:
-                /* ECM/BMM/MCM=111 invalid mode */
-                /* FIXME! */
-                for (int i = 0; i < 8; i++) {
-                    dst[i] = 0xFF00FF00;
-                }
-                break;
+        const uint8_t mode = vic->gunit.mode;
+        uint32_t bmc = 0;
+        for (int i = 0; i < 8; i++) {
+            uint32_t sc = _m6567_sunit_decode(vic);
+            _m6567_gunit_tick(vic, g_data);
+            switch (mode) {
+                case 0: bmc = _m6567_gunit_decode_mode0(vic); break;
+                case 1: bmc = _m6567_gunit_decode_mode1(vic); break;
+                case 2: bmc = _m6567_gunit_decode_mode2(vic); break;
+                case 3: bmc = _m6567_gunit_decode_mode3(vic); break;
+                case 4: bmc = _m6567_gunit_decode_mode4(vic);
+                /* default: invalid mode => black */
+            }
+            _m6567_test_mob_data_col(vic, bmc, sc);
+            dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
         }
     }
     /*
@@ -1082,6 +1022,37 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
         const uint32_t c = vic->brd.bc_rgba8;
         for (int i = 0; i < 8; i++) {
             dst[i] = c;
+        }
+    }
+}
+
+/* decode the next 8 pixels as debug visualization */
+static void _m6567_decode_pixels_debug(m6567_t* vic, uint8_t g_data, bool ba_pin, uint32_t* dst) {
+    _m6567_decode_pixels(vic, g_data, dst);
+    dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
+    uint32_t mask = 0x00000000;
+    if (vic->rs.badline) {
+        mask = 0x0000007F;
+    }
+    if (ba_pin) {
+        mask = 0x000000FF;
+    }
+    /* sprites */
+    for (int si = 0; si < 8; si++) {
+        const _m6567_sprite_unit_t* su = &vic->sunit[si];
+        if (su->disp_enabled) {
+            if (_M6567_HTICK_RANGE(su->h_first, su->h_last)) {
+                mask |= 0x00880088;
+            }
+        }
+    }
+    /* main interrupt bit */
+    if (vic->reg.int_latch & (1<<7)) {
+        mask |= 0x00008800;
+    }
+    if (mask != 0) {
+        for (int i = 0; i < 8; i++) {
+            dst[i] = (dst[i] & 0xFF888888) | mask;
         }
     }
 }
@@ -1246,9 +1217,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     /* 1. The expansion flip flip is set as long as the bit in MxYE in register
         $d017 corresponding to the sprite is cleared.
         (FIXME: this is currently only done when updating the MxYE register)
-    */
-
-    /*
        2. If the MxYE bit is set in the first phase of cycle 55, the expansion
         flip flop is inverted.
        3. In the first phases of cycle 55 and 56, the VIC checks for every sprite
@@ -1470,42 +1438,16 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
 
     /*--- decode pixels into framebuffer -------------------------------------*/
     {
+        int x, y, w;
         if (vic->debug_vis) {
-            /*=== DEBUG VISUALIZATION ===*/
-            const int x = vic->rs.h_count;
-            const int y = vic->rs.v_count;
-            const int w = vic->rs.h_total + 1;
+            x = vic->rs.h_count;
+            y = vic->rs.v_count;
+            w = vic->rs.h_total + 1;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
-            _m6567_decode_pixels(vic, g_data, dst);
-            dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
-            uint32_t mask = 0x00000000;
-            if (vic->rs.badline) {
-                mask = 0x0000007F;
-            }
-            if (ba_pin) {
-                mask = 0x000000FF;
-            }
-            /* sprites */
-            for (int si = 0; si < 8; si++) {
-                const _m6567_sprite_unit_t* su = &vic->sunit[si];
-                if (su->disp_enabled) {
-                    if (_M6567_HTICK_RANGE(su->h_first, su->h_last)) {
-                        mask |= 0x00880088;
-                    }
-                }
-            }
-            /* main interrupt bit */
-            if (vic->reg.int_latch & (1<<7)) {
-                mask |= 0x00008800;
-            }
-            if (mask != 0) {
-                for (int i = 0; i < 8; i++) {
-                    dst[i] = (dst[i] & 0xFF888888) | mask;
-                }
-            }
+            _m6567_decode_pixels_debug(vic, g_data, ba_pin, dst);
         }
         else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
-                (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
+                 (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
         {
             const int x = vic->crt.x - vic->crt.vis_x0;
             const int y = vic->crt.y - vic->crt.vis_y0;
