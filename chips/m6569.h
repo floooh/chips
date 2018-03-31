@@ -1,8 +1,8 @@
 #pragma once
 /*#
-    # m6567.h
+    # m6569.h
 
-    MOS Technology 6567 / 6569 emulator (aka VIC-II)
+    MOS Technology 6569 emulator (aka VIC-II for PAL-B)
 
     Do this:
     ~~~C
@@ -24,8 +24,8 @@
     *    RW --->|           |...      *
     *   IRQ <---|           |---> A13 *
     *    BA <---|           |         *
-    *   AEC <---|   M6567   |<--> D0  *
-    *           |   M6569   |...      *
+    *   AEC <---|   M6569   |<--> D0  *
+    *           |           |...      *
     *           |           |<--> D7  *
     *           |           |<--- D8  *
     *           |           |...      *
@@ -69,65 +69,57 @@ extern "C" {
 #endif
 
 /* address bus lines (with CS active A0..A6 is register address) */
-#define M6567_A0    (1ULL<<0)
-#define M6567_A1    (1ULL<<1)
-#define M6567_A2    (1ULL<<2)
-#define M6567_A3    (1ULL<<3)
-#define M6567_A4    (1ULL<<4)
-#define M6567_A5    (1ULL<<5)
-#define M6567_A6    (1ULL<<6)
-#define M6567_A7    (1ULL<<7)
-#define M6567_A8    (1ULL<<8)
-#define M6567_A9    (1ULL<<9)
-#define M6567_A10   (1ULL<<10)
-#define M6567_A11   (1ULL<<11)
-#define M6567_A12   (1ULL<<12)
-#define M6567_A13   (1ULL<<13)
+#define M6569_A0    (1ULL<<0)
+#define M6569_A1    (1ULL<<1)
+#define M6569_A2    (1ULL<<2)
+#define M6569_A3    (1ULL<<3)
+#define M6569_A4    (1ULL<<4)
+#define M6569_A5    (1ULL<<5)
+#define M6569_A6    (1ULL<<6)
+#define M6569_A7    (1ULL<<7)
+#define M6569_A8    (1ULL<<8)
+#define M6569_A9    (1ULL<<9)
+#define M6569_A10   (1ULL<<10)
+#define M6569_A11   (1ULL<<11)
+#define M6569_A12   (1ULL<<12)
+#define M6569_A13   (1ULL<<13)
 
 /* data bus pins D0..D7 */
-#define M6567_D0    (1ULL<<16)
-#define M6567_D1    (1ULL<<17)
-#define M6567_D2    (1ULL<<18)
-#define M6567_D3    (1ULL<<19)
-#define M6567_D4    (1ULL<<20)
-#define M6567_D5    (1ULL<<21)
-#define M6567_D6    (1ULL<<22)
-#define M6567_D7    (1ULL<<23)
+#define M6569_D0    (1ULL<<16)
+#define M6569_D1    (1ULL<<17)
+#define M6569_D2    (1ULL<<18)
+#define M6569_D3    (1ULL<<19)
+#define M6569_D4    (1ULL<<20)
+#define M6569_D5    (1ULL<<21)
+#define M6569_D6    (1ULL<<22)
+#define M6569_D7    (1ULL<<23)
 
 /* shared control pins */
-#define M6567_RW    (1ULL<<24)      /* shared with m6502 CPU */
-#define M6567_IRQ   (1ULL<<26)      /* shared with m6502 CPU */
-#define M6567_BA    (1ULL<<28)      /* shared with m6502 RDY */
-#define M6567_AEC   (1ULL<<29)      /* shared with m6510 AEC */
+#define M6569_RW    (1ULL<<24)      /* shared with m6502 CPU */
+#define M6569_IRQ   (1ULL<<26)      /* shared with m6502 CPU */
+#define M6569_BA    (1ULL<<28)      /* shared with m6502 RDY */
+#define M6569_AEC   (1ULL<<29)      /* shared with m6510 AEC */
 
-/* m6567 specific control pins */
-#define M6567_CS    (1ULL<<40)
+/* chip-specific control pins */
+#define M6569_CS    (1ULL<<40)
 
 /* number of registers */
-#define M6567_NUM_REGS (64)
+#define M6569_NUM_REGS (64)
 /* register address mask */
-#define M6567_REG_MASK (M6567_NUM_REGS-1)
+#define M6569_REG_MASK (M6569_NUM_REGS-1)
 /* number of sprites */
-#define M6567_NUM_MOBS (8)
+#define M6569_NUM_MOBS (8)
 
 /* extract 8-bit data bus from 64-bit pins */
-#define M6567_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define M6569_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define M6567_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+#define M6569_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
-/* memory fetch callback, used to feed pixel- and color-data into the m6567 */
-typedef uint16_t (*m6567_fetch_t)(uint16_t addr);
+/* memory fetch callback, used to feed pixel- and color-data into the m6569 */
+typedef uint16_t (*m6569_fetch_t)(uint16_t addr);
 
-/* chip subtypes */
-typedef enum {
-    M6567_TYPE_6567R8 = 0,      /* NTSC-M variant */
-    M6567_TYPE_6569,            /* PAL-B variant */
-} m6567_type_t;
-
-/* setup parameters for m6567_init() function */
+/* setup parameters for m6569_init() function */
 typedef struct {
-    /* chip subtype (default is NTSC type 6567R8) */
-    m6567_type_t type;
     /* pointer to RGBA8 framebuffer for generated image */
     uint32_t* rgba8_buffer;
     /* size of the RGBA framebuffer (must be at least 512x312) */
@@ -135,15 +127,15 @@ typedef struct {
     /* visible CRT area blitted to rgba8_buffer (in pixels) */
     uint16_t vis_x, vis_y, vis_w, vis_h;
     /* the memory-fetch callback */
-    m6567_fetch_t fetch_cb;
-} m6567_desc_t;
+    m6569_fetch_t fetch_cb;
+} m6569_desc_t;
 
 /* register bank */
 typedef struct {
     union {
-        uint8_t regs[M6567_NUM_REGS];
+        uint8_t regs[M6569_NUM_REGS];
         struct {
-            uint8_t mxy[M6567_NUM_MOBS][2];     /* sprite X/Y coords */
+            uint8_t mxy[M6569_NUM_MOBS][2];     /* sprite X/Y coords */
             uint8_t mx8;                        /* x coordinate MSBs */
             uint8_t ctrl_1;                     /* control register 1 */
             uint8_t raster;                     /* raster counter */
@@ -166,33 +158,33 @@ typedef struct {
             uint8_t unused[17];                 /* not writable, return 0xFF on read */
         };
     };
-} _m6567_registers_t;
+} _m6569_registers_t;
 
 /* control- and interrupt-register bits */
-#define M6567_CTRL1_RST8    (1<<7)
-#define M6567_CTRL1_ECM     (1<<6)
-#define M6567_CTRL1_BMM     (1<<5)
-#define M6567_CTRL1_DEN     (1<<4)
-#define M6567_CTRL1_RSEL    (1<<3)
-#define M6567_CTRL1_YSCROLL ((1<<2)|(1<<1)|(1<<0))
-#define M6567_CTRL2_RES     (1<<5)
-#define M6567_CTRL2_MCM     (1<<4)
-#define M6567_CTRL2_CSEL    (1<<3)
-#define M6567_CTRL2_XSCROLL ((1<<2)|(1<<1)|(1<<0))
-#define M6567_INT_IRQ       (1<<7)      /* int_latch: interrupt requested */
-#define M6567_INT_ILP       (1<<3)      /* int_latch: lightpen interrupt */
-#define M6567_INT_IMMC      (1<<2)      /* int_latch: mob/mob collision interrupt */
-#define M6567_INT_IMBC      (1<<1)      /* int_latch: mob/bitmap collision interrupt */
-#define M6567_INT_IRST      (1<<0)      /* int_latch: raster interrupt */
-#define M6567_INT_ELP       (1<<3)      /* int_mask: lightpen interrupt enabled */
-#define M6567_INT_EMMC      (1<<2)      /* int_mask: mob/mob collision interrupt enabled */
-#define M6567_INT_EMBC      (1<<1)      /* int_mask: mob/bitmap collision interrupt enabled */
-#define M6567_INT_ERST      (1<<0)      /* int_mask: raster interrupt enabled */
+#define M6569_CTRL1_RST8    (1<<7)
+#define M6569_CTRL1_ECM     (1<<6)
+#define M6569_CTRL1_BMM     (1<<5)
+#define M6569_CTRL1_DEN     (1<<4)
+#define M6569_CTRL1_RSEL    (1<<3)
+#define M6569_CTRL1_YSCROLL ((1<<2)|(1<<1)|(1<<0))
+#define M6569_CTRL2_RES     (1<<5)
+#define M6569_CTRL2_MCM     (1<<4)
+#define M6569_CTRL2_CSEL    (1<<3)
+#define M6569_CTRL2_XSCROLL ((1<<2)|(1<<1)|(1<<0))
+#define M6569_INT_IRQ       (1<<7)      /* int_latch: interrupt requested */
+#define M6569_INT_ILP       (1<<3)      /* int_latch: lightpen interrupt */
+#define M6569_INT_IMMC      (1<<2)      /* int_latch: mob/mob collision interrupt */
+#define M6569_INT_IMBC      (1<<1)      /* int_latch: mob/bitmap collision interrupt */
+#define M6569_INT_IRST      (1<<0)      /* int_latch: raster interrupt */
+#define M6569_INT_ELP       (1<<3)      /* int_mask: lightpen interrupt enabled */
+#define M6569_INT_EMMC      (1<<2)      /* int_mask: mob/mob collision interrupt enabled */
+#define M6569_INT_EMBC      (1<<1)      /* int_mask: mob/bitmap collision interrupt enabled */
+#define M6569_INT_ERST      (1<<0)      /* int_mask: raster interrupt enabled */
 
 /* raster unit state */
 typedef struct {
-    uint16_t h_count, h_total;
-    uint16_t v_count, v_total;
+    uint16_t h_count;
+    uint16_t v_count;
     uint16_t v_irqline;     /* raster interrupt line, updated when ctrl_1 or raster is written */
     uint16_t sh_count;      /* separate counter for sprite, reset at h_count=55 */
     uint16_t vc;            /* 10-bit video counter */
@@ -201,7 +193,7 @@ typedef struct {
     bool display_state;             /* true: in display state, false: in idle state */
     bool badline;                   /* true when the badline state is active */
     bool frame_badlines_enabled;    /* true when badlines are enabled in frame */
-} _m6567_raster_unit_t;
+} _m6569_raster_unit_t;
 
 /* address generator / memory interface state */
 typedef struct {
@@ -210,14 +202,14 @@ typedef struct {
     uint16_t g_addr_or;     /* OR-mask for g-accesses, computed from ECM bit */
     uint16_t i_addr;        /* address for i-accesses, 0x3FFF or 0x39FF (if ECM bit set) */
     uint16_t p_addr_or;     /* OR-mask for p-accesses */
-    m6567_fetch_t fetch_cb; /* memory-fetch callback */
-} _m6567_memory_unit_t;
+    m6569_fetch_t fetch_cb; /* memory-fetch callback */
+} _m6569_memory_unit_t;
 
 /* video matrix state */
 typedef struct {
     uint8_t vmli;           /* 6-bit 'vmli' video-matrix line buffer index */
     uint16_t line[64];      /* 40x 8+4 bits line buffer (64 items because vmli is a 6-bit ctr) */
-} _m6567_video_matrix_t;
+} _m6569_video_matrix_t;
 
 /* border unit state */
 typedef struct {
@@ -225,7 +217,7 @@ typedef struct {
     bool main;          /* main border flip-flop */
     bool vert;          /* vertical border flip flop */
     uint32_t bc_rgba8;  /* border color as RGBA8, udpated when border color register is updated */
-} _m6567_border_unit_t;
+} _m6569_border_unit_t;
 
 /* CRT state tracking */
 typedef struct {
@@ -233,7 +225,7 @@ typedef struct {
     uint16_t vis_x0, vis_y0, vis_x1, vis_y1;  /* the visible area */
     uint16_t vis_w, vis_h;      /* width of visible area */
     uint32_t* rgba8_buffer;
-} _m6567_crt_t;
+} _m6569_crt_t;
 
 /* graphics sequencer state */
 typedef struct {
@@ -245,7 +237,7 @@ typedef struct {
     uint8_t outp2;              /* current output byte at half frequency (bits 7 and 6) */
     uint16_t c_data;            /* loaded from video matrix line buffer */
     uint32_t bg_rgba8[4];       /* background colors as RGBA8 */
-} _m6567_graphics_unit_t;
+} _m6569_graphics_unit_t;
 
 /* sprite sequencer state */
 typedef struct {
@@ -271,34 +263,33 @@ typedef struct {
                                    the alpha channel is cleared and used as bitmask for sprites
                                    which produced a color
                                 */
-} _m6567_sprite_unit_t;
+} _m6569_sprite_unit_t;
 
-/* the m6567 state structure */
+/* the m6569 state structure */
 typedef struct {
-    m6567_type_t type;
     bool debug_vis;             /* toggle this to switch debug visualization on/off */
-    _m6567_registers_t reg;
-    _m6567_raster_unit_t rs;
-    _m6567_crt_t crt;
-    _m6567_border_unit_t brd;
-    _m6567_memory_unit_t mem;
-    _m6567_video_matrix_t vm;
-    _m6567_graphics_unit_t gunit;
-    _m6567_sprite_unit_t sunit[8];
-} m6567_t;
+    _m6569_registers_t reg;
+    _m6569_raster_unit_t rs;
+    _m6569_crt_t crt;
+    _m6569_border_unit_t brd;
+    _m6569_memory_unit_t mem;
+    _m6569_video_matrix_t vm;
+    _m6569_graphics_unit_t gunit;
+    _m6569_sprite_unit_t sunit[8];
+} m6569_t;
 
-/* initialize a new m6567_t instance */
-extern void m6567_init(m6567_t* vic, m6567_desc_t* desc);
-/* reset a m6567_t instance */
-extern void m6567_reset(m6567_t* vic);
+/* initialize a new m6569_t instance */
+extern void m6569_init(m6569_t* vic, m6569_desc_t* desc);
+/* reset a m6569_t instance */
+extern void m6569_reset(m6569_t* vic);
 /* get the visible display size in pixels (different for PAL/NTSC) */
-extern void m6567_display_size(m6567_t* vic, int* out_width, int* out_height);
-/* read/write m6567 registers */
-extern uint64_t m6567_iorq(m6567_t* vic, uint64_t pins);
-/* tick the m6567_y instance */
-extern uint64_t m6567_tick(m6567_t* vic, uint64_t pins);
+extern void m6569_display_size(m6569_t* vic, int* out_width, int* out_height);
+/* read/write m6569 registers */
+extern uint64_t m6569_iorq(m6569_t* vic, uint64_t pins);
+/* tick the m6569_y instance */
+extern uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
 /* get 32-bit RGBA8 value from color index (0..15) */
-extern uint32_t m6567_color(int i);
+extern uint32_t m6569_color(int i);
 
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -316,28 +307,28 @@ extern uint32_t m6567_color(int i);
 /*
     color palette (see: http://unusedino.de/ec64/technical/misc/vic656x/colors/)
 */
-#define _M6567_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
-static const uint32_t _m6567_colors[16] = {
-    _M6567_RGBA8(0x00,0x00,0x00),     /* 0: black */
-    _M6567_RGBA8(0xFF,0xFF,0xFF),     /* 1: white */
-    _M6567_RGBA8(0x68,0x37,0x2B),     /* 2: red */
-    _M6567_RGBA8(0x70,0xA4,0xB2),     /* 3: cyan */
-    _M6567_RGBA8(0x6F,0x3D,0x86),     /* 4: purple */
-    _M6567_RGBA8(0x58,0x8D,0x43),     /* 5: green */
-    _M6567_RGBA8(0x35,0x28,0x79),     /* 6: blue */
-    _M6567_RGBA8(0xB8,0xC7,0x6F),     /* 7: yellow */
-    _M6567_RGBA8(0x6F,0x4F,0x25),     /* 8: orange */
-    _M6567_RGBA8(0x43,0x39,0x00),     /* 9: brown */
-    _M6567_RGBA8(0x9A,0x67,0x59),     /* A: light red */
-    _M6567_RGBA8(0x44,0x44,0x44),     /* B: dark grey */
-    _M6567_RGBA8(0x6C,0x6C,0x6C),     /* C: grey */
-    _M6567_RGBA8(0x9A,0xD2,0x84),     /* D: light green */
-    _M6567_RGBA8(0x6C,0x5E,0xB5),     /* E: light blue */
-    _M6567_RGBA8(0x95,0x95,0x95)      /* F: light grey */
+#define _M6569_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
+static const uint32_t _m6569_colors[16] = {
+    _M6569_RGBA8(0x00,0x00,0x00),     /* 0: black */
+    _M6569_RGBA8(0xFF,0xFF,0xFF),     /* 1: white */
+    _M6569_RGBA8(0x68,0x37,0x2B),     /* 2: red */
+    _M6569_RGBA8(0x70,0xA4,0xB2),     /* 3: cyan */
+    _M6569_RGBA8(0x6F,0x3D,0x86),     /* 4: purple */
+    _M6569_RGBA8(0x58,0x8D,0x43),     /* 5: green */
+    _M6569_RGBA8(0x35,0x28,0x79),     /* 6: blue */
+    _M6569_RGBA8(0xB8,0xC7,0x6F),     /* 7: yellow */
+    _M6569_RGBA8(0x6F,0x4F,0x25),     /* 8: orange */
+    _M6569_RGBA8(0x43,0x39,0x00),     /* 9: brown */
+    _M6569_RGBA8(0x9A,0x67,0x59),     /* A: light red */
+    _M6569_RGBA8(0x44,0x44,0x44),     /* B: dark grey */
+    _M6569_RGBA8(0x6C,0x6C,0x6C),     /* C: grey */
+    _M6569_RGBA8(0x9A,0xD2,0x84),     /* D: light green */
+    _M6569_RGBA8(0x6C,0x5E,0xB5),     /* E: light blue */
+    _M6569_RGBA8(0x95,0x95,0x95)      /* F: light grey */
 };
 
 /* valid register bits */
-static const uint8_t _m6567_reg_mask[M6567_NUM_REGS] = {
+static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,     /* mob 0..3 xy */
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,     /* mob 4..7 xy */
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,     /* msbx, ctrl1, raster, lpx, lpy, mob enabled */
@@ -357,39 +348,30 @@ static const uint8_t _m6567_reg_mask[M6567_NUM_REGS] = {
 };
 
 /* internal implementation constants */
-#define _M6567_HTOTAL               (62)    /* 63 cycles per line (PAL) */
-#define _M6567_HRETRACEPOS          (3)     /* start of horizontal beam retrace */
-#define _M6567_VTOTAL               (311)   /* 312 lines total (PAL) */
-#define _M6567_VRETRACEPOS          (303)   /* start of vertical beam retrace */
-
-#define _M6567_RSEL1_BORDER_TOP     (51)    /* top border when RSEL=1 (25 rows) */
-#define _M6567_RSEL1_BORDER_BOTTOM  (251)   /* bottom border when RSEL=1 */
-#define _M6567_RSEL0_BORDER_TOP     (55)    /* top border when RSEL=0 (24 rows) */
-#define _M6567_RSEL0_BORDER_BOTTOM  (247)   /* bottom border when RSEL=0 (24 rows) */
-#define _M6567_CSEL1_BORDER_LEFT    (15)    /* left border when CSEL=1 (40 columns) */
-#define _M6567_CSEL1_BORDER_RIGHT   (55)    /* right border when CSEL=1 */
-#define _M6567_CSEL0_BORDER_LEFT    (16)    /* left border when CSEL=0 (38 columns) */
-#define _M6567_CSEL0_BORDER_RIGHT   (54)    /* right border when CSEL=0 */
+#define _M6569_HTOTAL               (62)    /* 63 cycles per line (PAL) */
+#define _M6569_HRETRACEPOS          (3)     /* start of horizontal beam retrace */
+#define _M6569_VTOTAL               (311)   /* 312 lines total (PAL) */
+#define _M6569_VRETRACEPOS          (303)   /* start of vertical beam retrace */
+#define _M6569_RSEL1_BORDER_TOP     (51)    /* top border when RSEL=1 (25 rows) */
+#define _M6569_RSEL1_BORDER_BOTTOM  (251)   /* bottom border when RSEL=1 */
+#define _M6569_RSEL0_BORDER_TOP     (55)    /* top border when RSEL=0 (24 rows) */
+#define _M6569_RSEL0_BORDER_BOTTOM  (247)   /* bottom border when RSEL=0 (24 rows) */
+#define _M6569_CSEL1_BORDER_LEFT    (15)    /* left border when CSEL=1 (40 columns) */
+#define _M6569_CSEL1_BORDER_RIGHT   (55)    /* right border when CSEL=1 */
+#define _M6569_CSEL0_BORDER_LEFT    (16)    /* left border when CSEL=0 (38 columns) */
+#define _M6569_CSEL0_BORDER_RIGHT   (54)    /* right border when CSEL=0 */
 
 /* internal helper macros to check for horizontal ticks with coordinates 
 used here: http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt
 */
-#define _M6567_HTICK(t)             (vic->rs.h_count == (t))
-#define _M6567_HTICK_GE(t)          (vic->rs.h_count >= (t))
-#define _M6567_HTICK_RANGE(t0,t1)   ((vic->rs.h_count >= (t0)) && (vic->rs.h_count <= (t1)))
-#define _M6567_RAST(r)              (vic->rs.v_count == (r))
-#define _M6567_RAST_RANGE(r0,r1)    ((vic->rs.v_count >= (r0)) && (vic->rs.v_count <= (r1)))
+#define _M6569_HTICK(t)             (vic->rs.h_count == (t))
+#define _M6569_HTICK_GE(t)          (vic->rs.h_count >= (t))
+#define _M6569_HTICK_RANGE(t0,t1)   ((vic->rs.h_count >= (t0)) && (vic->rs.h_count <= (t1)))
+#define _M6569_RAST(r)              (vic->rs.v_count == (r))
+#define _M6569_RAST_RANGE(r0,r1)    ((vic->rs.v_count >= (r0)) && (vic->rs.v_count <= (r1)))
 
 /*--- init -------------------------------------------------------------------*/
-static void _m6567_init_raster_unit(_m6567_raster_unit_t* r, m6567_desc_t* desc) {
-    /* only allow the PAL version for now */
-    CHIPS_ASSERT(desc->type == M6567_TYPE_6569);
-    r->h_total = _M6567_HTOTAL;
-    r->v_total = _M6567_VTOTAL;
-    CHIPS_ASSERT(desc->rgba8_buffer_size >= (r->h_total*8*r->v_total*sizeof(uint32_t)));
-}
-
-static void _m6567_init_crt(_m6567_crt_t* crt, m6567_desc_t* desc) {
+static void _m6569_init_crt(_m6569_crt_t* crt, m6569_desc_t* desc) {
     /* vis area horizontal coords must be multiple of 8 */
     CHIPS_ASSERT((desc->vis_x & 7) == 0);
     CHIPS_ASSERT((desc->vis_w & 7) == 0);
@@ -402,22 +384,20 @@ static void _m6567_init_crt(_m6567_crt_t* crt, m6567_desc_t* desc) {
     crt->vis_y1 = crt->vis_y0 + crt->vis_h;
 }
 
-void m6567_init(m6567_t* vic, m6567_desc_t* desc) {
+void m6569_init(m6569_t* vic, m6569_desc_t* desc) {
     CHIPS_ASSERT(vic && desc);
-    CHIPS_ASSERT((desc->type == M6567_TYPE_6567R8) || (desc->type == M6567_TYPE_6569));
+    CHIPS_ASSERT(desc->rgba8_buffer_size >= (_M6569_HTOTAL*8*_M6569_VTOTAL*sizeof(uint32_t)));
     memset(vic, 0, sizeof(*vic));
-    vic->type = desc->type;
-    _m6567_init_raster_unit(&vic->rs, desc);
-    _m6567_init_crt(&vic->crt, desc);
+    _m6569_init_crt(&vic->crt, desc);
     vic->mem.fetch_cb = desc->fetch_cb;
 }
 
 /*--- reset ------------------------------------------------------------------*/
-static void _m6567_reset_register_bank(_m6567_registers_t* r) {
+static void _m6569_reset_register_bank(_m6569_registers_t* r) {
     memset(r, 0, sizeof(*r));
 }
 
-static void _m6567_reset_raster_unit(_m6567_raster_unit_t* r) {
+static void _m6569_reset_raster_unit(_m6569_raster_unit_t* r) {
     r->h_count = r->v_count = 0;
     r->sh_count = 0;
     r->v_irqline = 0;
@@ -428,7 +408,7 @@ static void _m6567_reset_raster_unit(_m6567_raster_unit_t* r) {
     r->frame_badlines_enabled = false;
 }
 
-static void _m6567_reset_memory_unit(_m6567_memory_unit_t* m) {
+static void _m6569_reset_memory_unit(_m6569_memory_unit_t* m) {
     m->c_addr_or = 0;
     m->g_addr_and = 0;
     m->g_addr_or = 0;
@@ -436,49 +416,49 @@ static void _m6567_reset_memory_unit(_m6567_memory_unit_t* m) {
     m->p_addr_or = 0;
 }
 
-static void _m6567_reset_video_matrix_unit(_m6567_video_matrix_t* vm) {
+static void _m6569_reset_video_matrix_unit(_m6569_video_matrix_t* vm) {
     memset(vm, 0, sizeof(*vm));
 }
 
-static void _m6567_reset_graphics_unit(_m6567_graphics_unit_t* gu) {
+static void _m6569_reset_graphics_unit(_m6569_graphics_unit_t* gu) {
     memset(gu, 0, sizeof(*gu));
 }
 
-static void _m6567_reset_sprite_unit(_m6567_sprite_unit_t* su) {
+static void _m6569_reset_sprite_unit(_m6569_sprite_unit_t* su) {
     memset(su, 0, sizeof(*su));
 }
 
-static void _m6567_reset_border_unit(_m6567_border_unit_t* b) {
+static void _m6569_reset_border_unit(_m6569_border_unit_t* b) {
     b->main = b->vert = false;
 }
 
-static void _m6567_reset_crt(_m6567_crt_t* c) {
+static void _m6569_reset_crt(_m6569_crt_t* c) {
     c->x = c->y = 0;
 }
 
-void m6567_reset(m6567_t* vic) {
+void m6569_reset(m6569_t* vic) {
     CHIPS_ASSERT(vic);
-    _m6567_reset_register_bank(&vic->reg);
-    _m6567_reset_raster_unit(&vic->rs);
-    _m6567_reset_crt(&vic->crt);
-    _m6567_reset_border_unit(&vic->brd);
-    _m6567_reset_memory_unit(&vic->mem);
-    _m6567_reset_video_matrix_unit(&vic->vm);
-    _m6567_reset_graphics_unit(&vic->gunit);
+    _m6569_reset_register_bank(&vic->reg);
+    _m6569_reset_raster_unit(&vic->rs);
+    _m6569_reset_crt(&vic->crt);
+    _m6569_reset_border_unit(&vic->brd);
+    _m6569_reset_memory_unit(&vic->mem);
+    _m6569_reset_video_matrix_unit(&vic->vm);
+    _m6569_reset_graphics_unit(&vic->gunit);
     for (int i = 0; i < 8; i++) {
-        _m6567_reset_sprite_unit(&(vic->sunit[i]));
+        _m6569_reset_sprite_unit(&(vic->sunit[i]));
     }
 }
 
 /*--- I/O requests -----------------------------------------------------------*/
 
 /* update the raster-interrupt line from ctrl_1 and raster register updates */
-static inline void _m6567_io_update_irq_line(_m6567_raster_unit_t* rs, uint8_t ctrl_1, uint8_t rast) {
-    rs->v_irqline = ((ctrl_1 & M6567_CTRL1_RST8)<<1) | rast;
+static inline void _m6569_io_update_irq_line(_m6569_raster_unit_t* rs, uint8_t ctrl_1, uint8_t rast) {
+    rs->v_irqline = ((ctrl_1 & M6569_CTRL1_RST8)<<1) | rast;
 }
 
 /* update memory unit values after update mem_ptrs or ctrl_1 registers */
-static inline void _m6567_io_update_memory_unit(_m6567_memory_unit_t* m, uint8_t mem_ptrs, uint8_t ctrl_1) {
+static inline void _m6569_io_update_memory_unit(_m6569_memory_unit_t* m, uint8_t mem_ptrs, uint8_t ctrl_1) {
     /* c-access: addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
     m->c_addr_or = (mem_ptrs & 0xF0)<<6;
     /* g-access: addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0| */
@@ -492,48 +472,48 @@ static inline void _m6567_io_update_memory_unit(_m6567_memory_unit_t* m, uint8_t
         address lines 9 and 10 low without any other changes to the
         addressing scheme"
     */
-    if (ctrl_1 & M6567_CTRL1_ECM) {
+    if (ctrl_1 & M6569_CTRL1_ECM) {
         m->g_addr_and &= ~((1<<10)|(1<<9));
         m->i_addr &= ~((1<<10)|(1<<9));
     }
 }
 
 /* update the border top/bottom position when updating csel */
-static inline void _m6567_io_update_border_rsel(_m6567_border_unit_t* b, uint8_t ctrl_1) {
-    if (ctrl_1 & M6567_CTRL1_RSEL) {
+static inline void _m6569_io_update_border_rsel(_m6569_border_unit_t* b, uint8_t ctrl_1) {
+    if (ctrl_1 & M6569_CTRL1_RSEL) {
         /* RSEL 1: 25 rows */
-        b->top = _M6567_RSEL1_BORDER_TOP;
-        b->bottom = _M6567_RSEL1_BORDER_BOTTOM;
+        b->top = _M6569_RSEL1_BORDER_TOP;
+        b->bottom = _M6569_RSEL1_BORDER_BOTTOM;
     }
     else {
         /* RSEL 0: 24 rows */
-        b->top = _M6567_RSEL0_BORDER_TOP;
-        b->bottom = _M6567_RSEL0_BORDER_BOTTOM;
+        b->top = _M6569_RSEL0_BORDER_TOP;
+        b->bottom = _M6569_RSEL0_BORDER_BOTTOM;
     }
 }
 
 /* update the border left/right position when updating csel */
-static inline void _m6567_io_update_border_csel(_m6567_border_unit_t* b, uint8_t ctrl_2) {
-    if (ctrl_2 & M6567_CTRL2_CSEL) {
+static inline void _m6569_io_update_border_csel(_m6569_border_unit_t* b, uint8_t ctrl_2) {
+    if (ctrl_2 & M6569_CTRL2_CSEL) {
         /* CSEL 1: 40 columns */
-        b->left = _M6567_CSEL1_BORDER_LEFT;
-        b->right = _M6567_CSEL1_BORDER_RIGHT;
+        b->left = _M6569_CSEL1_BORDER_LEFT;
+        b->right = _M6569_CSEL1_BORDER_RIGHT;
     }
     else {
         /* CSEL 0: 38 columns */
-        b->left = _M6567_CSEL0_BORDER_LEFT;
-        b->right = _M6567_CSEL0_BORDER_RIGHT;
+        b->left = _M6569_CSEL0_BORDER_LEFT;
+        b->right = _M6569_CSEL0_BORDER_RIGHT;
     }
 }
 
 /* updates the graphics sequencer display mode (0..7) from the ECM/BMM/MCM bits */
-static inline void _m6567_io_update_gunit_mode(_m6567_graphics_unit_t* gu, uint8_t ctrl_1, uint8_t ctrl_2) {
-    gu->mode = ((ctrl_1&(M6567_CTRL1_ECM|M6567_CTRL1_BMM))|(ctrl_2&M6567_CTRL2_MCM))>>4;
+static inline void _m6569_io_update_gunit_mode(_m6569_graphics_unit_t* gu, uint8_t ctrl_1, uint8_t ctrl_2) {
+    gu->mode = ((ctrl_1&(M6569_CTRL1_ECM|M6569_CTRL1_BMM))|(ctrl_2&M6569_CTRL2_MCM))>>4;
 }
 
 /* update sprite unit positions and sizes when updating registers */
-static void _m6567_io_update_sunit(m6567_t* vic, int i, uint8_t mx, uint8_t my, uint8_t mx8, uint8_t mxe, uint8_t mye) {
-    _m6567_sprite_unit_t* su = &vic->sunit[i];
+static void _m6569_io_update_sunit(m6569_t* vic, int i, uint8_t mx, uint8_t my, uint8_t mx8, uint8_t mxe, uint8_t mye) {
+    _m6569_sprite_unit_t* su = &vic->sunit[i];
     /* mxb: MSB for each xpos */
     uint16_t xpos = ((mx8 & (1<<i))<<(8-i)) | mx;
     su->h_first  = (xpos / 8) + 12;
@@ -549,13 +529,13 @@ static void _m6567_io_update_sunit(m6567_t* vic, int i, uint8_t mx, uint8_t my, 
 }
 
 /* perform an I/O request on the VIC-II */
-uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
-    if (pins & M6567_CS) {
-        uint8_t r_addr = pins & M6567_REG_MASK;
-        _m6567_registers_t* r = &vic->reg;
-        if (pins & M6567_RW) {
+uint64_t m6569_iorq(m6569_t* vic, uint64_t pins) {
+    if (pins & M6569_CS) {
+        uint8_t r_addr = pins & M6569_REG_MASK;
+        _m6569_registers_t* r = &vic->reg;
+        if (pins & M6569_RW) {
             /* read register, with some special cases */
-            const _m6567_raster_unit_t* rs = &vic->rs;
+            const _m6569_raster_unit_t* rs = &vic->rs;
             uint8_t data;
             switch (r_addr) {
                 case 0x11:
@@ -574,108 +554,108 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     break;
                 default:
                     /* unconnected bits are returned as 1 */
-                    data = r->regs[r_addr] | ~_m6567_reg_mask[r_addr];
+                    data = r->regs[r_addr] | ~_m6569_reg_mask[r_addr];
                     break;
             }
-            M6567_SET_DATA(pins, data);
+            M6569_SET_DATA(pins, data);
         }
         else {
             /* write register, with special cases */
-            const uint8_t data = M6567_GET_DATA(pins) & _m6567_reg_mask[r_addr];
+            const uint8_t data = M6569_GET_DATA(pins) & _m6569_reg_mask[r_addr];
             bool write = true;
             switch (r_addr) {
                 case 0x00:  /* m0x */
-                    _m6567_io_update_sunit(vic, 0, data, r->mxy[0][1], r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 0, data, r->mxy[0][1], r->mx8, r->mxe, r->mye);
                     break;
                 case 0x01:  /* m0y */
-                    _m6567_io_update_sunit(vic, 0, r->mxy[0][0], data, r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 0, r->mxy[0][0], data, r->mx8, r->mxe, r->mye);
                     break;
                 case 0x02:  /* m1x */
-                    _m6567_io_update_sunit(vic, 1, data, r->mxy[1][1], r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 1, data, r->mxy[1][1], r->mx8, r->mxe, r->mye);
                     break;
                 case 0x03:  /* m1y */
-                    _m6567_io_update_sunit(vic, 1, r->mxy[1][0], data, r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 1, r->mxy[1][0], data, r->mx8, r->mxe, r->mye);
                     break;
                 case 0x04:  /* m2x */
-                    _m6567_io_update_sunit(vic, 2, data, r->mxy[2][1], r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 2, data, r->mxy[2][1], r->mx8, r->mxe, r->mye);
                     break;
                 case 0x05:  /* m2y */
-                    _m6567_io_update_sunit(vic, 2, r->mxy[2][0], data, r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 2, r->mxy[2][0], data, r->mx8, r->mxe, r->mye);
                     break;
                 case 0x06:  /* m3x */
-                    _m6567_io_update_sunit(vic, 3, data, r->mxy[3][1], r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 3, data, r->mxy[3][1], r->mx8, r->mxe, r->mye);
                     break;
                 case 0x07:  /* m3y */
-                    _m6567_io_update_sunit(vic, 3, r->mxy[3][0], data, r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 3, r->mxy[3][0], data, r->mx8, r->mxe, r->mye);
                     break;
                 case 0x08:  /* m4x */
-                    _m6567_io_update_sunit(vic, 4, data, r->mxy[4][1], r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 4, data, r->mxy[4][1], r->mx8, r->mxe, r->mye);
                     break;
                 case 0x09:  /* m4y */
-                    _m6567_io_update_sunit(vic, 4, r->mxy[4][0], data, r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 4, r->mxy[4][0], data, r->mx8, r->mxe, r->mye);
                     break;
                 case 0x0A:  /* m5x */
-                    _m6567_io_update_sunit(vic, 5, data, r->mxy[5][1], r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 5, data, r->mxy[5][1], r->mx8, r->mxe, r->mye);
                     break;
                 case 0x0B:  /* m5y */
-                    _m6567_io_update_sunit(vic, 5, r->mxy[5][0], data, r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 5, r->mxy[5][0], data, r->mx8, r->mxe, r->mye);
                     break;
                 case 0x0C:  /* m6x */
-                    _m6567_io_update_sunit(vic, 6, data, r->mxy[6][1], r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 6, data, r->mxy[6][1], r->mx8, r->mxe, r->mye);
                     break;
                 case 0x0D:  /* m6y */
-                    _m6567_io_update_sunit(vic, 6, r->mxy[6][0], data, r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 6, r->mxy[6][0], data, r->mx8, r->mxe, r->mye);
                     break;
                 case 0x0E:  /* m7x */
-                    _m6567_io_update_sunit(vic, 7, data, r->mxy[7][1], r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 7, data, r->mxy[7][1], r->mx8, r->mxe, r->mye);
                     break;
                 case 0x0F:  /* m7y */
-                    _m6567_io_update_sunit(vic, 7, r->mxy[7][0], data, r->mx8, r->mxe, r->mye);
+                    _m6569_io_update_sunit(vic, 7, r->mxy[7][0], data, r->mx8, r->mxe, r->mye);
                     break;
                 case 0x10:  /* mx8 */
                     for (int i = 0; i < 8; i++) {
-                        _m6567_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], data, r->mxe, r->mye);
+                        _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], data, r->mxe, r->mye);
                     }
                     break;
                 case 0x11:  /* ctrl_1 */
                     /* update raster interrupt line */
-                    _m6567_io_update_irq_line(&vic->rs, data, r->raster);
+                    _m6569_io_update_irq_line(&vic->rs, data, r->raster);
                     /* update border top/bottom from RSEL flag */
-                    _m6567_io_update_border_rsel(&vic->brd, data);
+                    _m6569_io_update_border_rsel(&vic->brd, data);
                     /* ECM bit updates the precomputed fetch address masks */
-                    _m6567_io_update_memory_unit(&vic->mem, r->mem_ptrs, data);
+                    _m6569_io_update_memory_unit(&vic->mem, r->mem_ptrs, data);
                     /* update the graphics mode */
-                    _m6567_io_update_gunit_mode(&vic->gunit, data, r->ctrl_2);
+                    _m6569_io_update_gunit_mode(&vic->gunit, data, r->ctrl_2);
                     break;
                 case 0x12:
                     /* raster irq value lower 8 bits */
-                    _m6567_io_update_irq_line(&vic->rs, r->ctrl_1, data);
+                    _m6569_io_update_irq_line(&vic->rs, r->ctrl_1, data);
                     break;
                 case 0x16: /* ctrl_2 */
                     /* update border left/right from CSEL flag */
-                    _m6567_io_update_border_csel(&vic->brd, data);
+                    _m6569_io_update_border_csel(&vic->brd, data);
                     /* update the graphics mode */
-                    _m6567_io_update_gunit_mode(&vic->gunit, r->ctrl_1, data);
+                    _m6569_io_update_gunit_mode(&vic->gunit, r->ctrl_1, data);
                     break;
                 case 0x17:  /* mye */
                     for (int i = 0; i < 8; i++) {
-                        _m6567_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, r->mxe, data);
+                        _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, r->mxe, data);
                     }
                     break;
                 case 0x18:
                     /* memory-ptrs register , update precomputed fetch address masks */
-                    _m6567_io_update_memory_unit(&vic->mem, data, r->ctrl_1);
+                    _m6569_io_update_memory_unit(&vic->mem, data, r->ctrl_1);
                     break;
                 case 0x19:
                     /* interrupt latch: to clear a bit in the latch, a 1-bit
                        must be written to the latch!
                     */
-                    r->int_latch = (r->int_latch & ~data) & _m6567_reg_mask[0x19];
+                    r->int_latch = (r->int_latch & ~data) & _m6569_reg_mask[0x19];
                     write = false;
                     break;
                 case 0x1D:  /* mxe */
                     for (int i = 0; i < 8; i++) {
-                        _m6567_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, data, r->mye);
+                        _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, data, r->mye);
                     }
                     break;
                 case 0x1E: case 0x1F:
@@ -684,32 +664,32 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
                     break;
                 case 0x20:
                     /* border color */
-                    vic->brd.bc_rgba8 = _m6567_colors[data & 0xF];
+                    vic->brd.bc_rgba8 = _m6569_colors[data & 0xF];
                     break;
                 case 0x21: case 0x22:
                     /* background colors (alpha bits 0 because these count as MCM BG colors) */
-                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6567_colors[data & 0xF] & 0x00FFFFFF;
+                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
                     break;
                 case 0x23: case 0x24:
                     /* background colors (alpha bits 1 because these count as MCM FG colors) */
-                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6567_colors[data & 0xF];
+                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6569_colors[data & 0xF];
                     break;
                 case 0x25:
                     /* sprite multicolor 0 */
                     for (int i = 0; i < 8; i++) {
-                        vic->sunit[i].colors[1] = _m6567_colors[data & 0xF] & 0x00FFFFFF;
+                        vic->sunit[i].colors[1] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
                     }
                     break;
                 case 0x26:
                     /* sprite multicolor 1*/
                     for (int i = 0; i < 8; i++) {
-                        vic->sunit[i].colors[3] = _m6567_colors[data & 0xF] & 0x00FFFFFF;
+                        vic->sunit[i].colors[3] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
                     }
                     break;
                 case 0x27: case 0x28: case 0x29: case 0x2A: 
                 case 0x2B: case 0x2C: case 0x2D: case 0x2E:
                     /* sprite main color */
-                    vic->sunit[r_addr-0x27].colors[2] = _m6567_colors[data & 0xF] & 0x00FFFFFF;
+                    vic->sunit[r_addr-0x27].colors[2] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
                     break;
             }
             if (write) {
@@ -725,7 +705,7 @@ uint64_t m6567_iorq(m6567_t* vic, uint64_t pins) {
 /* start the graphics sequencer, this happens at the first g_access,
    the graphics sequencer must be delayed by xscroll
 */
-static inline void _m6567_gunit_reload(m6567_t* vic, uint8_t xscroll) {
+static inline void _m6569_gunit_reload(m6569_t* vic, uint8_t xscroll) {
     vic->gunit.count = xscroll;
     vic->gunit.shift = 0;
     vic->gunit.outp = 0;
@@ -738,7 +718,7 @@ static inline void _m6567_gunit_reload(m6567_t* vic, uint8_t xscroll) {
    byte, and the video-matrix value with the current video-matrix-value
    (or 0 if the graphics sequencer is idle).
 */
-static inline void _m6567_gunit_tick(m6567_t* vic, uint8_t g_data) {
+static inline void _m6569_gunit_tick(m6569_t* vic, uint8_t g_data) {
     if (vic->gunit.count == 0) {
         vic->gunit.count = 7;
         vic->gunit.shift |= g_data;
@@ -762,10 +742,10 @@ static inline void _m6567_gunit_tick(m6567_t* vic, uint8_t g_data) {
     for the color multiplexer which selectes between the color
     produced by the graphics- and sprite-units
 */
-static inline uint32_t _m6567_gunit_decode_mode0(m6567_t* vic) {
+static inline uint32_t _m6569_gunit_decode_mode0(m6569_t* vic) {
     if (vic->gunit.outp & 0x80) {
         /* foreground color (alpha bits set) */
-        return _m6567_colors[(vic->gunit.c_data>>8)&0xF];
+        return _m6569_colors[(vic->gunit.c_data>>8)&0xF];
     }
     else {
         /* background color (alpha bits clear) */
@@ -773,9 +753,9 @@ static inline uint32_t _m6567_gunit_decode_mode0(m6567_t* vic) {
     }
 }
 
-static inline uint32_t _m6567_gunit_decode_mode1(m6567_t* vic) {
+static inline uint32_t _m6569_gunit_decode_mode1(m6569_t* vic) {
     /* only seven colors in multicolor mode */
-    const uint32_t fg = _m6567_colors[(vic->gunit.c_data>>8) & 0x7];
+    const uint32_t fg = _m6569_colors[(vic->gunit.c_data>>8) & 0x7];
     if (vic->gunit.c_data & (1<<11)) {
         /* outp2 is only updated every 2 ticks */
         uint8_t bits = ((vic->gunit.outp2)>>6) & 3;
@@ -808,18 +788,18 @@ static inline uint32_t _m6567_gunit_decode_mode1(m6567_t* vic) {
     }
 }
 
-static inline uint32_t _m6567_gunit_decode_mode2(m6567_t* vic) {
+static inline uint32_t _m6569_gunit_decode_mode2(m6569_t* vic) {
     if (vic->gunit.outp & 0x80) {
         /* foreground pixel */
-        return _m6567_colors[(vic->gunit.c_data >> 4) & 0xF];
+        return _m6569_colors[(vic->gunit.c_data >> 4) & 0xF];
     }
     else {
         /* background pixel (alpha bits must be clear for multiplexer) */
-        return _m6567_colors[vic->gunit.c_data & 0xF] & 0x00FFFFFF;
+        return _m6569_colors[vic->gunit.c_data & 0xF] & 0x00FFFFFF;
     }
 }
 
-static inline uint32_t _m6567_gunit_decode_mode3(m6567_t* vic) {
+static inline uint32_t _m6569_gunit_decode_mode3(m6569_t* vic) {
     /* shift 2 is only updated every 2 ticks */
     uint8_t bits = vic->gunit.outp2;
     /* half resolution multicolor char
@@ -831,16 +811,16 @@ static inline uint32_t _m6567_gunit_decode_mode3(m6567_t* vic) {
     */
     switch ((bits>>6)&3) {
         case 0:     return vic->gunit.bg_rgba8[0]; break;
-        case 1:     return _m6567_colors[(vic->gunit.c_data>>4) & 0xF] & 0x00FFFFFF; break;
-        case 2:     return _m6567_colors[vic->gunit.c_data & 0xF]; break;
-        default:    return _m6567_colors[(vic->gunit.c_data>>8) & 0xF]; break;
+        case 1:     return _m6569_colors[(vic->gunit.c_data>>4) & 0xF] & 0x00FFFFFF; break;
+        case 2:     return _m6569_colors[vic->gunit.c_data & 0xF]; break;
+        default:    return _m6569_colors[(vic->gunit.c_data>>8) & 0xF]; break;
     }
 }
 
-static inline uint32_t _m6567_gunit_decode_mode4(m6567_t* vic) {
+static inline uint32_t _m6569_gunit_decode_mode4(m6569_t* vic) {
     if (vic->gunit.outp & 0x80) {
         /* foreground color as usual bits 8..11 of c_data */
-        return _m6567_colors[(vic->gunit.c_data>>8) & 0xF];
+        return _m6569_colors[(vic->gunit.c_data>>8) & 0xF];
     }
     else {
         /* bg color selected by bits 6 and 7 of c_data */
@@ -853,7 +833,7 @@ static inline uint32_t _m6567_gunit_decode_mode4(m6567_t* vic) {
 }
 
 /*--- sprite sequencer helper ------------------------------------------------*/
-static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
+static inline uint32_t _m6569_sunit_decode(m6569_t* vic) {
     /* this will tick all the sprite units and return the color
         of the highest-priority sprite color for the current pixel,
         or 0 if the sprite units didn't produce a color 
@@ -865,8 +845,8 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
     uint32_t c = 0;
     bool collision = false;
     for (int i = 0; i < 8; i++) {
-        _m6567_sprite_unit_t* su = &vic->sunit[i];
-        if (su->disp_enabled && _M6567_HTICK_RANGE(su->h_first, su->h_last)) {
+        _m6569_sprite_unit_t* su = &vic->sunit[i];
+        if (su->disp_enabled && _M6569_HTICK_RANGE(su->h_first, su->h_last)) {
             if (su->delay_count == 0) {
                 if ((0 == (su->xexp_count++ & 1)) || (0 == (vic->reg.mxe & (1<<i)))) {
                     /* bit 31 of outp is the current shifter output */
@@ -912,7 +892,7 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
     }
     if (collision) {
         vic->reg.mcm |= (c>>24);
-        vic->reg.int_latch |= M6567_INT_IMMC;
+        vic->reg.int_latch |= M6569_INT_IMMC;
     }
     return c;
 }
@@ -925,10 +905,10 @@ static inline uint32_t _m6567_sunit_decode(m6567_t* vic) {
     produced a non-transparant color), and sets the md
     collision bitmask, and the IMBC interrupt bit.
 */
-static inline void _m6567_test_mob_data_col(m6567_t* vic, uint32_t bmc, uint32_t sc) {
+static inline void _m6569_test_mob_data_col(m6569_t* vic, uint32_t bmc, uint32_t sc) {
     if ((sc & bmc & 0xFF000000) != 0) {
         vic->reg.mcd |= (sc>>24);
-        vic->reg.int_latch |= M6567_INT_IMBC;
+        vic->reg.int_latch |= M6569_INT_IMBC;
     }
 }
 
@@ -941,7 +921,7 @@ static inline void _m6567_test_mob_data_col(m6567_t* vic, uint32_t bmc, uint32_t
     - the alpha channel bits of the bitmap color are 0x00 for a background
       color, or 0xFF for a foreground color
 */
-static inline uint32_t _m6567_color_multiplex(uint32_t bmc, uint32_t sc, uint8_t mdp) {
+static inline uint32_t _m6569_color_multiplex(uint32_t bmc, uint32_t sc, uint8_t mdp) {
     uint32_t c;
     if (sc == 0) {
         /* sprite unit didn't produce a color, use the bitmap color */
@@ -966,7 +946,7 @@ static inline uint32_t _m6567_color_multiplex(uint32_t bmc, uint32_t sc, uint8_t
 }
 
 /* decode the next 8 pixels */
-static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* dst) {
+static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* dst) {
     /*
         "...the vertical border flip flop controls the output of the graphics
         data sequencer. The sequencer only outputs data if the flip flop is
@@ -988,18 +968,18 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
         const uint8_t mode = vic->gunit.mode;
         uint32_t bmc = 0;
         for (int i = 0; i < 8; i++) {
-            uint32_t sc = _m6567_sunit_decode(vic);
-            _m6567_gunit_tick(vic, g_data);
+            uint32_t sc = _m6569_sunit_decode(vic);
+            _m6569_gunit_tick(vic, g_data);
             switch (mode) {
-                case 0: bmc = _m6567_gunit_decode_mode0(vic); break;
-                case 1: bmc = _m6567_gunit_decode_mode1(vic); break;
-                case 2: bmc = _m6567_gunit_decode_mode2(vic); break;
-                case 3: bmc = _m6567_gunit_decode_mode3(vic); break;
-                case 4: bmc = _m6567_gunit_decode_mode4(vic);
+                case 0: bmc = _m6569_gunit_decode_mode0(vic); break;
+                case 1: bmc = _m6569_gunit_decode_mode1(vic); break;
+                case 2: bmc = _m6569_gunit_decode_mode2(vic); break;
+                case 3: bmc = _m6569_gunit_decode_mode3(vic); break;
+                case 4: bmc = _m6569_gunit_decode_mode4(vic);
                 /* default: invalid mode => black */
             }
-            _m6567_test_mob_data_col(vic, bmc, sc);
-            dst[i] = _m6567_color_multiplex(bmc, sc, mdp);
+            _m6569_test_mob_data_col(vic, bmc, sc);
+            dst[i] = _m6569_color_multiplex(bmc, sc, mdp);
         }
     }
     /*
@@ -1027,8 +1007,8 @@ static inline void _m6567_decode_pixels(m6567_t* vic, uint8_t g_data, uint32_t* 
 }
 
 /* decode the next 8 pixels as debug visualization */
-static void _m6567_decode_pixels_debug(m6567_t* vic, uint8_t g_data, bool ba_pin, uint32_t* dst) {
-    _m6567_decode_pixels(vic, g_data, dst);
+static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint32_t* dst) {
+    _m6569_decode_pixels(vic, g_data, dst);
     dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
     uint32_t mask = 0x00000000;
     if (vic->rs.badline) {
@@ -1039,9 +1019,9 @@ static void _m6567_decode_pixels_debug(m6567_t* vic, uint8_t g_data, bool ba_pin
     }
     /* sprites */
     for (int si = 0; si < 8; si++) {
-        const _m6567_sprite_unit_t* su = &vic->sunit[si];
+        const _m6569_sprite_unit_t* su = &vic->sunit[si];
         if (su->disp_enabled) {
-            if (_M6567_HTICK_RANGE(su->h_first, su->h_last)) {
+            if (_M6569_HTICK_RANGE(su->h_first, su->h_last)) {
                 mask |= 0x00880088;
             }
         }
@@ -1058,7 +1038,7 @@ static void _m6567_decode_pixels_debug(m6567_t* vic, uint8_t g_data, bool ba_pin
 }
 
 /*=== TICK FUNCTION ==========================================================*/
-uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
+uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     /*--- raster unit --------------------------------------------------------*/
     bool c_access = false;
     bool g_access = false;
@@ -1075,10 +1055,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             and incrementing (resp. resetting) of RASTER are performed one cycle later
             than in the other lines.
         */
-        if (vic->rs.h_count == vic->rs.h_total) {
+        if (vic->rs.h_count == _M6569_HTOTAL) {
             vic->rs.h_count = 0;
             /* new scanline */
-            if (vic->rs.v_count == vic->rs.v_total) {
+            if (vic->rs.v_count == _M6569_VTOTAL) {
                 vic->rs.v_count = 0;
                 vic->rs.vc_base = 0;
             }
@@ -1090,9 +1070,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             vic->rs.h_count++;
         }
         /* update CRT beam pos */
-        if (vic->rs.h_count == _M6567_HRETRACEPOS) {
+        if (vic->rs.h_count == _M6569_HRETRACEPOS) {
             vic->crt.x = 0;
-            if (vic->rs.v_count == _M6567_VRETRACEPOS) {
+            if (vic->rs.v_count == _M6569_VRETRACEPOS) {
                 vic->crt.y = 0;
             }
             else {
@@ -1104,8 +1084,8 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
 
         /* check for raster interrupt */
-        if (_M6567_HTICK(0) && (vic->rs.v_count == vic->rs.v_irqline)) {
-            vic->reg.int_latch |= M6567_INT_IRST;
+        if (_M6569_HTICK(0) && (vic->rs.v_count == vic->rs.v_irqline)) {
+            vic->reg.int_latch |= M6569_INT_IRST;
         }
 
         /*
@@ -1118,9 +1098,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             <= $f7 (247) and the lower three bits of RASTER are equal to YSCROLL and if the
             DEN bit was set during an arbitrary cycle of raster line $30."
         */
-        if (_M6567_RAST_RANGE(48, 247)) {
+        if (_M6569_RAST_RANGE(48, 247)) {
             /* DEN bit must have been set in raster line $30 */
-            if (_M6567_RAST(48) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
+            if (_M6569_RAST(48) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
                 vic->rs.frame_badlines_enabled = true;
             }
             /* a badline is active when the low 3 bits of raster position
@@ -1151,7 +1131,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         if (vic->rs.badline) {
             vic->rs.display_state = true;
         }
-        if (_M6567_HTICK(58)) {
+        if (_M6569_HTICK(58)) {
             if (vic->rs.rc == 7) {
                 vic->rs.vc_base = vic->rs.vc;
                 if (!vic->rs.badline) {
@@ -1166,10 +1146,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         /* If there is a Bad Line Condition in cycles 12-54, BA is set low and the
             c-accesses are started. Also set the AEC pin 3 cycles later.
         */
-        if (_M6567_HTICK_RANGE(12,54)) {
+        if (_M6569_HTICK_RANGE(12,54)) {
             if (vic->rs.badline) {
                 ba_pin = true;
-                if (_M6567_HTICK_GE(15)) {
+                if (_M6569_HTICK_GE(15)) {
                     aec_pin = true;
                     c_access = true;
                 }
@@ -1178,7 +1158,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
                 this phase, RC is also reset to zero.
             */
-            if (_M6567_HTICK(14)) {
+            if (_M6569_HTICK(14)) {
                 vic->rs.vc = vic->rs.vc_base;
                 vic->vm.vmli = 0;
                 if (vic->rs.badline) {
@@ -1187,11 +1167,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             }
         }
         /* g-accesses start at cycle 15 of each line in display state */
-        g_access = vic->rs.display_state && _M6567_HTICK_RANGE(15,54);
+        g_access = vic->rs.display_state && _M6569_HTICK_RANGE(15,54);
         vic->gunit.enabled = g_access;
-        if (_M6567_HTICK(15)) {
+        if (_M6569_HTICK(15)) {
             /* reset the graphics sequencer, potentially delayed by xscroll value */
-            _m6567_gunit_reload(vic, vic->reg.ctrl_2 & M6567_CTRL2_XSCROLL);
+            _m6569_gunit_reload(vic, vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL);
         }
     }
 
@@ -1214,12 +1194,12 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         in tick 15/16 as described in the recipe turns off rendering the
         last line of a sprite)
     */
-    if (_M6567_HTICK(55)) {
+    if (_M6569_HTICK(55)) {
         vic->rs.sh_count = 0;
         const uint8_t me = vic->reg.me;
         const uint8_t mye = vic->reg.mye;
         for (int i = 0; i < 8; i++) {
-            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            _m6569_sprite_unit_t* su = &vic->sunit[i];
             const uint8_t mask = (1<<i);
             if (mye & mask) {
                 su->expand = !su->expand;
@@ -1248,9 +1228,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         8 bits of RASTER. If this is the case, the display of the sprite is
         turned on.
     */
-    if (_M6567_HTICK(58)) {
+    if (_M6569_HTICK(58)) {
         for (int i = 0; i < 8; i++) {
-            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            _m6569_sprite_unit_t* su = &vic->sunit[i];
             su->mc = su->mc_base;
             if (su->dma_enabled && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
                 su->disp_enabled = true;
@@ -1271,9 +1251,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
               of line into tick 55
             - I have 'rewinding' the sprite units here
     */
-    if (_M6567_HTICK(15)) {
+    if (_M6569_HTICK(15)) {
         for (int i = 0; i < 8; i++) {
-            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            _m6569_sprite_unit_t* su = &vic->sunit[i];
             if (su->expand) {
                 su->mc_base = (su->mc_base + 3) & 0x3F;
             }
@@ -1302,7 +1282,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
         uint16_t sh = 3;
         for (int i = 0; i < 8; i++, sh+=2) {
-            _m6567_sprite_unit_t* su = &vic->sunit[i];
+            _m6569_sprite_unit_t* su = &vic->sunit[i];
             if (su->dma_enabled) {
                 if ((vic->rs.sh_count >= (sh-3)) && (vic->rs.sh_count <= (sh+1))) {
                     ba_pin = true;
@@ -1336,7 +1316,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     uint8_t g_data;
     if (g_access) {
         uint16_t addr;
-        if (vic->reg.ctrl_1 & M6567_CTRL1_BMM) {
+        if (vic->reg.ctrl_1 & M6569_CTRL1_BMM) {
             /* bitmap mode: addr=|CB13|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0|RC2|RC1|RC0| */
             addr = vic->rs.vc<<3 | vic->rs.rc;
             addr = (addr | (vic->mem.g_addr_or & (1<<13))) & vic->mem.g_addr_and;
@@ -1351,7 +1331,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     }
     else if (s_index >= 0) {
         /* sprite s-access: |MP7|MP6|MP5|MP4|MP3|MP2|MP1|MP0|MC5|MC4|MC3|MC2|MC1|MC0| */
-        _m6567_sprite_unit_t* su = &vic->sunit[s_index];
+        _m6569_sprite_unit_t* su = &vic->sunit[s_index];
         uint16_t addr = (su->p_data<<6) | su->mc;
         uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr);
         su->shift = (su->shift<<8) | (s_data<<8);
@@ -1377,10 +1357,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         /* 1. If the X coordinate reaches the right comparison value, the main border
               flip flop is set.
         */
-        if (_M6567_HTICK(vic->brd.right)) {
+        if (_M6569_HTICK(vic->brd.right)) {
             vic->brd.main = true;
         }
-        else if (_M6567_HTICK(0)) {
+        else if (_M6569_HTICK(0)) {
             /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
                   vertical border flip flop is set.
             */
@@ -1391,11 +1371,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                   DEN bit in register $d011 is set, the vertical border flip flop is
                   reset.
             */
-            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
+            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
                 vic->brd.vert = false;
             }
         }
-        else if (_M6567_HTICK(vic->brd.left)) {
+        else if (_M6569_HTICK(vic->brd.left)) {
             /* 4. If the X coordinate reaches the left comparison value and the Y
                   coordinate reaches the bottom one, the vertical border flip flop is set.
             */
@@ -1406,7 +1386,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                   coordinate reaches the top one and the DEN bit in register $d011 is set,
                   the vertical border flip flop is reset.
             */
-            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
+            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
                 vic->brd.vert = false;
             }
             /* 6. If the X coordinate reaches the left comparison value and the vertical
@@ -1420,10 +1400,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
 
     /*-- main interrupt bit --*/
     if (vic->reg.int_latch & vic->reg.int_mask & 0x0F) {
-        vic->reg.int_latch |= M6567_INT_IRQ;
+        vic->reg.int_latch |= M6569_INT_IRQ;
     }
     else {
-        vic->reg.int_latch &= ~M6567_INT_IRQ;
+        vic->reg.int_latch &= ~M6569_INT_IRQ;
     }
 
     /*--- decode pixels into framebuffer -------------------------------------*/
@@ -1432,9 +1412,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         if (vic->debug_vis) {
             x = vic->rs.h_count;
             y = vic->rs.v_count;
-            w = vic->rs.h_total + 1;
+            w = _M6569_HTOTAL + 1;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
-            _m6567_decode_pixels_debug(vic, g_data, ba_pin, dst);
+            _m6569_decode_pixels_debug(vic, g_data, ba_pin, dst);
         }
         else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
                  (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
@@ -1443,7 +1423,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             const int y = vic->crt.y - vic->crt.vis_y0;
             const int w = vic->crt.vis_w;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
-            _m6567_decode_pixels(vic, g_data, dst);
+            _m6569_decode_pixels(vic, g_data, dst);
         }
     }
 
@@ -1455,22 +1435,22 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
 
     /*--- set CPU pins -------------------------------------------------------*/
     if (ba_pin) {
-        pins |= M6567_BA;
+        pins |= M6569_BA;
     }
     if (aec_pin) {
-        pins |= M6567_AEC;
+        pins |= M6569_AEC;
     }
     if (vic->reg.int_latch & (1<<7)) {
-        pins |= M6567_IRQ;
+        pins |= M6569_IRQ;
     }
     return pins;
 }
 
-void m6567_display_size(m6567_t* vic, int* out_width, int* out_height) {
+void m6569_display_size(m6569_t* vic, int* out_width, int* out_height) {
     CHIPS_ASSERT(vic && out_width && out_height);
     if (vic->debug_vis) {
-        *out_width = (vic->rs.h_total+1)*8;
-        *out_height = vic->rs.v_total+1;
+        *out_width = (_M6569_HTOTAL+1)*8;
+        *out_height = _M6569_VTOTAL+1;
     }
     else {
         *out_width = vic->crt.vis_w*8;
@@ -1478,9 +1458,9 @@ void m6567_display_size(m6567_t* vic, int* out_width, int* out_height) {
     }
 }
 
-uint32_t m6567_color(int i) {
+uint32_t m6569_color(int i) {
     CHIPS_ASSERT((i >= 0) && (i < 16));
-    return _m6567_colors[i];
+    return _m6569_colors[i];
 }
 #endif /* CHIPS_IMPL */
 

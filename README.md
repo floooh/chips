@@ -173,13 +173,11 @@ MOS Technology 6526 Complex Interface Adapter
   - PC pin
   - CNT pin is always high
 
-### MOS 6567 VIC-II (chips/m6567.h)
+### MOS 6569 VIC-II for PAL-B (chips/m6569.h)
 
-MOS Technology 6567 Video Interface Chip VIC-II
+MOS Technology 6569 Video Interface Chip VIC-II
 
 (Work In Progress)
-
-- currently only the PAL variant 6569 is implemented
 
 ## Helper Code
 
