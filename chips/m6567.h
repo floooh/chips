@@ -1252,6 +1252,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         for (int i = 0; i < 8; i++) {
             _m6567_sprite_unit_t* su = &vic->sunit[i];
             su->mc = su->mc_base;
+            su->delay_count = su->h_offset;
+            su->outp2_count = 0;
+            su->xexp_count = 0;
             if (su->dma_enabled && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
                 su->disp_enabled = true;
             }
@@ -1279,19 +1282,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             if (su->mc_base == 63) {
                 su->dma_enabled = false;
             }
-        }
-    }
-
-    /* on the first visible-sprite tick each line, pre-shift by the
-       sprites position inside the tick's 8-pixel grid (same idea as
-       the xscroll delay for vertical scrolling)
-    */
-    for (int i = 0; i < 8; i++) {
-        _m6567_sprite_unit_t* su = &vic->sunit[i];
-        if (_M6567_HTICK(su->h_first) && su->disp_enabled) {
-            su->delay_count = su->h_offset;
-            su->outp2_count = 0;
-            su->xexp_count = 0;
         }
     }
 
@@ -1372,6 +1362,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             su->shift = (su->shift<<8) | (s_data<<8);
             su->mc = (su->mc + 1) & 0x3F;
         }
+        i_access = false;
     }
 
     /* if no other accesses happened, do an i-access */
@@ -1385,10 +1376,10 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         /* 1. If the X coordinate reaches the right comparison value, the main border
               flip flop is set.
         */
-        if (vic->rs.h_count == vic->brd.right) {
+        if (_M6567_HTICK(vic->brd.right)) {
             vic->brd.main = true;
         }
-        if (_M6567_HTICK(0)) {
+        else if (_M6567_HTICK(0)) {
             /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
                   vertical border flip flop is set.
             */
@@ -1399,11 +1390,11 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                   DEN bit in register $d011 is set, the vertical border flip flop is
                   reset.
             */
-            if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
+            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
                 vic->brd.vert = false;
             }
         }
-        if (vic->rs.h_count == vic->brd.left) {
+        else if (_M6567_HTICK(vic->brd.left)) {
             /* 4. If the X coordinate reaches the left comparison value and the Y
                   coordinate reaches the bottom one, the vertical border flip flop is set.
             */
@@ -1414,7 +1405,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                   coordinate reaches the top one and the DEN bit in register $d011 is set,
                   the vertical border flip flop is reset.
             */
-            if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
+            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6567_CTRL1_DEN)) {
                 vic->brd.vert = false;
             }
             /* 6. If the X coordinate reaches the left comparison value and the vertical
