@@ -1196,23 +1196,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
     }
 
     /*--- sprite unit preparations -------------------------------------------*/
-    /* (see 3.8. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
-    /* run separate sprite raster counters which wrap around at h_count=55 */
-    if (vic->rs.h_count == 55) {
-        vic->rs.sh_count = 0;
-    }
-    else {
-        vic->rs.sh_count++;
-    }
-
-    /* p-accesses happen in each scanline */
-    int p_index = -1;
-    for (int i = 0; i < 8; i++) {
-        if (vic->rs.sh_count == 3+i*2) {
-            p_index = i;
-            break;
-        }
-    }
 
     /* 1. The expansion flip flip is set as long as the bit in MxYE in register
         $d017 corresponding to the sprite is cleared.
@@ -1232,6 +1215,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         last line of a sprite)
     */
     if (_M6567_HTICK(55)) {
+        vic->rs.sh_count = 0;
         const uint8_t me = vic->reg.me;
         const uint8_t mye = vic->reg.mye;
         for (int i = 0; i < 8; i++) {
@@ -1253,6 +1237,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
                 su->disp_enabled = false;
             }
         }
+    }
+    else {
+        vic->rs.sh_count++;
     }
 
     /* 4. In the first phase of cycle 58, the MC of every sprite is loaded from
@@ -1308,9 +1295,20 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         }
     }
 
-    /* s-access, ba/aec, for dma_enabled sprites */
+    /* s-access and p-access, ba/aec, for dma_enabled sprites */
     int s_index = -1;
+    int p_index = -1;
     if (vic->rs.sh_count < (2*8 + 3)) {
+        switch (vic->rs.sh_count) {
+            case 3:     p_index = 0; break;
+            case 5:     p_index = 1; break;
+            case 7:     p_index = 2; break;
+            case 9:     p_index = 3; break;
+            case 11:    p_index = 4; break;
+            case 13:    p_index = 5; break;
+            case 15:    p_index = 6; break;
+            case 17:    p_index = 7; break;
+        }
         uint16_t sh = 3;
         for (int i = 0; i < 8; i++, sh+=2) {
             _m6567_sprite_unit_t* su = &vic->sunit[i];
