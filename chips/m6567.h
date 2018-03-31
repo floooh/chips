@@ -1252,9 +1252,6 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
         for (int i = 0; i < 8; i++) {
             _m6567_sprite_unit_t* su = &vic->sunit[i];
             su->mc = su->mc_base;
-            su->delay_count = su->h_offset;
-            su->outp2_count = 0;
-            su->xexp_count = 0;
             if (su->dma_enabled && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
                 su->disp_enabled = true;
             }
@@ -1272,6 +1269,7 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             - I have merged actions of cycle 15 and 16 into cycle 15
             - I have moved switching off the display enable flag at the end
               of line into tick 55
+            - I have 'rewinding' the sprite units here
     */
     if (_M6567_HTICK(15)) {
         for (int i = 0; i < 8; i++) {
@@ -1282,6 +1280,9 @@ uint64_t m6567_tick(m6567_t* vic, uint64_t pins) {
             if (su->mc_base == 63) {
                 su->dma_enabled = false;
             }
+            su->delay_count = su->h_offset;
+            su->outp2_count = 0;
+            su->xexp_count = 0;
         }
     }
 
