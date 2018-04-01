@@ -1260,6 +1260,13 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             if (su->mc_base == 63) {
                 su->dma_enabled = false;
             }
+        }
+    }
+
+    /* on the first visible sprite tick each line, 'rewind' the sprite unit */
+    for (int i = 0; i < 8; i++) {
+        _m6569_sprite_unit_t* su = &vic->sunit[i];
+        if (_M6569_HTICK(su->h_first) && su->disp_enabled) {
             su->delay_count = su->h_offset;
             su->outp2_count = 0;
             su->xexp_count = 0;
