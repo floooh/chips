@@ -117,7 +117,7 @@ extern "C" {
 /* number of registers */
 #define AY38910_NUM_REGISTERS (16)
 /* error-accumulation precision boost */
-#define AY38910_PRECISION_BOOST (16)
+#define AY38910_FIXEDPOINT_SCALE (16)
 /* number of channels */
 #define AY38910_NUM_CHANNELS (3)
 
@@ -372,7 +372,7 @@ void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc) {
     ay->out_cb = desc->out_cb;
     ay->type = desc->type;
     ay->noise.rng = 1;
-    ay->sample_period = (desc->tick_hz * AY38910_PRECISION_BOOST) / desc->sound_hz;
+    ay->sample_period = (desc->tick_hz * AY38910_FIXEDPOINT_SCALE) / desc->sound_hz;
     ay->sample_counter = ay->sample_period;
     ay->mag = desc->magnitude;
     _ay38910_update_values(ay);
@@ -433,7 +433,7 @@ bool ay38910_tick(ay38910_t* ay) {
     }
 
     /* generate new sample? */
-    ay->sample_counter -= AY38910_PRECISION_BOOST;
+    ay->sample_counter -= AY38910_FIXEDPOINT_SCALE;
     while (ay->sample_counter <= 0) {
         ay->sample_counter += ay->sample_period;
         float vol = 0.0f;

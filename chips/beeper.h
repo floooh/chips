@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 /* error-accumulation precision boost */
-#define BEEPER_PRECISION_BOOST (16)
+#define BEEPER_FIXEDPOINT_SCALE (16)
 
 /* beeper state */
 typedef struct {
@@ -47,7 +47,7 @@ static inline bool beeper_tick(beeper_t* b) {
     if (b->state) {
         b->acc++;
     }
-    b->counter -= BEEPER_PRECISION_BOOST;
+    b->counter -= BEEPER_FIXEDPOINT_SCALE;
     if (b->counter <= 0) {
         b->counter += b->period;
         b->sample = ((float)b->acc) * b->mul;
@@ -74,7 +74,7 @@ void beeper_init(beeper_t* b, int tick_hz, int sound_hz, float magnitude) {
     CHIPS_ASSERT(b);
     CHIPS_ASSERT((tick_hz > 0) && (sound_hz > 0));
     memset(b, 0, sizeof(*b));
-    b->period = (tick_hz * BEEPER_PRECISION_BOOST) / sound_hz;
+    b->period = (tick_hz * BEEPER_FIXEDPOINT_SCALE) / sound_hz;
     b->counter = b->period;
     b->mul = magnitude * (1.0f / ((float)tick_hz / (float)sound_hz));
 }
