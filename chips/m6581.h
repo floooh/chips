@@ -121,6 +121,28 @@ extern "C" {
 #define M6581_INV_2         (31)
 #define M6581_NUM_REGS (32)
 
+/* voice control bits */
+#define M6581_CTRL_GATE     (1<<0)
+#define M6581_CTRL_SYNC     (1<<1)
+#define M6581_CTRL_RINGMOD  (1<<2)
+#define M6581_CTRL_TEST     (1<<3)
+#define M6581_CTRL_TRIANGLE (1<<4)
+#define M6581_CTRL_SAWTOOTH (1<<5)
+#define M6581_CTRL_PULSE    (1<<6)
+#define M6581_CTRL_NOISE    (1<<7)
+
+/* filter routing bits */
+#define M6581_FILTER_FILT1  (1<<0)
+#define M6581_FILTER_FILT2  (1<<1)
+#define M6581_FILTER_FILT3  (1<<2)
+#define M6581_FILTER_FILTEX (1<<3)
+
+/* filter mode bits */
+#define M6581_FILTER_LOWPASS    (1<<0)
+#define M6581_FILTER_BANDPASS   (1<<1)
+#define M6581_FILTER_HIGHPASS   (1<<2)
+#define M6581_FILTER_3OFF       (1<<3)
+
 /* setup parameters for m6581_init() */
 typedef struct {
     int tick_hz;        /* frequency at which m6581_tick() will be called in Hz */
@@ -132,16 +154,20 @@ typedef struct {
 typedef struct {
     uint16_t freq;
     uint16_t pulse_width;
-    uint8_t control;
-    uint8_t attack_decay;
-    uint8_t sustain_release;
+    uint8_t ctrl;
+    uint8_t attack;
+    uint8_t decay;
+    uint8_t sustain;
+    uint8_t release;
 } m6581_voice_t;
 
 /* filter state */
 typedef struct {
     uint16_t cutoff;
-    uint8_t res_filt;
-    uint8_t mode_vol;
+    uint8_t resonance;
+    uint8_t filter;
+    uint8_t mode;
+    uint8_t volume;
 } m6581_filter_t;
 
 /* m6581 instance state */
@@ -211,15 +237,15 @@ void m6581_reset(m6581_t* sid) {
     sid->bus_decay = 0x2000;
     for (int i = 0; i < 3; i++) {
         m6581_voice_t* v = &(sid->voice[i]);
-        v->freq = 0;
-        v->pulse_width = 0;
-        v->control = 0;
-        v->attack_decay = 0;
-        v->sustain_release = 0;
+        v->freq = v->pulse_width = 0;
+        v->ctrl = 0;
+        v->attack = v->decay = v->sustain = v->release = 0;
     }
     sid->filter.cutoff = 0;
-    sid->filter.res_filt = 0;
-    sid->filter.mode_vol = 0;
+    sid->filter.resonance = 0;
+    sid->filter.filter = 0;
+    sid->filter.mode = 0;
+    sid->filter.volume = 0;
     sid->sample_counter = sid->sample_period;
     sid->sample = 0.0f;
 }
@@ -280,13 +306,15 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                     M6581_SET_HI(sid->voice[0].pulse_width, (data & 0x0F));
                     break;
                 case M6581_V1_CTRL:
-                    sid->voice[0].control = data;
+                    sid->voice[0].ctrl = data;
                     break;
                 case M6581_V1_ATKDEC:
-                    sid->voice[0].attack_decay = data;
+                    sid->voice[0].attack = (data>>4);
+                    sid->voice[0].decay  = (data & 0x0F);
                     break;
                 case M6581_V1_SUSREL:
-                    sid->voice[0].sustain_release = data;
+                    sid->voice[0].sustain = (data>>4);
+                    sid->voice[0].release = (data & 0x0F);
                     break;
                 case M6581_V2_FREQ_LO:
                     M6581_SET_LO(sid->voice[1].freq, data);
@@ -301,13 +329,15 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                     M6581_SET_HI(sid->voice[1].pulse_width, (data & 0x0F));
                     break;
                 case M6581_V2_CTRL:
-                    sid->voice[1].control = data;
+                    sid->voice[1].ctrl = data;
                     break;
                 case M6581_V2_ATKDEC:
-                    sid->voice[1].attack_decay = data;
+                    sid->voice[1].attack = (data>>4);
+                    sid->voice[1].decay  = (data & 0x0F);
                     break;
                 case M6581_V2_SUSREL:
-                    sid->voice[1].sustain_release = data;
+                    sid->voice[1].sustain = (data>>4);
+                    sid->voice[1].release = (data & 0x0F);
                     break;
                 case M6581_V3_FREQ_LO:
                     M6581_SET_LO(sid->voice[2].freq, data);
@@ -322,13 +352,15 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                     M6581_SET_HI(sid->voice[2].pulse_width, (data & 0x0F));
                     break;
                 case M6581_V3_CTRL:
-                    sid->voice[2].control = data;
+                    sid->voice[2].ctrl = data;
                     break;
                 case M6581_V3_ATKDEC:
-                    sid->voice[2].attack_decay = data;
+                    sid->voice[2].attack = data >> 4;
+                    sid->voice[2].decay  = data & 0x0F;
                     break;
                 case M6581_V3_SUSREL:
-                    sid->voice[2].sustain_release = data;
+                    sid->voice[2].sustain = data >> 4;
+                    sid->voice[2].release = data & 0x0F;
                     break;
                 case M6581_FC_LO:
                     sid->filter.cutoff = (sid->filter.cutoff & ~7) | (data & 7);
@@ -337,10 +369,12 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                     sid->filter.cutoff = (data<<3) | (sid->filter.cutoff & 7);
                     break;
                 case M6581_RES_FILT:
-                    sid->filter.res_filt = data;
+                    sid->filter.resonance = data >> 4;
+                    sid->filter.filter = data & 0x0F;
                     break;
                 case M6581_MODE_VOL:
-                    sid->filter.mode_vol = data;
+                    sid->filter.mode = data >> 4;
+                    sid->filter.volume = data & 0x0F;
                     break;
             }
         }
