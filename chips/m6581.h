@@ -393,7 +393,7 @@ static inline uint16_t _m6581_noise(m6581_voice_t* v) {
            ((s & 0x00000004)<<2);
 }
 
-static inline bool _m6581_env_exp_period(uint8_t cnt) {
+static inline uint16_t _m6581_env_exp_period(uint8_t cnt) {
     if ((cnt >= 1) && (cnt < 7)) {
         return 30;
     }
