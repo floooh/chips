@@ -4,6 +4,8 @@
 
     MOS Technology 6581 emulator (aka SID)
 
+    based on tedplay (c) 2012 Attila Grosz, used under Unlicense http://unlicense.org/
+
     Do this:
     ~~~C
     #define CHIPS_IMPL
@@ -33,27 +35,10 @@
 
     TODO: Documentation
 
-    ## MIT License
+    ## Links
 
-    Copyright (c) 2018 Andre Weissflog
+    - http://blog.kevtris.org/?p=13
 
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -152,30 +137,33 @@ typedef struct {
 
 /* envelope generator state */
 typedef enum {
+    M6581_ENV_FROZEN,
     M6581_ENV_ATTACK,
-    M6581_ENV_DECAY_SUSTAIN,
+    M6581_ENV_DECAY,
     M6581_ENV_RELEASE
 } _m6581_env_state_t;
 
 /* voice state */
 typedef struct {
+    /* wave generator state */
     uint16_t freq;
     uint16_t pulse_width;
     uint8_t ctrl;
-    uint8_t attack;
-    uint8_t decay;
-    uint8_t sustain;
-    uint8_t release;
     bool sync;
     uint32_t noise_shift;           /* 24 bit */
-    uint32_t wav_accum;             /* 24 bit */
-    uint16_t wav_output;            /* 12 bit */
+    uint32_t wav_accum;             /* 8.16 fixed */
+    uint32_t wav_output;            /* 12 bit */
+
+    /* envelope generator state */
     _m6581_env_state_t env_state;
-    uint16_t env_rate_count;
-    uint16_t env_rate_period;
-    uint16_t env_exp_count;
-    uint8_t env_count;
-    bool env_hold;
+    uint32_t env_attack_add;
+    uint32_t env_decay_sub;
+    uint32_t env_sustain_level;
+    uint32_t env_release_sub;
+    uint32_t env_cur_level;
+    uint32_t env_counter;
+    uint32_t env_exp_counter;
+    uint32_t env_counter_compare;
 } m6581_voice_t;
 
 /* filter state */
@@ -201,8 +189,9 @@ typedef struct {
     /* sample generation state */
     int sample_period;
     int sample_counter;
-    float mag;
-    float acc;
+    float sample_accum;
+    float sample_accum_count;
+    float sample_mag;
     float sample;
 } m6581_t;
 
@@ -234,26 +223,38 @@ extern bool m6581_tick(m6581_t* sid);
 #define M6581_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 /* fixed point precision for sample period */
 #define M6581_FIXEDPOINT_SCALE (16)
+/* move bit into first position */
+#define M6581_BIT(val,bitnr) ((val>>bitnr)&1)
 
-static const uint16_t _m6581_env_period[16] = {
-    9, 32, 63, 95, 149, 220, 267, 313, 
-    392, 977, 1954, 3126, 3906, 11720, 19531, 31251
+static const uint32_t _m6581_rate_count_period[16] = {
+    0x7F00, 0x0006, 0x003C, 0x0330, 0x20C0, 0x6755, 0x3800, 0x500E,    
+    0x1212, 0x0222, 0x1848, 0x59B8, 0x3840, 0x77E2, 0x7625, 0x0A93
+};
+
+static const uint8_t _m6581_env_gen_dr_divisors[256] = {
+    30,30,30,30,30,30,16,16,16,16,16,16,16,16,8,8, 
+    8,8,8,8,8,8,8,8,8,8,4,4,4,4,4,4,
+    4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+    4,4,4,4,4,4,2,2,2,2,2,2,2,2,2,2,
+    2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+    2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1    
 };
 
 static void _m6581_init_voice(m6581_voice_t* v) {
-    v->freq = v->pulse_width = 0;
-    v->ctrl = 0;
-    v->attack = v->decay = v->sustain = v->release = 0;
-    v->sync = false;
-    v->wav_accum = 0;
-    v->noise_shift = 0x007FFFF8;
-    v->wav_output = 0;
-    v->env_state = M6581_ENV_RELEASE;
-    v->env_rate_count = 0;
-    v->env_rate_period = _m6581_env_period[0];
-    v->env_exp_count = 0;
-    v->env_count = 0;
-    v->env_hold = true;
+    memset(v, 0, sizeof(*v));
+    v->noise_shift = 0x007FFFFC;
+    v->env_state = M6581_ENV_FROZEN;
+    v->env_counter = 0x7FFF;
 }
 
 void m6581_init(m6581_t* sid, m6581_desc_t* desc) {
@@ -263,7 +264,8 @@ void m6581_init(m6581_t* sid, m6581_desc_t* desc) {
     memset(sid, 0, sizeof(*sid));
     sid->sample_period = (desc->tick_hz * M6581_FIXEDPOINT_SCALE) / desc->sound_hz;
     sid->sample_counter = sid->sample_period;
-    sid->mag = desc->magnitude;
+    sid->sample_mag = desc->magnitude;
+    sid->sample_accum_count = 1.0f;
     for (int i = 0; i < 3; i++) {
         _m6581_init_voice(&sid->voice[i]);
     }
@@ -283,6 +285,8 @@ void m6581_reset(m6581_t* sid) {
     sid->filter.volume = 0;
     sid->sample_counter = sid->sample_period;
     sid->sample = 0.0f;
+    sid->sample_accum = 0.0f;
+    sid->sample_accum_count = 1.0f;
 }
 
 /*--- VOICE IMPLEMENTATION ---------------------------------------------------*/
@@ -303,71 +307,69 @@ static inline void _m6581_set_pw_hi(m6581_voice_t* v, uint8_t data) {
 }
 
 static inline void _m6581_set_atkdec(m6581_voice_t* v, uint8_t data) {
-    v->attack = data >> 4;
-    v->decay = data & 0x0F;
+    v->env_attack_add = data >> 4;
+    v->env_decay_sub = data & 0x0F;
     if (v->env_state == M6581_ENV_ATTACK) {
-        v->env_rate_period = _m6581_env_period[v->attack];
+        v->env_counter_compare = v->env_attack_add;
     }
-    else if (v->env_state == M6581_ENV_DECAY_SUSTAIN) {
-        v->env_rate_period = _m6581_env_period[v->decay];
+    else if (v->env_state == M6581_ENV_DECAY) {
+        v->env_counter_compare = v->env_decay_sub;
     }
 }
 
 static inline void _m6581_set_susrel(m6581_voice_t* v, uint8_t data) {
-    v->sustain = data >> 4;
-    v->release = data & 0x0F;
+    v->env_sustain_level = (data >> 4) * 0x11;
+    v->env_release_sub = data & 0x0F;
     if (v->env_state == M6581_ENV_RELEASE) {
-        v->env_rate_period = _m6581_env_period[v->release];
+        v->env_counter_compare = v->env_release_sub;
     }
 }
 
 static inline void _m6581_set_ctrl(m6581_voice_t* v, uint8_t data) {
     /* wave/noise generator */
-    if (data & M6581_CTRL_TEST) {
+    if ((data & M6581_CTRL_TEST) && !(v->ctrl & M6581_CTRL_TEST)) {
         v->wav_accum = 0;
-        v->noise_shift = 0;
+        uint32_t bit19 = (v->noise_shift >> 19) & 1;
+        v->noise_shift = (v->noise_shift & 0x007FFFFD) | ((bit19^1)<<1);
     }
-    else if (v->ctrl & M6581_CTRL_TEST) {
-        v->noise_shift = 0x007FFFF8;
+    else if (!(data & M6581_CTRL_TEST) && (v->ctrl & M6581_CTRL_TEST)) {
+        uint32_t bit0 = ((v->noise_shift >> 22) ^ (v->noise_shift >> 17)) & 0x01;
+        v->noise_shift <<= 1;
+        v->noise_shift &= 0x007FFFFF;
+        v->noise_shift |= bit0;
     }
 
     /* envelope generator */
     if ((data & M6581_CTRL_GATE) && !(v->ctrl & M6581_CTRL_GATE)) {
         /* gate bit on: start attack */
         v->env_state = M6581_ENV_ATTACK;
-        v->env_rate_period = _m6581_env_period[v->attack];
-        v->env_hold = false;
+        v->env_counter_compare = v->env_attack_add;
     }
     else if (!(data & M6581_CTRL_GATE) && (v->ctrl & M6581_CTRL_GATE)) {
         /* gate bit off: start release */
         v->env_state = M6581_ENV_RELEASE;
-        v->env_rate_period = _m6581_env_period[v->release];
+        v->env_counter_compare = v->env_release_sub;
     }
-    
+
+    /* noise combined with other waveform? */
+    if ((data & 0xF0) > 0x80) {
+        v->noise_shift &= 0x007FFFFF^(1<<22)^(1<<20)^(1<<16)^(1<<13)^(1<<11)^(1<<7)^(1<<4)^(1<<2);
+    }
+
     v->ctrl = data;
 }
 
-static inline uint16_t _m6581_triangle(m6581_voice_t* v, m6581_voice_t* v_sync) {
-    uint32_t accum;
-    if (v->ctrl & M6581_CTRL_RINGMOD) {
-        if ((v->wav_accum ^ v_sync->wav_accum) & 0x00800000) {
-            accum = ~v->wav_accum;
-        }
-        else {
-            accum = v->wav_accum;
-        }
-    }
-    else {
-        accum = (v->wav_accum & 0x00800000) ? ~v->wav_accum : v->wav_accum;
-    }
-    return (accum>>11) & 0x0FFF;
+static inline uint32_t _m6581_triangle(m6581_voice_t* v, m6581_voice_t* v_sync) {
+    const bool ring = 0 != (v->ctrl & M6581_CTRL_RINGMOD);
+    uint32_t msb = (ring ? v->wav_accum ^ v_sync->wav_accum : v->wav_accum) & 0x00800000;
+    return ((msb ? ~v->wav_accum : v->wav_accum) >> 11) & 0x0FFF;
 }
 
-static inline uint16_t _m6581_sawtooth(m6581_voice_t* v) {
-    return (v->wav_accum>>12) & 0x0FFF;
+static inline uint32_t _m6581_sawtooth(m6581_voice_t* v) {
+    return v->wav_accum >> 12;
 }
 
-static inline uint16_t _m6581_pulse(m6581_voice_t* v) {
+static inline uint32_t _m6581_pulse(m6581_voice_t* v) {
     if (v->ctrl & M6581_CTRL_TEST) {
         return 0x0FFF;
     }
@@ -381,41 +383,42 @@ static inline uint16_t _m6581_pulse(m6581_voice_t* v) {
     }
 }
 
-static inline uint16_t _m6581_noise(m6581_voice_t* v) {
-    uint16_t s = v->noise_shift;
-    return ((s & 0x00400000)>>11) |
-           ((s & 0x00100000)>>10) |
-           ((s & 0x00010000)>>7) |
-           ((s & 0x00002000)>>5) |
-           ((s & 0x00000800)>>4) |
-           ((s & 0x00000080)>>1) |
-           ((s & 0x00000010)<<1) |
-           ((s & 0x00000004)<<2);
+static inline uint32_t _m6581_trisaw(m6581_voice_t* v, m6581_voice_t* v_sync) {
+    uint32_t sm = _m6581_triangle(v, v_sync) & _m6581_sawtooth(v);
+    return (sm >> 1) & (sm << 1);
 }
 
-static inline uint16_t _m6581_env_exp_period(uint8_t cnt) {
-    if ((cnt >= 1) && (cnt < 7)) {
-        return 30;
-    }
-    else if ((cnt >= 7) && (cnt < 15)) {
-        return 16;
-    }
-    else if ((cnt >= 15) && (cnt < 27)) {
-        return 8;
-    }
-    else if ((cnt >= 27) && (cnt < 55)) {
-        return 4;
-    }
-    else if ((cnt >= 55) && (cnt < 94)) {
-        return 2;
-    }
-    else {
-        return 1;
-    }
+static inline uint32_t _m6581_tripulse(m6581_voice_t* v, m6581_voice_t* v_sync) {
+    uint32_t sm = _m6581_triangle(v, v_sync) & _m6581_pulse(v);
+    return (sm >> 1) & (sm << 1);
+}
+
+static inline uint32_t _m6581_sawpulse(m6581_voice_t* v) {
+    uint32_t sm = _m6581_sawtooth(v) & _m6581_pulse(v);
+    return (sm >> 1) & (sm << 1);
+}
+
+static inline uint32_t _m6581_trisawpulse(m6581_voice_t* v, m6581_voice_t* v_sync) {
+    uint32_t sm = _m6581_triangle(v, v_sync) & _m6581_sawtooth(v) & _m6581_pulse(v);
+    return (sm >> 1) && (sm << 1);
+}
+
+static inline uint16_t _m6581_noise(m6581_voice_t* v) {
+    uint16_t s = v->noise_shift;
+    return (M6581_BIT(s,22)<<11) |
+           (M6581_BIT(s,20)<<10) |
+           (M6581_BIT(s,16)<<9) |
+           (M6581_BIT(s,13)<<8) |
+           (M6581_BIT(s,11)<<7) |
+           (M6581_BIT(s,7)<<6) |
+           (M6581_BIT(s,4)<<5) |
+           (M6581_BIT(s,2)<<4);
 }
 
 static inline void _m6581_voice_tick(m6581_t* sid, int voice_index) {
     m6581_voice_t* v = &sid->voice[voice_index];
+
+    /* waveform generator */
     if (0 == (v->ctrl & M6581_CTRL_TEST)) {
         /* frequency accumulator */
         uint32_t prev_accum = v->wav_accum;
@@ -429,74 +432,69 @@ static inline void _m6581_voice_tick(m6581_t* sid, int voice_index) {
         /* sync state */
         v->sync = (v->wav_accum & 0x00800000) &  !(prev_accum & 0x00800000);
     }
-
-    /* waveform output */
     m6581_voice_t* v_sync = &sid->voice[(voice_index+2)%3];
+    uint32_t sm;
     switch ((v->ctrl>>4) & 0x0F) {
-        case 0: /* none */
-            v->wav_output = 0;
-            break;
-        case 1: /* triangle */
-            v->wav_output = _m6581_triangle(v, v_sync);
-            break;
-        case 2: /* sawtooth */
-            v->wav_output = _m6581_sawtooth(v);
-            break;
-        case 3: /* FIXME: triangle/sawtooth */
-            v->wav_output = 0;
-            break;
-        case 4: /* pulse */
-            v->wav_output = _m6581_pulse(v);
-            break;
-        case 5: /* FIXME: pulse/triangle */
-            v->wav_output = 0;
-            break;
-        case 6: /* FIXME: pulse/sawtooth */
-            v->wav_output = 0;
-            break;
-        case 7: /* FIXME: triangle/sawtooth/pulse */
-            v->wav_output = 0;
-            break;
-        case 8: /* noise */
-            v->wav_output = _m6581_noise(v);
-            break;
-        default:
-            v->wav_output = 0;
-            break;
+        case 0: sm = 0; break;
+        case 1: sm = _m6581_triangle(v, v_sync); break;
+        case 2: sm = _m6581_sawtooth(v); break;
+        case 3: sm = _m6581_trisaw(v, v_sync); break;
+        case 4: sm = _m6581_pulse(v); break;
+        case 5: sm = _m6581_tripulse(v, v_sync); break;
+        case 6: sm = _m6581_sawpulse(v); break;
+        case 7: sm = _m6581_trisawpulse(v, v_sync); break;
+        case 8: sm = _m6581_noise(v); break;
+        default: sm = 0; break;
     }
+    v->wav_output = sm;
 
     /* envelope generator */
-    if (v->env_rate_count == v->env_rate_period) {
-        v->env_rate_count = 0;
+    uint32_t lfsr = v->env_counter;
+    if (lfsr != _m6581_rate_count_period[v->env_counter_compare & 0x0F]) {
+        const uint32_t feedback = ((lfsr >> 14) ^ (lfsr >> 13)) & 1;
+        lfsr = ((lfsr << 1) | feedback) & 0x7FFF;
+        v->env_counter = lfsr;
+    }
+    else {
+        v->env_counter = 0x7FFF;
         if ((v->env_state == M6581_ENV_ATTACK) ||
-            (++v->env_exp_count == _m6581_env_exp_period(v->env_count)))
+            (++v->env_exp_counter == _m6581_env_gen_dr_divisors[v->env_cur_level & 0xFF]))
         {
-            v->env_exp_count = 0;
-        }
-        if (!v->env_hold) {
+            v->env_exp_counter = 0;
             switch (v->env_state) {
                 case M6581_ENV_ATTACK:
-                    if (++v->env_count == 0xFF) {
-                        v->env_state = M6581_ENV_DECAY_SUSTAIN;
-                        v->env_rate_period = _m6581_env_period[v->decay];
+                    if (((++v->env_cur_level) & 0xFF) == 0xFF) {
+                        v->env_state = M6581_ENV_DECAY;
+                        v->env_counter_compare = v->env_decay_sub;
                     }
                     break;
-                case M6581_ENV_DECAY_SUSTAIN:
-                    if (v->env_count != ((v->sustain<<4)|v->sustain)) {
-                        v->env_count--;
+                case M6581_ENV_DECAY:
+                    if (v->env_cur_level != v->env_sustain_level) {
+                        --v->env_cur_level &= 0xFF;
+                        if (0 == v->env_cur_level) {
+                            v->env_state = M6581_ENV_FROZEN;
+                        }
                     }
                     break;
                 case M6581_ENV_RELEASE:
-                    v->env_count--;
+                    v->env_cur_level = (v->env_cur_level - 1) & 0xFF;
+                    if (0 == v->env_cur_level) {
+                        v->env_state = M6581_ENV_FROZEN;
+                    }
                     break;
-            }
-            if (0 == v->env_count) {
-                v->env_hold = true;
+                case M6581_ENV_FROZEN:
+                    v->env_cur_level = 0;
+                    break;
             }
         }
     }
-    else {
-        v->env_rate_count = (v->env_rate_count + 1) & 0x7FFF;
+}
+
+static inline void _m6581_voice_sync(m6581_t* sid, int voice_index) {
+    m6581_voice_t* v = &sid->voice[voice_index];
+    m6581_voice_t* v_sync = &sid->voice[(voice_index+2)%3];
+    if (v->sync && (v_sync->ctrl & M6581_CTRL_SYNC)) {
+        v->wav_accum = 0;
     }
 }
 
@@ -510,12 +508,43 @@ bool m6581_tick(m6581_t* sid) {
         }
     }
 
+    /* tick wave and envelope generators */
     for (int i = 0; i < 3; i++) {
         _m6581_voice_tick(sid, i);
     }
+    /* handle voice synchronization */
+    for (int i = 0; i < 3; i++) {
+        _m6581_voice_sync(sid, i);
+    }
+    /* FIXME: filter! */
+    /* sum the voice outputs 12+8 bit */
+    int v = 0;
+    for (int i = 0; i < 3; i++) {
+        m6581_voice_t* voice = &sid->voice[i];
+        v += (((int)voice->wav_output) - 2048) * voice->env_cur_level;
+    }
+    /* 20 + 4 bit */
+    v *= sid->filter.volume;
+    /* reduce to 16 bit */
+    v /= 256;
+    /* convert to -1.0 .. +1.0 */
+    float vf = v / 32768.0f;
+    sid->sample_accum += vf;
+    sid->sample_accum_count += 1.0f;
 
-    // FIXME
-    return false;
+    /* new sample? */
+    sid->sample_counter -= M6581_FIXEDPOINT_SCALE;
+    if (sid->sample_counter <= 0) {
+        sid->sample_counter += sid->sample_period;
+        float s = sid->sample_accum / sid->sample_accum_count;
+        sid->sample = sid->sample_mag * s;
+        sid->sample_accum = 0.0f;
+        sid->sample_accum_count = 1.0f;
+        return true;
+    }
+    else {
+        return false;
+    }
 }
 
 uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
@@ -528,10 +557,12 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                 case M6581_POT_X:
                 case M6581_POT_Y:
                     /* FIXME: potentiometers */
-                    data = 0x00;
+                    data = 0;
+                    sid->bus_value = 0;
                     break;
                 case M6581_OSC3RAND:
                     /* FIXME */
+                    sid->bus_value = 0;
                     data = 0x00;
                     break;
                 case M6581_ENV3:
