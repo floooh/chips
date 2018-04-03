@@ -529,12 +529,15 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                 case M6581_POT_Y:
                     /* FIXME: potentiometers */
                     data = 0x00;
+                    break;
                 case M6581_OSC3RAND:
                     /* FIXME */
                     data = 0x00;
+                    break;
                 case M6581_ENV3:
                     /* FIXME */
                     data = 0x00;
+                    break;
                 default:
                     data = sid->bus_value;
                     break;
