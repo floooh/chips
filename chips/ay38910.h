@@ -434,7 +434,7 @@ bool ay38910_tick(ay38910_t* ay) {
 
     /* generate new sample? */
     ay->sample_counter -= AY38910_FIXEDPOINT_SCALE;
-    while (ay->sample_counter <= 0) {
+    if (ay->sample_counter <= 0) {
         ay->sample_counter += ay->sample_period;
         float vol = 0.0f;
         for (int i = 0; i < AY38910_NUM_CHANNELS; i++) {
