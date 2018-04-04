@@ -15,7 +15,7 @@ extern "C" {
 #define BEEPER_FIXEDPOINT_SCALE (16)
 /* minimal update rate in Hz before the beeper goes silent */
 #ifndef BEEPER_SILENCE_HZ
-#define BEEPER_SILENCE_HZ (10)
+#define BEEPER_SILENCE_HZ (100)
 #endif
 
 /* beeper state */
@@ -62,8 +62,7 @@ static inline bool beeper_tick(beeper_t* beeper) {
     beeper->counter -= BEEPER_FIXEDPOINT_SCALE;
     if (beeper->counter <= 0) {
         beeper->counter += beeper->period;
-        float goal = ((float)beeper->state) * beeper->mag;
-        beeper->sample += (goal - beeper->sample) * 0.5f;
+        beeper->sample = ((float)beeper->state) * beeper->mag;
         return true;
     }
     return false;
