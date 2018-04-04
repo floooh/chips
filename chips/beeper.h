@@ -26,7 +26,6 @@ typedef struct {
     int period;
     int counter;
     float mag;
-    float goal;
     float sample;
 } beeper_t;
 
@@ -63,8 +62,8 @@ static inline bool beeper_tick(beeper_t* beeper) {
     beeper->counter -= BEEPER_FIXEDPOINT_SCALE;
     if (beeper->counter <= 0) {
         beeper->counter += beeper->period;
-        beeper->goal = ((float)beeper->state) * beeper->mag;
-        beeper->sample += (beeper->goal - beeper->sample) * 0.5f;
+        float goal = ((float)beeper->state) * beeper->mag;
+        beeper->sample += (goal - beeper->sample) * 0.5f;
         return true;
     }
     return false;

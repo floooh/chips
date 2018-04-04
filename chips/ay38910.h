@@ -215,7 +215,6 @@ typedef struct {
     int sample_period;
     int sample_counter;
     float mag;
-    float acc;
     float sample;
 } ay38910_t;
 
@@ -437,6 +436,7 @@ bool ay38910_tick(ay38910_t* ay) {
     if (ay->sample_counter <= 0) {
         ay->sample_counter += ay->sample_period;
         float vol = 0.0f;
+        float sm = 0.0f;
         for (int i = 0; i < AY38910_NUM_CHANNELS; i++) {
             const ay38910_tone_t* chn = &ay->tone[i];
             if (0 == (ay->reg[AY38910_REG_AMP_A+i] & (1<<4))) {
@@ -448,10 +448,9 @@ bool ay38910_tick(ay38910_t* ay) {
                 vol = _ay38910_volumes[ay->env.shape_state];
             }
             int vol_enable = (chn->bit|chn->tone_disable) & ((ay->noise.rng&1)|(chn->noise_disable));
-            ay->acc += (vol_enable ? vol : -vol);
+            sm += (vol_enable ? vol : -vol);
         }
-        ay->sample = (ay->mag * ay->acc) * 0.33333f;
-        ay->acc = 0.0f;
+        ay->sample = sm * ay->mag * 0.33333f;
         return true;    /* new sample is ready */
     }
     /* fallthrough: no new sample ready yet */
