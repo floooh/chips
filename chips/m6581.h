@@ -470,7 +470,7 @@ static inline void _m6581_voice_tick(m6581_t* sid, int voice_index) {
                     break;
                 case M6581_ENV_DECAY:
                     if (v->env_cur_level != v->env_sustain_level) {
-                        --v->env_cur_level &= 0xFF;
+                        v->env_cur_level = (v->env_cur_level - 1) & 0xFF;
                         if (0 == v->env_cur_level) {
                             v->env_state = M6581_ENV_FROZEN;
                         }
