@@ -447,7 +447,7 @@ static inline uint32_t _m6581_trisawpulse(m6581_voice_t* v, m6581_voice_t* v_syn
 }
 
 static inline uint16_t _m6581_noise(m6581_voice_t* v) {
-    uint16_t s = v->noise_shift;
+    uint32_t s = v->noise_shift;
     return (M6581_BIT(s,22)<<11) |
            (M6581_BIT(s,20)<<10) |
            (M6581_BIT(s,16)<<9) |
@@ -644,7 +644,7 @@ bool m6581_tick(m6581_t* sid) {
     }
     int accu = (sum_outp + _m6581_filter_output(&sid->filter, sum_filtered_outp) + M6581_DCMIXER) * sid->filter.volume;
     int sample = accu / (1<<12);
-    sid->sample_accum += (sample / 8192.0f);
+    sid->sample_accum += (sample / 16384.0f);
     sid->sample_accum_count += 1.0f;
 
     /* new sample? */
