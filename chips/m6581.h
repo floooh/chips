@@ -123,10 +123,10 @@ extern "C" {
 #define M6581_FILTER_FILTEX (1<<3)
 
 /* filter mode bits */
-#define M6581_FILTER_LOWPASS    (1<<0)
-#define M6581_FILTER_BANDPASS   (1<<1)
-#define M6581_FILTER_HIGHPASS   (1<<2)
-#define M6581_FILTER_3OFF       (1<<3)
+#define M6581_FILTER_LP     (1<<0)
+#define M6581_FILTER_BP     (1<<1)
+#define M6581_FILTER_HP     (1<<2)
+#define M6581_FILTER_3OFF   (1<<3)
 
 /* setup parameters for m6581_init() */
 typedef struct {
@@ -145,6 +145,7 @@ typedef enum {
 
 /* voice state */
 typedef struct {
+    bool muted;
     /* wave generator state */
     uint16_t freq;
     uint16_t pulse_width;
@@ -170,13 +171,20 @@ typedef struct {
 typedef struct {
     uint16_t cutoff;
     uint8_t resonance;
-    uint8_t filter;
+    uint8_t voices;
     uint8_t mode;
     uint8_t volume;
+    int nyquist_freq;
+    int resonance_coeff_div_1024;
+    int w0;
+    int v_hp;
+    int v_bp;
+    int v_lp;
 } m6581_filter_t;
 
 /* m6581 instance state */
 typedef struct {
+    int sound_hz;
     /* reading a write-only register returns the last value
        written to *any* register for about 0x2000 ticks
     */
@@ -207,6 +215,7 @@ extern bool m6581_tick(m6581_t* sid);
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
+#include <math.h>   /* tanh */
 #ifndef CHIPS_DEBUG
     #ifdef _DEBUG
         #define CHIPS_DEBUG
@@ -225,6 +234,10 @@ extern bool m6581_tick(m6581_t* sid);
 #define M6581_FIXEDPOINT_SCALE (16)
 /* move bit into first position */
 #define M6581_BIT(val,bitnr) ((val>>bitnr)&1)
+/* filter constants */
+#define M6581_DCWAVE (0) // (0x380)
+#define M6581_DCMIXER (0) // (((-0xFFF*0xFF)/18) / (1<<7))
+#define M6581_DCVOICE (0) // (0x800*0xFF)
 
 static const uint32_t _m6581_rate_count_period[16] = {
     0x7F00, 0x0006, 0x003C, 0x0330, 0x20C0, 0x6755, 0x3800, 0x500E,    
@@ -250,6 +263,8 @@ static const uint8_t _m6581_env_gen_dr_divisors[256] = {
     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1    
 };
 
+static float _m6581_cutoff_freq[2048];
+
 static void _m6581_init_voice(m6581_voice_t* v) {
     memset(v, 0, sizeof(*v));
     v->noise_shift = 0x007FFFFC;
@@ -257,11 +272,30 @@ static void _m6581_init_voice(m6581_voice_t* v) {
     v->env_counter = 0x7FFF;
 }
 
+static void _m6581_init_cutoff_table() {
+    for (int i = 0; i < 2048; i++) {
+        float x = i / 8.0f;
+        float cf = -0.0156f * x * x + 48.473f * x - 45.074f;
+        _m6581_cutoff_freq[i] = cf <= 0 ? 0 : cf;
+    }
+}
+
+static void _m6581_set_filter_cutoff(m6581_filter_t*);
+static void _m6581_set_resonance(m6581_filter_t*);
+
+static void _m6581_init_filter(m6581_filter_t* f, int sound_hz) {
+    memset(f, 0, sizeof(*f));
+    f->nyquist_freq = sound_hz / 2;
+    _m6581_set_filter_cutoff(f);
+    _m6581_set_resonance(f);
+}
+
 void m6581_init(m6581_t* sid, m6581_desc_t* desc) {
     CHIPS_ASSERT(sid && desc);
     CHIPS_ASSERT(desc->tick_hz > 0);
     CHIPS_ASSERT(desc->sound_hz > 0);
     memset(sid, 0, sizeof(*sid));
+    sid->sound_hz = desc->sound_hz;
     sid->sample_period = (desc->tick_hz * M6581_FIXEDPOINT_SCALE) / desc->sound_hz;
     sid->sample_counter = sid->sample_period;
     sid->sample_mag = desc->magnitude;
@@ -269,6 +303,8 @@ void m6581_init(m6581_t* sid, m6581_desc_t* desc) {
     for (int i = 0; i < 3; i++) {
         _m6581_init_voice(&sid->voice[i]);
     }
+    _m6581_init_cutoff_table();
+    _m6581_init_filter(&sid->filter, sid->sound_hz);
 }
 
 void m6581_reset(m6581_t* sid) {
@@ -278,11 +314,7 @@ void m6581_reset(m6581_t* sid) {
     for (int i = 0; i < 3; i++) {
         _m6581_init_voice(&sid->voice[i]);
     }
-    sid->filter.cutoff = 0;
-    sid->filter.resonance = 0;
-    sid->filter.filter = 0;
-    sid->filter.mode = 0;
-    sid->filter.volume = 0;
+    _m6581_init_filter(&sid->filter, sid->sound_hz);
     sid->sample_counter = sid->sample_period;
     sid->sample = 0.0f;
     sid->sample_accum = 0.0f;
@@ -357,6 +389,17 @@ static inline void _m6581_set_ctrl(m6581_voice_t* v, uint8_t data) {
     }
 
     v->ctrl = data;
+}
+
+static inline uint32_t _m6581_wavnone(m6581_voice_t* v) {
+    if (v->wav_accum) {
+        uint32_t sm = (v->wav_accum >> 12);
+        v->wav_accum >>= 1;
+        return sm;
+    }
+    else {
+        return 0;
+    }
 }
 
 static inline uint32_t _m6581_triangle(m6581_voice_t* v, m6581_voice_t* v_sync) {
@@ -435,7 +478,7 @@ static inline void _m6581_voice_tick(m6581_t* sid, int voice_index) {
     m6581_voice_t* v_sync = &sid->voice[(voice_index+2)%3];
     uint32_t sm;
     switch ((v->ctrl>>4) & 0x0F) {
-        case 0: sm = 0; break;
+        case 0: sm = _m6581_wavnone(v); break;
         case 1: sm = _m6581_triangle(v, v_sync); break;
         case 2: sm = _m6581_sawtooth(v); break;
         case 3: sm = _m6581_trisaw(v, v_sync); break;
@@ -498,6 +541,70 @@ static inline void _m6581_voice_sync(m6581_t* sid, int voice_index) {
     }
 }
 
+/*--- FILTER IMPLEMENTATION ---------------------------------------------------*/
+static void _m6581_set_filter_cutoff(m6581_filter_t* f) {
+    const float freq_domain_div_coeff = 2.0f * M_PI * 1.048576f;
+    f->w0 = (int) (_m6581_cutoff_freq[f->cutoff] * freq_domain_div_coeff);
+    const float nyquist_freq = (float) f->nyquist_freq;
+    const float max_cutoff = nyquist_freq > 16000.0f ? 16000.0f : nyquist_freq;
+    const int w0_max_dt = (int)(max_cutoff * freq_domain_div_coeff);
+    if (f->w0 > w0_max_dt) {
+        f->w0 = w0_max_dt;
+    }
+}
+
+static void _m6581_set_resonance(m6581_filter_t* f) {
+    f->resonance_coeff_div_1024 = (int) (1024.0f/(0.707f + 1.9f * ((float)f->resonance) / 15.0f) + 0.5f);
+}
+
+static void _m6581_set_cutoff_lo(m6581_filter_t* f, uint8_t data) {
+    if ((data ^ f->cutoff) & 7) {
+        f->cutoff = (f->cutoff & 0x7F8) | (data & 7);
+        _m6581_set_filter_cutoff(f);
+    }
+}
+
+static void _m6581_set_cutoff_hi(m6581_filter_t* f, uint8_t data) {
+    f->cutoff = (data<< 3) | (f->cutoff & 7);
+    _m6581_set_filter_cutoff(f);
+}
+
+static void _m6581_set_resfilt(m6581_filter_t* f, uint8_t data) {
+    f->voices = data & 7;
+    f->resonance = data >> 4;
+    _m6581_set_resonance(f);
+}
+
+static void _m6581_set_modevol(m6581_t* sid, uint8_t data) {
+    sid->filter.volume = data & 0x0F;
+    sid->filter.mode = data >> 4;
+    sid->voice[2].muted = 0 != (sid->filter.mode & M6581_FILTER_3OFF);
+}
+
+static inline int _m6581_filter_output(m6581_filter_t* f, int vi) {
+    int w0_dt = f->w0 / (1<<6);
+    vi = vi / (1<<7);
+
+    int d_vlp = (w0_dt * f->v_bp) / (1<<14);
+    f->v_lp -= d_vlp;
+    int d_vbp = (w0_dt * f->v_hp) / (1<<14);
+    f->v_bp -= d_vbp;
+    f->v_hp = ((f->v_bp * f->resonance_coeff_div_1024) / (1<<10)) - f->v_lp - vi;
+
+    int vf = 0;
+    if (f->mode & M6581_FILTER_LP) {
+        vf += f->v_lp;
+    }
+    if (f->mode & M6581_FILTER_BP) {
+        vf += f->v_bp;
+    }
+    if (f->mode & M6581_FILTER_HP) {
+        vf += f->v_hp;
+    }
+    return vf * (1<<7);
+}
+
+/*--- TICK FUNCTION ----------------------------------------------------------*/
 bool m6581_tick(m6581_t* sid) {
     CHIPS_ASSERT(sid);
 
@@ -516,20 +623,28 @@ bool m6581_tick(m6581_t* sid) {
     for (int i = 0; i < 3; i++) {
         _m6581_voice_sync(sid, i);
     }
-    /* FIXME: filter! */
-    /* sum the voice outputs 12+8 bit */
-    int v = 0;
+    /* filter */
+    int sum_filtered_outp = 0;
+    int sum_outp = 0;
     for (int i = 0; i < 3; i++) {
-        m6581_voice_t* voice = &sid->voice[i];
-        v += (((int)voice->wav_output) - 2048) * voice->env_cur_level;
+        m6581_voice_t* v = &sid->voice[i];
+        int wav_out = (int) v->wav_output;
+        int env_out = (int) v->env_cur_level;
+        if (sid->filter.voices & (1<<i)) {
+            sum_filtered_outp += (wav_out - M6581_DCWAVE) * env_out + M6581_DCVOICE;
+        }
+        else {
+            if (v->muted) {
+                sum_outp += (0 - M6581_DCWAVE) * env_out + M6581_DCVOICE;
+            }
+            else {
+                sum_outp += (wav_out - M6581_DCWAVE) * env_out + M6581_DCVOICE;
+            }
+        }
     }
-    /* 20 + 4 bit */
-    v *= sid->filter.volume;
-    /* reduce to 16 bit */
-    v /= 256;
-    /* convert to -1.0 .. +1.0 */
-    float vf = v / 32768.0f;
-    sid->sample_accum += vf;
+    int accu = (sum_outp + _m6581_filter_output(&sid->filter, sum_filtered_outp) + M6581_DCMIXER) * sid->filter.volume;
+    int sample = accu / (1<<12);
+    sid->sample_accum += (sample / 8192.0f);
     sid->sample_accum_count += 1.0f;
 
     /* new sample? */
@@ -539,7 +654,7 @@ bool m6581_tick(m6581_t* sid) {
         float s = sid->sample_accum / sid->sample_accum_count;
         sid->sample = sid->sample_mag * s;
         sid->sample_accum = 0.0f;
-        sid->sample_accum_count = 1.0f;
+        sid->sample_accum_count = 0.0f;
         return true;
     }
     else {
@@ -563,11 +678,11 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                 case M6581_OSC3RAND:
                     /* FIXME */
                     sid->bus_value = 0;
-                    data = 0x00;
+                    data = sid->voice[2].wav_output >> 4;
                     break;
                 case M6581_ENV3:
-                    /* FIXME */
-                    data = 0x00;
+                    sid->bus_value = 0;
+                    data = sid->voice[2].env_cur_level;
                     break;
                 default:
                     data = sid->bus_value;
@@ -645,18 +760,16 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                     _m6581_set_susrel(&sid->voice[2], data);
                     break;
                 case M6581_FC_LO:
-                    sid->filter.cutoff = (sid->filter.cutoff & ~7) | (data & 7);
+                    _m6581_set_cutoff_lo(&sid->filter, data);
                     break;
                 case M6581_FC_HI:
-                    sid->filter.cutoff = (data<<3) | (sid->filter.cutoff & 7);
+                    _m6581_set_cutoff_hi(&sid->filter, data);
                     break;
                 case M6581_RES_FILT:
-                    sid->filter.resonance = data >> 4;
-                    sid->filter.filter = data & 0x0F;
+                    _m6581_set_resfilt(&sid->filter, data);
                     break;
                 case M6581_MODE_VOL:
-                    sid->filter.mode = data >> 4;
-                    sid->filter.volume = data & 0x0F;
+                    _m6581_set_modevol(sid, data);
                     break;
             }
         }
