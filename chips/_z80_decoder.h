@@ -57,11 +57,11 @@ static uint8_t _z80_szp[256] = {
 #define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
 
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
-  z80_t c = *cpu;
+  z80_state_t c = cpu->state;
+  const z80_tick_t tick = cpu->tick;
+  uint64_t pins = cpu->pins;
   int trap_id = -1;
   uint32_t ticks = 0;
-  uint64_t pins = c.PINS;
-  const z80_tick_t tick = c.tick;
   uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;
   do {
     _OFF(Z80_INT);
@@ -1175,14 +1175,18 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       }
     }
     for (int i=0; i<Z80_MAX_NUM_TRAPS; i++) {
-      if (c.trap_valid[i] && (c.PC==c.trap_addr[i])) {
-        trap_id=i;
+      if (cpu->trap_valid[i] && (c.PC==cpu->trap_addr[i])) {
+        if (cpu->trap_check[i]) {
+          if (cpu->trap_check[i](i)) { trap_id=i; }
+        } else {
+          trap_id=i;
+        }
       }
     }
   } while ((ticks < num_ticks) && (trap_id < 0));
-  c.PINS = pins;
-  c.trap_id = trap_id;
-  *cpu = c;
+  cpu->state = c;
+  cpu->pins = pins;
+  cpu->trap_id = trap_id;
   return ticks;
 }
 #undef _SA

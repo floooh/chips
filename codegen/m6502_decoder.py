@@ -207,7 +207,7 @@ def write_header():
     l("/* machine generated, don't edit! */")
     write_defines()
     l('uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {')
-    l('  _m6502_state_t c = cpu->state;')
+    l('  m6502_state_t c = cpu->state;')
     l('  int trap_id = -1;')
     l('  uint8_t l, h;')
     l('  uint16_t a, t;')

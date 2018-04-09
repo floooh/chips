@@ -47,7 +47,7 @@
 #define _NZ(v) c.P=((c.P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
 uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
-  _m6502_state_t c = cpu->state;
+  m6502_state_t c = cpu->state;
   int trap_id = -1;
   uint8_t l, h;
   uint16_t a, t;

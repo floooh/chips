@@ -223,11 +223,11 @@ typedef struct {
     */
     uint8_t pi;
     bool bcd_enabled;       /* this is actually not mutable but needed when ticking */
-} _m6502_state_t;
+} m6502_state_t;
 
 /* M6502 CPU state */
 typedef struct {
-    _m6502_state_t state;
+    m6502_state_t state;
     m6502_tick_t tick;
 
     /* the m6510 IO port stuff */
@@ -290,7 +290,7 @@ extern uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
 /* helper macros and functions for code-generated instruction decoder */
 #define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
-static inline void _m6502_adc(_m6502_state_t* cpu, uint8_t val) {
+static inline void _m6502_adc(m6502_state_t* cpu, uint8_t val) {
     if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 1 : 0;
@@ -332,7 +332,7 @@ static inline void _m6502_adc(_m6502_state_t* cpu, uint8_t val) {
     }    
 }
 
-static inline void _m6502_sbc(_m6502_state_t* cpu, uint8_t val) {
+static inline void _m6502_sbc(m6502_state_t* cpu, uint8_t val) {
     if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 0 : 1;
@@ -375,7 +375,7 @@ static inline void _m6502_sbc(_m6502_state_t* cpu, uint8_t val) {
     }
 }
 
-static inline void _m6502_arr(_m6502_state_t* cpu) {
+static inline void _m6502_arr(m6502_state_t* cpu) {
     /* undocumented, unreliable ARR instruction, but this is tested
        by the Wolfgang Lorenz C64 test suite
        implementation taken from MAME

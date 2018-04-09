@@ -67,7 +67,7 @@
         z80_t.trap_id is >= 0.
 
     ~~~C
-    void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr)
+    void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr, z80_checktrap_t* check)
     ~~~
         Set a trap breakpoint at a 16-bit CPU address. Up to 8 trap breakpoints
         can be set. After each instruction, the current PC will be checked
@@ -75,7 +75,9 @@
         return early, and the trap_id member of z80_t will be >= 0. This can be
         used to set debugger breakpoints, or call out into native host system
         code for other reasons (for instance replacing operating system functions
-        like loading game files).
+        like loading game files). The optional _check_ function pointer will
+        be called whan the PC for a trap matches. If the function returns false
+        the trap will be ignored.
 
     ~~~C
     void z80_clear_trap(z80_t* cpu, int trap_id)
@@ -290,8 +292,9 @@
 extern "C" {
 #endif
 
-/*--- tick callback function typedef ---*/
+/*--- callback function typedefs ---*/
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
+typedef bool (*z80_checktrap_t)(int trap_id);
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -364,17 +367,10 @@ typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
 
 #define Z80_MAX_NUM_TRAPS (8)
 
-/* Z80 CPU state */
+/* Z80 mutable tick state */
 typedef struct {
-    /* tick function */
-    z80_tick_t tick;
-    /* the CPU pins (control, address and data) */
-    uint64_t PINS;
-    /* program counter */
     uint16_t PC;
-    /* memptr */
     uint16_t WZ;
-    /* NOTE: union layout assumes little-endian CPU */
     union { uint16_t AF; struct { uint8_t F, A; }; };
     union { uint16_t HL; struct { uint8_t L, H; }; };
     union { uint16_t IX; struct { uint8_t IXL, IXH; }; };
@@ -382,21 +378,22 @@ typedef struct {
     union { uint16_t BC; struct { uint8_t C, B; }; };
     union { uint16_t DE; struct { uint8_t E, D; }; };
     union { uint16_t IR; struct { uint8_t R, I; }; };
-    /* alternate register set */
     uint16_t BC_, DE_, HL_, AF_;
-    /* stack pointer */
     uint16_t SP;
-    /* interrupt mode (0, 1 or 2) */
     uint8_t IM;
-    /* interrupt enable bits */
     bool IFF1, IFF2;
-    /* enable-interrupt pending for start of next instruction */
     bool ei_pending;
-    /* trap points */
+} z80_state_t;
+
+/* Z80 CPU state */
+typedef struct {
+    z80_tick_t tick;
+    z80_state_t state;
+    uint64_t pins;
+    int trap_id;
     bool trap_valid[Z80_MAX_NUM_TRAPS];
     uint16_t trap_addr[Z80_MAX_NUM_TRAPS];
-    /* index of trap hit, or -1 if no trap hit */
-    int trap_id;
+    z80_checktrap_t trap_check[Z80_MAX_NUM_TRAPS];
 } z80_t;
 
 /* initialize a new z80 instance */
@@ -464,21 +461,21 @@ void z80_init(z80_t* c, z80_tick_t tick_cb) {
 void z80_reset(z80_t* c) {
     CHIPS_ASSERT(c);
     /* AF and SP are set to 0xFFFF */
-    c->AF = c->SP = 0xFFFF;
+    c->state.AF = c->state.SP = 0xFFFF;
     /* PC is set to 0x0000 */
-    c->PC = 0x0000;
+    c->state.PC = 0x0000;
     /* IFF1 and IFF2 are off */
-    c->IFF1 = c->IFF2 = false;
+    c->state.IFF1 = c->state.IFF2 = false;
     /* IM is set to 0 */
-    c->IM = 0;
+    c->state.IM = 0;
     /* all other registers are undefined, set them to 0xFF */
-    c->BC = c->DE = c->HL = 0xFFFF;
-    c->IX = c->IY = 0xFFFF;
-    c->BC_ = c->DE_ = c->HL_ = c->AF_ = 0xFFFF;
-    c->WZ = 0xFFFF;
+    c->state.BC = c->state.DE = c->state.HL = 0xFFFF;
+    c->state.IX = c->state.IY = 0xFFFF;
+    c->state.BC_ = c->state.DE_ = c->state.HL_ = c->state.AF_ = 0xFFFF;
+    c->state.WZ = 0xFFFF;
     /* after power-on or reset, R is set to 0 (see z80-documented.pdf) */
-    c->IR = 0;
-    c->ei_pending = false;
+    c->state.IR = 0;
+    c->state.ei_pending = false;
 }
 
 void z80_set_trap(z80_t* c, int trap_id, uint16_t addr) {
