@@ -67,7 +67,7 @@
         z80_t.trap_id is >= 0.
 
     ~~~C
-    void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr, z80_checktrap_t* check)
+    void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr)
     ~~~
         Set a trap breakpoint at a 16-bit CPU address. Up to 8 trap breakpoints
         can be set. After each instruction, the current PC will be checked
@@ -75,9 +75,15 @@
         return early, and the trap_id member of z80_t will be >= 0. This can be
         used to set debugger breakpoints, or call out into native host system
         code for other reasons (for instance replacing operating system functions
-        like loading game files). The optional _check_ function pointer will
-        be called whan the PC for a trap matches. If the function returns false
-        the trap will be ignored.
+        like loading game files). 
+        
+        NOTE: you can provide an optional callback function for each trap
+        point through the z80_t.trap_func[] array. If such a check-callback
+        is set, it will be called when a trap point hits to let the user-code
+        decide if the trap point should trigger (in this case the check
+        function must return true). This is for instance useful for emulated
+        systems with memory banking to check if the correct memory back is
+        currently paged in.
 
     ~~~C
     void z80_clear_trap(z80_t* cpu, int trap_id)
@@ -294,7 +300,7 @@ extern "C" {
 
 /*--- callback function typedefs ---*/
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
-typedef bool (*z80_checktrap_t)(int trap_id);
+typedef bool (*z80_trapfunc_t)();
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -393,7 +399,7 @@ typedef struct {
     int trap_id;
     bool trap_valid[Z80_MAX_NUM_TRAPS];
     uint16_t trap_addr[Z80_MAX_NUM_TRAPS];
-    z80_checktrap_t trap_check[Z80_MAX_NUM_TRAPS];
+    z80_trapfunc_t trap_func[Z80_MAX_NUM_TRAPS];
 } z80_t;
 
 /* initialize a new z80 instance */

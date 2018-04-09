@@ -1845,8 +1845,8 @@ def write_header() :
 def write_footer() :
     l('    for (int i=0; i<Z80_MAX_NUM_TRAPS; i++) {') 
     l('      if (cpu->trap_valid[i] && (c.PC==cpu->trap_addr[i])) {')
-    l('        if (cpu->trap_check[i]) {')
-    l('          if (c->trap_check[i](i)) { trap_id=i; }')
+    l('        if (cpu->trap_func[i]) {')
+    l('          if (cpu->trap_func[i]()) { trap_id=i; }')
     l('        } else {')
     l('          trap_id=i;')
     l('        }')

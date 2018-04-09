@@ -1176,8 +1176,8 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     }
     for (int i=0; i<Z80_MAX_NUM_TRAPS; i++) {
       if (cpu->trap_valid[i] && (c.PC==cpu->trap_addr[i])) {
-        if (cpu->trap_check[i]) {
-          if (cpu->trap_check[i](i)) { trap_id=i; }
+        if (cpu->trap_func[i]) {
+          if (cpu->trap_func[i]()) { trap_id=i; }
         } else {
           trap_id=i;
         }
