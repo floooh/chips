@@ -215,6 +215,9 @@ extern bool m6581_tick(m6581_t* sid);
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
+#ifdef _MSC_VER
+#define _USE_MATH_DEFINES
+#endif
 #include <math.h>   /* tanh */
 #ifndef CHIPS_DEBUG
     #ifdef _DEBUG
@@ -543,7 +546,7 @@ static inline void _m6581_voice_sync(m6581_t* sid, int voice_index) {
 
 /*--- FILTER IMPLEMENTATION ---------------------------------------------------*/
 static void _m6581_set_filter_cutoff(m6581_filter_t* f) {
-    const float freq_domain_div_coeff = 2.0f * M_PI * 1.048576f;
+    const float freq_domain_div_coeff = 2.0f * ((float)M_PI) * 1.048576f;
     f->w0 = (int) (_m6581_cutoff_freq[f->cutoff] * freq_domain_div_coeff);
     const float nyquist_freq = (float) f->nyquist_freq;
     const float max_cutoff = nyquist_freq > 16000.0f ? 16000.0f : nyquist_freq;
