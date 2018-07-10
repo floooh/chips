@@ -1320,7 +1320,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     }
 
     /* in the first half-cycle, either a g_access, p_access or i_access happens */
-    uint8_t g_data;
+    uint8_t g_data = 0;
     if (g_access) {
         uint16_t addr;
         if (vic->reg.ctrl_1 & M6569_CTRL1_BMM) {
