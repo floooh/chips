@@ -53,7 +53,7 @@
     *             +--------+        +--------+--------+                        *
     *                                                                          *
     *             +--------+--------+--------+--------+--------+----           *
-    * CPU Visible |   00   |   31   |   02   |   03   |   23   |               *
+    * CPU Visible |   00   |   31   |   02   |   03   |   24   |               *
     *             +--------+--------+--------+--------+--------+----           *
     *             0x0000   0x0400   0x0800   0x1000   0x1400   0x1800          *
     ****************************************************************************
@@ -93,7 +93,7 @@
     ~~~
     Map a range of host memory to a 16-bit address for RAM access in a
     given layer (0..3, 0 being the highest priority layer). Size is in bytes,
-    must be a multiple of 0x0400 (dez: 1024), and must be <= 0x10000 (dez: 65536)
+    must be a multiple of 0x0400 (decimal: 1024), and must be <= 0x10000 (decimal: 65536)
 
     ~~~C
     void mem_map_rom(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* ptr)
