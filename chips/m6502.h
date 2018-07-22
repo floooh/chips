@@ -54,7 +54,7 @@
         attributes:
             ~~~C
             typedef struct {
-                m6502_tick_t tick_cb;  /    / the CPU tick callback
+                m6502_tick_t tick_cb;       // the CPU tick callback
                 bool bcd_disabled;          // set to true if BCD mode is disabled
                 m6510_in_t in_cb;           // optional port IO input callback (only on m6510)
                 m6510_out_t out_cb;         // optional port IO output callback (only on m6510)
