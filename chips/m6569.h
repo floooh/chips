@@ -116,7 +116,7 @@ extern "C" {
 #define M6569_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
 /* memory fetch callback, used to feed pixel- and color-data into the m6569 */
-typedef uint16_t (*m6569_fetch_t)(uint16_t addr);
+typedef uint16_t (*m6569_fetch_t)(uint16_t addr, void* user_data);
 
 /* setup parameters for m6569_init() function */
 typedef struct {
@@ -128,6 +128,8 @@ typedef struct {
     uint16_t vis_x, vis_y, vis_w, vis_h;
     /* the memory-fetch callback */
     m6569_fetch_t fetch_cb;
+    /* optional user-data for fetch callback */
+    void* user_data;
 } m6569_desc_t;
 
 /* register bank */
@@ -203,6 +205,7 @@ typedef struct {
     uint16_t i_addr;        /* address for i-accesses, 0x3FFF or 0x39FF (if ECM bit set) */
     uint16_t p_addr_or;     /* OR-mask for p-accesses */
     m6569_fetch_t fetch_cb; /* memory-fetch callback */
+    void* user_data;        /* optional user-data for fetch callback */
 } _m6569_memory_unit_t;
 
 /* video matrix state */
@@ -390,6 +393,7 @@ void m6569_init(m6569_t* vic, m6569_desc_t* desc) {
     memset(vic, 0, sizeof(*vic));
     _m6569_init_crt(&vic->crt, desc);
     vic->mem.fetch_cb = desc->fetch_cb;
+    vic->mem.user_data = desc->user_data;
 }
 
 /*--- reset ------------------------------------------------------------------*/
@@ -1309,13 +1313,13 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     if (c_access) {
         /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
         uint16_t addr = vic->rs.vc | vic->mem.c_addr_or;
-        vic->vm.line[vic->vm.vmli] = vic->mem.fetch_cb(addr) & 0x0FFF;
+        vic->vm.line[vic->vm.vmli] = vic->mem.fetch_cb(addr, vic->mem.user_data) & 0x0FFF;
         i_access = false;
     }
     else if (p_index >= 0) {
         /* a sprite p-access */
         uint16_t addr = vic->mem.p_addr_or + p_index;
-        vic->sunit[p_index].p_data = (uint8_t) vic->mem.fetch_cb(addr);
+        vic->sunit[p_index].p_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
         i_access = false;
     }
 
@@ -1333,20 +1337,20 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             addr = ((vic->vm.line[vic->vm.vmli]&0xFF)<<3) | vic->rs.rc;
             addr = (addr | vic->mem.g_addr_or) & vic->mem.g_addr_and;
         }
-        g_data = (uint8_t) vic->mem.fetch_cb(addr);
+        g_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
         i_access = false;
     }
     else if (s_index >= 0) {
         /* sprite s-access: |MP7|MP6|MP5|MP4|MP3|MP2|MP1|MP0|MC5|MC4|MC3|MC2|MC1|MC0| */
         _m6569_sprite_unit_t* su = &vic->sunit[s_index];
         uint16_t addr = (su->p_data<<6) | su->mc;
-        uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr);
+        uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
         su->shift = (su->shift<<8) | (s_data<<8);
         su->mc = (su->mc + 1) & 0x3F;
         /* in the tick *after* the p-access, need to do 2 s-accesses (one each half-tick) */
         if (p_index == -1) {
             uint16_t addr = (su->p_data<<6) | su->mc;
-            uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr);
+            uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
             su->shift = (su->shift<<8) | (s_data<<8);
             su->mc = (su->mc + 1) & 0x3F;
         }
@@ -1355,7 +1359,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
 
     /* if no other accesses happened, do an i-access */
     if (i_access) {
-        g_data = (uint8_t) vic->mem.fetch_cb(vic->mem.i_addr);
+        g_data = (uint8_t) vic->mem.fetch_cb(vic->mem.i_addr, vic->mem.user_data);
     }
 
     /*--- update the border flip-flops ---------------------------------------*/

@@ -129,8 +129,15 @@ extern "C" {
 /* port in/out callbacks */
 #define M6526_PORT_A (0)
 #define M6526_PORT_B (1)
-typedef uint8_t (*m6526_in_t)(int port_id);
-typedef void (*m6526_out_t)(int port_id, uint8_t data);
+typedef uint8_t (*m6526_in_t)(int port_id, void* user_data);
+typedef void (*m6526_out_t)(int port_id, uint8_t data, void* user_data);
+
+/* m6526 initialization parameters */
+typedef struct {
+    m6526_in_t in_cb;
+    m6526_out_t out_cb;
+    void* user_data;
+} m6526_desc_t;
 
 /* I/O port state */
 typedef struct {
@@ -170,6 +177,7 @@ typedef struct {
     m6526_int_t intr;
     m6526_in_t in_cb;
     m6526_out_t out_cb;
+    void* user_data;
 } m6526_t;
 
 /* extract 8-bit data bus from 64-bit pins */
@@ -180,7 +188,7 @@ typedef struct {
 #define M6526_SET_ADDR(p,d) {p=((p&~0xF)|(d&0xF));}
 
 /* initialize a new m6526_t instance */
-extern void m6526_init(m6526_t* c, m6526_in_t in_cb, m6526_out_t out_cb);
+extern void m6526_init(m6526_t* c, m6526_desc_t* desc);
 /* reset an existing m6526_t instance */
 extern void m6526_reset(m6526_t* c);
 /* perform an IO request */
@@ -227,11 +235,12 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->flag = false;
 }
 
-void m6526_init(m6526_t* c, m6526_in_t in_cb, m6526_out_t out_cb) {
-    CHIPS_ASSERT(c && in_cb && out_cb);
+void m6526_init(m6526_t* c, m6526_desc_t* desc) {
+    CHIPS_ASSERT(c && desc && desc->in_cb && desc->out_cb);
     memset(c, 0, sizeof(*c));
-    c->in_cb = in_cb;
-    c->out_cb = out_cb;
+    c->in_cb = desc->in_cb;
+    c->out_cb = desc->out_cb;
+    c->user_data = desc->user_data;
     _m6526_init_port(&c->pa);
     _m6526_init_port(&c->pb);
     _m6526_init_timer(&c->ta);
@@ -311,7 +320,7 @@ static void _m6526_update_pa(m6526_t* c) {
     data |= c->pa.inp & ~c->pa.ddr;
     if (data != c->pa.last_out) {
         c->pa.last_out = data;
-        c->out_cb(M6526_PORT_A, data);
+        c->out_cb(M6526_PORT_A, data, c->user_data);
     }
 }
 
@@ -321,7 +330,7 @@ static void _m6526_update_pb(m6526_t* c) {
     data = _m6526_merge_pb67(c, data);
     if (data != c->pb.last_out) {
         c->pb.last_out = data;
-        c->out_cb(M6526_PORT_B, data);
+        c->out_cb(M6526_PORT_B, data, c->user_data);
     }
 }
 
@@ -331,10 +340,10 @@ static uint8_t _m6526_read_pa(m6526_t* c) {
     */
     /* the input callback should put a 1 into all unconnected pins */
     if (c->pa.ddr != 0xFF) {
-        c->pa.inp = (c->in_cb(M6526_PORT_A) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
+        c->pa.inp = (c->in_cb(M6526_PORT_A, c->user_data) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
     }
     else {
-        c->pa.inp = c->in_cb(M6526_PORT_A) & c->pa.reg;
+        c->pa.inp = c->in_cb(M6526_PORT_A, c->user_data) & c->pa.reg;
     }
     return c->pa.inp;
 }
@@ -342,10 +351,10 @@ static uint8_t _m6526_read_pa(m6526_t* c) {
 static uint8_t _m6526_read_pb(m6526_t* c) {
     uint8_t data;
     if (c->pb.ddr != 0xFF) {
-        data = (c->in_cb(M6526_PORT_B) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);
+        data = (c->in_cb(M6526_PORT_B, c->user_data) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);
     }
     else {
-        data = c->in_cb(M6526_PORT_B) & c->pb.reg;
+        data = c->in_cb(M6526_PORT_B, c->user_data) & c->pb.reg;
     }
     c->pb.inp = data;
     data = _m6526_merge_pb67(c, data);

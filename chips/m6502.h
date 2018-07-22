@@ -60,6 +60,7 @@
                 m6510_out_t out_cb;         // optional port IO output callback (only on m6510)
                 uint8_t m6510_io_pullup;    // IO port bits that are 1 when reading
                 uint8_t m6510_io_floating;  // unconnected IO port pins
+                void* user_data;            // optional user-data for callbacks
             } m6502_desc_t;
             ~~~
 
@@ -197,10 +198,10 @@ extern "C" {
 #define M6502_MAX_NUM_TRAPS (8)
 
 /* tick callback function typedef */
-typedef uint64_t (*m6502_tick_t)(uint64_t pins);
+typedef uint64_t (*m6502_tick_t)(uint64_t pins, void* user_data);
 /* callbacks for M6510 port I/O */
-typedef void (*m6510_out_t)(uint8_t data);
-typedef uint8_t (*m6510_in_t)(void);
+typedef void (*m6510_out_t)(uint8_t data, void* user_data);
+typedef uint8_t (*m6510_in_t)(void* user_data);
 
 /* the desc structure provided to m6502_init() */
 typedef struct {
@@ -210,6 +211,7 @@ typedef struct {
     m6510_out_t out_cb;     /* optional port IO output callback (only on m6510) */
     uint8_t m6510_io_pullup;    /* IO port bits that are 1 when reading */
     uint8_t m6510_io_floating;  /* unconnected IO port pins */
+    void* user_data;        /* optional user-data for callbacks */
 } m6502_desc_t;
 
 /* mutable tick state */
@@ -229,6 +231,7 @@ typedef struct {
 typedef struct {
     m6502_state_t state;
     m6502_tick_t tick;
+    void* user_data;
 
     /* the m6510 IO port stuff */
     m6510_in_t in_cb;
@@ -426,6 +429,7 @@ void m6502_init(m6502_t* c, m6502_desc_t* desc) {
     CHIPS_ASSERT(desc->tick_cb);
     memset(c, 0, sizeof(*c));
     c->tick = desc->tick_cb;
+    c->user_data = desc->user_data;
     c->state.PINS = M6502_RW;
     c->state.P = M6502_IF|M6502_XF;
     c->state.S = 0xFD;
@@ -443,8 +447,8 @@ void m6502_reset(m6502_t* c) {
     c->state.S = 0xFD;
     c->state.PINS = M6502_RW;
     /* load reset vector from 0xFFFD into PC */
-    uint8_t l = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFC, 0x00)));
-    uint8_t h = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00)));
+    uint8_t l = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFC, 0x00), c->user_data));
+    uint8_t h = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00), c->user_data));
     c->state.PC = (h<<8)|l;
     c->io_ddr = 0;
     c->io_port = 0;
@@ -482,21 +486,21 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
             /* write IO direction bits and update outside world */
             c->io_ddr = M6502_GET_DATA(pins);
             c->io_drive = (c->io_port & c->io_ddr) | (c->io_drive & ~c->io_ddr);
-            c->out_cb((c->io_port & c->io_ddr) | (c->io_pullup & ~c->io_ddr));
+            c->out_cb((c->io_port & c->io_ddr) | (c->io_pullup & ~c->io_ddr), c->user_data);
         }
     }
     else {
         /* address 1: perform I/O */
         if (pins & M6502_RW) {
             /* an input operation */
-            uint8_t val = ((c->in_cb() | (c->io_floating & c->io_drive)) & ~c->io_ddr) | (c->io_port & c->io_ddr);
+            uint8_t val = ((c->in_cb(c->user_data) | (c->io_floating & c->io_drive)) & ~c->io_ddr) | (c->io_port & c->io_ddr);
             M6502_SET_DATA(pins, val);
         }
         else {
             /* an output operation */
             c->io_port = M6502_GET_DATA(pins);
             c->io_drive = (c->io_port & c->io_ddr) | (c->io_drive & ~c->io_ddr);
-            c->out_cb((c->io_port & c->io_ddr) | (c->io_pullup & ~c->io_ddr));
+            c->out_cb((c->io_port & c->io_ddr) | (c->io_pullup & ~c->io_ddr), c->user_data);
         }
     }
     return pins;
