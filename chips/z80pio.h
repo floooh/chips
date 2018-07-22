@@ -191,12 +191,17 @@ typedef struct {
     as input arg and return value to allow the callback
     to modify the CPU pins (e.g. to request an interrupr)
 */
-typedef uint8_t (*z80pio_in_t)(int port_id);
-typedef void (*z80pio_out_t)(int port_id, uint8_t data);
+typedef uint8_t (*z80pio_in_t)(int port_id, void* user_data);
+typedef void (*z80pio_out_t)(int port_id, uint8_t data, void* user_data);
 
-/*
-    Z80 PIO state.
-*/
+/* Z80 PIO initialization parameters */
+typedef struct {
+    z80pio_in_t in_cb;      /* port-input callback */
+    z80pio_out_t out_cb;    /* port-output callback */
+    void* user_data;        /* user-data handed to callbacks */
+} z80pio_desc_t;
+
+/* Z80 PIO state. */
 typedef struct {
     /* port A and B register sets */
     z80pio_port_t port[Z80PIO_NUM_PORTS];
@@ -206,6 +211,8 @@ typedef struct {
     z80pio_in_t in_cb;
     /* port-output callback */
     z80pio_out_t out_cb;
+    /* user-data for callbacks */
+    void* user_data;
 } z80pio_t;
 
 /* extract 8-bit data bus from 64-bit pins */
@@ -220,11 +227,10 @@ typedef struct {
     clear the z80pio structure and go into reset state:
 
     pio     -- pointer to a z80pio_t instance
-    in_cb   -- callback to be called when input on a port is needed
-    out_cb  -- callback to be called when output on a port is performed
+    desc    -- pointer to a z80pio_desc_t structure
 
 */
-extern void z80pio_init(z80pio_t* pio, z80pio_in_t in_cb, z80pio_out_t out_cb);
+extern void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc);
 
 /*
     z80pio_reset
@@ -343,11 +349,12 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void z80pio_init(z80pio_t* pio, z80pio_in_t in_cb, z80pio_out_t out_cb) {
-    CHIPS_ASSERT(pio && in_cb && out_cb);
+void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc) {
+    CHIPS_ASSERT(pio && desc && desc->in_cb && desc->out_cb);
     memset(pio, 0, sizeof(*pio));
-    pio->out_cb = out_cb;
-    pio->in_cb = in_cb;
+    pio->out_cb = desc->out_cb;
+    pio->in_cb = desc->in_cb;
+    pio->user_data = desc->user_data;
     z80pio_reset(pio);
 }
 
@@ -402,9 +409,7 @@ void _z80pio_write_ctrl(z80pio_t* pio, int port_id, uint8_t data) {
             p->mode = data>>6;
             if (p->mode == Z80PIO_MODE_OUTPUT) {
                 /* make output visible */
-                if (pio->out_cb) {
-                    pio->out_cb(port_id, p->output);
-                }
+                pio->out_cb(port_id, p->output, pio->user_data);
             }
             else if (p->mode == Z80PIO_MODE_BITCONTROL) {
                 /* next control word is the io_select mask */
@@ -455,9 +460,7 @@ void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
     switch (p->mode) {
         case Z80PIO_MODE_OUTPUT:
             p->output = data;
-            if (pio->out_cb) {
-                pio->out_cb(port_id, data);
-            }
+            pio->out_cb(port_id, data, pio->user_data);
             break;
         case Z80PIO_MODE_INPUT:
             p->output = data;
@@ -467,9 +470,7 @@ void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
             break;
         case Z80PIO_MODE_BITCONTROL:
             p->output = data;
-            if (pio->out_cb) {
-                pio->out_cb(port_id, p->io_select | (p->output & ~p->io_select));
-            }
+            pio->out_cb(port_id, p->io_select | (p->output & ~p->io_select), pio->user_data);
             break;
     }
 }
@@ -484,18 +485,14 @@ uint8_t _z80pio_read_data(z80pio_t* pio, int port_id) {
             data = p->output;
             break;
         case Z80PIO_MODE_INPUT:
-            if (pio->in_cb) {
-                p->input = pio->in_cb(port_id);
-            }
+            p->input = pio->in_cb(port_id, pio->user_data);
             data = p->input;
             break;
         case Z80PIO_MODE_BIDIRECTIONAL:
             // FIXME
             break;
         case Z80PIO_MODE_BITCONTROL:
-            if (pio->in_cb) {
-                p->input = pio->in_cb(port_id);
-            }
+            p->input = pio->in_cb(port_id, pio->user_data);
             data = (p->input & p->io_select) | (p->output & ~p->io_select);
             break;
     }
