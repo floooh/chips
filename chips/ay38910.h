@@ -132,8 +132,8 @@ extern "C" {
 #define AY38910_ENV_CONTINUE    (1<<3)
 
 /* callbacks for input/output on I/O ports */
-typedef uint8_t (*ay38910_in_t)(int port_id);
-typedef void (*ay38910_out_t)(int port_id, uint8_t data);
+typedef uint8_t (*ay38910_in_t)(int port_id, void* user_data);
+typedef void (*ay38910_out_t)(int port_id, uint8_t data, void* user_data);
 
 /* chip subtypes */
 typedef enum {
@@ -150,6 +150,7 @@ typedef struct {
     float magnitude;        /* output sample magnitude, from 0.0 (silence) to 1.0 (max volume) */ 
     ay38910_in_t in_cb;     /* I/O port input callback */
     ay38910_out_t out_cb;   /* I/O port output callback */
+    void* user_data;        /* optional user-data for callbacks */
 } ay38910_desc_t;
 
 /* a tone channel */
@@ -184,6 +185,7 @@ typedef struct {
     ay38910_type_t type;        /* the chip flavour */
     ay38910_in_t in_cb;         /* the port-input callback */
     ay38910_out_t out_cb;       /* the port-output callback */
+    void* user_data;            /* optional user-data for callbacks */
     uint32_t tick;              /* a tick counter for internal clock division */
     uint8_t addr;               /* 4-bit address latch */
     union {                     /* the register bank */
@@ -369,6 +371,7 @@ void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc) {
     /* note: input and output callbacks are optional */
     ay->in_cb = desc->in_cb;
     ay->out_cb = desc->out_cb;
+    ay->user_data = desc->user_data;
     ay->type = desc->type;
     ay->noise.rng = 1;
     ay->sample_period = (desc->tick_hz * AY38910_FIXEDPOINT_SCALE) / desc->sound_hz;
@@ -494,14 +497,14 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                     else if (ay->addr == AY38910_REG_IO_PORT_A) {
                         if (ay->enable & (1<<6)) {
                             if (ay->out_cb) {
-                                ay->out_cb(AY38910_PORT_A, ay->port_a);
+                                ay->out_cb(AY38910_PORT_A, ay->port_a, ay->user_data);
                             }
                         }
                     }
                     else if (ay->addr == AY38910_REG_IO_PORT_B) {
                         if (ay->enable & (1<<7)) {
                             if (ay->out_cb) {
-                                ay->out_cb(AY38910_PORT_B, ay->port_b);
+                                ay->out_cb(AY38910_PORT_B, ay->port_b, ay->user_data);
                             }
                         }
                     }
@@ -527,7 +530,7 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                 if (ay->addr == AY38910_REG_IO_PORT_A) {
                     if ((ay->enable & (1<<6)) == 0) {
                         if (ay->in_cb) {
-                            ay->port_a = ay->in_cb(AY38910_PORT_A);
+                            ay->port_a = ay->in_cb(AY38910_PORT_A, ay->user_data);
                         }
                         else {
                             ay->port_a = 0xFF;
@@ -537,7 +540,7 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                 else if (ay->addr == AY38910_REG_IO_PORT_B) {
                     if ((ay->enable & (1<<7)) == 0) {
                         if (ay->in_cb) {
-                            ay->port_b = ay->in_cb(AY38910_PORT_B);
+                            ay->port_b = ay->in_cb(AY38910_PORT_B, ay->user_data);
                         }
                         else {
                             ay->port_b = 0xFF;

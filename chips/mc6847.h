@@ -198,7 +198,7 @@ extern "C" {
 #define MC6847_FIXEDPOINT_SCALE (16)
 
 /* a memory-fetch callback, used to read video memory bytes into the MC6847 */
-typedef uint64_t (*mc6847_fetch_t)(uint64_t pins);
+typedef uint64_t (*mc6847_fetch_t)(uint64_t pins, void* user_data);
 
 /* the mc6847 setup parameters */
 typedef struct {
@@ -210,6 +210,8 @@ typedef struct {
     uint32_t rgba8_buffer_size;
     /* memory-fetch callback */
     mc6847_fetch_t fetch_cb;
+    /* optional user-data for the fetch callback */
+    void* user_data;
 } mc6847_desc_t;
 
 /* the mc6847 state struct */
@@ -239,6 +241,8 @@ typedef struct {
 
     /* the fetch callback function */
     mc6847_fetch_t fetch_cb;
+    /* optional user-data for the fetch-callback */
+    void* user_data;
     /* pointer to RGBA8 buffer where decoded video image is written too */
     uint32_t* rgba8_buffer;
 } mc6847_t;
@@ -278,6 +282,7 @@ void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc) {
     memset(vdg, 0, sizeof(*vdg));
     vdg->rgba8_buffer = desc->rgba8_buffer;
     vdg->fetch_cb = desc->fetch_cb;
+    vdg->user_data = desc->user_data;
 
     /* compute counter periods, the MC6847 is always clocked at 3.579 MHz,
        and the frequency of how the tick function is called must be 
@@ -439,6 +444,7 @@ static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
     uint32_t* dst = &(vdg->rgba8_buffer[(y+MC6847_TOP_BORDER_LINES) * MC6847_DISPLAY_WIDTH]);
     uint32_t bc = _mc6847_border_color(vdg);
     uint64_t pins = vdg->pins;
+    void* ud = vdg->user_data;
 
     /* left border */
     for (int i = 0; i < MC6847_BORDER_PIXELS; i++) {
@@ -464,7 +470,7 @@ static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
             uint32_t fg_color = (pins & MC6847_CSS) ? vdg->palette[4] : vdg->palette[0];
             for (int x = 0; x < bytes_per_row; x++) {
                 MC6847_SET_ADDR(pins, addr++);
-                pins = vdg->fetch_cb(pins);
+                pins = vdg->fetch_cb(pins, ud);
                 uint8_t m = MC6847_GET_DATA(pins);
                 for (int p = 7; p >= 0; p--) {
                     uint32_t c = ((m>>p) & 1) ? fg_color : vdg->black;
@@ -490,7 +496,7 @@ static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
             uint16_t addr = (y / row_height) * bytes_per_row;
             for (int x = 0; x < bytes_per_row; x++) {
                 MC6847_SET_ADDR(pins, addr++);
-                pins = vdg->fetch_cb(pins);
+                pins = vdg->fetch_cb(pins, ud);
                 uint8_t m = MC6847_GET_DATA(pins);
                 for (int p = 6; p >= 0; p -= 2) {
                     const uint32_t c = vdg->palette[((m>>p) & 3) + pal_offset];
@@ -515,7 +521,7 @@ static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
         uint32_t alnum_bg = (pins & MC6847_CSS) ? vdg->alnum_dark_orange : vdg->alnum_dark_green;
         for (int x = 0; x < 32; x++) {
             MC6847_SET_ADDR(pins, addr++);
-            pins = vdg->fetch_cb(pins);
+            pins = vdg->fetch_cb(pins, ud);
             uint8_t chr = MC6847_GET_DATA(pins);
             if (pins & MC6847_AS) {
                 /* semigraphics mode */

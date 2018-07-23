@@ -28,9 +28,9 @@ static uint8_t _z80_szp[256] = {
 /* disable control pins */
 #define _OFF(m) pins&=~(m)
 /* execute a number of ticks without wait-state detection */
-#define _T(num) pins=tick(num,pins);ticks+=num
+#define _T(num) pins=tick(num,pins,ud);ticks+=num
 /* execute a number of ticks with wait-state detection */
-#define _TW(num) pins&=~Z80_WAIT_MASK;pins=tick(num,pins);ticks+=num+Z80_GET_WAIT(pins);
+#define _TW(num) pins&=~Z80_WAIT_MASK;pins=tick(num,pins,ud);ticks+=num+Z80_GET_WAIT(pins);
 /* a memory read machine cycle (3 ticks with wait-state detection) */
 #define _MR(addr,data) _SA(addr);_ON(Z80_MREQ|Z80_RD);_TW(3);_OFF(Z80_MREQ|Z80_RD);data=_GD()
 /* a memory write machine cycle (3 ticks with wait-state detection) */
@@ -59,6 +59,7 @@ static uint8_t _z80_szp[256] = {
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   z80_state_t c = cpu->state;
   const z80_tick_t tick = cpu->tick;
+  void* ud = cpu->user_data;
   uint64_t pins = cpu->pins;
   int trap_id = -1;
   uint32_t ticks = 0;
@@ -1177,7 +1178,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     for (int i=0; i<Z80_MAX_NUM_TRAPS; i++) {
       if (cpu->trap_valid[i] && (c.PC==cpu->trap_addr[i])) {
         if (cpu->trap_func[i]) {
-          if (cpu->trap_func[i]()) { trap_id=i; }
+          if (cpu->trap_func[i](ud)) { trap_id=i; }
         } else {
           trap_id=i;
         }

@@ -12,6 +12,14 @@ The YAKC emulator is here:
 - github repo: https://github.com/floooh/yakc
 - asm.js/wasm demo: http://floooh.github.io/virtualkc/
 
+
+## What's New
+
+* **23-Jul-2018**: all chip emulators with callbacks now have an extra
+```user_data``` argument in the callbacks which is provided in the init
+function, this makes the chip emulators a bit more flexible when more than
+one emulator of the same type is used in a program
+
 ## Chip Emulators
 
 ### Z80 CPU (chips/z80.h)

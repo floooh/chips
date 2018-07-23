@@ -44,10 +44,17 @@
 
     ## Functions
     ~~~C
-    void z80_init(z80_t* cpu, z80_tick_t tick_func)
+    void z80_init(z80_t* cpu, z80_desc_t* desc)
     ~~~
-        Initializes a new Z80 CPU instance. The tick function will be called
-        from inside the z80_exec() function.
+        Initializes a new Z80 CPU instance. The z80_desc_t struct
+        provided initialization attributes:
+            ~~~C
+            typedef struct {
+                z80_tick_t tick_cb; // the CPU tick callback
+                void* user_data;    // user data arg handed to callbacks
+            } z80_desc_t;
+            ~~~
+        The tick_cb function will be called from inside z80_exec().
 
     ~~~C
     void z80_reset(z80_t* cpu)
@@ -148,7 +155,7 @@
 
     ~~~C
     uint8_t mem[1<<16] = { 0 };
-    uint64_t tick(int num_ticks, uint64_t pins) {
+    uint64_t tick(int num_ticks, uint64_t pins, void* user_data) {
         if (pins & Z80_MREQ) {
             if (pins & Z80_RD) {
                 Z80_SET_DATA(pins, mem[Z80_GET_ADDR(pins)]);
@@ -299,8 +306,8 @@ extern "C" {
 #endif
 
 /*--- callback function typedefs ---*/
-typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins);
-typedef bool (*z80_trapfunc_t)();
+typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins, void* user_data);
+typedef bool (*z80_trapfunc_t)(void* user_data);
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -373,6 +380,12 @@ typedef bool (*z80_trapfunc_t)();
 
 #define Z80_MAX_NUM_TRAPS (8)
 
+/* initialization attributes */
+typedef struct {
+    z80_tick_t tick_cb;
+    void* user_data;
+} z80_desc_t;
+
 /* Z80 mutable tick state */
 typedef struct {
     uint16_t PC;
@@ -396,6 +409,7 @@ typedef struct {
     z80_tick_t tick;
     z80_state_t state;
     uint64_t pins;
+    void* user_data;
     int trap_id;
     bool trap_valid[Z80_MAX_NUM_TRAPS];
     uint16_t trap_addr[Z80_MAX_NUM_TRAPS];
@@ -403,7 +417,7 @@ typedef struct {
 } z80_t;
 
 /* initialize a new z80 instance */
-extern void z80_init(z80_t* cpu, z80_tick_t tick_cb);
+extern void z80_init(z80_t* cpu, z80_desc_t* desc);
 /* reset an existing z80 instance */
 extern void z80_reset(z80_t* cpu);
 /* set a trap point */
@@ -456,12 +470,13 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 #pragma warning (pop)
 #endif
 
-void z80_init(z80_t* c, z80_tick_t tick_cb) {
-    CHIPS_ASSERT(c);
-    CHIPS_ASSERT(tick_cb);
+void z80_init(z80_t* c, z80_desc_t* desc) {
+    CHIPS_ASSERT(c && desc);
+    CHIPS_ASSERT(desc->tick_cb);
     memset(c, 0, sizeof(*c));
     z80_reset(c);
-    c->tick = tick_cb;
+    c->tick = desc->tick_cb;
+    c->user_data = desc->user_data;
 }
 
 void z80_reset(z80_t* c) {

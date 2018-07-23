@@ -154,8 +154,15 @@ extern "C" {
 /* port in/out callbacks */
 #define M6522_PORT_A (0)
 #define M6522_PORT_B (1)
-typedef uint8_t (*m6522_in_t)(int port_id);
-typedef void (*m6522_out_t)(int port_id, uint8_t data);
+typedef uint8_t (*m6522_in_t)(int port_id, void* user_data);
+typedef void (*m6522_out_t)(int port_id, uint8_t data, void* user_data);
+
+/* m6522 initialization parameters */
+typedef struct {
+    m6522_in_t in_cb;
+    m6522_out_t out_cb;
+    void* user_data;
+} m6522_desc_t;
 
 /* m6522 state */
 typedef struct {
@@ -171,6 +178,7 @@ typedef struct {
     bool t2_active;         /* timer2 active */
     m6522_in_t in_cb;
     m6522_out_t out_cb;
+    void* user_data;
 } m6522_t;
 
 /* extract 8-bit data bus from 64-bit pins */
@@ -181,7 +189,7 @@ typedef struct {
 #define M6522_SET_ADDR(p,d) {p=((p&~0xF)|(d&0xF));}
 
 /* initialize a new 6522 instance */
-extern void m6522_init(m6522_t* m6522, m6522_in_t in_cb, m6522_out_t out_cb);
+extern void m6522_init(m6522_t* m6522, m6522_desc_t* desc);
 /* reset an existing 6522 instance */
 extern void m6522_reset(m6522_t* m6522);
 /* perform an IO request */
@@ -207,11 +215,12 @@ extern void m6522_tick(m6522_t* m6522);
 #define _M6522_CHECK_ACR_LATCH_B()        ((m6522->acr & (1<<1)) != 0)
 #define _M6522_CHECK_ACR_LATCH_A()        ((m6522->acr & (1<<0)) != 0)
 
-void m6522_init(m6522_t* m6522, m6522_in_t in_cb, m6522_out_t out_cb) {
-    CHIPS_ASSERT(m6522);
+void m6522_init(m6522_t* m6522, m6522_desc_t* desc) {
+    CHIPS_ASSERT(m6522 && desc);
     memset(m6522, 0, sizeof(*m6522));
-    m6522->in_cb = in_cb;
-    m6522->out_cb = out_cb;
+    m6522->in_cb = desc->in_cb;
+    m6522->out_cb = desc->out_cb;
+    m6522->user_data = desc->user_data;
 }
 
 /*
@@ -231,7 +240,7 @@ void m6522_reset(m6522_t* m6522) {
 }
 
 static uint8_t _m6522_in_a(m6522_t* m6522) {
-    uint8_t data = m6522->in_cb(M6522_PORT_A);
+    uint8_t data = m6522->in_cb(M6522_PORT_A, m6522->user_data);
     data = (m6522->out_a & m6522->ddr_a) | (data & ~m6522->ddr_a);
     return data;
 }
@@ -239,11 +248,11 @@ static uint8_t _m6522_in_a(m6522_t* m6522) {
 static void _m6522_out_a(m6522_t* m6522) {
     /* mask output bits, set input bits to 1 */
     uint8_t data = (m6522->out_a & m6522->ddr_a) | ~m6522->ddr_a;
-    m6522->out_cb(M6522_PORT_A, data);
+    m6522->out_cb(M6522_PORT_A, data, m6522->user_data);
 }
 
 static uint8_t _m6522_in_b(m6522_t* m6522) {
-    uint8_t data = m6522->in_cb(M6522_PORT_B);
+    uint8_t data = m6522->in_cb(M6522_PORT_B, m6522->user_data);
     data = (m6522->out_b & m6522->ddr_b) | (data & ~m6522->ddr_b);
     if (_M6522_CHECK_ACR_T1_PB7()) {
         data = (data & 0x7F) | (m6522->t1_pb7<<7);
@@ -258,7 +267,7 @@ static void _m6522_out_b(m6522_t* m6522) {
     if (_M6522_CHECK_ACR_T1_PB7()) {
         data = (data & 0x7F) | (m6522->t1_pb7<<7);
     }
-    m6522->out_cb(M6522_PORT_B, data);
+    m6522->out_cb(M6522_PORT_B, data, m6522->user_data);
 }
 
 static void _m6522_write(m6522_t* m6522, uint8_t addr, uint8_t data) {

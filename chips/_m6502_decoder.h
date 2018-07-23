@@ -12,7 +12,7 @@
 /* disable control pins */
 #define _OFF(m) pins&=~(m)
 /* execute a tick */
-#define _T() pins=tick(pins);ticks++;
+#define _T() pins=tick(pins,ud);ticks++;
 /* a memory read tick */
 #define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);
 /* a memory write tick */
@@ -54,6 +54,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
   uint32_t ticks = 0;
   uint64_t pins = c.PINS;
   const m6502_tick_t tick = cpu->tick;
+  void* ud = cpu->user_data;
   do {
     uint64_t pre_pins = pins;
     _OFF(M6502_IRQ|M6502_NMI);
