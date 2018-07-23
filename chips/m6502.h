@@ -277,6 +277,10 @@ extern uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
 /* M6510: check for IO port access to address 0 or 1 */
 #define M6510_CHECK_IO(p) ((p&0xFFFEULL)==0)
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -506,7 +510,3 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
     return pins;
 }
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

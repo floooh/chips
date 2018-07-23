@@ -212,6 +212,10 @@ extern uint64_t m6581_iorq(m6581_t* sid, uint64_t pins);
 /* tick a m6581_t instance, returns true when new sample is ready */
 extern bool m6581_tick(m6581_t* sid);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -780,7 +784,3 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
     return pins;
 }
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

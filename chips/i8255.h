@@ -244,6 +244,10 @@ extern void i8255_reset(i8255_t* ppi);
 */
 extern uint64_t i8255_iorq(i8255_t* ppi, uint64_t pins);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -442,7 +446,3 @@ uint64_t i8255_iorq(i8255_t* ppi, uint64_t pins) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

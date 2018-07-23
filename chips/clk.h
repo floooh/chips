@@ -11,6 +11,10 @@ extern "C" {
 /* convert microseconds to number of clock ticks */
 extern int64_t clk_ticks(int freq_hz, int micro_secs);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -27,8 +31,4 @@ extern int64_t clk_ticks(int freq_hz, int micro_secs);
 int64_t clk_ticks(int freq_hz, int micro_secs) {
     return ((int64_t)freq_hz * micro_secs) / 1000000;
 }
-#endif
-
-#ifdef __cplusplus
-} /* extern "C" */
 #endif

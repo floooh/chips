@@ -133,6 +133,10 @@ extern void kbd_set_active_lines(kbd_t* kbd, uint16_t line_mask);
 /* scan active columns (used together with kbd_set_active_lines */
 extern uint16_t kbd_scan_columns(kbd_t* kbd);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -349,7 +353,3 @@ uint16_t kbd_scan_columns(kbd_t* kbd) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

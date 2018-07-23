@@ -240,6 +240,10 @@ extern uint64_t mc6845_iorq(mc6845_t* mc6845, uint64_t pins);
 /* tick the mc6845, the returned pin mask overwrittes addr bus pins with MA0..MA13! */
 extern uint64_t mc6845_tick(mc6845_t* mc6845);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -477,7 +481,3 @@ uint64_t mc6845_tick(mc6845_t* c) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

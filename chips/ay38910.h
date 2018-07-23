@@ -234,6 +234,10 @@ extern uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins);
 /* tick the AY-3-8910, return true if a new sample is ready */
 extern bool ay38910_tick(ay38910_t* ay);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -557,7 +561,3 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

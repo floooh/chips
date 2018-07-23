@@ -197,6 +197,10 @@ extern uint64_t m6522_iorq(m6522_t* m6522, uint64_t pins);
 /* tick the m6522 */
 extern void m6522_tick(m6522_t* m6522);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -499,7 +503,3 @@ void m6522_tick(m6522_t* m6522) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

@@ -256,6 +256,10 @@ extern void mc6847_ctrl(mc6847_t* vdg, uint64_t pins, uint64_t mask);
 /* tick the mc6847_t instance, this will call the fetch_cb and generate the image */
 extern void mc6847_tick(mc6847_t* vdg);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -640,7 +644,3 @@ void mc6847_tick(mc6847_t* vdg) {
 }
 
 # endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

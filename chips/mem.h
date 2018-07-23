@@ -253,6 +253,10 @@ static inline uint16_t mem_rd16(mem_t* mem, uint16_t addr) {
     return (h<<8)|l;
 }
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -369,6 +373,3 @@ void mem_write_range(mem_t* m, uint16_t addr, const uint8_t* src, int num_bytes)
     }
 }
 #endif /* CHIPS_IMPL */
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

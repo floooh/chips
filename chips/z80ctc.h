@@ -393,6 +393,10 @@ static inline uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
     return pins;
 }
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -509,7 +513,3 @@ uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

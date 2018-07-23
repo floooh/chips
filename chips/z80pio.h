@@ -336,6 +336,10 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
     return pins;
 }
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -549,7 +553,3 @@ void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

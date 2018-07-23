@@ -294,6 +294,10 @@ extern uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
 /* get 32-bit RGBA8 value from color index (0..15) */
 extern uint32_t m6569_color(int i);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -1474,7 +1478,3 @@ uint32_t m6569_color(int i) {
     return _m6569_colors[i];
 }
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

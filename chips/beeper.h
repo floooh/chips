@@ -47,6 +47,9 @@ static inline bool beeper_tick(beeper_t* beeper) {
     return false;
 }
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -77,7 +80,3 @@ void beeper_reset(beeper_t* b) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

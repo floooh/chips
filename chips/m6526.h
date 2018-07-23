@@ -196,6 +196,10 @@ extern uint64_t m6526_iorq(m6526_t* c, uint64_t pins);
 /* tick the m6526_t instance, return true if interrupt requested */
 extern uint64_t m6526_tick(m6526_t* c, uint64_t pins);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -642,7 +646,3 @@ uint64_t m6526_iorq(m6526_t* c, uint64_t pins) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

@@ -146,6 +146,10 @@ extern void crt_reset(crt_t* crt);
 */
 extern bool crt_tick(crt_t* crt, bool hsync, bool vsync);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -238,7 +242,3 @@ bool crt_tick(crt_t* crt, bool hsync, bool vsync) {
     return crt->visible;
 }
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif

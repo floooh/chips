@@ -448,6 +448,10 @@ extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 /* set up to 7 wait states in pin mask */
 #define Z80_SET_WAIT(p,w) {p=((p&~Z80_WAIT_MASK)|((((uint64_t)w)<<Z80_WAIT_SHIFT)&Z80_WAIT_MASK));}
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
@@ -519,7 +523,3 @@ bool z80_has_trap(z80_t* c, int trap_id) {
 }
 
 #endif /* CHIPS_IMPL */
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif
