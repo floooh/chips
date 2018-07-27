@@ -89,139 +89,16 @@ typedef bool (*z80m_trapfunc_t)(void* user_data);
 
 #define Z80M_MAX_NUM_TRAPS (8)
 
-/* register access macros */
-#define Z80M_MSK_A      (0x00000000000000FFULL)
-#define Z80M_MSK_F      (0x000000000000FF00ULL)
-#define Z80M_MSK_L      (0x0000000000FF0000ULL)
-#define Z80M_MSK_H      (0x00000000FF000000ULL)
-#define Z80M_MSK_E      (0x000000FF00000000ULL)
-#define Z80M_MSK_D      (0x0000FF0000000000ULL)
-#define Z80M_MSK_C      (0x00FF000000000000ULL)
-#define Z80M_MSK_B      (0xFF00000000000000ULL)
-#define Z80M_MSK_FA     (0x000000000000FFFFULL)
-#define Z80M_MSK_HL     (0x00000000FFFF0000ULL)
-#define Z80M_MSK_DE     (0x0000FFFF00000000ULL)
-#define Z80M_MSK_BC     (0xFFFF000000000000ULL)
-#define Z80M_MSK_PC     (0x000000000000FFFFULL)
-#define Z80M_MSK_WZ     (0x00000000FFFF0000ULL)
-#define Z80M_MSK_SP     (0x0000FFFF00000000ULL)
-#define Z80M_MSK_R      (0x00FF000000000000ULL)
-#define Z80M_MSK_I      (0xFF00000000000000ULL)
-#define Z80M_MSK_IX     (0x000000000000FFFFULL)
-#define Z80M_MSK_IY     (0x00000000FFFF0000ULL)
-#define Z80M_MSK_IM     (0x000000FF00000000ULL)
-#define Z80M_MSK_IFF1   (0x0001000000000000ULL)
-#define Z80M_MSK_IFF2   (0x0002000000000000ULL)
-#define Z80M_MSK_EI     (0x0003000000000000ULL)
-
-#define Z80M_INV_A      (0xFFFFFFFFFFFFFF00ULL)
-#define Z80M_INV_F      (0xFFFFFFFFFFFF00FFULL)
-#define Z80M_INV_L      (0xFFFFFFFFFF00FFFFULL)
-#define Z80M_INV_H      (0xFFFFFFFF00FFFFFFULL)
-#define Z80M_INV_E      (0xFFFFFF00FFFFFFFFULL)
-#define Z80M_INV_D      (0xFFFF00FFFFFFFFFFULL)
-#define Z80M_INV_C      (0xFF00FFFFFFFFFFFFULL)
-#define Z80M_INV_B      (0x00FFFFFFFFFFFFFFULL)
-#define Z80M_INV_FA     (0xFFFFFFFFFFFF0000ULL)
-#define Z80M_INV_HL     (0xFFFFFFFF0000FFFFULL)
-#define Z80M_INV_DE     (0xFFFF0000FFFFFFFFULL)
-#define Z80M_INV_BC     (0x0000FFFFFFFFFFFFULL)
-#define Z80M_INV_PC     (0xFFFFFFFFFFFF0000ULL)
-#define Z80M_INV_WZ     (0xFFFFFFFF0000FFFFULL)
-#define Z80M_INV_SP     (0xFFFF0000FFFFFFFFULL)
-#define Z80M_INV_R      (0xFF00FFFFFFFFFFFFULL)
-#define Z80M_INV_I      (0x00FFFFFFFFFFFFFFULL)
-#define Z80M_INV_IX     (0xFFFFFFFFFFFF0000ULL)
-#define Z80M_INV_IY     (0xFFFFFFFF0000FFFFULL)
-#define Z80M_INV_IM     (0xFFFFFF00FFFFFFFFULL)
-#define Z80M_INV_IFF1   (0xFFFEFFFFFFFFFFFFULL)
-#define Z80M_INV_IFF2   (0xFFFDFFFFFFFFFFFFULL)
-#define Z80M_INV_EI     (0xFFFBFFFFFFFFFFFFULL)
-
-#define Z80M_SFT_A      (0)
-#define Z80M_SFT_F      (8)
-#define Z80M_SFT_L      (16)
-#define Z80M_SFT_H      (24)
-#define Z80M_SFT_E      (32)
-#define Z80M_SFT_D      (40)
-#define Z80M_SFT_C      (48)
-#define Z80M_SFT_B      (56)
-#define Z80M_SFT_FA     (0)
-#define Z80M_SFT_HL     (16)
-#define Z80M_SFT_DE     (32)
-#define Z80M_SFT_BC     (48)
-#define Z80M_SFT_PC     (0)
-#define Z80M_SFT_WZ     (16)
-#define Z80M_SFT_SP     (32)
-#define Z80M_SFT_R      (48)
-#define Z80M_SFT_I      (56)
-#define Z80M_SFT_IX     (0)
-#define Z80M_SFT_IY     (16)
-#define Z80M_SFT_IM     (32)
-#define Z80M_SFT_IFF1   (48)
-#define Z80M_SFT_IFF2   (49)
-#define Z80M_SFT_EI     (50)
-
-#define Z80M_BIT_IFF1   (1ULL<<Z80M_SFT_IFF1)
-#define Z80M_BIT_IFF2   (1ULL<<Z80M_SFT_IFF2)
-#define Z80M_BIT_EI     (1ULL<<Z80M_SFT_EI)
-
-#define Z80M_SET_A(bank,val)    (((bank)&Z80M_INV_A)|((val&0xFFULL)<<Z80M_SFT_A))
-#define Z80M_SET_F(bank,val)    (((bank)&Z80M_INV_F)|((val&0xFFULL)<<Z80M_SFT_F))
-#define Z80M_SET_L(bank,val)    (((bank)&Z80M_INV_L)|((val&0xFFULL)<<Z80M_SFT_L))
-#define Z80M_SET_H(bank,val)    (((bank)&Z80M_INV_H)|((val&0xFFULL)<<Z80M_SFT_H))
-#define Z80M_SET_E(bank,val)    (((bank)&Z80M_INV_E)|((val&0xFFULL)<<Z80M_SFT_E))
-#define Z80M_SET_D(bank,val)    (((bank)&Z80M_INV_D)|((val&0xFFULL)<<Z80M_SFT_D))
-#define Z80M_SET_C(bank,val)    (((bank)&Z80M_INV_C)|((val&0xFFULL)<<Z80M_SFT_C))
-#define Z80M_SET_B(bank,val)    (((bank)&Z80M_INV_B)|((val&0xFFULL)<<Z80M_SFT_B))
-#define Z80M_SET_FA(bank,val)   (((bank)&Z80M_INV_FA)|((val&0xFFFFULL)<<Z80M_SFT_FA))
-#define Z80M_SET_HL(bank,val)   (((bank)&Z80M_INV_HL)|((val&0xFFFFULL)<<Z80M_SFT_HL))
-#define Z80M_SET_DE(bank,val)   (((bank)&Z80M_INV_DE)|((val&0xFFFFULL)<<Z80M_SFT_DE))
-#define Z80M_SET_BC(bank,val)   (((bank)&Z80M_INV_BC)|((val&0xFFFFULL)<<Z80M_SFT_BC))
-#define Z80M_SET_PC(bank,val)   (((bank)&Z80M_INV_PC)|((val&0xFFFFULL)<<Z80M_SFT_PC))
-#define Z80M_SET_WZ(bank,val)   (((bank)&Z80M_INV_WZ)|((val&0xFFFFULL)<<Z80M_SFT_WZ))
-#define Z80M_SET_SP(bank,val)   (((bank)&Z80M_INV_SP)|((val&0xFFFFULL)<<Z80M_SFT_SP))
-#define Z80M_SET_R(bank,val)    (((bank)&Z80M_INV_R)|((val&0xFFULL)<<Z80M_SFT_R))
-#define Z80M_SET_I(bank,val)    (((bank)&Z80M_INV_I)|((val&0xFFULL)<<Z80M_SFT_I))
-#define Z80M_SET_IX(bank,val)   (((bank)&Z80M_INV_IX)|((val&0xFFFFULL)<<Z80M_SFT_IX))
-#define Z80M_SET_IY(bank,val)   (((bank)&Z80M_INV_IY)|((val&0xFFFFULL)<<Z80M_SFT_IY))
-#define Z80M_SET_IM(bank,val)   (((bank)&Z80M_INV_IM)|((val&0xFFFFULL)<<Z80M_SFT_IM))
-#define Z80M_SET_IFF1(bank,val) (((bank)&Z80M_INV_IFF1)|((val&1ULL)<<Z80M_SFT_IFF1))
-#define Z80M_SET_IFF2(bank,val) (((bank)&Z80M_INV_IFF2)|((val&1ULL)<<Z80M_SFT_IFF2))
-#define Z80M_SET_EI(bank,val)   (((bank)&Z80M_INV_EI)|((val&1ULL)<<Z80M_SFT_EI))
-
-#define Z80M_A(bank)    (((bank)>>Z80M_SFT_A)&0xFF)
-#define Z80M_F(bank)    (((bank)>>Z80M_SFT_F)&0xFF)
-#define Z80M_L(bank)    (((bank)>>Z80M_SFT_L)&0xFF)
-#define Z80M_H(bank)    (((bank)>>Z80M_SFT_H)&0xFF)
-#define Z80M_E(bank)    (((bank)>>Z80M_SFT_E)&0xFF)
-#define Z80M_D(bank)    (((bank)>>Z80M_SFT_D)&0xFF)
-#define Z80M_C(bank)    (((bank)>>Z80M_SFT_C)&0xFF)
-#define Z80M_B(bank)    (((bank)>>Z80M_SFT_B)&0xFF)
-#define Z80M_FA(bank)   (((bank)>>Z80M_SFT_FA)&0xFFFF)
-#define Z80M_HL(bank)   (((bank)>>Z80M_SFT_HL)&0xFFFF)
-#define Z80M_DE(bank)   (((bank)>>Z80M_SFT_DE)&0xFFFF)
-#define Z80M_BC(bank)   (((bank)>>Z80M_SFT_BC)&0xFFFF)   
-#define Z80M_PC(bank)   (((bank)>>Z80M_SFT_PC)&0xFFFF)
-#define Z80M_WZ(bank)   (((bank)>>Z80M_SFT_WZ)&0xFFFF)
-#define Z80M_SP(bank)   (((bank)>>Z80M_SFT_SP)&0xFFFF)
-#define Z80M_R(bank)    (((bank)>>Z80M_SFT_R)&0xFF)
-#define Z80M_I(bank)    (((bank)>>Z80M_SFT_I)&0xFF)
-#define Z80M_IX(bank)   (((bank)>>Z80M_SFT_IX)&0xFFFF)
-#define Z80M_IY(bank)   (((bank)>>Z80M_SFT_IY)&0xFFFF)
-#define Z80M_IM(bank)   (((bank)>>Z80M_SFT_IM)&0xFF)
-#define Z80M_IFF1(bank) (((bank)>>Z80M_SFT_IFF1)&1)
-#define Z80M_IFF2(bank) (((bank)>>Z80M_SFT_IFF2)&1)
-#define Z80M_EI(bank)   (((bank)>>Z80M_SFT_EI)&1)
-
 /* initialization attributes */
 typedef struct {
     z80m_tick_t tick_cb;
     void* user_data;
 } z80m_desc_t;
 
-/* Z80 mutable tick state */
+/* Z80 CPU state */
 typedef struct {
+    /* tick callback */
+    z80m_tick_t tick;
     /* main register bank (BC, DE, HL, FA) */
     uint64_t bc_de_hl_fa;   /* B:63..56 C:55..48 D:47..40 E:39..32 H:31..24 L:23..16: F:15..8, A:7..0 */
     /* shadow register bank (BC', DE', HL', FA') */
@@ -230,12 +107,6 @@ typedef struct {
     uint64_t ir_sp_wz_pc;
     /* EI-pending,IFF1,IFF2,IM,IY,IX */
     uint64_t eif_im_iy_ix;
-} z80m_state_t;
-
-/* Z80 CPU state */
-typedef struct {
-    z80m_tick_t tick;
-    z80m_state_t state;
     /* last pin state (only for debug inspection) */
     uint64_t pins;
     void* user_data;
@@ -259,61 +130,61 @@ extern bool z80m_has_trap(z80m_t* cpu, int trap_id);
 extern uint32_t z80m_exec(z80m_t* cpu, uint32_t ticks);
 
 /* register access functions */
-static inline void z80m_set_a(z80m_t* cpu, uint8_t v)   { cpu->state.bc_de_hl_fa = Z80M_SET_A(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_f(z80m_t* cpu, uint8_t v)   { cpu->state.bc_de_hl_fa = Z80M_SET_F(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_l(z80m_t* cpu, uint8_t v)   { cpu->state.bc_de_hl_fa = Z80M_SET_L(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_h(z80m_t* cpu, uint8_t v)   { cpu->state.bc_de_hl_fa = Z80M_SET_H(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_e(z80m_t* cpu, uint8_t v)   { cpu->state.bc_de_hl_fa = Z80M_SET_E(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_d(z80m_t* cpu, uint8_t v)   { cpu->state.bc_de_hl_fa = Z80M_SET_D(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_c(z80m_t* cpu, uint8_t v)   { cpu->state.bc_de_hl_fa = Z80M_SET_C(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_b(z80m_t* cpu, uint8_t v)   { cpu->state.bc_de_hl_fa = Z80M_SET_B(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_fa(z80m_t* cpu, uint16_t v) { cpu->state.bc_de_hl_fa = Z80M_SET_FA(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_hl(z80m_t* cpu, uint16_t v) { cpu->state.bc_de_hl_fa = Z80M_SET_HL(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_de(z80m_t* cpu, uint16_t v) { cpu->state.bc_de_hl_fa = Z80M_SET_DE(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_bc(z80m_t* cpu, uint16_t v) { cpu->state.bc_de_hl_fa = Z80M_SET_BC(cpu->state.bc_de_hl_fa, v); }
-static inline void z80m_set_fa_(z80m_t* cpu, uint16_t v) { cpu->state.bc_de_hl_fa_ = Z80M_SET_FA(cpu->state.bc_de_hl_fa_, v); }
-static inline void z80m_set_hl_(z80m_t* cpu, uint16_t v) { cpu->state.bc_de_hl_fa_ = Z80M_SET_HL(cpu->state.bc_de_hl_fa_, v); }
-static inline void z80m_set_de_(z80m_t* cpu, uint16_t v) { cpu->state.bc_de_hl_fa_ = Z80M_SET_DE(cpu->state.bc_de_hl_fa_, v); }
-static inline void z80m_set_bc_(z80m_t* cpu, uint16_t v) { cpu->state.bc_de_hl_fa_ = Z80M_SET_BC(cpu->state.bc_de_hl_fa_, v); }
-static inline void z80m_set_pc(z80m_t* cpu, uint16_t v) { cpu->state.ir_sp_wz_pc = Z80M_SET_PC(cpu->state.ir_sp_wz_pc, v); }
-static inline void z80m_set_wz(z80m_t* cpu, uint16_t v) { cpu->state.ir_sp_wz_pc = Z80M_SET_WZ(cpu->state.ir_sp_wz_pc, v); }
-static inline void z80m_set_sp(z80m_t* cpu, uint16_t v) { cpu->state.ir_sp_wz_pc = Z80M_SET_SP(cpu->state.ir_sp_wz_pc, v); }
-static inline void z80m_set_i(z80m_t* cpu, uint8_t v)   { cpu->state.ir_sp_wz_pc = Z80M_SET_I(cpu->state.ir_sp_wz_pc, v); }
-static inline void z80m_set_r(z80m_t* cpu, uint8_t v)   { cpu->state.ir_sp_wz_pc = Z80M_SET_R(cpu->state.ir_sp_wz_pc, v); }
-static inline void z80m_set_ix(z80m_t* cpu, uint16_t v) { cpu->state.eif_im_iy_ix = Z80M_SET_IX(cpu->state.eif_im_iy_ix, v); }
-static inline void z80m_set_iy(z80m_t* cpu, uint16_t v) { cpu->state.eif_im_iy_ix = Z80M_SET_IY(cpu->state.eif_im_iy_ix, v); }
-static inline void z80m_set_im(z80m_t* cpu, uint8_t v)  { cpu->state.eif_im_iy_ix = Z80M_SET_IM(cpu->state.eif_im_iy_ix, v); }
-static inline void z80m_set_iff1(z80m_t* cpu, bool b)   { cpu->state.eif_im_iy_ix = Z80M_SET_IFF1(cpu->state.eif_im_iy_ix, (b?1:0)); }
-static inline void z80m_set_iff2(z80m_t* cpu, bool b)   { cpu->state.eif_im_iy_ix = Z80M_SET_IFF2(cpu->state.eif_im_iy_ix, (b?1:0)); }
-static inline void z80m_set_ei_pending(z80m_t* cpu, bool b) { cpu->state.eif_im_iy_ix = Z80M_SET_EI(cpu->state.eif_im_iy_ix, (b?1:0)); }
+extern void z80m_set_a(z80m_t* cpu, uint8_t v);
+extern void z80m_set_f(z80m_t* cpu, uint8_t v);
+extern void z80m_set_l(z80m_t* cpu, uint8_t v);
+extern void z80m_set_h(z80m_t* cpu, uint8_t v);
+extern void z80m_set_e(z80m_t* cpu, uint8_t v);
+extern void z80m_set_d(z80m_t* cpu, uint8_t v);
+extern void z80m_set_c(z80m_t* cpu, uint8_t v);
+extern void z80m_set_b(z80m_t* cpu, uint8_t v);
+extern void z80m_set_fa(z80m_t* cpu, uint16_t v);
+extern void z80m_set_hl(z80m_t* cpu, uint16_t v);
+extern void z80m_set_de(z80m_t* cpu, uint16_t v);
+extern void z80m_set_bc(z80m_t* cpu, uint16_t v);
+extern void z80m_set_fa_(z80m_t* cpu, uint16_t v);
+extern void z80m_set_hl_(z80m_t* cpu, uint16_t v);
+extern void z80m_set_de_(z80m_t* cpu, uint16_t v);
+extern void z80m_set_bc_(z80m_t* cpu, uint16_t v);
+extern void z80m_set_pc(z80m_t* cpu, uint16_t v);
+extern void z80m_set_wz(z80m_t* cpu, uint16_t v);
+extern void z80m_set_sp(z80m_t* cpu, uint16_t v);
+extern void z80m_set_i(z80m_t* cpu, uint8_t v);
+extern void z80m_set_r(z80m_t* cpu, uint8_t v);
+extern void z80m_set_ix(z80m_t* cpu, uint16_t v);
+extern void z80m_set_iy(z80m_t* cpu, uint16_t v);
+extern void z80m_set_im(z80m_t* cpu, uint8_t v);
+extern void z80m_set_iff1(z80m_t* cpu, bool b);
+extern void z80m_set_iff2(z80m_t* cpu, bool b);
+extern void z80m_set_ei_pending(z80m_t* cpu, bool b);
 
-static inline uint8_t z80m_a(z80m_t* cpu)   { return Z80M_A(cpu->state.bc_de_hl_fa); }
-static inline uint8_t z80m_f(z80m_t* cpu)   { return Z80M_F(cpu->state.bc_de_hl_fa); }
-static inline uint8_t z80m_l(z80m_t* cpu)   { return Z80M_L(cpu->state.bc_de_hl_fa); }
-static inline uint8_t z80m_h(z80m_t* cpu)   { return Z80M_H(cpu->state.bc_de_hl_fa); }
-static inline uint8_t z80m_e(z80m_t* cpu)   { return Z80M_E(cpu->state.bc_de_hl_fa); }
-static inline uint8_t z80m_d(z80m_t* cpu)   { return Z80M_D(cpu->state.bc_de_hl_fa); }
-static inline uint8_t z80m_c(z80m_t* cpu)   { return Z80M_C(cpu->state.bc_de_hl_fa); }
-static inline uint8_t z80m_b(z80m_t* cpu)   { return Z80M_B(cpu->state.bc_de_hl_fa); }
-static inline uint16_t z80m_fa(z80m_t* cpu) { return Z80M_FA(cpu->state.bc_de_hl_fa); }
-static inline uint16_t z80m_hl(z80m_t* cpu) { return Z80M_HL(cpu->state.bc_de_hl_fa); }
-static inline uint16_t z80m_de(z80m_t* cpu) { return Z80M_DE(cpu->state.bc_de_hl_fa); }
-static inline uint16_t z80m_bc(z80m_t* cpu) { return Z80M_BC(cpu->state.bc_de_hl_fa); }
-static inline uint16_t z80m_fa_(z80m_t* cpu) { return Z80M_FA(cpu->state.bc_de_hl_fa_); }
-static inline uint16_t z80m_hl_(z80m_t* cpu) { return Z80M_HL(cpu->state.bc_de_hl_fa_); }
-static inline uint16_t z80m_de_(z80m_t* cpu) { return Z80M_DE(cpu->state.bc_de_hl_fa_); }
-static inline uint16_t z80m_bc_(z80m_t* cpu) { return Z80M_BC(cpu->state.bc_de_hl_fa_); }
-static inline uint16_t z80m_pc(z80m_t* cpu) { return Z80M_PC(cpu->state.ir_sp_wz_pc); }
-static inline uint16_t z80m_wz(z80m_t* cpu) { return Z80M_WZ(cpu->state.ir_sp_wz_pc); }
-static inline uint16_t z80m_sp(z80m_t* cpu) { return Z80M_SP(cpu->state.ir_sp_wz_pc); }
-static inline uint8_t z80m_i(z80m_t* cpu)   { return Z80M_I(cpu->state.ir_sp_wz_pc); }
-static inline uint8_t z80m_r(z80m_t* cpu)   { return Z80M_R(cpu->state.ir_sp_wz_pc); }
-static inline uint16_t z80m_ix(z80m_t* cpu) { return Z80M_IX(cpu->state.eif_im_iy_ix); }
-static inline uint16_t z80m_iy(z80m_t* cpu) { return Z80M_IY(cpu->state.eif_im_iy_ix); }
-static inline uint8_t z80m_im(z80m_t* cpu)  { return Z80M_IM(cpu->state.eif_im_iy_ix); }
-static inline bool z80m_iff1(z80m_t* cpu)   { return 0 != Z80M_IFF1(cpu->state.eif_im_iy_ix); }
-static inline bool z80m_iff2(z80m_t* cpu)   { return 0 != Z80M_IFF2(cpu->state.eif_im_iy_ix); }
-static inline bool z80m_ei_pending(z80m_t* cpu)     { return 0 != Z80M_EI(cpu->state.eif_im_iy_ix); }
+extern uint8_t z80m_a(z80m_t* cpu);
+extern uint8_t z80m_f(z80m_t* cpu);
+extern uint8_t z80m_l(z80m_t* cpu);
+extern uint8_t z80m_h(z80m_t* cpu);
+extern uint8_t z80m_e(z80m_t* cpu);
+extern uint8_t z80m_d(z80m_t* cpu);
+extern uint8_t z80m_c(z80m_t* cpu);
+extern uint8_t z80m_b(z80m_t* cpu);
+extern uint16_t z80m_fa(z80m_t* cpu);
+extern uint16_t z80m_hl(z80m_t* cpu);
+extern uint16_t z80m_de(z80m_t* cpu);
+extern uint16_t z80m_bc(z80m_t* cpu);
+extern uint16_t z80m_fa_(z80m_t* cpu);
+extern uint16_t z80m_hl_(z80m_t* cpu);
+extern uint16_t z80m_de_(z80m_t* cpu);
+extern uint16_t z80m_bc_(z80m_t* cpu);
+extern uint16_t z80m_pc(z80m_t* cpu);
+extern uint16_t z80m_wz(z80m_t* cpu);
+extern uint16_t z80m_sp(z80m_t* cpu);
+extern uint8_t z80m_i(z80m_t* cpu);
+extern uint8_t z80m_r(z80m_t* cpu);
+extern uint16_t z80m_ix(z80m_t* cpu);
+extern uint16_t z80m_iy(z80m_t* cpu);
+extern uint8_t z80m_im(z80m_t* cpu);
+extern bool z80m_iff1(z80m_t* cpu);
+extern bool z80m_iff2(z80m_t* cpu);
+extern bool z80m_ei_pending(z80m_t* cpu);
 
 /* helper macro to start interrupt handling in tick callback */
 #define Z80M_DAISYCHAIN_BEGIN(pins) if (pins&Z80M_M1) { pins|=Z80M_IEIO;
@@ -351,6 +222,122 @@ static inline bool z80m_ei_pending(z80m_t* cpu)     { return 0 != Z80M_EI(cpu->s
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+/* register locations in register banks */
+/* bank 0  and bank 1*/
+#define _A (0)
+#define _F (8)
+#define _L (16)
+#define _H (24)
+#define _E (32)
+#define _D (40)
+#define _C (48)
+#define _B (56)
+#define _FA (0)
+#define _HL (16)
+#define _DE (32)
+#define _BC (48)
+/* bank 2 */
+#define _PC (0)
+#define _WZ (16)
+#define _SP (32)
+#define _IR (48)
+#define _R  (48)
+#define _I  (56)
+/* bank 3 */
+#define _IX (0)
+#define _IY (16)
+#define _IM (32)
+#define _IFF1 (40)
+#define _IFF2 (41)
+#define _EI   (42)
+#define _BIT_IFF1 (1ULL<<_IFF1)
+#define _BIT_IFF2 (1ULL<<_IFF2)
+#define _BIT_EI   (1ULL<<_EI)
+
+/* set 8-bit immediate value in 64-bit register bank */
+#define _SI8(bank,shift,val)    ((bank&~(0xFFULL<<shift))|((val&0xFFULL)<<shift))
+/* extract 8-bit value from 64-bit register bank */
+#define _G8(bank,shift)         ((bank>>shift)&0xFFULL)
+/* set 16-bit immediate value in 64-bit register bank */
+#define _SI16(bank,shift,val)   ((bank&~(0xFFFFUL<<shift))|((val&0xFFFFULL)<<shift))
+/* extract 16-bit value from 64-bit register bank */
+#define _G16(bank,shift)        ((bank>>shift)&0xFFFFULL)
+/* set a single bit value in 64-bit register mask */
+#define _SI1(bank,shift,val)    ((bank&~(1ULL<<shift))|((val&1ULL)<<shift))
+/* set 16-bit address bus pins */
+#define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
+/* set 16-bit address bus and 8-bit data bus pins */
+#define _SAD(addr,data) pins=(pins&~0xFFFFFFULL)|((((data)&0xFFULL)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
+/* get 8-bit data bus value from pins */
+#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
+
+#define _ON(m) pins|=(m)
+#define _OFF(m) pins&=~(m)
+#define _T(num) pins=tick(num,pins,ud);ticks+=num
+#define _TW(num) pins&=~Z80M_WAIT_MASK;pins=tick(num,pins,ud);ticks+=num+Z80M_GET_WAIT(pins);
+#define _MR(addr,data) _SA(addr);_ON(Z80M_MREQ|Z80M_RD);_TW(3);_OFF(Z80M_MREQ|Z80M_RD);data=_GD()
+#define _MW(addr,data) _SAD(addr,data);_ON(Z80M_MREQ|Z80M_WR);_TW(3);_OFF(Z80M_MREQ|Z80M_WR)
+#define _IN(addr,data) _SA(addr);_ON(Z80M_IORQ|Z80M_RD);_TW(4);_OFF(Z80M_IORQ|Z80M_RD);data=_GD()
+#define _OUT(addr,data) _SAD(addr,data);_ON(Z80M_IORQ|Z80M_WR);_TW(4);_OFF(Z80M_IORQ|Z80M_WR)
+
+/* register access functions */
+void z80m_set_a(z80m_t* cpu, uint8_t v)         { cpu->bc_de_hl_fa = _SI8(cpu->bc_de_hl_fa,_A,v); }
+void z80m_set_f(z80m_t* cpu, uint8_t v)         { cpu->bc_de_hl_fa = _SI8(cpu->bc_de_hl_fa,_F,v); }
+void z80m_set_l(z80m_t* cpu, uint8_t v)         { cpu->bc_de_hl_fa = _SI8(cpu->bc_de_hl_fa,_L,v); }
+void z80m_set_h(z80m_t* cpu, uint8_t v)         { cpu->bc_de_hl_fa = _SI8(cpu->bc_de_hl_fa,_H,v); }
+void z80m_set_e(z80m_t* cpu, uint8_t v)         { cpu->bc_de_hl_fa = _SI8(cpu->bc_de_hl_fa,_E,v); }
+void z80m_set_d(z80m_t* cpu, uint8_t v)         { cpu->bc_de_hl_fa = _SI8(cpu->bc_de_hl_fa,_D,v); }
+void z80m_set_c(z80m_t* cpu, uint8_t v)         { cpu->bc_de_hl_fa = _SI8(cpu->bc_de_hl_fa,_C,v); }
+void z80m_set_b(z80m_t* cpu, uint8_t v)         { cpu->bc_de_hl_fa = _SI8(cpu->bc_de_hl_fa,_B,v); }
+void z80m_set_fa(z80m_t* cpu, uint16_t v)       { cpu->bc_de_hl_fa = _SI16(cpu->bc_de_hl_fa,_FA,v); }
+void z80m_set_hl(z80m_t* cpu, uint16_t v)       { cpu->bc_de_hl_fa = _SI16(cpu->bc_de_hl_fa,_HL,v); }
+void z80m_set_de(z80m_t* cpu, uint16_t v)       { cpu->bc_de_hl_fa = _SI16(cpu->bc_de_hl_fa,_DE,v); }
+void z80m_set_bc(z80m_t* cpu, uint16_t v)       { cpu->bc_de_hl_fa = _SI16(cpu->bc_de_hl_fa,_BC,v); }
+void z80m_set_fa_(z80m_t* cpu, uint16_t v)      { cpu->bc_de_hl_fa_ = _SI16(cpu->bc_de_hl_fa_,_FA,v); }
+void z80m_set_hl_(z80m_t* cpu, uint16_t v)      { cpu->bc_de_hl_fa_ = _SI16(cpu->bc_de_hl_fa_,_HL,v); }
+void z80m_set_de_(z80m_t* cpu, uint16_t v)      { cpu->bc_de_hl_fa_ = _SI16(cpu->bc_de_hl_fa_,_DE,v); }
+void z80m_set_bc_(z80m_t* cpu, uint16_t v)      { cpu->bc_de_hl_fa_ = _SI16(cpu->bc_de_hl_fa_,_BC,v); }
+void z80m_set_pc(z80m_t* cpu, uint16_t v)       { cpu->ir_sp_wz_pc = _SI16(cpu->ir_sp_wz_pc,_PC,v); }
+void z80m_set_wz(z80m_t* cpu, uint16_t v)       { cpu->ir_sp_wz_pc = _SI16(cpu->ir_sp_wz_pc,_WZ,v); }
+void z80m_set_sp(z80m_t* cpu, uint16_t v)       { cpu->ir_sp_wz_pc = _SI16(cpu->ir_sp_wz_pc,_SP,v); }
+void z80m_set_ir(z80m_t* cpu, uint16_t v)       { cpu->ir_sp_wz_pc = _SI16(cpu->ir_sp_wz_pc,_IR,v); }
+void z80m_set_i(z80m_t* cpu, uint8_t v)         { cpu->ir_sp_wz_pc = _SI8(cpu->ir_sp_wz_pc,_I,v); }
+void z80m_set_r(z80m_t* cpu, uint8_t v)         { cpu->ir_sp_wz_pc = _SI8(cpu->ir_sp_wz_pc,_R,v); }
+void z80m_set_ix(z80m_t* cpu, uint16_t v)       { cpu->eif_im_iy_ix = _SI16(cpu->eif_im_iy_ix,_IX,v); }
+void z80m_set_iy(z80m_t* cpu, uint16_t v)       { cpu->eif_im_iy_ix = _SI16(cpu->eif_im_iy_ix,_IY,v); }
+void z80m_set_im(z80m_t* cpu, uint8_t v)        { cpu->eif_im_iy_ix = _SI8(cpu->eif_im_iy_ix,_IM,v); }
+void z80m_set_iff1(z80m_t* cpu, bool b)         { cpu->eif_im_iy_ix = _SI1(cpu->eif_im_iy_ix,_IFF1,(b?1:0)); }
+void z80m_set_iff2(z80m_t* cpu, bool b)         { cpu->eif_im_iy_ix = _SI1(cpu->eif_im_iy_ix,_IFF2,(b?1:0)); }
+void z80m_set_ei_pending(z80m_t* cpu, bool b)   { cpu->eif_im_iy_ix = _SI1(cpu->eif_im_iy_ix,_EI,(b?1:0)); }
+uint8_t z80m_a(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_A); }
+uint8_t z80m_f(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_F); }
+uint8_t z80m_l(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_L); }
+uint8_t z80m_h(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_H); }
+uint8_t z80m_e(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_E); }
+uint8_t z80m_d(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_D); }
+uint8_t z80m_c(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_C); }
+uint8_t z80m_b(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_B); }
+uint16_t z80m_fa(z80m_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_FA); }
+uint16_t z80m_hl(z80m_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_HL); }
+uint16_t z80m_de(z80m_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_DE); }
+uint16_t z80m_bc(z80m_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_BC); }
+uint16_t z80m_fa_(z80m_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_FA); }
+uint16_t z80m_hl_(z80m_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_HL); }
+uint16_t z80m_de_(z80m_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_DE); }
+uint16_t z80m_bc_(z80m_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_BC); }
+uint16_t z80m_pc(z80m_t* cpu)       { return _G16(cpu->ir_sp_wz_pc,_PC); }
+uint16_t z80m_wz(z80m_t* cpu)       { return _G16(cpu->ir_sp_wz_pc,_WZ); }
+uint16_t z80m_sp(z80m_t* cpu)       { return _G16(cpu->ir_sp_wz_pc,_SP); }
+uint16_t z80m_ir(z80m_t* cpu)       { return _G16(cpu->ir_sp_wz_pc,_IR); }
+uint8_t z80m_i(z80m_t* cpu)         { return _G8(cpu->ir_sp_wz_pc,_I); }
+uint8_t z80m_r(z80m_t* cpu)         { return _G8(cpu->ir_sp_wz_pc,_R); }
+uint16_t z80m_ix(z80m_t* cpu)       { return _G16(cpu->eif_im_iy_ix,_IX); }
+uint16_t z80m_iy(z80m_t* cpu)       { return _G16(cpu->eif_im_iy_ix,_IY); }
+uint8_t z80m_im(z80m_t* cpu)        { return _G8(cpu->eif_im_iy_ix,_IM); }
+bool z80m_iff1(z80m_t* cpu)         { return 0 != (cpu->eif_im_iy_ix & _BIT_IFF1); }
+bool z80m_iff2(z80m_t* cpu)         { return 0 != (cpu->eif_im_iy_ix & _BIT_IFF2); }
+bool z80m_ei_pending(z80m_t* cpu)   { return 0 != (cpu->eif_im_iy_ix & _BIT_EI); }
+
 void z80m_init(z80m_t* cpu, z80m_desc_t* desc) {
     CHIPS_ASSERT(cpu && desc);
     CHIPS_ASSERT(desc->tick_cb);
@@ -363,7 +350,7 @@ void z80m_init(z80m_t* cpu, z80m_desc_t* desc) {
 void z80m_reset(z80m_t* cpu) {
     CHIPS_ASSERT(cpu);
     /* set AF to 0xFFFF, all other regs are undefined, set to 0xFFFF to */
-    cpu->state.bc_de_hl_fa = cpu->state.bc_de_hl_fa_ = 0xFFFFFFFFFFFFFFFFULL;
+    cpu->bc_de_hl_fa = cpu->bc_de_hl_fa_ = 0xFFFFFFFFFFFFFFFFULL;
     z80m_set_ix(cpu, 0xFFFF);
     z80m_set_iy(cpu, 0xFFFF);
     z80m_set_wz(cpu, 0xFFFF);
@@ -381,24 +368,11 @@ void z80m_reset(z80m_t* cpu) {
     z80m_set_ei_pending(cpu, false);
 }
 
-/* instruction decoder helper macros */
-#define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
-#define _SAD(addr,data) pins=(pins&~0xFFFFFFULL)|((((data)&0xFFULL)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
-#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
-#define _ON(m) pins|=(m)
-#define _OFF(m) pins&=~(m)
-#define _T(num) pins=tick(num,pins,ud);ticks+=num
-#define _TW(num) pins&=~Z80M_WAIT_MASK;pins=tick(num,pins,ud);ticks+=num+Z80M_GET_WAIT(pins);
-#define _MR(addr,data) _SA(addr);_ON(Z80M_MREQ|Z80M_RD);_TW(3);_OFF(Z80M_MREQ|Z80M_RD);data=_GD()
-#define _MW(addr,data) _SAD(addr,data);_ON(Z80M_MREQ|Z80M_WR);_TW(3);_OFF(Z80M_MREQ|Z80M_WR)
-#define _IN(addr,data) _SA(addr);_ON(Z80M_IORQ|Z80M_RD);_TW(4);_OFF(Z80M_IORQ|Z80M_RD);data=_GD()
-#define _OUT(addr,data) _SAD(addr,data);_ON(Z80M_IORQ|Z80M_WR);_TW(4);_OFF(Z80M_IORQ|Z80M_WR)
-
 /* instruction decoder */
 uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
-    uint64_t r0 = cpu->state.bc_de_hl_fa;
-    uint64_t r1 = cpu->state.ir_sp_wz_pc;
-    uint64_t r2 = cpu->state.eif_im_iy_ix;
+    uint64_t r0 = cpu->bc_de_hl_fa;
+    uint64_t r1 = cpu->ir_sp_wz_pc;
+    uint64_t r2 = cpu->eif_im_iy_ix;
     uint64_t pins = cpu->pins;
     const z80m_tick_t tick = cpu->tick;
     void* ud = cpu->user_data;
@@ -408,28 +382,28 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         /* switch off interrupt flag */
         _OFF(Z80M_INT);
         /* delay-enable interrupt flags */
-        if (r2 & Z80M_BIT_EI) {
-            r2 &= ~Z80M_BIT_EI;
-            r2 |= (Z80M_BIT_IFF1 | Z80M_BIT_IFF2);
+        if (r2 & _BIT_EI) {
+            r2 &= ~_BIT_EI;
+            r2 |= (_BIT_IFF1 | _BIT_IFF2);
         }
         /* fetch opcode (4 cycles) */
         uint8_t op;
         {
             _ON(Z80M_M1|Z80M_MREQ|Z80M_RD);
-            uint16_t pc = Z80M_PC(r1);
+            uint16_t pc = _G16(r1,_PC);
             _SA(pc++);
-            r1 = Z80M_SET_PC(r1,pc);
+            r1 = _SI16(r1,_PC,pc);
             _TW(4);
             _OFF(Z80M_M1|Z80M_MREQ|Z80M_RD);
             op = _GD();
-            uint8_t r = Z80M_R(r1);
+            uint8_t r = _G8(r1,_R);
             r = (r&0x80)|((r+1)&0x7F);
-            r1 = Z80M_SET_R(r1,r);
+            r1 = _SI8(r1,_R,r);
         }
     } while ((ticks < num_ticks) && (trap_id < 0));
-    cpu->state.bc_de_hl_fa = r0;
-    cpu->state.ir_sp_wz_pc = r1;
-    cpu->state.eif_im_iy_ix = r2;
+    cpu->bc_de_hl_fa = r0;
+    cpu->ir_sp_wz_pc = r1;
+    cpu->eif_im_iy_ix = r2;
     cpu->pins = pins;
     cpu->trap_id = trap_id;
     return ticks;
