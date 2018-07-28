@@ -370,6 +370,123 @@ void z80m_reset(z80m_t* cpu) {
     z80m_set_ei_pending(cpu, false);
 }
 
+/* flags evaluation */
+static inline uint8_t _z80m_sz(uint8_t val) {
+    return val ? (val & Z80M_SF) : Z80M_ZF;
+}
+
+static inline uint8_t _z80m_szyxch(uint8_t acc, uint8_t val, uint32_t res) {
+    return _z80m_sz(res)|(res&(Z80M_YF|Z80M_XF))|((res>>8)&Z80M_CF)|((acc^val^res)&Z80M_HF);
+}
+
+static inline uint8_t _z80m_add_flags(uint8_t acc, uint8_t val, uint32_t res) {
+    return _z80m_szyxch(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80M_VF);
+}
+
+static inline uint8_t _z80m_sub_flags(uint8_t acc, uint8_t val, uint32_t res) {
+    return Z80M_NF|_z80m_szyxch(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80M_VF);
+}
+
+static inline uint8_t _z80m_cp_flags(uint8_t acc, uint8_t val, uint32_t res) {
+    return Z80M_NF|(_z80m_sz(res)|(val&(Z80M_YF|Z80M_XF))|((res>>8)&Z80M_CF)|((acc^val^res)&Z80M_HF))|((((val^acc)&(res^acc))>>5)&Z80M_VF);
+}
+
+/* sign+zero+parity lookup table */
+static uint8_t _z80m_szp[256] = {
+  0x44,0x00,0x00,0x04,0x00,0x04,0x04,0x00,0x08,0x0c,0x0c,0x08,0x0c,0x08,0x08,0x0c,
+  0x00,0x04,0x04,0x00,0x04,0x00,0x00,0x04,0x0c,0x08,0x08,0x0c,0x08,0x0c,0x0c,0x08,
+  0x20,0x24,0x24,0x20,0x24,0x20,0x20,0x24,0x2c,0x28,0x28,0x2c,0x28,0x2c,0x2c,0x28,
+  0x24,0x20,0x20,0x24,0x20,0x24,0x24,0x20,0x28,0x2c,0x2c,0x28,0x2c,0x28,0x28,0x2c,
+  0x00,0x04,0x04,0x00,0x04,0x00,0x00,0x04,0x0c,0x08,0x08,0x0c,0x08,0x0c,0x0c,0x08,
+  0x04,0x00,0x00,0x04,0x00,0x04,0x04,0x00,0x08,0x0c,0x0c,0x08,0x0c,0x08,0x08,0x0c,
+  0x24,0x20,0x20,0x24,0x20,0x24,0x24,0x20,0x28,0x2c,0x2c,0x28,0x2c,0x28,0x28,0x2c,
+  0x20,0x24,0x24,0x20,0x24,0x20,0x20,0x24,0x2c,0x28,0x28,0x2c,0x28,0x2c,0x2c,0x28,
+  0x80,0x84,0x84,0x80,0x84,0x80,0x80,0x84,0x8c,0x88,0x88,0x8c,0x88,0x8c,0x8c,0x88,
+  0x84,0x80,0x80,0x84,0x80,0x84,0x84,0x80,0x88,0x8c,0x8c,0x88,0x8c,0x88,0x88,0x8c,
+  0xa4,0xa0,0xa0,0xa4,0xa0,0xa4,0xa4,0xa0,0xa8,0xac,0xac,0xa8,0xac,0xa8,0xa8,0xac,
+  0xa0,0xa4,0xa4,0xa0,0xa4,0xa0,0xa0,0xa4,0xac,0xa8,0xa8,0xac,0xa8,0xac,0xac,0xa8,
+  0x84,0x80,0x80,0x84,0x80,0x84,0x84,0x80,0x88,0x8c,0x8c,0x88,0x8c,0x88,0x88,0x8c,
+  0x80,0x84,0x84,0x80,0x84,0x80,0x80,0x84,0x8c,0x88,0x88,0x8c,0x88,0x8c,0x8c,0x88,
+  0xa0,0xa4,0xa4,0xa0,0xa4,0xa0,0xa0,0xa4,0xac,0xa8,0xa8,0xac,0xa8,0xac,0xac,0xa8,
+  0xa4,0xa0,0xa0,0xa4,0xa0,0xa4,0xa4,0xa0,0xa8,0xac,0xac,0xa8,0xac,0xa8,0xa8,0xac,
+};
+
+/* ALU functions */
+static inline uint64_t _z80m_add8(uint64_t bank, uint8_t val) {
+    uint8_t acc = _G8(bank,_A);
+    uint32_t res = acc + val;
+    _SI8(bank,_F,_z80m_add_flags(acc,val,res));
+    _SI8(bank,_A,res);
+    return bank;
+}
+
+static inline uint64_t _z80m_adc8(uint64_t bank, uint8_t val) {
+    uint8_t acc = _G8(bank,_A);
+    uint32_t res = acc + val + (_G8(bank,_F) & Z80M_CF);
+    _SI8(bank,_F,_z80m_add_flags(acc,val,res));
+    _SI8(bank,_A,res);
+    return bank;
+}
+
+static inline uint64_t _z80m_sub8(uint64_t bank, uint8_t val) {
+    uint8_t acc = _G8(bank,_A);
+    uint32_t res = (uint32_t) ((int)acc - (int)val);
+    _SI8(bank,_F,_z80m_sub_flags(acc,val,res));
+    _SI8(bank,_A,res);
+    return bank;
+}
+
+static inline uint64_t _z80m_sbc8(uint64_t bank, uint8_t val) {
+    uint8_t acc = _G8(bank,_A);
+    uint32_t res = (uint32_t) ((int)acc - (int)val - (_G8(bank,_F) & Z80M_CF));
+    _SI8(bank,_F,_z80m_sub_flags(acc,val,res));
+    _SI8(bank,_A,res);
+    return bank;
+}
+
+static inline uint64_t _z80m_and8(uint64_t bank, uint8_t val) {
+    val &= _G8(bank,_A);
+    _SI8(bank,_F,_z80m_szp[val]|Z80M_HF);
+    _SI8(bank,_A,val);
+    return bank;
+}
+
+static inline uint64_t _z80m_xor8(uint64_t bank, uint8_t val) {
+    val ^= _G8(bank,_A);
+    _SI8(bank,_F,_z80m_szp[val]);
+    _SI8(bank,_A,val);
+    return bank;
+}
+
+static inline uint64_t _z80m_or8(uint64_t bank, uint8_t val) {
+    val |= _G8(bank,_A);
+    _SI8(bank,_F,_z80m_szp[val]);
+    _SI8(bank,_A,val);
+    return bank;
+}
+
+static inline uint64_t _z80m_cp8(uint64_t bank, uint8_t val) {
+    uint8_t acc = _G8(bank,_A);
+    uint32_t res = (uint32_t) ((int)acc - (int)val);
+    _SI8(bank,_F,_z80m_cp_flags(acc,val,res));
+    return bank;
+}
+
+static inline uint64_t _z80m_alu8(uint8_t type, uint64_t bank, uint8_t val) {
+    switch (type) {
+        case 0: return _z80m_add8(bank,val); break;
+        case 1: return _z80m_adc8(bank,val); break;
+        case 2: return _z80m_sub8(bank,val); break;
+        case 3: return _z80m_sbc8(bank,val); break;
+        case 4: return _z80m_and8(bank,val); break;
+        case 5: return _z80m_xor8(bank,val); break;
+        case 6: return _z80m_or8(bank,val); break;
+        case 7: return _z80m_cp8(bank,val); break;
+    }
+    /* can't happen */
+    return bank;
+}
+
 /* instruction decoder */
 uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     uint64_t r0 = cpu->bc_de_hl_fa;
@@ -439,6 +556,15 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         }
         /*=== BLOCK 2: 8-bit ALU instructions ================================*/
         else if (x == 2) {
+            if (z == 6) {
+                /* ALU (HL); ALU (IX+d); ALU (IY+d) */
+                _MR(addr,d8);
+            }
+            else {
+                /* ALU r */
+                d8 = _G8(r0,rz);
+            }
+            r0 = _z80m_alu8(y,r0,d8);
         }
         /*=== BLOCK 0: misc instructions =====================================*/
         else if (x == 0) {
@@ -532,7 +658,41 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         }
         /*=== BLOCK 3: misc and extended ops =================================*/
         else {
-
+            switch (z) {
+                case 0:
+                    /* RET cc */
+                    assert(false);
+                    break;
+                case 1:
+                    /* POP + misc */
+                    assert(false);
+                    break;
+                case 2:
+                    /* JP cc,nn */
+                    assert(false);
+                    break;
+                case 3:
+                    /* misc ops */
+                    assert(false);
+                    break;
+                case 4:
+                    /* CALL cc,nn */
+                    assert(false);
+                    break;
+                case 5:
+                    /* PUSH, CALL, DD,ED,FD prefixes */
+                    assert(false);
+                    break;
+                case 6:
+                    /* ALU n */
+                    _MR(pc++,d8);
+                    r0 = _z80m_alu8(y,r0,d8);
+                    break;
+                case 7:
+                    /* RST */
+                    assert(false);
+                    break;
+            }
         }
         
         /* write PC back to register bank */
