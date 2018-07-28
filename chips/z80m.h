@@ -388,7 +388,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
             r2 &= ~_BIT_EI;
             r2 |= (_BIT_IFF1 | _BIT_IFF2);
         }
-        /* fetch opcode (4 cycles) */
+        /* fetch opcode, bump R register (4 cycles) */
         pc=_G16(r1,_PC); _SA(pc++); 
         _ON(Z80M_M1|Z80M_MREQ|Z80M_RD);
         _TW(4);
@@ -406,6 +406,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         const uint8_t x = op>>6;
         const uint8_t y = (op>>3)&7;
         const uint8_t z = op&7;
+        const uint8_t q = y&1;
         const uint8_t ry = (7-y)<<3;
         const uint8_t rz = (7-z)<<3;
 
@@ -432,11 +433,70 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         }
         /*=== BLOCK 2: 8-bit ALU instructions ================================*/
         else if (x == 2) {
-
         }
         /*=== BLOCK 0: misc instructions =====================================*/
         else if (x == 0) {
-
+            switch (z) {
+                case 0:
+                    switch (y) {
+                        case 0:     /* NOP */
+                            break;
+                        case 1:     /* EX AF,AF' */
+                            assert(false);
+                            break;
+                        case 2:     /* DJNZ d */
+                            assert(false);
+                            break;
+                        case 3:     /* JR d */
+                            assert(false);
+                            break;
+                        default:     /* JR cc,d */
+                            assert(false);
+                            break;
+                    }
+                    break;
+                case 1:
+                    if (q == 0) {
+                        /* 16-bit immediate loads */
+                        assert(false);
+                    }
+                    else {
+                        /* ADD HL,rr; ADD IX,rr; ADD IY,rr */
+                        assert(false);
+                    }
+                    break;
+                case 2:
+                    /* indirect loads */
+                    assert(false);
+                    break;
+                case 3:
+                    /* 16-bit INC/DEC */
+                    assert(false);
+                    break;
+                case 4:
+                    /* 8-bit INC */
+                    assert(false);
+                    break;
+                case 5:
+                    /* 8-bit DEC */
+                    assert(false);
+                    break;
+                case 6:
+                    _MR(pc++,data);
+                    if (y == 6) {
+                        /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
+                        _MW(addr,data);
+                    }
+                    else {
+                        /* LD r,n */
+                        _SI8(r0,ry,data);
+                    }
+                    break;
+                case 7:
+                    /* misc ops on A and F */
+                    assert(false);
+                    break;
+            }
         }
         /*=== BLOCK 3: misc and extended ops =================================*/
         else {
@@ -454,6 +514,33 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     return ticks;
 }
 
+#undef _A
+#undef _F
+#undef _L
+#undef _H
+#undef _E
+#undef _D
+#undef _C
+#undef _B
+#undef _FA
+#undef _HL
+#undef _DE
+#undef _BC
+#undef _PC
+#undef _WZ
+#undef _SP
+#undef _IR
+#undef _R 
+#undef _I 
+#undef _IX
+#undef _IY
+#undef _IM
+#undef _IFF1
+#undef _IFF2
+#undef _EI
+#undef _BIT_IFF1
+#undef _BIT_IFF2
+#undef _BIT_EI
 #undef _SA
 #undef _SAD
 #undef _GD
