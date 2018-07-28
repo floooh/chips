@@ -255,15 +255,15 @@ extern bool z80m_ei_pending(z80m_t* cpu);
 #define _BIT_EI   (1ULL<<_EI)
 
 /* set 8-bit immediate value in 64-bit register bank */
-#define _SI8(bank,shift,val)    bank=(((bank)&~(0xFFULL<<(shift)))|(((val)&0xFFULL)<<(shift)))
+#define _S8(bank,shift,val)    bank=(((bank)&~(0xFFULL<<(shift)))|(((val)&0xFFULL)<<(shift)))
 /* extract 8-bit value from 64-bit register bank */
 #define _G8(bank,shift)         (((bank)>>(shift))&0xFFULL)
 /* set 16-bit immediate value in 64-bit register bank */
-#define _SI16(bank,shift,val)   bank=((bank&~(0xFFFFULL<<(shift)))|(((val)&0xFFFFULL)<<(shift)))
+#define _S16(bank,shift,val)   bank=((bank&~(0xFFFFULL<<(shift)))|(((val)&0xFFFFULL)<<(shift)))
 /* extract 16-bit value from 64-bit register bank */
 #define _G16(bank,shift)        (((bank)>>(shift))&0xFFFFULL)
 /* set a single bit value in 64-bit register mask */
-#define _SI1(bank,shift,val)    bank=(((bank)&~(1ULL<<(shift)))|(((val)&1ULL)<<(shift)))
+#define _S1(bank,shift,val)    bank=(((bank)&~(1ULL<<(shift)))|(((val)&1ULL)<<(shift)))
 /* set 16-bit address bus pins */
 #define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
 /* set 16-bit address bus and 8-bit data bus pins */
@@ -280,37 +280,37 @@ extern bool z80m_ei_pending(z80m_t* cpu);
 #define _IN(addr,data) _SA(addr);_ON(Z80M_IORQ|Z80M_RD);_TW(4);_OFF(Z80M_IORQ|Z80M_RD);data=_GD()
 #define _OUT(addr,data) _SAD(addr,data);_ON(Z80M_IORQ|Z80M_WR);_TW(4);_OFF(Z80M_IORQ|Z80M_WR)
 #define _IMM8(data) _MR(pc++,data);
-#define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_SI16(r1,_WZ,data);} 
+#define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S16(r1,_WZ,data);} 
 
 /* register access functions */
-void z80m_set_a(z80m_t* cpu, uint8_t v)         { _SI8(cpu->bc_de_hl_fa,_A,v); }
-void z80m_set_f(z80m_t* cpu, uint8_t v)         { _SI8(cpu->bc_de_hl_fa,_F,v); }
-void z80m_set_l(z80m_t* cpu, uint8_t v)         { _SI8(cpu->bc_de_hl_fa,_L,v); }
-void z80m_set_h(z80m_t* cpu, uint8_t v)         { _SI8(cpu->bc_de_hl_fa,_H,v); }
-void z80m_set_e(z80m_t* cpu, uint8_t v)         { _SI8(cpu->bc_de_hl_fa,_E,v); }
-void z80m_set_d(z80m_t* cpu, uint8_t v)         { _SI8(cpu->bc_de_hl_fa,_D,v); }
-void z80m_set_c(z80m_t* cpu, uint8_t v)         { _SI8(cpu->bc_de_hl_fa,_C,v); }
-void z80m_set_b(z80m_t* cpu, uint8_t v)         { _SI8(cpu->bc_de_hl_fa,_B,v); }
-void z80m_set_fa(z80m_t* cpu, uint16_t v)       { _SI16(cpu->bc_de_hl_fa,_FA,v); }
-void z80m_set_hl(z80m_t* cpu, uint16_t v)       { _SI16(cpu->bc_de_hl_fa,_HL,v); }
-void z80m_set_de(z80m_t* cpu, uint16_t v)       { _SI16(cpu->bc_de_hl_fa,_DE,v); }
-void z80m_set_bc(z80m_t* cpu, uint16_t v)       { _SI16(cpu->bc_de_hl_fa,_BC,v); }
-void z80m_set_fa_(z80m_t* cpu, uint16_t v)      { _SI16(cpu->bc_de_hl_fa_,_FA,v); }
-void z80m_set_hl_(z80m_t* cpu, uint16_t v)      { _SI16(cpu->bc_de_hl_fa_,_HL,v); }
-void z80m_set_de_(z80m_t* cpu, uint16_t v)      { _SI16(cpu->bc_de_hl_fa_,_DE,v); }
-void z80m_set_bc_(z80m_t* cpu, uint16_t v)      { _SI16(cpu->bc_de_hl_fa_,_BC,v); }
-void z80m_set_pc(z80m_t* cpu, uint16_t v)       { _SI16(cpu->ir_wz_sp_pc,_PC,v); }
-void z80m_set_wz(z80m_t* cpu, uint16_t v)       { _SI16(cpu->ir_wz_sp_pc,_WZ,v); }
-void z80m_set_sp(z80m_t* cpu, uint16_t v)       { _SI16(cpu->ir_wz_sp_pc,_SP,v); }
-void z80m_set_ir(z80m_t* cpu, uint16_t v)       { _SI16(cpu->ir_wz_sp_pc,_IR,v); }
-void z80m_set_i(z80m_t* cpu, uint8_t v)         { _SI8(cpu->ir_wz_sp_pc,_I,v); }
-void z80m_set_r(z80m_t* cpu, uint8_t v)         { _SI8(cpu->ir_wz_sp_pc,_R,v); }
-void z80m_set_ix(z80m_t* cpu, uint16_t v)       { _SI16(cpu->eif_im_iy_ix,_IX,v); }
-void z80m_set_iy(z80m_t* cpu, uint16_t v)       { _SI16(cpu->eif_im_iy_ix,_IY,v); }
-void z80m_set_im(z80m_t* cpu, uint8_t v)        { _SI8(cpu->eif_im_iy_ix,_IM,v); }
-void z80m_set_iff1(z80m_t* cpu, bool b)         { _SI1(cpu->eif_im_iy_ix,_IFF1,(b?1:0)); }
-void z80m_set_iff2(z80m_t* cpu, bool b)         { _SI1(cpu->eif_im_iy_ix,_IFF2,(b?1:0)); }
-void z80m_set_ei_pending(z80m_t* cpu, bool b)   { _SI1(cpu->eif_im_iy_ix,_EI,(b?1:0)); }
+void z80m_set_a(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_A,v); }
+void z80m_set_f(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_F,v); }
+void z80m_set_l(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_L,v); }
+void z80m_set_h(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_H,v); }
+void z80m_set_e(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_E,v); }
+void z80m_set_d(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_D,v); }
+void z80m_set_c(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_C,v); }
+void z80m_set_b(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_B,v); }
+void z80m_set_fa(z80m_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_FA,v); }
+void z80m_set_hl(z80m_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_HL,v); }
+void z80m_set_de(z80m_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_DE,v); }
+void z80m_set_bc(z80m_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_BC,v); }
+void z80m_set_fa_(z80m_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_FA,v); }
+void z80m_set_hl_(z80m_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_HL,v); }
+void z80m_set_de_(z80m_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_DE,v); }
+void z80m_set_bc_(z80m_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_BC,v); }
+void z80m_set_pc(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_wz_sp_pc,_PC,v); }
+void z80m_set_wz(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_wz_sp_pc,_WZ,v); }
+void z80m_set_sp(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_wz_sp_pc,_SP,v); }
+void z80m_set_ir(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_wz_sp_pc,_IR,v); }
+void z80m_set_i(z80m_t* cpu, uint8_t v)         { _S8(cpu->ir_wz_sp_pc,_I,v); }
+void z80m_set_r(z80m_t* cpu, uint8_t v)         { _S8(cpu->ir_wz_sp_pc,_R,v); }
+void z80m_set_ix(z80m_t* cpu, uint16_t v)       { _S16(cpu->eif_im_iy_ix,_IX,v); }
+void z80m_set_iy(z80m_t* cpu, uint16_t v)       { _S16(cpu->eif_im_iy_ix,_IY,v); }
+void z80m_set_im(z80m_t* cpu, uint8_t v)        { _S8(cpu->eif_im_iy_ix,_IM,v); }
+void z80m_set_iff1(z80m_t* cpu, bool b)         { _S1(cpu->eif_im_iy_ix,_IFF1,(b?1:0)); }
+void z80m_set_iff2(z80m_t* cpu, bool b)         { _S1(cpu->eif_im_iy_ix,_IFF2,(b?1:0)); }
+void z80m_set_ei_pending(z80m_t* cpu, bool b)   { _S1(cpu->eif_im_iy_ix,_EI,(b?1:0)); }
 uint8_t z80m_a(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_A); }
 uint8_t z80m_f(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_F); }
 uint8_t z80m_l(z80m_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_L); }
@@ -415,60 +415,60 @@ static uint8_t _z80m_szp[256] = {
 static inline uint64_t _z80m_add8(uint64_t bank, uint8_t val) {
     uint8_t acc = _G8(bank,_A);
     uint32_t res = acc + val;
-    _SI8(bank,_F,_z80m_add_flags(acc,val,res));
-    _SI8(bank,_A,res);
+    _S8(bank,_F,_z80m_add_flags(acc,val,res));
+    _S8(bank,_A,res);
     return bank;
 }
 
 static inline uint64_t _z80m_adc8(uint64_t bank, uint8_t val) {
     uint8_t acc = _G8(bank,_A);
     uint32_t res = acc + val + (_G8(bank,_F) & Z80M_CF);
-    _SI8(bank,_F,_z80m_add_flags(acc,val,res));
-    _SI8(bank,_A,res);
+    _S8(bank,_F,_z80m_add_flags(acc,val,res));
+    _S8(bank,_A,res);
     return bank;
 }
 
 static inline uint64_t _z80m_sub8(uint64_t bank, uint8_t val) {
     uint8_t acc = _G8(bank,_A);
     uint32_t res = (uint32_t) ((int)acc - (int)val);
-    _SI8(bank,_F,_z80m_sub_flags(acc,val,res));
-    _SI8(bank,_A,res);
+    _S8(bank,_F,_z80m_sub_flags(acc,val,res));
+    _S8(bank,_A,res);
     return bank;
 }
 
 static inline uint64_t _z80m_sbc8(uint64_t bank, uint8_t val) {
     uint8_t acc = _G8(bank,_A);
     uint32_t res = (uint32_t) ((int)acc - (int)val - (_G8(bank,_F) & Z80M_CF));
-    _SI8(bank,_F,_z80m_sub_flags(acc,val,res));
-    _SI8(bank,_A,res);
+    _S8(bank,_F,_z80m_sub_flags(acc,val,res));
+    _S8(bank,_A,res);
     return bank;
 }
 
 static inline uint64_t _z80m_and8(uint64_t bank, uint8_t val) {
     val &= _G8(bank,_A);
-    _SI8(bank,_F,_z80m_szp[val]|Z80M_HF);
-    _SI8(bank,_A,val);
+    _S8(bank,_F,_z80m_szp[val]|Z80M_HF);
+    _S8(bank,_A,val);
     return bank;
 }
 
 static inline uint64_t _z80m_xor8(uint64_t bank, uint8_t val) {
     val ^= _G8(bank,_A);
-    _SI8(bank,_F,_z80m_szp[val]);
-    _SI8(bank,_A,val);
+    _S8(bank,_F,_z80m_szp[val]);
+    _S8(bank,_A,val);
     return bank;
 }
 
 static inline uint64_t _z80m_or8(uint64_t bank, uint8_t val) {
     val |= _G8(bank,_A);
-    _SI8(bank,_F,_z80m_szp[val]);
-    _SI8(bank,_A,val);
+    _S8(bank,_F,_z80m_szp[val]);
+    _S8(bank,_A,val);
     return bank;
 }
 
 static inline uint64_t _z80m_cp8(uint64_t bank, uint8_t val) {
     uint8_t acc = _G8(bank,_A);
     uint32_t res = (uint32_t) ((int)acc - (int)val);
-    _SI8(bank,_F,_z80m_cp_flags(acc,val,res));
+    _S8(bank,_F,_z80m_cp_flags(acc,val,res));
     return bank;
 }
 
@@ -514,7 +514,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
             _TW(4);
             _OFF(Z80M_M1|Z80M_MREQ|Z80M_RD);
             op = _GD();
-            uint8_t r=_G8(r1,_R); r=(r&0x80)|((r+1)&0x7F); _SI8(r1,_R,r);
+            uint8_t r=_G8(r1,_R); r=(r&0x80)|((r+1)&0x7F); _S8(r1,_R,r);
         }
 
         /* FIXME: compute effective address (HL, IX+d or IY+d), and update WZ */
@@ -542,7 +542,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
             else {
                 if (z == 6) { _MR(addr,d8); } /* LD r,(HL); LD r,(IX+d); LD r,(IY+d) */
                 else        { d8=_G8(r0,rz); }       /* LD r,s */
-                _SI8(r0,ry,d8);
+                _S8(r0,ry,d8);
             }
         }
         /*=== BLOCK 2: 8-bit ALU instructions ================================*/
@@ -576,8 +576,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     if (q == 0) {
                         /* 16-bit immediate loads (AF => SP)*/
                         _IMM16(d16);
-                        if (p == 3) { _SI16(r1,rp,d16); } /* LD SP,nn */
-                        else        { _SI16(r0,rp,d16); } /* LD HL,nn; LD DE,nn; LD BC,nn */
+                        if (p == 3) { _S16(r1,rp,d16); } /* LD SP,nn */
+                        else        { _S16(r0,rp,d16); } /* LD HL,nn; LD DE,nn; LD BC,nn */
                     }
                     else {
                         /* ADD HL,rr; ADD IX,rr; ADD IY,rr */
@@ -593,18 +593,18 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     }
                     if (q == 0) { /* store */
                         if (p == 2) { /* LD (nn),HL; LD (nn),IX; LD (nn),IY, WZ=addr++ */
-                            _MW(addr++,_G8(r0,_L)); _MW(addr,_G8(r0,_H)); _SI16(r1,_WZ,addr);
+                            _MW(addr++,_G8(r0,_L)); _MW(addr,_G8(r0,_H)); _S16(r1,_WZ,addr);
                         }
                         else { /* LD (BC),A; LD (DE),A; LD (nn),A; W=A,L=addr++ */
-                            d8=_G8(r0,_A); _MW(addr++,d8); _SI16(r1,_WZ,((d8<<8)|(addr&0x00FF)));
+                            d8=_G8(r0,_A); _MW(addr++,d8); _S16(r1,_WZ,((d8<<8)|(addr&0x00FF)));
                         }
                     }
                     else { /* load */
                         if (p == 2) { /* LD HL,(nn); LD IX,(nn); LD IY,(nn) */
-                            _MR(addr++,d8); _SI8(r0,_L,d8); _MR(addr,d8); _SI8(r0,_H,d8); _SI16(r1,_WZ,addr);
+                            _MR(addr++,d8); _S8(r0,_L,d8); _MR(addr,d8); _S8(r0,_H,d8); _S16(r1,_WZ,addr);
                         }
                         else {  /* LD A,(BC); LD A,(DE); LD A,(nn); W=addr++ */
-                            _MR(addr++,d8); _SI8(r0,_A,d8); _SI16(r1,_WZ,addr);
+                            _MR(addr++,d8); _S8(r0,_A,d8); _S16(r1,_WZ,addr);
                         }
                     }
                     break;
@@ -623,7 +623,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                 case 6:
                     _IMM8(d8);
                     if (y == 6) { _MW(addr,d8); }   /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
-                    else        { _SI8(r0,ry,d8); } /* LD r,n */
+                    else        { _S8(r0,ry,d8); } /* LD r,n */
                     break;
                 case 7:
                     /* misc ops on A and F */
@@ -670,7 +670,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         }
         
         /* write PC back to register bank */
-        _SI16(r1,_PC,pc);
+        _S16(r1,_PC,pc);
     } while ((ticks < num_ticks) && (trap_id < 0));
     cpu->bc_de_hl_fa = r0;
     cpu->ir_wz_sp_pc = r1;
