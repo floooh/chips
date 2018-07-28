@@ -255,15 +255,15 @@ extern bool z80m_ei_pending(z80m_t* cpu);
 #define _BIT_EI   (1ULL<<_EI)
 
 /* set 8-bit immediate value in 64-bit register bank */
-#define _SI8(bank,shift,val)    bank=((bank&~(0xFFULL<<shift))|((val&0xFFULL)<<shift))
+#define _SI8(bank,shift,val)    bank=(((bank)&~(0xFFULL<<(shift)))|(((val)&0xFFULL)<<(shift)))
 /* extract 8-bit value from 64-bit register bank */
-#define _G8(bank,shift)         ((bank>>shift)&0xFFULL)
+#define _G8(bank,shift)         (((bank)>>(shift))&0xFFULL)
 /* set 16-bit immediate value in 64-bit register bank */
-#define _SI16(bank,shift,val)   bank=((bank&~(0xFFFFUL<<shift))|((val&0xFFFFULL)<<shift))
+#define _SI16(bank,shift,val)   bank=((bank&~(0xFFFFUL<<(shift)))|(((val)&0xFFFFULL)<<(shift)))
 /* extract 16-bit value from 64-bit register bank */
-#define _G16(bank,shift)        ((bank>>shift)&0xFFFFULL)
+#define _G16(bank,shift)        (((bank)>>(shift))&0xFFFFULL)
 /* set a single bit value in 64-bit register mask */
-#define _SI1(bank,shift,val)    bank=((bank&~(1ULL<<shift))|((val&1ULL)<<shift))
+#define _SI1(bank,shift,val)    bank=(((bank)&~(1ULL<<(shift)))|(((val)&1ULL)<<(shift)))
 /* set 16-bit address bus pins */
 #define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
 /* set 16-bit address bus and 8-bit data bus pins */
@@ -479,7 +479,27 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 2:
                     /* indirect loads */
-                    assert(false);
+                    switch (p) { /* get effective address (BC),(DE) or (nn) */
+                        case 0:     addr=_G16(r0,_BC); break;
+                        case 1:     addr=_G16(r0,_DE); break;
+                        default:    _IMM16(addr); break;
+                    }
+                    if (q == 0) { /* store */
+                        if (p == 2) { /* LD (nn),HL; LD (nn),IX; LD (nn),IY, WZ=addr++ */
+                            _MW(addr++,_G8(r0,_L)); _MW(addr,_G8(r0,_H)); _SI16(r1,_WZ,addr);
+                        }
+                        else { /* LD (BC),A; LD (DE),A; LD (nn),A; W=A,L=addr++ */
+                            d8=_G8(r0,_A); _MW(addr++,d8); _SI16(r1,_WZ,((d8<<8)|(addr&0x00FF)));
+                        }
+                    }
+                    else { /* load */
+                        if (p == 2) { /* LD HL,(nn); LD IX,(nn); LD IY,(nn) */
+                            _MR(addr++,d8); _SI8(r0,_L,d8); _MR(addr,d8); _SI8(r0,_H,d8); _SI16(r1,_WZ,addr);
+                        }
+                        else {  /* LD A,(BC); LD A,(DE); LD A,(nn); W=addr++ */
+                            _MR(addr++,d8); _SI8(r0,_A,d8); _SI16(r1,_WZ,addr);
+                        }
+                    }
                     break;
                 case 3:
                     /* 16-bit INC/DEC */
