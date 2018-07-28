@@ -259,7 +259,7 @@ extern bool z80m_ei_pending(z80m_t* cpu);
 /* extract 8-bit value from 64-bit register bank */
 #define _G8(bank,shift)         (((bank)>>(shift))&0xFFULL)
 /* set 16-bit immediate value in 64-bit register bank */
-#define _SI16(bank,shift,val)   bank=((bank&~(0xFFFFUL<<(shift)))|(((val)&0xFFFFULL)<<(shift)))
+#define _SI16(bank,shift,val)   bank=((bank&~(0xFFFFULL<<(shift)))|(((val)&0xFFFFULL)<<(shift)))
 /* extract 16-bit value from 64-bit register bank */
 #define _G16(bank,shift)        (((bank)>>(shift))&0xFFFFULL)
 /* set a single bit value in 64-bit register mask */
@@ -536,34 +536,19 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         /*=== BLOCK 1: 8-bit loads and HALT ==================================*/
         if (x == 1) {
             if (y == 6) {
-                if (z == 6) {
-                    /* special case: HALT */
-                    _ON(Z80M_HALT); pc--;
-                }
-                else {
-                    /* LD (HL),r; LD (IX+d),r; LD (IY+d),r */
-                    d8=_G8(r0,rz); _MW(addr,d8);
-                }
-            }
-            else if (z == 6) {
-                /* LD r,(HL); LD r,(IX+d); LD r,(IY+d) */
-                _MR(addr,d8); _SI8(r0,ry,d8);
+                if (z == 6) { _ON(Z80M_HALT); pc--; } /* special case: HALT */
+                else        { d8=_G8(r0,rz); _MW(addr,d8); } /* LD (HL),r; LD (IX+d),r; LD (IY+d),r */
             }
             else {
-                /* LD r,s */
-                d8=_G8(r0,rz); _SI8(r0,ry,d8);
+                if (z == 6) { _MR(addr,d8); } /* LD r,(HL); LD r,(IX+d); LD r,(IY+d) */
+                else        { d8=_G8(r0,rz); }       /* LD r,s */
+                _SI8(r0,ry,d8);
             }
         }
         /*=== BLOCK 2: 8-bit ALU instructions ================================*/
         else if (x == 2) {
-            if (z == 6) {
-                /* ALU (HL); ALU (IX+d); ALU (IY+d) */
-                _MR(addr,d8);
-            }
-            else {
-                /* ALU r */
-                d8 = _G8(r0,rz);
-            }
+            if (z == 6) { _MR(addr,d8); }       /* ALU (HL); ALU (IX+d); ALU (IY+d) */
+            else        { d8 = _G8(r0,rz); }    /* ALU r */
             r0 = _z80m_alu8(y,r0,d8);
         }
         /*=== BLOCK 0: misc instructions =====================================*/
@@ -591,12 +576,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     if (q == 0) {
                         /* 16-bit immediate loads (AF => SP)*/
                         _IMM16(d16);
-                        if (p == 3) {   /* LD SP,nn */
-                            _SI16(r1,rp,d16);
-                        }
-                        else { /* LD HL,nn; LD DE,nn; LD BC,nn */
-                            _SI16(r0,rp,d16);
-                        }
+                        if (p == 3) { _SI16(r1,rp,d16); } /* LD SP,nn */
+                        else        { _SI16(r0,rp,d16); } /* LD HL,nn; LD DE,nn; LD BC,nn */
                     }
                     else {
                         /* ADD HL,rr; ADD IX,rr; ADD IY,rr */
@@ -641,14 +622,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 6:
                     _IMM8(d8);
-                    if (y == 6) {
-                        /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
-                        _MW(addr,d8);
-                    }
-                    else {
-                        /* LD r,n */
-                        _SI8(r0,ry,d8);
-                    }
+                    if (y == 6) { _MW(addr,d8); }   /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
+                    else        { _SI8(r0,ry,d8); } /* LD r,n */
                     break;
                 case 7:
                     /* misc ops on A and F */
@@ -685,8 +660,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 6:
                     /* ALU n */
-                    _MR(pc++,d8);
-                    r0 = _z80m_alu8(y,r0,d8);
+                    _MR(pc++,d8); r0=_z80m_alu8(y,r0,d8);
                     break;
                 case 7:
                     /* RST */
