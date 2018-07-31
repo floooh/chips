@@ -573,7 +573,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     uint64_t r2 = cpu->bits_im_iy_ix;
     uint64_t r3 = cpu->bc_de_hl_fa_;
     uint64_t ws = _z80m_map_regs(r0, r2, r3);
-    uint64_t map_bits = r3 & _BITS_MAP_REGS;
+    uint64_t map_bits = r2 & _BITS_MAP_REGS;
     uint64_t pins = cpu->pins;
     const z80m_tick_t tick = cpu->tick;
     void* ud = cpu->user_data;
@@ -582,11 +582,12 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     uint8_t op, d8;
     uint16_t addr, pc, d16;
     do {
-        /* flush and update the working set */
-        if (map_bits != (r3 & _BITS_MAP_REGS)) {
-            r0 = _z80m_flush_r0(ws, r0, map_bits);
-            r2 = _z80m_flush_r2(ws, r2, map_bits);
-            r3 = _z80m_flush_r3(ws, r3, map_bits);
+        /* flush and update the working set if register mapping has changed */
+        if (map_bits != (r2 & _BITS_MAP_REGS)) {
+            uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
+            r0 = _z80m_flush_r0(ws, r0, old_map_bits);
+            r2 = _z80m_flush_r2(ws, r2, old_map_bits);
+            r3 = _z80m_flush_r3(ws, r3, old_map_bits);
             ws = _z80m_map_regs(r0, r2, r3);
         }
         /* switch off interrupt flag */
@@ -758,6 +759,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         /* write PC back to register bank */
         _S16(r1,_PC,pc);
     } while ((ticks < num_ticks) && (trap_id < 0));
+    map_bits = r2 & _BITS_MAP_REGS;
     r0 = _z80m_flush_r0(ws, r0, map_bits);
     r2 = _z80m_flush_r2(ws, r2, map_bits);
     r3 = _z80m_flush_r3(ws, r3, map_bits);
