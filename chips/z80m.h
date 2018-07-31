@@ -17,7 +17,6 @@ extern "C" {
 typedef uint64_t (*z80m_tick_t)(int num_ticks, uint64_t pins, void* user_data);
 typedef bool (*z80m_trapfunc_t)(void* user_data);
 
-
 /*--- address lines ---*/
 #define Z80M_A0  (1ULL<<0)
 #define Z80M_A1  (1ULL<<1)
@@ -298,7 +297,9 @@ extern bool z80m_iff2(z80m_t* cpu);
 /* read 16-bit immediate value (also update WZ register) */
 #define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S16(r1,_WZ,data);} 
 /* generate effective address for (HL), (IX+d), (IY+d) */
-#define _ADDR(addr) {addr=_G16(ws,_HL);}
+#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if (r2&(_BIT_USE_IX|_BIT_USE_IY)){int8_t d;_MR(pc++,d);addr+=d;_S16(r1,_WZ,addr);_T(ext_ticks);}}
+/* a normal opcode fetch, bump R */
+#define _FETCH(op) {_SA(pc++);_ON(Z80M_M1|Z80M_MREQ|Z80M_RD);_TW(4);_OFF(Z80M_M1|Z80M_MREQ|Z80M_RD);op=_GD();d8=_G8(r1,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r1,_R,d8);}
 
 /* register access functions */
 void z80m_set_a(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_A,v); }
@@ -562,7 +563,6 @@ static inline uint64_t _z80m_flush_r2(uint64_t ws, uint64_t r2, uint64_t map_bit
     else if (map_bits & _BIT_USE_IY) {
         r2 = (r2 & ~(0xFFFFULL<<_IY)) | (((ws>>_HL) & 0xFFFFULL)<<_IY);
     }
-    r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
     return r2;
 }
 
@@ -580,16 +580,9 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     int trap_id = -1;
     uint32_t ticks = 0;
     uint8_t op, d8;
-    uint16_t addr, pc, d16;
+    uint16_t addr, d16;
+    uint16_t pc = _G16(r1,_PC);
     do {
-        /* flush and update the working set if register mapping has changed */
-        if (map_bits != (r2 & _BITS_MAP_REGS)) {
-            uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
-            r0 = _z80m_flush_r0(ws, r0, old_map_bits);
-            r2 = _z80m_flush_r2(ws, r2, old_map_bits);
-            r3 = _z80m_flush_r3(ws, r3, old_map_bits);
-            ws = _z80m_map_regs(r0, r2, r3);
-        }
         /* switch off interrupt flag */
         _OFF(Z80M_INT);
         /* delay-enable interrupt flags */
@@ -598,13 +591,24 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
             r2 |= (_BIT_IFF1 | _BIT_IFF2);
         }
         /* fetch opcode machine cycle, bump R register (4 cycles) */
-        {
-            pc=_G16(r1,_PC); _SA(pc++); 
-            _ON(Z80M_M1|Z80M_MREQ|Z80M_RD);
-            _TW(4);
-            _OFF(Z80M_M1|Z80M_MREQ|Z80M_RD);
-            op = _GD();
-            uint8_t r=_G8(r1,_R); r=(r&0x80)|((r+1)&0x7F); _S8(r1,_R,r);
+        _FETCH(op)
+
+        /* DD/FD prefix? these just set the register mapping bits to use IX/IY instead
+           of HL, skip the interrupt handling and continue with the next opcode byte
+        */
+        if ((op == 0xDD) || (op == 0xFD)) {
+            map_bits |= (op==0xDD) ? _BIT_USE_IX : _BIT_USE_IY;
+            _FETCH(op);
+        }
+
+        /* flush and update the working set if register mapping has changed */
+        if (map_bits != (r2 & _BITS_MAP_REGS)) {
+            const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
+            r0 = _z80m_flush_r0(ws, r0, old_map_bits);
+            r2 = _z80m_flush_r2(ws, r2, old_map_bits);
+            r3 = _z80m_flush_r3(ws, r3, old_map_bits);
+            r2 = (r2 & ~_BITS_MAP_REGS) | map_bits; 
+            ws = _z80m_map_regs(r0, r2, r3);
         }
 
         /* split opcode into bitgroups
@@ -623,19 +627,62 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         /*=== BLOCK 1: 8-bit loads and HALT ==================================*/
         if (x == 1) {
             if (y == 6) {
-                if (z == 6) { _ON(Z80M_HALT); pc--; }   /* special case: HALT */
-                else        { d8=_G8(ws,rz); _ADDR(addr); _MW(addr,d8); }   /* LD (HL),r; LD (IX+d),r; LD (IY+d),r */
+                if (z == 6) {
+                    /* special case; HALT */
+                    _ON(Z80M_HALT);
+                    pc--;
+                }
+                else  {
+                    /* LD (HL),r; LD (IX+d),r; LD (IY+d),r */
+                    if ((map_bits & (_BIT_USE_IX|_BIT_USE_IY)) && ((z>>1) == 2)) {
+                        /* special case LD (IX/IY+d),H; LD (IX/IY+d),L, these need to
+                            store the original H/L registers, not IXH/IXL
+                        */
+                        if (map_bits & _BIT_EXX) {
+                            d8=_G8(r3,rz);
+                        }
+                        else {
+                            d8=_G8(r0,rz);
+                        }
+                    }
+                    else {
+                        d8=_G8(ws,rz);
+                    }
+                    _ADDR(addr,5);
+                    _MW(addr,d8); 
+                }
             }
             else {
-                if (z == 6) { _ADDR(addr); _MR(addr,d8); }   /* LD r,(HL); LD r,(IX+d); LD r,(IY+d) */
-                else        { d8=_G8(ws,rz); }  /* LD r,s */
-                _S8(ws,ry,d8);
+                if (z == 6) {
+                    /* LD r,(HL); LD r,(IX+d); LD r,(IY+d) */
+                    _ADDR(addr,5);
+                    _MR(addr,d8); 
+                    if ((map_bits & (_BIT_USE_IX|_BIT_USE_IY)) && ((y>>1) == 2)) {
+                        /* special case LD H,(IX/IY+d), LD L,(IX/IY+d), these need to
+                        access the original H/L registers, not IXH/IXL
+                        */
+                        if (map_bits & _BIT_EXX) {
+                            _S8(r3,ry,d8);
+                        }
+                        else {
+                            _S8(r0,ry,d8);
+                        }
+                    }
+                    else {
+                        _S8(ws,ry,d8);
+                    }
+                }
+                else { 
+                    /* LD r,s */
+                    d8=_G8(ws,rz);
+                    _S8(ws,ry,d8);
+                }
             }
         }
         /*=== BLOCK 2: 8-bit ALU instructions ================================*/
         else if (x == 2) {
-            if (z == 6) { _ADDR(addr); _MR(addr,d8); }       /* ALU (HL); ALU (IX+d); ALU (IY+d) */
-            else        { d8 = _G8(ws,rz); }    /* ALU r */
+            if (z == 6) { _ADDR(addr,5); _MR(addr,d8); } /* ALU (HL); ALU (IX+d); ALU (IY+d) */
+            else        { d8 = _G8(ws,rz); } /* ALU r */
             ws = _z80m_alu8(y,ws,d8);
         }
         /*=== BLOCK 0: misc instructions =====================================*/
@@ -663,7 +710,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     if (q == 0) {
                         /* 16-bit immediate loads (AF => SP)*/
                         _IMM16(d16);
-                        if (p == 3) { _S16(r1,rp,d16); } /* LD SP,nn */
+                        if (p == 3) { _S16(r1,_SP,d16); } /* LD SP,nn */
                         else        { _S16(ws,rp,d16); } /* LD HL,nn; LD DE,nn; LD BC,nn */
                     }
                     else {
@@ -708,9 +755,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     assert(false);
                     break;
                 case 6:
-                    _IMM8(d8);
-                    if (y == 6) { _ADDR(addr); _MW(addr,d8); } /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
-                    else        { _S8(ws,ry,d8); } /* LD r,n */
+                    if (y == 6) { _ADDR(addr,2); _IMM8(d8); _MW(addr,d8); } /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
+                    else        { _IMM8(d8); _S8(ws,ry,d8); } /* LD r,n */
                     break;
                 case 7:
                     /* misc ops on A and F */
@@ -755,14 +801,16 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
             }
         }
-        
-        /* write PC back to register bank */
-        _S16(r1,_PC,pc);
+        map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
     } while ((ticks < num_ticks) && (trap_id < 0));
-    map_bits = r2 & _BITS_MAP_REGS;
-    r0 = _z80m_flush_r0(ws, r0, map_bits);
-    r2 = _z80m_flush_r2(ws, r2, map_bits);
-    r3 = _z80m_flush_r3(ws, r3, map_bits);
+    _S16(r1,_PC,pc);
+    {
+        uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
+        r0 = _z80m_flush_r0(ws, r0, old_map_bits);
+        r2 = _z80m_flush_r2(ws, r2, old_map_bits);
+        r3 = _z80m_flush_r3(ws, r3, old_map_bits);
+    }
+    r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
     cpu->bc_de_hl_fa = r0;
     cpu->ir_wz_sp_pc = r1;
     cpu->bits_im_iy_ix = r2;
