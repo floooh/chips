@@ -103,7 +103,7 @@ typedef struct {
     /* shadow register bank (BC', DE', HL', FA') */
     uint64_t bc_de_hl_fa_;
     /* IR,WZ,SP,PC */
-    uint64_t ir_wz_sp_pc;
+    uint64_t ir_pc_wz_sp;
     /* control bits,IM,IY,IX */
     uint64_t bits_im_iy_ix;
     /* last pin state (only for debug inspection) */
@@ -234,9 +234,9 @@ extern bool z80m_iff2(z80m_t* cpu);
 #define _DE (32)
 #define _BC (48)
 /* bank 2 */
-#define _PC (0)
-#define _SP (16)
-#define _WZ (32)
+#define _SP (0)
+#define _WZ (16)
+#define _PC (32)
 #define _IR (48)
 #define _R  (48)
 #define _I  (56)
@@ -318,12 +318,12 @@ void z80m_set_fa_(z80m_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_FA,v);
 void z80m_set_hl_(z80m_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_HL,v); }
 void z80m_set_de_(z80m_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_DE,v); }
 void z80m_set_bc_(z80m_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_BC,v); }
-void z80m_set_pc(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_wz_sp_pc,_PC,v); }
-void z80m_set_wz(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_wz_sp_pc,_WZ,v); }
-void z80m_set_sp(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_wz_sp_pc,_SP,v); }
-void z80m_set_ir(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_wz_sp_pc,_IR,v); }
-void z80m_set_i(z80m_t* cpu, uint8_t v)         { _S8(cpu->ir_wz_sp_pc,_I,v); }
-void z80m_set_r(z80m_t* cpu, uint8_t v)         { _S8(cpu->ir_wz_sp_pc,_R,v); }
+void z80m_set_pc(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_pc_wz_sp,_PC,v); }
+void z80m_set_wz(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_pc_wz_sp,_WZ,v); }
+void z80m_set_sp(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_pc_wz_sp,_SP,v); }
+void z80m_set_ir(z80m_t* cpu, uint16_t v)       { _S16(cpu->ir_pc_wz_sp,_IR,v); }
+void z80m_set_i(z80m_t* cpu, uint8_t v)         { _S8(cpu->ir_pc_wz_sp,_I,v); }
+void z80m_set_r(z80m_t* cpu, uint8_t v)         { _S8(cpu->ir_pc_wz_sp,_R,v); }
 void z80m_set_ix(z80m_t* cpu, uint16_t v)       { _S16(cpu->bits_im_iy_ix,_IX,v); }
 void z80m_set_iy(z80m_t* cpu, uint16_t v)       { _S16(cpu->bits_im_iy_ix,_IY,v); }
 void z80m_set_im(z80m_t* cpu, uint8_t v)        { _S8(cpu->bits_im_iy_ix,_IM,v); }
@@ -346,12 +346,12 @@ uint16_t z80m_fa_(z80m_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_FA); }
 uint16_t z80m_hl_(z80m_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_HL); }
 uint16_t z80m_de_(z80m_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_DE); }
 uint16_t z80m_bc_(z80m_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_BC); }
-uint16_t z80m_pc(z80m_t* cpu)       { return _G16(cpu->ir_wz_sp_pc,_PC); }
-uint16_t z80m_wz(z80m_t* cpu)       { return _G16(cpu->ir_wz_sp_pc,_WZ); }
-uint16_t z80m_sp(z80m_t* cpu)       { return _G16(cpu->ir_wz_sp_pc,_SP); }
-uint16_t z80m_ir(z80m_t* cpu)       { return _G16(cpu->ir_wz_sp_pc,_IR); }
-uint8_t z80m_i(z80m_t* cpu)         { return _G8(cpu->ir_wz_sp_pc,_I); }
-uint8_t z80m_r(z80m_t* cpu)         { return _G8(cpu->ir_wz_sp_pc,_R); }
+uint16_t z80m_pc(z80m_t* cpu)       { return _G16(cpu->ir_pc_wz_sp,_PC); }
+uint16_t z80m_wz(z80m_t* cpu)       { return _G16(cpu->ir_pc_wz_sp,_WZ); }
+uint16_t z80m_sp(z80m_t* cpu)       { return _G16(cpu->ir_pc_wz_sp,_SP); }
+uint16_t z80m_ir(z80m_t* cpu)       { return _G16(cpu->ir_pc_wz_sp,_IR); }
+uint8_t z80m_i(z80m_t* cpu)         { return _G8(cpu->ir_pc_wz_sp,_I); }
+uint8_t z80m_r(z80m_t* cpu)         { return _G8(cpu->ir_pc_wz_sp,_R); }
 uint16_t z80m_ix(z80m_t* cpu)       { return _G16(cpu->bits_im_iy_ix,_IX); }
 uint16_t z80m_iy(z80m_t* cpu)       { return _G16(cpu->bits_im_iy_ix,_IY); }
 uint8_t z80m_im(z80m_t* cpu)        { return _G8(cpu->bits_im_iy_ix,_IM); }
@@ -569,7 +569,7 @@ static inline uint64_t _z80m_flush_r2(uint64_t ws, uint64_t r2, uint64_t map_bit
 /* instruction decoder */
 uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     uint64_t r0 = cpu->bc_de_hl_fa;
-    uint64_t r1 = cpu->ir_wz_sp_pc;
+    uint64_t r1 = cpu->ir_pc_wz_sp;
     uint64_t r2 = cpu->bits_im_iy_ix;
     uint64_t r3 = cpu->bc_de_hl_fa_;
     uint64_t ws = _z80m_map_regs(r0, r2, r3);
@@ -599,6 +599,10 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         if ((op == 0xDD) || (op == 0xFD)) {
             map_bits |= (op==0xDD) ? _BIT_USE_IX : _BIT_USE_IY;
             _FETCH(op);
+            /* 0xED following a 0xDD or 0xFD would reset the IX/IY mappings(?) */
+            if (op == 0xED) { 
+                map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
+            }
         }
 
         /* flush and update the working set if register mapping has changed */
@@ -638,12 +642,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         /* special case LD (IX/IY+d),H; LD (IX/IY+d),L, these need to
                             store the original H/L registers, not IXH/IXL
                         */
-                        if (map_bits & _BIT_EXX) {
-                            d8=_G8(r3,rz);
-                        }
-                        else {
-                            d8=_G8(r0,rz);
-                        }
+                       d8 = _G8((map_bits & _BIT_EXX) ? r3:r0, rz);
                     }
                     else {
                         d8=_G8(ws,rz);
@@ -661,12 +660,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         /* special case LD H,(IX/IY+d), LD L,(IX/IY+d), these need to
                         access the original H/L registers, not IXH/IXL
                         */
-                        if (map_bits & _BIT_EXX) {
-                            _S8(r3,ry,d8);
-                        }
-                        else {
-                            _S8(r0,ry,d8);
-                        }
+                        if (map_bits & _BIT_EXX) { _S8(r3,ry,d8); }
+                        else                     { _S8(r0,ry,d8); }
                     }
                     else {
                         _S8(ws,ry,d8);
@@ -710,8 +705,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     if (q == 0) {
                         /* 16-bit immediate loads (AF => SP)*/
                         _IMM16(d16);
-                        if (p == 3) { _S16(r1,_SP,d16); } /* LD SP,nn */
-                        else        { _S16(ws,rp,d16); } /* LD HL,nn; LD DE,nn; LD BC,nn */
+                        if (_FA==rp) { _S16(r1,_SP,d16); } /* LD SP,nn */
+                        else         { _S16(ws,rp,d16); } /* LD HL,nn; LD DE,nn; LD BC,nn */
                     }
                     else {
                         /* ADD HL,rr; ADD IX,rr; ADD IY,rr */
@@ -789,7 +784,97 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 5:
                     /* PUSH, CALL, DD,ED,FD prefixes */
-                    assert(false);
+                    if (q == 0) {
+                        /* PUSH BC,DE,HL,IX,IY,AF */
+                        assert(false);
+                    }
+                    else switch (p) {
+                        case 0: assert(false); break;   /* CALL nnnn */
+                        case 1: pc--; ticks-=4; break;   /* DD prefix (treat as a new instruction) */
+                        case 2: {   /* ED prefix */
+                                _FETCH(op);
+                                const uint8_t x = op>>6;
+                                const uint8_t y = (op>>3)&7;
+                                const uint8_t z = op&7;
+                                const uint8_t p = y>>1;
+                                const uint8_t q = y&1;
+                                const int rp = (3-p)<<4;
+                                if (x == 2) {
+                                    /* block instructions (LDIR, etc...) */
+                                    assert(false);
+                                }
+                                else if (x == 1) {
+                                    /* misc ED ops */
+                                    switch (z) {
+                                        case 0: /* IN r,(C) */
+                                            assert(false);
+                                            break;
+                                        case 1: /* OUT (C),r */
+                                            assert(false);
+                                            break;
+                                        case 2: /* SBC/ADC HL,rr */
+                                            assert(false);
+                                            break;
+                                        case 3: /* LD (nn),rr; LD rr,(nn) */
+                                            _IMM16(addr);
+                                            if (q == 0) { /* LD (nn),rr */
+                                                if (rp == _FA) { d16=_G16(r1, _SP); }
+                                                else           { d16=_G16(ws, rp);  }
+                                                _MW(addr++, d16 & 0xFF);
+                                                _MW(addr, d16 >> 8);
+                                                _S16(r1, _WZ, addr);
+                                            }
+                                            else {  /* LD rr,(nn) */
+                                                uint8_t l,h;
+                                                _MR(addr++,l);
+                                                _MR(addr,h);
+                                                d16=(h<<8)|l;
+                                                if (rp == _FA) { _S16(r1, _SP, d16); }
+                                                else           { _S16(ws, rp, d16); }
+                                                _S16(r1, _WZ, addr);
+                                            }
+                                            break;
+                                        case 4: /* NEG */
+                                            assert(false);
+                                            break;
+                                        case 5: /* RETN, RETI */
+                                            assert(false);
+                                            break;
+                                        case 6: /* IM */
+                                            assert(false);
+                                            break;
+                                        case 7: /* misc ops with R,I,A */
+                                            switch (y) {
+                                                case 0: /* LD I,A */
+                                                    assert(false);
+                                                    break;
+                                                case 1: /* LD R,A */
+                                                    assert(false);
+                                                    break;
+                                                case 2: /* LD A,I */
+                                                    assert(false);
+                                                    break;
+                                                case 3: /* LD A,R */
+                                                    assert(false);
+                                                    break;
+                                                case 4: /* RRD */
+                                                    assert(false);
+                                                    break;
+                                                case 5: /* RLD */
+                                                    assert(false);
+                                                default: /* 8-cycle NOP */
+                                                    break;
+                                            }
+                                            break;
+                                    }
+                                }
+                                else {
+                                    /* everything else is a 8-cycle NOP */
+                                }
+                            }
+                            break;
+                        case 3: pc--; ticks-=4; break;   /* FD prefix (treat as new instruction) */
+                    }
                     break;
                 case 6:
                     /* ALU n */
@@ -812,7 +897,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     }
     r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
     cpu->bc_de_hl_fa = r0;
-    cpu->ir_wz_sp_pc = r1;
+    cpu->ir_pc_wz_sp = r1;
     cpu->bits_im_iy_ix = r2;
     cpu->bc_de_hl_fa_ = r3;
     cpu->pins = pins;
