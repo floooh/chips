@@ -409,6 +409,12 @@ static inline uint8_t _z80m_cp_flags(uint8_t acc, uint8_t val, uint32_t res) {
     return Z80M_NF|(_z80m_sz(res)|(val&(Z80M_YF|Z80M_XF))|((res>>8)&Z80M_CF)|((acc^val^res)&Z80M_HF))|((((val^acc)&(res^acc))>>5)&Z80M_VF);
 }
 
+static inline uint8_t _z80m_sziff2_flags(uint64_t ws, uint64_t r2, uint8_t val) {
+    uint8_t f = _G8(ws,_F) & Z80M_CF;
+    f |= _z80m_sz(val)|(val&(Z80M_YF|Z80M_XF))|((r2 & _BIT_IFF2) ? Z80M_PF : 0);
+    return f;
+}
+
 /* sign+zero+parity lookup table */
 static uint8_t _z80m_szp[256] = {
   0x44,0x00,0x00,0x04,0x00,0x04,0x04,0x00,0x08,0x0c,0x0c,0x08,0x0c,0x08,0x08,0x0c,
@@ -846,16 +852,18 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                         case 7: /* misc ops with R,I,A */
                                             switch (y) {
                                                 case 0: /* LD I,A */
-                                                    assert(false);
+                                                    _T(1); d8=_G8(ws,_A); _S8(r1,_I,d8);
                                                     break;
                                                 case 1: /* LD R,A */
-                                                    assert(false);
+                                                    _T(1); d8=_G8(ws,_A); _S8(r1,_R,d8);
                                                     break;
                                                 case 2: /* LD A,I */
-                                                    assert(false);
+                                                    _T(1); d8=_G8(r1,_I); _S8(ws,_A,d8);
+                                                    _S8(ws,_F,_z80m_sziff2_flags(ws, r2, d8));
                                                     break;
                                                 case 3: /* LD A,R */
-                                                    assert(false);
+                                                    _T(1); d8=_G8(r1,_R); _S8(ws,_A,d8);
+                                                    _S8(ws,_F,_z80m_sziff2_flags(ws, r2, d8));
                                                     break;
                                                 case 4: /* RRD */
                                                     assert(false);
