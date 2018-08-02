@@ -249,16 +249,12 @@ extern bool z80m_iff2(z80m_t* cpu);
 #define _EI   (2)
 #define _USE_IX (3)
 #define _USE_IY (4)
-#define _EXAF (5)
-#define _EXX (6)
 #define _BIT_IFF1   (1ULL<<_IFF1)
 #define _BIT_IFF2   (1ULL<<_IFF2)
 #define _BIT_EI     (1ULL<<_EI)
 #define _BIT_USE_IX (1ULL<<_USE_IX)
 #define _BIT_USE_IY (1ULL<<_USE_IY)
-#define _BIT_EXAF   (1ULL<<_EXAF)
-#define _BIT_EXX    (1ULL<<_EXX)
-#define _BITS_MAP_REGS (_BIT_USE_IX|_BIT_USE_IY|_BIT_EXAF|_BIT_EXX)
+#define _BITS_MAP_REGS (_BIT_USE_IX|_BIT_USE_IY)
 
 /* set 8-bit immediate value in 64-bit register bank */
 #define _S8(bank,shift,val)    bank=(((bank)&~(0xFFULL<<(shift)))|(((val)&0xFFULL)<<(shift)))
@@ -385,7 +381,7 @@ void z80m_reset(z80m_t* cpu) {
     z80m_set_im(cpu, 0);
     /* after power-on or reset, R is set to 0 (see z80-documented.pdf) */
     z80m_set_ir(cpu, 0x0000);
-    cpu->bits_im_iy_ix &= ~(_BIT_EI|_BIT_USE_IX|_BIT_USE_IX|_BIT_USE_IY|_BIT_EXAF|_BIT_EXX);
+    cpu->bits_im_iy_ix &= ~(_BIT_EI|_BIT_USE_IX|_BIT_USE_IY);
 }
 
 /* flags evaluation */
@@ -512,54 +508,23 @@ static inline uint64_t _z80m_alu8(uint8_t type, uint64_t bank, uint8_t val) {
 }
 
 /* manage the virtual 'working set' register bank */
-static inline uint64_t _z80m_map_regs(uint64_t r0, uint64_t r2, uint64_t r3) {
-    uint64_t ws = ((r2 & _BIT_EXAF) ? r3 : r0) & (0xFFFFULL<<_FA);
-    uint64_t rtmp = (r2 & _BIT_EXX) ? r3 : r0;
-    ws |= rtmp & ((0xFFFFULL<<_BC)|(0xFFFFULL<<_DE));
+static inline uint64_t _z80m_map_regs(uint64_t r0, uint64_t r2) {
+    uint64_t ws = r0;
     if (r2 & _BIT_USE_IX) {
-        ws |= ((r2>>_IX)<<_HL) & (0xFFFFULL<<_HL);
+        ws = (ws & ~(0xFFFFULL<<_HL)) | (((r2>>_IX) & 0xFFFF)<<_HL);
     }
     else if (r2 & _BIT_USE_IY) {
-        ws |= ((r2>>_IY)<<_HL) &  (0xFFFFULL<<_HL);
-    }
-    else {
-        ws |= rtmp & (0xFFFFULL<<_HL);
+        ws = (ws & ~(0xFFFFULL<<_HL)) | (((r2>>_IY) & 0xFFFF)<<_HL);
     }
     return ws;
 }
 
 static inline uint64_t _z80m_flush_r0(uint64_t ws, uint64_t r0, uint64_t map_bits) {
-    if (!(map_bits & _BIT_EXAF)) {
-        /* flush AF */
-        r0 = (r0 & ~(0xFFFFULL<<_FA)) | (ws & (0xFFFFULL<<_FA));
-    }
-    if (!(map_bits & _BIT_EXX)) {
-        /* flush BC and DE */
-        r0 = (r0 & ~(0xFFFFULL<<_BC)) | (ws & (0xFFFFULL<<_BC));
-        r0 = (r0 & ~(0xFFFFULL<<_DE)) | (ws & (0xFFFFULL<<_DE));
-        if (!(map_bits & (_BIT_USE_IX|_BIT_USE_IY))) {
-            /* flush HL */
-            r0 = (r0 & ~(0xFFFFULL<<_HL)) | (ws & (0xFFFFULL<<_HL));
-        }
+    r0 = (r0 & (0xFFFFULL<<_HL)) | (ws & ~(0xFFFFULL<<_HL));
+    if (!(map_bits & (_BIT_USE_IX|_BIT_USE_IY))) {
+        r0 = (r0 & ~(0xFFFFULL<<_HL)) | (ws & (0xFFFFULL<<_HL));
     }
     return r0;
-}
-
-static inline uint64_t _z80m_flush_r3(uint64_t ws, uint64_t r3, uint64_t map_bits) {
-    if (map_bits & _BIT_EXAF) {
-        /* flush AF' */
-        r3 = (r3 & ~(0xFFFFULL<<_FA)) | (ws & (0xFFFFULL<<_FA));
-    }
-    if (map_bits & _BIT_EXX) {
-        /* flush BC' and DE' */
-        r3 = (r3 & ~(0xFFFFULL<<_BC)) | (ws & 0xFFFFULL<<_BC);
-        r3 = (r3 & ~(0xFFFFULL<<_DE)) | (ws & 0xFFFFULL<<_DE);
-        if (!(map_bits & (_BIT_USE_IX|_BIT_USE_IY))) {
-            /* flush HL' */
-            r3 = (r3 & ~(0xFFFFULL<<_HL)) | (ws & 0xFFFFULL<<_HL);
-        }
-    }
-    return r3;
 }
 
 static inline uint64_t _z80m_flush_r2(uint64_t ws, uint64_t r2, uint64_t map_bits) {
@@ -577,8 +542,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     uint64_t r0 = cpu->bc_de_hl_fa;
     uint64_t r1 = cpu->ir_pc_wz_sp;
     uint64_t r2 = cpu->bits_im_iy_ix;
-    uint64_t r3 = cpu->bc_de_hl_fa_;
-    uint64_t ws = _z80m_map_regs(r0, r2, r3);
+    uint64_t ws = _z80m_map_regs(r0, r2);
     uint64_t map_bits = r2 & _BITS_MAP_REGS;
     uint64_t pins = cpu->pins;
     const z80m_tick_t tick = cpu->tick;
@@ -616,9 +580,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
             const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
             r0 = _z80m_flush_r0(ws, r0, old_map_bits);
             r2 = _z80m_flush_r2(ws, r2, old_map_bits);
-            r3 = _z80m_flush_r3(ws, r3, old_map_bits);
             r2 = (r2 & ~_BITS_MAP_REGS) | map_bits; 
-            ws = _z80m_map_regs(r0, r2, r3);
+            ws = _z80m_map_regs(r0, r2);
         }
 
         /* split opcode into bitgroups
@@ -648,7 +611,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         /* special case LD (IX/IY+d),H; LD (IX/IY+d),L, these need to
                             store the original H/L registers, not IXH/IXL
                         */
-                       d8 = _G8((map_bits & _BIT_EXX) ? r3:r0, rz);
+                       d8 = _G8(r0, rz);
                     }
                     else {
                         d8=_G8(ws,rz);
@@ -666,8 +629,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         /* special case LD H,(IX/IY+d), LD L,(IX/IY+d), these need to
                         access the original H/L registers, not IXH/IXL
                         */
-                        if (map_bits & _BIT_EXX) { _S8(r3,ry,d8); }
-                        else                     { _S8(r0,ry,d8); }
+                        _S8(r0,ry,d8);
                     }
                     else {
                         _S8(ws,ry,d8);
@@ -901,13 +863,11 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
         r0 = _z80m_flush_r0(ws, r0, old_map_bits);
         r2 = _z80m_flush_r2(ws, r2, old_map_bits);
-        r3 = _z80m_flush_r3(ws, r3, old_map_bits);
     }
     r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
     cpu->bc_de_hl_fa = r0;
     cpu->ir_pc_wz_sp = r1;
     cpu->bits_im_iy_ix = r2;
-    cpu->bc_de_hl_fa_ = r3;
     cpu->pins = pins;
     cpu->trap_id = trap_id;
     return ticks;
