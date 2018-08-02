@@ -738,7 +738,11 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     /* POP + misc */
                     if (q == 0) {
                         /* POP BC,DE,HL,IX,IY */
-                        assert(false);
+                        addr = _G16(r1,_SP);
+                        uint8_t l,h;
+                        _MR(addr++,l); _MR(addr++,h);
+                        d16 = (rp==_FA) ? ((l<<8)|h) : ((h<<8)|l);
+                        _S16(ws,rp,d16); _S16(r1,_SP,addr);
                     }
                     else switch (p) {
                         case 0: /* RET */
@@ -771,7 +775,14 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     /* PUSH, CALL, DD,ED,FD prefixes */
                     if (q == 0) {
                         /* PUSH BC,DE,HL,IX,IY,AF */
-                        assert(false);
+                        _T(1);
+                        addr = _G16(r1,_SP);
+                        d16 = _G16(ws,rp);
+                        if (rp==_FA) {
+                            d16 = (d16>>8) | (d16<<8);
+                        }
+                        _MW(--addr,d16>>8); _MW(--addr,d16);
+                        _S16(r1,_SP,addr);
                     }
                     else switch (p) {
                         case 0: assert(false); break;   /* CALL nnnn */
@@ -810,10 +821,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                                 _S16(r1, _WZ, addr);
                                             }
                                             else {  /* LD rr,(nn) */
-                                                uint8_t l,h;
-                                                _MR(addr++,l);
-                                                _MR(addr,h);
-                                                d16=(h<<8)|l;
+                                                uint8_t l,h; _MR(addr++,l); _MR(addr,h); d16 = (h<<8)|l;
                                                 if (rp == _FA) { _S16(r1, _SP, d16); }
                                                 else           { _S16(ws, rp, d16); }
                                                 _S16(r1, _WZ, addr);
