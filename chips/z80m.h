@@ -736,7 +736,24 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 1:
                     /* POP + misc */
-                    assert(false);
+                    if (q == 0) {
+                        /* POP BC,DE,HL,IX,IY */
+                        assert(false);
+                    }
+                    else switch (p) {
+                        case 0: /* RET */
+                            assert(false);
+                            break;
+                        case 1: /* EXX */
+                            assert(false);
+                            break;
+                        case 2: /* JP (HL) */
+                            assert(false);
+                            break;
+                        case 3: /* LD SP,HL; LD SP,IX; LD SP,IY */
+                            _T(2); _S16(r1,_SP,_G16(ws,_HL));
+                            break;
+                    }
                     break;
                 case 2:
                     /* JP cc,nn */
