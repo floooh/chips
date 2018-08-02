@@ -542,6 +542,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     uint64_t r0 = cpu->bc_de_hl_fa;
     uint64_t r1 = cpu->ir_pc_wz_sp;
     uint64_t r2 = cpu->bits_im_iy_ix;
+    uint64_t r3 = cpu->bc_de_hl_fa_;
     uint64_t ws = _z80m_map_regs(r0, r2);
     uint64_t map_bits = r2 & _BITS_MAP_REGS;
     uint64_t pins = cpu->pins;
@@ -656,7 +657,12 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         case 0:     /* NOP */
                             break;
                         case 1:     /* EX AF,AF' */
-                            assert(false);
+                            r0 = _z80m_flush_r0(ws, r0, r2);
+                            uint16_t fa = _G16(r0,_FA);
+                            uint16_t fa_ = _G16(r3, _FA);
+                            _S16(r0,_FA,fa_);
+                            _S16(r3,_FA,fa);
+                            ws = _z80m_map_regs(r0, r2);
                             break;
                         case 2:     /* DJNZ d */
                             assert(false);
@@ -749,7 +755,11 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             assert(false);
                             break;
                         case 1: /* EXX */
-                            assert(false);
+                            r0 = _z80m_flush_r0(ws, r0, r2);
+                            const uint64_t rx = r3;
+                            r3 = (r3 & 0xFFFF) | (r0 & 0xFFFFFFFFFFFF0000);
+                            r0 = (r0 & 0xFFFF) | (rx & 0xFFFFFFFFFFFF0000);
+                            ws = _z80m_map_regs(r0, r2);
                             break;
                         case 2: /* JP (HL) */
                             assert(false);
@@ -765,7 +775,59 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 3:
                     /* misc ops */
-                    assert(false);
+                    switch (y) {
+                        case 0:
+                            /* JP nn */
+                            assert(false);
+                            break;
+                        case 1:
+                            /* CB prefix */
+                            assert(false);
+                            break;
+                        case 2:
+                            /* OUT (n),A */
+                            assert(false);
+                            break;
+                        case 3:
+                            /* IN A(n) */
+                            assert(false);
+                            break;
+                        case 4:
+                            /* EX SP,(HL/IX/IY) */
+                            {
+                                _T(3);
+                                addr = _G16(r1,_SP);
+                                d16 = _G16(ws,_HL);
+                                uint8_t l,h;
+                                _MR(addr,l);
+                                _MR(addr+1,h);
+                                _MW(addr,d16);
+                                _MW(addr+1,d16>>8);
+                                d16 = (h<<8)|l;
+                                _S16(ws,_HL,d16);
+                                _S16(r1,_WZ,d16);
+                            }
+                            break;
+                        case 5:
+                            /* EX DE,HL */
+                            {
+                                r0 = _z80m_flush_r0(ws, r0, r2);
+                                uint16_t de = _G16(r0,_DE);
+                                uint16_t hl = _G16(r0,_HL);
+                                _S16(r0,_DE,hl);
+                                _S16(r0,_HL,de);
+                                ws = _z80m_map_regs(r0, r2);
+                            }
+                            break;
+                        case 6:
+                            /* DI */
+                            assert(false);
+                            break;
+                        case 7:
+                            /* EI */
+                            assert(false);
+                            break;
+                    }
                     break;
                 case 4:
                     /* CALL cc,nn */
@@ -893,6 +955,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     cpu->bc_de_hl_fa = r0;
     cpu->ir_pc_wz_sp = r1;
     cpu->bits_im_iy_ix = r2;
+    cpu->bc_de_hl_fa_ = r3;
     cpu->pins = pins;
     cpu->trap_id = trap_id;
     return ticks;
