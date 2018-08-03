@@ -127,6 +127,8 @@ extern void z80m_clear_trap(z80m_t* cpu, int trap_id);
 extern bool z80m_has_trap(z80m_t* cpu, int trap_id);
 /* execute instructions for at least 'ticks', but at least one, return executed ticks */
 extern uint32_t z80m_exec(z80m_t* cpu, uint32_t ticks);
+/* return false if z80m_exec() returned in the middle of an extended intruction */
+extern bool z80m_opdone(z80m_t* cpu);
 
 /* register access functions */
 extern void z80m_set_a(z80m_t* cpu, uint8_t v);
@@ -384,6 +386,10 @@ void z80m_reset(z80m_t* cpu) {
     cpu->bits_im_iy_ix &= ~(_BIT_EI|_BIT_USE_IX|_BIT_USE_IY);
 }
 
+bool z80m_opdone(z80m_t* cpu) {
+    return 0 == (cpu->bits_im_iy_ix & (_BIT_USE_IX|_BIT_USE_IY));
+}
+
 /* flags evaluation */
 static inline uint8_t _z80m_sz(uint8_t val) {
     return val ? (val & Z80M_SF) : Z80M_ZF;
@@ -564,21 +570,11 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         /* fetch opcode machine cycle, bump R register (4 cycles) */
         _FETCH(op)
 
-        /* FIXME: this special case block should be removed, and instead 
-           the normal opcode decoding should set a _BIT_PREFIX_IX 
-           or _BIT_PREFIX_IY flag, and then continue the while
-           loop without interrupt handling...
+        /* ED prefix resets the IX/IY mapping flags (this may happen for invalid
+            opcode sequences like FF ED, DD ED etc..)
         */
-        /* DD/FD prefix? these just set the register mapping bits to use IX/IY instead
-           of HL, skip the interrupt handling and continue with the next opcode byte
-        */
-        if ((op == 0xDD) || (op == 0xFD)) {
-            map_bits |= (op==0xDD) ? _BIT_USE_IX : _BIT_USE_IY;
-            _FETCH(op);
-            /* 0xED following a 0xDD or 0xFD would reset the IX/IY mappings(?) */
-            if (op == 0xED) { 
-                map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
-            }
+        if (op == 0xED) { 
+            map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
         }
 
         /* flush and update the working set if register mapping has changed */
@@ -852,8 +848,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         _S16(r1,_SP,addr);
                     }
                     else switch (p) {
-                        case 0: assert(false); break;   /* CALL nnnn */
-                        case 1: pc--; ticks-=4; break;   /* DD prefix (treat as a new instruction) */
+                        case 0: assert(false); break;               /* CALL nnnn */
+                        case 1: map_bits |= _BIT_USE_IX; continue;  /* DD prefix (map IX into HL slot) */
                         case 2: {   /* ED prefix */
                                 _FETCH(op);
                                 const uint8_t x = op>>6;
@@ -935,7 +931,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                 }
                             }
                             break;
-                        case 3: pc--; ticks-=4; break;   /* FD prefix (treat as new instruction) */
+                        case 3: map_bits |= _BIT_USE_IY; continue;  /* FD prefix (map IY into HL slot ) */
                     }
                     break;
                 case 6:
