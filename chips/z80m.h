@@ -564,6 +564,11 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         /* fetch opcode machine cycle, bump R register (4 cycles) */
         _FETCH(op)
 
+        /* FIXME: this special case block should be removed, and instead 
+           the normal opcode decoding should set a _BIT_PREFIX_IX 
+           or _BIT_PREFIX_IY flag, and then continue the while
+           loop without interrupt handling...
+        */
         /* DD/FD prefix? these just set the register mapping bits to use IX/IY instead
            of HL, skip the interrupt handling and continue with the next opcode byte
         */
