@@ -716,13 +716,30 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     /* 16-bit INC/DEC */
                     assert(false);
                     break;
-                case 4:
-                    /* 8-bit INC */
-                    assert(false);
+                case 4: /* 8-bit INC (HL); INC (IX+d); INC (IY+d); INC r */
+                    {
+                        if (y == 6) { _ADDR(addr,5); _MR(addr,d8); _T(1); }
+                        else        { d8 = _G8(ws,ry); }
+                        uint8_t r = d8 + 1;
+                        if (y == 6) { _MW(addr,r); }
+                        else        { _S8(ws,ry,r); }
+                        uint8_t f = _G8(ws,_F) & Z80M_CF;
+                        f |= _z80m_sz(r)|(r&(Z80M_XF|Z80M_YF))|((r^d8)&Z80M_HF);
+                        if (r == 0x80) { f |= Z80M_VF; }
+                        _S8(ws,_F,f);
+                    }
                     break;
                 case 5:
-                    /* 8-bit DEC */
-                    assert(false);
+                    /* 8-bit DEC (HL); DEC (IX+d); DEC (IY+d); DEC r */
+                    if (y == 6) { _ADDR(addr,5); _MR(addr,d8); _T(1); }
+                    else        { d8 = _G8(ws,ry); }
+                    uint8_t r = d8 - 1;
+                    if (y == 6) { _MW(addr,r); }
+                    else        { _S8(ws,ry,r); }
+                    uint8_t f = Z80M_NF | (_G8(ws,_F) & Z80M_CF);
+                    f |= _z80m_sz(r)|(r&(Z80M_XF|Z80M_YF))|((r^d8)&Z80M_HF);
+                    if (r == 0x7F) { f |= Z80M_VF; }
+                    _S8(ws,_F,f);
                     break;
                 case 6:
                     if (y == 6) { _ADDR(addr,2); _IMM8(d8); _MW(addr,d8); } /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
