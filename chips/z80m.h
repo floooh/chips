@@ -548,6 +548,31 @@ static inline uint64_t _z80m_daa(uint64_t ws) {
     return ws;
 }
 
+static inline uint64_t _z80m_cpl(uint64_t ws) {
+    uint8_t a = _G8(ws,_A) ^ 0xFF;
+    _S8(ws,_A,a);
+    uint8_t f = _G8(ws,_F);
+    f = (f & (Z80M_SF|Z80M_ZF|Z80M_PF|Z80M_CF)) | Z80M_HF | Z80M_NF | (a & (Z80M_YF|Z80M_XF));
+    _S8(ws,_F,f);
+    return ws;
+}
+
+static inline uint64_t _z80m_scf(uint64_t ws) {
+    uint8_t a = _G8(ws,_A);
+    uint8_t f = _G8(ws,_F);
+    f = (f & (Z80M_SF|Z80M_ZF|Z80M_PF|Z80M_CF)) | Z80M_CF | (a & (Z80M_YF|Z80M_XF));
+    _S8(ws,_F,f);
+    return ws;
+}
+
+static inline uint64_t _z80m_ccf(uint64_t ws) {
+    uint8_t a = _G8(ws,_A);
+    uint8_t f = _G8(ws,_F);
+    f = ((f & (Z80M_SF|Z80M_ZF|Z80M_YF|Z80M_XF|Z80M_PF|Z80M_CF)) | ((f & Z80M_CF)<<4) | (a & (Z80M_YF|Z80M_XF))) ^ Z80M_CF;
+    _S8(ws,_F,f);
+    return ws;
+}
+
 static inline uint64_t _z80m_rlca(uint64_t ws) {
     uint8_t a = _G8(ws,_A);
     uint8_t f = _G8(ws,_F);
@@ -828,9 +853,9 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         case 2: ws=_z80m_rla(ws); break;
                         case 3: ws=_z80m_rra(ws); break;
                         case 4: ws=_z80m_daa(ws); break;
-                        default:
-                            assert(false);
-                            break;
+                        case 5: ws=_z80m_cpl(ws); break;
+                        case 6: ws=_z80m_scf(ws); break;
+                        case 7: ws=_z80m_ccf(ws); break;
                     }
                     break;
             }
