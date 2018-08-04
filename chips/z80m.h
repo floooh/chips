@@ -519,6 +519,35 @@ static inline uint64_t _z80m_alu8(uint8_t type, uint64_t bank, uint8_t val) {
     return bank;
 }
 
+static inline uint64_t _z80m_daa(uint64_t ws) {
+    uint8_t a = _G8(ws,_A);
+    uint8_t v = a;
+    uint8_t f = _G8(ws,_F);
+    if (f & Z80M_NF) {
+        if (((a & 0xF)>0x9) || (f & Z80M_HF)) {
+            v -= 0x06;
+        }
+        if ((a > 0x99) || (f & Z80M_CF)) {
+            v -= 0x60;
+        }
+    }
+    else {
+        if (((a & 0xF)>0x9) || (f & Z80M_HF)) {
+            v += 0x06;
+        }
+        if ((a > 0x99) || (f & Z80M_CF)) {
+            v += 0x60;
+        }
+    }
+    f &= Z80M_CF|Z80M_NF;
+    f |= (a>0x99) ? Z80M_CF : 0;
+    f |= (a ^ v) & Z80M_HF;
+    f |= _z80m_szp[v];
+    _S8(ws,_A,v);
+    _S8(ws,_F,f);
+    return ws;
+}
+
 static inline uint64_t _z80m_rlca(uint64_t ws) {
     uint8_t a = _G8(ws,_A);
     uint8_t f = _G8(ws,_F);
@@ -798,6 +827,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         case 1: ws=_z80m_rrca(ws); break;
                         case 2: ws=_z80m_rla(ws); break;
                         case 3: ws=_z80m_rra(ws); break;
+                        case 4: ws=_z80m_daa(ws); break;
                         default:
                             assert(false);
                             break;
