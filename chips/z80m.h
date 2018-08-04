@@ -513,6 +513,46 @@ static inline uint64_t _z80m_alu8(uint8_t type, uint64_t bank, uint8_t val) {
     return bank;
 }
 
+static inline uint64_t _z80m_rlca(uint64_t ws) {
+    uint8_t a = _G8(ws,_A);
+    uint8_t f = _G8(ws,_F);
+    uint8_t r = (a<<1) | (a>>7);
+    f = ((a>>7) & Z80M_CF) | (f & (Z80M_SF|Z80M_ZF|Z80M_PF)) | (r & (Z80M_YF|Z80M_XF));
+    _S8(ws,_A,r);
+    _S8(ws,_F,f);
+    return ws;
+}
+
+static inline uint64_t _z80m_rrca(uint64_t ws) {
+    uint8_t a = _G8(ws,_A);
+    uint8_t f = _G8(ws,_F);
+    uint8_t r = (a>>1) | (a<<7);
+    f = (a & Z80M_CF) | (f & (Z80M_SF|Z80M_ZF|Z80M_PF)) | (r & (Z80M_YF|Z80M_XF));
+    _S8(ws,_A,r);
+    _S8(ws,_F,f);
+    return ws;
+}
+
+static inline uint64_t _z80m_rla(uint64_t ws) {
+    uint8_t a = _G8(ws,_A);
+    uint8_t f = _G8(ws,_F);
+    uint8_t r = (a<<1) | (f & Z80M_CF);
+    f = ((a>>7) & Z80M_CF) | (f & (Z80M_SF|Z80M_ZF|Z80M_PF)) | (r & (Z80M_YF|Z80M_XF));
+    _S8(ws,_A,r);
+    _S8(ws,_F,f);
+    return ws;
+}
+
+static inline uint64_t _z80m_rra(uint64_t ws) {
+    uint8_t a = _G8(ws,_A);
+    uint8_t f = _G8(ws,_F);
+    uint8_t r = (a>>1) | ((f & Z80M_CF)<<7);
+    f = (a & Z80M_CF) | (f & (Z80M_SF|Z80M_ZF|Z80M_PF)) | (r & (Z80M_YF|Z80M_XF));
+    _S8(ws,_A,r);
+    _S8(ws,_F,f);
+    return ws;
+}
+
 /* manage the virtual 'working set' register bank */
 static inline uint64_t _z80m_map_regs(uint64_t r0, uint64_t r2) {
     uint64_t ws = r0;
@@ -747,7 +787,15 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 7:
                     /* misc ops on A and F */
-                    assert(false);
+                    switch (y) {
+                        case 0: ws=_z80m_rlca(ws); break;
+                        case 1: ws=_z80m_rrca(ws); break;
+                        case 2: ws=_z80m_rla(ws); break;
+                        case 3: ws=_z80m_rra(ws); break;
+                        default:
+                            assert(false);
+                            break;
+                    }
                     break;
             }
         }
