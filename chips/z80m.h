@@ -1034,11 +1034,34 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                                     _T(1); d8=_G8(r1,_R); _S8(ws,_A,d8);
                                                     _S8(ws,_F,_z80m_sziff2_flags(ws, r2, d8));
                                                     break;
-                                                case 4: /* RRD */
-                                                    assert(false);
+                                                case 4: { /* RRD */
+                                                        addr = _G16(ws,_HL);
+                                                        uint8_t a = _G8(ws,_A);
+                                                        _MR(addr, d8);
+                                                        uint8_t l = a & 0x0F;
+                                                        a = (a & 0xF0) | (d8 & 0x0F);
+                                                        _S8(ws,_A,a);
+                                                        d8 = (d8>>4) | (l<<4);
+                                                        _MW(addr++,d8);
+                                                        _S16(r1,_WZ,addr);
+                                                        _S8(ws,_F,(_G8(ws,_F) & Z80M_CF) | _z80m_szp[a]);
+                                                        _T(4);
+                                                    }
                                                     break;
-                                                case 5: /* RLD */
-                                                    assert(false);
+                                                case 5: {  /* RLD */
+                                                        addr = _G16(ws,_HL);
+                                                        uint8_t a = _G8(ws,_A);
+                                                        _MR(addr, d8);
+                                                        uint8_t l = a & 0x0F;
+                                                        a = (a & 0xF0) | (d8>>4);
+                                                        _S8(ws,_A,a);
+                                                        d8 = (d8<<4) | l;
+                                                        _MW(addr++,d8);
+                                                        _S16(r1,_WZ,addr);
+                                                        _S8(ws,_F,(_G8(ws,_F) & Z80M_CF) | _z80m_szp[a]);
+                                                        _T(4);
+                                                    }
+                                                    break;
                                                 default: /* 8-cycle NOP */
                                                     break;
                                             }
