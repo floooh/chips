@@ -714,14 +714,19 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 3:
                     /* 16-bit INC/DEC */
-                    assert(false);
+                    _T(2);
+                    if (rp==_FA) { d16=_G16(r1,_SP); }
+                    else         { d16=_G16(ws,rp); }
+                    d16 = d16 + (q ? -1 : +1);
+                    if (rp==_FA) { _S16(r1,_SP,d16); }
+                    else         { _S16(ws,rp,d16); }
                     break;
                 case 4: /* 8-bit INC (HL); INC (IX+d); INC (IY+d); INC r */
                 case 5: /* 8-bit DEC (HL); DEC (IX+d); DEC (IY+d); DEC r */
                     {
                         if (y == 6) { _ADDR(addr,5); _MR(addr,d8); _T(1); }
                         else        { d8 = _G8(ws,ry); }
-                        uint8_t r = d8 + ((z & 1) ? -1 : 1);
+                        uint8_t r = d8 + ((z & 1) ? -1 : +1);
                         if (y == 6) { _MW(addr,r); }
                         else        { _S8(ws,ry,r); }
                         uint8_t f = _G8(ws,_F) & Z80M_CF;
