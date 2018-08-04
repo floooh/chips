@@ -296,8 +296,14 @@ extern bool z80m_iff2(z80m_t* cpu);
 #define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S16(r1,_WZ,data);} 
 /* generate effective address for (HL), (IX+d), (IY+d) */
 #define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if (r2&(_BIT_USE_IX|_BIT_USE_IY)){int8_t d;_MR(pc++,d);addr+=d;_S16(r1,_WZ,addr);_T(ext_ticks);}}
+/* generate effective address for (HL), (IX+d), (IY+d) with given d (for DD/FD+CB ops) */
+#define _ADDR_CB(addr,d,ext_ticks) {addr=_G16(ws,_HL);if (r2&(_BIT_USE_IX|_BIT_USE_IY)){addr+=d;_S16(r1,_WZ,addr);_T(ext_ticks);}}
+/* helper macro to bump R register */
+#define _BUMPR() d8=_G8(r1,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r1,_R,d8)
 /* a normal opcode fetch, bump R */
-#define _FETCH(op) {_SA(pc++);_ON(Z80M_M1|Z80M_MREQ|Z80M_RD);_TW(4);_OFF(Z80M_M1|Z80M_MREQ|Z80M_RD);op=_GD();d8=_G8(r1,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r1,_R,d8);}
+#define _FETCH(op) {_SA(pc++);_ON(Z80M_M1|Z80M_MREQ|Z80M_RD);_TW(4);_OFF(Z80M_M1|Z80M_MREQ|Z80M_RD);op=_GD();_BUMPR();}
+/* special opcode fetch for CB prefix, only bump R if not a DD/FD+CB 'double prefix' op */
+#define _FETCH_CB(op) {_SA(pc++);_ON(Z80M_M1|Z80M_MREQ|Z80M_RD);_TW(4);_OFF(Z80M_M1|Z80M_MREQ|Z80M_RD);op=_GD();if(0==(r2&(_BIT_USE_IX|_BIT_USE_IY))){_BUMPR();}}
 
 /* register access functions */
 void z80m_set_a(z80m_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_A,v); }
@@ -846,9 +852,61 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             /* JP nn */
                             assert(false);
                             break;
-                        case 1:
-                            /* CB prefix */
-                            assert(false);
+                        case 1: { /* CB prefix */
+                                /* if this is a DD/FD+CB double prefix op, fetch the d offset for (IX/IY+d) */
+                                int8_t d = 0;
+                                if (r2 & (_BIT_USE_IX|_BIT_USE_IY)) {
+                                    _MR(pc++,d);
+                                }
+                                _FETCH_CB(op);
+                                const uint8_t x = op>>6;
+                                const uint8_t y = (op>>3)&7;
+                                const uint8_t z = op&7;
+                                const int rz = (7-z)<<3;
+                                if (z == 6) { _ADDR_CB(addr,d,1); _MR(addr,d8); _T(1); } /* (HL); (IX+d); (IY+d) */
+                                else        { d8 = _G8(ws,rz); } /* r */
+                                uint8_t f = _G8(ws,_F);
+                                uint8_t r;
+                                switch (x) {
+                                    case 0:
+                                        /* rot/shift */
+                                        switch (y) {
+                                            case 0: /*RLC*/ r=d8<<1|d8>>7; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
+                                            case 1: /*RRC*/ r=d8>>1|d8<<7; f=_z80m_szp[r]|(d8&Z80M_CF); break;
+                                            case 2: /*RL */ r=d8<<1|(f&Z80M_CF); f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
+                                            case 3: /*RR */ r=d8>>1|((f&Z80M_CF)<<7); f=_z80m_szp[r]|(d8&Z80M_CF); break;
+                                            case 4: /*SLA*/ r=d8<<1; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
+                                            case 5: /*SRA*/ r=d8>>1|(d8&0x80); f=_z80m_szp[r]|(d8&Z80M_CF); break;
+                                            case 6: /*SLL*/ r=d8<<1|1; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
+                                            case 7: /*SRL*/ r=d8>>1; f=_z80m_szp[r]|(d8&Z80M_CF); break;
+                                        }
+                                        break;
+                                    case 1:
+                                        /* BIT (bit test) */
+                                        r = d8 & (1<<y); 
+                                        f = (f&Z80M_CF) | Z80M_HF | (r?(r&Z80M_SF):(Z80M_ZF|Z80M_PF));
+                                        if (z == 6) {
+                                            f |= (_G16(r2,_WZ)>>8) & (Z80M_YF|Z80M_XF);
+                                        }
+                                        else {
+                                            f |= d8 & (Z80M_YF|Z80M_XF);
+                                        }
+                                        break;
+                                    case 2:
+                                        /* RES (bit clear) */
+                                        r = d8 & ~(1<<y);
+                                        break;
+                                    case 3:
+                                        /* SET (bit set) */
+                                        r = d8 | (1<<y);
+                                        break;
+                                }
+                                if (x != 1) {
+                                    if (z == 6) { _MW(addr,r); } /* (HL); (IX+d); (IY+d) */
+                                    else        { _S8(ws,rz,r); } /* r */
+                                }
+                                _S8(ws,_F,f);
+                            } 
                             break;
                         case 2:
                             /* OUT (n),A */
@@ -858,9 +916,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             /* IN A(n) */
                             assert(false);
                             break;
-                        case 4:
-                            /* EX SP,(HL/IX/IY) */
-                            {
+                        case 4: { /* EX SP,(HL/IX/IY) */
                                 _T(3);
                                 addr = _G16(r1,_SP);
                                 d16 = _G16(ws,_HL);
@@ -874,9 +930,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                 _S16(r1,_WZ,d16);
                             }
                             break;
-                        case 5:
-                            /* EX DE,HL */
-                            {
+                        case 5: { /* EX DE,HL */
                                 r0 = _z80m_flush_r0(ws, r0, r2);
                                 uint16_t de = _G16(r0,_DE);
                                 uint16_t hl = _G16(r0,_HL);
