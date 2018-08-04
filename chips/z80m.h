@@ -444,79 +444,85 @@ static uint8_t _z80m_szp[256] = {
 };
 
 /* ALU functions */
-static inline uint64_t _z80m_add8(uint64_t bank, uint8_t val) {
-    uint8_t acc = _G8(bank,_A);
+static inline uint64_t _z80m_add8(uint64_t ws, uint8_t val) {
+    uint8_t acc = _G8(ws,_A);
     uint32_t res = acc + val;
-    _S8(bank,_F,_z80m_add_flags(acc,val,res));
-    _S8(bank,_A,res);
-    return bank;
+    _S8(ws,_F,_z80m_add_flags(acc,val,res));
+    _S8(ws,_A,res);
+    return ws;
 }
 
-static inline uint64_t _z80m_adc8(uint64_t bank, uint8_t val) {
-    uint8_t acc = _G8(bank,_A);
-    uint32_t res = acc + val + (_G8(bank,_F) & Z80M_CF);
-    _S8(bank,_F,_z80m_add_flags(acc,val,res));
-    _S8(bank,_A,res);
-    return bank;
+static inline uint64_t _z80m_adc8(uint64_t ws, uint8_t val) {
+    uint8_t acc = _G8(ws,_A);
+    uint32_t res = acc + val + (_G8(ws,_F) & Z80M_CF);
+    _S8(ws,_F,_z80m_add_flags(acc,val,res));
+    _S8(ws,_A,res);
+    return ws;
 }
 
-static inline uint64_t _z80m_sub8(uint64_t bank, uint8_t val) {
-    uint8_t acc = _G8(bank,_A);
+static inline uint64_t _z80m_sub8(uint64_t ws, uint8_t val) {
+    uint8_t acc = _G8(ws,_A);
     uint32_t res = (uint32_t) ((int)acc - (int)val);
-    _S8(bank,_F,_z80m_sub_flags(acc,val,res));
-    _S8(bank,_A,res);
-    return bank;
+    _S8(ws,_F,_z80m_sub_flags(acc,val,res));
+    _S8(ws,_A,res);
+    return ws;
 }
 
-static inline uint64_t _z80m_sbc8(uint64_t bank, uint8_t val) {
-    uint8_t acc = _G8(bank,_A);
-    uint32_t res = (uint32_t) ((int)acc - (int)val - (_G8(bank,_F) & Z80M_CF));
-    _S8(bank,_F,_z80m_sub_flags(acc,val,res));
-    _S8(bank,_A,res);
-    return bank;
+static inline uint64_t _z80m_neg8(uint64_t ws) {
+    uint8_t val = _G8(ws,_A);
+    _S8(ws,_A,0);
+    return _z80m_sub8(ws,val);
 }
 
-static inline uint64_t _z80m_and8(uint64_t bank, uint8_t val) {
-    val &= _G8(bank,_A);
-    _S8(bank,_F,_z80m_szp[val]|Z80M_HF);
-    _S8(bank,_A,val);
-    return bank;
+static inline uint64_t _z80m_sbc8(uint64_t ws, uint8_t val) {
+    uint8_t acc = _G8(ws,_A);
+    uint32_t res = (uint32_t) ((int)acc - (int)val - (_G8(ws,_F) & Z80M_CF));
+    _S8(ws,_F,_z80m_sub_flags(acc,val,res));
+    _S8(ws,_A,res);
+    return ws;
 }
 
-static inline uint64_t _z80m_xor8(uint64_t bank, uint8_t val) {
-    val ^= _G8(bank,_A);
-    _S8(bank,_F,_z80m_szp[val]);
-    _S8(bank,_A,val);
-    return bank;
+static inline uint64_t _z80m_and8(uint64_t ws, uint8_t val) {
+    val &= _G8(ws,_A);
+    _S8(ws,_F,_z80m_szp[val]|Z80M_HF);
+    _S8(ws,_A,val);
+    return ws;
 }
 
-static inline uint64_t _z80m_or8(uint64_t bank, uint8_t val) {
-    val |= _G8(bank,_A);
-    _S8(bank,_F,_z80m_szp[val]);
-    _S8(bank,_A,val);
-    return bank;
+static inline uint64_t _z80m_xor8(uint64_t ws, uint8_t val) {
+    val ^= _G8(ws,_A);
+    _S8(ws,_F,_z80m_szp[val]);
+    _S8(ws,_A,val);
+    return ws;
 }
 
-static inline uint64_t _z80m_cp8(uint64_t bank, uint8_t val) {
-    uint8_t acc = _G8(bank,_A);
+static inline uint64_t _z80m_or8(uint64_t ws, uint8_t val) {
+    val |= _G8(ws,_A);
+    _S8(ws,_F,_z80m_szp[val]);
+    _S8(ws,_A,val);
+    return ws;
+}
+
+static inline uint64_t _z80m_cp8(uint64_t ws, uint8_t val) {
+    uint8_t acc = _G8(ws,_A);
     uint32_t res = (uint32_t) ((int)acc - (int)val);
-    _S8(bank,_F,_z80m_cp_flags(acc,val,res));
-    return bank;
+    _S8(ws,_F,_z80m_cp_flags(acc,val,res));
+    return ws;
 }
 
-static inline uint64_t _z80m_alu8(uint8_t type, uint64_t bank, uint8_t val) {
+static inline uint64_t _z80m_alu8(uint8_t type, uint64_t ws, uint8_t val) {
     switch (type) {
-        case 0: return _z80m_add8(bank,val); break;
-        case 1: return _z80m_adc8(bank,val); break;
-        case 2: return _z80m_sub8(bank,val); break;
-        case 3: return _z80m_sbc8(bank,val); break;
-        case 4: return _z80m_and8(bank,val); break;
-        case 5: return _z80m_xor8(bank,val); break;
-        case 6: return _z80m_or8(bank,val); break;
-        case 7: return _z80m_cp8(bank,val); break;
+        case 0: return _z80m_add8(ws,val); break;
+        case 1: return _z80m_adc8(ws,val); break;
+        case 2: return _z80m_sub8(ws,val); break;
+        case 3: return _z80m_sbc8(ws,val); break;
+        case 4: return _z80m_and8(ws,val); break;
+        case 5: return _z80m_xor8(ws,val); break;
+        case 6: return _z80m_or8(ws,val); break;
+        case 7: return _z80m_cp8(ws,val); break;
     }
     /* can't happen */
-    return bank;
+    return ws;
 }
 
 static inline uint64_t _z80m_daa(uint64_t ws) {
@@ -1065,7 +1071,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                             }
                                             break;
                                         case 4: /* NEG */
-                                            assert(false);
+                                            ws = _z80m_neg8(ws);
                                             break;
                                         case 5: /* RETN, RETI */
                                             assert(false);
