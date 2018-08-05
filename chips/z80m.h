@@ -617,6 +617,21 @@ static inline uint64_t _z80m_rra(uint64_t ws) {
     return ws;
 }
 
+static inline bool _z80m_cond(uint64_t ws, uint8_t cc) {
+    const uint8_t f = _G8(ws,_F);
+    bool res = false;
+    switch (cc>>1) {
+        case 0: res = f & Z80M_ZF; break;   /* NZ,Z */
+        case 1: res = f & Z80M_CF; break;   /* NC,C */
+        case 2: res = f & Z80M_PF; break;   /* PO,PE */
+        case 3: res = f & Z80M_SF; break;   /* P,M */
+    }
+    if (!(cc & 1)) {
+        res = !res;
+    }
+    return res;
+}
+
 /* manage the virtual 'working set' register bank */
 static inline uint64_t _z80m_map_regs(uint64_t r0, uint64_t r2) {
     uint64_t ws = r0;
@@ -902,7 +917,10 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 2:
                     /* JP cc,nn */
-                    assert(false);
+                    _IMM16(addr);
+                    if (_z80m_cond(ws,y)) {
+                        pc = addr;
+                    }
                     break;
                 case 3:
                     /* misc ops */
