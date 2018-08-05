@@ -1067,7 +1067,49 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                 const int rp = (3-p)<<4;
                                 if (x == 2) {
                                     /* block instructions (LDIR, etc...) */
-                                    assert(false);
+                                    if (y >= 4) {
+                                        switch (z) {
+                                            case 0: /* LDI, LDD, LDIR, LDDR */
+                                                {
+                                                    uint16_t hl = _G16(ws,_HL);
+                                                    uint16_t de = _G16(ws,_DE);
+                                                    _MR(hl,d8);
+                                                    _MW(de,d8);
+                                                    if (y & 1) { hl--; de--; }
+                                                    else       { hl++; de++; }
+                                                    _S16(ws,_HL,hl);
+                                                    _S16(ws,_DE,de);
+                                                    _T(2);
+                                                    d8 += _G8(ws,_A);
+                                                    uint8_t f = _G8(ws,_F) & (Z80M_SF|Z80M_ZF|Z80M_CF);
+                                                    if (d8 & 0x02) { f |= Z80M_YF; }
+                                                    if (d8 & 0x08) { f |= Z80M_XF; }
+                                                    uint16_t bc = _G16(ws,_BC);
+                                                    bc--;
+                                                    _S16(ws,_BC,bc);
+                                                    if (bc) { f |= Z80M_VF; }
+                                                    _S8(ws,_F,f);
+                                                    if (y >= 6) {
+                                                        /* LDIR/LDDR */
+                                                        if (bc) {
+                                                            pc -= 2;
+                                                            _S16(r1,_WZ,pc+1);
+                                                            _T(5);
+                                                        }
+                                                    }
+                                                }
+                                                break;
+                                            case 1: /* CPI, CPD, CPIR, CPDR */
+                                                assert(false);
+                                                break;
+                                            case 2: /* INI, IND, INIR, INDR */
+                                                assert(false);
+                                                break;
+                                            case 3: /* OUTI, OUTD, OTIR, OTDR */
+                                                assert(false);
+                                                break;
+                                        }
+                                    }
                                 }
                                 else if (x == 1) {
                                     /* misc ED ops */
@@ -1204,9 +1246,9 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
 #undef _HL
 #undef _DE
 #undef _BC
-#undef _PC
-#undef _WZ
 #undef _SP
+#undef _WZ
+#undef _PC
 #undef _IR
 #undef _R 
 #undef _I 
@@ -1215,14 +1257,20 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
 #undef _IM
 #undef _IFF1
 #undef _IFF2
-#undef _EI
+#undef _EI  
 #undef _USE_IX
 #undef _USE_IY
 #undef _BIT_IFF1
 #undef _BIT_IFF2
-#undef _BIT_EI
+#undef _BIT_EI  
 #undef _BIT_USE_IX
 #undef _BIT_USE_IY
+#undef _BITS_MAP_REGS
+#undef _S8
+#undef _G8
+#undef _S16
+#undef _G16
+#undef _S1
 #undef _SA
 #undef _SAD
 #undef _GD
@@ -1234,4 +1282,11 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
 #undef _MW
 #undef _IN
 #undef _OUT
+#undef _IMM8
+#undef _IMM16
+#undef _ADDR
+#undef _BUMPR
+#undef _FETCH
+#undef _FETCH_CB
+
 #endif /* CHIPS_IMPL */
