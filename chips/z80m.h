@@ -795,7 +795,14 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             }
                             break;
                         default:     /* JR cc,d */
-                            assert(false);
+                            {
+                                int8_t d; _MR(pc++,d);
+                                if (_z80m_cond(ws,y-4)) {
+                                    pc += d;
+                                    _S16(r1,_WZ,pc);
+                                    _T(5);
+                                }
+                            }
                             break;
                     }
                     break;
