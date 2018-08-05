@@ -825,7 +825,17 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     }
                     else {
                         /* ADD HL,rr; ADD IX,rr; ADD IY,rr */
-                        assert(false);
+                        uint16_t acc = _G16(ws,_HL);
+                        _S16(r1,_WZ,acc+1);
+                        if (_FA==rp) { d16 = _G16(r1,_SP); }  /* ADD HL,SP */
+                        else         { d16 = _G16(ws,rp); }   /* ADD HL,dd */
+                        uint32_t r = acc + d16;
+                        _S16(ws,_HL,r);
+                        uint8_t f = _G8(ws,_F) & (Z80M_SF|Z80M_ZF|Z80M_VF);
+                        f |= ((acc^r^d16)>>8) & Z80M_HF;
+                        f |= ((r>>16) & Z80M_CF)|((r>>8)&(Z80M_YF|Z80M_XF));
+                        _S8(ws,_F,f);
+                        _T(7);
                     }
                     break;
                 case 2:
@@ -1224,7 +1234,32 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                             assert(false);
                                             break;
                                         case 2: /* SBC/ADC HL,rr */
-                                            assert(false);
+                                            {
+                                                uint16_t acc = _G16(ws,_HL);
+                                                _S16(r1,_WZ,acc+1);
+                                                if (_FA==rp) { d16 = _G16(r1,_SP); }  /* ADD HL,SP */
+                                                else         { d16 = _G16(ws,rp); }   /* ADD HL,dd */
+                                                uint32_t r;
+                                                uint8_t f;
+                                                if (q == 0) {
+                                                    /* SBC HL,rr */
+                                                    r = acc - d16 - (_G8(ws,_F) & Z80M_CF);
+                                                    f = Z80M_NF;
+                                                }
+                                                else {
+                                                    /* ADC HL,rr */
+                                                    r = acc + d16 + (_G8(ws,_F) & Z80M_CF);
+                                                    f = 0;
+                                                }
+                                                _S16(ws,_HL,r);
+                                                f |= ((acc^r^d16)>>8) & Z80M_HF;
+                                                f |= (r>>16) & Z80M_CF;
+                                                f |= (r>>8) & (Z80M_SF|Z80M_YF|Z80M_XF);
+                                                f |= (r & 0xFFFF) ? 0 : Z80M_ZF;
+                                                f |= ((d16^acc^0x8000)&(d16^r)&0x8000)>>13;
+                                                _S8(ws,_F,f);
+                                                _T(7);
+                                            }
                                             break;
                                         case 3: /* LD (nn),rr; LD rr,(nn) */
                                             _IMM16(addr);
