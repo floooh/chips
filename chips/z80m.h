@@ -1027,13 +1027,11 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                 ws = _z80m_map_regs(r0, r2);
                             }
                             break;
-                        case 6:
-                            /* DI */
-                            assert(false);
+                        case 6: /* DI */
+                            r2 &= ~(_BIT_IFF1|_BIT_IFF2);
                             break;
-                        case 7:
-                            /* EI */
-                            assert(false);
+                        case 7: /* EI (enabled at start of next op) */
+                            r2 |= _BIT_EI;
                             break;
                     }
                     break;
@@ -1176,7 +1174,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                             assert(false);
                                             break;
                                         case 6: /* IM */
-                                            assert(false);
+                                            d8 = ((y&3) == 0) ? 0 : (y&3)-1;
+                                            _S8(r2,_IM,d8);
                                             break;
                                         case 7: /* misc ops with R,I,A */
                                             switch (y) {
