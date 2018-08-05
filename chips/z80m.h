@@ -785,18 +785,28 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             ws = _z80m_map_regs(r0, r2);
                             break;
                         case 2:     /* DJNZ d */
-                            assert(false);
+                            {
+                                _T(1);
+                                int8_t d; _IMM8(d);
+                                d8 = _G8(ws,_B) - 1;
+                                _S8(ws,_B,d8);
+                                if (d8 > 0) {
+                                    pc += d;
+                                    _S16(r1,_WZ,pc);
+                                    _T(5);
+                                }
+                            }
                             break;
                         case 3:     /* JR d */
                             {
-                                int8_t d; _MR(pc++,d); pc += d;
+                                int8_t d; _IMM8(d); pc += d;
                                 _S16(r1,_WZ,pc);
                                 _T(5);
                             }
                             break;
                         default:     /* JR cc,d */
                             {
-                                int8_t d; _MR(pc++,d);
+                                int8_t d; _IMM8(d);
                                 if (_z80m_cond(ws,y-4)) {
                                     pc += d;
                                     _S16(r1,_WZ,pc);
@@ -949,7 +959,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                 /* load the d offset for indexed instructions */
                                 int8_t d = 0;
                                 if (r2 & (_BIT_USE_IX|_BIT_USE_IY)) {
-                                    _MR(pc++,d);
+                                    _IMM8(d);
                                 }
                                 /* fetch opcode without memory refresh and incrementint R */
                                 _FETCH_CB(op);
@@ -1265,7 +1275,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 6:
                     /* ALU n */
-                    _MR(pc++,d8); ws=_z80m_alu8(y,ws,d8);
+                    _IMM8(d8); ws=_z80m_alu8(y,ws,d8);
                     break;
                 case 7:
                     /* RST */
