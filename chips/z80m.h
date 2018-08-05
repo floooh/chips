@@ -919,7 +919,15 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     }
                     else switch (p) {
                         case 0: /* RET */
-                            assert(false);
+                            {
+                                uint8_t w,z;
+                                uint16_t sp = _G16(r1,_SP);
+                                _MR(sp++,z);
+                                _MR(sp++,w);
+                                _S16(r1,_SP,sp);
+                                pc = (w<<8)|z;
+                                _S16(r1,_WZ,pc);
+                            }
                             break;
                         case 1: /* EXX */
                             r0 = _z80m_flush_r0(ws, r0, r2);
@@ -1091,8 +1099,20 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                         _S16(r1,_SP,addr);
                     }
                     else switch (p) {
-                        case 0: assert(false); break;               /* CALL nnnn */
-                        case 1: map_bits |= _BIT_USE_IX; continue;  /* DD prefix (map IX into HL slot) */
+                        case 0: /* CALL nn */
+                            {
+                                _IMM16(addr);
+                                _T(1);
+                                uint16_t sp = _G16(r1,_SP);
+                                _MW(--sp, pc>>8);
+                                _MW(--sp, pc);
+                                _S16(r1,_SP,sp);
+                                pc = addr;
+                            }
+                            break;
+                        case 1: /* DD prefix (maps IX into HL slot, don't handle interrupt */
+                            map_bits |= _BIT_USE_IX;
+                            continue; 
                         case 2: {   /* ED prefix */
                                 _FETCH(op);
                                 const uint8_t x = op>>6;
@@ -1270,7 +1290,9 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                 }
                             }
                             break;
-                        case 3: map_bits |= _BIT_USE_IY; continue;  /* FD prefix (map IY into HL slot ) */
+                        case 3: /* FD prefix (map IY into HL slot, don't handle interrupt) */
+                            map_bits |= _BIT_USE_IY;
+                            continue;
                     }
                     break;
                 case 6:
