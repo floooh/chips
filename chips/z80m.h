@@ -905,7 +905,16 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
             switch (z) {
                 case 0:
                     /* RET cc */
-                    assert(false);
+                    _T(1);
+                    if (_z80m_cond(ws,y)) {
+                        uint8_t w,z;
+                        uint16_t sp = _G16(r1,_SP);
+                        _MR(sp++,z);
+                        _MR(sp++,w);
+                        _S16(r1,_SP,sp);
+                        pc = (w<<8)|z;
+                        _S16(r1,_WZ,pc);
+                    }
                     break;
                 case 1:
                     /* POP + misc */
@@ -1083,7 +1092,15 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 4:
                     /* CALL cc,nn */
-                    assert(false);
+                    _IMM16(addr);
+                    if (_z80m_cond(ws,y)) {
+                        _T(1);
+                        uint16_t sp = _G16(r1,_SP);
+                        _MW(--sp, pc>>8);
+                        _MW(--sp, pc);
+                        _S16(r1,_SP,sp);
+                        pc = addr;
+                    }
                     break;
                 case 5:
                     /* PUSH, CALL, DD,ED,FD prefixes */
