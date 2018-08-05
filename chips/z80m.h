@@ -788,7 +788,11 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             assert(false);
                             break;
                         case 3:     /* JR d */
-                            assert(false);
+                            {
+                                int8_t d; _MR(pc++,d); pc += d;
+                                _S16(r1,_WZ,pc);
+                                _T(5);
+                            }
                             break;
                         default:     /* JR cc,d */
                             assert(false);
@@ -907,8 +911,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             r0 = (r0 & 0xFFFF) | (rx & 0xFFFFFFFFFFFF0000);
                             ws = _z80m_map_regs(r0, r2);
                             break;
-                        case 2: /* JP (HL) */
-                            assert(false);
+                        case 2: /* JP (HL), JP (IX), JP (IY) */
+                            pc = _G16(ws,_HL);
                             break;
                         case 3: /* LD SP,HL; LD SP,IX; LD SP,IY */
                             _T(2); _S16(r1,_SP,_G16(ws,_HL));
@@ -925,9 +929,8 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                 case 3:
                     /* misc ops */
                     switch (y) {
-                        case 0:
-                            /* JP nn */
-                            assert(false);
+                        case 0: /* JP nn */
+                            _IMM16(pc);
                             break;
                         case 1: { /* CB prefix */
                                 /* special handling for undocumented DD/FD+CB double prefix instructions,
