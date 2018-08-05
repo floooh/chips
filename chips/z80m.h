@@ -295,9 +295,7 @@ extern bool z80m_iff2(z80m_t* cpu);
 /* read 16-bit immediate value (also update WZ register) */
 #define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S16(r1,_WZ,data);} 
 /* generate effective address for (HL), (IX+d), (IY+d) */
-#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if (r2&(_BIT_USE_IX|_BIT_USE_IY)){int8_t d;_MR(pc++,d);addr+=d;_S16(r1,_WZ,addr);_T(ext_ticks);}}
-/* generate effective address for (HL), (IX+d), (IY+d) with given d (for DD/FD+CB ops) */
-#define _ADDR_CB(addr,d,ext_ticks) {addr=_G16(ws,_HL);if (r2&(_BIT_USE_IX|_BIT_USE_IY)){addr+=d;_S16(r1,_WZ,addr);_T(ext_ticks);}}
+#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if(r2&(_BIT_USE_IX|_BIT_USE_IY)){int8_t d;_MR(pc++,d);addr+=d;_S16(r1,_WZ,addr);_T(ext_ticks);}}
 /* helper macro to bump R register */
 #define _BUMPR() d8=_G8(r1,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r1,_R,d8)
 /* a normal opcode fetch, bump R */
@@ -914,18 +912,38 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             assert(false);
                             break;
                         case 1: { /* CB prefix */
-                                /* if this is a DD/FD+CB double prefix op, fetch the d offset for (IX/IY+d) */
+                                /* special handling for undocumented DD/FD+CB double prefix instructions,
+                                    these always load the value from memory (IX+d),
+                                    and write the value back, even for normal
+                                    'register' instructions
+                                   see: http://www.baltazarstudios.com/files/ddcb.html
+                                */
+                                /* load the d offset for indexed instructions */
                                 int8_t d = 0;
                                 if (r2 & (_BIT_USE_IX|_BIT_USE_IY)) {
                                     _MR(pc++,d);
                                 }
+                                /* fetch opcode without memory refresh and incrementint R */
                                 _FETCH_CB(op);
                                 const uint8_t x = op>>6;
                                 const uint8_t y = (op>>3)&7;
                                 const uint8_t z = op&7;
                                 const int rz = (7-z)<<3;
-                                if (z == 6) { _ADDR_CB(addr,d,1); _MR(addr,d8); _T(1); } /* (HL); (IX+d); (IY+d) */
-                                else        { d8 = _G8(ws,rz); } /* r */
+                                /* load the operand (for indexed ops, always from memory!) */
+                                if ((z == 6) || (r2 & (_BIT_USE_IX|_BIT_USE_IY))) {
+                                    _T(1);
+                                    addr = _G16(ws,_HL);
+                                    if (r2 & (_BIT_USE_IX|_BIT_USE_IY)) {
+                                        _T(1);
+                                        addr += d;
+                                        _S16(r1,_WZ,addr);
+                                    }
+                                    _MR(addr,d8);
+                                }
+                                else {
+                                    /* simple non-indexed, non-(HL): load register value */
+                                    d8 = _G8(ws,rz);
+                                }
                                 uint8_t f = _G8(ws,_F);
                                 uint8_t r;
                                 switch (x) {
@@ -963,8 +981,17 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                         break;
                                 }
                                 if (x != 1) {
-                                    if (z == 6) { _MW(addr,r); } /* (HL); (IX+d); (IY+d) */
-                                    else        { _S8(ws,rz,r); } /* r */
+                                    /* write result back */
+                                    if ((z == 6) || (r2 & (_BIT_USE_IX|_BIT_USE_IY))) {
+                                        /* (HL), (IX+d), (IY+d): write back to memory, for extended ops,
+                                           even when the op is actually a register op
+                                        */
+                                       _MW(addr,r);
+                                    }
+                                    if (z != 6) {
+                                        /* write result back to register */
+                                        _S8(ws,rz,r);
+                                    }
                                 }
                                 _S8(ws,_F,f);
                             } 
