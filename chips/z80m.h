@@ -1100,7 +1100,37 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                                 }
                                                 break;
                                             case 1: /* CPI, CPD, CPIR, CPDR */
-                                                assert(false);
+                                                {
+                                                    uint16_t hl = _G16(ws,_HL);
+                                                    _MR(hl,d8);
+                                                    uint16_t wz = _G16(r1,_WZ);
+                                                    if (y & 1) { hl--; wz--; }
+                                                    else       { hl++; wz++; }
+                                                    _S16(r1,_WZ,wz);
+                                                    _S16(ws,_HL,hl);
+                                                    _T(5);
+                                                    int r = ((int)_G8(ws,_A)) - d8;
+                                                    uint8_t f = (_G8(ws,_F) & Z80M_CF) | Z80M_NF | _z80m_sz(r);
+                                                    if ((r & 0x0F) > (_G8(ws,_A) & 0x0F)) {
+                                                        f |= Z80M_HF;
+                                                        r--;
+                                                    }
+                                                    if (r & 0x02) { f |= Z80M_YF; }
+                                                    if (r & 0x08) { f |= Z80M_XF; }
+                                                    uint16_t bc = _G16(ws,_BC);
+                                                    bc--;
+                                                    _S16(ws,_BC,bc);
+                                                    if (bc) { f |= Z80M_VF; }
+                                                    _S8(ws,_F,f);
+                                                    if (y >= 6) {
+                                                        /* CPIR/CPDR */
+                                                        if (bc && !(f & Z80M_ZF)) {
+                                                            pc -= 2;
+                                                            _S16(r1,_WZ,pc+1);
+                                                            _T(5);
+                                                        }
+                                                    }
+                                                }
                                                 break;
                                             case 2: /* INI, IND, INIR, INDR */
                                                 assert(false);
