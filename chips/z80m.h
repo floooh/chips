@@ -86,7 +86,7 @@ typedef bool (*z80m_trapfunc_t)(void* user_data);
 #define Z80M_ZF (1<<6)           /* zero */
 #define Z80M_SF (1<<7)           /* sign */
 
-#define Z80M_MAX_NUM_TRAPS (8)
+#define Z80M_MAX_NUM_TRAPS (4)
 
 /* initialization attributes */
 typedef struct {
@@ -110,9 +110,7 @@ typedef struct {
     uint64_t pins;
     void* user_data;
     int trap_id;
-    bool trap_valid[Z80M_MAX_NUM_TRAPS];
-    uint16_t trap_addr[Z80M_MAX_NUM_TRAPS];
-    z80m_trapfunc_t trap_func[Z80M_MAX_NUM_TRAPS];
+    uint64_t trap_addr;
 } z80m_t;
 
 /* initialize a new z80 instance */
@@ -366,6 +364,7 @@ void z80m_init(z80m_t* cpu, z80m_desc_t* desc) {
     CHIPS_ASSERT(desc->tick_cb);
     memset(cpu, 0, sizeof(*cpu));
     z80m_reset(cpu);
+    cpu->trap_addr = 0xFFFFFFFFFFFFFFFF;
     cpu->tick = desc->tick_cb;
     cpu->user_data = desc->user_data;
 }
@@ -388,6 +387,22 @@ void z80m_reset(z80m_t* cpu) {
     /* after power-on or reset, R is set to 0 (see z80-documented.pdf) */
     z80m_set_ir(cpu, 0x0000);
     cpu->bits_im_iy_ix &= ~(_BIT_EI|_BIT_USE_IX|_BIT_USE_IY);
+}
+
+void z80m_set_trap(z80m_t* cpu, int trap_id, uint16_t addr) {
+    CHIPS_ASSERT(cpu && (trap_id >= 0) && (trap_id < Z80M_MAX_NUM_TRAPS));
+    cpu->trap_addr &= ~(0xFFFFULL<<(trap_id<<4));
+    cpu->trap_addr |= addr<<(trap_id<<4);
+}
+
+void z80m_clear_trap(z80m_t* cpu, int trap_id) {
+    CHIPS_ASSERT(cpu && (trap_id >= 0) && (trap_id < Z80M_MAX_NUM_TRAPS));
+    cpu->trap_addr |= 0xFFFFULL<<(trap_id<<4);
+}
+
+bool z80m_has_trap(z80m_t* cpu, int trap_id) {
+    CHIPS_ASSERT(cpu && (trap_id >= 0) && (trap_id < Z80M_MAX_NUM_TRAPS));
+    return (cpu->trap_addr>>(trap_id<<4) & 0xFFFF) != 0xFFFF;
 }
 
 bool z80m_opdone(z80m_t* cpu) {
@@ -671,6 +686,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
     uint64_t ws = _z80m_map_regs(r0, r2);
     uint64_t map_bits = r2 & _BITS_MAP_REGS;
     uint64_t pins = cpu->pins;
+    const uint64_t trap_addr = cpu->trap_addr;
     const z80m_tick_t tick = cpu->tick;
     void* ud = cpu->user_data;
     int trap_id = -1;
@@ -1479,6 +1495,15 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
             _S16(r1,_WZ,pc);
         }
         map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
+        /* check traps */
+        uint64_t ta = trap_addr;
+        for (int i = 0; i < Z80M_MAX_NUM_TRAPS; i++) {
+            ta >>= 16;
+            if (((ta & 0xFFFF) == pc) && (pc != 0xFFFF)) {
+                trap_id = i;
+                break;
+            }
+        }
     } while ((ticks < num_ticks) && (trap_id < 0));
     _S16(r1,_PC,pc);
     {
