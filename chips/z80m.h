@@ -1063,11 +1063,26 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                             break;
                         case 2:
                             /* OUT (n),A */
-                            assert(false);
+                            {
+                                _IMM8(d8);
+                                uint8_t a = _G8(ws,_A);
+                                addr = (a<<8)|d8;
+                                _OUT(addr,a);
+                                /* special WZ computation, only bump Z */
+                                addr = (addr & 0xFF00) | ((addr+1) & 0x00FF);
+                                _S16(r1,_WZ,addr);
+                            }
                             break;
                         case 3:
                             /* IN A(n) */
-                            assert(false);
+                            {
+                                _IMM8(d8);
+                                uint8_t a = _G8(ws,_A);
+                                addr = (a<<8)|d8;
+                                _IN(addr++,a);
+                                _S8(ws,_A,a);
+                                _S16(r1,_WZ,addr);
+                            }
                             break;
                         case 4: { /* EX SP,(HL/IX/IY) */
                                 _T(3);
@@ -1216,22 +1231,91 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                                 }
                                                 break;
                                             case 2: /* INI, IND, INIR, INDR */
-                                                assert(false);
+                                                {
+                                                    _T(1);
+                                                    addr = _G16(ws,_BC);
+                                                    uint16_t hl = _G16(ws,_HL);
+                                                    _IN(addr,d8);
+                                                    _MW(hl,d8);
+                                                    uint8_t b = _G8(ws,_B);
+                                                    uint8_t c = _G8(ws,_C);
+                                                    b--;
+                                                    if (y & 1) { addr--; hl--; c--; }
+                                                    else       { addr++; hl++; c++; }
+                                                    _S8(ws,_B,b);
+                                                    _S16(ws,_HL,hl);
+                                                    _S16(r1,_WZ,addr);
+                                                    uint8_t f = b ? (b & Z80M_SF) : Z80M_ZF;
+                                                    if (d8 & Z80M_SF) { f |= Z80M_NF; }
+                                                    uint32_t t = (uint32_t) (c & 0xFF) + d8;
+                                                    if (t & 0x100) { f |= Z80M_HF|Z80M_CF; }
+                                                    f |= _z80m_szp[((uint8_t)(t & 0x07)) ^ b] & Z80M_PF;
+                                                    _S8(ws,_F,f);
+                                                    if (y >= 6) {
+                                                        /* INIR,INDR */
+                                                        if (b) {
+                                                            pc -= 2;
+                                                            _T(5);
+                                                        }
+                                                    }
+                                                }
                                                 break;
                                             case 3: /* OUTI, OUTD, OTIR, OTDR */
-                                                assert(false);
+                                                {
+                                                    _T(1);
+                                                    uint16_t hl = _G16(ws,_HL);
+                                                    _MR(hl,d8);
+                                                    uint8_t b = _G8(ws,_B);
+                                                    b--;
+                                                    _S8(ws,_B,b);
+                                                    addr = _G16(ws,_BC);
+                                                    _OUT(addr,d8);
+                                                    if (y & 1) { addr--; hl--; }
+                                                    else       { addr++; hl++; }
+                                                    _S16(ws,_HL,hl);
+                                                    _S16(r1,_WZ,addr);
+                                                    uint8_t f = b ? (b & Z80M_SF) : Z80M_ZF;
+                                                    if (d8 & Z80M_SF) { f |= Z80M_NF; }
+                                                    uint32_t t = (uint32_t)_G8(ws,_L) + (uint32_t)d8;
+                                                    if (t & 0x0100) { f |= Z80M_HF|Z80M_CF; }
+                                                    f |= _z80m_szp[((uint8_t)(t & 0x07)) ^ b] & Z80M_PF;
+                                                    _S8(ws,_F,f);
+                                                    if (y >= 6) {
+                                                        /* INIR,INDR */
+                                                        if (b) {
+                                                            pc -= 2;
+                                                            _T(5);
+                                                        }
+                                                    }
+                                                }
                                                 break;
                                         }
                                     }
                                 }
                                 else if (x == 1) {
+                                    const int ry = (7-y)<<3;
                                     /* misc ED ops */
                                     switch (z) {
                                         case 0: /* IN r,(C) */
-                                            assert(false);
+                                            {
+                                                addr = _G16(ws,_BC);
+                                                _IN(addr++,d8);
+                                                _S16(r1,_WZ,addr);
+                                                uint8_t f = (_G8(ws,_F) & Z80M_CF) | _z80m_szp[d8];
+                                                _S8(ws,_F,f);
+                                                /* handle undocumented special case IN F,(C): 
+                                                    only set flags, don't store result
+                                                */
+                                                if (ry != _F) {
+                                                    _S8(ws,ry,d8);
+                                                }
+                                            }
                                             break;
                                         case 1: /* OUT (C),r */
-                                            assert(false);
+                                            addr = _G16(ws,_BC);
+                                            d8 = (ry == _F) ? 0 : _G8(ws,ry);
+                                            _OUT(addr++,d8);
+                                            _S16(r1,_WZ,addr);
                                             break;
                                         case 2: /* SBC/ADC HL,rr */
                                             {
