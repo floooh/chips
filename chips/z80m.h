@@ -1441,6 +1441,43 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
             }
         }
+        /* check for and handle interrupt */
+        if (((pins & (Z80M_INT|Z80M_BUSREQ))==Z80M_INT) && (r2 & _BIT_IFF1)) {
+            r2 &= ~(_BIT_IFF1|_BIT_IFF2);
+            if (pins & Z80M_HALT) {
+                pins &= ~Z80M_HALT;
+                pc++;
+            }
+            _ON(Z80M_M1|Z80M_IORQ);
+            _SA(pc);
+            _TW(4);
+            const uint8_t int_vec = _GD();
+            _OFF(Z80M_M1|Z80M_IORQ);
+            _BUMPR();
+            _T(2);
+            uint16_t sp = _G16(r1,_SP);
+            _MW(--sp,pc>>8);
+            _MW(--sp,pc);
+            _S16(r1,_SP,sp);
+            switch (_G8(r2,_IM)) {
+                case 0:
+                    /* IM 0 not supported */
+                    break;
+                case 1:
+                    pc = 0x0038;
+                    break;
+                case 2:
+                    {
+                        addr = _G8(r1,_I) | (int_vec & 0xFE);
+                        uint8_t z,w;
+                        _MR(addr++,z);
+                        _MR(addr,w);
+                        pc = (w<<8)|z;
+                    }
+                    break;
+            }
+            _S16(r1,_WZ,pc);
+        }
         map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
     } while ((ticks < num_ticks) && (trap_id < 0));
     _S16(r1,_PC,pc);
