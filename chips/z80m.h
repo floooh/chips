@@ -1046,7 +1046,7 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                         r = d8 & (1<<y); 
                                         f = (f&Z80M_CF) | Z80M_HF | (r?(r&Z80M_SF):(Z80M_ZF|Z80M_PF));
                                         if (z == 6) {
-                                            f |= (_G16(r2,_WZ)>>8) & (Z80M_YF|Z80M_XF);
+                                            f |= (_G16(r1,_WZ)>>8) & (Z80M_YF|Z80M_XF);
                                         }
                                         else {
                                             f |= d8 & (Z80M_YF|Z80M_XF);
@@ -1344,19 +1344,18 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                                                 if (q == 0) {
                                                     /* SBC HL,rr */
                                                     r = acc - d16 - (_G8(ws,_F) & Z80M_CF);
-                                                    f = Z80M_NF;
+                                                    f = Z80M_NF | (((d16^acc)&(acc^r)&0x8000)>>13);
                                                 }
                                                 else {
                                                     /* ADC HL,rr */
                                                     r = acc + d16 + (_G8(ws,_F) & Z80M_CF);
-                                                    f = 0;
+                                                    f = ((d16^acc^0x8000)&(d16^r)&0x8000)>>13;
                                                 }
                                                 _S16(ws,_HL,r);
                                                 f |= ((acc^r^d16)>>8) & Z80M_HF;
                                                 f |= (r>>16) & Z80M_CF;
                                                 f |= (r>>8) & (Z80M_SF|Z80M_YF|Z80M_XF);
                                                 f |= (r & 0xFFFF) ? 0 : Z80M_ZF;
-                                                f |= ((d16^acc^0x8000)&(d16^r)&0x8000)>>13;
                                                 _S8(ws,_F,f);
                                                 _T(7);
                                             }
