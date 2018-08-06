@@ -1452,7 +1452,14 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                     break;
                 case 7:
                     /* RST */
-                    assert(false);
+                    {
+                        uint16_t sp = _G16(r1,_SP);
+                        _MW(--sp, pc>>8);
+                        _MW(--sp, pc);
+                        _S16(r1,_SP,sp);
+                        pc = y * 8;
+                        _S16(r1, _WZ, pc);
+                    }
                     break;
             }
         }
