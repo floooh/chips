@@ -791,28 +791,14 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
                 break;
             /* ALU r */
             case 0x80: case 0x81: case 0x82: case 0x83: case 0x84: case 0x85: case 0x87:
-                ws = _z80m_add8(ws, _G8(ws,rz));
-                break;
             case 0x88: case 0x89: case 0x8A: case 0x8B: case 0x8C: case 0x8D: case 0x8F:
-                ws = _z80m_adc8(ws, _G8(ws,rz));
-                break;
             case 0x90: case 0x91: case 0x92: case 0x93: case 0x94: case 0x95: case 0x97:
-                ws = _z80m_sub8(ws, _G8(ws,rz));
-                break;
             case 0x98: case 0x99: case 0x9A: case 0x9B: case 0x9C: case 0x9D: case 0x9F:
-                ws = _z80m_sbc8(ws, _G8(ws,rz));
-                break;
             case 0xA0: case 0xA1: case 0xA2: case 0xA3: case 0xA4: case 0xA5: case 0xA7:
-                ws = _z80m_and8(ws, _G8(ws,rz));
-                break;
             case 0xA8: case 0xA9: case 0xAA: case 0xAB: case 0xAC: case 0xAD: case 0xAF:
-                ws = _z80m_xor8(ws, _G8(ws,rz));
-                break;
             case 0xB0: case 0xB1: case 0xB2: case 0xB3: case 0xB4: case 0xB5: case 0xB7:
-                ws = _z80m_or8(ws, _G8(ws,rz));
-                break;
             case 0xB8: case 0xB9: case 0xBA: case 0xBB: case 0xBC: case 0xBD: case 0xBF:
-                ws = _z80m_cp8(ws, _G8(ws,rz));
+                ws = _z80m_alu8(y,ws,_G8(ws,rz));
                 break;
         /*=== BLOCK 0: misc instructions =====================================*/
             /* NOP */
