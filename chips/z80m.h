@@ -15,7 +15,6 @@ extern "C" {
 
 /*--- callback function typedefs ---*/
 typedef uint64_t (*z80m_tick_t)(int num_ticks, uint64_t pins, void* user_data);
-typedef bool (*z80m_trapfunc_t)(void* user_data);
 
 /*--- address lines ---*/
 #define Z80M_A0  (1ULL<<0)
