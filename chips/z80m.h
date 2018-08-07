@@ -730,7 +730,6 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
             |xx|yyy|zzz|
             |xx|pp|q|zzz|
         */
-        const uint8_t x = op>>6;
         const uint8_t y = (op>>3)&7;
         const uint8_t z = op&7;
         const uint8_t p = y>>1;
@@ -739,734 +738,760 @@ uint32_t z80m_exec(z80m_t* cpu, uint32_t num_ticks) {
         const int rz = (7-z)<<3;
         const int rp = (3-p)<<4;
 
-        /*=== BLOCK 1: 8-bit loads and HALT ==================================*/
-        if (x == 1) {
-            if (y == 6) {
-                if (z == 6) {
-                    /* special case; HALT */
-                    _ON(Z80M_HALT);
-                    pc--;
+        switch (op) {
+        /*=== BLOCK 2: 8-bit ALU instructions ================================*/
+            /* LD (HL),r; LD (IX+d),r; LD (IY+d),r */
+            case 0x70: case 0x71: case 0x72: case 0x73: case 0x74: case 0x75: case 0x77:
+                if ((map_bits & (_BIT_USE_IX|_BIT_USE_IY)) && ((z>>1) == 2)) {
+                    /* special case LD (IX/IY+d),H; LD (IX/IY+d),L, these need to
+                        store the original H/L registers, not IXH/IXL
+                    */
+                    d8 = _G8(r0, rz);
                 }
-                else  {
-                    /* LD (HL),r; LD (IX+d),r; LD (IY+d),r */
-                    if ((map_bits & (_BIT_USE_IX|_BIT_USE_IY)) && ((z>>1) == 2)) {
-                        /* special case LD (IX/IY+d),H; LD (IX/IY+d),L, these need to
-                            store the original H/L registers, not IXH/IXL
-                        */
-                       d8 = _G8(r0, rz);
-                    }
-                    else {
-                        d8=_G8(ws,rz);
-                    }
-                    _ADDR(addr,5);
-                    _MW(addr,d8); 
-                }
-            }
-            else {
-                if (z == 6) {
-                    /* LD r,(HL); LD r,(IX+d); LD r,(IY+d) */
-                    _ADDR(addr,5);
-                    _MR(addr,d8); 
-                    if ((map_bits & (_BIT_USE_IX|_BIT_USE_IY)) && ((y>>1) == 2)) {
-                        /* special case LD H,(IX/IY+d), LD L,(IX/IY+d), these need to
-                        access the original H/L registers, not IXH/IXL
-                        */
-                        _S8(r0,ry,d8);
-                    }
-                    else {
-                        _S8(ws,ry,d8);
-                    }
-                }
-                else { 
-                    /* LD r,s */
+                else {
                     d8=_G8(ws,rz);
+                }
+                _ADDR(addr,5);
+                _MW(addr,d8); 
+                break;
+            /* special case HALT */
+            case 0x76:
+                _ON(Z80M_HALT); pc--;
+                break;
+            /* LD r,s */
+            case 0x40: case 0x41: case 0x42: case 0x43: case 0x44: case 0x45: case 0x47:
+            case 0x48: case 0x49: case 0x4A: case 0x4B: case 0x4C: case 0x4D: case 0x4F:
+            case 0x50: case 0x51: case 0x52: case 0x53: case 0x54: case 0x55: case 0x57:
+            case 0x58: case 0x59: case 0x5A: case 0x5B: case 0x5C: case 0x5D: case 0x5F:
+            case 0x60: case 0x61: case 0x62: case 0x63: case 0x64: case 0x65: case 0x67:
+            case 0x68: case 0x69: case 0x6A: case 0x6B: case 0x6C: case 0x6D: case 0x6F:
+            case 0x78: case 0x79: case 0x7A: case 0x7B: case 0x7C: case 0x7D: case 0x7F:
+                d8=_G8(ws,rz);
+                _S8(ws,ry,d8);
+                break;
+            /* LD r,(HL); LD r,(IX+d); LD r,(IY+d) */
+            case 0x46: case 0x4E: case 0x56: case 0x5E: case 0x66: case 0x6E: case 0x7E:
+                _ADDR(addr,5);
+                _MR(addr,d8); 
+                if ((map_bits & (_BIT_USE_IX|_BIT_USE_IY)) && ((y>>1) == 2)) {
+                    /* special case LD H,(IX/IY+d), LD L,(IX/IY+d), these need to
+                    access the original H/L registers, not IXH/IXL
+                    */
+                    _S8(r0,ry,d8);
+                }
+                else {
                     _S8(ws,ry,d8);
                 }
-            }
-        }
+                break;
         /*=== BLOCK 2: 8-bit ALU instructions ================================*/
-        else if (x == 2) {
-            if (z == 6) { _ADDR(addr,5); _MR(addr,d8); } /* ALU (HL); ALU (IX+d); ALU (IY+d) */
-            else        { d8 = _G8(ws,rz); } /* ALU r */
-            ws = _z80m_alu8(y,ws,d8);
-        }
+            /* ALU (HL); ALU (IX+d); ALU (IY+d) */
+            case 0x86: case 0x8E: case 0x96: case 0x9E: case 0xA6: case 0xAE: case 0xB6: case 0xBE:
+                _ADDR(addr,5); _MR(addr,d8);
+                ws = _z80m_alu8(y,ws,d8);
+                break;
+            /* ALU r */
+            case 0x80: case 0x81: case 0x82: case 0x83: case 0x84: case 0x85: case 0x87:
+                ws = _z80m_add8(ws, _G8(ws,rz));
+                break;
+            case 0x88: case 0x89: case 0x8A: case 0x8B: case 0x8C: case 0x8D: case 0x8F:
+                ws = _z80m_adc8(ws, _G8(ws,rz));
+                break;
+            case 0x90: case 0x91: case 0x92: case 0x93: case 0x94: case 0x95: case 0x97:
+                ws = _z80m_sub8(ws, _G8(ws,rz));
+                break;
+            case 0x98: case 0x99: case 0x9A: case 0x9B: case 0x9C: case 0x9D: case 0x9F:
+                ws = _z80m_sbc8(ws, _G8(ws,rz));
+                break;
+            case 0xA0: case 0xA1: case 0xA2: case 0xA3: case 0xA4: case 0xA5: case 0xA7:
+                ws = _z80m_and8(ws, _G8(ws,rz));
+                break;
+            case 0xA8: case 0xA9: case 0xAA: case 0xAB: case 0xAC: case 0xAD: case 0xAF:
+                ws = _z80m_xor8(ws, _G8(ws,rz));
+                break;
+            case 0xB0: case 0xB1: case 0xB2: case 0xB3: case 0xB4: case 0xB5: case 0xB7:
+                ws = _z80m_or8(ws, _G8(ws,rz));
+                break;
+            case 0xB8: case 0xB9: case 0xBA: case 0xBB: case 0xBC: case 0xBD: case 0xBF:
+                ws = _z80m_cp8(ws, _G8(ws,rz));
+                break;
         /*=== BLOCK 0: misc instructions =====================================*/
-        else if (x == 0) {
-            switch (z) {
-                case 0:
-                    switch (y) {
-                        case 0:     /* NOP */
-                            break;
-                        case 1:     /* EX AF,AF' */
-                            r0 = _z80m_flush_r0(ws, r0, r2);
-                            uint16_t fa = _G16(r0,_FA);
-                            uint16_t fa_ = _G16(r3, _FA);
-                            _S16(r0,_FA,fa_);
-                            _S16(r3,_FA,fa);
-                            ws = _z80m_map_regs(r0, r1, r2);
-                            break;
-                        case 2:     /* DJNZ d */
-                            {
-                                _T(1);
-                                int8_t d; _IMM8(d);
-                                d8 = _G8(ws,_B) - 1;
-                                _S8(ws,_B,d8);
-                                if (d8 > 0) {
-                                    pc += d;
-                                    _SWZ(pc);
-                                    _T(5);
-                                }
-                            }
-                            break;
-                        case 3:     /* JR d */
-                            {
-                                int8_t d; _IMM8(d); pc += d;
-                                _SWZ(pc);
-                                _T(5);
-                            }
-                            break;
-                        default:     /* JR cc,d */
-                            {
-                                int8_t d; _IMM8(d);
-                                if (_z80m_cond(ws,y-4)) {
-                                    pc += d;
-                                    _SWZ(pc);
-                                    _T(5);
-                                }
-                            }
-                            break;
+            /* NOP */
+            case 0x00: 
+                break;
+            /* EX AF,AF' */
+            case 0x08:
+                r0 = _z80m_flush_r0(ws, r0, r2);
+                uint16_t fa = _G16(r0,_FA);
+                uint16_t fa_ = _G16(r3, _FA);
+                _S16(r0,_FA,fa_);
+                _S16(r3,_FA,fa);
+                ws = _z80m_map_regs(r0, r1, r2);
+                break;
+            /* DJNZ */
+            case 0x10:
+                {
+                    _T(1);
+                    int8_t d; _IMM8(d);
+                    d8 = _G8(ws,_B) - 1;
+                    _S8(ws,_B,d8);
+                    if (d8 > 0) {
+                        pc += d;
+                        _SWZ(pc);
+                        _T(5);
                     }
-                    break;
-                case 1:
-                    if (q == 0) {
-                        /* 16-bit immediate loads (AF => SP)*/
-                        _IMM16(d16);
-                        if (_FA==rp) { _S16(r1,_SP,d16); } /* LD SP,nn */
-                        else         { _S16(ws,rp,d16); } /* LD HL,nn; LD DE,nn; LD BC,nn */
+                }
+                break;
+            /* JR d */
+            case 0x18:
+                {
+                    int8_t d; _IMM8(d); pc += d;
+                    _SWZ(pc);
+                    _T(5);
+                }
+                break;
+            /* JR cc,d */
+            case 0x20: case 0x28: case 0x30: case 0x38:
+                {
+                    int8_t d; _IMM8(d);
+                    if (_z80m_cond(ws,y-4)) {
+                        pc += d;
+                        _SWZ(pc);
+                        _T(5);
+                    }
+                }
+                break;
+            /* 16-bit immediate loads (AF => SP)*/
+            case 0x01: case 0x11: case 0x21: case 0x31:
+                _IMM16(d16);
+                if (_FA==rp) { _S16(r1,_SP,d16); } /* LD SP,nn */
+                else         { _S16(ws,rp,d16); } /* LD HL,nn; LD DE,nn; LD BC,nn */
+                break;
+            /* ADD HL,rr; ADD IX,rr; ADD IY,rr */
+            case 0x09: case 0x19: case 0x29: case 0x39:
+                {
+                    uint16_t acc = _G16(ws,_HL);
+                    _SWZ(acc+1);
+                    if (_FA==rp) { d16 = _G16(r1,_SP); }  /* ADD HL,SP */
+                    else         { d16 = _G16(ws,rp); }   /* ADD HL,dd */
+                    uint32_t r = acc + d16;
+                    _S16(ws,_HL,r);
+                    uint8_t f = _G8(ws,_F) & (Z80M_SF|Z80M_ZF|Z80M_VF);
+                    f |= ((acc^r^d16)>>8) & Z80M_HF;
+                    f |= ((r>>16) & Z80M_CF)|((r>>8)&(Z80M_YF|Z80M_XF));
+                    _S8(ws,_F,f);
+                    _T(7);
+                }
+                break;
+            /* indirect loads */
+            case 0x02: case 0x0A: case 0x12: case 0x1A: case 0x22: case 0x2A: case 0x32: case 0x3A:
+                switch (p) { /* get effective address (BC),(DE) or (nn) */
+                    case 0:     addr=_G16(ws,_BC); break;
+                    case 1:     addr=_G16(ws,_DE); break;
+                    default:    _IMM16(addr); break;
+                }
+                if (q == 0) { /* store */
+                    if (p == 2) { /* LD (nn),HL; LD (nn),IX; LD (nn),IY, WZ=addr++ */
+                        _MW(addr++,_G8(ws,_L)); _MW(addr,_G8(ws,_H)); _SWZ(addr);
+                    }
+                    else { /* LD (BC),A; LD (DE),A; LD (nn),A; W=A,L=addr++ */
+                        d8=_G8(ws,_A); _MW(addr++,d8); _SWZ(((d8<<8)|(addr&0x00FF)));
+                    }
+                }
+                else { /* load */
+                    if (p == 2) { /* LD HL,(nn); LD IX,(nn); LD IY,(nn) */
+                        _MR(addr++,d8); _S8(ws,_L,d8); _MR(addr,d8); _S8(ws,_H,d8); _SWZ(addr);
+                    }
+                    else {  /* LD A,(BC); LD A,(DE); LD A,(nn); W=addr++ */
+                        _MR(addr++,d8); _S8(ws,_A,d8); _SWZ(addr);
+                    }
+                }
+                break;
+            /* 16-bit INC/DEC */
+            case 0x03: case 0x0B: case 0x13: case 0x1B: case 0x23: case 0x2B: case 0x33: case 0x3B:
+                _T(2);
+                if (rp==_FA) { d16=_G16(r1,_SP); }
+                else         { d16=_G16(ws,rp); }
+                d16 = d16 + (q ? -1 : +1);
+                if (rp==_FA) { _S16(r1,_SP,d16); }
+                else         { _S16(ws,rp,d16); }
+                break;
+            /* 8-bit INC (HL); INC (IX+d); INC (IY+d); INC r */
+            /* 8-bit DEC (HL); DEC (IX+d); DEC (IY+d); DEC r */
+            case 0x04: case 0x05: case 0x0C: case 0x0D: case 0x14: case 0x15: case 0x1C: case 0x1D:
+            case 0x24: case 0x25: case 0x2C: case 0x2D: case 0x34: case 0x35: case 0x3C: case 0x3D:
+                {
+                    if (y == 6) { _ADDR(addr,5); _MR(addr,d8); _T(1); }
+                    else        { d8 = _G8(ws,ry); }
+                    uint8_t r = d8 + ((z & 1) ? -1 : +1);
+                    if (y == 6) { _MW(addr,r); }
+                    else        { _S8(ws,ry,r); }
+                    uint8_t f = _G8(ws,_F) & Z80M_CF;
+                    f |= _z80m_sz(r)|(r&(Z80M_XF|Z80M_YF))|((r^d8)&Z80M_HF);
+                    if (z & 1) {
+                        f |= Z80M_NF;
+                        if (r == 0x7F) { f |= Z80M_VF; }
                     }
                     else {
-                        /* ADD HL,rr; ADD IX,rr; ADD IY,rr */
-                        uint16_t acc = _G16(ws,_HL);
-                        _SWZ(acc+1);
-                        if (_FA==rp) { d16 = _G16(r1,_SP); }  /* ADD HL,SP */
-                        else         { d16 = _G16(ws,rp); }   /* ADD HL,dd */
-                        uint32_t r = acc + d16;
-                        _S16(ws,_HL,r);
-                        uint8_t f = _G8(ws,_F) & (Z80M_SF|Z80M_ZF|Z80M_VF);
-                        f |= ((acc^r^d16)>>8) & Z80M_HF;
-                        f |= ((r>>16) & Z80M_CF)|((r>>8)&(Z80M_YF|Z80M_XF));
-                        _S8(ws,_F,f);
-                        _T(7);
+                        if (r == 0x80) { f |= Z80M_VF; }
                     }
-                    break;
-                case 2:
-                    /* indirect loads */
-                    switch (p) { /* get effective address (BC),(DE) or (nn) */
-                        case 0:     addr=_G16(ws,_BC); break;
-                        case 1:     addr=_G16(ws,_DE); break;
-                        default:    _IMM16(addr); break;
-                    }
-                    if (q == 0) { /* store */
-                        if (p == 2) { /* LD (nn),HL; LD (nn),IX; LD (nn),IY, WZ=addr++ */
-                            _MW(addr++,_G8(ws,_L)); _MW(addr,_G8(ws,_H)); _SWZ(addr);
-                        }
-                        else { /* LD (BC),A; LD (DE),A; LD (nn),A; W=A,L=addr++ */
-                            d8=_G8(ws,_A); _MW(addr++,d8); _SWZ(((d8<<8)|(addr&0x00FF)));
-                        }
-                    }
-                    else { /* load */
-                        if (p == 2) { /* LD HL,(nn); LD IX,(nn); LD IY,(nn) */
-                            _MR(addr++,d8); _S8(ws,_L,d8); _MR(addr,d8); _S8(ws,_H,d8); _SWZ(addr);
-                        }
-                        else {  /* LD A,(BC); LD A,(DE); LD A,(nn); W=addr++ */
-                            _MR(addr++,d8); _S8(ws,_A,d8); _SWZ(addr);
-                        }
-                    }
-                    break;
-                case 3:
-                    /* 16-bit INC/DEC */
-                    _T(2);
-                    if (rp==_FA) { d16=_G16(r1,_SP); }
-                    else         { d16=_G16(ws,rp); }
-                    d16 = d16 + (q ? -1 : +1);
-                    if (rp==_FA) { _S16(r1,_SP,d16); }
-                    else         { _S16(ws,rp,d16); }
-                    break;
-                case 4: /* 8-bit INC (HL); INC (IX+d); INC (IY+d); INC r */
-                case 5: /* 8-bit DEC (HL); DEC (IX+d); DEC (IY+d); DEC r */
-                    {
-                        if (y == 6) { _ADDR(addr,5); _MR(addr,d8); _T(1); }
-                        else        { d8 = _G8(ws,ry); }
-                        uint8_t r = d8 + ((z & 1) ? -1 : +1);
-                        if (y == 6) { _MW(addr,r); }
-                        else        { _S8(ws,ry,r); }
-                        uint8_t f = _G8(ws,_F) & Z80M_CF;
-                        f |= _z80m_sz(r)|(r&(Z80M_XF|Z80M_YF))|((r^d8)&Z80M_HF);
-                        if (z & 1) {
-                            f |= Z80M_NF;
-                            if (r == 0x7F) { f |= Z80M_VF; }
-                        }
-                        else {
-                            if (r == 0x80) { f |= Z80M_VF; }
-                        }
-                        _S8(ws,_F,f);
-                    }
-                    break;
-                case 6:
-                    if (y == 6) { _ADDR(addr,2); _IMM8(d8); _MW(addr,d8); } /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
-                    else        { _IMM8(d8); _S8(ws,ry,d8); } /* LD r,n */
-                    break;
-                case 7:
-                    /* misc ops on A and F */
-                    switch (y) {
-                        case 0: ws=_z80m_rlca(ws); break;
-                        case 1: ws=_z80m_rrca(ws); break;
-                        case 2: ws=_z80m_rla(ws); break;
-                        case 3: ws=_z80m_rra(ws); break;
-                        case 4: ws=_z80m_daa(ws); break;
-                        case 5: ws=_z80m_cpl(ws); break;
-                        case 6: ws=_z80m_scf(ws); break;
-                        case 7: ws=_z80m_ccf(ws); break;
-                    }
-                    break;
-            }
-        }
+                    _S8(ws,_F,f);
+                }
+                break;
+            /* LD (HL),n; LD (IX+d),n; LD (IY+d),n */
+            case 0x36:
+                _ADDR(addr,2); _IMM8(d8); _MW(addr,d8);
+                break;
+            /* LD r,n */
+            case 0x06: case 0x0E: case 0x16: case 0x1E: case 0x26: case 0x2E: case 0x3E:
+                _IMM8(d8); _S8(ws,ry,d8);
+                break;
+            /* misc ops on A and F */
+            case 0x07: ws=_z80m_rlca(ws); break;
+            case 0x0F: ws=_z80m_rrca(ws); break;
+            case 0x17: ws=_z80m_rla(ws); break;
+            case 0x1F: ws=_z80m_rra(ws); break;
+            case 0x27: ws=_z80m_daa(ws); break;
+            case 0x2F: ws=_z80m_cpl(ws); break;
+            case 0x37: ws=_z80m_scf(ws); break;
+            case 0x3F: ws=_z80m_ccf(ws); break;
         /*=== BLOCK 3: misc and extended ops =================================*/
-        else {
-            switch (z) {
-                case 0:
-                    /* RET cc */
-                    _T(1);
-                    if (_z80m_cond(ws,y)) {
-                        uint8_t w,z;
-                        uint16_t sp = _G16(r1,_SP);
-                        _MR(sp++,z);
-                        _MR(sp++,w);
-                        _S16(r1,_SP,sp);
-                        pc = (w<<8)|z;
-                        _SWZ(pc);
+            /* RET cc */
+            case 0xC0: case 0xC8: case 0xD0: case 0xD8: case 0xE0: case 0xE8: case 0xF0: case 0xF8:
+                _T(1);
+                if (_z80m_cond(ws,y)) {
+                    uint8_t w,z;
+                    uint16_t sp = _G16(r1,_SP);
+                    _MR(sp++,z);
+                    _MR(sp++,w);
+                    _S16(r1,_SP,sp);
+                    pc = (w<<8)|z;
+                    _SWZ(pc);
+                }
+                break;
+            /* POP BC,DE,HL,AF,IX,IY */
+            case 0xC1: case 0xD1: case 0xE1: case 0xF1:
+                {
+                    addr = _G16(r1,_SP);
+                    uint8_t l,h;
+                    _MR(addr++,l); _MR(addr++,h);
+                    d16 = (rp==_FA) ? ((l<<8)|h) : ((h<<8)|l);
+                    _S16(ws,rp,d16); _S16(r1,_SP,addr);
+                }
+                break;
+            /* RET */
+            case 0xC9:
+                {
+                    uint8_t w,z;
+                    uint16_t sp = _G16(r1,_SP);
+                    _MR(sp++,z);
+                    _MR(sp++,w);
+                    _S16(r1,_SP,sp);
+                    pc = (w<<8)|z;
+                    _SWZ(pc);
+                }
+                break;
+            /* EXX */
+            case 0xD9:
+                r0 = _z80m_flush_r0(ws, r0, r2);
+                const uint64_t rx = r3;
+                r3 = (r3 & 0xFFFF) | (r0 & 0xFFFFFFFFFFFF0000);
+                r0 = (r0 & 0xFFFF) | (rx & 0xFFFFFFFFFFFF0000);
+                ws = _z80m_map_regs(r0, r1, r2);
+                break;
+            /* JP (HL), JP (IX), JP (IY) */
+            case 0xE9:
+                pc = _G16(ws,_HL);
+                break;
+            /* LD SP,HL; LD SP,IX; LD SP,IY */
+            case 0xF9:
+                _T(2); _S16(r1,_SP,_G16(ws,_HL));
+                break;
+            /* JP cc,nn */
+            case 0xC2: case 0xCA: case 0xD2: case 0xDA: case 0xE2: case 0xEA: case 0xF2: case 0xFA:
+                _IMM16(addr);
+                if (_z80m_cond(ws,y)) {
+                    pc = addr;
+                }
+                break;
+            /* JP nn */
+            case 0xC3:
+                _IMM16(pc);
+                break;
+            /* CB prefix */
+            case 0xCB:
+                {
+                    /* special handling for undocumented DD/FD+CB double prefix instructions,
+                        these always load the value from memory (IX+d),
+                        and write the value back, even for normal
+                        'register' instructions
+                        see: http://www.baltazarstudios.com/files/ddcb.html
+                    */
+                    /* load the d offset for indexed instructions */
+                    int8_t d = 0;
+                    if (r2 & (_BIT_USE_IX|_BIT_USE_IY)) {
+                        _IMM8(d);
                     }
-                    break;
-                case 1:
-                    /* POP + misc */
-                    if (q == 0) {
-                        /* POP BC,DE,HL,IX,IY */
-                        addr = _G16(r1,_SP);
-                        uint8_t l,h;
-                        _MR(addr++,l); _MR(addr++,h);
-                        d16 = (rp==_FA) ? ((l<<8)|h) : ((h<<8)|l);
-                        _S16(ws,rp,d16); _S16(r1,_SP,addr);
+                    /* fetch opcode without memory refresh and incrementint R */
+                    _FETCH_CB(op);
+                    const uint8_t x = op>>6;
+                    const uint8_t y = (op>>3)&7;
+                    const uint8_t z = op&7;
+                    const int rz = (7-z)<<3;
+                    /* load the operand (for indexed ops, always from memory!) */
+                    if ((z == 6) || (r2 & (_BIT_USE_IX|_BIT_USE_IY))) {
+                        _T(1);
+                        addr = _G16(ws,_HL);
+                        if (r2 & (_BIT_USE_IX|_BIT_USE_IY)) {
+                            _T(1);
+                            addr += d;
+                            _SWZ(addr);
+                        }
+                        _MR(addr,d8);
                     }
-                    else switch (p) {
-                        case 0: /* RET */
-                            {
-                                uint8_t w,z;
-                                uint16_t sp = _G16(r1,_SP);
-                                _MR(sp++,z);
-                                _MR(sp++,w);
-                                _S16(r1,_SP,sp);
-                                pc = (w<<8)|z;
-                                _SWZ(pc);
+                    else {
+                        /* simple non-indexed, non-(HL): load register value */
+                        d8 = _G8(ws,rz);
+                    }
+                    uint8_t f = _G8(ws,_F);
+                    uint8_t r;
+                    switch (x) {
+                        case 0:
+                            /* rot/shift */
+                            switch (y) {
+                                case 0: /*RLC*/ r=d8<<1|d8>>7; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
+                                case 1: /*RRC*/ r=d8>>1|d8<<7; f=_z80m_szp[r]|(d8&Z80M_CF); break;
+                                case 2: /*RL */ r=d8<<1|(f&Z80M_CF); f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
+                                case 3: /*RR */ r=d8>>1|((f&Z80M_CF)<<7); f=_z80m_szp[r]|(d8&Z80M_CF); break;
+                                case 4: /*SLA*/ r=d8<<1; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
+                                case 5: /*SRA*/ r=d8>>1|(d8&0x80); f=_z80m_szp[r]|(d8&Z80M_CF); break;
+                                case 6: /*SLL*/ r=d8<<1|1; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
+                                case 7: /*SRL*/ r=d8>>1; f=_z80m_szp[r]|(d8&Z80M_CF); break;
                             }
                             break;
-                        case 1: /* EXX */
-                            r0 = _z80m_flush_r0(ws, r0, r2);
-                            const uint64_t rx = r3;
-                            r3 = (r3 & 0xFFFF) | (r0 & 0xFFFFFFFFFFFF0000);
-                            r0 = (r0 & 0xFFFF) | (rx & 0xFFFFFFFFFFFF0000);
-                            ws = _z80m_map_regs(r0, r1, r2);
-                            break;
-                        case 2: /* JP (HL), JP (IX), JP (IY) */
-                            pc = _G16(ws,_HL);
-                            break;
-                        case 3: /* LD SP,HL; LD SP,IX; LD SP,IY */
-                            _T(2); _S16(r1,_SP,_G16(ws,_HL));
-                            break;
-                    }
-                    break;
-                case 2:
-                    /* JP cc,nn */
-                    _IMM16(addr);
-                    if (_z80m_cond(ws,y)) {
-                        pc = addr;
-                    }
-                    break;
-                case 3:
-                    /* misc ops */
-                    switch (y) {
-                        case 0: /* JP nn */
-                            _IMM16(pc);
-                            break;
-                        case 1: { /* CB prefix */
-                                /* special handling for undocumented DD/FD+CB double prefix instructions,
-                                    these always load the value from memory (IX+d),
-                                    and write the value back, even for normal
-                                    'register' instructions
-                                   see: http://www.baltazarstudios.com/files/ddcb.html
-                                */
-                                /* load the d offset for indexed instructions */
-                                int8_t d = 0;
-                                if (r2 & (_BIT_USE_IX|_BIT_USE_IY)) {
-                                    _IMM8(d);
-                                }
-                                /* fetch opcode without memory refresh and incrementint R */
-                                _FETCH_CB(op);
-                                const uint8_t x = op>>6;
-                                const uint8_t y = (op>>3)&7;
-                                const uint8_t z = op&7;
-                                const int rz = (7-z)<<3;
-                                /* load the operand (for indexed ops, always from memory!) */
-                                if ((z == 6) || (r2 & (_BIT_USE_IX|_BIT_USE_IY))) {
-                                    _T(1);
-                                    addr = _G16(ws,_HL);
-                                    if (r2 & (_BIT_USE_IX|_BIT_USE_IY)) {
-                                        _T(1);
-                                        addr += d;
-                                        _SWZ(addr);
-                                    }
-                                    _MR(addr,d8);
-                                }
-                                else {
-                                    /* simple non-indexed, non-(HL): load register value */
-                                    d8 = _G8(ws,rz);
-                                }
-                                uint8_t f = _G8(ws,_F);
-                                uint8_t r;
-                                switch (x) {
-                                    case 0:
-                                        /* rot/shift */
-                                        switch (y) {
-                                            case 0: /*RLC*/ r=d8<<1|d8>>7; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
-                                            case 1: /*RRC*/ r=d8>>1|d8<<7; f=_z80m_szp[r]|(d8&Z80M_CF); break;
-                                            case 2: /*RL */ r=d8<<1|(f&Z80M_CF); f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
-                                            case 3: /*RR */ r=d8>>1|((f&Z80M_CF)<<7); f=_z80m_szp[r]|(d8&Z80M_CF); break;
-                                            case 4: /*SLA*/ r=d8<<1; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
-                                            case 5: /*SRA*/ r=d8>>1|(d8&0x80); f=_z80m_szp[r]|(d8&Z80M_CF); break;
-                                            case 6: /*SLL*/ r=d8<<1|1; f=_z80m_szp[r]|(d8>>7&Z80M_CF); break;
-                                            case 7: /*SRL*/ r=d8>>1; f=_z80m_szp[r]|(d8&Z80M_CF); break;
-                                        }
-                                        break;
-                                    case 1:
-                                        /* BIT (bit test) */
-                                        r = d8 & (1<<y); 
-                                        f = (f&Z80M_CF) | Z80M_HF | (r?(r&Z80M_SF):(Z80M_ZF|Z80M_PF));
-                                        if (z == 6) {
-                                            f |= (_GWZ()>>8) & (Z80M_YF|Z80M_XF);
-                                        }
-                                        else {
-                                            f |= d8 & (Z80M_YF|Z80M_XF);
-                                        }
-                                        break;
-                                    case 2:
-                                        /* RES (bit clear) */
-                                        r = d8 & ~(1<<y);
-                                        break;
-                                    case 3:
-                                        /* SET (bit set) */
-                                        r = d8 | (1<<y);
-                                        break;
-                                }
-                                if (x != 1) {
-                                    /* write result back */
-                                    if ((z == 6) || (r2 & (_BIT_USE_IX|_BIT_USE_IY))) {
-                                        /* (HL), (IX+d), (IY+d): write back to memory, for extended ops,
-                                           even when the op is actually a register op
-                                        */
-                                       _MW(addr,r);
-                                    }
-                                    if (z != 6) {
-                                        /* write result back to register */
-                                        _S8(ws,rz,r);
-                                    }
-                                }
-                                _S8(ws,_F,f);
-                            } 
+                        case 1:
+                            /* BIT (bit test) */
+                            r = d8 & (1<<y); 
+                            f = (f&Z80M_CF) | Z80M_HF | (r?(r&Z80M_SF):(Z80M_ZF|Z80M_PF));
+                            if (z == 6) {
+                                f |= (_GWZ()>>8) & (Z80M_YF|Z80M_XF);
+                            }
+                            else {
+                                f |= d8 & (Z80M_YF|Z80M_XF);
+                            }
                             break;
                         case 2:
-                            /* OUT (n),A */
-                            {
-                                _IMM8(d8);
-                                uint8_t a = _G8(ws,_A);
-                                addr = (a<<8)|d8;
-                                _OUT(addr,a);
-                                /* special WZ computation, only bump Z */
-                                addr = (addr & 0xFF00) | ((addr+1) & 0x00FF);
-                                _SWZ(addr);
-                            }
+                            /* RES (bit clear) */
+                            r = d8 & ~(1<<y);
                             break;
                         case 3:
-                            /* IN A(n) */
-                            {
-                                _IMM8(d8);
-                                uint8_t a = _G8(ws,_A);
-                                addr = (a<<8)|d8;
-                                _IN(addr++,a);
-                                _S8(ws,_A,a);
-                                _SWZ(addr);
-                            }
-                            break;
-                        case 4: { /* EX SP,(HL/IX/IY) */
-                                _T(3);
-                                addr = _G16(r1,_SP);
-                                d16 = _G16(ws,_HL);
-                                uint8_t l,h;
-                                _MR(addr,l);
-                                _MR(addr+1,h);
-                                _MW(addr,d16);
-                                _MW(addr+1,d16>>8);
-                                d16 = (h<<8)|l;
-                                _S16(ws,_HL,d16);
-                                _SWZ(d16);
-                            }
-                            break;
-                        case 5: { /* EX DE,HL */
-                                r0 = _z80m_flush_r0(ws, r0, r2);
-                                uint16_t de = _G16(r0,_DE);
-                                uint16_t hl = _G16(r0,_HL);
-                                _S16(r0,_DE,hl);
-                                _S16(r0,_HL,de);
-                                ws = _z80m_map_regs(r0, r1, r2);
-                            }
-                            break;
-                        case 6: /* DI */
-                            r2 &= ~(_BIT_IFF1|_BIT_IFF2);
-                            break;
-                        case 7: /* EI (enabled at start of next op) */
-                            r2 |= _BIT_EI;
+                            /* SET (bit set) */
+                            r = d8 | (1<<y);
                             break;
                     }
-                    break;
-                case 4:
-                    /* CALL cc,nn */
-                    _IMM16(addr);
-                    if (_z80m_cond(ws,y)) {
-                        _T(1);
-                        uint16_t sp = _G16(r1,_SP);
-                        _MW(--sp, pc>>8);
-                        _MW(--sp, pc);
-                        _S16(r1,_SP,sp);
-                        pc = addr;
-                    }
-                    break;
-                case 5:
-                    /* PUSH, CALL, DD,ED,FD prefixes */
-                    if (q == 0) {
-                        /* PUSH BC,DE,HL,IX,IY,AF */
-                        _T(1);
-                        addr = _G16(r1,_SP);
-                        d16 = _G16(ws,rp);
-                        if (rp==_FA) {
-                            d16 = (d16>>8) | (d16<<8);
+                    if (x != 1) {
+                        /* write result back */
+                        if ((z == 6) || (r2 & (_BIT_USE_IX|_BIT_USE_IY))) {
+                            /* (HL), (IX+d), (IY+d): write back to memory, for extended ops,
+                                even when the op is actually a register op
+                            */
+                            _MW(addr,r);
                         }
-                        _MW(--addr,d16>>8); _MW(--addr,d16);
-                        _S16(r1,_SP,addr);
+                        if (z != 6) {
+                            /* write result back to register */
+                            _S8(ws,rz,r);
+                        }
                     }
-                    else switch (p) {
-                        case 0: /* CALL nn */
-                            {
-                                _IMM16(addr);
-                                _T(1);
-                                uint16_t sp = _G16(r1,_SP);
-                                _MW(--sp, pc>>8);
-                                _MW(--sp, pc);
-                                _S16(r1,_SP,sp);
-                                pc = addr;
-                            }
-                            break;
-                        case 1: /* DD prefix (maps IX into HL slot, don't handle interrupt */
-                            map_bits |= _BIT_USE_IX;
-                            continue; 
-                        case 2: {   /* ED prefix */
-                                _FETCH(op);
-                                const uint8_t x = op>>6;
-                                const uint8_t y = (op>>3)&7;
-                                const uint8_t z = op&7;
-                                const uint8_t p = y>>1;
-                                const uint8_t q = y&1;
-                                const int rp = (3-p)<<4;
-                                if (x == 2) {
-                                    /* block instructions (LDIR, etc...) */
-                                    if (y >= 4) {
-                                        switch (z) {
-                                            case 0: /* LDI, LDD, LDIR, LDDR */
-                                                {
-                                                    uint16_t hl = _G16(ws,_HL);
-                                                    uint16_t de = _G16(ws,_DE);
-                                                    _MR(hl,d8);
-                                                    _MW(de,d8);
-                                                    if (y & 1) { hl--; de--; }
-                                                    else       { hl++; de++; }
-                                                    _S16(ws,_HL,hl);
-                                                    _S16(ws,_DE,de);
-                                                    _T(2);
-                                                    d8 += _G8(ws,_A);
-                                                    uint8_t f = _G8(ws,_F) & (Z80M_SF|Z80M_ZF|Z80M_CF);
-                                                    if (d8 & 0x02) { f |= Z80M_YF; }
-                                                    if (d8 & 0x08) { f |= Z80M_XF; }
-                                                    uint16_t bc = _G16(ws,_BC);
-                                                    bc--;
-                                                    _S16(ws,_BC,bc);
-                                                    if (bc) { f |= Z80M_VF; }
-                                                    _S8(ws,_F,f);
-                                                    if (y >= 6) {
-                                                        /* LDIR/LDDR */
-                                                        if (bc) {
-                                                            pc -= 2;
-                                                            _SWZ(pc+1);
-                                                            _T(5);
-                                                        }
-                                                    }
-                                                }
-                                                break;
-                                            case 1: /* CPI, CPD, CPIR, CPDR */
-                                                {
-                                                    uint16_t hl = _G16(ws,_HL);
-                                                    _MR(hl,d8);
-                                                    uint16_t wz = _GWZ();
-                                                    if (y & 1) { hl--; wz--; }
-                                                    else       { hl++; wz++; }
-                                                    _SWZ(wz);
-                                                    _S16(ws,_HL,hl);
-                                                    _T(5);
-                                                    int r = ((int)_G8(ws,_A)) - d8;
-                                                    uint8_t f = (_G8(ws,_F) & Z80M_CF) | Z80M_NF | _z80m_sz(r);
-                                                    if ((r & 0x0F) > (_G8(ws,_A) & 0x0F)) {
-                                                        f |= Z80M_HF;
-                                                        r--;
-                                                    }
-                                                    if (r & 0x02) { f |= Z80M_YF; }
-                                                    if (r & 0x08) { f |= Z80M_XF; }
-                                                    uint16_t bc = _G16(ws,_BC);
-                                                    bc--;
-                                                    _S16(ws,_BC,bc);
-                                                    if (bc) { f |= Z80M_VF; }
-                                                    _S8(ws,_F,f);
-                                                    if (y >= 6) {
-                                                        /* CPIR/CPDR */
-                                                        if (bc && !(f & Z80M_ZF)) {
-                                                            pc -= 2;
-                                                            _SWZ(pc+1);
-                                                            _T(5);
-                                                        }
-                                                    }
-                                                }
-                                                break;
-                                            case 2: /* INI, IND, INIR, INDR */
-                                                {
-                                                    _T(1);
-                                                    addr = _G16(ws,_BC);
-                                                    uint16_t hl = _G16(ws,_HL);
-                                                    _IN(addr,d8);
-                                                    _MW(hl,d8);
-                                                    uint8_t b = _G8(ws,_B);
-                                                    uint8_t c = _G8(ws,_C);
-                                                    b--;
-                                                    if (y & 1) { addr--; hl--; c--; }
-                                                    else       { addr++; hl++; c++; }
-                                                    _S8(ws,_B,b);
-                                                    _S16(ws,_HL,hl);
-                                                    _SWZ(addr);
-                                                    uint8_t f = b ? (b & Z80M_SF) : Z80M_ZF;
-                                                    if (d8 & Z80M_SF) { f |= Z80M_NF; }
-                                                    uint32_t t = (uint32_t) (c & 0xFF) + d8;
-                                                    if (t & 0x100) { f |= Z80M_HF|Z80M_CF; }
-                                                    f |= _z80m_szp[((uint8_t)(t & 0x07)) ^ b] & Z80M_PF;
-                                                    _S8(ws,_F,f);
-                                                    if (y >= 6) {
-                                                        /* INIR,INDR */
-                                                        if (b) {
-                                                            pc -= 2;
-                                                            _T(5);
-                                                        }
-                                                    }
-                                                }
-                                                break;
-                                            case 3: /* OUTI, OUTD, OTIR, OTDR */
-                                                {
-                                                    _T(1);
-                                                    uint16_t hl = _G16(ws,_HL);
-                                                    _MR(hl,d8);
-                                                    uint8_t b = _G8(ws,_B);
-                                                    b--;
-                                                    _S8(ws,_B,b);
-                                                    addr = _G16(ws,_BC);
-                                                    _OUT(addr,d8);
-                                                    if (y & 1) { addr--; hl--; }
-                                                    else       { addr++; hl++; }
-                                                    _S16(ws,_HL,hl);
-                                                    _SWZ(addr);
-                                                    uint8_t f = b ? (b & Z80M_SF) : Z80M_ZF;
-                                                    if (d8 & Z80M_SF) { f |= Z80M_NF; }
-                                                    uint32_t t = (uint32_t)_G8(ws,_L) + (uint32_t)d8;
-                                                    if (t & 0x0100) { f |= Z80M_HF|Z80M_CF; }
-                                                    f |= _z80m_szp[((uint8_t)(t & 0x07)) ^ b] & Z80M_PF;
-                                                    _S8(ws,_F,f);
-                                                    if (y >= 6) {
-                                                        /* INIR,INDR */
-                                                        if (b) {
-                                                            pc -= 2;
-                                                            _T(5);
-                                                        }
-                                                    }
-                                                }
-                                                break;
+                    _S8(ws,_F,f);
+                }
+                break;
+            /* OUT (n),A */
+            case 0xD3:
+                {
+                    _IMM8(d8);
+                    uint8_t a = _G8(ws,_A);
+                    addr = (a<<8)|d8;
+                    _OUT(addr,a);
+                    /* special WZ computation, only bump Z */
+                    addr = (addr & 0xFF00) | ((addr+1) & 0x00FF);
+                    _SWZ(addr);
+                }
+                break;
+            /* IN A(n) */
+            case 0xDB:
+                {
+                    _IMM8(d8);
+                    uint8_t a = _G8(ws,_A);
+                    addr = (a<<8)|d8;
+                    _IN(addr++,a);
+                    _S8(ws,_A,a);
+                    _SWZ(addr);
+                }
+                break;
+            /* EX SP,(HL/IX/IY) */
+            case 0xE3:
+                {
+                    _T(3);
+                    addr = _G16(r1,_SP);
+                    d16 = _G16(ws,_HL);
+                    uint8_t l,h;
+                    _MR(addr,l);
+                    _MR(addr+1,h);
+                    _MW(addr,d16);
+                    _MW(addr+1,d16>>8);
+                    d16 = (h<<8)|l;
+                    _S16(ws,_HL,d16);
+                    _SWZ(d16);
+                }
+                break;
+            /* EX DE,HL */
+            case 0xEB:
+                {
+                    r0 = _z80m_flush_r0(ws, r0, r2);
+                    uint16_t de = _G16(r0,_DE);
+                    uint16_t hl = _G16(r0,_HL);
+                    _S16(r0,_DE,hl);
+                    _S16(r0,_HL,de);
+                    ws = _z80m_map_regs(r0, r1, r2);
+                }
+                break;
+            /* DI */
+            case 0xF3:
+                r2 &= ~(_BIT_IFF1|_BIT_IFF2);
+                break;
+            /* EI (ints enabled at start of next op) */
+            case 0xFB:
+                r2 |= _BIT_EI;
+                break;
+            /* CALL cc,nn */
+            case 0xC4: case 0xCC: case 0xD4: case 0xDC: case 0xE4: case 0xEC: case 0xF4: case 0xFC:
+                _IMM16(addr);
+                if (_z80m_cond(ws,y)) {
+                    _T(1);
+                    uint16_t sp = _G16(r1,_SP);
+                    _MW(--sp, pc>>8);
+                    _MW(--sp, pc);
+                    _S16(r1,_SP,sp);
+                    pc = addr;
+                }
+                break;
+            /* PUSH BC,DE,HL,IX,IY,AF */
+            case 0xC5: case 0xD5: case 0xE5: case 0xF5:
+                _T(1);
+                addr = _G16(r1,_SP);
+                d16 = _G16(ws,rp);
+                if (rp==_FA) {
+                    d16 = (d16>>8) | (d16<<8);
+                }
+                _MW(--addr,d16>>8); _MW(--addr,d16);
+                _S16(r1,_SP,addr);
+                break;
+            /* CALL nn */
+            case 0xCD:
+                {
+                    _IMM16(addr);
+                    _T(1);
+                    uint16_t sp = _G16(r1,_SP);
+                    _MW(--sp, pc>>8);
+                    _MW(--sp, pc);
+                    _S16(r1,_SP,sp);
+                    pc = addr;
+                }
+                break;
+            /* DD prefix (maps IX into HL slot, don't handle interrupt) */
+            case 0xDD:
+                map_bits |= _BIT_USE_IX;
+                continue;
+            /* FD prefix (maps IY into HL slot, don't handle interrupt) */
+            case 0xFD:
+                map_bits |= _BIT_USE_IY;
+                continue;
+            /* ALU n */
+            case 0xC6: case 0xCE: case 0xD6: case 0xDE: case 0xE6: case 0xEE: case 0xF6: case 0xFE:
+                _IMM8(d8); ws=_z80m_alu8(y,ws,d8);
+                break;
+            /* RST */
+            case 0xC7: case 0xCF: case 0xD7: case 0xDF: case 0xE7: case 0xEF: case 0xF7: case 0xFF:
+                {
+                    uint16_t sp = _G16(r1,_SP);
+                    _MW(--sp, pc>>8);
+                    _MW(--sp, pc);
+                    _S16(r1,_SP,sp);
+                    pc = y * 8;
+                    _SWZ(pc);
+                }
+                break;
+            /* ED prefix */
+            case 0xED:
+                {
+                    _FETCH(op);
+                    const uint8_t x = op>>6;
+                    const uint8_t y = (op>>3)&7;
+                    const uint8_t z = op&7;
+                    const uint8_t p = y>>1;
+                    const uint8_t q = y&1;
+                    const int rp = (3-p)<<4;
+                    if (x == 2) {
+                        /* block instructions (LDIR, etc...) */
+                        if (y >= 4) {
+                            switch (z) {
+                                case 0: /* LDI, LDD, LDIR, LDDR */
+                                    {
+                                        uint16_t hl = _G16(ws,_HL);
+                                        uint16_t de = _G16(ws,_DE);
+                                        _MR(hl,d8);
+                                        _MW(de,d8);
+                                        if (y & 1) { hl--; de--; }
+                                        else       { hl++; de++; }
+                                        _S16(ws,_HL,hl);
+                                        _S16(ws,_DE,de);
+                                        _T(2);
+                                        d8 += _G8(ws,_A);
+                                        uint8_t f = _G8(ws,_F) & (Z80M_SF|Z80M_ZF|Z80M_CF);
+                                        if (d8 & 0x02) { f |= Z80M_YF; }
+                                        if (d8 & 0x08) { f |= Z80M_XF; }
+                                        uint16_t bc = _G16(ws,_BC);
+                                        bc--;
+                                        _S16(ws,_BC,bc);
+                                        if (bc) { f |= Z80M_VF; }
+                                        _S8(ws,_F,f);
+                                        if (y >= 6) {
+                                            /* LDIR/LDDR */
+                                            if (bc) {
+                                                pc -= 2;
+                                                _SWZ(pc+1);
+                                                _T(5);
+                                            }
                                         }
                                     }
-                                }
-                                else if (x == 1) {
-                                    const int ry = (7-y)<<3;
-                                    /* misc ED ops */
-                                    switch (z) {
-                                        case 0: /* IN r,(C) */
-                                            {
-                                                addr = _G16(ws,_BC);
-                                                _IN(addr++,d8);
-                                                _SWZ(addr);
-                                                uint8_t f = (_G8(ws,_F) & Z80M_CF) | _z80m_szp[d8];
-                                                _S8(ws,_F,f);
-                                                /* handle undocumented special case IN F,(C): 
-                                                    only set flags, don't store result
-                                                */
-                                                if (ry != _F) {
-                                                    _S8(ws,ry,d8);
-                                                }
+                                    break;
+                                case 1: /* CPI, CPD, CPIR, CPDR */
+                                    {
+                                        uint16_t hl = _G16(ws,_HL);
+                                        _MR(hl,d8);
+                                        uint16_t wz = _GWZ();
+                                        if (y & 1) { hl--; wz--; }
+                                        else       { hl++; wz++; }
+                                        _SWZ(wz);
+                                        _S16(ws,_HL,hl);
+                                        _T(5);
+                                        int r = ((int)_G8(ws,_A)) - d8;
+                                        uint8_t f = (_G8(ws,_F) & Z80M_CF) | Z80M_NF | _z80m_sz(r);
+                                        if ((r & 0x0F) > (_G8(ws,_A) & 0x0F)) {
+                                            f |= Z80M_HF;
+                                            r--;
+                                        }
+                                        if (r & 0x02) { f |= Z80M_YF; }
+                                        if (r & 0x08) { f |= Z80M_XF; }
+                                        uint16_t bc = _G16(ws,_BC);
+                                        bc--;
+                                        _S16(ws,_BC,bc);
+                                        if (bc) { f |= Z80M_VF; }
+                                        _S8(ws,_F,f);
+                                        if (y >= 6) {
+                                            /* CPIR/CPDR */
+                                            if (bc && !(f & Z80M_ZF)) {
+                                                pc -= 2;
+                                                _SWZ(pc+1);
+                                                _T(5);
                                             }
-                                            break;
-                                        case 1: /* OUT (C),r */
-                                            addr = _G16(ws,_BC);
-                                            d8 = (ry == _F) ? 0 : _G8(ws,ry);
-                                            _OUT(addr++,d8);
-                                            _SWZ(addr);
-                                            break;
-                                        case 2: /* SBC/ADC HL,rr */
-                                            {
-                                                uint16_t acc = _G16(ws,_HL);
-                                                _SWZ(acc+1);
-                                                if (_FA==rp) { d16 = _G16(r1,_SP); }  /* ADD HL,SP */
-                                                else         { d16 = _G16(ws,rp); }   /* ADD HL,dd */
-                                                uint32_t r;
-                                                uint8_t f;
-                                                if (q == 0) {
-                                                    /* SBC HL,rr */
-                                                    r = acc - d16 - (_G8(ws,_F) & Z80M_CF);
-                                                    f = Z80M_NF | (((d16^acc)&(acc^r)&0x8000)>>13);
-                                                }
-                                                else {
-                                                    /* ADC HL,rr */
-                                                    r = acc + d16 + (_G8(ws,_F) & Z80M_CF);
-                                                    f = ((d16^acc^0x8000)&(d16^r)&0x8000)>>13;
-                                                }
-                                                _S16(ws,_HL,r);
-                                                f |= ((acc^r^d16)>>8) & Z80M_HF;
-                                                f |= (r>>16) & Z80M_CF;
-                                                f |= (r>>8) & (Z80M_SF|Z80M_YF|Z80M_XF);
-                                                f |= (r & 0xFFFF) ? 0 : Z80M_ZF;
-                                                _S8(ws,_F,f);
-                                                _T(7);
+                                        }
+                                    }
+                                    break;
+                                case 2: /* INI, IND, INIR, INDR */
+                                    {
+                                        _T(1);
+                                        addr = _G16(ws,_BC);
+                                        uint16_t hl = _G16(ws,_HL);
+                                        _IN(addr,d8);
+                                        _MW(hl,d8);
+                                        uint8_t b = _G8(ws,_B);
+                                        uint8_t c = _G8(ws,_C);
+                                        b--;
+                                        if (y & 1) { addr--; hl--; c--; }
+                                        else       { addr++; hl++; c++; }
+                                        _S8(ws,_B,b);
+                                        _S16(ws,_HL,hl);
+                                        _SWZ(addr);
+                                        uint8_t f = b ? (b & Z80M_SF) : Z80M_ZF;
+                                        if (d8 & Z80M_SF) { f |= Z80M_NF; }
+                                        uint32_t t = (uint32_t) (c & 0xFF) + d8;
+                                        if (t & 0x100) { f |= Z80M_HF|Z80M_CF; }
+                                        f |= _z80m_szp[((uint8_t)(t & 0x07)) ^ b] & Z80M_PF;
+                                        _S8(ws,_F,f);
+                                        if (y >= 6) {
+                                            /* INIR,INDR */
+                                            if (b) {
+                                                pc -= 2;
+                                                _T(5);
                                             }
-                                            break;
-                                        case 3: /* LD (nn),rr; LD rr,(nn) */
-                                            _IMM16(addr);
-                                            if (q == 0) { /* LD (nn),rr */
-                                                if (rp == _FA) { d16=_G16(r1, _SP); }
-                                                else           { d16=_G16(ws, rp);  }
-                                                _MW(addr++, d16 & 0xFF);
-                                                _MW(addr, d16 >> 8);
-                                                _SWZ(addr);
+                                        }
+                                    }
+                                    break;
+                                case 3: /* OUTI, OUTD, OTIR, OTDR */
+                                    {
+                                        _T(1);
+                                        uint16_t hl = _G16(ws,_HL);
+                                        _MR(hl,d8);
+                                        uint8_t b = _G8(ws,_B);
+                                        b--;
+                                        _S8(ws,_B,b);
+                                        addr = _G16(ws,_BC);
+                                        _OUT(addr,d8);
+                                        if (y & 1) { addr--; hl--; }
+                                        else       { addr++; hl++; }
+                                        _S16(ws,_HL,hl);
+                                        _SWZ(addr);
+                                        uint8_t f = b ? (b & Z80M_SF) : Z80M_ZF;
+                                        if (d8 & Z80M_SF) { f |= Z80M_NF; }
+                                        uint32_t t = (uint32_t)_G8(ws,_L) + (uint32_t)d8;
+                                        if (t & 0x0100) { f |= Z80M_HF|Z80M_CF; }
+                                        f |= _z80m_szp[((uint8_t)(t & 0x07)) ^ b] & Z80M_PF;
+                                        _S8(ws,_F,f);
+                                        if (y >= 6) {
+                                            /* INIR,INDR */
+                                            if (b) {
+                                                pc -= 2;
+                                                _T(5);
                                             }
-                                            else {  /* LD rr,(nn) */
-                                                uint8_t l,h; _MR(addr++,l); _MR(addr,h); d16 = (h<<8)|l;
-                                                if (rp == _FA) { _S16(r1, _SP, d16); }
-                                                else           { _S16(ws, rp, d16); }
-                                                _SWZ(addr);
-                                            }
-                                            break;
-                                        case 4: /* NEG */
-                                            ws = _z80m_neg8(ws);
-                                            break;
-                                        case 5: /* RETN, RETI */
-                                            assert(false);
-                                            break;
-                                        case 6: /* IM */
-                                            d8 = ((y&3) == 0) ? 0 : (y&3)-1;
-                                            _S8(r2,_IM,d8);
-                                            break;
-                                        case 7: /* misc ops with R,I,A */
-                                            switch (y) {
-                                                case 0: /* LD I,A */
-                                                    _T(1); d8=_G8(ws,_A); _S8(r2,_I,d8);
-                                                    break;
-                                                case 1: /* LD R,A */
-                                                    _T(1); d8=_G8(ws,_A); _S8(r2,_R,d8);
-                                                    break;
-                                                case 2: /* LD A,I */
-                                                    _T(1); d8=_G8(r2,_I); _S8(ws,_A,d8);
-                                                    _S8(ws,_F,_z80m_sziff2_flags(ws, r2, d8));
-                                                    break;
-                                                case 3: /* LD A,R */
-                                                    _T(1); d8=_G8(r2,_R); _S8(ws,_A,d8);
-                                                    _S8(ws,_F,_z80m_sziff2_flags(ws, r2, d8));
-                                                    break;
-                                                case 4: { /* RRD */
-                                                        addr = _G16(ws,_HL);
-                                                        uint8_t a = _G8(ws,_A);
-                                                        _MR(addr, d8);
-                                                        uint8_t l = a & 0x0F;
-                                                        a = (a & 0xF0) | (d8 & 0x0F);
-                                                        _S8(ws,_A,a);
-                                                        d8 = (d8>>4) | (l<<4);
-                                                        _MW(addr++,d8);
-                                                        _SWZ(addr);
-                                                        _S8(ws,_F,(_G8(ws,_F) & Z80M_CF) | _z80m_szp[a]);
-                                                        _T(4);
-                                                    }
-                                                    break;
-                                                case 5: {  /* RLD */
-                                                        addr = _G16(ws,_HL);
-                                                        uint8_t a = _G8(ws,_A);
-                                                        _MR(addr, d8);
-                                                        uint8_t l = a & 0x0F;
-                                                        a = (a & 0xF0) | (d8>>4);
-                                                        _S8(ws,_A,a);
-                                                        d8 = (d8<<4) | l;
-                                                        _MW(addr++,d8);
-                                                        _SWZ(addr);
-                                                        _S8(ws,_F,(_G8(ws,_F) & Z80M_CF) | _z80m_szp[a]);
-                                                        _T(4);
-                                                    }
-                                                    break;
-                                                default: /* 8-cycle NOP */
-                                                    break;
-                                            }
-                                            break;
+                                        }
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+                    else if (x == 1) {
+                        const int ry = (7-y)<<3;
+                        /* misc ED ops */
+                        switch (z) {
+                            case 0: /* IN r,(C) */
+                                {
+                                    addr = _G16(ws,_BC);
+                                    _IN(addr++,d8);
+                                    _SWZ(addr);
+                                    uint8_t f = (_G8(ws,_F) & Z80M_CF) | _z80m_szp[d8];
+                                    _S8(ws,_F,f);
+                                    /* handle undocumented special case IN F,(C): 
+                                        only set flags, don't store result
+                                    */
+                                    if (ry != _F) {
+                                        _S8(ws,ry,d8);
                                     }
                                 }
-                                else {
-                                    /* everything else is a 8-cycle NOP */
+                                break;
+                            case 1: /* OUT (C),r */
+                                addr = _G16(ws,_BC);
+                                d8 = (ry == _F) ? 0 : _G8(ws,ry);
+                                _OUT(addr++,d8);
+                                _SWZ(addr);
+                                break;
+                            case 2: /* SBC/ADC HL,rr */
+                                {
+                                    uint16_t acc = _G16(ws,_HL);
+                                    _SWZ(acc+1);
+                                    if (_FA==rp) { d16 = _G16(r1,_SP); }  /* ADD HL,SP */
+                                    else         { d16 = _G16(ws,rp); }   /* ADD HL,dd */
+                                    uint32_t r;
+                                    uint8_t f;
+                                    if (q == 0) {
+                                        /* SBC HL,rr */
+                                        r = acc - d16 - (_G8(ws,_F) & Z80M_CF);
+                                        f = Z80M_NF | (((d16^acc)&(acc^r)&0x8000)>>13);
+                                    }
+                                    else {
+                                        /* ADC HL,rr */
+                                        r = acc + d16 + (_G8(ws,_F) & Z80M_CF);
+                                        f = ((d16^acc^0x8000)&(d16^r)&0x8000)>>13;
+                                    }
+                                    _S16(ws,_HL,r);
+                                    f |= ((acc^r^d16)>>8) & Z80M_HF;
+                                    f |= (r>>16) & Z80M_CF;
+                                    f |= (r>>8) & (Z80M_SF|Z80M_YF|Z80M_XF);
+                                    f |= (r & 0xFFFF) ? 0 : Z80M_ZF;
+                                    _S8(ws,_F,f);
+                                    _T(7);
                                 }
-                            }
-                            break;
-                        case 3: /* FD prefix (map IY into HL slot, don't handle interrupt) */
-                            map_bits |= _BIT_USE_IY;
-                            continue;
+                                break;
+                            case 3: /* LD (nn),rr; LD rr,(nn) */
+                                _IMM16(addr);
+                                if (q == 0) { /* LD (nn),rr */
+                                    if (rp == _FA) { d16=_G16(r1, _SP); }
+                                    else           { d16=_G16(ws, rp);  }
+                                    _MW(addr++, d16 & 0xFF);
+                                    _MW(addr, d16 >> 8);
+                                    _SWZ(addr);
+                                }
+                                else {  /* LD rr,(nn) */
+                                    uint8_t l,h; _MR(addr++,l); _MR(addr,h); d16 = (h<<8)|l;
+                                    if (rp == _FA) { _S16(r1, _SP, d16); }
+                                    else           { _S16(ws, rp, d16); }
+                                    _SWZ(addr);
+                                }
+                                break;
+                            case 4: /* NEG */
+                                ws = _z80m_neg8(ws);
+                                break;
+                            case 5: /* RETN, RETI */
+                                assert(false);
+                                break;
+                            case 6: /* IM */
+                                d8 = ((y&3) == 0) ? 0 : (y&3)-1;
+                                _S8(r2,_IM,d8);
+                                break;
+                            case 7: /* misc ops with R,I,A */
+                                switch (y) {
+                                    case 0: /* LD I,A */
+                                        _T(1); d8=_G8(ws,_A); _S8(r2,_I,d8);
+                                        break;
+                                    case 1: /* LD R,A */
+                                        _T(1); d8=_G8(ws,_A); _S8(r2,_R,d8);
+                                        break;
+                                    case 2: /* LD A,I */
+                                        _T(1); d8=_G8(r2,_I); _S8(ws,_A,d8);
+                                        _S8(ws,_F,_z80m_sziff2_flags(ws, r2, d8));
+                                        break;
+                                    case 3: /* LD A,R */
+                                        _T(1); d8=_G8(r2,_R); _S8(ws,_A,d8);
+                                        _S8(ws,_F,_z80m_sziff2_flags(ws, r2, d8));
+                                        break;
+                                    case 4: { /* RRD */
+                                            addr = _G16(ws,_HL);
+                                            uint8_t a = _G8(ws,_A);
+                                            _MR(addr, d8);
+                                            uint8_t l = a & 0x0F;
+                                            a = (a & 0xF0) | (d8 & 0x0F);
+                                            _S8(ws,_A,a);
+                                            d8 = (d8>>4) | (l<<4);
+                                            _MW(addr++,d8);
+                                            _SWZ(addr);
+                                            _S8(ws,_F,(_G8(ws,_F) & Z80M_CF) | _z80m_szp[a]);
+                                            _T(4);
+                                        }
+                                        break;
+                                    case 5: {  /* RLD */
+                                            addr = _G16(ws,_HL);
+                                            uint8_t a = _G8(ws,_A);
+                                            _MR(addr, d8);
+                                            uint8_t l = a & 0x0F;
+                                            a = (a & 0xF0) | (d8>>4);
+                                            _S8(ws,_A,a);
+                                            d8 = (d8<<4) | l;
+                                            _MW(addr++,d8);
+                                            _SWZ(addr);
+                                            _S8(ws,_F,(_G8(ws,_F) & Z80M_CF) | _z80m_szp[a]);
+                                            _T(4);
+                                        }
+                                        break;
+                                    default: /* 8-cycle NOP */
+                                        break;
+                                }
+                                break;
+                        }
                     }
-                    break;
-                case 6:
-                    /* ALU n */
-                    _IMM8(d8); ws=_z80m_alu8(y,ws,d8);
-                    break;
-                case 7:
-                    /* RST */
-                    {
-                        uint16_t sp = _G16(r1,_SP);
-                        _MW(--sp, pc>>8);
-                        _MW(--sp, pc);
-                        _S16(r1,_SP,sp);
-                        pc = y * 8;
-                        _SWZ(pc);
+                    else {
+                        /* everything else is a 8-cycle NOP */
                     }
-                    break;
-            }
+                }
+                break;
         }
         /* check for and handle interrupt */
         if (((pins & (Z80M_INT|Z80M_BUSREQ))==Z80M_INT) && (r2 & _BIT_IFF1)) {
