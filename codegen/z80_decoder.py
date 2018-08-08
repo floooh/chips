@@ -71,97 +71,6 @@ def l(s) :
     Out.write(s+'\n')
 
 #-------------------------------------------------------------------------------
-#   write C defines, these make the generated code a bit more readable
-#
-def write_defines():
-    l('/* set 16-bit address in 64-bit pin mask*/')
-    l('#define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)')
-    l('/* set 16-bit address and 8-bit data in 64-bit pin mask */')
-    l('#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)')
-    l('/* extract 8-bit data from 64-bit pin mask */')
-    l('#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))')
-    l('/* enable control pins */')
-    l('#define _ON(m) pins|=(m)')
-    l('/* disable control pins */')
-    l('#define _OFF(m) pins&=~(m)')
-    l('/* execute a number of ticks without wait-state detection */')
-    l('#define _T(num) pins=tick(num,pins,ud);ticks+=num')
-    l('/* execute a number of ticks with wait-state detection */')
-    l('#define _TW(num) pins&=~Z80_WAIT_MASK;pins=tick(num,pins,ud);ticks+=num+Z80_GET_WAIT(pins);')
-    l('/* a memory read machine cycle (3 ticks with wait-state detection) */')
-    l('#define _MR(addr,data) _SA(addr);_ON(Z80_MREQ|Z80_RD);_TW(3);_OFF(Z80_MREQ|Z80_RD);data=_GD()')
-    l('/* a memory write machine cycle (3 ticks with wait-state detection) */')
-    l('#define _MW(addr,data) _SAD(addr,data);_ON(Z80_MREQ|Z80_WR);_TW(3);_OFF(Z80_MREQ|Z80_WR)')
-    l('/* an input machine cycle (4 ticks with wait-state detection) */')
-    l('#define _IN(addr,data) _SA(addr);_ON(Z80_IORQ|Z80_RD);_TW(4);_OFF(Z80_IORQ|Z80_RD);data=_GD()')
-    l('/* an output machine cycle (4 ticks with wait-state detection) */')
-    l('#define _OUT(addr,data) _SAD(addr,data);_ON(Z80_IORQ|Z80_WR);_TW(4);_OFF(Z80_IORQ|Z80_WR)')
-    l('/* an opcode fetch machine cycle (4 ticks with wait-state detection, no refresh cycle emulated, bump R) */')
-    l('#define _FETCH(op) _ON(Z80_M1|Z80_MREQ|Z80_RD);_SA(c.PC++);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();c.R=(c.R&0x80)|((c.R+1)&0x7F)')
-    l('/* a special opcode fetch for DD/FD+CB instructions without incrementing R */')
-    l('#define _FETCH_CB(op) _ON(Z80_M1|Z80_MREQ|Z80_RD);_SA(c.PC++);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD()')
-    l('/* a 16-bit immediate load from (PC) into WZ */')
-    l('#define _IMM16() {uint8_t w,z;_MR(c.PC++,z);_MR(c.PC++,w);c.WZ=(w<<8)|z;}')
-    l('/* evaluate the S and Z flags */')
-    l('#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)')
-    l('/* evaluate the S,Z,Y,X,C and H flags */')
-    l('#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))')
-    l('/* evaluate flags for ADD and ADC */')
-    l('#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))')
-    l('/* evaluate flags for SUB and SBC */')
-    l('#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))')
-    l('/* evaluate flags for CP */')
-    l('#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))')
-    l('')
-#-------------------------------------------------------------------------------
-#   undefine the C defines
-#
-def write_undefines():
-    l('#undef _SA')
-    l('#undef _SAD')
-    l('#undef _GD')
-    l('#undef _ON')
-    l('#undef _OFF')
-    l('#undef _T')
-    l('#undef _TW')
-    l('#undef _MR')
-    l('#undef _MW')
-    l('#undef _IN')
-    l('#undef _OUT')
-    l('#undef _FETCH')
-    l('#undef _FETCH_CB')
-    l('#undef _IMM16')
-    l('#undef _ADD_FLAGS')
-    l('#undef _SUB_FLAGS')
-    l('#undef _CP_FLAGS')
-
-#-------------------------------------------------------------------------------
-#   Generate the SZP flags lookup table.
-#
-def write_szp_table():
-    Z80_PF =  (1<<2)
-    Z80_XF =  (1<<3)
-    Z80_YF =  (1<<5)
-    Z80_ZF =  (1<<6)
-    Z80_SF =  (1<<7)
-    s = ''
-    l('static uint8_t _z80_szp[256] = {')
-    for v in range(0, 256):
-        p = 0
-        for i in range(0, 8):
-            if v & (1<<i):
-                p += 1
-        f = (v & Z80_SF) if v else Z80_ZF
-        f |= v & (Z80_YF|Z80_XF)
-        if (p & 1) == 0:
-            f |= Z80_PF
-        s += '0x{:02x},'.format(f)
-        if (v % 16) == 15:
-            l('  '+s)
-            s = ''
-    l('};')
-
-#-------------------------------------------------------------------------------
 #   Generate code for one or more 'ticks', call tick callback and increment 
 #   the ticks counter.
 #
@@ -169,11 +78,7 @@ def tick(num=1):
     return '_T('+str(num)+');'
 
 #-------------------------------------------------------------------------------
-#   Generate code for an opcode fetch. If xxcb_ext is true, the special
-#   opcode fetch following a DD/FD+CB prefix instruction is generated
-#   which doesn't increment the R register
-#
-#    instruction fetch machine cycle (M1)
+# instruction fetch machine cycle (M1):
 #              T1   T2   T3   T4
 #    --------+----+----+----+----+
 #    CLK     |--**|--**|--**|--**|
@@ -185,15 +90,7 @@ def tick(num=1):
 #    D7-D0   |    |   X|    |    |
 #    RFSH    |    |    |****|****|
 #
-def fetch(xxcb_ext):
-    if xxcb_ext:
-        return '_FETCH_CB(opcode);'
-    else:
-        return '_FETCH(opcode);'
-
-#-------------------------------------------------------------------------------
-#   Generate code for a memory-read machine cycle
-#
+# memory-read machine cycle:
 #              T1   T2   T3
 #    --------+----+----+----+
 #    CLK     |--**|--**|--**|
@@ -204,12 +101,7 @@ def fetch(xxcb_ext):
 #    D7-D0   |    |    | X  |
 #    WAIT    |    | -- |    |
 #
-def rd(addr,res):
-    return '_MR('+addr+','+res+');'
-
-#-------------------------------------------------------------------------------
-#   Generate code for a memory-write machine cycle
-#
+# memory-write machine cycle:
 #              T1   T2   T3
 #    --------+----+----+----+
 #    CLK     |--**|--**|--**|
@@ -220,12 +112,7 @@ def rd(addr,res):
 #    D7-D0   |   X|XXXX|XXXX|
 #    WAIT    |    | -- |    |
 #
-def wr(addr,val):
-    return '_MW('+addr+','+val+');'
-
-#-------------------------------------------------------------------------------
-#   Generate code for an input machine cycle.
-#
+# input machine cycle:
 #              T1   T2   TW   T3
 #    --------+----+----+----+----+
 #    CLK     |--**|--**|--**|--**|
@@ -240,12 +127,7 @@ def wr(addr,val):
 #   pins from T2 to TW, so that the pins will only be active 
 #   for one tick (assuming no wait states)
 #
-def inp(addr,res):
-    return '_IN('+addr+','+res+');'
-
-#-------------------------------------------------------------------------------
-#   Generate code for output machine cycle.
-#
+# output machine cycle:
 #              T1   T2   TW   T3
 #    --------+----+----+----+----+
 #    CLK     |--**|--**|--**|--**|
@@ -259,8 +141,76 @@ def inp(addr,res):
 #    NOTE: the IORQ|WR pins will already be switched off at the beginning
 #    of TW, so that IO devices don't need to do double work.
 #
-def out(addr,val):
-    return '_OUT('+addr+','+val+');'
+
+#-------------------------------------------------------------------------------
+# write source header
+#
+def write_header() :
+    l('    uint64_t r0 = cpu->bc_de_hl_fa;')
+    l('    uint64_t r1 = cpu->wz_ix_iy_sp;')
+    l('    uint64_t r2 = cpu->im_ir_pc_bits;')
+    l('    uint64_t r3 = cpu->bc_de_hl_fa_;')
+    l('    uint64_t ws = _z80m_map_regs(r0, r1, r2);')
+    l('    uint64_t map_bits = r2 & _BITS_MAP_REGS;')
+    l('    uint64_t pins = cpu->pins;')
+    l('    const uint64_t trap_addr = cpu->trap_addr;')
+    l('    const z80m_tick_t tick = cpu->tick;')
+    l('    void* ud = cpu->user_data;')
+    l('    int trap_id = -1;')
+    l('    uint32_t ticks = 0;')
+    l('    uint8_t op, d8;')
+    l('    uint16_t addr, d16;')
+    l('    uint16_t pc = _G_PC();')
+    l('    do {')
+    l('        _OFF(Z80M_INT);')
+    l('        /* delay-enable interrupt flags */')
+    l('        if (r2 & _BIT_EI) {')
+    l('            r2 &= ~_BIT_EI;')
+    l('            r2 |= (_BIT_IFF1 | _BIT_IFF2);')
+    l('        }')
+    l('        _FETCH(op)')
+    l('        if (op == 0xED) {')
+    l('            map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
+    l('        }')
+    l('        if (map_bits != (r2 & _BITS_MAP_REGS)) {')
+    l('            const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;')
+    l('            r0 = _z80m_flush_r0(ws, r0, old_map_bits);')
+    l('            r1 = _z80m_flush_r1(ws, r1, old_map_bits);')
+    l('            r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
+    l('            ws = _z80m_map_regs(r0, r1, r2);')
+    l('        }')
+
+#-------------------------------------------------------------------------------
+# write source footer
+#
+def write_footer() :
+    l('        map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
+    l('        if (trap_addr != 0xFFFFFFFFFFFFFFFF) {
+    l('            uint64_t ta = trap_addr;
+    l('            for (int i = 0; i < Z80M_MAX_NUM_TRAPS; i++) {
+    l('                ta >>= 16;
+    l('                if (((ta & 0xFFFF) == pc) && (pc != 0xFFFF)) {
+    l('                    trap_id = i;
+    l('                    break;
+    l('                }
+    l('            }
+    l('        }
+    l('    } while ((ticks < num_ticks) && (trap_id < 0));
+    l('    _S_PC(pc);
+    l('    {
+    l('        uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
+    l('        r0 = _z80m_flush_r0(ws, r0, old_map_bits);
+    l('        r1 = _z80m_flush_r1(ws, r1, old_map_bits);
+    l('    }
+    l('    r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
+    l('    cpu->bc_de_hl_fa = r0;
+    l('    cpu->wz_ix_iy_sp = r1;
+    l('    cpu->im_ir_pc_bits = r2;
+    l('    cpu->bc_de_hl_fa_ = r3;
+    l('    cpu->pins = pins;
+    l('    cpu->trap_id = trap_id;
+    l('    return ticks;
+    l('}
 
 #-------------------------------------------------------------------------------
 #   Generate code for checking and handling an interrupt request at
@@ -296,35 +246,41 @@ def out(addr,val):
 #   INT MODE 2: 19 cycles
 #
 def write_interrupt_handling():
-    l('    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && c.IFF1) {')
-    l('      c.IFF1=c.IFF2=false;')
-    l('      if (pins & Z80_HALT) { pins &= ~Z80_HALT; c.PC++; }')
-    l('      _ON(Z80_M1|Z80_IORQ);')
-    l('      _SA(c.PC);')
-    l('      _TW(4);')
-    l('      const uint8_t int_vec=_GD();')
-    l('      _OFF(Z80_M1|Z80_IORQ);')
-    l('      c.R=(c.R&0x80)|((c.R+1)&0x7F);')
-    l('      _T(2);')
-    l('      if (c.IM==1) {')
-    l('        _MW(--c.SP,(uint8_t)(c.PC>>8));')
-    l('        _MW(--c.SP,(uint8_t)(c.PC));')
-    l('        c.PC=c.WZ=0x0038;')
-    l('      }')
-    l('      else if (c.IM==2) {')
-    l('        _MW(--c.SP,(uint8_t)(c.PC>>8));')
-    l('        _MW(--c.SP,(uint8_t)(c.PC));')
-    l('        a=(c.I<<8)|(int_vec&0xFE);')
-    l('        {')
-    l('          uint8_t w,z;')
-    l('          _MR(a++,z);')
-    l('          _MR(a,w);')
-    l('          c.PC=c.WZ=(w<<8)|z;')
-    l('        }')
-    l('      } else {')
-    l('        /*CHIPS_ASSERT(false);*/')
-    l('      }')
-    l('    }')
+    l('            if (((pins & (Z80M_INT|Z80M_BUSREQ))==Z80M_INT) && (r2 & _BIT_IFF1)) {')
+    l('                r2 &= ~(_BIT_IFF1|_BIT_IFF2);')
+    l('                if (pins & Z80M_HALT) {')
+    l('                    pins &= ~Z80M_HALT;')
+    l('                    pc++;')
+    l('                }')
+    l('                _ON(Z80M_M1|Z80M_IORQ);')
+    l('                _SA(pc);')
+    l('                _TW(4);')
+    l('                const uint8_t int_vec = _GD();')
+    l('                _OFF(Z80M_M1|Z80M_IORQ);')
+    l('                _BUMPR();')
+    l('                _T(2);')
+    l('                uint16_t sp = _G_SP();')
+    l('                _MW(--sp,pc>>8);')
+    l('                _MW(--sp,pc);')
+    l('                _S_SP(sp);')
+    l('                switch (_G_IM()) {')
+    l('                    case 0:')
+    l('                        break;')
+    l('                    case 1:')
+    l('                        pc = 0x0038;')
+    l('                        break;')
+    l('                    case 2:')
+    l('                        {')
+    l('                            addr = _G8_I() | (int_vec & 0xFE);')
+    l('                            uint8_t z,w;')
+    l('                            _MR(addr++,z);')
+    l('                            _MR(addr,w);')
+    l('                            pc = (w<<8)|z;')
+    l('                        }')
+    l('                        break;')
+    l('                }')
+    l('                _S_WZ(pc);')
+    l('            }')
 
 #-------------------------------------------------------------------------------
 # return comment string for (HL), (IX+d), (IY+d)
@@ -340,71 +296,36 @@ def iHLcmt(ext) :
 # or (IX+d), (IY+d). For the index instructions also update WZ with
 # IX+d or IY+d
 #
-def iHLsrc(ext) :
-    if (ext) :
-        # IX+d or IY+d
-        return '{int8_t d;'+rd('c.PC++','d')+';a=c.WZ=c.'+r[6]+'+d;}'
-    else :
-        # HL
-        return 'a=c.'+r[6]+';'
+def addr(ext_ticks) :
+    return '_ADDR(addr,'+ext_ticks+');'
 
 #-------------------------------------------------------------------------------
-# Return code to setup an variable 'a' with the address of HL or (IX+d), (IY+d).
+# Return code to setup an variable 'addr' with the address of HL or (IX+d), (IY+d).
 # For the index instructions, also update WZ with IX+d or IY+d
 #
 def iHLdsrc(ext) :
-    if (ext) :
-        # IX+d or IY+d
-        return 'a=c.WZ=c.'+r[6]+'+d;'
-    else :
-        # HL
-        return 'a=c.'+r[6]+';'
-
-#-------------------------------------------------------------------------------
-# Return string with num ticks or empty string depending on 'ext'
-#
-def ext_ticks(ext, num):
-    if ext:
-        return tick(num)
-    else:
-        return ''
-
-#-------------------------------------------------------------------------------
-#   imm16()
-#
-#   Generate code for a 16-bit immediate load into WZ
-#
-def imm16():
-    return '_IMM16();'
-
-#-------------------------------------------------------------------------------
-#   swp16()
-#
-#   Generate code to swap 2 16-bit values.
-#
-def swp16(val0,val1):
-    return '{uint16_t tmp='+val0+';'+val0+'='+val1+';'+val1+'=tmp;}'
+    return "FIXME!"
 
 #-------------------------------------------------------------------------------
 #   Flag computation helpers
 #
 def sz(val):
-    return '_SZ('+val+')'
+    return '_z80_sz('+val+')'
 
 def szyxch(acc,val,res):
-    return '_SZYXCH('+acc+','+val+','+res+')'
+    return '_z80_szyxch('+acc+','+val+','+res+')'
 
 def add_flags(acc,val,res):
-    return '_ADD_FLAGS('+acc+','+val+','+res+')'
+    return '_z80_add_flags('+acc+','+val+','+res+')'
 
 def sub_flags(acc,val,res):
-    return '_SUB_FLAGS('+acc+','+val+','+res+')'
+    return '_z80_sub_flags('+acc+','+val+','+res+')'
 
 def cp_flags(acc,val,res):
-    return '_CP_FLAGS('+acc+','+val+','+res+')'
+    return '_z80_cp_flags('+acc+','+val+','+res+')'
 
 def sziff2(val):
-    return '('+sz(val)+'|('+val+'&(Z80_YF|Z80_XF))|(c.IFF2?Z80_PF:0))'
+    return '_z80_sziff2_flags('+sz(val)+'|('+val+'&(Z80_YF|Z80_XF))|(c.IFF2?Z80_PF:0))'
 
 #-------------------------------------------------------------------------------
 #   out_n_a
@@ -412,10 +333,14 @@ def sziff2(val):
 #   Generate code for OUT (n),A
 #
 def out_n_a():
-    src =rd('c.PC++','v')
-    src+='c.WZ=((c.A<<8)|v);'
-    src+=out('c.WZ','c.A')
-    src+='{uint8_t z=(uint8_t)c.WZ;z++;c.WZ=(c.WZ&0xFF00)|z;}'
+    src = '{'
+    src += '_IMM8(d8);'
+    src += 'uint8_t a=_G_A();'
+    src += 'addr=(a<<8)|d8;'
+    src += '_OUT(addr,a);'
+    src += 'addr=(addr&0xFF00)|((addr+1)&0x00FF);'
+    src += '_S_WZ(addr);'
+    src += '}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -424,9 +349,14 @@ def out_n_a():
 #   Generate code for IN A,(n)
 #
 def in_n_a():
-    src =rd('c.PC++','v')
-    src+='c.WZ=((c.A<<8)|v);'
-    src+=inp('c.WZ++','c.A')
+    src = '{'
+    src += '_IMM8(d8);'
+    src += 'uint8_t a=_G_();'
+    src += 'addr=(a<<8)|d8;'
+    src += '_IN(addr++,a);'
+    src += '_S_A(a);'
+    src += '_S_WZ(addr);'
+    src += '}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -1826,8 +1756,6 @@ def unpatch_reg_tables() :
 #
 def write_header() :
     l('/* machine generated, do not edit! */')
-    write_szp_table()
-    write_defines()
     l('uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {')
     l('  z80_state_t c = cpu->state;')
     l('  const z80_tick_t tick = cpu->tick;')
@@ -1859,7 +1787,6 @@ def write_footer() :
     l('  cpu->trap_id = trap_id;')
     l('  return ticks;')
     l('}')
-    write_undefines()
 
 #-------------------------------------------------------------------------------
 # begin a new instruction group (begins a switch statement)
