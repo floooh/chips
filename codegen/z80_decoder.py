@@ -21,13 +21,8 @@ OutPath = '../chips/_z80_decoder.h'
 Out = None
 
 # 8-bit register table, the 'HL' entry is for instructions that use
-# (HL), (IX+d) and (IY+d), and will be patched to 'IX' or 'IY' for
-# the DD/FD prefix instructions
+# (HL), (IX+d) and (IY+d)
 r = [ 'B', 'C', 'D', 'E', 'H', 'L', 'HL', 'A' ]
-
-# the same, but the 'HL' item is never patched to IX/IY, this is
-# for indexed instructions that load into H or L (e.g. LD H,(IX+d))
-r2 = [ 'B', 'C', 'D', 'E', 'H', 'L', 'HL', 'A' ]
 
 # 16-bit register table, with SP
 rp = [ 'BC', 'DE', 'HL', 'SP' ]
@@ -146,71 +141,74 @@ def tick(num=1):
 # write source header
 #
 def write_header() :
-    l('    uint64_t r0 = cpu->bc_de_hl_fa;')
-    l('    uint64_t r1 = cpu->wz_ix_iy_sp;')
-    l('    uint64_t r2 = cpu->im_ir_pc_bits;')
-    l('    uint64_t r3 = cpu->bc_de_hl_fa_;')
-    l('    uint64_t ws = _z80m_map_regs(r0, r1, r2);')
-    l('    uint64_t map_bits = r2 & _BITS_MAP_REGS;')
-    l('    uint64_t pins = cpu->pins;')
-    l('    const uint64_t trap_addr = cpu->trap_addr;')
-    l('    const z80m_tick_t tick = cpu->tick;')
-    l('    void* ud = cpu->user_data;')
-    l('    int trap_id = -1;')
-    l('    uint32_t ticks = 0;')
-    l('    uint8_t op, d8;')
-    l('    uint16_t addr, d16;')
-    l('    uint16_t pc = _G_PC();')
-    l('    do {')
-    l('        _OFF(Z80M_INT);')
-    l('        /* delay-enable interrupt flags */')
-    l('        if (r2 & _BIT_EI) {')
-    l('            r2 &= ~_BIT_EI;')
-    l('            r2 |= (_BIT_IFF1 | _BIT_IFF2);')
-    l('        }')
-    l('        _FETCH(op)')
-    l('        if (op == 0xED) {')
-    l('            map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
-    l('        }')
-    l('        if (map_bits != (r2 & _BITS_MAP_REGS)) {')
-    l('            const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;')
-    l('            r0 = _z80m_flush_r0(ws, r0, old_map_bits);')
-    l('            r1 = _z80m_flush_r1(ws, r1, old_map_bits);')
-    l('            r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
-    l('            ws = _z80m_map_regs(r0, r1, r2);')
-    l('        }')
+    l('uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {')
+    l('  uint64_t r0 = cpu->bc_de_hl_fa;')
+    l('  uint64_t r1 = cpu->wz_ix_iy_sp;')
+    l('  uint64_t r2 = cpu->im_ir_pc_bits;')
+    l('  uint64_t r3 = cpu->bc_de_hl_fa_;')
+    l('  uint64_t ws = _z80m_map_regs(r0, r1, r2);')
+    l('  uint64_t map_bits = r2 & _BITS_MAP_REGS;')
+    l('  uint64_t pins = cpu->pins;')
+    l('  const uint64_t trap_addr = cpu->trap_addr;')
+    l('  const z80m_tick_t tick = cpu->tick;')
+    l('  void* ud = cpu->user_data;')
+    l('  int trap_id = -1;')
+    l('  uint32_t ticks = 0;')
+    l('  uint8_t op, d8;')
+    l('  uint16_t addr, d16;')
+    l('  uint16_t pc = _G_PC();')
+    l('  do {')
+    l('    _OFF(Z80M_INT);')
+    l('    /* delay-enable interrupt flags */')
+    l('    if (r2 & _BIT_EI) {')
+    l('      r2 &= ~_BIT_EI;')
+    l('      r2 |= (_BIT_IFF1 | _BIT_IFF2);')
+    l('    }')
+    l('    _FETCH(op)')
+    l('    if (op == 0xED) {')
+    l('      map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
+    l('    }')
+    l('    if (map_bits != (r2 & _BITS_MAP_REGS)) {')
+    l('      const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;')
+    l('      r0 = _z80m_flush_r0(ws, r0, old_map_bits);')
+    l('      r1 = _z80m_flush_r1(ws, r1, old_map_bits);')
+    l('      r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
+    l('      ws = _z80m_map_regs(r0, r1, r2);')
+    l('    }')
+    l('    switch (op) {')
 
 #-------------------------------------------------------------------------------
 # write source footer
 #
 def write_footer() :
-    l('        map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
-    l('        if (trap_addr != 0xFFFFFFFFFFFFFFFF) {
-    l('            uint64_t ta = trap_addr;
-    l('            for (int i = 0; i < Z80M_MAX_NUM_TRAPS; i++) {
-    l('                ta >>= 16;
-    l('                if (((ta & 0xFFFF) == pc) && (pc != 0xFFFF)) {
-    l('                    trap_id = i;
-    l('                    break;
-    l('                }
-    l('            }
-    l('        }
-    l('    } while ((ticks < num_ticks) && (trap_id < 0));
-    l('    _S_PC(pc);
-    l('    {
-    l('        uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
-    l('        r0 = _z80m_flush_r0(ws, r0, old_map_bits);
-    l('        r1 = _z80m_flush_r1(ws, r1, old_map_bits);
-    l('    }
-    l('    r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
-    l('    cpu->bc_de_hl_fa = r0;
-    l('    cpu->wz_ix_iy_sp = r1;
-    l('    cpu->im_ir_pc_bits = r2;
-    l('    cpu->bc_de_hl_fa_ = r3;
-    l('    cpu->pins = pins;
-    l('    cpu->trap_id = trap_id;
-    l('    return ticks;
-    l('}
+    l('    }')
+    l('    map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
+    l('    if (trap_addr != 0xFFFFFFFFFFFFFFFF) {')
+    l('      uint64_t ta = trap_addr;')
+    l('      for (int i = 0; i < Z80M_MAX_NUM_TRAPS; i++) {')
+    l('        ta >>= 16;')
+    l('        if (((ta & 0xFFFF) == pc) && (pc != 0xFFFF)) {')
+    l('          trap_id = i;')
+    l('          break;')
+    l('        }')
+    l('      }')
+    l('    }')
+    l('  } while ((ticks < num_ticks) && (trap_id < 0));')
+    l('  _S_PC(pc);')
+    l('  {')
+    l('    uint64_t old_map_bits = r2 & _BITS_MAP_REGS;')
+    l('    r0 = _z80m_flush_r0(ws, r0, old_map_bits);')
+    l('    r1 = _z80m_flush_r1(ws, r1, old_map_bits);')
+    l('  }')
+    l('  r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
+    l('  cpu->bc_de_hl_fa = r0;')
+    l('  cpu->wz_ix_iy_sp = r1;')
+    l('  cpu->im_ir_pc_bits = r2;')
+    l('  cpu->bc_de_hl_fa_ = r3;')
+    l('  cpu->pins = pins;')
+    l('  cpu->trap_id = trap_id;')
+    l('  return ticks;')
+    l('}')
 
 #-------------------------------------------------------------------------------
 #   Generate code for checking and handling an interrupt request at
@@ -246,50 +244,41 @@ def write_footer() :
 #   INT MODE 2: 19 cycles
 #
 def write_interrupt_handling():
-    l('            if (((pins & (Z80M_INT|Z80M_BUSREQ))==Z80M_INT) && (r2 & _BIT_IFF1)) {')
-    l('                r2 &= ~(_BIT_IFF1|_BIT_IFF2);')
-    l('                if (pins & Z80M_HALT) {')
-    l('                    pins &= ~Z80M_HALT;')
-    l('                    pc++;')
-    l('                }')
-    l('                _ON(Z80M_M1|Z80M_IORQ);')
-    l('                _SA(pc);')
-    l('                _TW(4);')
-    l('                const uint8_t int_vec = _GD();')
-    l('                _OFF(Z80M_M1|Z80M_IORQ);')
-    l('                _BUMPR();')
-    l('                _T(2);')
-    l('                uint16_t sp = _G_SP();')
-    l('                _MW(--sp,pc>>8);')
-    l('                _MW(--sp,pc);')
-    l('                _S_SP(sp);')
-    l('                switch (_G_IM()) {')
-    l('                    case 0:')
-    l('                        break;')
-    l('                    case 1:')
-    l('                        pc = 0x0038;')
-    l('                        break;')
-    l('                    case 2:')
-    l('                        {')
-    l('                            addr = _G8_I() | (int_vec & 0xFE);')
-    l('                            uint8_t z,w;')
-    l('                            _MR(addr++,z);')
-    l('                            _MR(addr,w);')
-    l('                            pc = (w<<8)|z;')
-    l('                        }')
-    l('                        break;')
-    l('                }')
-    l('                _S_WZ(pc);')
-    l('            }')
-
-#-------------------------------------------------------------------------------
-# return comment string for (HL), (IX+d), (IY+d)
-#
-def iHLcmt(ext) :
-    if (ext) :
-        return '('+r[6]+'+d)'
-    else :
-        return '('+r[6]+')'
+    l('    if (((pins & (Z80M_INT|Z80M_BUSREQ))==Z80M_INT) && (r2 & _BIT_IFF1)) {')
+    l('      r2 &= ~(_BIT_IFF1|_BIT_IFF2);')
+    l('      if (pins & Z80M_HALT) {')
+    l('        pins &= ~Z80M_HALT;')
+    l('        pc++;')
+    l('      }')
+    l('      _ON(Z80M_M1|Z80M_IORQ);')
+    l('      _SA(pc);')
+    l('      _TW(4);')
+    l('      const uint8_t int_vec = _GD();')
+    l('      _OFF(Z80M_M1|Z80M_IORQ);')
+    l('      _BUMPR();')
+    l('      _T(2);')
+    l('      uint16_t sp = _G_SP();')
+    l('      _MW(--sp,pc>>8);')
+    l('      _MW(--sp,pc);')
+    l('      _S_SP(sp);')
+    l('      switch (_G_IM()) {')
+    l('        case 0:')
+    l('          break;')
+    l('        case 1:')
+    l('          pc = 0x0038;')
+    l('          break;')
+    l('        case 2:')
+    l('          {')
+    l('            addr = _G8_I() | (int_vec & 0xFE);')
+    l('            uint8_t z,w;')
+    l('            _MR(addr++,z);')
+    l('            _MR(addr,w);')
+    l('            pc = (w<<8)|z;')
+    l('          }')
+    l('          break;')
+    l('      }')
+    l('      _S_WZ(pc);')
+    l('    }')
 
 #-------------------------------------------------------------------------------
 # Return code to setup an address variable 'a' with the address of HL
@@ -297,7 +286,7 @@ def iHLcmt(ext) :
 # IX+d or IY+d
 #
 def addr(ext_ticks) :
-    return '_ADDR(addr,'+ext_ticks+');'
+    return '_ADDR(addr,'+str(ext_ticks)+');'
 
 #-------------------------------------------------------------------------------
 # Return code to setup an variable 'addr' with the address of HL or (IX+d), (IY+d).
@@ -454,8 +443,8 @@ def bit_n_idd(ext, y):
 #   Generate code for BIT n,r
 #
 def bit_n_r(y,z):
-    src ='v=c.'+r2[z]+'&'+hex(1<<y)+';'
-    src+='f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|(c.'+r2[z]+'&(Z80_YF|Z80_XF));'
+    src ='v=c.'+r[z]+'&'+hex(1<<y)+';'
+    src+='f=Z80_HF|(v?(v&Z80_SF):(Z80_ZF|Z80_PF))|(c.'+r[z]+'&(Z80_YF|Z80_XF));'
     src+='c.F=f|(c.F&Z80_CF);'
     return src
 
@@ -482,8 +471,8 @@ def res_n_idd_r(ext, y, z):
     src+=tick()
     src+=ext_ticks(ext,1)
     src+=rd('a','v')
-    src+='c.'+r2[z]+'=v&~'+hex(1<<y)+';'
-    src+=wr('a','c.'+r2[z])
+    src+='c.'+r[z]+'=v&~'+hex(1<<y)+';'
+    src+=wr('a','c.'+r[z])
     return src
 
 #-------------------------------------------------------------------------------
@@ -509,8 +498,8 @@ def set_n_idd_r(ext, y, z):
     src+=tick()
     src+=ext_ticks(ext,1)
     src+=rd('a','v')
-    src+='c.'+r2[z]+'=v|'+hex(1<<y)+';'
-    src+=wr('a','c.'+r2[z])
+    src+='c.'+r[z]+'=v|'+hex(1<<y)+';'
+    src+=wr('a','c.'+r[z])
     return src
 
 #-------------------------------------------------------------------------------
@@ -1203,7 +1192,7 @@ def rot_idd_r(y, z):
     src+=tick(2)
     src+=rd('a','v')
     src+=rot(y,'v')
-    src+='c.'+r2[z]+'=v;'
+    src+='c.'+r[z]+'=v;'
     src+=wr('a','v')
     return src
 
@@ -1239,7 +1228,7 @@ def daa():
     return src
 
 def halt():
-    return '_ON(Z80_HALT);c.PC--;'
+    return '_ON(Z80_HALT);pc--;'
 
 def di():
     return 'c.IFF1=c.IFF2=false;'
@@ -1286,27 +1275,36 @@ def enc_op(op, ext) :
                 o.src = halt()
             else:
                 # LD (HL),r; LD (IX+d),r; LD (IX+d),r
-                o.cmt = 'LD '+iHLcmt(ext)+','+r2[z]
-                o.src = iHLsrc(ext)+ext_ticks(ext,5)+wr('a','c.'+r2[z])
+                o.cmt = 'LD (HL/IX+d/IY+d),'+r[z]
+                # special case LD (IX+d),L LD (IX+d),H
+                if z in [4,5]:
+                    o.src = 'd8=(_IDX()?_G8(r0,_'+r[z]+'):_G_'+r[z]+'();'
+                else:
+                    o.src = 'd8=_G_'+r[z]+'();'
+                o.src += addr(5)+'_MW(addr,d8);'
         elif z == 6:
             # LD r,(HL); LD r,(IX+d); LD r,(IY+d)
-            o.cmt = 'LD '+r2[y]+','+iHLcmt(ext)
-            o.src = iHLsrc(ext)+ext_ticks(ext,5)+rd('a','c.'+r2[y])
+            o.cmt = 'LD '+r[y]+',(HL/IX+d/IY+d)'
+            o.src = addr(5)+'_MR(addr,d8);'
+            if y in [4,5]:
+                o.src += '_S8(r0,_'+r[y]+',d8);'
+            else:
+                o.src += '_S_'+r[y]+'(d8);'
         else:
             # LD r,s
             o.cmt = 'LD '+r[y]+','+r[z]
-            o.src = 'c.'+r[y]+'=c.'+r[z]+';'
+            o.src = '_S_'+r[y]+'(_G_'+r[z]+'());'
 
     #---- block 2: 8-bit ALU instructions (ADD, ADC, SUB, SBC, AND, XOR, OR, CP)
-    elif x == 2:
-        if z == 6:
-            # ALU (HL); ALU (IX+d); ALU (IY+d)
-            o.cmt = alu_cmt[y]+' '+iHLcmt(ext)
-            o.src = iHLsrc(ext)+ext_ticks(ext,5)+rd('a','v')+alu8(y,'v')
-        else:
-            # ALU r
-            o.cmt = alu_cmt[y]+' '+r[z]
-            o.src = alu8(y,'c.'+r[z])
+    #elif x == 2:
+    #    if z == 6:
+    #        # ALU (HL); ALU (IX+d); ALU (IY+d)
+    #        o.cmt = alu_cmt[y]+' '+iHLcmt(ext)
+    #        o.src = iHLsrc(ext)+ext_ticks(ext,5)+rd('a','v')+alu8(y,'v')
+    #    else:
+    #        # ALU r
+    #        o.cmt = alu_cmt[y]+' '+r[z]
+    #        o.src = alu8(y,'c.'+r[z])
 
     #---- block 0: misc ops
     elif x == 0:
@@ -1315,42 +1313,42 @@ def enc_op(op, ext) :
                 # NOP
                 o.cmt = 'NOP'
                 o.src = ' '
-            elif y == 1:
-                # EX AF,AF'
-                o.cmt = "EX AF,AF'"
-                o.src = swp16('c.AF','c.AF_')
-            elif y == 2:
-                # DJNZ d
-                o.cmt = 'DJNZ'
-                o.src = djnz()
-            elif  y == 3:
-                # JR d
-                o.cmt = 'JR d'
-                o.src = jr()
-            else:
-                # JR cc,d
-                o.cmt = 'JR '+cond_cmt[y-4]+',d'
-                o.src = jr_cc(y)
+    #        elif y == 1:
+    #             # EX AF,AF'
+    #             o.cmt = "EX AF,AF'"
+    #             o.src = swp16('c.AF','c.AF_')
+    #        elif y == 2:
+    #             # DJNZ d
+    #             o.cmt = 'DJNZ'
+    #             o.src = djnz()
+    #        elif  y == 3:
+    #             # JR d
+    #             o.cmt = 'JR d'
+    #             o.src = jr()
+    #        else:
+    #             # JR cc,d
+    #             o.cmt = 'JR '+cond_cmt[y-4]+',d'
+    #             o.src = jr_cc(y)
         elif z == 1:
             if q == 0:
                 # 16-bit immediate loads
                 o.cmt = 'LD '+rp[p]+',nn'
-                o.src = imm16()+'c.'+rp[p]+'=c.WZ;'
-            else :
-                # ADD HL,rr; ADD IX,rr; ADD IY,rr
-                o.cmt = 'ADD '+rp[2]+','+rp[p]
-                o.src = add16('c.'+rp[2],'c.'+rp[p])
+                o.src = '_IMM16(d16); _S_'+rp[p]+'(d16);'
+    #         else :
+    #             # ADD HL,rr; ADD IX,rr; ADD IY,rr
+    #             o.cmt = 'ADD '+rp[2]+','+rp[p]
+    #             o.src = add16('c.'+rp[2],'c.'+rp[p])
         elif z == 2:
             # indirect loads
             op_tbl = [
-                [ 'LD (BC),A', 'c.WZ=c.BC;'+wr('c.WZ++','c.A')+';c.WZ=(c.WZ&0x00FF)|(c.A<<8);' ],
-                [ 'LD A,(BC)', 'c.WZ=c.BC;'+rd('c.WZ++','c.A')+';' ],
-                [ 'LD (DE),A', 'c.WZ=c.DE;'+wr('c.WZ++','c.A')+';c.WZ=(c.WZ&0x00FF)|(c.A<<8);' ],
-                [ 'LD A,(DE)', 'c.WZ=c.DE;'+rd('c.WZ++','c.A')+';' ],
-                [ 'LD (nn),'+rp[2], imm16()+wr('c.WZ++','(uint8_t)c.'+rp[2])+wr('c.WZ','(uint8_t)(c.'+rp[2]+'>>8)') ],
-                [ 'LD '+rp[2]+',(nn)', imm16()+'{uint8_t l,h;'+rd('c.WZ++','l')+rd('c.WZ','h')+'c.'+rp[2]+'=(h<<8)|l;}' ],
-                [ 'LD (nn),A', imm16()+wr('c.WZ++','c.A')+';c.WZ=(c.WZ&0x00FF)|(c.A<<8);' ],
-                [ 'LD A,(nn)', imm16()+rd('c.WZ++','c.A')+';' ]
+                [ 'LD (BC),A',          'addr=_G_BC();d8=_G_A();_MW(addr++,d8);_S_WZ((d8<<8)|(addr&0x00FF));' ],
+                [ 'LD A,(BC)',          'addr=_G_BC();_MR(addr++,d8);_S_A(d8);_S_WZ(addr);' ],
+                [ 'LD (DE),A',          'addr=_G_DE();d8=_G_A();_MW(addr++,d8);_S_WZ((d8<<8)|(addr&0x00FF));' ],
+                [ 'LD A,(DE)',          'addr=_G_DE();_MR(addr++,d8);_S_A(d8);_S_WZ(addr);' ],
+                [ 'LD (nn),'+rp[2],     '_IMM16(addr);_MW(addr++,_G_L());_MW(addr,_G_H());_S_WZ(addr);' ],
+                [ 'LD '+rp[2]+',(nn)',  '_IMM16(addr);_MR(addr++,d8);_S_L(d8);_MR(addr,d8);_S_H(d8);_S_WZ(addr);' ],
+                [ 'LD (nn),A',          '_IMM16(addr);d8=_G_A();_MW(addr++,d8);_S_WZ((d8<<8)|(addr&0x00FF));' ],
+                [ 'LD A,(nn)',          '_IMM16(addr);_MR(addr++,d8);_S_A(d8);_S_WZ(addr);' ],
             ]
             o.cmt = op_tbl[y][0]
             o.src = op_tbl[y][1]
@@ -1358,110 +1356,110 @@ def enc_op(op, ext) :
             # 16-bit INC/DEC 
             if q == 0:
                 o.cmt = 'INC '+rp[p]
-                o.src = tick(2)+'c.'+rp[p]+'++;'.format(rp[p])
+                o.src = '_T(2);d16=_G_'+rp[p]+'()+1;_S_'+rp[p]+'(d16);'
             else:
                 o.cmt = 'DEC '+rp[p]
-                o.src = tick(2)+'c.'+rp[p]+'--;'.format(rp[p])
-        elif z == 4 or z == 5:
-            cmt = 'INC' if z == 4 else 'DEC'
-            if y == 6:
-                # INC/DEC (HL)/(IX+d)/(IY+d)
-                o.cmt = cmt+' '+iHLcmt(ext)
-                fn = inc8('v') if z==4 else dec8('v')
-                o.src = iHLsrc(ext)+ext_ticks(ext,5)+tick()+rd('a','v')+fn+wr('a','v')
-            else:
-                # INC/DEC r
-                o.cmt = cmt+' '+r[y]
-                o.src = inc8('c.'+r[y]) if z==4 else dec8('c.'+r[y])
-        elif z == 6:
-            if y == 6:
-                # LD (HL),n; LD (IX+d),n; LD (IY+d),n
-                o.cmt = 'LD '+iHLcmt(ext)+',n'
-                o.src = iHLsrc(ext)+ext_ticks(ext,2)+rd('c.PC++','v')+wr('a','v')
-            else:
-                # LD r,n
-                o.cmt = 'LD '+r[y]+',n'
-                o.src = rd('c.PC++','c.'+r[y])
-        elif z == 7:
-            # misc ops on A and F
-            op_tbl = [
-                [ 'RLCA', rlca() ],
-                [ 'RRCA', rrca() ],
-                [ 'RLA',  rla() ],
-                [ 'RRA',  rra() ],
-                [ 'DAA',  daa() ],
-                [ 'CPL',  cpl() ],
-                [ 'SCF',  scf() ],
-                [ 'CCF',  ccf() ]
-            ]
-            o.cmt = op_tbl[y][0]
-            o.src = op_tbl[y][1]
+                o.src = '_T(2);d16=_G_'+rp[p]+'()-1;_S_'+rp[p]+'(d16);'
+    #    elif z == 4 or z == 5:
+    #         cmt = 'INC' if z == 4 else 'DEC'
+    #         if y == 6:
+    #             # INC/DEC (HL)/(IX+d)/(IY+d)
+    #             o.cmt = cmt+' '+iHLcmt(ext)
+    #             fn = inc8('v') if z==4 else dec8('v')
+    #             o.src = iHLsrc(ext)+ext_ticks(ext,5)+tick()+rd('a','v')+fn+wr('a','v')
+    #         else:
+    #             # INC/DEC r
+    #             o.cmt = cmt+' '+r[y]
+    #             o.src = inc8('c.'+r[y]) if z==4 else dec8('c.'+r[y])
+    #    elif z == 6:
+    #        if y == 6:
+    #             # LD (HL),n; LD (IX+d),n; LD (IY+d),n
+    #             o.cmt = 'LD '+iHLcmt(ext)+',n'
+    #             o.src = iHLsrc(ext)+ext_ticks(ext,2)+rd('c.PC++','v')+wr('a','v')
+    #         else:
+    #             # LD r,n
+    #             o.cmt = 'LD '+r[y]+',n'
+    #             o.src = rd('c.PC++','c.'+r[y])
+    #    elif z == 7:
+    #         # misc ops on A and F
+    #         op_tbl = [
+    #             [ 'RLCA', rlca() ],
+    #             [ 'RRCA', rrca() ],
+    #             [ 'RLA',  rla() ],
+    #             [ 'RRA',  rra() ],
+    #             [ 'DAA',  daa() ],
+    #             [ 'CPL',  cpl() ],
+    #             [ 'SCF',  scf() ],
+    #             [ 'CCF',  ccf() ]
+    #         ]
+    #         o.cmt = op_tbl[y][0]
+    #         o.src = op_tbl[y][1]
 
     #--- block 3: misc and extended ops
-    elif x == 3:
-        if z == 0:
-            # RET cc
-            o.cmt = 'RET '+cond_cmt[y]
-            o.src = ret_cc(y)
-        elif z == 1:
-            if q == 0:
-                # POP BC,DE,HL,IX,IY,AF
-                o.cmt = 'POP '+rp2[p]
-                o.src = pop_dd(p)
-            else:
-                # misc ops
-                op_tbl = [
-                    [ 'RET', ret() ],
-                    [ 'EXX', exx() ],
-                    [ 'JP '+rp[2], 'c.PC=c.'+rp[2]+';' ],
-                    [ 'LD SP,'+rp[2], tick(2)+'c.SP=c.'+rp[2]+';' ]
-                ]
-                o.cmt = op_tbl[p][0]
-                o.src = op_tbl[p][1]
-        elif z == 2:
-            # JP cc,nn
-            o.cmt = 'JP {},nn'.format(cond_cmt[y])
-            o.src = imm16()+'if ({}) {{ c.PC=c.WZ; }}'.format(cond[y])
-        elif z == 3:
-            # misc ops
-            op_tbl = [
-                [ 'JP nn', imm16()+'c.PC=c.WZ;' ],
-                [ None, None ], # CB prefix instructions
-                [ 'OUT (n),A', out_n_a() ],
-                [ 'IN A,(n)', in_n_a() ],
-                [ 'EX (SP),'+rp[2], ex_sp_dd() ],
-                [ 'EX DE,HL', swp16('c.DE','c.HL') ],
-                [ 'DI', di() ],
-                [ 'EI', ei() ]
-            ]
-            o.cmt = op_tbl[y][0]
-            o.src = op_tbl[y][1]
-        elif z == 4:
-            # CALL cc,nn
-            o.cmt = 'CALL {},nn'.format(cond_cmt[y])
-            o.src = call_cc_nn(y)
-        elif z == 5:
-            if q == 0:
-                # PUSH BC,DE,HL,IX,IY,AF
-                o.cmt = 'PUSH {}'.format(rp2[p])
-                o.src = push_dd(p)
-            else:
-                op_tbl = [
-                    [ 'CALL nn', call_nn() ],
-                    [ None, None ], # DD prefix instructions
-                    [ None, None ], # ED prefix instructions
-                    [ None, None ], # FD prefix instructions
-                ]
-                o.cmt = op_tbl[p][0]
-                o.src = op_tbl[p][1]
-        elif z == 6:
-            # ALU n
-            o.cmt = '{} n'.format(alu_cmt[y])
-            o.src = rd('c.PC++','v')+alu8(y,'v')
-        elif z == 7:
-            # RST
-            o.cmt = 'RST {}'.format(hex(y*8))
-            o.src = rst(y)
+    #elif x == 3:
+    #    if z == 0:
+    #         # RET cc
+    #         o.cmt = 'RET '+cond_cmt[y]
+    #         o.src = ret_cc(y)
+    #    elif z == 1:
+    #         if q == 0:
+    #             # POP BC,DE,HL,IX,IY,AF
+    #             o.cmt = 'POP '+rp2[p]
+    #             o.src = pop_dd(p)
+    #         else:
+    #             # misc ops
+    #             op_tbl = [
+    #                 [ 'RET', ret() ],
+    #                 [ 'EXX', exx() ],
+    #                 [ 'JP '+rp[2], 'c.PC=c.'+rp[2]+';' ],
+    #                 [ 'LD SP,'+rp[2], tick(2)+'c.SP=c.'+rp[2]+';' ]
+    #             ]
+    #             o.cmt = op_tbl[p][0]
+    #             o.src = op_tbl[p][1]
+    #    elif z == 2:
+    #         # JP cc,nn
+    #         o.cmt = 'JP {},nn'.format(cond_cmt[y])
+    #         o.src = imm16()+'if ({}) {{ c.PC=c.WZ; }}'.format(cond[y])
+    #    elif z == 3:
+    #         # misc ops
+    #         op_tbl = [
+    #             [ 'JP nn', imm16()+'c.PC=c.WZ;' ],
+    #             [ None, None ], # CB prefix instructions
+    #             [ 'OUT (n),A', out_n_a() ],
+    #             [ 'IN A,(n)', in_n_a() ],
+    #             [ 'EX (SP),'+rp[2], ex_sp_dd() ],
+    #             [ 'EX DE,HL', swp16('c.DE','c.HL') ],
+    #             [ 'DI', di() ],
+    #             [ 'EI', ei() ]
+    #         ]
+    #         o.cmt = op_tbl[y][0]
+    #         o.src = op_tbl[y][1]
+    #    elif z == 4:
+    #         # CALL cc,nn
+    #         o.cmt = 'CALL {},nn'.format(cond_cmt[y])
+    #         o.src = call_cc_nn(y)
+    #    elif z == 5:
+    #         if q == 0:
+    #             # PUSH BC,DE,HL,IX,IY,AF
+    #             o.cmt = 'PUSH {}'.format(rp2[p])
+    #             o.src = push_dd(p)
+    #         else:
+    #             op_tbl = [
+    #                 [ 'CALL nn', call_nn() ],
+    #                 [ None, None ], # DD prefix instructions
+    #                 [ None, None ], # ED prefix instructions
+    #                 [ None, None ], # FD prefix instructions
+    #             ]
+    #             o.cmt = op_tbl[p][0]
+    #             o.src = op_tbl[p][1]
+    #    elif z == 6:
+    #         # ALU n
+    #         o.cmt = '{} n'.format(alu_cmt[y])
+    #         o.src = rd('c.PC++','v')+alu8(y,'v')
+    #    elif z == 7:
+    #         # RST
+    #         o.cmt = 'RST {}'.format(hex(y*8))
+    #         o.src = rst(y)
 
     return o
 
@@ -1738,77 +1736,6 @@ def dyn_bit_res_set_ixiy(indent):
     l(tab(indent)+'}')
 
 #-------------------------------------------------------------------------------
-# patch register lookup tables for IX or IY instructions
-#
-def patch_reg_tables(reg) :
-    r[4] = reg+'H'; r[5] = reg+'L'; r[6] = reg;
-    rp[2] = rp2[2] = reg
-
-#-------------------------------------------------------------------------------
-# 'unpatch' the register lookup tables
-#
-def unpatch_reg_tables() :
-    r[4] = 'H'; r[5] = 'L'; r[6] = 'HL'
-    rp[2] = rp2[2] = 'HL'
-
-#-------------------------------------------------------------------------------
-# write source header
-#
-def write_header() :
-    l('/* machine generated, do not edit! */')
-    l('uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {')
-    l('  z80_state_t c = cpu->state;')
-    l('  const z80_tick_t tick = cpu->tick;')
-    l('  void* ud = cpu->user_data;')
-    l('  uint64_t pins = cpu->pins;')
-    l('  int trap_id = -1;')
-    l('  uint32_t ticks = 0;')
-    l('  uint8_t opcode; uint16_t a; uint8_t v; uint8_t f;')
-    l('  do {')
-    l('    _OFF(Z80_INT);')
-    l('    if (c.ei_pending) { c.IFF1=c.IFF2=true; c.ei_pending=false; }')
-
-#-------------------------------------------------------------------------------
-# write source footer
-#
-def write_footer() :
-    l('    for (int i=0; i<Z80_MAX_NUM_TRAPS; i++) {') 
-    l('      if (cpu->trap_valid[i] && (c.PC==cpu->trap_addr[i])) {')
-    l('        if (cpu->trap_func[i]) {')
-    l('          if (cpu->trap_func[i](ud)) { trap_id=i; }')
-    l('        } else {')
-    l('          trap_id=i;')
-    l('        }')
-    l('      }')
-    l('    }')
-    l('  } while ((ticks < num_ticks) && (trap_id < 0));')
-    l('  cpu->state = c;')
-    l('  cpu->pins = pins;')
-    l('  cpu->trap_id = trap_id;')
-    l('  return ticks;')
-    l('}')
-
-#-------------------------------------------------------------------------------
-# begin a new instruction group (begins a switch statement)
-#
-def write_begin_group(indent, ext_byte=None, xxcb_ext=False) :
-    if ext_byte:
-        # this is a prefix instruction, need to write a case
-        l(tab(indent)+'case '+hex(ext_byte)+':')
-    indent += 1
-    # xxcb_ext: special case for DD/FD CB 'double extended' instructions,
-    # these have the d offset after the CB byte and before
-    # the actual instruction byte, and the next opcode fetch doesn't
-    # increment R
-    l(tab(indent)+'{')
-    if xxcb_ext:
-        l(tab(indent)+'int8_t d;'+rd('c.PC++', 'd'))
-    l(tab(indent)+fetch(xxcb_ext))
-    l(tab(indent)+'switch (opcode) {')
-    indent += 1
-    return indent
-
-#-------------------------------------------------------------------------------
 # write a single (writes a case inside the current switch)
 #
 def write_op(indent, op) :
@@ -1818,22 +1745,6 @@ def write_op(indent, op) :
         l(tab(indent)+'case '+hex(op.byte)+':/*'+op.cmt+'*/'+op.src+'break;')
 
 #-------------------------------------------------------------------------------
-# finish an instruction group (ends current statement)
-#
-def write_end_group(indent, inv_op_bytes, ext, fallthrough_func) :
-    l(tab(indent)+'default:')
-    if fallthrough_func:
-        fallthrough_func(indent+2)
-    l(tab(indent)+'  break;')
-    indent -= 1
-    l(tab(indent)+'} }')
-    # if this was a prefix instruction, need to write a final break
-    if ext:
-        l(tab(indent)+'break;')
-    indent -= 1
-    return indent
-
-#-------------------------------------------------------------------------------
 # main encoder function, this populates all the opcode tables and
 # generates the C++ source code into the file f
 #
@@ -1841,39 +1752,19 @@ Out = open(OutPath, 'w')
 write_header()
 
 # loop over all instruction bytes
-indent = write_begin_group(1)
+indent = 3
 for i in range(0, 256) :
-    # DD or FD prefix instruction?
-    if i == 0xDD or i == 0xFD:
-        indent = write_begin_group(indent, i)
-        patch_reg_tables('IX' if i==0xDD else 'IY')
-        for ii in range(0, 256) :
-            if ii == 0xCB:
-                # DD/FD CB prefix
-                indent = write_begin_group(indent, ii, True)
-                for iii in range(0, 256) :
-                    write_op(indent, enc_cb_op(iii, True))
-                indent = write_end_group(indent, 4, True, dyn_bit_res_set_ixiy)
-            else:
-                write_op(indent, enc_op(ii, True))
-        unpatch_reg_tables()
-        indent = write_end_group(indent, 2, True, None)
     # ED prefix instructions
-    elif i == 0xED:
-        indent = write_begin_group(indent, i)
-        for ii in range(0, 256) :
-            write_op(indent, enc_ed_op(ii))
-        indent = write_end_group(indent, 2, True, None)
+    if i == 0xED:
+        pass
     # CB prefix instructions
     elif i == 0xCB:
-        indent = write_begin_group(indent, i, False)
-        for ii in range(0, 256) :
-            write_op(indent, enc_cb_op(ii, False))
-        indent = write_end_group(indent, 2, True, dyn_bit_res_set)
+        pass
     # non-prefixed instruction
     else:
         write_op(indent, enc_op(i, False))
-write_end_group(indent, 1, False, None)
+l('      default: break;')
+l('    }')
 write_interrupt_handling()
 write_footer()
 Out.close()
