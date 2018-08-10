@@ -350,8 +350,7 @@ def out_n_a():
     src += 'uint8_t a=_G_A();'
     src += 'addr=(a<<8)|d8;'
     src += '_OUT(addr,a);'
-    src += 'addr=(addr&0xFF00)|((addr+1)&0x00FF);'
-    src += '_S_WZ(addr);'
+    src += '_S_WZ((addr&0xFF00)|((addr+1)&0x00FF));'
     src += '}'
     return src
 
@@ -363,7 +362,7 @@ def out_n_a():
 def in_n_a():
     src = '{'
     src += '_IMM8(d8);'
-    src += 'uint8_t a=_G_();'
+    src += 'uint8_t a=_G_A();'
     src += 'addr=(a<<8)|d8;'
     src += '_IN(addr++,a);'
     src += '_S_A(a);'
@@ -372,19 +371,56 @@ def in_n_a():
     return src
 
 #-------------------------------------------------------------------------------
+#   ex_af
+#
+#   Generate code for EX AF,AF'
+#
+def ex_af():
+    src ='{'
+    src+='r0=_z80_flush_r0(ws,r0,r2);'
+    src+='uint16_t fa=_G16(r0,_FA);'
+    src+='uint16_t fa_=_G16(r3,_FA);'
+    src+='_S16(r0,_FA,fa_);'
+    src+='_S16(r3,_FA,fa);'
+    src+='ws=_z80_map_regs(r0,r1,r2);'
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
+#   ex_de_hl
+#
+#   Generate code for EX DE,HL
+#
+def ex_de_hl():
+    src ='{'
+    src+='r0=_z80_flush_r0(ws,r0,r2);'
+    src+='uint16_t de=_G16(r0,_DE);'
+    src+='uint16_t hl=_G16(r0,_HL);'
+    src+='_S16(r0,_DE,hl);'
+    src+='_S16(r0,_HL,de);'
+    src+='ws=_z80_map_regs(r0,r1,r2);'
+    src+='}'
+    return src
+
+#-------------------------------------------------------------------------------
 #   ex_sp_dd
 #
 #   Generate code for EX (SP),HL; EX (SP),IX and EX (SP),IY
 #
 def ex_sp_dd():
-    src =tick()
-    src+='{uint8_t w,z;'
-    src+=rd('c.SP','z')
-    src+=rd('c.SP+1','w')
-    src+=wr('c.SP','(uint8_t)c.'+rp[2])
-    src+=wr('c.SP+1','(uint8_t)(c.'+rp[2]+'>>8)')
-    src+='c.'+rp[2]+'=c.WZ=(w<<8)|z;}'
-    src+=tick(2)
+    src ='{'
+    src+='_T(3);'
+    src+='addr=_G_SP();'
+    src+='d16=_G_HL();'
+    src+='uint8_t l,h;'
+    src+='_MR(addr,l);'
+    src+='_MR(addr+1,h);'
+    src+='_MW(addr,d16);'
+    src+='_MW(addr+1,d16>>8);'
+    src+='d16=(h<<8)|l;'
+    src+='_S_HL(d16);'
+    src+='_S_WZ(d16);'
+    src+='}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -1282,10 +1318,10 @@ def halt():
     return '_ON(Z80_HALT);pc--;'
 
 def di():
-    return 'c.IFF1=c.IFF2=false;'
+    return 'r2|=(_BIT_IFF1|_BIT_IFF2);'
 
 def ei():
-    return 'c.ei_pending=true;'
+    return 'r2|=_BIT_EI;'
 
 def reti():
     # same as RET, but also set the virtual Z80_RETI pin
@@ -1364,10 +1400,10 @@ def enc_op(op) :
                 # NOP
                 o.cmt = 'NOP'
                 o.src = ' '
-    #        elif y == 1:
-    #             # EX AF,AF'
-    #             o.cmt = "EX AF,AF'"
-    #             o.src = swp16('c.AF','c.AF_')
+            elif y == 1:
+                # EX AF,AF'
+                o.cmt = "EX AF,AF'"
+                o.src = ex_af()
     #        elif y == 2:
     #             # DJNZ d
     #             o.cmt = 'DJNZ'
@@ -1472,20 +1508,20 @@ def enc_op(op) :
     #         # JP cc,nn
     #         o.cmt = 'JP {},nn'.format(cond_cmt[y])
     #         o.src = imm16()+'if ({}) {{ c.PC=c.WZ; }}'.format(cond[y])
-    #    if z == 3:
-    #         # misc ops
-    #         op_tbl = [
-    #             [ 'JP nn', imm16()+'c.PC=c.WZ;' ],
-    #             [ None, None ], # CB prefix instructions
-    #             [ 'OUT (n),A', out_n_a() ],
-    #             [ 'IN A,(n)', in_n_a() ],
-    #             [ 'EX (SP),'+rp[2], ex_sp_dd() ],
-    #             [ 'EX DE,HL', swp16('c.DE','c.HL') ],
-    #             [ 'DI', di() ],
-    #             [ 'EI', ei() ]
-    #         ]
-    #         o.cmt = op_tbl[y][0]
-    #         o.src = op_tbl[y][1]
+        if z == 3:
+            # misc ops
+            op_tbl = [
+                [ 'JP nn', '_IMM16(pc);' ],
+                [ None, None ], # CB prefix instructions
+                [ 'OUT (n),A', out_n_a() ],
+                [ 'IN A,(n)', in_n_a() ],
+                [ 'EX (SP),'+rp[2], ex_sp_dd() ],
+                [ 'EX DE,HL', ex_de_hl() ],
+                [ 'DI', di() ],
+                [ 'EI', ei() ]
+            ]
+            o.cmt = op_tbl[y][0]
+            o.src = op_tbl[y][1]
     #    if z == 4:
     #         # CALL cc,nn
     #         o.cmt = 'CALL {},nn'.format(cond_cmt[y])
