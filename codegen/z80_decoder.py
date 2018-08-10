@@ -146,11 +146,11 @@ def write_header() :
     l('  uint64_t r1 = cpu->wz_ix_iy_sp;')
     l('  uint64_t r2 = cpu->im_ir_pc_bits;')
     l('  uint64_t r3 = cpu->bc_de_hl_fa_;')
-    l('  uint64_t ws = _z80m_map_regs(r0, r1, r2);')
+    l('  uint64_t ws = _z80_map_regs(r0, r1, r2);')
     l('  uint64_t map_bits = r2 & _BITS_MAP_REGS;')
     l('  uint64_t pins = cpu->pins;')
     l('  const uint64_t trap_addr = cpu->trap_addr;')
-    l('  const z80m_tick_t tick = cpu->tick;')
+    l('  const z80_tick_t tick = cpu->tick;')
     l('  void* ud = cpu->user_data;')
     l('  int trap_id = -1;')
     l('  uint32_t ticks = 0;')
@@ -158,7 +158,7 @@ def write_header() :
     l('  uint16_t addr, d16;')
     l('  uint16_t pc = _G_PC();')
     l('  do {')
-    l('    _OFF(Z80M_INT);')
+    l('    _OFF(Z80_INT);')
     l('    /* delay-enable interrupt flags */')
     l('    if (r2 & _BIT_EI) {')
     l('      r2 &= ~_BIT_EI;')
@@ -170,10 +170,10 @@ def write_header() :
     l('    }')
     l('    if (map_bits != (r2 & _BITS_MAP_REGS)) {')
     l('      const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;')
-    l('      r0 = _z80m_flush_r0(ws, r0, old_map_bits);')
-    l('      r1 = _z80m_flush_r1(ws, r1, old_map_bits);')
+    l('      r0 = _z80_flush_r0(ws, r0, old_map_bits);')
+    l('      r1 = _z80_flush_r1(ws, r1, old_map_bits);')
     l('      r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
-    l('      ws = _z80m_map_regs(r0, r1, r2);')
+    l('      ws = _z80_map_regs(r0, r1, r2);')
     l('    }')
     l('    switch (op) {')
 
@@ -181,11 +181,10 @@ def write_header() :
 # write source footer
 #
 def write_footer() :
-    l('    }')
     l('    map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
     l('    if (trap_addr != 0xFFFFFFFFFFFFFFFF) {')
     l('      uint64_t ta = trap_addr;')
-    l('      for (int i = 0; i < Z80M_MAX_NUM_TRAPS; i++) {')
+    l('      for (int i = 0; i < Z80_MAX_NUM_TRAPS; i++) {')
     l('        ta >>= 16;')
     l('        if (((ta & 0xFFFF) == pc) && (pc != 0xFFFF)) {')
     l('          trap_id = i;')
@@ -197,8 +196,8 @@ def write_footer() :
     l('  _S_PC(pc);')
     l('  {')
     l('    uint64_t old_map_bits = r2 & _BITS_MAP_REGS;')
-    l('    r0 = _z80m_flush_r0(ws, r0, old_map_bits);')
-    l('    r1 = _z80m_flush_r1(ws, r1, old_map_bits);')
+    l('    r0 = _z80_flush_r0(ws, r0, old_map_bits);')
+    l('    r1 = _z80_flush_r1(ws, r1, old_map_bits);')
     l('  }')
     l('  r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
     l('  cpu->bc_de_hl_fa = r0;')
@@ -244,17 +243,17 @@ def write_footer() :
 #   INT MODE 2: 19 cycles
 #
 def write_interrupt_handling():
-    l('    if (((pins & (Z80M_INT|Z80M_BUSREQ))==Z80M_INT) && (r2 & _BIT_IFF1)) {')
+    l('    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1)) {')
     l('      r2 &= ~(_BIT_IFF1|_BIT_IFF2);')
-    l('      if (pins & Z80M_HALT) {')
-    l('        pins &= ~Z80M_HALT;')
+    l('      if (pins & Z80_HALT) {')
+    l('        pins &= ~Z80_HALT;')
     l('        pc++;')
     l('      }')
-    l('      _ON(Z80M_M1|Z80M_IORQ);')
+    l('      _ON(Z80_M1|Z80_IORQ);')
     l('      _SA(pc);')
     l('      _TW(4);')
     l('      const uint8_t int_vec = _GD();')
-    l('      _OFF(Z80M_M1|Z80M_IORQ);')
+    l('      _OFF(Z80_M1|Z80_IORQ);')
     l('      _BUMPR();')
     l('      _T(2);')
     l('      uint16_t sp = _G_SP();')
@@ -269,7 +268,7 @@ def write_interrupt_handling():
     l('          break;')
     l('        case 2:')
     l('          {')
-    l('            addr = _G8_I() | (int_vec & 0xFE);')
+    l('            addr = _G_I() | (int_vec & 0xFE);')
     l('            uint8_t z,w;')
     l('            _MR(addr++,z);')
     l('            _MR(addr,w);')
@@ -1278,7 +1277,7 @@ def enc_op(op, ext) :
                 o.cmt = 'LD (HL/IX+d/IY+d),'+r[z]
                 # special case LD (IX+d),L LD (IX+d),H
                 if z in [4,5]:
-                    o.src = 'd8=(_IDX()?_G8(r0,_'+r[z]+'):_G_'+r[z]+'();'
+                    o.src = 'd8=_IDX()?_G8(r0,_'+r[z]+'):_G_'+r[z]+'();'
                 else:
                     o.src = 'd8=_G_'+r[z]+'();'
                 o.src += addr(5)+'_MW(addr,d8);'

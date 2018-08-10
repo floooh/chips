@@ -3,11 +3,11 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   uint64_t r1 = cpu->wz_ix_iy_sp;
   uint64_t r2 = cpu->im_ir_pc_bits;
   uint64_t r3 = cpu->bc_de_hl_fa_;
-  uint64_t ws = _z80m_map_regs(r0, r1, r2);
+  uint64_t ws = _z80_map_regs(r0, r1, r2);
   uint64_t map_bits = r2 & _BITS_MAP_REGS;
   uint64_t pins = cpu->pins;
   const uint64_t trap_addr = cpu->trap_addr;
-  const z80m_tick_t tick = cpu->tick;
+  const z80_tick_t tick = cpu->tick;
   void* ud = cpu->user_data;
   int trap_id = -1;
   uint32_t ticks = 0;
@@ -15,7 +15,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   uint16_t addr, d16;
   uint16_t pc = _G_PC();
   do {
-    _OFF(Z80M_INT);
+    _OFF(Z80_INT);
     /* delay-enable interrupt flags */
     if (r2 & _BIT_EI) {
       r2 &= ~_BIT_EI;
@@ -27,10 +27,10 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     }
     if (map_bits != (r2 & _BITS_MAP_REGS)) {
       const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
-      r0 = _z80m_flush_r0(ws, r0, old_map_bits);
-      r1 = _z80m_flush_r1(ws, r1, old_map_bits);
+      r0 = _z80_flush_r0(ws, r0, old_map_bits);
+      r1 = _z80_flush_r1(ws, r1, old_map_bits);
       r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
-      ws = _z80m_map_regs(r0, r1, r2);
+      ws = _z80_map_regs(r0, r1, r2);
     }
     switch (op) {
       case 0x0:/*NOP*/ break;
@@ -106,8 +106,8 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0x71:/*LD (HL/IX+d/IY+d),C*/d8=_G_C();_ADDR(addr,5);_MW(addr,d8);break;
       case 0x72:/*LD (HL/IX+d/IY+d),D*/d8=_G_D();_ADDR(addr,5);_MW(addr,d8);break;
       case 0x73:/*LD (HL/IX+d/IY+d),E*/d8=_G_E();_ADDR(addr,5);_MW(addr,d8);break;
-      case 0x74:/*LD (HL/IX+d/IY+d),H*/d8=(_IDX()?_G8(r0,_H):_G_H();_ADDR(addr,5);_MW(addr,d8);break;
-      case 0x75:/*LD (HL/IX+d/IY+d),L*/d8=(_IDX()?_G8(r0,_L):_G_L();_ADDR(addr,5);_MW(addr,d8);break;
+      case 0x74:/*LD (HL/IX+d/IY+d),H*/d8=_IDX()?_G8(r0,_H):_G_H();_ADDR(addr,5);_MW(addr,d8);break;
+      case 0x75:/*LD (HL/IX+d/IY+d),L*/d8=_IDX()?_G8(r0,_L):_G_L();_ADDR(addr,5);_MW(addr,d8);break;
       case 0x76:/*HALT*/_ON(Z80_HALT);pc--;break;
       case 0x77:/*LD (HL/IX+d/IY+d),A*/d8=_G_A();_ADDR(addr,5);_MW(addr,d8);break;
       case 0x78:/*LD A,B*/_S_A(_G_B());break;
@@ -120,17 +120,17 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0x7f:/*LD A,A*/_S_A(_G_A());break;
       default: break;
     }
-    if (((pins & (Z80M_INT|Z80M_BUSREQ))==Z80M_INT) && (r2 & _BIT_IFF1)) {
+    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1)) {
       r2 &= ~(_BIT_IFF1|_BIT_IFF2);
-      if (pins & Z80M_HALT) {
-        pins &= ~Z80M_HALT;
+      if (pins & Z80_HALT) {
+        pins &= ~Z80_HALT;
         pc++;
       }
-      _ON(Z80M_M1|Z80M_IORQ);
+      _ON(Z80_M1|Z80_IORQ);
       _SA(pc);
       _TW(4);
       const uint8_t int_vec = _GD();
-      _OFF(Z80M_M1|Z80M_IORQ);
+      _OFF(Z80_M1|Z80_IORQ);
       _BUMPR();
       _T(2);
       uint16_t sp = _G_SP();
@@ -145,7 +145,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
           break;
         case 2:
           {
-            addr = _G8_I() | (int_vec & 0xFE);
+            addr = _G_I() | (int_vec & 0xFE);
             uint8_t z,w;
             _MR(addr++,z);
             _MR(addr,w);
@@ -155,11 +155,10 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       }
       _S_WZ(pc);
     }
-    }
     map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
     if (trap_addr != 0xFFFFFFFFFFFFFFFF) {
       uint64_t ta = trap_addr;
-      for (int i = 0; i < Z80M_MAX_NUM_TRAPS; i++) {
+      for (int i = 0; i < Z80_MAX_NUM_TRAPS; i++) {
         ta >>= 16;
         if (((ta & 0xFFFF) == pc) && (pc != 0xFFFF)) {
           trap_id = i;
@@ -171,8 +170,8 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   _S_PC(pc);
   {
     uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
-    r0 = _z80m_flush_r0(ws, r0, old_map_bits);
-    r1 = _z80m_flush_r1(ws, r1, old_map_bits);
+    r0 = _z80_flush_r0(ws, r0, old_map_bits);
+    r1 = _z80_flush_r1(ws, r1, old_map_bits);
   }
   r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
   cpu->bc_de_hl_fa = r0;

@@ -580,19 +580,22 @@ extern bool z80_iff2(z80_t* cpu);
 /* read 8-bit immediate value */
 #define _IMM8(data) _MR(pc++,data);
 /* read 16-bit immediate value (also update WZ register) */
-#define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_SWZ(data);} 
+#define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S_WZ(data);} 
 /* generate effective address for (HL), (IX+d), (IY+d) */
-#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if(r2&(_BIT_USE_IX|_BIT_USE_IY)){int8_t d;_MR(pc++,d);addr+=d;_SWZ(addr);_T(ext_ticks);}}
+#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if(r2&(_BIT_USE_IX|_BIT_USE_IY)){int8_t d;_MR(pc++,d);addr+=d;_S_WZ(addr);_T(ext_ticks);}}
 /* helper macro to bump R register */
 #define _BUMPR() d8=_G8(r2,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r2,_R,d8)
 /* a normal opcode fetch, bump R */
 #define _FETCH(op) {_SA(pc++);_ON(Z80_M1|Z80_MREQ|Z80_RD);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_BUMPR();}
 /* special opcode fetch for CB prefix, only bump R if not a DD/FD+CB 'double prefix' op */
 #define _FETCH_CB(op) {_SA(pc++);_ON(Z80_M1|Z80_MREQ|Z80_RD);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();if(0==(r2&(_BIT_USE_IX|_BIT_USE_IY))){_BUMPR();}}
+/* true if current op is an indexed op */
+#define _IDX() (0!=(map_bits&(_BIT_USE_IX|_BIT_USE_IY)))
 
 #define _S_A(val)  _S8(ws,_A,val)
 #define _S_F(val)  _S8(ws,_F,val)
 #define _S_L(val)  _S8(ws,_L,val)
+#define _S_H(val)  _S8(ws,_H,val)
 #define _S_E(val)  _S8(ws,_E,val)
 #define _S_D(val)  _S8(ws,_D,val)
 #define _S_C(val)  _S8(ws,_C,val)
@@ -614,6 +617,7 @@ extern bool z80_iff2(z80_t* cpu);
 #define _G_A(val)  _G8(ws,_A)
 #define _G_F(val)  _G8(ws,_F)
 #define _G_L(val)  _G8(ws,_L)
+#define _G_H(val)  _G8(ws,_H)
 #define _G_E(val)  _G8(ws,_E)
 #define _G_D(val)  _G8(ws,_D)
 #define _G_C(val)  _G8(ws,_C)
