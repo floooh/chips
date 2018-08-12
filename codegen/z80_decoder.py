@@ -66,13 +66,6 @@ def l(s) :
     Out.write(tab()+s+'\n')
 
 #-------------------------------------------------------------------------------
-#   Generate code for one or more 'ticks', call tick callback and increment 
-#   the ticks counter.
-#
-def tick(num=1):
-    return '_T('+str(num)+');'
-
-#-------------------------------------------------------------------------------
 # instruction fetch machine cycle (M1):
 #              T1   T2   T3   T4
 #    --------+----+----+----+----+
@@ -398,31 +391,6 @@ def write_cb_ops():
 #
 def addr(ext_ticks) :
     return '_ADDR(addr,'+str(ext_ticks)+');'
-
-#-------------------------------------------------------------------------------
-# Return code to setup an variable 'addr' with the address of HL or (IX+d), (IY+d).
-# For the index instructions, also update WZ with IX+d or IY+d
-#
-def iHLdsrc(ext) :
-    return "FIXME!"
-
-#-------------------------------------------------------------------------------
-#   Flag computation helpers
-#
-def sz(val):
-    return '_z80_sz('+val+')'
-
-def szyxch(acc,val,res):
-    return '_z80_szyxch('+acc+','+val+','+res+')'
-
-def add_flags(acc,val,res):
-    return '_z80_add_flags('+acc+','+val+','+res+')'
-
-def sub_flags(acc,val,res):
-    return '_z80_sub_flags('+acc+','+val+','+res+')'
-
-def cp_flags(acc,val,res):
-    return '_z80_cp_flags('+acc+','+val+','+res+')'
 
 #-------------------------------------------------------------------------------
 #   out_n_a
@@ -822,22 +790,28 @@ def ret_cc(y):
     return src
 
 #-------------------------------------------------------------------------------
-#   rst()
+#   reti()
 #
-def rst(y):
-    src =wr('--c.SP','(uint8_t)(c.PC>>8)')
-    src+=wr('--c.SP','(uint8_t)c.PC')
-    src+='c.WZ=c.PC=(uint16_t)'+hex(y*8)+';'
+def reti():
+    # same as RET, but also set the virtual Z80_RETI pin
+    src  = '_ON(Z80_RETI);'
+    src += 'd16=_G_SP();'
+    src += '_MR(d16++,d8);pc=d8;'
+    src += '_MR(d16++,d8);pc|=d8<<8;'
+    src += '_S_SP(d16);'
+    src += '_S_WZ(pc);'
     return src
 
 #-------------------------------------------------------------------------------
-#   in_ic()
-#   IN (C)
+#   rst()
 #
-def in_ic():
-    src ='c.WZ=c.BC;'
-    src+=inp('c.WZ++','v')
-    src+='c.F=_z80_szp[v]|(c.F&Z80_CF);'
+def rst(y):
+    src ='d16= _G_SP();'
+    src+='_MW(--d16, pc>>8);'
+    src+='_MW(--d16, pc);'
+    src+='_S_SP(d16);'
+    src+='pc='+hex(y*8)+';'
+    src+='_S_WZ(pc);'
     return src
 
 #-------------------------------------------------------------------------------
@@ -845,18 +819,17 @@ def in_ic():
 #   IN r,(C)
 #
 def in_r_ic(y):
-    src ='c.WZ=c.BC;'
-    src+=inp('c.WZ++','c.'+r[y])
-    src+='c.F=_z80_szp[c.'+r[y]+']|(c.F&Z80_CF);'
-    return src
-
-#-------------------------------------------------------------------------------
-#   out_ic()
-#   OUT (C)
-#
-def out_ic():
-    src ='c.WZ=c.BC;'
-    src+=out('c.WZ++','0')
+    src ='{'
+    src+='addr=_G_BC();'
+    src+='_IN(addr++,d8);'
+    src+='_S_WZ(addr);'
+    src+='uint8_t f=(_G_F()&Z80_CF)|_z80_szp[d8];'
+    src+='_S8(ws,_F,f);'
+    # handle undocumented special case IN F,(C): 
+    # only set flags, don't store result
+    if (y != 6):
+        src+='_S_'+r[y]+'(d8);'
+    src+='}'
     return src
 
 #-------------------------------------------------------------------------------
@@ -864,8 +837,12 @@ def out_ic():
 #   OUT r,(C)
 #
 def out_r_ic(y):
-    src ='c.WZ=c.BC;'
-    src+=out('c.WZ++','c.'+r[y])
+    src ='addr=_G_BC();'
+    if y == 6:
+        src+='_OUT(addr++,0);'
+    else:
+        src+='_OUT(addr++,_G_'+r[y]+'());'
+    src+='_S_WZ(addr);'
     return src
 
 #-------------------------------------------------------------------------------
@@ -892,7 +869,7 @@ def alu8(y):
 def inc8():
     src ='{'
     src+='uint8_t r=d8+1;'
-    src+='uint8_t f='+sz('r')+'|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
+    src+='uint8_t f=_z80_sz(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
     src+='if(r==0x80){f|=Z80_VF;}'
     src+='_S_F(f|(_G_F()&Z80_CF));'
     src+='d8=r;'
@@ -902,7 +879,7 @@ def inc8():
 def dec8():
     src ='{'
     src+='uint8_t r=d8-1;'
-    src+='uint8_t f=Z80_NF|'+sz('r')+'|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
+    src+='uint8_t f=Z80_NF|_z80_sz(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
     src+='if(r==0x7F){f|=Z80_VF;}'
     src+='_S_F(f|(_G_F()&Z80_CF));'
     src+='d8=r;'
@@ -914,44 +891,53 @@ def dec8():
 #
 #   flags computation taken from MAME
 #
-def add16(acc,val):
+def add16(p):
     src ='{'
-    src+='c.WZ='+acc+'+1;'
-    src+='uint32_t r='+acc+'+'+val+';'
-    src+='c.F=(c.F&(Z80_SF|Z80_ZF|Z80_VF))|'
-    src+='((('+acc+'^r^'+val+')>>8)&Z80_HF)|'
-    src+='((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));'
-    src+=acc+'=r;'
+    src+='uint16_t acc=_G_HL();'
+    src+='_S_WZ(acc+1);'
+    src+='d16=_G_'+rp[p]+'();'
+    src+='uint32_t r=acc+d16;'
+    src+='_S_HL(r);'
+    src+='uint8_t f=_G_F()&(Z80_SF|Z80_ZF|Z80_VF);'
+    src+='f|=((acc^r^d16)>>8)&Z80_HF;'
+    src+='f|=((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));'
+    src+='_S_F(f);'
+    src+='_T(7);'
     src+='}'
-    src+=tick(7)
     return src
 
-def adc16(acc,val):
+def adc16(p):
     src ='{'
-    src+='c.WZ='+acc+'+1;'
-    src+='uint32_t r='+acc+'+'+val+'+(c.F&Z80_CF);'
-    src+='c.F=((('+acc+'^r^'+val+')>>8)&Z80_HF)|'
-    src+='((r>>16)&Z80_CF)|'
-    src+='((r>>8)&(Z80_SF|Z80_YF|Z80_XF))|'
-    src+='((r&0xFFFF)?0:Z80_ZF)|'
-    src+='((('+val+'^'+acc+'^0x8000)&('+val+'^r)&0x8000)>>13);'
-    src+=acc+'=r;'
+    src+='uint16_t acc=_G_HL();'
+    src+='_S_WZ(acc+1);'
+    src+='d16=_G_'+rp[p]+'();'
+    src+='uint32_t r=acc+d16+(_G_F()&Z80_CF);'
+    src+='_S_HL(r);'
+    src+='uint8_t f=((d16^acc^0x8000)&(d16^r)&0x8000)>>13;'
+    src+='f|=((acc^r^d16)>>8)&Z80_HF;'
+    src+='f|=(r>>16)&Z80_CF;'
+    src+='f|=(r>>8)&(Z80_SF|Z80_YF|Z80_XF);'
+    src+='f|=(r&0xFFFF)?0:Z80_ZF;'
+    src+='_S_F(f);'
+    src+='_T(7);'
     src+='}'
-    src+=tick(7)
     return src
 
-def sbc16(acc,val):
+def sbc16(p):
     src ='{'
-    src+='c.WZ='+acc+'+1;'
-    src+='uint32_t r='+acc+'-'+val+'-(c.F&Z80_CF);'
-    src+='c.F=((('+acc+'^r^'+val+')>>8)&Z80_HF)|Z80_NF|'
-    src+='((r>>16)&Z80_CF)|'
-    src+='((r>>8)&(Z80_SF|Z80_YF|Z80_XF))|'
-    src+='((r&0xFFFF)?0:Z80_ZF)|'
-    src+='((('+val+'^'+acc+')&('+acc+'^r)&0x8000)>>13);'
-    src+=acc+'=r;'
+    src+='uint16_t acc=_G_HL();'
+    src+='_S_WZ(acc+1);'
+    src+='d16=_G_'+rp[p]+'();'
+    src+='uint32_t r=acc-d16-(_G_F()&Z80_CF);'
+    src+='uint8_t f=Z80_NF|(((d16^acc)&(acc^r)&0x8000)>>13);'
+    src+='_S_HL(r);'
+    src+='f|=((acc^r^d16)>>8) & Z80_HF;'
+    src+='f|=(r>>16)&Z80_CF;'
+    src+='f|=(r>>8)&(Z80_SF|Z80_YF|Z80_XF);'
+    src+='f|=(r&0xFFFF)?0:Z80_ZF;'
+    src+='_S_F(f);'
+    src+='_T(7);'
     src+='}'
-    src+=tick(7)
     return src
 
 #-------------------------------------------------------------------------------
@@ -1000,15 +986,6 @@ def di():
 
 def ei():
     return 'r2|=_BIT_EI;'
-
-def reti():
-    # same as RET, but also set the virtual Z80_RETI pin
-    src ='{uint8_t w,z;'
-    src+='_ON(Z80_RETI);'
-    src+=rd('c.SP++','z')
-    src+=rd('c.SP++','w')
-    src+='c.PC=c.WZ=(w<<8)|z;}'
-    return src
 
 #-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
@@ -1099,10 +1076,10 @@ def enc_op(op) :
                 # 16-bit immediate loads
                 o.cmt = 'LD '+rp[p]+',nn'
                 o.src = '_IMM16(d16);_S_'+rp[p]+'(d16);'
-    #         else :
-    #             # ADD HL,rr; ADD IX,rr; ADD IY,rr
-    #             o.cmt = 'ADD '+rp[2]+','+rp[p]
-    #             o.src = add16('c.'+rp[2],'c.'+rp[p])
+            else :
+                # ADD HL,rr; ADD IX,rr; ADD IY,rr
+                o.cmt = 'ADD '+rp[2]+','+rp[p]
+                o.src = add16(p)
         elif z == 2:
             # indirect loads
             op_tbl = [
@@ -1221,10 +1198,10 @@ def enc_op(op) :
             # ALU n
             o.cmt = '{} n'.format(alu_cmt[y])
             o.src = '_IMM8(d8);'+alu8(y)
-    #    if z == 7:
-    #         # RST
-    #         o.cmt = 'RST {}'.format(hex(y*8))
-    #         o.src = rst(y)
+        if z == 7:
+            # RST
+            o.cmt = 'RST {}'.format(hex(y*8))
+            o.src = rst(y)
 
     return o
 
@@ -1275,32 +1252,22 @@ def enc_ed_op(op) :
 
     if x == 1:
         # misc ops
-        #if z == 0:
-        #    # IN r,(C)
-        #    if y == 6:
-        #        # undocumented special case 'IN F,(C)', only alter flags, don't store result
-        #        o.cmt = 'IN (C)';
-        #        o.src = in_ic()
-        #    else:
-        #        o.cmt = 'IN {},(C)'.format(r[y])
-        #        o.src = in_r_ic(y)
-        #if z == 1:
-        #    # OUT (C),r
-        #    if y == 6:
-        #        # undocumented special case 'OUT (C),F', always output 0
-        #        o.cmd = 'OUT (C)';
-        #        o.src = out_ic()
-        #    else:
-        #        o.cmt = 'OUT (C),{}'.format(r[y])
-        #        o.src = out_r_ic(y)
-        #if z == 2:
-        #    # SBC/ADC HL,rr
-        #    if q==0:
-        #        o.cmt = 'SBC HL,'+rp[p]
-        #        o.src = sbc16('c.HL','c.'+rp[p])
-        #    else:
-        #        o.cmt = 'ADC HL,'+rp[p]
-        #        o.src = adc16('c.HL','c.'+rp[p])
+        if z == 0:
+            # IN r,(C)
+            o.cmt = 'IN {},(C)'.format(r[y])
+            o.src = in_r_ic(y)
+        if z == 1:
+            # OUT (C),r
+            o.cmt = 'OUT (C),{}'.format(r[y])
+            o.src = out_r_ic(y)
+        if z == 2:
+            # SBC/ADC HL,rr
+            if q==0:
+                o.cmt = 'SBC HL,'+rp[p]
+                o.src = sbc16(p)
+            else:
+                o.cmt = 'ADC HL,'+rp[p]
+                o.src = adc16(p)
         if z == 3:
             # 16-bit immediate address load/store
             if q == 0:
@@ -1313,11 +1280,11 @@ def enc_ed_op(op) :
             # NEG
             o.cmt = 'NEG'
             o.src = 'ws=_z80_neg8(ws);'
-        #if z == 5:
-        #    # RETN, RETI (only RETI implemented!)
-        #    if y == 1:
-        #        o.cmt = 'RETI'
-        #        o.src = reti()
+        if z == 5:
+            # RETN, RETI (only RETI implemented!)
+            if y == 1:
+                o.cmt = 'RETI'
+                o.src = reti()
         if z == 6:
             # IM m
             im_mode = [ 0, 0, 1, 2, 0, 0, 1, 2 ]
