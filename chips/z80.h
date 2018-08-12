@@ -614,27 +614,27 @@ extern bool z80_iff2(z80_t* cpu);
 #define _S_IR(val) _S16(r2,_IR,val)
 #define _S_PC(val) _S16(r2,_PC,val)
 
-#define _G_A(val)  _G8(ws,_A)
-#define _G_F(val)  _G8(ws,_F)
-#define _G_L(val)  _G8(ws,_L)
-#define _G_H(val)  _G8(ws,_H)
-#define _G_E(val)  _G8(ws,_E)
-#define _G_D(val)  _G8(ws,_D)
-#define _G_C(val)  _G8(ws,_C)
-#define _G_B(val)  _G8(ws,_B)
-#define _G_FA(val) _G16(ws,_FA)
-#define _G_HL(val) _G16(ws,_HL)
-#define _G_DE(val) _G16(ws,_DE)
-#define _G_BC(val) _G16(ws,_BC)
-#define _G_WZ(val) _G16(r1,_WZ)
-#define _G_IX(val) _G16(r1,_IX)
-#define _G_IY(val) _G16(r1,_IY)
-#define _G_SP(val) _G16(r1,_SP)
-#define _G_IM(val) _G8(r2,_IM)
-#define _G_I(val)  _G8(r2,_I)
-#define _G_R(val)  _G8(r2,_R)
-#define _G_IR(val) _G16(r2,_IR)
-#define _G_PC(val) _G16(r2,_PC)
+#define _G_A()  _G8(ws,_A)
+#define _G_F()  _G8(ws,_F)
+#define _G_L()  _G8(ws,_L)
+#define _G_H()  _G8(ws,_H)
+#define _G_E()  _G8(ws,_E)
+#define _G_D()  _G8(ws,_D)
+#define _G_C()  _G8(ws,_C)
+#define _G_B()  _G8(ws,_B)
+#define _G_FA() _G16(ws,_FA)
+#define _G_HL() _G16(ws,_HL)
+#define _G_DE() _G16(ws,_DE)
+#define _G_BC() _G16(ws,_BC)
+#define _G_WZ() _G16(r1,_WZ)
+#define _G_IX() _G16(r1,_IX)
+#define _G_IY() _G16(r1,_IY)
+#define _G_SP() _G16(r1,_SP)
+#define _G_IM() _G8(r2,_IM)
+#define _G_I()  _G8(r2,_I)
+#define _G_R()  _G8(r2,_R)
+#define _G_IR() _G16(r2,_IR)
+#define _G_PC() _G16(r2,_PC)
 
 /* register access functions */
 void z80_set_a(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_A,v); }
@@ -856,21 +856,6 @@ static inline uint64_t _z80_cp8(uint64_t ws, uint8_t val) {
     uint8_t acc = _G8(ws,_A);
     uint32_t res = (uint32_t) ((int)acc - (int)val);
     _S8(ws,_F,_z80_cp_flags(acc,val,res));
-    return ws;
-}
-
-static inline uint64_t _z80_alu8(uint8_t type, uint64_t ws, uint8_t val) {
-    switch (type) {
-        case 0: return _z80_add8(ws,val); break;
-        case 1: return _z80_adc8(ws,val); break;
-        case 2: return _z80_sub8(ws,val); break;
-        case 3: return _z80_sbc8(ws,val); break;
-        case 4: return _z80_and8(ws,val); break;
-        case 5: return _z80_xor8(ws,val); break;
-        case 6: return _z80_or8(ws,val); break;
-        case 7: return _z80_cp8(ws,val); break;
-    }
-    /* can't happen */
     return ws;
 }
 
