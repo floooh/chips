@@ -465,27 +465,34 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       _OFF(Z80_M1|Z80_IORQ);
       _BUMPR();
       _T(2);
-      uint16_t sp = _G_SP();
-      _MW(--sp,pc>>8);
-      _MW(--sp,pc);
-      _S_SP(sp);
       switch (_G_IM()) {
         case 0:
           break;
         case 1:
-          pc = 0x0038;
+          {
+            uint16_t sp = _G_SP();
+            _MW(--sp,pc>>8);
+            _MW(--sp,pc);
+            _S_SP(sp);
+            pc = 0x0038;
+            _S_WZ(pc);
+          }
           break;
         case 2:
           {
-            addr = _G_I() | (int_vec & 0xFE);
+            uint16_t sp = _G_SP();
+            _MW(--sp,pc>>8);
+            _MW(--sp,pc);
+            _S_SP(sp);
+            addr = (_G_I()<<8) | (int_vec & 0xFE);
             uint8_t z,w;
             _MR(addr++,z);
             _MR(addr,w);
             pc = (w<<8)|z;
+            _S_WZ(pc);
           }
           break;
       }
-      _S_WZ(pc);
     }
     map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
     if (trap_addr != 0xFFFFFFFFFFFFFFFF) {
