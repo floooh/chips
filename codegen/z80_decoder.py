@@ -30,14 +30,14 @@ rp2 = [ 'BC', 'DE', 'HL', 'FA' ]
 
 # condition-code table (for conditional jumps etc)
 cond = [
-    '!(c.F&Z80_ZF)',  # NZ
-    '(c.F&Z80_ZF)',   # Z
-    '!(c.F&Z80_CF)',   # NC
-    '(c.F&Z80_CF)',    # C
-    '!(c.F&Z80_PF)',   # PO
-    '(c.F&Z80_PF)',    # PE
-    '!(c.F&Z80_SF)',   # P
-    '(c.F&Z80_SF)'     # M
+    '!(_G_F()&Z80_ZF)',  # NZ
+    '(_G_F()&Z80_ZF)',   # Z
+    '!(_G_F()&Z80_CF)',   # NC
+    '(_G_F()&Z80_CF)',    # C
+    '!(_G_F()&Z80_PF)',   # PO
+    '(_G_F()&Z80_PF)',    # PE
+    '!(_G_F()&Z80_SF)',   # P
+    '(_G_F()&Z80_SF)'     # M
 ]
 
 # the same as 'human readable' flags for comments
@@ -609,12 +609,14 @@ def call_nn():
 #   Generate code for CALL cc,nn
 #
 def call_cc_nn(y):
-    src =imm16()
-    src+='if ('+cond[y]+'){'
-    src+=tick()
-    src+=wr('--c.SP','(uint8_t)(c.PC>>8)')
-    src+=wr('--c.SP','(uint8_t)c.PC')
-    src+='c.PC=c.WZ;'
+    src ='_IMM16(addr);'
+    src+='if('+cond[y]+'){'
+    src+='_T(1);'
+    src+='uint16_t sp=_G_SP();'
+    src+='_MW(--sp,pc>>8);'
+    src+='_MW(--sp,pc);'
+    src+='_S_SP(sp);'
+    src+='pc=addr;'
     src+='}'
     return src
 
@@ -768,13 +770,12 @@ def outi_outd_otir_otdr(y):
 #   djnz()
 #
 def djnz():
-    src =tick()
-    src+='{int8_t d;'
-    src+=rd('c.PC++','d')
-    src+='if(--c.B>0){'
-    src+='c.WZ=c.PC=c.PC+d;'
-    src+=tick(5)
-    src+='}'
+    src ='{'
+    src+='_T(1);'
+    src+='int8_t d;_IMM8(d);'
+    src+='d8=_G_B()-1;'
+    src+='_S_B(d8);'
+    src+='if(d8>0){pc+=d;_S_WZ(pc);_T(5);}'
     src+='}'
     return src
 
@@ -782,23 +783,14 @@ def djnz():
 #   jr()
 #
 def jr():
-    src ='{int8_t d;'
-    src+=rd('c.PC++','d')
-    src+='c.WZ=c.PC=c.PC+d;'
-    src+='}'
-    src+=tick(5)
-    return src;
+    return '{int8_t d;_IMM8(d);pc+=d;_S_WZ(pc);_T(5);}'
 
 #-------------------------------------------------------------------------------
 #   jr_cc()
 #
 def jr_cc(y):
-    src ='{int8_t d;'
-    src+=rd('c.PC++','d')
-    src+='if('+cond[y-4]+'){'
-    src+='c.WZ=c.PC=c.PC+d;'
-    src+=tick(5)
-    src+='}'
+    src ='{int8_t d;_IMM8(d);'
+    src+='if('+cond[y-4]+'){pc+=d;_S_WZ(pc);_T(5);}'
     src+='}'
     return src
 
@@ -807,8 +799,8 @@ def jr_cc(y):
 #
 def ret():
     src  = 'd16=_G_SP();'
-    src += '_MR(d16++,d8);pc=d8<<8;'
-    src += '_MR(d16++,d8);pc|=d8;'
+    src += '_MR(d16++,d8);pc=d8;'
+    src += '_MR(d16++,d8);pc|=d8<<8;'
     src += '_S_SP(d16);'
     src += '_S_WZ(pc);'
     return src
@@ -817,12 +809,15 @@ def ret():
 #   ret_cc()
 #
 def ret_cc(y):
-    src =tick()
-    src+='if('+cond[y]+'){'
+    src ='_T(1);'
+    src+='if ('+cond[y]+'){'
     src+='uint8_t w,z;'
-    src+=rd('c.SP++','z')
-    src+=rd('c.SP++','w')
-    src+='c.PC=c.WZ=(w<<8)|z;'
+    src+='d16=_G_SP();'
+    src+='_MR(d16++,z);'
+    src+='_MR(d16++,w);'
+    src+='_S_SP(d16);'
+    src+='pc=(w<<8)|z;'
+    src+='_S_WZ(pc);'
     src+='}'
     return src
 
@@ -1001,7 +996,7 @@ def halt():
     return '_ON(Z80_HALT);pc--;'
 
 def di():
-    return 'r2|=(_BIT_IFF1|_BIT_IFF2);'
+    return 'r2&=~(_BIT_IFF1|_BIT_IFF2);'
 
 def ei():
     return 'r2|=_BIT_EI;'
@@ -1087,18 +1082,18 @@ def enc_op(op) :
                 # EX AF,AF'
                 o.cmt = "EX AF,AF'"
                 o.src = ex_af()
-    #        elif y == 2:
-    #             # DJNZ d
-    #             o.cmt = 'DJNZ'
-    #             o.src = djnz()
-    #        elif  y == 3:
-    #             # JR d
-    #             o.cmt = 'JR d'
-    #             o.src = jr()
-    #        else:
-    #             # JR cc,d
-    #             o.cmt = 'JR '+cond_cmt[y-4]+',d'
-    #             o.src = jr_cc(y)
+            elif y == 2:
+                # DJNZ d
+                o.cmt = 'DJNZ'
+                o.src = djnz()
+            elif  y == 3:
+                # JR d
+                o.cmt = 'JR d'
+                o.src = jr()
+            else:
+                # JR cc,d
+                o.cmt = 'JR '+cond_cmt[y-4]+',d'
+                o.src = jr_cc(y)
         elif z == 1:
             if q == 0:
                 # 16-bit immediate loads
@@ -1168,10 +1163,9 @@ def enc_op(op) :
     #--- block 3: misc and extended ops
     elif x == 3:
         if z == 0:
-            pass
-    #         # RET cc
-    #         o.cmt = 'RET '+cond_cmt[y]
-    #         o.src = ret_cc(y)
+            # RET cc
+            o.cmt = 'RET '+cond_cmt[y]
+            o.src = ret_cc(y)
         if z == 1:
             if q == 0:
                 # POP BC,DE,HL,IX,IY,AF
@@ -1187,10 +1181,10 @@ def enc_op(op) :
                 ]
                 o.cmt = op_tbl[p][0]
                 o.src = op_tbl[p][1]
-    #    if z == 2:
-    #         # JP cc,nn
-    #         o.cmt = 'JP {},nn'.format(cond_cmt[y])
-    #         o.src = imm16()+'if ({}) {{ c.PC=c.WZ; }}'.format(cond[y])
+        if z == 2:
+            # JP cc,nn
+            o.cmt = 'JP {},nn'.format(cond_cmt[y])
+            o.src = '_IMM16(addr);if('+cond[y]+'){pc=addr;}'
         if z == 3:
             # misc ops
             op_tbl = [
@@ -1205,10 +1199,10 @@ def enc_op(op) :
             ]
             o.cmt = op_tbl[y][0]
             o.src = op_tbl[y][1]
-    #    if z == 4:
-    #         # CALL cc,nn
-    #         o.cmt = 'CALL {},nn'.format(cond_cmt[y])
-    #         o.src = call_cc_nn(y)
+        if z == 4:
+            # CALL cc,nn
+            o.cmt = 'CALL {},nn'.format(cond_cmt[y])
+            o.src = call_cc_nn(y)
         if z == 5:
             if q == 0:
                 # PUSH BC,DE,HL,IX,IY,AF
@@ -1324,11 +1318,11 @@ def enc_ed_op(op) :
         #    if y == 1:
         #        o.cmt = 'RETI'
         #        o.src = reti()
-        #if z == 6:
-        #    # IM m
-        #    im_mode = [ 0, 0, 1, 2, 0, 0, 1, 2 ]
-        #    o.cmt = 'IM {}'.format(im_mode[y])
-        #    o.src = 'c.IM={};'.format(im_mode[y])
+        if z == 6:
+            # IM m
+            im_mode = [ 0, 0, 1, 2, 0, 0, 1, 2 ]
+            o.cmt = 'IM {}'.format(im_mode[y])
+            o.src = '_S_IM({});'.format(im_mode[y])
         if z == 7:
             # misc ops on I,R and A
             op_tbl = [
