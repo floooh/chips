@@ -307,7 +307,6 @@ extern "C" {
 
 /*--- callback function typedefs ---*/
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins, void* user_data);
-typedef bool (*z80_trapfunc_t)(void* user_data);
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -591,6 +590,18 @@ extern bool z80_iff2(z80_t* cpu);
 #define _FETCH(op) {_SA(pc++);_ON(Z80_M1|Z80_MREQ|Z80_RD);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_BUMPR();}
 /* special opcode fetch for CB prefix, only bump R if not a DD/FD+CB 'double prefix' op */
 #define _FETCH_CB(op) {_SA(pc++);_ON(Z80_M1|Z80_MREQ|Z80_RD);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();if(0==(r2&(_BIT_USE_IX|_BIT_USE_IY))){_BUMPR();}}
+/* evaluate S+Z flags */
+#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
+/* evaluate SZYXCH flags */
+#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
+/* evaluate flags for 8-bit adds */
+#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
+/* evaluate flags for 8-bit subs */
+#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
+/* evaluate flags for 8-bit compare */
+#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
+/* evaluate flags for LD A,I and LD A,R */
+#define _SZIFF2_FLAGS(val) ((_G_F()&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((r2&_BIT_IFF2)?Z80_PF:0))
 
 #define _S_A(val)  _S8(ws,_A,val)
 #define _S_F(val)  _S8(ws,_F,val)
@@ -745,33 +756,6 @@ bool z80_opdone(z80_t* cpu) {
     return 0 == (cpu->im_ir_pc_bits & (_BIT_USE_IX|_BIT_USE_IY));
 }
 
-/* flags evaluation */
-static inline uint8_t _z80_sz(uint8_t val) {
-    return val ? (val & Z80_SF) : Z80_ZF;
-}
-
-static inline uint8_t _z80_szyxch(uint8_t acc, uint8_t val, uint32_t res) {
-    return _z80_sz(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF);
-}
-
-static inline uint8_t _z80_add_flags(uint8_t acc, uint8_t val, uint32_t res) {
-    return _z80_szyxch(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF);
-}
-
-static inline uint8_t _z80_sub_flags(uint8_t acc, uint8_t val, uint32_t res) {
-    return Z80_NF|_z80_szyxch(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF);
-}
-
-static inline uint8_t _z80_cp_flags(uint8_t acc, uint8_t val, uint32_t res) {
-    return Z80_NF|(_z80_sz(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF);
-}
-
-static inline uint8_t _z80_sziff2_flags(uint64_t ws, uint64_t r2, uint8_t val) {
-    uint8_t f = _G8(ws,_F) & Z80_CF;
-    f |= _z80_sz(val)|(val&(Z80_YF|Z80_XF))|((r2 & _BIT_IFF2) ? Z80_PF : 0);
-    return f;
-}
-
 /* sign+zero+parity lookup table */
 static uint8_t _z80_szp[256] = {
   0x44,0x00,0x00,0x04,0x00,0x04,0x04,0x00,0x08,0x0c,0x0c,0x08,0x0c,0x08,0x08,0x0c,
@@ -791,73 +775,6 @@ static uint8_t _z80_szp[256] = {
   0xa0,0xa4,0xa4,0xa0,0xa4,0xa0,0xa0,0xa4,0xac,0xa8,0xa8,0xac,0xa8,0xac,0xac,0xa8,
   0xa4,0xa0,0xa0,0xa4,0xa0,0xa4,0xa4,0xa0,0xa8,0xac,0xac,0xa8,0xac,0xa8,0xa8,0xac,
 };
-
-/* ALU functions */
-static inline uint64_t _z80_add8(uint64_t ws, uint8_t val) {
-    uint8_t acc = _G8(ws,_A);
-    uint32_t res = acc + val;
-    _S8(ws,_F,_z80_add_flags(acc,val,res));
-    _S8(ws,_A,res);
-    return ws;
-}
-
-static inline uint64_t _z80_adc8(uint64_t ws, uint8_t val) {
-    uint8_t acc = _G8(ws,_A);
-    uint32_t res = acc + val + (_G8(ws,_F) & Z80_CF);
-    _S8(ws,_F,_z80_add_flags(acc,val,res));
-    _S8(ws,_A,res);
-    return ws;
-}
-
-static inline uint64_t _z80_sub8(uint64_t ws, uint8_t val) {
-    uint8_t acc = _G8(ws,_A);
-    uint32_t res = (uint32_t) ((int)acc - (int)val);
-    _S8(ws,_F,_z80_sub_flags(acc,val,res));
-    _S8(ws,_A,res);
-    return ws;
-}
-
-static inline uint64_t _z80_neg8(uint64_t ws) {
-    uint8_t val = _G8(ws,_A);
-    _S8(ws,_A,0);
-    return _z80_sub8(ws,val);
-}
-
-static inline uint64_t _z80_sbc8(uint64_t ws, uint8_t val) {
-    uint8_t acc = _G8(ws,_A);
-    uint32_t res = (uint32_t) ((int)acc - (int)val - (_G8(ws,_F) & Z80_CF));
-    _S8(ws,_F,_z80_sub_flags(acc,val,res));
-    _S8(ws,_A,res);
-    return ws;
-}
-
-static inline uint64_t _z80_and8(uint64_t ws, uint8_t val) {
-    val &= _G8(ws,_A);
-    _S8(ws,_F,_z80_szp[val]|Z80_HF);
-    _S8(ws,_A,val);
-    return ws;
-}
-
-static inline uint64_t _z80_xor8(uint64_t ws, uint8_t val) {
-    val ^= _G8(ws,_A);
-    _S8(ws,_F,_z80_szp[val]);
-    _S8(ws,_A,val);
-    return ws;
-}
-
-static inline uint64_t _z80_or8(uint64_t ws, uint8_t val) {
-    val |= _G8(ws,_A);
-    _S8(ws,_F,_z80_szp[val]);
-    _S8(ws,_A,val);
-    return ws;
-}
-
-static inline uint64_t _z80_cp8(uint64_t ws, uint8_t val) {
-    uint8_t acc = _G8(ws,_A);
-    uint32_t res = (uint32_t) ((int)acc - (int)val);
-    _S8(ws,_F,_z80_cp_flags(acc,val,res));
-    return ws;
-}
 
 static inline uint64_t _z80_daa(uint64_t ws) {
     uint8_t a = _G8(ws,_A);
@@ -1048,6 +965,12 @@ static inline uint64_t _z80_flush_r1(uint64_t ws, uint64_t r1, uint64_t map_bits
 #undef _BUMPR
 #undef _FETCH
 #undef _FETCH_CB
+#undef _SZ
+#undef _SZYXCH
+#undef _ADD_FLAGS
+#undef _SUB_FLAGS
+#undef _CP_FLAGS
+#undef _SZIFF2_FLAGS
 #undef _S_A
 #undef _S_F
 #undef _S_L

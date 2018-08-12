@@ -642,7 +642,7 @@ def cpi_cpd_cpir_cpdr(y):
     src+='_S_HL(hl);'
     src+='_T(5);'
     src+='int r=((int)_G_A())-d8;'
-    src+='uint8_t f=(_G_F()&Z80_CF)|Z80_NF|_z80_sz(r);'
+    src+='uint8_t f=(_G_F()&Z80_CF)|Z80_NF|_SZ(r);'
     src+='if((r&0x0F)>(_G_A()&0x0F)){'
     src+='f|=Z80_HF;'
     src+='r--;'
@@ -848,28 +848,102 @@ def out_r_ic(y):
 #-------------------------------------------------------------------------------
 #   ALU functions.
 #
+def add8():
+    src ='{'
+    src+='uint8_t acc=_G_A();'
+    src+='uint32_t res=acc+d8;'
+    src+='_S_F(_ADD_FLAGS(acc,d8,res));'
+    src+='_S_A(res);'
+    src+='}'
+    return src
+
+def adc8():
+    src ='{'
+    src+='uint8_t acc=_G_A();'
+    src+='uint32_t res=acc+d8+(_G_F()&Z80_CF);'
+    src+='_S_F(_ADD_FLAGS(acc,d8,res));'
+    src+='_S_A(res);'
+    src+='}'
+    return src
+
+def sub8():
+    src ='{'
+    src+='uint8_t acc=_G_A();'
+    src+='uint32_t res=(uint32_t)((int)acc-(int)d8);'
+    src+='_S_F(_SUB_FLAGS(acc,d8,res));'
+    src+='_S_A(res);'
+    src+='}'
+    return src
+
+def sbc8():
+    src ='{'
+    src+='uint8_t acc=_G_A();'
+    src+='uint32_t res=(uint32_t)((int)acc-(int)d8-(_G_F()&Z80_CF));'
+    src+='_S_F(_SUB_FLAGS(acc,d8,res));'
+    src+='_S_A(res);'
+    src+='}'
+    return src
+
+def and8():
+    src ='{'
+    src+='d8&=_G_A();'
+    src+='_S_F(_z80_szp[d8]|Z80_HF);'
+    src+='_S_A(d8);'
+    src+='}'
+    return src
+
+def xor8():
+    src ='{'
+    src+='d8^=_G_A();'
+    src+='_S_F(_z80_szp[d8]);'
+    src+='_S_A(d8);'
+    src+='}'
+    return src
+
+def or8():
+    src ='{'
+    src+='d8|=_G_A();'
+    src+='_S_F(_z80_szp[d8]);'
+    src+='_S_A(d8);'
+    src+='}'
+    return src
+
+def cp8():
+    src ='{'
+    src+='uint8_t acc=_G_A();'
+    src+='int32_t res=(uint32_t)((int)acc-(int)d8);'
+    src+='_S_F(_CP_FLAGS(acc,d8,res));'
+    src+='}'
+    return src
+
 def alu8(y):
     if (y==0):
-        return 'ws=_z80_add8(ws,d8);'
+        return add8()
     elif (y==1):
-        return 'ws=_z80_adc8(ws,d8);'
+        return adc8()
     elif (y==2):
-        return 'ws=_z80_sub8(ws,d8);'
+        return sub8()
     elif (y==3):
-        return 'ws=_z80_sbc8(ws,d8);'
+        return sbc8()
     elif (y==4):
-        return 'ws=_z80_and8(ws,d8);'
+        return and8()
     elif (y==5):
-        return 'ws=_z80_xor8(ws,d8);'
+        return xor8()
     elif (y==6):
-        return 'ws=_z80_or8(ws,d8);'
+        return or8()
     elif (y==7):
-        return 'ws=_z80_cp8(ws,d8);'
+        return cp8()
+
+def neg8():
+    src ='d8=_G_A();'
+    src+='_S_A(0);'
+    src+=sub8();
+    return src
 
 def inc8():
     src ='{'
     src+='uint8_t r=d8+1;'
-    src+='uint8_t f=_z80_sz(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
+    src+='uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
     src+='if(r==0x80){f|=Z80_VF;}'
     src+='_S_F(f|(_G_F()&Z80_CF));'
     src+='d8=r;'
@@ -879,7 +953,7 @@ def inc8():
 def dec8():
     src ='{'
     src+='uint8_t r=d8-1;'
-    src+='uint8_t f=Z80_NF|_z80_sz(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
+    src+='uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
     src+='if(r==0x7F){f|=Z80_VF;}'
     src+='_S_F(f|(_G_F()&Z80_CF));'
     src+='d8=r;'
@@ -1279,7 +1353,7 @@ def enc_ed_op(op) :
         if z == 4:
             # NEG
             o.cmt = 'NEG'
-            o.src = 'ws=_z80_neg8(ws);'
+            o.src = neg8()
         if z == 5:
             # RETN, RETI (only RETI implemented!)
             if y == 1:
@@ -1295,8 +1369,8 @@ def enc_ed_op(op) :
             op_tbl = [
                 [ 'LD I,A', '_T(1);_S_I(_G_A());' ],
                 [ 'LD R,A', '_T(1);_S_R(_G_A());' ],
-                [ 'LD A,I', '_T(1);d8=_G_I();_S_A(d8);_S_F(_z80_sziff2_flags(ws,r2,d8));' ],
-                [ 'LD A,R', '_T(1);d8=_G_R();_S_A(d8);_S_F(_z80_sziff2_flags(ws,r2,d8));' ],
+                [ 'LD A,I', '_T(1);d8=_G_I();_S_A(d8);_S_F(_SZIFF2_FLAGS(d8));' ],
+                [ 'LD A,R', '_T(1);d8=_G_R();_S_A(d8);_S_F(_SZIFF2_FLAGS(d8));' ],
                 [ 'RRD', rrd() ],
                 [ 'RLD', rld() ],
                 [ 'NOP (ED)', ' ' ],
