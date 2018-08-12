@@ -619,245 +619,148 @@ def call_cc_nn(y):
     return src
 
 #-------------------------------------------------------------------------------
-#   ldi
+#   ldi_ldd_ldir_lddr()
 #
-def ldi():
-    src =rd('c.HL','v')
-    src+=wr('c.DE','v')
-    src+=tick(2)
-    src+='v+=c.A;'
-    src+='f=c.F&(Z80_SF|Z80_ZF|Z80_CF);'
-    src+='if(v&0x02){f|=Z80_YF;}'
-    src+='if(v&0x08){f|=Z80_XF;}'
-    src+='c.HL++;c.DE++;c.BC--;'
-    src+='if(c.BC){f|=Z80_VF;}'
-    src+='c.F=f;'
-    return src
-
-#-------------------------------------------------------------------------------
-#   ldir
+#   Generate code for LDI, LDIR, LDD, LDDR
 #
-def ldir():
-    src=ldi()
-    src+='if(c.BC){'
-    src+='c.PC-=2;'
-    src+='c.WZ=c.PC+1;'
-    src+=tick(5)
+def ldi_ldd_ldir_lddr(y):
+    src ='{'
+    src+='uint16_t hl=_G_HL();'
+    src+='uint16_t de=_G_DE();'
+    src+='_MR(hl,d8);'
+    src+='_MW(de,d8);'
+    if y & 1:
+        src+='hl--;de--;'
+    else:
+        src+='hl++;de++;'
+    src+='_S_HL(hl);'
+    src+='_S_DE(de);'
+    src+='_T(2);'
+    src+='d8+=_G_A();'
+    src+='uint8_t f=_G_F()&(Z80_SF|Z80_ZF|Z80_CF);'
+    src+='if(d8&0x02){f|=Z80_YF;}'
+    src+='if(d8&0x08){f|=Z80_XF;}'
+    src+='uint16_t bc=_G_BC();'
+    src+='bc--;'
+    src+='_S_BC(bc);'
+    src+='if(bc){f|=Z80_VF;}'
+    src+='_S_F(f);'
+    if y >= 6:
+        src+='if(bc){'
+        src+='pc-=2;'
+        src+='_S_WZ(pc+1);'
+        src+='_T(5);'
+        src+='}'
     src+='}'
     return src
 
 #-------------------------------------------------------------------------------
-#   ldd
+#   cpi_cpd_cpir_cpdr()
 #
-def ldd():
-    src =rd('c.HL','v')
-    src+=wr('c.DE','v')
-    src+=tick(2)
-    src+='v+=c.A;'
-    src+='f=c.F&(Z80_SF|Z80_ZF|Z80_CF);'
-    src+='if(v&0x02){f|=Z80_YF;}'
-    src+='if(v&0x08){f|=Z80_XF;}'
-    src+='c.HL--;c.DE--;c.BC--;'
-    src+='if(c.BC){f|=Z80_VF;}'
-    src+='c.F=f;'
-    return src
-
-#-------------------------------------------------------------------------------
-#   lddr()
+#   Generate code for CPI, CPD, CPIR, CPDR
 #
-def lddr():
-    src =ldd()
-    src+='if(c.BC){'
-    src+='c.PC-=2;'
-    src+='c.WZ=c.PC+1;'
-    src+=tick(5)
-    src+='}'
-    return src
-
-#-------------------------------------------------------------------------------
-#   cpi()
-#
-def cpi():
-    src =rd('c.HL','v')
-    src+=tick(5)
-    src+='{int r=(int)c.A-v;'
-    src+='f=Z80_NF|(c.F&Z80_CF)|'+sz('r')+';'
-    src+='if((r&0x0F)>(c.A&0x0F)){'
+def cpi_cpd_cpir_cpdr(y):
+    src ='{'
+    src+='uint16_t hl = _G_HL();'
+    src+='_MR(hl,d8);'
+    src+='uint16_t wz = _G_WZ();'
+    if y & 1:
+        src+='hl--;wz--;'
+    else:
+        src+='hl++;wz++;'
+    src+='_S_WZ(wz);'
+    src+='_S_HL(hl);'
+    src+='_T(5);'
+    src+='int r=((int)_G_A())-d8;'
+    src+='uint8_t f=(_G_F()&Z80_CF)|Z80_NF|_z80_sz(r);'
+    src+='if((r&0x0F)>(_G_A()&0x0F)){'
     src+='f|=Z80_HF;'
     src+='r--;'
     src+='}'
     src+='if(r&0x02){f|=Z80_YF;}'
     src+='if(r&0x08){f|=Z80_XF;}'
-    src+='}'
-    src+='c.WZ++;c.HL++;c.BC--;'
-    src+='if(c.BC){f|=Z80_VF;}'
-    src+='c.F=f;'
-    return src
-
-#-------------------------------------------------------------------------------
-#   cpir()
-#
-def cpir():
-    src =cpi()
-    src+='if(c.BC&&!(c.F&Z80_ZF)){'
-    src+='c.PC-=2;'
-    src+='c.WZ=c.PC+1;'   # FIXME: is this correct (see memptr_eng.txt)
-    src+=tick(5)
+    src+='uint16_t bc=_G_BC();'
+    src+='bc--;'
+    src+='_S_BC(bc);'
+    src+='if(bc){f|=Z80_VF;}'
+    src+='_S8(ws,_F,f);'
+    if y >= 6:
+        src+='if(bc&&!(f&Z80_ZF)){'
+        src+='pc-=2;'
+        src+='_S_WZ(pc+1);'
+        src+='_T(5);'
+        src+='}'
     src+='}'
     return src
 
 #-------------------------------------------------------------------------------
-#   cpd()
+#   ini_ind_inir_indr()
 #
-def cpd():
-    src =rd('c.HL','v')
-    src+='{int r=(int)c.A-v;'
-    src+=tick(5)
-    src+='f=Z80_NF|(c.F&Z80_CF)|'+sz('r')+';'
-    src+='if((r&0x0F)>(c.A&0x0F)){'
-    src+='f|=Z80_HF;'
-    src+='r--;'
-    src+='}'
-    src+='if(r&0x02){f|=Z80_YF;}'
-    src+='if(r&0x08){f|=Z80_XF;}'
-    src+='}'
-    src+='c.WZ--;c.HL--;c.BC--;'
-    src+='if(c.BC){f|=Z80_VF;}'
-    src+='c.F=f;'
-    return src
-
-#-------------------------------------------------------------------------------
-#   cpdr()
+#   Generate code for INI, IND, INIR, INDR
 #
-def cpdr():
-    src =cpd()
-    src+='if((c.BC)&&!(c.F&Z80_ZF)){'
-    src+='c.PC-=2;'
-    src+='c.WZ=c.PC+1;'
-    src+=tick(5)
-    src+='}'
-    return src
-
-#-------------------------------------------------------------------------------
-#   ini_ind_flags(io_val,c_add)
-#   outi_outd_flags(io_val,c_add)
-#
-#   Returns a string which evaluates the flags for ini and ind instructions into F.
-#   NOTE: most INI/OUTI flag settings are undocumented in the official
-#   docs, so this is taken from MAME, there's also more
-#   information here: http://www.z80.info/z80undoc3.txt
-#
-def ini_ind_flags(io_val,c_add):
-    src ='f=c.B?(c.B&Z80_SF):Z80_ZF;'
-    src+='if('+io_val+'&Z80_SF){f|=Z80_NF;}'
-    src+='{';
-    src+='uint32_t t=(uint32_t)((c.C+('+c_add+'))&0xFF)+(uint32_t)'+io_val+';'
-    src+='if(t&0x100){f|=(Z80_HF|Z80_CF);}'
-    src+='f|=_z80_szp[((uint8_t)(t&0x07))^c.B]&Z80_PF;'
-    src+='}'
-    src+='c.F=f;'
-    return src
-
-def outi_outd_flags(io_val):
-    src='f=c.B?(c.B&Z80_SF):Z80_ZF;'
-    src+='if('+io_val+'&Z80_SF){f|=Z80_NF;}'
-    src+='{';
-    src+='uint32_t t=(uint32_t)c.L+(uint32_t)'+io_val+';'
-    src+='if(t&0x100){f|=(Z80_HF|Z80_CF);}'
-    src+='f|=_z80_szp[((uint8_t)(t&0x07))^c.B]&Z80_PF;'
-    src+='}'
-    src+='c.F=f;'
-    return src
-
-#-------------------------------------------------------------------------------
-#   ini()
-#
-def ini():
-    src =tick()
-    src+='c.WZ=c.BC;'
-    src+=inp('c.WZ++','v')
-    src+='c.B--;'
-    src+=wr('c.HL++','v')
-    src+=ini_ind_flags('v','+1')
-    return src
-
-#-------------------------------------------------------------------------------
-#   inir()
-#
-def inir():
-    src =ini()
-    src+='if(c.B){'
-    src+='c.PC-=2;'
-    src+=tick(5)
+def ini_ind_inir_indr(y):
+    src ='{'
+    src+='_T(1);'
+    src+='addr=_G_BC();'
+    src+='uint16_t hl=_G_HL();'
+    src+='_IN(addr,d8);'
+    src+='_MW(hl,d8);'
+    src+='uint8_t b=_G_B();'
+    src+='uint8_t c=_G_C();'
+    src+='b--;'
+    if y & 1:
+        src+='addr--;hl--;c--;'
+    else:
+        src+='addr++;hl++;c++;'
+    src+='_S_B(b);'
+    src+='_S_HL(hl);'
+    src+='_S_WZ(addr);'
+    src+='uint8_t f=b?(b&Z80_SF):Z80_ZF;'
+    src+='if(d8&Z80_SF){f|=Z80_NF;}'
+    src+='uint32_t t=(uint32_t)(c&0xFF)+d8;'
+    src+='if(t&0x100){f|=Z80_HF|Z80_CF;}'
+    src+='f|=_z80_szp[((uint8_t)(t&0x07))^b]&Z80_PF;'
+    src+='_S_F(f);'
+    if y >= 6:
+        src+='if(b){'
+        src+='pc-=2;'
+        src+='_T(5);'
+        src+='}'
     src+='}'
     return src
 
 #-------------------------------------------------------------------------------
-#   ind()
+#   outi_outd_otir_otdr()
 #
-def ind():
-    src =tick()
-    src+='c.WZ=c.BC;'
-    src+=inp('c.WZ--','v')
-    src+='c.B--;'
-    src+=wr('c.HL--','v')
-    src+=ini_ind_flags('v','-1')
-    return src
-
-#-------------------------------------------------------------------------------
-#   indr()
+#   Generate code OUTI, OUTD, OTIR, OTDR
 #
-def indr():
-    src =ind()
-    src+='if(c.B){'
-    src+='c.PC-=2;'
-    src+=tick(5)
-    src+='}'
-    return src
-
-#-------------------------------------------------------------------------------
-#   outi()
-#
-def outi():
-    src =tick()
-    src+=rd('c.HL++','v')
-    src+='c.B--;'
-    src+='c.WZ=c.BC;'
-    src+=out('c.WZ++','v')
-    src+=outi_outd_flags('v')
-    return src
-
-#-------------------------------------------------------------------------------
-#   otir()
-#
-def otir():
-    src =outi()
-    src+='if(c.B){'
-    src+='c.PC-=2;'
-    src+=tick(5)
-    src+='}'
-    return src
-
-#-------------------------------------------------------------------------------
-#   outd()
-#
-def outd():
-    src =tick()
-    src+=rd('c.HL--','v')
-    src+='c.B--;'
-    src+='c.WZ=c.BC;'
-    src+=out('c.WZ--','v')
-    src+=outi_outd_flags('v')
-    return src
-
-#-------------------------------------------------------------------------------
-#   otdr()
-#
-def otdr():
-    src =outd()
-    src+='if(c.B){'
-    src+='c.PC-=2;'
-    src+=tick(5)
+def outi_outd_otir_otdr(y):
+    src ='{'
+    src+='_T(1);'
+    src+='uint16_t hl=_G_HL();'
+    src+='_MR(hl,d8);'
+    src+='uint8_t b=_G_B();'
+    src+='b--;'
+    src+='_S_B(b);'
+    src+='addr=_G_BC();'
+    src+='_OUT(addr,d8);'
+    if y & 1:
+        src+='addr--;hl--;'
+    else:
+        src+='addr++; hl++;'
+    src+='_S_HL(hl);'
+    src+='_S_WZ(addr);'
+    src+='uint8_t f=b?(b&Z80_SF):Z80_ZF;'
+    src+='if(d8&Z80_SF){f|=Z80_NF;}'
+    src+='uint32_t t=(uint32_t)_G_L()+(uint32_t)d8;'
+    src+='if (t&0x0100){f|=Z80_HF|Z80_CF;}'
+    src+='f|=_z80_szp[((uint8_t)(t&0x07))^b]&Z80_PF;'
+    src+='_S_F(f);'
+    if y >= 6:
+        src+='if(b){'
+        src+='pc-=2;'
+        src+='_T(5);'
+        src+='}'
     src+='}'
     return src
 
@@ -1344,37 +1247,37 @@ def enc_ed_op(op) :
     p = y>>1
     q = y&1
 
-    #if x == 2:
-    #    # block instructions (LDIR etc)
-    #    if y >= 4 and z < 4 :
-    #        op_tbl = [
-    #            [ 
-    #                [ 'LDI',  ldi() ],
-    #                [ 'LDD',  ldd() ],
-    #                [ 'LDIR', ldir() ],
-    #                [ 'LDDR', lddr() ]
-    #            ],
-    #            [
-    #                [ 'CPI',  cpi() ],
-    #                [ 'CPD',  cpd() ],
-    #                [ 'CPIR', cpir() ],
-    #                [ 'CPDR', cpdr() ]
-    #            ],
-    #            [
-    #                [ 'INI',  ini() ],
-    #                [ 'IND',  ind() ],
-    #                [ 'INIR', inir() ],
-    #                [ 'INDR', indr() ]
-    #            ],
-    #            [
-    #                [ 'OUTI', outi() ],
-    #                [ 'OUTD', outd() ],
-    #                [ 'OTIR', otir() ],
-    #                [ 'OTDR', otdr() ]
-    #            ]
-    #        ]
-    #        o.cmt = op_tbl[z][y-4][0]
-    #        o.src = op_tbl[z][y-4][1]
+    if x == 2:
+        # block instructions (LDIR etc)
+        if y >= 4 and z < 4 :
+            op_tbl = [
+                [ 
+                    [ 'LDI',  ldi_ldd_ldir_lddr(y) ],
+                    [ 'LDD',  ldi_ldd_ldir_lddr(y) ],
+                    [ 'LDIR', ldi_ldd_ldir_lddr(y) ],
+                    [ 'LDDR', ldi_ldd_ldir_lddr(y) ]
+                ],
+                [
+                    [ 'CPI',  cpi_cpd_cpir_cpdr(y) ],
+                    [ 'CPD',  cpi_cpd_cpir_cpdr(y) ],
+                    [ 'CPIR', cpi_cpd_cpir_cpdr(y) ],
+                    [ 'CPDR', cpi_cpd_cpir_cpdr(y) ]
+                ],
+                [
+                    [ 'INI',  ini_ind_inir_indr(y) ],
+                    [ 'IND',  ini_ind_inir_indr(y) ],
+                    [ 'INIR', ini_ind_inir_indr(y) ],
+                    [ 'INDR', ini_ind_inir_indr(y) ]
+                ],
+                [
+                    [ 'OUTI', outi_outd_otir_otdr(y) ],
+                    [ 'OUTD', outi_outd_otir_otdr(y) ],
+                    [ 'OTIR', outi_outd_otir_otdr(y) ],
+                    [ 'OTDR', outi_outd_otir_otdr(y) ]
+                ]
+            ]
+            o.cmt = op_tbl[z][y-4][0]
+            o.src = op_tbl[z][y-4][1]
 
     if x == 1:
         # misc ops
