@@ -357,7 +357,7 @@ def write_cb_ops():
     l('    /* BIT (bit test) */')
     l('    r = d8 & (1<<y);')
     l('    f = (f&Z80_CF) | Z80_HF | (r?(r&Z80_SF):(Z80_ZF|Z80_PF));')
-    l('    if (z == 6) {')
+    l('    if ((z == 6) || _IDX()) {')
     l('      f |= (_G_WZ()>>8) & (Z80_YF|Z80_XF);')
     l('    }')
     l('    else {')

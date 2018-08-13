@@ -287,7 +287,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             /* BIT (bit test) */
             r = d8 & (1<<y);
             f = (f&Z80_CF) | Z80_HF | (r?(r&Z80_SF):(Z80_ZF|Z80_PF));
-            if (z == 6) {
+            if ((z == 6) || _IDX()) {
               f |= (_G_WZ()>>8) & (Z80_YF|Z80_XF);
             }
             else {
