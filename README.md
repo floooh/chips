@@ -33,13 +33,21 @@ The Zilog Z80 CPU.
 - all undocumented instructions supported
 - internal WZ register and undocumented XF and YF flags supported
 - support for interrupt-priority handling (daisy chain) with help from the tick callback
-- runs the ZEXDOC and ZEXALL tests (more to be added)
+- runs the ZEXDOC and ZEXALL tests
+- runs the CPU test of the FUSE ZX Spectrum emulator, with the following exceptions:
+  - the state of the XF/YF undocumented flags is ignored for indirect BIT
+  test instructions, FUSE doesn't agree here with ZEXALL and I think ZEXALL
+  is right (the state of the XF/YF flags depends on the current state of the
+  internal WZ register)
+  - FUSE assumes that the PC after a HALT instruction has been incremented,
+  while the chips Z80 emulator doesn't incrmenent the PC, this shouldn't make
+  any difference though
+- properly handles sequences of DD/FD prefix bytes
 - NOT IMPLEMENTED/TODO:
     - NMI (non-maskable interrupts)
     - interrupt mode 0
     - refresh cycle in second half of opcode fetch machine cycle
     - bus request/acknowledge (BUSRQ/BUSAK pins)
-    - sequences of DD/FD prefix bytes behave differently than a real CPU
 
 ### Z80 PIO (chips/z80pio.h)
 
