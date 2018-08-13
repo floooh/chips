@@ -429,10 +429,12 @@ extern void z80_set_d(z80_t* cpu, uint8_t v);
 extern void z80_set_c(z80_t* cpu, uint8_t v);
 extern void z80_set_b(z80_t* cpu, uint8_t v);
 extern void z80_set_fa(z80_t* cpu, uint16_t v);
+extern void z80_set_af(z80_t* cpi, uint16_t v);
 extern void z80_set_hl(z80_t* cpu, uint16_t v);
 extern void z80_set_de(z80_t* cpu, uint16_t v);
 extern void z80_set_bc(z80_t* cpu, uint16_t v);
 extern void z80_set_fa_(z80_t* cpu, uint16_t v);
+extern void z80_set_af_(z80_t* cpi, uint16_t v);
 extern void z80_set_hl_(z80_t* cpu, uint16_t v);
 extern void z80_set_de_(z80_t* cpu, uint16_t v);
 extern void z80_set_bc_(z80_t* cpu, uint16_t v);
@@ -456,10 +458,12 @@ extern uint8_t z80_d(z80_t* cpu);
 extern uint8_t z80_c(z80_t* cpu);
 extern uint8_t z80_b(z80_t* cpu);
 extern uint16_t z80_fa(z80_t* cpu);
+extern uint16_t z80_af(z80_t* cpu);
 extern uint16_t z80_hl(z80_t* cpu);
 extern uint16_t z80_de(z80_t* cpu);
 extern uint16_t z80_bc(z80_t* cpu);
 extern uint16_t z80_fa_(z80_t* cpu);
+extern uint16_t z80_af_(z80_t* cpu);
 extern uint16_t z80_hl_(z80_t* cpu);
 extern uint16_t z80_de_(z80_t* cpu);
 extern uint16_t z80_bc_(z80_t* cpu);
@@ -656,11 +660,13 @@ void z80_set_e(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_E,v); }
 void z80_set_d(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_D,v); }
 void z80_set_c(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_C,v); }
 void z80_set_b(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_B,v); }
+void z80_set_af(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_FA,((v<<8)&0xFF00)|((v>>8)&0x00FF)); }
 void z80_set_fa(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_FA,v); }
 void z80_set_hl(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_HL,v); }
 void z80_set_de(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_DE,v); }
 void z80_set_bc(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_BC,v); }
 void z80_set_fa_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_FA,v); }
+void z80_set_af_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_FA,((v<<8)&0xFF00)|((v>>8)&0x00FF)); }
 void z80_set_hl_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_HL,v); }
 void z80_set_de_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_DE,v); }
 void z80_set_bc_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_BC,v); }
@@ -685,10 +691,12 @@ uint8_t z80_d(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_D); }
 uint8_t z80_c(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_C); }
 uint8_t z80_b(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_B); }
 uint16_t z80_fa(z80_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_FA); }
+uint16_t z80_af(z80_t* cpu)       { uint16_t d16=_G16(cpu->bc_de_hl_fa,_FA); return (d16<<8)|(d16>>8); }
 uint16_t z80_hl(z80_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_HL); }
 uint16_t z80_de(z80_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_DE); }
 uint16_t z80_bc(z80_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_BC); }
 uint16_t z80_fa_(z80_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_FA); }
+uint16_t z80_af_(z80_t* cpu)      { uint16_t d16=_G16(cpu->bc_de_hl_fa_,_FA); return (d16<<8)|(d16>>8); }
 uint16_t z80_hl_(z80_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_HL); }
 uint16_t z80_de_(z80_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_DE); }
 uint16_t z80_bc_(z80_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_BC); }
