@@ -72,6 +72,23 @@
         (usually once per machine cycle, but also for 'filler ticks' or wait
         state ticks). To check if a trap has been hit, test whether the 
         z80_t.trap_id is >= 0.
+        NOTE: the z80_exec() function may return in the 'middle' of an
+        DD/FD extended instruction (right after the prefix byte). If this
+        is the case, z80_opdone() will return false.
+
+    ~~~C
+    bool z80_opdone(z80_t* cpu)
+    ~~~
+        Return true if z80_exec() has returned at the end of an instruction,
+        and false if the CPU is in the middle of a DD/FD prefix instruction.
+
+    ~~~C
+    void z80_set_x(z80_t* cpu, uint8_t val)
+    void z80_set_xx(z80_t* cpu, uint16_t val)
+    uint8_t z80_x(z80_t* cpu)
+    uint16_t z80_xx(z80_t* cpu)
+    ~~~
+        Set and get Z80 registers and flags.
 
     ~~~C
     void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr)
