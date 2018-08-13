@@ -833,7 +833,7 @@ static inline uint64_t _z80_scf(uint64_t ws) {
 static inline uint64_t _z80_ccf(uint64_t ws) {
     uint8_t a = _G8(ws,_A);
     uint8_t f = _G8(ws,_F);
-    f = ((f & (Z80_SF|Z80_ZF|Z80_YF|Z80_XF|Z80_PF|Z80_CF)) | ((f & Z80_CF)<<4) | (a & (Z80_YF|Z80_XF))) ^ Z80_CF;
+    f = ((f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | ((f & Z80_CF)<<4) | (a & (Z80_YF|Z80_XF))) ^ Z80_CF;
     _S8(ws,_F,f);
     return ws;
 }
