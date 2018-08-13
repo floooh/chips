@@ -815,6 +815,21 @@ def reti():
     return src
 
 #-------------------------------------------------------------------------------
+#   reti()
+#
+def retn():
+    # same as RET, but also set the virtual Z80_RETI pin and copy IFF2->IFF1
+    src  = '_ON(Z80_RETI);'
+    src += 'd16=_G_SP();'
+    src += '_MR(d16++,d8);pc=d8;'
+    src += '_MR(d16++,d8);pc|=d8<<8;'
+    src += '_S_SP(d16);'
+    src += '_S_WZ(pc);'
+    src += 'if (r2&_BIT_IFF2){r2|=_BIT_IFF1;}else{r2&=~_BIT_IFF1;}'
+    return src
+
+
+#-------------------------------------------------------------------------------
 #   rst()
 #
 def rst(y):
@@ -1372,6 +1387,9 @@ def enc_ed_op(op) :
             if y == 1:
                 o.cmt = 'RETI'
                 o.src = reti()
+            else:
+                o.cmt = 'RETN'
+                o.src = retn()
         if z == 6:
             # IM m
             im_mode = [ 0, 0, 1, 2, 0, 0, 1, 2 ]
