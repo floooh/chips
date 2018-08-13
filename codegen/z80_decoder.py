@@ -813,7 +813,8 @@ def reti():
 #   rst()
 #
 def rst(y):
-    src ='d16= _G_SP();'
+    src ='_T(1);'
+    src+='d16= _G_SP();'
     src+='_MW(--d16, pc>>8);'
     src+='_MW(--d16, pc);'
     src+='_S_SP(d16);'

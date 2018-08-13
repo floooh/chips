@@ -232,7 +232,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xc4:/*CALL NZ,nn*/_IMM16(addr);if(!(_G_F()&Z80_ZF)){_T(1);uint16_t sp=_G_SP();_MW(--sp,pc>>8);_MW(--sp,pc);_S_SP(sp);pc=addr;}break;
       case 0xc5:/*PUSH BC*/_T(1);addr=_G_SP();d16=_G_BC();_MW(--addr,d16>>8);_MW(--addr,d16);_S_SP(addr);break;
       case 0xc6:/*ADD n*/_IMM8(d8);{uint8_t acc=_G_A();uint32_t res=acc+d8;_S_F(_ADD_FLAGS(acc,d8,res));_S_A(res);}break;
-      case 0xc7:/*RST 0x0*/d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x0;_S_WZ(pc);break;
+      case 0xc7:/*RST 0x0*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x0;_S_WZ(pc);break;
       case 0xc8:/*RET Z*/_T(1);if ((_G_F()&Z80_ZF)){uint8_t w,z;d16=_G_SP();_MR(d16++,z);_MR(d16++,w);_S_SP(d16);pc=(w<<8)|z;_S_WZ(pc);}break;
       case 0xc9:/*RET*/d16=_G_SP();_MR(d16++,d8);pc=d8;_MR(d16++,d8);pc|=d8<<8;_S_SP(d16);_S_WZ(pc);break;
       case 0xca:/*JP Z,nn*/_IMM16(addr);if((_G_F()&Z80_ZF)){pc=addr;}break;
@@ -322,7 +322,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xcc:/*CALL Z,nn*/_IMM16(addr);if((_G_F()&Z80_ZF)){_T(1);uint16_t sp=_G_SP();_MW(--sp,pc>>8);_MW(--sp,pc);_S_SP(sp);pc=addr;}break;
       case 0xcd:/*CALL nn*/_IMM16(addr);_T(1);d16=_G_SP();_MW(--d16,pc>>8);_MW(--d16,pc);_S_SP(d16);pc=addr;break;
       case 0xce:/*ADC n*/_IMM8(d8);{uint8_t acc=_G_A();uint32_t res=acc+d8+(_G_F()&Z80_CF);_S_F(_ADD_FLAGS(acc,d8,res));_S_A(res);}break;
-      case 0xcf:/*RST 0x8*/d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x8;_S_WZ(pc);break;
+      case 0xcf:/*RST 0x8*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x8;_S_WZ(pc);break;
       case 0xd0:/*RET NC*/_T(1);if (!(_G_F()&Z80_CF)){uint8_t w,z;d16=_G_SP();_MR(d16++,z);_MR(d16++,w);_S_SP(d16);pc=(w<<8)|z;_S_WZ(pc);}break;
       case 0xd1:/*POP DE*/addr=_G_SP();_MR(addr++,d8);d16=d8;_MR(addr++,d8);d16|=d8<<8;_S_DE(d16);_S_SP(addr);break;
       case 0xd2:/*JP NC,nn*/_IMM16(addr);if(!(_G_F()&Z80_CF)){pc=addr;}break;
@@ -330,7 +330,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xd4:/*CALL NC,nn*/_IMM16(addr);if(!(_G_F()&Z80_CF)){_T(1);uint16_t sp=_G_SP();_MW(--sp,pc>>8);_MW(--sp,pc);_S_SP(sp);pc=addr;}break;
       case 0xd5:/*PUSH DE*/_T(1);addr=_G_SP();d16=_G_DE();_MW(--addr,d16>>8);_MW(--addr,d16);_S_SP(addr);break;
       case 0xd6:/*SUB n*/_IMM8(d8);{uint8_t acc=_G_A();uint32_t res=(uint32_t)((int)acc-(int)d8);_S_F(_SUB_FLAGS(acc,d8,res));_S_A(res);}break;
-      case 0xd7:/*RST 0x10*/d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x10;_S_WZ(pc);break;
+      case 0xd7:/*RST 0x10*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x10;_S_WZ(pc);break;
       case 0xd8:/*RET C*/_T(1);if ((_G_F()&Z80_CF)){uint8_t w,z;d16=_G_SP();_MR(d16++,z);_MR(d16++,w);_S_SP(d16);pc=(w<<8)|z;_S_WZ(pc);}break;
       case 0xd9:/*EXX*/{r0=_z80_flush_r0(ws,r0,r2);const uint64_t rx=r3;r3=(r3&0xffff)|(r0&0xffffffffffff0000);r0=(r0&0xffff)|(rx&0xffffffffffff0000);ws=_z80_map_regs(r0, r1, r2);}break;
       case 0xda:/*JP C,nn*/_IMM16(addr);if((_G_F()&Z80_CF)){pc=addr;}break;
@@ -338,7 +338,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xdc:/*CALL C,nn*/_IMM16(addr);if((_G_F()&Z80_CF)){_T(1);uint16_t sp=_G_SP();_MW(--sp,pc>>8);_MW(--sp,pc);_S_SP(sp);pc=addr;}break;
       case 0xdd:/*DD prefix*/map_bits|=_BIT_USE_IX;continue;break;
       case 0xde:/*SBC n*/_IMM8(d8);{uint8_t acc=_G_A();uint32_t res=(uint32_t)((int)acc-(int)d8-(_G_F()&Z80_CF));_S_F(_SUB_FLAGS(acc,d8,res));_S_A(res);}break;
-      case 0xdf:/*RST 0x18*/d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x18;_S_WZ(pc);break;
+      case 0xdf:/*RST 0x18*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x18;_S_WZ(pc);break;
       case 0xe0:/*RET PO*/_T(1);if (!(_G_F()&Z80_PF)){uint8_t w,z;d16=_G_SP();_MR(d16++,z);_MR(d16++,w);_S_SP(d16);pc=(w<<8)|z;_S_WZ(pc);}break;
       case 0xe1:/*POP HL*/addr=_G_SP();_MR(addr++,d8);d16=d8;_MR(addr++,d8);d16|=d8<<8;_S_HL(d16);_S_SP(addr);break;
       case 0xe2:/*JP PO,nn*/_IMM16(addr);if(!(_G_F()&Z80_PF)){pc=addr;}break;
@@ -346,7 +346,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xe4:/*CALL PO,nn*/_IMM16(addr);if(!(_G_F()&Z80_PF)){_T(1);uint16_t sp=_G_SP();_MW(--sp,pc>>8);_MW(--sp,pc);_S_SP(sp);pc=addr;}break;
       case 0xe5:/*PUSH HL*/_T(1);addr=_G_SP();d16=_G_HL();_MW(--addr,d16>>8);_MW(--addr,d16);_S_SP(addr);break;
       case 0xe6:/*AND n*/_IMM8(d8);{d8&=_G_A();_S_F(_z80_szp[d8]|Z80_HF);_S_A(d8);}break;
-      case 0xe7:/*RST 0x20*/d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x20;_S_WZ(pc);break;
+      case 0xe7:/*RST 0x20*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x20;_S_WZ(pc);break;
       case 0xe8:/*RET PE*/_T(1);if ((_G_F()&Z80_PF)){uint8_t w,z;d16=_G_SP();_MR(d16++,z);_MR(d16++,w);_S_SP(d16);pc=(w<<8)|z;_S_WZ(pc);}break;
       case 0xe9:/*JP HL*/pc=_G_HL();break;
       case 0xea:/*JP PE,nn*/_IMM16(addr);if((_G_F()&Z80_PF)){pc=addr;}break;
@@ -433,7 +433,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       }
       break;
       case 0xee:/*XOR n*/_IMM8(d8);{d8^=_G_A();_S_F(_z80_szp[d8]);_S_A(d8);}break;
-      case 0xef:/*RST 0x28*/d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x28;_S_WZ(pc);break;
+      case 0xef:/*RST 0x28*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x28;_S_WZ(pc);break;
       case 0xf0:/*RET P*/_T(1);if (!(_G_F()&Z80_SF)){uint8_t w,z;d16=_G_SP();_MR(d16++,z);_MR(d16++,w);_S_SP(d16);pc=(w<<8)|z;_S_WZ(pc);}break;
       case 0xf1:/*POP FA*/addr=_G_SP();_MR(addr++,d8);d16=d8<<8;_MR(addr++,d8);d16|=d8;_S_FA(d16);_S_SP(addr);break;
       case 0xf2:/*JP P,nn*/_IMM16(addr);if(!(_G_F()&Z80_SF)){pc=addr;}break;
@@ -441,7 +441,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xf4:/*CALL P,nn*/_IMM16(addr);if(!(_G_F()&Z80_SF)){_T(1);uint16_t sp=_G_SP();_MW(--sp,pc>>8);_MW(--sp,pc);_S_SP(sp);pc=addr;}break;
       case 0xf5:/*PUSH FA*/_T(1);addr=_G_SP();d16=_G_FA();_MW(--addr,d16);_MW(--addr,d16>>8);_S_SP(addr);break;
       case 0xf6:/*OR n*/_IMM8(d8);{d8|=_G_A();_S_F(_z80_szp[d8]);_S_A(d8);}break;
-      case 0xf7:/*RST 0x30*/d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x30;_S_WZ(pc);break;
+      case 0xf7:/*RST 0x30*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x30;_S_WZ(pc);break;
       case 0xf8:/*RET M*/_T(1);if ((_G_F()&Z80_SF)){uint8_t w,z;d16=_G_SP();_MR(d16++,z);_MR(d16++,w);_S_SP(d16);pc=(w<<8)|z;_S_WZ(pc);}break;
       case 0xf9:/*LD SP,HL*/_T(2);_S_SP(_G_HL());break;
       case 0xfa:/*JP M,nn*/_IMM16(addr);if((_G_F()&Z80_SF)){pc=addr;}break;
@@ -449,7 +449,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xfc:/*CALL M,nn*/_IMM16(addr);if((_G_F()&Z80_SF)){_T(1);uint16_t sp=_G_SP();_MW(--sp,pc>>8);_MW(--sp,pc);_S_SP(sp);pc=addr;}break;
       case 0xfd:/*FD prefix*/map_bits|=_BIT_USE_IY;continue;break;
       case 0xfe:/*CP n*/_IMM8(d8);{uint8_t acc=_G_A();int32_t res=(uint32_t)((int)acc-(int)d8);_S_F(_CP_FLAGS(acc,d8,res));}break;
-      case 0xff:/*RST 0x38*/d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x38;_S_WZ(pc);break;
+      case 0xff:/*RST 0x38*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x38;_S_WZ(pc);break;
       default: break;
     }
     if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1)) {
