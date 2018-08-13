@@ -15,12 +15,6 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   uint16_t addr, d16;
   uint16_t pc = _G_PC();
   do {
-    _OFF(Z80_INT);
-    /* delay-enable interrupt flags */
-    if (r2 & _BIT_EI) {
-      r2 &= ~_BIT_EI;
-      r2 |= (_BIT_IFF1 | _BIT_IFF2);
-    }
     _FETCH(op)
     if (op == 0xED) {
       map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
@@ -507,6 +501,12 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       }
     }
     map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
+    _OFF(Z80_INT);
+    /* delay-enable interrupt flags */
+    if (r2 & _BIT_EI) {
+      r2 &= ~_BIT_EI;
+      r2 |= (_BIT_IFF1 | _BIT_IFF2);
+    }
     if (trap_addr != 0xFFFFFFFFFFFFFFFF) {
       uint64_t ta = trap_addr;
       for (int i = 0; i < Z80_MAX_NUM_TRAPS; i++) {
