@@ -305,15 +305,20 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
         }
         if (x != 1) {
           /* write result back */
-          if ((z == 6) || (r2 & (_BIT_USE_IX|_BIT_USE_IY))) {
+          if ((z == 6) || _IDX()) {
             /* (HL), (IX+d), (IY+d): write back to memory, for extended ops,
                even when the op is actually a register op
             */
             _MW(addr,r);
           }
           if (z != 6) {
-            /* write result back to register */
-            _S8(ws,rz,r);
+            /* write result back to register (special case for indexed + H/L! */
+            if (_IDX() && ((z==4)||(z==5))) {
+              _S8(r0,rz,r);
+            }
+            else {
+              _S8(ws,rz,r);
+            }
           }
         }
         _S_F(f);
