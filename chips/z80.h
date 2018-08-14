@@ -902,7 +902,7 @@ static inline uint64_t _z80_map_regs(uint64_t r0, uint64_t r1, uint64_t r2) {
         ws = (ws & ~(0xFFFFULL<<_HL)) | (((r1>>_IX)<<_HL) & (0xFFFFULL<<_HL));
     }
     else if (r2 & _BIT_USE_IY) {
-        ws = (ws & ~(0xFFFFULL<<_HL)) | (((r1>>_IY)<<_HL) & (0xFFFFULL<<_IY));
+        ws = (ws & ~(0xFFFFULL<<_HL)) | (((r1>>_IY)<<_HL) & (0xFFFFULL<<_HL));
     }
     return ws;
 }
