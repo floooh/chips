@@ -24,10 +24,24 @@
     - chips/z80pio.h
     - chips/mem.h
     - chips/kbd.h
+    - chips/clk.h
 
-    ## TODO: Describe Z1013
+    ## The Robotron Z1013
 
-    ## TODO: Describe embedding
+    The Z1013 was a very simple East German home computer, basically
+    just a Z80 CPU connected to some memory, and a PIO connected to
+    a keyboard matrix. It's easy to emulate because the system didn't
+    use any interrupts, and only simple PIO IN/OUT is required to
+    scan the keyboard matrix.
+
+    It had a 32x32 monochrome ASCII framebuffer starting at EC00,
+    and a 2 KByte operating system ROM starting at F000.
+
+    No cassette-tape / beeper sound emulated!
+
+    ## TODO: add hardware/software reference links
+
+    ## TODO: Describe Usage
 
 
     ## zlib/libpng license
@@ -55,16 +69,20 @@
 extern "C" {
 #endif
 
-/* Z1013 models */
+/* the width and height of the Z1013 display in pixels */
+#define Z1013_DISPLAY_WIDTH (256)
+#define Z1013_DISPLAY_HEIGHT (256)
+
+/* Z1013 types */
 typedef enum {
-    Z1013_MODEL_64,      /* Z1013.64 (default, latest model with 2 MHz and 64 KB RAM, new ROM) */
-    Z1013_MODEL_16,      /* Z1013.16 (2 MHz model with 16 KB RAM, new ROM) */
-    Z1013_MODEL_01,      /* Z1013.01 (original model, 1 MHz, 16 KB RAM) */
-} z1013_model_t;
+    Z1013_TYPE_64,      /* Z1013.64 (default, latest model with 2 MHz and 64 KB RAM, new ROM) */
+    Z1013_TYPE_16,      /* Z1013.16 (2 MHz model with 16 KB RAM, new ROM) */
+    Z1013_TYPE_01,      /* Z1013.01 (original model, 1 MHz, 16 KB RAM) */
+} z1013_type_t;
 
 /* configuration parameters for z1013_setup() */
 typedef struct {
-    z1013_model_t model;        /* default is Z1013_TYPE_64 */
+    z1013_type_t type;          /* default is Z1013_TYPE_64 */
     const void* rom_mon202;     /* pointer to static mon202 ROM data, required by Z1013_TYPE_01 */
     const void* rom_mon_a2;     /* pointer to static mon_a2 ROM data, required by Z1013_TYPE_16 and Z1013_TYPE_64 */
     const void* rom_font;       /* pointer to static font ROM data, required by all models */
@@ -77,13 +95,14 @@ typedef struct {
 
 /* Z1013 instance state */
 typedef struct {
-    z1013_model_t model;
     z80_t cpu;
     z80pio_t pio;
+    clk_t clk;
     mem_t mem;
     kbd_t kbd;
+    z1013_type_t type;
     uint8_t kbd_request_column;
-    bool kbd_request_hilo;
+    bool kbd_request_line_hilo;
     uint32_t* pixel_buffer;
     const void* rom_mon202;
     const void* rom_mon_a2;
@@ -97,18 +116,12 @@ extern void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
 extern void z1013_reset(z1013_t* sys);
 /* run the Z1013 instance for a given time in seconds */
 extern void z1013_exec(z1013_t* sys, double seconds);
-/* execute at least given number of ticks, return executed number of ticks */
-extern uint32_t z1013_step(z1013_t* sys, uint32_t ticks);
 /* send a key-down event */
-extern void z1013_key_down(z1013_t* sys, uint8_t key_code);
+extern void z1013_key_down(z1013_t* sys, int key_code);
 /* send a key-up event */
-extern void z1013_key_up(z1013_t* sys, uint8_t key_code);
-/* get the fixed width of the Z1013 display in pixels */
-extern int z1013_display_width(void);
-/* get the fixed height of the Z1013 display in pixels */
-extern int z1013_display_height(void);
-/* load a .z80 file into the emulator */
-extern bool z1013_load_z80(z1013_t* sys, const uint8_t* ptr, int num_bytes);
+extern void z1013_key_up(z1013_t* sys, int key_code);
+/* load a "KC .z80" file into the emulator */
+extern bool z1013_load_kcz80(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -123,9 +136,7 @@ extern bool z1013_load_z80(z1013_t* sys, const uint8_t* ptr, int num_bytes);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _Z1013_DISPLAY_WIDTH (256)
-#define _Z1013_DISPLAY_HEIGHT (256)
-#define _Z1013_DISPLAY_SIZE (_Z1013_DISPLAY_WITH*_Z1013_DISPLAY_HEIGHT*sizeof(uint32_t))
+#define _Z1013_DISPLAY_SIZE (Z1013_DISPLAY_WIDTH*Z1013_DISPLAY_HEIGHT*4)
 #define _Z1013_ROM_MON202_SIZE (2048)
 #define _Z1013_ROM_MON_A2_SIZE (2048)
 #define _Z1013_ROM_FONT_SIZE   (2048)
@@ -133,21 +144,13 @@ extern bool z1013_load_z80(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 extern uint64_t _z1013_tick(int num, uint64_t pins, void* user_data);
 extern uint8_t _z1013_pio_in(int port_id, void* user_data);
 extern void _z1013_pio_out(int port_id, uint8_t data, void* user_data);
-
-
-int z1013_display_width(void) {
-    return _Z1013_DISPLAY_WIDTH;
-}
-
-int z1013_display_height(void) {
-    return _Z1013_DISPLAY_HEIGHT;
-}
+extern void _z1013_decode_vidmem(z1013_t* sys);
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z1013_DISPLAY_SIZE));
     CHIPS_ASSERT(desc->rom_font && (desc->rom_font_size == _Z1013_ROM_FONT_SIZE));
-    if (desc->model == Z1013_MODEL_01) {
+    if (desc->type == Z1013_TYPE_01) {
         CHIPS_ASSERT(desc->rom_mon202 && (desc->rom_mon202_size == _Z1013_ROM_MON202_SIZE));
     }
     else {
@@ -155,7 +158,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     }
 
     memset(sys, 0, sizeof(z1013_t));
-    sys->model = desc->model;
+    sys->type = desc->type;
     sys->rom_font = desc->rom_font;
     sys->rom_mon202 = desc->rom_mon202;
     sys->rom_mon_a2 = desc->rom_mon_a2;
@@ -171,6 +174,12 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     pio_desc.out_cb = _z1013_pio_out;
     pio_desc.user_data = sys;
     z80pio_init(&sys->pio, &pio_desc);
+    if (Z1013_TYPE_01 == sys->type) {
+        clk_init(&sys->clk, 1000000);
+    }
+    else {
+        clk_init(&sys->clk, 2000000);
+    }
 
     /* execution starts at 0xF000 */
     z80_set_pc(&sys->cpu, 0xF000);
@@ -182,14 +191,14 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
         - the memory map is fixed
     */
     mem_init(&sys->mem);
-    if (Z1013_MODEL_64 == sys->model) {
+    if (Z1013_TYPE_64 == sys->type) {
         mem_map_ram(&sys->mem, 1, 0x0000, 0x10000, sys->ram);
     }
     else {
         mem_map_ram(&sys->mem, 1, 0x0000, 0x4000, sys->ram);
-        mem_map_ram(&sys->mem, 1, 0xEC00, 0x0400, sys->ram);
+        mem_map_ram(&sys->mem, 1, 0xEC00, 0x0400, &(sys->ram[0xEC00]));
     }
-    if (Z1013_MODEL_01 == sys->model) {
+    if (Z1013_TYPE_01 == sys->type) {
         mem_map_rom(&sys->mem, 0, 0xF000, 0x0800, sys->rom_mon202);
     }
     else {
@@ -201,7 +210,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     */
     /* keep key presses sticky for 2 frames */
     kbd_init(&sys->kbd, 2);
-    if (Z1013_MODEL_01 == sys->model) {
+    if (Z1013_TYPE_01 == sys->type) {
         /* 8x4 keyboard matrix */
 
         /* 4 shift key modifiers */
@@ -256,7 +265,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
                 for (int column = 0; column < 8; column++) {
                     int c = keymap[layer*64 + line*8 + column];
                     if (c != 0x20) {
-                        kbd_register_key(&sys->kbd, key, column, line, layer ? shift_mask : 0);
+                        kbd_register_key(&sys->kbd, c, column, line, layer ? shift_mask : 0);
                     }
                 }
             }
@@ -272,4 +281,192 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     }
 }
 
+void z1013_reset(z1013_t* sys) {
+    CHIPS_ASSERT(sys);
+    z80_reset(&sys->cpu);
+    z80pio_reset(&sys->pio);
+    sys->kbd_request_column = 0;
+    z80_set_pc(&sys->cpu, 0xF000);
+}
+
+void z1013_exec(z1013_t* sys, double seconds) {
+    CHIPS_ASSERT(sys);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
+    uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
+    clk_ticks_executed(&sys->clk, ticks_executed);
+    kbd_update(&sys->kbd);
+    _z1013_decode_vidmem(sys);
+}
+
+void z1013_key_down(z1013_t* sys, int key_code) {
+    CHIPS_ASSERT(sys);
+    kbd_key_down(&sys->kbd, key_code);
+}
+
+void z1013_key_up(z1013_t* sys, int key_code) {
+    CHIPS_ASSERT(sys);
+    kbd_key_up(&sys->kbd, key_code);
+}
+
+uint64_t _z1013_tick(int num_ticks, uint64_t pins, void* user_data) {
+    z1013_t* sys = (z1013_t*) user_data;
+    if (pins & Z80_MREQ) {
+        /* a memory request */
+        const uint16_t addr = Z80_GET_ADDR(pins);
+        if (pins & Z80_RD) {
+            /* read memory byte */
+            Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
+        }
+        else if (pins & Z80_WR) {
+            mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
+        }
+    }
+    else if (pins & Z80_IORQ) {
+        /* an I/O request */
+        /*
+            The PIO Chip-Enable pin (Z80PIO_CE) is connected to output pin 0 of
+            a MH7442 BCD-to-Decimal decoder (looks like this is a Czech
+            clone of a SN7442). The lower 3 input pins of the MH7442
+            are connected to address bus pins A2..A4, and the 4th input
+            pin is connected to IORQ. This means the PIO is enabled when
+            the CPU IORQ pin is low (active), and address bus bits 2..4 are
+            off. This puts the PIO at the lowest 4 addresses of an 32-entry
+            address space (so the PIO should be visible at port number
+            0..4, but also at 32..35, 64..67 and so on).
+
+            The PIO Control/Data select pin (Z80PIO_CDSEL) is connected to
+            address bus pin A0. This means even addresses select a PIO data
+            operation, and odd addresses select a PIO control operation.
+
+            The PIO port A/B select pin (Z80PIO_BASEL) is connected to address
+            bus pin A1. This means the lower 2 port numbers address the PIO
+            port A, and the upper 2 port numbers address the PIO port B.
+
+            The keyboard matrix columns are connected to another MH7442
+            BCD-to-Decimal converter, this converts a hardware latch at port
+            address 8 which stores a keyboard matrix column number from the CPU
+            to the column lines. The operating system scans the keyboard by
+            writing the numbers 0..7 to this latch, which is then converted
+            by the MH7442 to light up the keyboard matrix column lines
+            in that order. Next the CPU reads back the keyboard matrix lines
+            in 2 steps of 4 bits each from PIO port B.
+        */
+        if ((pins & (Z80_A4|Z80_A3|Z80_A2)) == 0) {
+            /* address bits A2..A4 are zero, this activates the PIO chip-select pin */
+            uint64_t pio_pins = (pins & Z80_PIN_MASK) | Z80PIO_CE;
+            /* address bit 0 selects data/ctrl */
+            if (pio_pins & (1<<0)) pio_pins |= Z80PIO_CDSEL;
+            /* address bit 1 selects port A/B */
+            if (pio_pins & (1<<1)) pio_pins |= Z80PIO_BASEL;
+            pins = z80pio_iorq(&sys->pio, pio_pins) & Z80_PIN_MASK;
+        }
+        else if ((pins & (Z80_A3|Z80_WR)) == (Z80_A3|Z80_WR)) {
+            /* port 8 is connected to a hardware latch to store the
+               requested keyboard column for the next keyboard scan
+            */
+            sys->kbd_request_column = Z80_GET_DATA(pins) & 7;
+        }
+    }
+    /* there are no interrupts happening in a vanilla Z1013,
+       so don't trigger the interrupt daisy chain
+    */
+    return pins;
+}
+
+/* the PIO input callback handles keyboard input */
+uint8_t _z1013_pio_in(int port_id, void* user_data) {
+    z1013_t* sys = (z1013_t*) user_data;
+    if (Z80PIO_PORT_A == port_id) {
+        /* nothing to return here, PIO port A is for user devices */
+        return 0xFF;
+    }
+    else {
+        /* port B is for cassette input (bit 7, not implemented), 
+            and the lower 4 bits are for are connected to the keyboard matrix lines
+        */
+        uint16_t column_mask = 1 << sys->kbd_request_column;
+        uint16_t line_mask = kbd_test_lines(&sys->kbd, column_mask);
+        if (Z1013_TYPE_01 != sys->type) {
+            if (sys->kbd_request_line_hilo) {
+                line_mask >>= 4;
+            }
+        }
+        return 0x0F & ~(line_mask & 0x0F);
+    }
+}
+
+/* the PIO output callback selects the upper or lower 4 lines for the next keyboard scan */
+void _z1013_pio_out(int port_id, uint8_t data, void* user_data) {
+    z1013_t* sys = (z1013_t*) user_data;
+    if (Z80PIO_PORT_B == port_id) {
+        /* bit 4 for 8x8 keyboard selects upper or lower 4 kbd matrix line bits */
+        sys->kbd_request_line_hilo = (data & (1<<4)) != 0;
+        /* bit 7 is cassette output, not emulated */
+    }
+}
+
+/* since the Z1013 didn't have any sort of programmable video output, 
+    we're cheating a bit and decode the entire frame in one go
+*/
+void _z1013_decode_vidmem(z1013_t* sys) {
+    uint32_t* dst = sys->pixel_buffer;
+    const uint8_t* src = &sys->ram[0xEC00];   /* the 32x32 framebuffer starts at EC00 */
+    const uint8_t* font = sys->rom_font;
+    for (int y = 0; y < 32; y++) {
+        for (int py = 0; py < 8; py++) {
+            for (int x = 0; x < 32; x++) {
+                uint8_t chr = src[(y<<5) + x];
+                uint8_t bits = font[(chr<<3)|py];
+                for (int px = 7; px >=0; px--) {
+                    *dst++ = bits & (1<<px) ? 0xFFFFFFFF : 0xFF000000;
+                }
+            }
+        }
+    }
+}
+
+/* load and start a "KC Z80" file */
+typedef struct {
+    uint8_t load_addr_l;
+    uint8_t load_addr_h;
+    uint8_t end_addr_l;
+    uint8_t end_addr_h;
+    uint8_t exec_addr_l;
+    uint8_t exec_addr_h;
+    uint8_t free[6];
+    uint8_t typ;
+    uint8_t d3[3];        /* d3 d3 d3 */
+    uint8_t name[16];
+} _z1013_kcz80_header;
+
+bool z1013_load_z80(z1013_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && ptr);
+    if (num_bytes < (int)sizeof(_z1013_kcz80_header)) {
+        return false;
+    }
+    const _z1013_kcz80_header* hdr = (const _z1013_kcz80_header*) ptr;
+    if ((hdr->d3[0] != 0xD3) || (hdr->d3[1] != 0xD3) || (hdr->d3[2] != 0xD3)) {
+        return false;
+    }
+    ptr += sizeof(_z1013_kcz80_header);
+    uint16_t exec_addr = 0;
+    int addr = (hdr->load_addr_h<<8 | hdr->load_addr_l) & 0xFFFF;
+    int end_addr = (hdr->end_addr_h<<8 | hdr->end_addr_l) & 0xFFFF;
+    if (end_addr <= addr) {
+        return false;
+    }
+    exec_addr = (hdr->exec_addr_h<<8 | hdr->exec_addr_l) & 0xFFFF;
+    mem_write_range(&sys->mem, addr, ptr, end_addr - addr);
+
+    z80_reset(&sys->cpu);
+    z80_set_a(&sys->cpu, 0x00);
+    z80_set_f(&sys->cpu, 0x10);
+    z80_set_bc(&sys->cpu, 0x0000); z80_set_bc_(&sys->cpu, 0x0000);
+    z80_set_de(&sys->cpu, 0x0000); z80_set_de_(&sys->cpu, 0x0000);
+    z80_set_hl(&sys->cpu, 0x0000); z80_set_hl_(&sys->cpu, 0x0000);
+    z80_set_af_(&sys->cpu, 0x0000);
+    z80_set_pc(&sys->cpu, exec_addr);
+
+    return true;
+}
 #endif /* CHIPS_IMPL */
