@@ -2,7 +2,7 @@
 /*#
     # z1013.h
 
-    Header-only Robotron Z1013 emulator.
+    A Robotron Z1013 emulator in a C header.
 
     Do this:
     ~~~C
