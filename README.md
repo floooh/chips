@@ -1,7 +1,8 @@
 # chips
 
-A toolbox of chips and helper code to write 8-bit emulators in
-dependency-free C99-headers.
+A toolbox of 8-bit chip-emulators, helper code and complete embeddable 
+system emulators in dependency-free C headers (a subset of C99 that
+compiles on gcc, clang and cl.exe).
 
 Tests and example code is in a separate repo: https://github.com/floooh/chips-test
 
@@ -19,6 +20,10 @@ The YAKC emulator is here:
 ```user_data``` argument in the callbacks which is provided in the init
 function, this makes the chip emulators a bit more flexible when more than
 one emulator of the same type is used in a program
+
+## System Emulators
+
+TODO!
 
 ## Chip Emulators
 
