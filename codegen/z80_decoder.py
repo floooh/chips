@@ -176,7 +176,7 @@ def write_op_post():
 #
 def write_footer() :
     l('    map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
-    l('    _OFF(Z80_INT);')
+    l('    pins&=~Z80_INT;')
     l('    /* delay-enable interrupt flags */')
     l('    if (r2 & _BIT_EI) {')
     l('      r2 &= ~_BIT_EI;')
@@ -246,11 +246,9 @@ def write_interrupt_handling():
     l('        pins &= ~Z80_HALT;')
     l('        pc++;')
     l('      }')
-    l('      _ON(Z80_M1|Z80_IORQ);')
     l('      _SA(pc);')
-    l('      _TW(4);')
+    l('      _TWM(4,Z80_M1|Z80_IORQ);')
     l('      const uint8_t int_vec = _GD();')
-    l('      _OFF(Z80_M1|Z80_IORQ);')
     l('      _BUMPR();')
     l('      _T(2);')
     l('      switch (_G_IM()) {')
@@ -806,7 +804,7 @@ def ret_cc(y):
 #
 def reti():
     # same as RET, but also set the virtual Z80_RETI pin
-    src  = '_ON(Z80_RETI);'
+    src  = 'pins|=Z80_RETI;'
     src += 'd16=_G_SP();'
     src += '_MR(d16++,d8);pc=d8;'
     src += '_MR(d16++,d8);pc|=d8<<8;'
@@ -819,7 +817,7 @@ def reti():
 #
 def retn():
     # same as RET, but also set the virtual Z80_RETI pin and copy IFF2->IFF1
-    src  = '_ON(Z80_RETI);'
+    src  = 'pins|=Z80_RETI;'
     src += 'd16=_G_SP();'
     src += '_MR(d16++,d8);pc=d8;'
     src += '_MR(d16++,d8);pc|=d8<<8;'
@@ -1081,7 +1079,7 @@ def rld():
 #   misc ops
 #
 def halt():
-    return '_ON(Z80_HALT);pc--;'
+    return 'pins|=Z80_HALT;pc--;'
 
 def di():
     return 'r2&=~(_BIT_IFF1|_BIT_IFF2);'

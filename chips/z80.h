@@ -361,6 +361,7 @@ typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins, void* user_data);
 #define  Z80_IORQ  (1ULL<<26)       /* input/output request */
 #define  Z80_RD    (1ULL<<27)       /* read */
 #define  Z80_WR    (1ULL<<28)       /* write */
+#define  Z80_CTRL_MASK (Z80_M1|Z80_MREQ|Z80_IORQ|Z80_RD|Z80_WR)
 
 /* CPU control pins */
 #define  Z80_HALT  (1ULL<<29)       /* halt state */
@@ -581,22 +582,20 @@ extern bool z80_iff2(z80_t* cpu);
 #define _SAD(addr,data) pins=(pins&~0xFFFFFFULL)|((((data)&0xFFULL)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
 /* get 8-bit data bus value from pins */
 #define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
-/* enable CPU control pins */
-#define _ON(m) pins|=(m)
-/* disable CPU control pins */
-#define _OFF(m) pins&=~(m)
-/* invoke tick callback (without wait state detection) */
-#define _T(num) pins=tick(num,pins,ud);ticks+=num
+/* invoke 'filler tick' without control pins set */
+#define _T(num) pins=tick(num,(pins&~Z80_CTRL_MASK),ud);ticks+=num
+/* invoke tick callback with pins mask */
+#define _TM(num,mask) pins=tick(num,(pins&~(Z80_CTRL_MASK))|(mask),ud);ticks+=num
 /* invoke tick callback (with wait state detecion) */
-#define _TW(num) pins&=~Z80_WAIT_MASK;pins=tick(num,pins,ud);ticks+=num+Z80_GET_WAIT(pins);
+#define _TWM(num,mask) pins=tick(num,(pins&~(Z80_WAIT_MASK|Z80_CTRL_MASK))|(mask),ud);ticks+=num+Z80_GET_WAIT(pins)
 /* memory read machine cycle */
-#define _MR(addr,data) _SA(addr);_ON(Z80_MREQ|Z80_RD);_TW(3);_OFF(Z80_MREQ|Z80_RD);data=_GD()
+#define _MR(addr,data) _SA(addr);_TWM(3,Z80_MREQ|Z80_RD);data=_GD()
 /* memory write machine cycle */
-#define _MW(addr,data) _SAD(addr,data);_ON(Z80_MREQ|Z80_WR);_TW(3);_OFF(Z80_MREQ|Z80_WR)
+#define _MW(addr,data) _SAD(addr,data);_TWM(3,Z80_MREQ|Z80_WR)
 /* input machine cycle */
-#define _IN(addr,data) _SA(addr);_ON(Z80_IORQ|Z80_RD);_TW(4);_OFF(Z80_IORQ|Z80_RD);data=_GD()
+#define _IN(addr,data) _SA(addr);_TWM(4,Z80_IORQ|Z80_RD);data=_GD()
 /* output machine cycle */
-#define _OUT(addr,data) _SAD(addr,data);_ON(Z80_IORQ|Z80_WR);_TW(4);_OFF(Z80_IORQ|Z80_WR)
+#define _OUT(addr,data) _SAD(addr,data);_TWM(4,Z80_IORQ|Z80_WR);
 /* read 8-bit immediate value */
 #define _IMM8(data) _MR(pc++,data);
 /* read 16-bit immediate value (also update WZ register) */
@@ -608,9 +607,9 @@ extern bool z80_iff2(z80_t* cpu);
 /* helper macro to bump R register */
 #define _BUMPR() d8=_G8(r2,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r2,_R,d8)
 /* a normal opcode fetch, bump R */
-#define _FETCH(op) {_SA(pc++);_ON(Z80_M1|Z80_MREQ|Z80_RD);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_BUMPR();}
+#define _FETCH(op) {_SA(pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_BUMPR();}
 /* special opcode fetch for CB prefix, only bump R if not a DD/FD+CB 'double prefix' op */
-#define _FETCH_CB(op) {_SA(pc++);_ON(Z80_M1|Z80_MREQ|Z80_RD);_TW(4);_OFF(Z80_M1|Z80_MREQ|Z80_RD);op=_GD();if(0==(r2&(_BIT_USE_IX|_BIT_USE_IY))){_BUMPR();}}
+#define _FETCH_CB(op) {_SA(pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();if(!_IDX()){_BUMPR();}}
 /* evaluate S+Z flags */
 #define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
 /* evaluate SZYXCH flags */
@@ -976,10 +975,9 @@ static inline uint64_t _z80_flush_r1(uint64_t ws, uint64_t r1, uint64_t map_bits
 #undef _SA
 #undef _SAD
 #undef _GD
-#undef _ON
-#undef _OFF
 #undef _T
-#undef _TW
+#undef _TM
+#undef _TWM
 #undef _MR
 #undef _MW
 #undef _IN
