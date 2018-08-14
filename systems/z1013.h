@@ -123,6 +123,10 @@ extern void z1013_key_up(z1013_t* sys, int key_code);
 /* load a "KC .z80" file into the emulator */
 extern bool z1013_load_kcz80(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
