@@ -589,21 +589,21 @@ extern bool z80_iff2(z80_t* cpu);
 /* invoke tick callback (with wait state detecion) */
 #define _TWM(num,mask) pins=tick(num,(pins&~(Z80_WAIT_MASK|Z80_CTRL_MASK))|(mask),ud);ticks+=num+Z80_GET_WAIT(pins)
 /* memory read machine cycle */
-#define _MR(addr,data) _SA(addr);_TWM(3,Z80_MREQ|Z80_RD);data=_GD()
+#define _MR(addr,data,add_ticks) _SA(addr);_TWM(3+add_ticks,Z80_MREQ|Z80_RD);data=_GD()
 /* memory write machine cycle */
-#define _MW(addr,data) _SAD(addr,data);_TWM(3,Z80_MREQ|Z80_WR)
+#define _MW(addr,data,add_ticks) _SAD(addr,data);_TWM(3+add_ticks,Z80_MREQ|Z80_WR)
 /* input machine cycle */
-#define _IN(addr,data) _SA(addr);_TWM(4,Z80_IORQ|Z80_RD);data=_GD()
+#define _IN(addr,data,add_ticks) _SA(addr);_TWM(4+add_ticks,Z80_IORQ|Z80_RD);data=_GD()
 /* output machine cycle */
-#define _OUT(addr,data) _SAD(addr,data);_TWM(4,Z80_IORQ|Z80_WR);
+#define _OUT(addr,data,add_ticks) _SAD(addr,data);_TWM(4+add_ticks,Z80_IORQ|Z80_WR);
 /* read 8-bit immediate value */
-#define _IMM8(data) _MR(pc++,data);
+#define _IMM8(data,add_ticks) _MR(pc++,data,add_ticks);
 /* read 16-bit immediate value (also update WZ register) */
-#define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S_WZ(data);} 
+#define _IMM16(data,add_ticks) {uint8_t w,z;_MR(pc++,z,add_ticks);_MR(pc++,w,0);data=(w<<8)|z;_S_WZ(data);} 
 /* true if current op is an indexed op */
 #define _IDX() (0!=(r2&(_BIT_USE_IX|_BIT_USE_IY)))
 /* generate effective address for (HL), (IX+d), (IY+d) */
-#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if(_IDX()){int8_t d;_MR(pc++,d);addr+=d;_S_WZ(addr);_T(ext_ticks);}}
+#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if(_IDX()){int8_t d;_MR(pc++,d,ext_ticks);addr+=d;_S_WZ(addr);}}
 /* helper macro to bump R register */
 #define _BUMPR() d8=_G8(r2,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r2,_R,d8)
 /* a normal opcode fetch, bump R */
