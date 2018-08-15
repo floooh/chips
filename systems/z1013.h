@@ -93,13 +93,11 @@ typedef struct {
     int pixel_buffer_size;      /* size of framebuffer memory chunk in bytes, must be at least 256 KBytes (256*256*4) */
 } z1013_desc_t;
 
-/* Z1013 instance state */
+/* Z1013 emulator state */
 typedef struct {
     z80_t cpu;
     z80pio_t pio;
     clk_t clk;
-    mem_t mem;
-    kbd_t kbd;
     bool valid;
     z1013_type_t type;
     uint8_t kbd_request_column;
@@ -108,6 +106,8 @@ typedef struct {
     const void* rom_mon202;
     const void* rom_mon_a2;
     const void* rom_font;
+    mem_t mem;
+    kbd_t kbd;
     uint8_t ram[1<<16];
 } z1013_t;
 
