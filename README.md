@@ -13,6 +13,7 @@ The YAKC emulator is here:
 - github repo: https://github.com/floooh/yakc
 - asm.js/wasm demo: http://floooh.github.io/virtualkc/
 
+For schematics, manuals and research material, see: https://github.com/floooh/emu-info
 
 ## What's New
 
