@@ -73,7 +73,7 @@ extern "C" {
 #define Z1013_DISPLAY_WIDTH (256)
 #define Z1013_DISPLAY_HEIGHT (256)
 
-/* Z1013 types */
+/* Z1013 model types */
 typedef enum {
     Z1013_TYPE_64,      /* Z1013.64 (default, latest model with 2 MHz and 64 KB RAM, new ROM) */
     Z1013_TYPE_16,      /* Z1013.16 (2 MHz model with 16 KB RAM, new ROM) */
@@ -100,6 +100,7 @@ typedef struct {
     clk_t clk;
     mem_t mem;
     kbd_t kbd;
+    bool valid;
     z1013_type_t type;
     uint8_t kbd_request_column;
     bool kbd_request_line_hilo;
@@ -112,6 +113,8 @@ typedef struct {
 
 /* initialize a new Z1013 instance */
 extern void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
+/* discard a z1013 instance */
+extern void z1013_discard(z1013_t* sys);
 /* reset Z1013 instance */
 extern void z1013_reset(z1013_t* sys);
 /* run the Z1013 instance for a given time in seconds */
@@ -162,6 +165,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     }
 
     memset(sys, 0, sizeof(z1013_t));
+    sys->valid = true;
     sys->type = desc->type;
     sys->rom_font = desc->rom_font;
     sys->rom_mon202 = desc->rom_mon202;
@@ -285,8 +289,13 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     }
 }
 
+void z1013_discard(z1013_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->valid = false;
+}
+
 void z1013_reset(z1013_t* sys) {
-    CHIPS_ASSERT(sys);
+    CHIPS_ASSERT(sys && sys->valid);
     z80_reset(&sys->cpu);
     z80pio_reset(&sys->pio);
     sys->kbd_request_column = 0;
@@ -294,7 +303,7 @@ void z1013_reset(z1013_t* sys) {
 }
 
 void z1013_exec(z1013_t* sys, double seconds) {
-    CHIPS_ASSERT(sys);
+    CHIPS_ASSERT(sys && sys->valid);
     uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
     uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
@@ -303,12 +312,12 @@ void z1013_exec(z1013_t* sys, double seconds) {
 }
 
 void z1013_key_down(z1013_t* sys, int key_code) {
-    CHIPS_ASSERT(sys);
+    CHIPS_ASSERT(sys && sys->valid);
     kbd_key_down(&sys->kbd, key_code);
 }
 
 void z1013_key_up(z1013_t* sys, int key_code) {
-    CHIPS_ASSERT(sys);
+    CHIPS_ASSERT(sys && sys->valid);
     kbd_key_up(&sys->kbd, key_code);
 }
 
@@ -444,7 +453,7 @@ typedef struct {
 } _z1013_kcz80_header;
 
 bool z1013_load_z80(z1013_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && ptr);
+    CHIPS_ASSERT(sys && sys->valid && ptr);
     if (num_bytes < (int)sizeof(_z1013_kcz80_header)) {
         return false;
     }
