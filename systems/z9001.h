@@ -28,9 +28,26 @@
     - chips/kbd.h
     - chips/clk.h
   
-    ## The Robotron Z9001 / KC87
+    ## The Robotron Z9001
 
-    FIXME!
+    The Z9001 (later retconned to KC85/1) was independently developed
+    to the HC900 (aka KC85/2) by Robotron Dresden. It had a pretty
+    slick design with an integrated keyboard which was legendary for
+    how hard it was to type on.\n\nThe standard model had 16 KByte RAM,
+    a monochrome 40x24 character display, and a 2.5 MHz U880 CPU
+    (making it the fastest East German 8-bitter). The Z9001 could
+    be extended by up to 4 expansion modules, usually one or two
+    16 KByte RAM modules, and a 10 KByte ROM BASIC module (the
+    version emulated here comes with 32 KByte RAM and a BASIC module).
+
+    ## The Robotron KC87
+
+    The KC87 was the successor to the KC85/1. The only real difference
+    was the built-in BASIC interpreter in ROM. The KC87 emulated here
+    has 48 KByte RAM and the video color extension which could
+    assign 8 foreground and 8 (identical) background colors per character,
+    plus a blinking flag. This video extension was already available on the
+    Z9001 though.
 
     ## TODO:
     - enable/disable audio on PIO1-A bit 7
