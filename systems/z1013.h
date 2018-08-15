@@ -83,14 +83,20 @@ typedef enum {
 /* configuration parameters for z1013_setup() */
 typedef struct {
     z1013_type_t type;          /* default is Z1013_TYPE_64 */
-    const void* rom_mon202;     /* pointer to static mon202 ROM data, required by Z1013_TYPE_01 */
-    const void* rom_mon_a2;     /* pointer to static mon_a2 ROM data, required by Z1013_TYPE_16 and Z1013_TYPE_64 */
-    const void* rom_font;       /* pointer to static font ROM data, required by all models */
-    void* pixel_buffer;         /* pointer to a memory chunk used as RGBA8 framebuffer */
-    int rom_mon202_size;        /* size of mon202 ROM data (must be 2048 bytes) */
-    int rom_mon_a2_size;        /* size of mon_a2 ROM data (must be 2048 bytes) */
-    int rom_font_size;          /* size of font ROM (must be 2048 bytes) */
-    int pixel_buffer_size;      /* size of framebuffer memory chunk in bytes, must be at least 256 KBytes (256*256*4) */
+
+    /* video output config */
+    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes */
+    int pixel_buffer_size;      /* size of the pixel buffer in bytes */
+
+    /* ROMs for Z1013.01 */
+    const void* rom_mon202;
+    int rom_mon202_size;
+
+    /* ROMs for Z1013.16 and Z1013.64 */
+    const void* rom_mon_a2;
+    const void* rom_font;
+    int rom_mon_a2_size;
+    int rom_font_size;
 } z1013_desc_t;
 
 /* Z1013 emulator state */

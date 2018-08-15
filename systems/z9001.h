@@ -105,10 +105,17 @@ typedef int (*z9001_audio_callback_t)(const float* samples, int num_samples);
 /* configuration parameters for z9001_init() */
 typedef struct {
     z9001_type_t type;                  /* default is Z9001_TYPE_Z9001 */
+
+    /* video output config */
+    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*192*4 bytes */
+    int pixel_buffer_size;      /* size of the pixel buffer in bytes */
+
+    /* audio output config */
     z9001_audio_callback_t audio_cb;    /* called when audio_num_samples are ready */
     int audio_num_samples;              /* default is Z9001_DEFAULT_AUDIO_SAMPLES */
     int audio_sample_rate;              /* playback sample rate, default is 44100 */
-    float audio_sample_magnitude;       /* 0.0..1.0, default is 0.5 */
+    float audio_sample_magnitude;       /* magnitude/volume of audio samples: 0.0..1.0, default is 0.5 */
+
     /* ROMs for Z9001 */
     const void* rom_z9001_os_1;
     const void* rom_z9001_os_2;
@@ -116,9 +123,11 @@ typedef struct {
     int rom_z9001_os_1_size;
     int rom_z9001_os_2_size;
     int rom_z9001_font_size;
+
     /* optional BASIC module for z9001 */
     const void* rom_z9001_basic;
     int rom_z9001_basic_size;
+
     /* ROMs for KC87 */
     const void* rom_kc87_os;
     const void* rom_kc87_basic;
@@ -126,9 +135,6 @@ typedef struct {
     int rom_kc87_os_size;
     int rom_kc87_basic_size;
     int rom_kc87_font_size;
-    /* output pixel buffer (must be at least 320*192*4 bytes) */
-    void* pixel_buffer;
-    int pixel_buffer_size;
 } z9001_desc_t;
 
 /* Z9001 emulator state */
