@@ -124,7 +124,7 @@ extern void z1013_key_down(z1013_t* sys, int key_code);
 /* send a key-up event */
 extern void z1013_key_up(z1013_t* sys, int key_code);
 /* load a "KC .z80" file into the emulator */
-extern bool z1013_load_kcz80(z1013_t* sys, const uint8_t* ptr, int num_bytes);
+extern bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -148,10 +148,10 @@ extern bool z1013_load_kcz80(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 #define _Z1013_ROM_MON_A2_SIZE (2048)
 #define _Z1013_ROM_FONT_SIZE   (2048)
 
-extern uint64_t _z1013_tick(int num, uint64_t pins, void* user_data);
-extern uint8_t _z1013_pio_in(int port_id, void* user_data);
-extern void _z1013_pio_out(int port_id, uint8_t data, void* user_data);
-extern void _z1013_decode_vidmem(z1013_t* sys);
+static uint64_t _z1013_tick(int num, uint64_t pins, void* user_data);
+static uint8_t _z1013_pio_in(int port_id, void* user_data);
+static void _z1013_pio_out(int port_id, uint8_t data, void* user_data);
+static void _z1013_decode_vidmem(z1013_t* sys);
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -220,8 +220,6 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     kbd_init(&sys->kbd, 2);
     if (Z1013_TYPE_01 == sys->type) {
         /* 8x4 keyboard matrix */
-
-        /* 4 shift key modifiers */
         kbd_register_modifier(&sys->kbd, 0, 0, 3);
         kbd_register_modifier(&sys->kbd, 1, 1, 3);
         kbd_register_modifier(&sys->kbd, 2, 2, 3);
@@ -256,7 +254,6 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     }
     else {
         /* 8x8 keyboard matrix (http://www.z1013.de/images/21.gif) */
-
         /* shift key modifier is column 7 line 6 */
         const int shift = 0, shift_mask = (1<<shift);
         kbd_register_modifier(&sys->kbd, shift, 7, 6);
@@ -321,7 +318,7 @@ void z1013_key_up(z1013_t* sys, int key_code) {
     kbd_key_up(&sys->kbd, key_code);
 }
 
-uint64_t _z1013_tick(int num_ticks, uint64_t pins, void* user_data) {
+static uint64_t _z1013_tick(int num_ticks, uint64_t pins, void* user_data) {
     z1013_t* sys = (z1013_t*) user_data;
     if (pins & Z80_MREQ) {
         /* a memory request */
@@ -387,7 +384,7 @@ uint64_t _z1013_tick(int num_ticks, uint64_t pins, void* user_data) {
 }
 
 /* the PIO input callback handles keyboard input */
-uint8_t _z1013_pio_in(int port_id, void* user_data) {
+static uint8_t _z1013_pio_in(int port_id, void* user_data) {
     z1013_t* sys = (z1013_t*) user_data;
     if (Z80PIO_PORT_A == port_id) {
         /* nothing to return here, PIO port A is for user devices */
@@ -409,7 +406,7 @@ uint8_t _z1013_pio_in(int port_id, void* user_data) {
 }
 
 /* the PIO output callback selects the upper or lower 4 lines for the next keyboard scan */
-void _z1013_pio_out(int port_id, uint8_t data, void* user_data) {
+static void _z1013_pio_out(int port_id, uint8_t data, void* user_data) {
     z1013_t* sys = (z1013_t*) user_data;
     if (Z80PIO_PORT_B == port_id) {
         /* bit 4 for 8x8 keyboard selects upper or lower 4 kbd matrix line bits */
@@ -421,7 +418,7 @@ void _z1013_pio_out(int port_id, uint8_t data, void* user_data) {
 /* since the Z1013 didn't have any sort of programmable video output, 
     we're cheating a bit and decode the entire frame in one go
 */
-void _z1013_decode_vidmem(z1013_t* sys) {
+static void _z1013_decode_vidmem(z1013_t* sys) {
     uint32_t* dst = sys->pixel_buffer;
     const uint8_t* src = &sys->ram[0xEC00];   /* the 32x32 framebuffer starts at EC00 */
     const uint8_t* font = sys->rom_font;
@@ -438,7 +435,8 @@ void _z1013_decode_vidmem(z1013_t* sys) {
     }
 }
 
-/* load and start a "KC Z80" file */
+/*=== FILE LOADING ===========================================================*/
+
 typedef struct {
     uint8_t load_addr_l;
     uint8_t load_addr_h;
@@ -452,7 +450,7 @@ typedef struct {
     uint8_t name[16];
 } _z1013_kcz80_header;
 
-bool z1013_load_z80(z1013_t* sys, const uint8_t* ptr, int num_bytes) {
+bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid && ptr);
     if (num_bytes < (int)sizeof(_z1013_kcz80_header)) {
         return false;
