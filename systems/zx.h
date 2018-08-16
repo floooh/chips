@@ -86,7 +86,6 @@ typedef enum {
 
 /* audio sample data callback */
 typedef int (*zx_audio_callback_t)(const float* samples, int num_samples);
-
 /* max number of audio samples in internal sample buffer */
 #define ZX_MAX_AUDIO_SAMPLES (1024)
 /* default number of audio samples to generate until audio callback is invoked */
@@ -124,7 +123,6 @@ typedef struct {
     z80_t cpu;
     beeper_t beeper;
     ay38910_t ay;
-    clk_t clk;
     bool valid;
     zx_type_t type;
     zx_joystick_t joystick_type;
@@ -140,6 +138,7 @@ typedef struct {
     int scanline_y;
     uint32_t display_ram_bank;
     uint32_t border_color;
+    clk_t clk;
     kbd_t kbd;
     mem_t mem;
     uint32_t* pixel_buffer;

@@ -141,13 +141,13 @@ typedef struct {
     z80pio_t pio2;
     z80ctc_t ctc;
     beeper_t beeper;
-    clk_t clk;
     bool valid;
     z9001_type_t type;
     uint64_t ctc_zcto2;     /* pin mask to store state of CTC ZCTO2 */
     uint32_t blink_counter;
     bool blink_flip_flop;
     /* FIXME: uint8_t border_color; */
+    clk_t clk;
     mem_t mem;
     kbd_t kbd;
     uint32_t* pixel_buffer;

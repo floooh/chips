@@ -103,7 +103,6 @@ typedef struct {
 typedef struct {
     z80_t cpu;
     z80pio_t pio;
-    clk_t clk;
     bool valid;
     z1013_type_t type;
     uint8_t kbd_request_column;
@@ -112,6 +111,7 @@ typedef struct {
     const void* rom_mon202;
     const void* rom_mon_a2;
     const void* rom_font;
+    clk_t clk;
     mem_t mem;
     kbd_t kbd;
     uint8_t ram[1<<16];
