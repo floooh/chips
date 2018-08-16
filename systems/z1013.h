@@ -176,7 +176,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     sys->rom_font = desc->rom_font;
     sys->rom_mon202 = desc->rom_mon202;
     sys->rom_mon_a2 = desc->rom_mon_a2;
-    sys->pixel_buffer = desc->pixel_buffer;
+    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
 
     /* initialize the hardware */
     z80_desc_t cpu_desc = {0};

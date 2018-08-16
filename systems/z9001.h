@@ -84,9 +84,10 @@
 extern "C" {
 #endif
 
-/* display width/height in pixels */
-#define Z9001_DISPLAY_WIDTH (320)
-#define Z9001_DISPLAY_HEIGHT (192)
+#define Z9001_DISPLAY_WIDTH (320)   /* display width in pixels */
+#define Z9001_DISPLAY_HEIGHT (192)  /* display height in pixels */
+#define Z9001_MAX_AUDIO_SAMPLES (1024)      /* max number of audio samples in internal sample buffer */
+#define Z9001_DEFAULT_AUDIO_SAMPLES (128)   /* default number of samples in internal sample buffer */ 
 
 /* Z9001/KC87 model types */
 typedef enum {
@@ -97,10 +98,6 @@ typedef enum {
 /* Z9001 audio sample data callback */
 typedef int (*z9001_audio_callback_t)(const float* samples, int num_samples);
 
-/* max number of audio samples in internal sample buffer */
-#define Z9001_MAX_AUDIO_SAMPLES (1024)
-/* default number of audio samples to generate until audio callback is invoked */
-#define Z9001_DEFAULT_AUDIO_SAMPLES (128)
 
 /* configuration parameters for z9001_init() */
 typedef struct {
@@ -110,11 +107,11 @@ typedef struct {
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*192*4 bytes */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
 
-    /* audio output config */
+    /* audio output config (if you don't want audio, set audio_cb to zero) */
     z9001_audio_callback_t audio_cb;    /* called when audio_num_samples are ready */
     int audio_num_samples;              /* default is Z9001_DEFAULT_AUDIO_SAMPLES */
     int audio_sample_rate;              /* playback sample rate, default is 44100 */
-    float audio_sample_magnitude;       /* magnitude/volume of audio samples: 0.0..1.0, default is 0.5 */
+    float audio_volume;                 /* volume of generated audio: 0.0..1.0, default is 0.5 */
 
     /* ROMs for Z9001 */
     const void* rom_z9001_os_1;
@@ -225,9 +222,10 @@ static inline uint32_t _z9001_xorshift32(uint32_t x) {
     return x;
 }
 
+#define _Z9001_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+
 void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->audio_cb);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z9001_DISPLAY_SIZE));
     if (desc->type == Z9001_TYPE_Z9001) {
         CHIPS_ASSERT(desc->rom_z9001_os_1 && (desc->rom_z9001_os_1_size == _Z9001_ROM_Z9001_OS_1_SIZE));
@@ -257,9 +255,9 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
         sys->rom_kc87_basic = desc->rom_kc87_basic;
         sys->rom_kc87_font = desc->rom_kc87_font;
     }
-    sys->pixel_buffer = desc->pixel_buffer;
+    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
-    sys->num_samples = (desc->audio_num_samples > 0) ? desc->audio_num_samples : Z9001_DEFAULT_AUDIO_SAMPLES;
+    sys->num_samples = _Z9001_DEFAULT(desc->audio_num_samples, Z9001_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= Z9001_MAX_AUDIO_SAMPLES);
 
     /* initialize the hardware */
@@ -283,9 +281,9 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     pio2_desc.user_data = sys;
     z80pio_init(&sys->pio2, &pio2_desc);
 
-    const int audio_hz = (desc->audio_sample_rate > 0) ? desc->audio_sample_rate : 44100;
-    const float audio_mag = (desc->audio_sample_magnitude > 0.0f) ? desc->audio_sample_magnitude : 0.5f;
-    beeper_init(&sys->beeper, _Z9001_FREQUENCY, audio_hz, audio_mag);
+    const int audio_hz = _Z9001_DEFAULT(desc->audio_sample_rate, 44100);
+    const float audio_vol = _Z9001_DEFAULT(desc->audio_volume, 0.5f);
+    beeper_init(&sys->beeper, _Z9001_FREQUENCY, audio_hz, audio_vol);
     
     /* execution starts at 0xF000 */
     z80_set_pc(&sys->cpu, 0xF000);
@@ -436,7 +434,9 @@ static uint64_t _z9001_tick(int num_ticks, uint64_t pins, void* user_data) {
             /* new audio sample ready */
             sys->sample_buffer[sys->sample_pos++] = sys->beeper.sample;
             if (sys->sample_pos == sys->num_samples) {
-                sys->audio_cb(sys->sample_buffer, sys->num_samples);
+                if (sys->audio_cb) {
+                    sys->audio_cb(sys->sample_buffer, sys->num_samples);
+                }
                 sys->sample_pos = 0;
             }
         }
