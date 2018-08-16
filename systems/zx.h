@@ -302,6 +302,90 @@ void zx_exec(zx_t* sys, double seconds) {
     kbd_update(&sys->kbd);
 }
 
+void zx_key_down(zx_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    switch (sys->joystick_type) {
+        case ZX_JOYSTICK_NONE:
+            kbd_key_down(&sys->kbd, key_code);
+            break;
+        case ZX_JOYSTICK_KEMPSTON:
+            switch (key_code) {
+                case 0x20:  sys->kempston_mask |= (1<<4); break;    /* fire */
+                case 0x08:  sys->kempston_mask |= (1<<1); break;    /* left */
+                case 0x09:  sys->kempston_mask |= (1<<0); break;    /* right */
+                case 0x0A:  sys->kempston_mask |= (1<<2); break;    /* down */
+                case 0x0B:  sys->kempston_mask |= (1<<3); break;    /* up */
+                default:    kbd_key_down(&sys->kbd, key_code); break;
+            }
+            break;
+        /* the Sinclair joystick ports work as normal keys */
+        case ZX_JOYSTICK_SINCLAIR_1:
+            switch (key_code) {
+                case 0x20:  key_code = '5'; break;    /* fire */
+                case 0x08:  key_code = '1'; break;    /* left */
+                case 0x09:  key_code = '2'; break;    /* right */
+                case 0x0A:  key_code = '3'; break;    /* down */
+                case 0x0B:  key_code = '4'; break;    /* up */
+                default: break;
+            }
+            kbd_key_down(&sys->kbd, key_code);
+            break;
+        case ZX_JOYSTICK_SINCLAIR_2:
+            switch (key_code) {
+                case 0x20:  key_code = '0'; break;    /* fire */
+                case 0x08:  key_code = '6'; break;    /* left */
+                case 0x09:  key_code = '7'; break;    /* right */
+                case 0x0A:  key_code = '8'; break;    /* down */
+                case 0x0B:  key_code = '9'; break;    /* up */
+                default: break;
+            }
+            kbd_key_down(&sys->kbd, key_code);
+            break;
+    }
+}
+
+void zx_key_up(zx_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    switch (sys->joystick_type) {
+        case ZX_JOYSTICK_NONE:
+            kbd_key_up(&sys->kbd, key_code);
+            break;
+        case ZX_JOYSTICK_KEMPSTON:
+            switch (key_code) {
+                case 0x20:  sys->kempston_mask &= ~(1<<4); break;    /* fire */
+                case 0x08:  sys->kempston_mask &= ~(1<<1); break;    /* left */
+                case 0x09:  sys->kempston_mask &= ~(1<<0); break;    /* right */
+                case 0x0A:  sys->kempston_mask &= ~(1<<2); break;    /* down */
+                case 0x0B:  sys->kempston_mask &= ~(1<<3); break;    /* up */
+                default:    kbd_key_up(&sys->kbd, key_code); break;
+            }
+            break;
+        /* the Sinclair joystick ports work as normal keys */
+        case ZX_JOYSTICK_SINCLAIR_1:
+            switch (key_code) {
+                case 0x20:  key_code = '5'; break;    /* fire */
+                case 0x08:  key_code = '1'; break;    /* left */
+                case 0x09:  key_code = '2'; break;    /* right */
+                case 0x0A:  key_code = '3'; break;    /* down */
+                case 0x0B:  key_code = '4'; break;    /* up */
+                default: break;
+            }
+            kbd_key_up(&sys->kbd, key_code);
+            break;
+        case ZX_JOYSTICK_SINCLAIR_2:
+            switch (key_code) {
+                case 0x20:  key_code = '0'; break;    /* fire */
+                case 0x08:  key_code = '6'; break;    /* left */
+                case 0x09:  key_code = '7'; break;    /* right */
+                case 0x0A:  key_code = '8'; break;    /* down */
+                case 0x0B:  key_code = '9'; break;    /* up */
+                default: break;
+            }
+            kbd_key_up(&sys->kbd, key_code);
+            break;
+    }
+}
+
 static uint32_t _zx_palette[8] = {
     0xFF000000,     // black
     0xFFFF0000,     // blue
@@ -625,4 +709,225 @@ static void _zx_init_keyboard_matrix(zx_t* sys) {
     kbd_register_key(&sys->kbd, 0x0D, 6, 0, 0); /* Enter */
 }
 
+/*=== FILE LOADING ===========================================================*/
+
+/* ZX Z80 file format header (http://www.worldofspectrum.org/faq/reference/z80format.htm ) */
+typedef struct {
+    uint8_t A, F;
+    uint8_t C, B;
+    uint8_t L, H;
+    uint8_t PC_l, PC_h;
+    uint8_t SP_l, SP_h;
+    uint8_t I, R;
+    uint8_t flags0;
+    uint8_t E, D;
+    uint8_t C_, B_;
+    uint8_t E_, D_;
+    uint8_t L_, H_;
+    uint8_t A_, F_;
+    uint8_t IY_l, IY_h;
+    uint8_t IX_l, IX_h;
+    uint8_t EI;
+    uint8_t IFF2;
+    uint8_t flags1;
+} _zx_z80_header;
+
+typedef struct {
+    uint8_t len_l;
+    uint8_t len_h;
+    uint8_t PC_l, PC_h;
+    uint8_t hw_mode;
+    uint8_t out_7ffd;
+    uint8_t rom1;
+    uint8_t flags;
+    uint8_t out_fffd;
+    uint8_t audio[16];
+    uint8_t tlow_l;
+    uint8_t tlow_h;
+    uint8_t spectator_flags;
+    uint8_t mgt_rom_paged;
+    uint8_t multiface_rom_paged;
+    uint8_t rom_0000_1fff;
+    uint8_t rom_2000_3fff;
+    uint8_t joy_mapping[10];
+    uint8_t kbd_mapping[10];
+    uint8_t mgt_type;
+    uint8_t disciple_button_state;
+    uint8_t disciple_flags;
+    uint8_t out_1ffd;
+} _zx_z80_ext_header;
+
+typedef struct {
+    uint8_t len_l;
+    uint8_t len_h;
+    uint8_t page_nr;
+} _zx_z80_page_header;
+
+static bool _zx_overflow(const uint8_t* ptr, intptr_t num_bytes, const uint8_t* end_ptr) {
+    return (ptr + num_bytes) > end_ptr;
+}
+
+bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
+    const uint8_t* end_ptr = ptr + num_bytes;
+    if (_zx_overflow(ptr, sizeof(_zx_z80_header), end_ptr)) {
+        return false;
+    }
+    const _zx_z80_header* hdr = (const _zx_z80_header*) ptr;
+    ptr += sizeof(_zx_z80_header);
+    const _zx_z80_ext_header* ext_hdr = 0;
+    uint16_t pc = (hdr->PC_h<<8 | hdr->PC_l) & 0xFFFF;
+    const bool is_version1 = 0 != pc;
+    if (!is_version1) {
+        if (_zx_overflow(ptr, sizeof(_zx_z80_ext_header), end_ptr)) {
+            return false;
+        }
+        ext_hdr = (_zx_z80_ext_header*) ptr;
+        int ext_hdr_len = (ext_hdr->len_h<<8)|ext_hdr->len_l;
+        ptr += 2 + ext_hdr_len;
+        if (ext_hdr->hw_mode < 3) {
+            if (sys->type != ZX_TYPE_48K) {
+                return false;
+            }
+        }
+        else {
+            if (sys->type != ZX_TYPE_128) {
+                return false;
+            }
+        }
+    }
+    else {
+        if (sys->type != ZX_TYPE_48K) {
+            return false;
+        }
+    }
+    const bool v1_compr = 0 != (hdr->flags0 & (1<<5));
+    while (ptr < end_ptr) {
+        int page_index = 0;
+        int src_len = 0, dst_len = 0;
+        if (is_version1) {
+            src_len = num_bytes - sizeof(_zx_z80_header);
+            dst_len = 48 * 1024;
+        }
+        else {
+            _zx_z80_page_header* phdr = (_zx_z80_page_header*) ptr;
+            if (_zx_overflow(ptr, sizeof(_zx_z80_page_header), end_ptr)) {
+                return false;
+            }
+            ptr += sizeof(_zx_z80_page_header);
+            src_len = (phdr->len_h<<8 | phdr->len_l) & 0xFFFF;
+            dst_len = 0x4000;
+            page_index = phdr->page_nr - 3;
+            if ((sys->type == ZX_TYPE_48K) && (page_index == 5)) {
+                page_index = 0;
+            }
+            if ((page_index < 0) || (page_index > 7)) {
+                page_index = -1;
+            }
+        }
+        uint8_t* dst_ptr;
+        if (-1 == page_index) {
+            dst_ptr = sys->junk;
+        }
+        else {
+            dst_ptr = sys->ram[page_index];
+        }
+        if (0xFFFF == src_len) {
+            // FIXME: uncompressed not supported yet
+            return false;
+        }
+        else {
+            /* compressed */
+            int src_pos = 0;
+            bool v1_done = false;
+            uint8_t val[4];
+            while ((src_pos < src_len) && !v1_done) {
+                val[0] = ptr[src_pos];
+                val[1] = ptr[src_pos+1];
+                val[2] = ptr[src_pos+2];
+                val[3] = ptr[src_pos+3];
+                /* check for version 1 end marker */
+                if (v1_compr && (0==val[0]) && (0xED==val[1]) && (0xED==val[2]) && (0==val[3])) {
+                    v1_done = true;
+                    src_pos += 4;
+                }
+                else if (0xED == val[0]) {
+                    if (0xED == val[1]) {
+                        uint8_t count = val[2];
+                        assert(0 != count);
+                        uint8_t data = val[3];
+                        src_pos += 4;
+                        for (int i = 0; i < count; i++) {
+                            *dst_ptr++ = data;
+                        }
+                    }
+                    else {
+                        /* single ED */
+                        *dst_ptr++ = val[0];
+                        src_pos++;
+                    }
+                }
+                else {
+                    /* any value */
+                    *dst_ptr++ = val[0];
+                    src_pos++;
+                }
+            }
+            assert(src_pos == src_len);
+        }
+        if (0xFFFF == src_len) {
+            ptr += 0x4000;
+        }
+        else {
+            ptr += src_len;
+        }
+    }
+
+    /* start loaded image */
+    z80_reset(&sys->cpu);
+    z80_set_a(&sys->cpu, hdr->A); z80_set_f(&sys->cpu, hdr->F);
+    z80_set_b(&sys->cpu, hdr->B); z80_set_c(&sys->cpu, hdr->C);
+    z80_set_d(&sys->cpu, hdr->D); z80_set_e(&sys->cpu, hdr->E);
+    z80_set_h(&sys->cpu, hdr->H); z80_set_l(&sys->cpu, hdr->L);
+    z80_set_ix(&sys->cpu, hdr->IX_h<<8|hdr->IX_l);
+    z80_set_iy(&sys->cpu, hdr->IY_h<<8|hdr->IY_l);
+    z80_set_af_(&sys->cpu, hdr->A_<<8|hdr->F_);
+    z80_set_bc_(&sys->cpu, hdr->B_<<8|hdr->C_);
+    z80_set_de_(&sys->cpu, hdr->D_<<8|hdr->E_);
+    z80_set_hl_(&sys->cpu, hdr->H_<<8|hdr->L_);
+    z80_set_sp(&sys->cpu, hdr->SP_h<<8|hdr->SP_l);
+    z80_set_i(&sys->cpu, hdr->I);
+    z80_set_r(&sys->cpu, (hdr->R & 0x7F) | ((hdr->flags0 & 1)<<7));
+    z80_set_iff2(&sys->cpu, hdr->IFF2 != 0);
+    z80_set_ei_pending(&sys->cpu, hdr->EI != 0);
+    if (hdr->flags1 != 0xFF) {
+        z80_set_im(&sys->cpu, hdr->flags1 & 3);
+    }
+    else {
+        z80_set_im(&sys->cpu, 1);
+    }
+    if (ext_hdr) {
+        z80_set_pc(&sys->cpu, ext_hdr->PC_h<<8|ext_hdr->PC_l);
+        if (sys->type == ZX_TYPE_128) {
+            for (int i = 0; i < 16; i++) {
+                /* latch AY-3-8912 register address */
+                ay38910_iorq(&sys->ay, AY38910_BDIR|AY38910_BC1|(i<<16));
+                /* write AY-3-8912 register value */
+                ay38910_iorq(&sys->ay, AY38910_BDIR|(ext_hdr->audio[i]<<16));
+            }
+        }
+        /* simulate an out of port 0xFFFD and 0x7FFD */
+        uint64_t pins = Z80_IORQ|Z80_WR;
+        Z80_SET_ADDR(pins, 0xFFFD);
+        Z80_SET_DATA(pins, ext_hdr->out_fffd);
+        _zx_tick(4, pins, sys);
+        Z80_SET_ADDR(pins, 0x7FFD);
+        Z80_SET_DATA(pins, ext_hdr->out_7ffd);
+        _zx_tick(4, pins, sys);
+    }
+    else {
+        z80_set_pc(&sys->cpu, hdr->PC_h<<8|hdr->PC_l);
+    }
+    sys->border_color = _zx_palette[(hdr->flags0>>1) & 7] & 0xFFD7D7D7;
+    return true;
+}
 #endif /* CHIPS_IMPL */
