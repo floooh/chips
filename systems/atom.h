@@ -59,6 +59,7 @@
 */
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,8 +67,9 @@ extern "C" {
 
 #define ATOM_DISPLAY_WIDTH (MC6847_DISPLAY_WIDTH)
 #define ATOM_DISPLAY_HEIGHT (MC6847_DISPLAY_HEIGHT)
-#define ATOM_MAX_AUDIO_SAMPLES (1024)      /* max number of audio samples in internal sample buffer */
-#define ATOM_DEFAULT_AUDIO_SAMPLES (128)   /* default number of samples in internal sample buffer */ 
+#define ATOM_MAX_AUDIO_SAMPLES (1024)       /* max number of audio samples in internal sample buffer */
+#define ATOM_DEFAULT_AUDIO_SAMPLES (128)    /* default number of samples in internal sample buffer */
+#define ATOM_MAX_TAPE_SIZE (1<<16)          /* max size of tape file in bytes */
 
 /* joystick emulation types */
 typedef enum {
@@ -133,6 +135,9 @@ typedef struct {
     int sample_pos;
     float sample_buffer[ATOM_MAX_AUDIO_SAMPLES];
     uint8_t ram[1<<16];
+    int tape_size;  /* tape_size is > 0 if a tape is inserted */
+    int tape_pos;
+    uint8_t tape_buf[ATOM_MAX_TAPE_SIZE];
 } atom_t;
 
 /* initialize a new Atom instance */
@@ -147,8 +152,10 @@ void atom_exec(atom_t* sys, double seconds);
 void atom_key_down(atom_t* sys, int key_code);
 /* send a key up event */
 void atom_key_up(atom_t* sys, int key_code);
-/* load an Atom TAP file */
-void atom_quickload(atom_t* sys, const uint8_t* ptr, int num_bytes);
+/* insert a tape for loading (must be an Atom TAP file), data will be copied */
+bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes);
+/* remove tape */
+void atom_remove_tape(atom_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -181,6 +188,7 @@ static uint8_t _atom_via_in(int port_id, void* user_data);
 static void _atom_via_out(int port_id, uint8_t data, void* user_data);
 static void _atom_init_keymap(atom_t* sys);
 static void _atom_init_memorymap(atom_t* sys);
+static void _atom_osload(atom_t* sys);
 
 #define _ATOM_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 
@@ -266,6 +274,10 @@ void atom_exec(atom_t* sys, double seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
     uint32_t ticks_executed = m6502_exec(&sys->cpu, ticks_to_run);
+    /* check if the trapped OSLoad function was hit to implement tape file loading */
+    if (1 == sys->cpu.trap_id) {
+        _atom_osload(sys);
+    }
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);
 }
@@ -600,6 +612,124 @@ static void _atom_init_memorymap(atom_t* sys) {
     mem_map_rom(&sys->mem, 0, 0xD000, 0x1000, sys->rom_afloat);
     mem_map_rom(&sys->mem, 0, 0xE000, 0x1000, sys->rom_dosrom);
     mem_map_rom(&sys->mem, 0, 0xF000, 0x1000, sys->rom_abasic + 0x1000);
+}
+
+/*=== FILE LOADING ===========================================================*/
+/* Atom TAP / ATM header (https://github.com/hoglet67/Atomulator/blob/master/docs/atommmc2.txt ) */
+typedef struct {
+    uint8_t name[16];
+    uint16_t load_addr;
+    uint16_t exec_addr;
+    uint16_t length;
+} _atom_tap_header;
+
+bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid);
+    CHIPS_ASSERT(ptr);
+    atom_remove_tape(sys);
+    /* check for valid size */
+    if ((num_bytes < (int)sizeof(_atom_tap_header)) || (num_bytes > ATOM_MAX_TAPE_SIZE)) {
+        return false;
+    }
+    memcpy(sys->tape_buf, ptr, num_bytes);
+    sys->tape_pos = 0;
+    sys->tape_size = num_bytes;
+    return true;
+}
+
+void atom_remove_tape(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->tape_pos = 0;
+    sys->tape_size = 0;
+}
+
+/*
+    trapped OSLOAD function, load ATM block in a TAP file:
+      https://github.com/hoglet67/Atomulator/blob/master/docs/atommmc2.tx
+    from: http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.di
+      OSLOAD Load File subroutine
+       --------------------------
+     - Entry: 0,X = LSB File name string address
+              1,X = MSB File name string address
+              2,X = LSB Data dump start address
+              3,X = MSB Data dump start address
+              4,X : If bit 7 is clear, then the file's own start address is
+                    to be used
+              #DD = FLOAD flag - bit 7 is set if in FLOAD mod
+     - Uses:  #C9 = LSB File name string address
+              #CA = MSB File name string address
+              #CB = LSB Data dump start address
+              #CC = MSB Data dump start address
+              #CD = load flag - if bit 7 is set, then the load address at
+                    (#CB) is to be used instead of the file's load address
+              #D0 = MSB Current block number
+              #D1 = LSB Current block numbe
+     - Header format: <*>                      )
+                      <*>                      )
+                      <*>                      )
+                      <*>                      ) Header preamble
+                      <Filename>               ) Name is 1 to 13 bytes long
+                      <Status Flag>            ) Bit 7 clear if last block
+                                               ) Bit 6 clear to skip block
+                                               ) Bit 5 clear if first block
+                      <LSB block number>
+                      <MSB block number>       ) Always zero
+                      <Bytes in block>
+                      <MSB run address>
+                      <LSB run address>
+                      <MSB block load address>
+                      <LSB block load address
+     - Data format:   <....data....>           ) 1 to #FF bytes
+                      <Checksum>               ) LSB sum of all data byte
+*/
+void _atom_osload(atom_t* sys) {
+    bool success = false;
+
+    /* tape inserted? */
+    uint16_t exec_addr = 0;
+    if ((sys->tape_size > 0) && (sys->tape_pos < sys->tape_size)) {
+        /* read next tape chunk */
+        if ((int)(sys->tape_pos + sizeof(_atom_tap_header)) < sys->tape_size) {
+            const _atom_tap_header* hdr = (const _atom_tap_header*) &sys->tape_buf[sys->tape_pos];
+            sys->tape_pos += sizeof(_atom_tap_header);
+            exec_addr = hdr->exec_addr;
+            uint16_t addr = hdr->load_addr;
+            /* override file load address? */
+            if (mem_rd(&sys->mem, 0xCD) & 0x80) {
+                addr = mem_rd16(&sys->mem, 0xCB);
+            }
+            if ((sys->tape_pos + hdr->length) <= sys->tape_size) {
+                for (int i = 0; i < hdr->length; i++) {
+                    mem_wr(&sys->mem, addr++, sys->tape_buf[sys->tape_pos++]);
+                }
+                success = true;
+            }
+        }
+    }
+    /* success/fail: set or clear bit 6 and clear bit 7 of 0xDD */
+    uint8_t dd = mem_rd(&sys->mem, 0xDD);
+    if (success) {
+        dd |= (1<<6);
+    }
+    else {
+        dd &= ~(1<<6);
+    }
+    dd &= ~(1<<7);
+    mem_wr(&sys->mem, 0xDD, dd);
+
+    /* execute RTS */
+    sys->cpu.state.S++;
+    uint8_t l = mem_rd(&sys->mem, 0x0100|sys->cpu.state.S++);
+    uint8_t h = mem_rd(&sys->mem, 0x0100|sys->cpu.state.S);
+    if (success) {
+        /* jump to start of loaded code */
+        sys->cpu.state.PC = exec_addr;
+    }
+    else {
+        /* on error, just execute the RTS */
+        sys->cpu.state.PC = (h<<8)|l;
+        sys->cpu.state.PC++;
+    }
 }
 
 #endif /* CHIPS_IMPL */
