@@ -1255,15 +1255,47 @@ bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
+/* CPC AMSDOS BIN files */
+typedef struct {
+    uint8_t user_number;
+    uint8_t file_name[8];
+    uint8_t file_ext[3];
+    uint8_t pad_0[6];
+    uint8_t type;
+    uint8_t pad_1[2];
+    uint8_t load_addr_l;
+    uint8_t load_addr_h;
+    uint8_t pad_2;
+    uint8_t length_l;
+    uint8_t length_h;
+    uint8_t start_addr_l;
+    uint8_t start_addr_h;
+    uint8_t pad_4[4];
+    uint8_t pad_5[0x60];
+} _cpc_bin_header;
+
 bool _cpc_is_valid_bin(const uint8_t* ptr, int num_bytes) {
-    /* FIXME */
-    return false;
+    if (num_bytes <= (int)sizeof(_cpc_bin_header)) {
+        return false;
+    }
+    return true;
 }
 
 bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
-    /* FIXME */
-    return false;
-}
+    const _cpc_bin_header* hdr = (const _cpc_bin_header*) ptr;
+    ptr += sizeof(_cpc_bin_header);
+    const uint16_t load_addr = (hdr->load_addr_h<<8)|hdr->load_addr_l;
+    const uint16_t start_addr = (hdr->start_addr_h<<8)|hdr->start_addr_l;
+    const uint16_t len = (hdr->length_h<<8)|hdr->length_l;
+    for (uint16_t i = 0; i < len; i++) {
+        mem_wr(&sys->mem, load_addr+i, *ptr++);
+    }
+    z80_set_iff1(&sys->cpu, true);
+    z80_set_iff2(&sys->cpu, true);
+    z80_set_c(&sys->cpu, 0);        /* FIXME: "ROM select number" */
+    z80_set_hl(&sys->cpu, start_addr);
+    z80_set_pc(&sys->cpu, 0xBD16);  /* MC START PROGRAM */
+    return true;}
 
 bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid && ptr);
