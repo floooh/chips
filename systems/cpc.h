@@ -378,11 +378,11 @@ void cpc_key_down(cpc_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->joystick_type == CPC_JOYSTICK_DIGITAL) {
         switch (key_code) {
-            case SAPP_KEYCODE_SPACE: sys->joy_mask |= 1<<4; break;
-            case SAPP_KEYCODE_LEFT:  sys->joy_mask |= 1<<2; break;
-            case SAPP_KEYCODE_RIGHT: sys->joy_mask |= 1<<3; break;
-            case SAPP_KEYCODE_DOWN:  sys->joy_mask |= 1<<1; break;
-            case SAPP_KEYCODE_UP:    sys->joy_mask |= 1<<0; break;
+            case 0x20: sys->joy_mask |= 1<<4; break;    /* fire */
+            case 0x08: sys->joy_mask |= 1<<2; break;    /* left */
+            case 0x09: sys->joy_mask |= 1<<3; break;    /* right */
+            case 0x0A: sys->joy_mask |= 1<<1; break;    /* down */
+            case 0x0B: sys->joy_mask |= 1<<0; break;    /* up */
             default: kbd_key_down(&sys->kbd, key_code); break;
         }
     }
@@ -395,11 +395,11 @@ void cpc_key_up(cpc_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->joystick_type == CPC_JOYSTICK_DIGITAL) {
         switch (key_code) {
-            case SAPP_KEYCODE_SPACE: sys->joy_mask &= ~(1<<4); break;
-            case SAPP_KEYCODE_LEFT:  sys->joy_mask &= ~(1<<2); break;
-            case SAPP_KEYCODE_RIGHT: sys->joy_mask &= ~(1<<3); break;
-            case SAPP_KEYCODE_DOWN:  sys->joy_mask &= ~(1<<1); break;
-            case SAPP_KEYCODE_UP:    sys->joy_mask &= ~(1<<0); break;
+            case 0x20: sys->joy_mask &= ~(1<<4); break; /* fire */
+            case 0x08: sys->joy_mask &= ~(1<<2); break; /* left */
+            case 0x09: sys->joy_mask &= ~(1<<3); break; /* right */
+            case 0x0A: sys->joy_mask &= ~(1<<1); break; /* down */
+            case 0x0B: sys->joy_mask &= ~(1<<0); break; /* up */
             default: kbd_key_up(&sys->kbd, key_code); break;
         }
     }
@@ -1142,6 +1142,140 @@ static void _cpc_update_memory_mapping(cpc_t* sys) {
     else {
         /* RAM-behind-ROM */
         mem_map_rw(&sys->mem, 0, 0xC000, 0x4000, rom1_ptr, sys->ram[i3]);
+    }
+}
+
+/*=== SNAPSHOT FILE LOADING ==================================================*/
+
+/* CPC SNA fileformat header: http://cpctech.cpc-live.com/docs/snapshot.html */
+typedef struct {
+    uint8_t magic[8];     // must be "MV - SNA"
+    uint8_t pad0[8];
+    uint8_t version;
+    uint8_t F, A, C, B, E, D, L, H, R, I;
+    uint8_t IFF1, IFF2;
+    uint8_t IX_l, IX_h;
+    uint8_t IY_l, IY_h;
+    uint8_t SP_l, SP_h;
+    uint8_t PC_l, PC_h;
+    uint8_t IM;
+    uint8_t F_, A_, C_, B_, E_, D_, L_, H_;
+    uint8_t selected_pen;
+    uint8_t pens[17];             // palette + border colors
+    uint8_t gate_array_config;
+    uint8_t ram_config;
+    uint8_t crtc_selected;
+    uint8_t crtc_regs[18];
+    uint8_t rom_config;
+    uint8_t ppi_a;
+    uint8_t ppi_b;
+    uint8_t ppi_c;
+    uint8_t ppi_control;
+    uint8_t psg_selected;
+    uint8_t psg_regs[16];
+    uint8_t dump_size_l;
+    uint8_t dump_size_h;
+    uint8_t pad1[0x93];
+} _cpc_sna_header;
+
+bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
+    if (num_bytes <= (int)sizeof(_cpc_sna_header)) {
+        return false;
+    }
+    const _cpc_sna_header* hdr = (const _cpc_sna_header*) ptr;
+    static uint8_t magic[8] = { 'M', 'V', 0x20, '-', 0x20, 'S', 'N', 'A' };
+    for (int i = 0; i < 8; i++) {
+        if (magic[i] != hdr->magic[i]) {
+            return false;
+        }
+    }
+    /* FIXME: check version field? */
+    return true;
+}
+
+bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+    const _cpc_sna_header* hdr = (const _cpc_sna_header*) ptr;
+    ptr += sizeof(_cpc_sna_header);
+    
+    /* copy 64 or 128 KByte memory dump */
+    const uint16_t dump_size = hdr->dump_size_h<<8 | hdr->dump_size_l;
+    const uint32_t dump_num_bytes = (dump_size == 64) ? 0x10000 : 0x20000;
+    if (num_bytes > (int) (sizeof(_cpc_sna_header) + dump_num_bytes)) {
+        return false;
+    }
+    if (dump_num_bytes > sizeof(sys->ram)) {
+        return false;
+    }
+    memcpy(sys->ram, ptr, dump_num_bytes);
+
+    z80_reset(&sys->cpu);
+    z80_set_f(&sys->cpu, hdr->F); z80_set_a(&sys->cpu,hdr->A);
+    z80_set_c(&sys->cpu, hdr->C); z80_set_b(&sys->cpu, hdr->B);
+    z80_set_e(&sys->cpu, hdr->E); z80_set_d(&sys->cpu, hdr->D);
+    z80_set_l(&sys->cpu, hdr->L); z80_set_h(&sys->cpu, hdr->H);
+    z80_set_r(&sys->cpu, hdr->R); z80_set_i(&sys->cpu, hdr->I);
+    z80_set_iff1(&sys->cpu, (hdr->IFF1 & 1) != 0);
+    z80_set_iff2(&sys->cpu, (hdr->IFF2 & 1) != 0);
+    z80_set_ix(&sys->cpu, hdr->IX_h<<8 | hdr->IX_l);
+    z80_set_iy(&sys->cpu, hdr->IY_h<<8 | hdr->IY_l);
+    z80_set_sp(&sys->cpu, hdr->SP_h<<8 | hdr->SP_l);
+    z80_set_pc(&sys->cpu, hdr->PC_h<<8 | hdr->PC_l);
+    z80_set_im(&sys->cpu, hdr->IM);
+    z80_set_af_(&sys->cpu, hdr->A_<<8 | hdr->F_);
+    z80_set_bc_(&sys->cpu, hdr->B_<<8 | hdr->C_);
+    z80_set_de_(&sys->cpu, hdr->D_<<8 | hdr->E_);
+    z80_set_hl_(&sys->cpu, hdr->H_<<8 | hdr->L_);
+
+    for (int i = 0; i < 16; i++) {
+        sys->ga.palette[i] = sys->ga.colors[hdr->pens[i] & 0x1F];
+    }
+    sys->ga.border_color = sys->ga.colors[hdr->pens[16] & 0x1F];
+    sys->ga.pen = hdr->selected_pen & 0x1F;
+    sys->ga.config = hdr->gate_array_config & 0x3F;
+    sys->ga.next_video_mode = hdr->gate_array_config & 3;
+    sys->ga.ram_config = hdr->ram_config & 0x3F;
+    sys->upper_rom_select = hdr->rom_config;
+    _cpc_update_memory_mapping(sys);
+
+    for (int i = 0; i < 18; i++) {
+        sys->vdg.reg[i] = hdr->crtc_regs[i];
+    }
+    sys->vdg.sel = hdr->crtc_selected;
+
+    sys->ppi.output[I8255_PORT_A] = hdr->ppi_a;
+    sys->ppi.output[I8255_PORT_B] = hdr->ppi_b;
+    sys->ppi.output[I8255_PORT_C] = hdr->ppi_c;
+    sys->ppi.control = hdr->ppi_control;
+
+    for (int i = 0; i < 16; i++) {
+        ay38910_iorq(&sys->psg, AY38910_BDIR|AY38910_BC1|(i<<16));
+        ay38910_iorq(&sys->psg, AY38910_BDIR|(hdr->psg_regs[i]<<16));
+    }
+    ay38910_iorq(&sys->psg, AY38910_BDIR|AY38910_BC1|(hdr->psg_selected<<16));
+    return true;
+}
+
+bool _cpc_is_valid_bin(const uint8_t* ptr, int num_bytes) {
+    /* FIXME */
+    return false;
+}
+
+bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+    /* FIXME */
+    return false;
+}
+
+bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid && ptr);
+    if (_cpc_is_valid_sna(ptr, num_bytes)) {
+        return _cpc_load_sna(sys, ptr, num_bytes);
+    }
+    else if (_cpc_is_valid_bin(ptr, num_bytes)) {
+        return _cpc_load_bin(sys, ptr, num_bytes);
+    }
+    else {
+        /* not a known file type, or not enough data */
+        return false;
     }
 }
 
