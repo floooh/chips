@@ -374,6 +374,361 @@ void cpc_exec(cpc_t* sys, double seconds) {
     }
 }
 
+void cpc_key_down(cpc_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (sys->joystick_type == CPC_JOYSTICK_DIGITAL) {
+        switch (key_code) {
+            case SAPP_KEYCODE_SPACE: sys->joy_mask |= 1<<4; break;
+            case SAPP_KEYCODE_LEFT:  sys->joy_mask |= 1<<2; break;
+            case SAPP_KEYCODE_RIGHT: sys->joy_mask |= 1<<3; break;
+            case SAPP_KEYCODE_DOWN:  sys->joy_mask |= 1<<1; break;
+            case SAPP_KEYCODE_UP:    sys->joy_mask |= 1<<0; break;
+            default: kbd_key_down(&sys->kbd, key_code); break;
+        }
+    }
+    else {
+        kbd_key_down(&sys->kbd, key_code);
+    }
+}
+
+void cpc_key_up(cpc_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (sys->joystick_type == CPC_JOYSTICK_DIGITAL) {
+        switch (key_code) {
+            case SAPP_KEYCODE_SPACE: sys->joy_mask &= ~(1<<4); break;
+            case SAPP_KEYCODE_LEFT:  sys->joy_mask &= ~(1<<2); break;
+            case SAPP_KEYCODE_RIGHT: sys->joy_mask &= ~(1<<3); break;
+            case SAPP_KEYCODE_DOWN:  sys->joy_mask &= ~(1<<1); break;
+            case SAPP_KEYCODE_UP:    sys->joy_mask &= ~(1<<0); break;
+            default: kbd_key_up(&sys->kbd, key_code); break;
+        }
+    }
+    else {
+        kbd_key_up(&sys->kbd, key_code);
+    }
+}
+
+/* the CPU tick callback */
+uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
+    cpc_t* sys = (cpc_t*) user_data;
+
+    /* interrupt acknowledge? */
+    if ((pins & (Z80_M1|Z80_IORQ)) == (Z80_M1|Z80_IORQ)) {
+        _cpc_ga_int_ack(sys);
+    }
+
+    /* memory and IO requests */
+    if (pins & Z80_MREQ) {
+        /* CPU MEMORY REQUEST */
+        const uint16_t addr = Z80_GET_ADDR(pins);
+        if (pins & Z80_RD) {
+            Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
+        }
+        else if (pins & Z80_WR) {
+            mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
+        }
+    }
+    else if ((pins & Z80_IORQ) && (pins & (Z80_RD|Z80_WR))) {
+        /* CPU IO REQUEST */
+        pins = _cpc_cpu_iorq(sys, pins);
+    }
+    
+    /*
+        tick the gate array and audio chip at 1 MHz, and decide how many wait
+        states must be injected, the CPC signals the wait line in 3 out of 4
+        cycles:
+    
+         0: wait inactive
+         1: wait active
+         2: wait active
+         3: wait active
+    
+        the CPU samples the wait line only on specific clock ticks
+        during memory or IO operations, wait states are only injected
+        if the 'wait active' happens on the same clock tick as the
+        CPU would sample the wait line
+    */
+    int wait_scan_tick = -1;
+    if (pins & Z80_MREQ) {
+        /* a memory request or opcode fetch, wait is sampled on second clock tick */
+        wait_scan_tick = 1;
+    }
+    else if (pins & Z80_IORQ) {
+        if (pins & Z80_M1) {
+            /* an interrupt acknowledge cycle, wait is sampled on fourth clock tick */
+            wait_scan_tick = 3;
+        }
+        else {
+            /* an IO cycle, wait is sampled on third clock tick */
+            wait_scan_tick = 2;
+        }
+    }
+    bool wait = false;
+    uint32_t wait_cycles = 0;
+    for (int i = 0; i<num_ticks; i++) {
+        do {
+            /* CPC gate array sets the wait pin for 3 out of 4 clock ticks */
+            bool wait_pin = (sys->tick_count++ & 3) != 0;
+            wait = (wait_pin && (wait || (i == wait_scan_tick)));
+            if (wait) {
+                wait_cycles++;
+            }
+            /* on every 4th clock cycle, tick the system */
+            if (!wait_pin) {
+                if (ay38910_tick(&sys->psg)) {
+                    sys->sample_buffer[sys->sample_pos++] = sys->psg.sample;
+                    if (sys->sample_pos == sys->num_samples) {
+                        if (sys->audio_cb) {
+                            sys->audio_cb(sys->sample_buffer, sys->num_samples);
+                        }
+                        sys->sample_pos = 0;
+                    }
+                }
+                pins = _cpc_ga_tick(sys, pins);
+            }
+        }
+        while (wait);
+    }
+    Z80_SET_WAIT(pins, wait_cycles);
+    return pins;
+}
+
+uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
+    /*
+        CPU IO REQUEST
+
+        For address decoding, see the main board schematics!
+        also: http://cpcwiki.eu/index.php/Default_I/O_Port_Summary
+
+        Z80 to i8255 PPI pin connections:
+            ~A11 -> CS (CS is active-low)
+                A8 -> A0
+                A9 -> A1
+                RD -> RD
+                WR -> WR
+            D0..D7 -> D0..D7
+    */
+    if ((pins & Z80_A11) == 0) {
+        /* i8255 in/out */
+        uint64_t ppi_pins = (pins & Z80_PIN_MASK)|I8255_CS;
+        if (pins & Z80_A9) { ppi_pins |= I8255_A1; }
+        if (pins & Z80_A8) { ppi_pins |= I8255_A0; }
+        if (pins & Z80_RD) { ppi_pins |= I8255_RD; }
+        if (pins & Z80_WR) { ppi_pins |= I8255_WR; }
+        pins = i8255_iorq(&sys->ppi, ppi_pins) & Z80_PIN_MASK;
+    }
+    /*
+        Z80 to MC6845 pin connections:
+
+            ~A14 -> CS (CS is active low)
+            A9  -> RW (high: read, low: write)
+            A8  -> RS
+        D0..D7  -> D0..D7
+    */
+    if ((pins & Z80_A14) == 0) {
+        /* 6845 in/out */
+        uint64_t vdg_pins = (pins & Z80_PIN_MASK)|MC6845_CS;
+        if (pins & Z80_A9) { vdg_pins |= MC6845_RW; }
+        if (pins & Z80_A8) { vdg_pins |= MC6845_RS; }
+        pins = mc6845_iorq(&sys->vdg, vdg_pins) & Z80_PIN_MASK;
+    }
+    /*
+        Gate Array Function (only writing to the gate array
+        is possible, but the gate array doesn't check the
+        CPU R/W pins, so each access is a write).
+
+        This is used by the Arnold Acid test "OnlyInc", which
+        access the PPI and gate array in the same IO operation
+        to move data directly from the PPI into the gate array.
+    */
+    if ((pins & (Z80_A15|Z80_A14)) == Z80_A14) {
+        /* D6 and D7 select the gate array operation */
+        const uint8_t data = Z80_GET_DATA(pins);
+        switch (data & ((1<<7)|(1<<6))) {
+            case 0:
+                /* select pen:
+                    bit 4 set means 'select border', otherwise
+                    bits 0..3 contain the pen number
+                */
+                sys->ga.pen = data & 0x1F;
+                break;
+            case (1<<6):
+                /* select color for border or selected pen: */
+                if (sys->ga.pen & (1<<4)) {
+                    /* border color */
+                    sys->ga.border_color = sys->ga.colors[data & 0x1F];
+                }
+                else {
+                    sys->ga.palette[sys->ga.pen & 0x0F] = sys->ga.colors[data & 0x1F];
+                }
+                break;
+            case (1<<7):
+                /* select screen mode, ROM config and interrupt control
+                    - bits 0 and 1 select the screen mode
+                        00: Mode 0 (160x200 @ 16 colors)
+                        01: Mode 1 (320x200 @ 4 colors)
+                        02: Mode 2 (640x200 @ 2 colors)
+                        11: Mode 3 (160x200 @ 2 colors, undocumented)
+                  
+                    - bit 2: disable/enable lower ROM
+                    - bit 3: disable/enable upper ROM
+                  
+                    - bit 4: interrupt generation control
+                */
+                sys->ga.config = data;
+                sys->ga.next_video_mode = data & 3;
+                if (data & (1<<4)) {
+                    sys->ga.hsync_irq_counter = 0;
+                    sys->ga.intr = false;
+                }
+                _cpc_update_memory_mapping(sys);
+                break;
+            case (1<<7)|(1<<6):
+                /* RAM memory management (only CPC6128) */
+                if (CPC_TYPE_6128 == sys->type) {
+                    sys->ga.ram_config = data;
+                    _cpc_update_memory_mapping(sys);
+                }
+                break;
+        }
+    }
+    /*
+        Upper ROM Bank number
+
+        This is used to select a ROM in the 0xC000..0xFFFF region, without expansions,
+        this is just the BASIC and AMSDOS ROM.
+    */
+    if ((pins & Z80_A13) == 0) {
+        sys->upper_rom_select = Z80_GET_DATA(pins);
+        _cpc_update_memory_mapping(sys);
+    }
+    /*
+        Floppy Disk Interface
+    */
+    if ((pins & (Z80_A10|Z80_A8|Z80_A7)) == 0) {
+        /* FIXME: floppy disk motor control */
+    }
+    else if ((pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
+        /* floppy controller status/data register */
+        if (pins & Z80_RD) {
+            Z80_SET_DATA(pins, 0xFF);
+        }
+    }
+    return pins;
+}
+
+uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data) {
+    cpc_t* sys = (cpc_t*) user_data;
+    /*
+        i8255 PPI to AY-3-8912 PSG pin connections:
+            PA0..PA7    -> D0..D7
+                 PC7    -> BDIR
+                 PC6    -> BC1
+    */
+    if ((I8255_PORT_A == port_id) || (I8255_PORT_C == port_id)) {
+        const uint8_t ay_ctrl = sys->ppi.output[I8255_PORT_C] & ((1<<7)|(1<<6));
+        if (ay_ctrl) {
+            uint64_t ay_pins = 0;
+            if (ay_ctrl & (1<<7)) { ay_pins |= AY38910_BDIR; }
+            if (ay_ctrl & (1<<6)) { ay_pins |= AY38910_BC1; }
+            const uint8_t ay_data = sys->ppi.output[I8255_PORT_A];
+            AY38910_SET_DATA(ay_pins, ay_data);
+            ay38910_iorq(&sys->psg, ay_pins);
+        }
+    }
+    if (I8255_PORT_C == port_id) {
+        // bits 0..3: select keyboard matrix line
+        kbd_set_active_columns(&sys->kbd, 1<<(data & 0x0F));
+
+        /* FIXME: cassette write data */
+        /* FIXME: cassette deck motor control */
+        if (data & (1<<4)) {
+            // tape_start_motor();
+        }
+        else {
+            // tape_stop_motor();
+        }
+    }
+    return pins;
+}
+
+uint8_t _cpc_ppi_in(int port_id, void* user_data) {
+    cpc_t* sys = (cpc_t*) user_data;
+    if (I8255_PORT_A == port_id) {
+        /* AY-3-8912 PSG function (indirectly this may also trigger
+            a read of the keyboard matrix via the AY's IO port
+        */
+        uint64_t ay_pins = 0;
+        uint8_t ay_ctrl = sys->ppi.output[I8255_PORT_C];
+        if (ay_ctrl & (1<<7)) ay_pins |= AY38910_BDIR;
+        if (ay_ctrl & (1<<6)) ay_pins |= AY38910_BC1;
+        uint8_t ay_data = sys->ppi.output[I8255_PORT_A];
+        AY38910_SET_DATA(ay_pins, ay_data);
+        ay_pins = ay38910_iorq(&sys->psg, ay_pins);
+        return AY38910_GET_DATA(ay_pins);
+    }
+    else if (I8255_PORT_B == port_id) {
+        /*
+            Bit 7: cassette data input
+            Bit 6: printer port ready (1=not ready, 0=ready)
+            Bit 5: expansion port /EXP pin
+            Bit 4: screen refresh rate (1=50Hz, 0=60Hz)
+            Bit 3..1: distributor id (shown in start screen)
+                0: Isp
+                1: Triumph
+                2: Saisho
+                3: Solavox
+                4: Awa
+                5: Schneider
+                6: Orion
+                7: Amstrad
+            Bit 0: vsync
+        */
+        uint8_t val = (1<<4) | (7<<1);    // 50Hz refresh rate, Amstrad
+        /* PPI Port B Bit 0 is directly wired to the 6845 VSYNC pin (see schematics) */
+        if (sys->vdg.vs) {
+            val |= (1<<0);
+        }
+        return val;
+    }
+    else {
+        /* shouldn't happen */
+        return 0xFF;
+    }
+}
+
+void _cpc_psg_out(int port_id, uint8_t data, void* user_data) {
+    /* this shouldn't be called */
+}
+
+uint8_t _cpc_psg_in(int port_id, void* user_data) {
+    cpc_t* sys = (cpc_t*) user_data;
+    /* read the keyboard matrix and joystick port */
+    if (port_id == AY38910_PORT_A) {
+        uint8_t data = (uint8_t) kbd_scan_lines(&sys->kbd);
+        if (sys->kbd.active_columns & (1<<9)) {
+            /*
+                joystick input is implemented like this:
+                - the keyboard column 9 is routed to the joystick
+                  ports "COM1" pin, this means the joystick is only
+                  "powered" when the keyboard line 9 is active
+                - the joysticks direction and fire pins are
+                  connected to the keyboard matrix lines as
+                  input to PSG port A
+                - thus, only when the keyboard matrix column 9 is sampled,
+                  joystick input will be provided on the keyboard
+                  matrix lines
+            */
+            data |= sys->joy_mask;
+        }
+        return ~data;
+    }
+    else {
+        /* this shouldn't happen since the AY-3-8912 only has one IO port */
+        return 0xFF;
+    }
+}
+
 /* the first 32 bytes of the KC Compact color ROM */
 static uint8_t _cpc_kcc_color_rom[32] = {
     0x15, 0x15, 0x31, 0x3d, 0x01, 0x0d, 0x11, 0x1d,
@@ -455,6 +810,218 @@ static void _cpc_ga_init(cpc_t* sys) {
         /* the original-CPC hardware colors */
         for (int i = 0; i < 32; i++) {
             sys->ga.colors[i] = _cpc_colors[i];
+        }
+    }
+}
+
+void _cpc_ga_int_ack(cpc_t* sys) {
+    /* on interrupt acknowledge from the CPU, clear the top bit from the
+        hsync counter, so the next interrupt can't occur closer then 
+        32 HSYNC, and clear the gate array interrupt pin state
+    */
+    sys->ga.hsync_irq_counter &= 0x1F;
+    sys->ga.intr = false;
+}
+
+static bool _cpc_falling_edge(uint64_t new_pins, uint64_t old_pins, uint64_t mask) {
+    return 0 != (mask & (~new_pins & (new_pins ^ old_pins)));
+}
+
+static bool _cpc_rising_edge(uint64_t new_pins, uint64_t old_pins, uint64_t mask) {
+    return 0 != (mask & (new_pins & (new_pins ^ old_pins)));
+}
+
+uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
+    /*
+        http://cpctech.cpc-live.com/docs/ints.html
+        http://www.cpcwiki.eu/forum/programming/frame-flyback-and-interrupts/msg25106/#msg25106
+        https://web.archive.org/web/20170612081209/http://www.grimware.org/doku.php/documentations/devices/gatearray
+    */
+    uint64_t crtc_pins = mc6845_tick(&sys->vdg);
+
+    /*
+        INTERRUPT GENERATION:
+
+        From: https://web.archive.org/web/20170612081209/http://www.grimware.org/doku.php/documentations/devices/gatearray
+
+        - On every falling edge of the HSYNC signal (from the 6845),
+          the gate array will increment the counter by one. When the
+          counter reaches 52, the gate array will raise the INT signal
+          and reset the counter.
+        - When the CPU acknowledges the interrupt, the gate array will
+          reset bit5 of the counter, so the next interrupt can't occur
+          closer than 32 HSync.
+        - When a VSync occurs, the gate array will wait for 2 HSync and:
+            - if the counter>=32 (bit5=1) then no interrupt request is issued
+              and counter is reset to 0
+            - if the counter<32 (bit5=0) then an interrupt request is issued
+              and counter is reset to 0
+        - This 2 HSync delay after a VSync is used to let the main program,
+          executed by the CPU, enough time to sense the VSync...
+
+        From: http://www.cpcwiki.eu/index.php?title=CRTC
+        
+        - The HSYNC is modified before being sent to the monitor. It happens
+          2us after the HSYNC from the CRTC and lasts 4us when HSYNC length
+          is greater or equal to 6.
+        - The VSYNC is also modified before being sent to the monitor, it happens
+          two lines after the VSYNC from the CRTC and stay 2 lines (same cut
+          rule if VSYNC is lower than 4).
+
+        NOTES:
+            - the interrupt acknowledge is handled once per machine 
+              cycle in cpu_tick()
+            - the video mode will take effect *after the next HSYNC*
+    */
+    if (_cpc_rising_edge(crtc_pins, sys->ga.crtc_pins, MC6845_VS)) {
+        sys->ga.hsync_after_vsync_counter = 2;
+    }
+    if (_cpc_falling_edge(crtc_pins, sys->ga.crtc_pins, MC6845_HS)) {
+        sys->ga.video_mode = sys->ga.next_video_mode;
+        sys->ga.hsync_irq_counter = (sys->ga.hsync_irq_counter + 1) & 0x3F;
+
+        /* 2 HSync delay? */
+        if (sys->ga.hsync_after_vsync_counter > 0) {
+            sys->ga.hsync_after_vsync_counter--;
+            if (sys->ga.hsync_after_vsync_counter == 0) {
+                if (sys->ga.hsync_irq_counter >= 32) {
+                    sys->ga.intr = true;
+                }
+                sys->ga.hsync_irq_counter = 0;
+            }
+        }
+        /* normal behaviour, request interrupt each 52 scanlines */
+        if (sys->ga.hsync_irq_counter == 52) {
+            sys->ga.hsync_irq_counter = 0;
+            sys->ga.intr = true;
+        }
+    }
+
+    /* generate HSYNC signal to monitor:
+        - starts 2 ticks after HSYNC rising edge from CRTC
+        - stays active for 4 ticks or less if CRTC HSYNC goes inactive earlier
+    */
+    if (_cpc_rising_edge(crtc_pins, sys->ga.crtc_pins, MC6845_HS)) {
+        sys->ga.hsync_delay_counter = 3;
+    }
+    if (_cpc_falling_edge(crtc_pins, sys->ga.crtc_pins, MC6845_HS)) {
+        sys->ga.hsync_delay_counter = 0;
+        sys->ga.hsync_counter = 0;
+        sys->ga.sync = false;
+    }
+    if (sys->ga.hsync_delay_counter > 0) {
+        sys->ga.hsync_delay_counter--;
+        if (sys->ga.hsync_delay_counter == 0) {
+            sys->ga.sync = true;
+            sys->ga.hsync_counter = 5;
+        }
+    }
+    if (sys->ga.hsync_counter > 0) {
+        sys->ga.hsync_counter--;
+        if (sys->ga.hsync_counter == 0) {
+            sys->ga.sync = false;
+        }
+    }
+
+    // FIXME delayed VSYNC to monitor
+
+    const bool vsync = 0 != (crtc_pins & MC6845_VS);
+    crt_tick(&sys->crt, sys->ga.sync, vsync);
+    _cpc_ga_decode_video(sys, crtc_pins);
+
+    sys->ga.crtc_pins = crtc_pins;
+
+    if (sys->ga.intr) {
+        cpu_pins |= Z80_INT;
+    }
+    return cpu_pins;
+}
+
+void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
+    /*
+        compute the source address from current CRTC ma (memory address)
+        and ra (raster address) like this:
+    
+        |ma12|ma11|ra2|ra1|ra0|ma9|ma8|...|ma2|ma1|ma0|0|
+    
+       Bits ma12 and m11 point to the 16 KByte page, and all
+       other bits are the index into that page.
+    */
+    const uint16_t ma = MC6845_GET_ADDR(crtc_pins);
+    const uint8_t ra = MC6845_GET_RA(crtc_pins);
+    const uint32_t page_index  = (ma>>12) & 3;
+    const uint32_t page_offset = ((ma & 0x03FF)<<1) | ((ra & 7)<<11);
+    const uint8_t* src = &(sys->ram[page_index][page_offset]);
+    uint8_t c;
+    uint32_t p;
+    if (0 == sys->ga.video_mode) {
+        /* 160x200 @ 16 colors
+           pixel    bit mask
+           0:       |3|7|
+           1:       |2|6|
+           2:       |1|5|
+           3:       |0|4|
+        */
+        for (int i = 0; i < 2; i++) {
+            c = *src++;
+            p = sys->ga.palette[((c>>7)&0x1)|((c>>2)&0x2)|((c>>3)&0x4)|((c<<2)&0x8)];
+            *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
+            p = sys->ga.palette[((c>>6)&0x1)|((c>>1)&0x2)|((c>>2)&0x4)|((c<<3)&0x8)];
+            *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
+        }
+    }
+    else if (1 == sys->ga.video_mode) {
+        /* 320x200 @ 4 colors
+           pixel    bit mask
+           0:       |3|7|
+           1:       |2|6|
+           2:       |1|5|
+           3:       |0|4|
+        */
+        for (int i = 0; i < 2; i++) {
+            c = *src++;
+            p = sys->ga.palette[((c>>2)&2)|((c>>7)&1)];
+            *dst++ = p; *dst++ = p;
+            p = sys->ga.palette[((c>>1)&2)|((c>>6)&1)];
+            *dst++ = p; *dst++ = p;
+            p = sys->ga.palette[((c>>0)&2)|((c>>5)&1)];
+            *dst++ = p; *dst++ = p;
+            p = sys->ga.palette[((c<<1)&2)|((c>>4)&1)];
+            *dst++ = p; *dst++ = p;
+        }
+    }
+    else if (2 == sys->ga.video_mode) {
+        /* 640x200 @ 2 colors */
+        for (int i = 0; i < 2; i++) {
+            c = *src++;
+            for (int j = 7; j >= 0; j--) {
+                *dst++ = sys->ga.palette[(c>>j)&1];
+            }
+        }
+    }
+}
+
+/* FIXME: debug visualzation! */
+void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
+    if (sys->crt.visible) {
+        int dst_x = sys->crt.pos_x * 16;
+        int dst_y = sys->crt.pos_y;
+        uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * CPC_DISPLAY_WIDTH]);
+        if (crtc_pins & MC6845_DE) {
+            /* decode visible pixels */
+            _cpc_ga_decode_pixels(sys, dst, crtc_pins);
+        }
+        else if (crtc_pins & (MC6845_HS|MC6845_VS)) {
+            /* during horizontal/vertical sync: blacker than black */
+            for (int i = 0; i < 16; i++) {
+                dst[i] = 0xFF000000;
+            }
+        }
+        else {
+            /* border color */
+            for (int i = 0; i < 16; i++) {
+                dst[i] = sys->ga.border_color;
+            }
         }
     }
 }
