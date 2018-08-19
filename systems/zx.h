@@ -213,13 +213,9 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
     sys->valid = true;
     sys->type = desc->type;
     sys->joystick_type = desc->joystick_type;
-    if (desc->type == ZX_TYPE_48K) {
-        sys->rom_zx48k = desc->rom_zx48k;
-    }
-    else {
-        sys->rom_zx128_0 = desc->rom_zx128_0;
-        sys->rom_zx128_1 = desc->rom_zx128_1;
-    }
+    sys->rom_zx48k = desc->rom_zx48k;
+    sys->rom_zx128_0 = desc->rom_zx128_0;
+    sys->rom_zx128_1 = desc->rom_zx128_1;
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _ZX_DEFAULT(desc->audio_num_samples, ZX_DEFAULT_AUDIO_SAMPLES);
