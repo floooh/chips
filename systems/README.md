@@ -30,7 +30,7 @@ and games.
 parsed, and an implemented part that's only parsed when ```CHIPS_IMPL```
 is defined in one source file
 - the declaration part only includes the following headers: ```stdint.h```, ```stdbool.h```, ```string.h```
-- the implementation part will additionally include ```assert.h```, unless the CHIPS_ASSERT macro is overriden
+- the implementation part will additionally include ```assert.h```, unless you define your own CHIPS_ASSERT macro
 - the following CRT header features are used:
     - uint8_t, uint16_t, uint32_t, uint64_t, bool
     - memset(), memcpy()
