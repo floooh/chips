@@ -89,13 +89,11 @@ typedef struct {
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
 
-    /* ROMs for Z1013.01 */
+    /* ROM images */
     const void* rom_mon202;
-    int rom_mon202_size;
-
-    /* ROMs for Z1013.16 and Z1013.64 */
     const void* rom_mon_a2;
     const void* rom_font;
+    int rom_mon202_size;
     int rom_mon_a2_size;
     int rom_font_size;
 } z1013_desc_t;
@@ -109,13 +107,12 @@ typedef struct {
     uint8_t kbd_request_column;
     bool kbd_request_line_hilo;
     uint32_t* pixel_buffer;
-    const void* rom_mon202;
-    const void* rom_mon_a2;
-    const void* rom_font;
     clk_t clk;
     mem_t mem;
     kbd_t kbd;
     uint8_t ram[1<<16];
+    uint8_t rom_os[2048];
+    uint8_t rom_font[2048];
 } z1013_t;
 
 /* initialize a new Z1013 instance */
@@ -151,9 +148,6 @@ extern bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 #endif
 
 #define _Z1013_DISPLAY_SIZE (Z1013_DISPLAY_WIDTH*Z1013_DISPLAY_HEIGHT*4)
-#define _Z1013_ROM_MON202_SIZE (2048)
-#define _Z1013_ROM_MON_A2_SIZE (2048)
-#define _Z1013_ROM_FONT_SIZE   (2048)
 
 static uint64_t _z1013_tick(int num, uint64_t pins, void* user_data);
 static uint8_t _z1013_pio_in(int port_id, void* user_data);
@@ -163,21 +157,25 @@ static void _z1013_decode_vidmem(z1013_t* sys);
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z1013_DISPLAY_SIZE));
-    CHIPS_ASSERT(desc->rom_font && (desc->rom_font_size == _Z1013_ROM_FONT_SIZE));
+    CHIPS_ASSERT(desc->rom_font && (desc->rom_font_size == sizeof(sys->rom_font)));
     if (desc->type == Z1013_TYPE_01) {
-        CHIPS_ASSERT(desc->rom_mon202 && (desc->rom_mon202_size == _Z1013_ROM_MON202_SIZE));
+        CHIPS_ASSERT(desc->rom_mon202 && (desc->rom_mon202_size == sizeof(sys->rom_os)));
     }
     else {
-        CHIPS_ASSERT(desc->rom_mon_a2 && (desc->rom_mon_a2_size == _Z1013_ROM_MON_A2_SIZE));
+        CHIPS_ASSERT(desc->rom_mon_a2 && (desc->rom_mon_a2_size == sizeof(sys->rom_os)));
     }
 
     memset(sys, 0, sizeof(z1013_t));
     sys->valid = true;
     sys->type = desc->type;
-    sys->rom_font = desc->rom_font;
-    sys->rom_mon202 = desc->rom_mon202;
-    sys->rom_mon_a2 = desc->rom_mon_a2;
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
+    memcpy(sys->rom_font, desc->rom_font, sizeof(sys->rom_font));
+    if (desc->type == Z1013_TYPE_01) {
+        memcpy(sys->rom_os, desc->rom_mon202, sizeof(sys->rom_os));
+    }
+    else {
+        memcpy(sys->rom_os, desc->rom_mon_a2, sizeof(sys->rom_os));
+    }
 
     /* initialize the hardware */
     z80_desc_t cpu_desc = {0};
@@ -213,12 +211,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
         mem_map_ram(&sys->mem, 1, 0x0000, 0x4000, sys->ram);
         mem_map_ram(&sys->mem, 1, 0xEC00, 0x0400, &(sys->ram[0xEC00]));
     }
-    if (Z1013_TYPE_01 == sys->type) {
-        mem_map_rom(&sys->mem, 0, 0xF000, 0x0800, sys->rom_mon202);
-    }
-    else {
-        mem_map_rom(&sys->mem, 0, 0xF000, 0x0800, sys->rom_mon_a2);
-    }
+    mem_map_rom(&sys->mem, 0, 0xF000, 0x0800, sys->rom_os);
 
     /* Setup the keyboard matrix, the original Z1013.01 has a 8x4 matrix with
        4 shift keys, later models also support a more traditional 8x8 matrix.

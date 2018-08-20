@@ -175,20 +175,14 @@ typedef struct {
     kbd_t kbd;
     mem_t mem;
     uint32_t* pixel_buffer;
-    const void* rom_464_os;
-    const void* rom_464_basic;
-    const void* rom_6128_os;
-    const void* rom_6128_basic;
-    const void* rom_6128_amsdos;
-    const void* rom_kcc_os;
-    const void* rom_kcc_basic;
-
     cpc_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
     float sample_buffer[CPC_MAX_AUDIO_SAMPLES];
-
     uint8_t ram[8][0x4000];
+    uint8_t rom_os[0x4000];
+    uint8_t rom_basic[0x4000];
+    uint8_t rom_amsdos[0x4000];
 } cpc_t;
 
 /* initialize a new CPC instance */
@@ -233,7 +227,6 @@ extern bool cpc_dbgvis_enabled(cpc_t* cpc);
 
 #define _CPC_DISPLAY_SIZE_DEBUG (CPC_DISPLAY_WIDTH*CPC_DISPLAY_HEIGHT*3)
 #define _CPC_FREQUENCY (4000000)
-#define _CPC_ROM_SIZE (0x4000)
 
 static uint64_t _cpc_tick(int num, uint64_t pins, void* user_data);
 static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins);
@@ -254,31 +247,31 @@ static void _cpc_update_memory_mapping(cpc_t* sys);
 void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _CPC_DISPLAY_SIZE_DEBUG));
-    if (CPC_TYPE_464 == desc->type) {
-        CHIPS_ASSERT(desc->rom_464_os && (desc->rom_464_os_size == _CPC_ROM_SIZE));
-        CHIPS_ASSERT(desc->rom_464_basic && (desc->rom_464_basic_size == _CPC_ROM_SIZE));
-    }
-    else if (CPC_TYPE_6128 == desc->type) {
-        CHIPS_ASSERT(desc->rom_6128_os && (desc->rom_6128_os_size == _CPC_ROM_SIZE));
-        CHIPS_ASSERT(desc->rom_6128_basic && (desc->rom_6128_basic_size == _CPC_ROM_SIZE));
-        CHIPS_ASSERT(desc->rom_6128_amsdos && (desc->rom_6128_amsdos_size == _CPC_ROM_SIZE));
-    }
-    else {
-        CHIPS_ASSERT(desc->rom_kcc_os && (desc->rom_kcc_os_size == _CPC_ROM_SIZE));
-        CHIPS_ASSERT(desc->rom_kcc_basic && (desc->rom_kcc_basic_size == _CPC_ROM_SIZE));
-    }
-    
+
     memset(sys, 0, sizeof(cpc_t));
     sys->valid = true;
     sys->type = desc->type;
     sys->joystick_type = desc->joystick_type;
-    sys->rom_464_os = desc->rom_464_os;
-    sys->rom_464_basic = desc->rom_464_basic;
-    sys->rom_6128_os = desc->rom_6128_os;
-    sys->rom_6128_basic = desc->rom_6128_basic;
-    sys->rom_6128_amsdos = desc->rom_6128_amsdos;
-    sys->rom_kcc_os = desc->rom_kcc_os;
-    sys->rom_kcc_basic = desc->rom_kcc_basic;
+    if (CPC_TYPE_464 == desc->type) {
+        CHIPS_ASSERT(desc->rom_464_os && (desc->rom_464_os_size == 0x4000));
+        CHIPS_ASSERT(desc->rom_464_basic && (desc->rom_464_basic_size == 0x4000));
+        memcpy(sys->rom_os, desc->rom_464_os, 0x4000);
+        memcpy(sys->rom_basic, desc->rom_464_basic, 0x4000);
+    }
+    else if (CPC_TYPE_6128 == desc->type) {
+        CHIPS_ASSERT(desc->rom_6128_os && (desc->rom_6128_os_size == 0x4000));
+        CHIPS_ASSERT(desc->rom_6128_basic && (desc->rom_6128_basic_size == 0x4000));
+        CHIPS_ASSERT(desc->rom_6128_amsdos && (desc->rom_6128_amsdos_size == 0x4000));
+        memcpy(sys->rom_os, desc->rom_6128_os, 0x4000);
+        memcpy(sys->rom_basic, desc->rom_6128_basic, 0x4000);
+        memcpy(sys->rom_amsdos, desc->rom_6128_amsdos, 0x4000);
+    }
+    else {
+        CHIPS_ASSERT(desc->rom_kcc_os && (desc->rom_kcc_os_size == 0x4000));
+        CHIPS_ASSERT(desc->rom_kcc_basic && (desc->rom_kcc_basic_size == 0x4000));
+        memcpy(sys->rom_os, desc->rom_kcc_os, 0x4000);
+        memcpy(sys->rom_basic, desc->rom_kcc_basic, 0x4000);
+    }
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _CPC_DEFAULT(desc->audio_num_samples, CPC_DEFAULT_AUDIO_SAMPLES);
@@ -1103,18 +1096,13 @@ static void _cpc_update_memory_mapping(cpc_t* sys) {
     const uint8_t* rom1_ptr;
     if (CPC_TYPE_6128 == sys->type) {
         ram_config_index = sys->ga.ram_config & 7;
-        rom0_ptr = sys->rom_6128_os;
-        rom1_ptr = (sys->upper_rom_select == 7) ? sys->rom_6128_amsdos : sys->rom_6128_basic;
-    }
-    else if (CPC_TYPE_KCCOMPACT == sys->type) {
-        ram_config_index = 0;
-        rom0_ptr = sys->rom_464_os;
-        rom1_ptr = sys->rom_464_basic;
+        rom0_ptr = sys->rom_os;
+        rom1_ptr = (sys->upper_rom_select == 7) ? sys->rom_amsdos : sys->rom_basic;
     }
     else {
         ram_config_index = 0;
-        rom0_ptr = sys->rom_kcc_os;
-        rom1_ptr = sys->rom_kcc_basic;
+        rom0_ptr = sys->rom_os;
+        rom1_ptr = sys->rom_basic;
     }
     const int i0 = _cpc_ram_config[ram_config_index][0];
     const int i1 = _cpc_ram_config[ram_config_index][1];

@@ -143,14 +143,12 @@ typedef struct {
     kbd_t kbd;
     mem_t mem;
     uint32_t* pixel_buffer;
-    const void* rom_zx48k;
-    const void* rom_zx128_0;
-    const void* rom_zx128_1;
     zx_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
     float sample_buffer[ZX_MAX_AUDIO_SAMPLES];
     uint8_t ram[8][0x4000];
+    uint8_t rom[2][0x4000];
     uint8_t junk[0x4000];
 } zx_t;
 
@@ -189,7 +187,6 @@ extern bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes);
 #define _ZX_DISPLAY_SIZE (ZX_DISPLAY_WIDTH*ZX_DISPLAY_HEIGHT*4)
 #define _ZX_48K_FREQUENCY (3500000)
 #define _ZX_128_FREQUENCY (3546894)
-#define _ZX_ROM_SIZE (0x4000)   /* all ROMs are 16 KB */
 
 static uint64_t _zx_tick(int num, uint64_t pins, void* user_data);
 static void _zx_init_memory_map(zx_t* sys);
@@ -201,21 +198,11 @@ static bool _zx_decode_scanline(zx_t* sys);
 void zx_init(zx_t* sys, const zx_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _ZX_DISPLAY_SIZE));
-    if (desc->type == ZX_TYPE_48K) {
-        CHIPS_ASSERT(desc->rom_zx48k && (desc->rom_zx48k_size == _ZX_ROM_SIZE));
-    }
-    else {
-        CHIPS_ASSERT(desc->rom_zx128_0 && (desc->rom_zx128_0_size == _ZX_ROM_SIZE));
-        CHIPS_ASSERT(desc->rom_zx128_1 && (desc->rom_zx128_1_size == _ZX_ROM_SIZE));
-    }
 
     memset(sys, 0, sizeof(zx_t));
     sys->valid = true;
     sys->type = desc->type;
     sys->joystick_type = desc->joystick_type;
-    sys->rom_zx48k = desc->rom_zx48k;
-    sys->rom_zx128_0 = desc->rom_zx128_0;
-    sys->rom_zx128_1 = desc->rom_zx128_1;
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _ZX_DEFAULT(desc->audio_num_samples, ZX_DEFAULT_AUDIO_SAMPLES);
@@ -224,12 +211,18 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
     /* initalize the hardware */
     sys->border_color = 0xFF000000;
     if (ZX_TYPE_128 == sys->type) {
+        CHIPS_ASSERT(desc->rom_zx128_0 && (desc->rom_zx128_0_size == 0x4000));
+        CHIPS_ASSERT(desc->rom_zx128_1 && (desc->rom_zx128_1_size == 0x4000));
+        memcpy(sys->rom[0], desc->rom_zx128_0, 0x4000);
+        memcpy(sys->rom[1], desc->rom_zx128_1, 0x4000);
         sys->display_ram_bank = 5;
         sys->frame_scan_lines = 311;
         sys->top_border_scanlines = 63;
         sys->scanline_period = 228;
     }
     else {
+        CHIPS_ASSERT(desc->rom_zx48k && (desc->rom_zx48k_size == 0x4000));
+        memcpy(sys->rom[0], desc->rom_zx48k, 0x4000);
         sys->display_ram_bank = 0;
         sys->frame_scan_lines = 312;
         sys->top_border_scanlines = 64;
@@ -506,11 +499,11 @@ static uint64_t _zx_tick(int num_ticks, uint64_t pins, void* user_data) {
                         /* ROM0 or ROM1 */
                         if (data & (1<<4)) {
                             /* bit 4 set: ROM1 */
-                            mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom_zx128_1);
+                            mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom[1]);
                         }
                         else {
                             /* bit 4 clear: ROM0 */
-                            mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom_zx128_0);
+                            mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom[0]);
                         }
                     }
                     if (data & (1<<5)) {
@@ -634,13 +627,13 @@ static void _zx_init_memory_map(zx_t* sys) {
         mem_map_ram(&sys->mem, 0, 0x4000, 0x4000, sys->ram[5]);
         mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[2]);
         mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->ram[0]);
-        mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom_zx128_0);
+        mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom[0]);
     }
     else {
         mem_map_ram(&sys->mem, 0, 0x4000, 0x4000, sys->ram[0]);
         mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[1]);
         mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->ram[2]);
-        mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom_zx48k);
+        mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom[0]);
     }
 }
 

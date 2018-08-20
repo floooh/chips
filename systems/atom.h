@@ -127,14 +127,14 @@ typedef struct {
     clk_t clk;
     mem_t mem;
     kbd_t kbd;
-    const uint8_t* rom_abasic;
-    const uint8_t* rom_afloat;
-    const uint8_t* rom_dosrom;
     atom_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
     float sample_buffer[ATOM_MAX_AUDIO_SAMPLES];
-    uint8_t ram[1<<16];
+    uint8_t ram[0xA000];
+    uint8_t rom_abasic[0x2000];
+    uint8_t rom_afloat[0x1000];
+    uint8_t rom_dosrom[0x1000];
     int tape_size;  /* tape_size is > 0 if a tape is inserted */
     int tape_pos;
     uint8_t tape_buf[ATOM_MAX_TAPE_SIZE];
@@ -176,8 +176,6 @@ void atom_remove_tape(atom_t* sys);
 
 #define _ATOM_DISPLAY_SIZE (ATOM_DISPLAY_WIDTH*ATOM_DISPLAY_HEIGHT*4)
 #define _ATOM_FREQUENCY (1000000)
-#define _ATOM_ROM_ABASIC_SIZE (0x2000)
-#define _ATOM_ROM_AFLOAT_SIZE (0x1000)
 #define _ATOM_ROM_DOSROM_SIZE (0x1000)
 
 static uint64_t _atom_tick(uint64_t pins, void* user_data);
@@ -195,9 +193,6 @@ static void _atom_osload(atom_t* sys);
 void atom_init(atom_t* sys, const atom_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _ATOM_DISPLAY_SIZE));
-    CHIPS_ASSERT(desc->rom_abasic && (desc->rom_abasic_size == _ATOM_ROM_ABASIC_SIZE));
-    CHIPS_ASSERT(desc->rom_afloat && (desc->rom_afloat_size == _ATOM_ROM_AFLOAT_SIZE));
-    CHIPS_ASSERT(desc->rom_dosrom && (desc->rom_dosrom_size == _ATOM_ROM_DOSROM_SIZE));
 
     memset(sys, 0, sizeof(atom_t));
     sys->valid = true;
@@ -205,9 +200,12 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _ATOM_DEFAULT(desc->audio_num_samples, ATOM_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= ATOM_MAX_AUDIO_SAMPLES);
-    sys->rom_abasic = (const uint8_t*) desc->rom_abasic;
-    sys->rom_afloat = (const uint8_t*) desc->rom_afloat;
-    sys->rom_dosrom = (const uint8_t*) desc->rom_dosrom;
+    CHIPS_ASSERT(desc->rom_abasic && (desc->rom_abasic_size == sizeof(sys->rom_abasic)));
+    memcpy(sys->rom_abasic, desc->rom_abasic, sizeof(sys->rom_abasic));
+    CHIPS_ASSERT(desc->rom_afloat && (desc->rom_afloat_size == sizeof(sys->rom_afloat)));
+    memcpy(&sys->rom_afloat, desc->rom_afloat, sizeof(sys->rom_afloat));
+    CHIPS_ASSERT(desc->rom_dosrom && (desc->rom_dosrom_size == sizeof(sys->rom_dosrom)));
+    memcpy(&sys->rom_dosrom, desc->rom_dosrom, sizeof(sys->rom_dosrom));
 
     /* initialize the hardware */
     clk_init(&sys->clk, _ATOM_FREQUENCY);

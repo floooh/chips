@@ -152,18 +152,13 @@ typedef struct {
     mem_t mem;
     kbd_t kbd;
     uint32_t* pixel_buffer;
-    const void* rom_z9001_os_1;
-    const void* rom_z9001_os_2;
-    const void* rom_z9001_basic;
-    const void* rom_z9001_font;
-    const void* rom_kc87_os;
-    const void* rom_kc87_basic;
-    const void* rom_kc87_font;
     z9001_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
     float sample_buffer[Z9001_MAX_AUDIO_SAMPLES];
     uint8_t ram[1<<16];
+    uint8_t rom[0x4000];
+    uint8_t rom_font[0x0800];   /* 2 KB font ROM (not mapped into CPU address space) */
 } z9001_t;
 
 /* initialize a new Z9001 instance */
@@ -187,7 +182,6 @@ extern bool z9001_quickload(z9001_t* sys, const uint8_t* ptr, int num_bytes);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
-#include <string.h>
 #ifndef CHIPS_DEBUG
     #ifdef _DEBUG
         #define CHIPS_DEBUG
@@ -200,13 +194,6 @@ extern bool z9001_quickload(z9001_t* sys, const uint8_t* ptr, int num_bytes);
 
 #define _Z9001_DISPLAY_SIZE (Z9001_DISPLAY_WIDTH*Z9001_DISPLAY_HEIGHT*4)
 #define _Z9001_FREQUENCY (2457600)
-#define _Z9001_ROM_Z9001_OS_1_SIZE  (0x0800)
-#define _Z9001_ROM_Z9001_OS_2_SIZE  (0x0800)
-#define _Z9001_ROM_Z9001_BASIC_SIZE (0x2800)
-#define _Z9001_ROM_Z9001_FONT_SIZE  (0x0800)
-#define _Z9001_ROM_KC87_OS_SIZE     (0x2000)
-#define _Z9001_ROM_KC87_BASIC_SIZE  (0x2000)
-#define _Z9001_ROM_KC87_FONT_SIZE   (0x0800)
 
 static uint64_t _z9001_tick(int num, uint64_t pins, void* user_data);
 static uint8_t _z9001_pio1_in(int port_id, void* user_data);
@@ -227,35 +214,31 @@ static inline uint32_t _z9001_xorshift32(uint32_t x) {
 
 void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z9001_DISPLAY_SIZE));
-    if (desc->type == Z9001_TYPE_Z9001) {
-        CHIPS_ASSERT(desc->rom_z9001_os_1 && (desc->rom_z9001_os_1_size == _Z9001_ROM_Z9001_OS_1_SIZE));
-        CHIPS_ASSERT(desc->rom_z9001_os_2 && (desc->rom_z9001_os_2_size == _Z9001_ROM_Z9001_OS_2_SIZE));
-        if (desc->rom_z9001_basic) {
-            CHIPS_ASSERT(desc->rom_z9001_basic_size == _Z9001_ROM_Z9001_BASIC_SIZE);
-            CHIPS_ASSERT(desc->rom_z9001_font && (desc->rom_z9001_font_size == _Z9001_ROM_Z9001_FONT_SIZE));
-        }
-    }
-    else {
-        CHIPS_ASSERT(desc->rom_kc87_os && (desc->rom_kc87_os_size == _Z9001_ROM_KC87_OS_SIZE));
-        CHIPS_ASSERT(desc->rom_kc87_basic && (desc->rom_kc87_basic_size == _Z9001_ROM_KC87_BASIC_SIZE));
-        CHIPS_ASSERT(desc->rom_kc87_font && (desc->rom_kc87_font_size == _Z9001_ROM_KC87_FONT_SIZE));
-    }
 
     memset(sys, 0, sizeof(z9001_t));
     sys->valid = true;
     sys->type = desc->type;
     if (desc->type == Z9001_TYPE_Z9001) {
-        sys->rom_z9001_os_1 = desc->rom_z9001_os_1;
-        sys->rom_z9001_os_2 = desc->rom_z9001_os_2;
-        sys->rom_z9001_basic = desc->rom_z9001_basic;
-        sys->rom_z9001_font = desc->rom_z9001_font;
+        CHIPS_ASSERT(desc->rom_z9001_font && (desc->rom_z9001_font_size == 0x0800));
+        memcpy(sys->rom_font, desc->rom_z9001_font, 0x0800);
+        if (desc->rom_z9001_basic) {
+            CHIPS_ASSERT(desc->rom_z9001_basic_size == 0x2800);
+            memcpy(&sys->rom[0x0000], desc->rom_z9001_basic, 0x2800);
+        }
+        CHIPS_ASSERT(desc->rom_z9001_os_1 && (desc->rom_z9001_os_1_size == 0x0800));
+        memcpy(&sys->rom[0x3000], desc->rom_z9001_os_1, 0x0800);
+        CHIPS_ASSERT(desc->rom_z9001_os_2 && (desc->rom_z9001_os_2_size == 0x0800));
+        memcpy(&sys->rom[0x3800], desc->rom_z9001_os_2, 0x0800);
     }
     else {
-        sys->rom_kc87_os = desc->rom_kc87_os;
-        sys->rom_kc87_basic = desc->rom_kc87_basic;
-        sys->rom_kc87_font = desc->rom_kc87_font;
+        CHIPS_ASSERT(desc->rom_kc87_font && (desc->rom_kc87_font_size == 0x0800));
+        memcpy(sys->rom_font, desc->rom_kc87_font, 0x0800);
+        CHIPS_ASSERT(desc->rom_kc87_basic && (desc->rom_kc87_basic_size == 0x2000));
+        memcpy(&sys->rom[0x0000], desc->rom_kc87_basic, 0x2000);
+        CHIPS_ASSERT(desc->rom_kc87_os && (desc->rom_kc87_os_size == 0x2000));
+        memcpy(&sys->rom[0x2000], desc->rom_kc87_os, 0x2000);
     }
+    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z9001_DISPLAY_SIZE));
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _Z9001_DEFAULT(desc->audio_num_samples, Z9001_DEFAULT_AUDIO_SAMPLES);
@@ -307,19 +290,27 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     }
     mem_init(&sys->mem);
     if (Z9001_TYPE_Z9001 == sys->type) {
+        /* 16 KB RAM + 16 KB RAM module */
         mem_map_ram(&sys->mem, 0, 0x0000, 0x8000, sys->ram);
-        if (sys->rom_z9001_basic) {
-            mem_map_rom(&sys->mem, 1, 0xC000, 0x2800, sys->rom_z9001_basic);
+        /* optional 12 KB BASIC ROM module at 0xC000 */
+        if (desc->rom_z9001_basic) {
+            mem_map_rom(&sys->mem, 1, 0xC000, 0x2800, &sys->rom[0x0000]);
         }
-        mem_map_rom(&sys->mem, 1, 0xF000, 0x0800, sys->rom_z9001_os_1);
-        mem_map_rom(&sys->mem, 1, 0xF800, 0x0800, sys->rom_z9001_os_2);
+        /* 2 OS ROMs at 2 KB each */
+        mem_map_rom(&sys->mem, 1, 0xF000, 0x0800, &sys->rom[0x3000]);
+        mem_map_rom(&sys->mem, 1, 0xF800, 0x0800, &sys->rom[0x3800]);
     }
     else {
+        /* 48 KB RAM */
         mem_map_ram(&sys->mem, 0, 0x0000, 0xC000, sys->ram);
+        /* 1 KB color RAM */
         mem_map_ram(&sys->mem, 0, 0xE800, 0x0400, &sys->ram[0xE800]);
-        mem_map_rom(&sys->mem, 1, 0xC000, 0x2000, sys->rom_kc87_basic);
-        mem_map_rom(&sys->mem, 1, 0xE000, 0x2000, sys->rom_kc87_os);
+        /* 8 KB builtin BASIC */
+        mem_map_rom(&sys->mem, 1, 0xC000, 0x2000, &sys->rom[0x0000]);
+        /* 8 KB ROM (overlayed by 1 KB at 0xEC00 for ASCII video RAM) */
+        mem_map_rom(&sys->mem, 1, 0xE000, 0x2000, &sys->rom[0x2000]);
     }
+    /* 1 KB ASCII video RAM */
     mem_map_ram(&sys->mem, 0, 0xEC00, 0x0400, &sys->ram[0xEC00]);
 
     /* setup the 8x8 keyboard matrix, keep pressed keys sticky for 3 frames 
@@ -582,7 +573,7 @@ static void _z9001_decode_vidmem(z9001_t* sys) {
     int offset = 0;
     if (Z9001_TYPE_KC87 == sys->type) {
         /* KC87 with color module */
-        const uint8_t* font = sys->rom_kc87_font;
+        const uint8_t* font = sys->rom_font;
         uint32_t fg, bg;
         for (int y = 0; y < 24; y++) {
             for (int py = 0; py < 8; py++) {
@@ -609,7 +600,7 @@ static void _z9001_decode_vidmem(z9001_t* sys) {
     }
     else {
         /* Z9001 monochrome display */
-        const uint8_t* font = sys->rom_z9001_font;
+        const uint8_t* font = sys->rom_font;
         for (int y = 0; y < 24; y++) {
             for (int py = 0; py < 8; py++) {
                 for (int x = 0; x < 40; x++) {
