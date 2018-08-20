@@ -133,7 +133,7 @@ typedef struct {
     int rom_kcc_basic_size;
 } cpc_desc_t;
 
-/* CPCP gate array state */
+/* CPC gate array state */
 typedef struct {
     uint8_t config;                 /* out to port 0x7Fxx func 0x80 */
     uint8_t next_video_mode;
