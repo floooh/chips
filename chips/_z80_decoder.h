@@ -508,11 +508,11 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     if (trap_addr != 0xFFFFFFFFFFFFFFFF) {
       uint64_t ta = trap_addr;
       for (int i = 0; i < Z80_MAX_NUM_TRAPS; i++) {
-        ta >>= 16;
         if (((ta & 0xFFFF) == pc) && (pc != 0xFFFF)) {
           trap_id = i;
           break;
         }
+        ta >>= 16;
       }
     }
   } while ((ticks < num_ticks) && (trap_id < 0));
