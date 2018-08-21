@@ -74,11 +74,9 @@ extern "C" {
 
 #define CPC_DISPLAY_WIDTH (768)
 #define CPC_DISPLAY_HEIGHT (272)
-#define CPC_DISPLAY_WIDTH_DEBUG (1024)      /* display-width with debug-visualization enabled */
-#define CPC_DISPLAY_HEIGHT_DEBUG (312)      /* display-width with debug-visualization enabled */
 #define CPC_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
 #define CPC_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */
-#define CPC_MAX_TAPE_SIZE (1<<16)           /* max size of tape file in bytes */
+#define CPC_MAX_TAPE_SIZE (128*1024)        /* max size of tape file in bytes */
 
 /* CPC model types */
 typedef enum {
@@ -195,6 +193,10 @@ typedef struct {
     uint8_t rom_os[0x4000];
     uint8_t rom_basic[0x4000];
     uint8_t rom_amsdos[0x4000];
+    /* tape loading */
+    int tape_size;      /* tape_size is > 0 if a tape is inserted */
+    int tape_pos;
+    uint8_t tape_buf[CPC_MAX_TAPE_SIZE];
 } cpc_t;
 
 /* initialize a new CPC instance */
@@ -237,7 +239,7 @@ extern bool cpc_video_debugging_enabled(cpc_t* cpc);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _CPC_DISPLAY_SIZE_DEBUG (CPC_DISPLAY_WIDTH*CPC_DISPLAY_HEIGHT*3)
+#define _CPC_DISPLAY_SIZE (CPC_DISPLAY_WIDTH*CPC_DISPLAY_HEIGHT*4)
 #define _CPC_FREQUENCY (4000000)
 
 static uint64_t _cpc_tick(int num, uint64_t pins, void* user_data);
@@ -253,12 +255,13 @@ static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins);
 static void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins);
 static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_update_memory_mapping(cpc_t* sys);
+static void _cpc_casread(cpc_t* sys);
 
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 
 void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _CPC_DISPLAY_SIZE_DEBUG));
+    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _CPC_DISPLAY_SIZE));
 
     memset(sys, 0, sizeof(cpc_t));
     sys->valid = true;
@@ -371,12 +374,12 @@ void cpc_exec(cpc_t* sys, double seconds) {
     if (sys->cpu.trap_id == 1) {
         if (sys->type == CPC_TYPE_6128) {
             if (0 == (sys->ga.config & (1<<2))) {
-//                _cpc_casread(sys);
+                _cpc_casread(sys);
             }
         }
         else {
             /* no memory mapping on KC Compact, 464 or 664 */
-//            _cpc_casread(sys);
+            _cpc_casread(sys);
         }
     }
 }
@@ -1325,6 +1328,50 @@ bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
         /* not a known file type, or not enough data */
         return false;
     }
+}
+
+bool cpc_insert_tape(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid);
+    CHIPS_ASSERT(ptr);
+    cpc_remove_tape(sys);
+    if (num_bytes > CPC_MAX_TAPE_SIZE) {
+        return false;
+    }
+    memcpy(sys->tape_buf, ptr, num_bytes);
+    sys->tape_pos = 0;
+    sys->tape_size = num_bytes;
+    return true;
+}
+
+void cpc_remove_tape(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->tape_pos = 0;
+    sys->tape_size = 0;
+}
+
+/* the trapped OS casread function, reads one tape block into memory */
+static void _cpc_casread(cpc_t* sys) {
+    bool success = false;
+    /* if no tape is currently inserted, both tape_pos and tape_size is 0 */
+    if ((sys->tape_pos + 3) < sys->tape_size) {
+        uint8_t len_l = sys->tape_buf[sys->tape_pos++];
+        uint8_t len_h = sys->tape_buf[sys->tape_pos++];
+        uint16_t len = len_h<<8 | len_l;
+        if ((sys->tape_pos + len) <= sys->tape_size) {
+            uint8_t sync = sys->tape_buf[sys->tape_pos++];
+            if (sync == z80_a(&sys->cpu)) {
+                success = true;
+                for (uint16_t i = 0; i < (len-1); i++) {
+                    uint16_t hl = z80_hl(&sys->cpu);
+                    uint8_t val = sys->tape_buf[sys->tape_pos++];
+                    mem_wr(&sys->mem, hl++, val);
+                    z80_set_hl(&sys->cpu, hl);
+                }
+            }
+        }
+    }
+    z80_set_f(&sys->cpu, success ? 0x45 : 0x00);
+    z80_set_pc(&sys->cpu, sys->casread_ret);
 }
 
 #endif /* CHIPS_IMPL */
