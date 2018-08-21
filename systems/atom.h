@@ -139,6 +139,7 @@ typedef struct {
     uint8_t rom_abasic[0x2000];
     uint8_t rom_afloat[0x1000];
     uint8_t rom_dosrom[0x1000];
+    /* tape loading */
     int tape_size;  /* tape_size is > 0 if a tape is inserted */
     int tape_pos;
     uint8_t tape_buf[ATOM_MAX_TAPE_SIZE];
