@@ -78,7 +78,7 @@ typedef enum {
 } atom_joystick_t;
 
 /* audio sample data callback */
-typedef int (*atom_audio_callback_t)(const float* samples, int num_samples);
+typedef void (*atom_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 /* max number of audio samples in internal sample buffer */
 #define ATOM_MAX_AUDIO_SAMPLES (1024)
 /* default number of audio samples to generate until audio callback is invoked */
@@ -91,6 +91,9 @@ typedef struct {
     /* video output config */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
+
+    /* optional user-data for callbacks */
+    void* user_data;
 
     /* audio output config (if you don't want audio, set audio_cb to zero) */
     atom_audio_callback_t audio_cb;   /* called when audio_num_samples are ready */
@@ -127,6 +130,7 @@ typedef struct {
     clk_t clk;
     mem_t mem;
     kbd_t kbd;
+    void* user_data;
     atom_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
@@ -197,6 +201,7 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     memset(sys, 0, sizeof(atom_t));
     sys->valid = true;
     sys->joystick_type = desc->joystick_type;
+    sys->user_data = desc->user_data;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _ATOM_DEFAULT(desc->audio_num_samples, ATOM_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= ATOM_MAX_AUDIO_SAMPLES);
@@ -341,7 +346,7 @@ uint64_t _atom_tick(uint64_t pins, void* user_data) {
         sys->sample_buffer[sys->sample_pos++] = sys->beeper.sample;
         if (sys->sample_pos == sys->num_samples) {
             if (sys->audio_cb) {
-                sys->audio_cb(sys->sample_buffer, sys->num_samples);
+                sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
             }
             sys->sample_pos = 0;
         }

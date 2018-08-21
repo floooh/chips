@@ -86,7 +86,7 @@ typedef enum {
 } zx_joystick_t;
 
 /* audio sample data callback */
-typedef int (*zx_audio_callback_t)(const float* samples, int num_samples);
+typedef void (*zx_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 /* max number of audio samples in internal sample buffer */
 #define ZX_MAX_AUDIO_SAMPLES (1024)
 /* default number of audio samples to generate until audio callback is invoked */
@@ -101,6 +101,10 @@ typedef struct {
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
 
+    /* optional user-data for callback functions */
+    void* user_data;
+
+    /* optional user data for callback functions */
     /* audio output config (if you don't want audio, set audio_cb to zero) */
     zx_audio_callback_t audio_cb;   /* called when audio_num_samples are ready */
     int audio_num_samples;          /* default is ZX_AUDIO_NUM_SAMPLES */
@@ -143,6 +147,7 @@ typedef struct {
     kbd_t kbd;
     mem_t mem;
     uint32_t* pixel_buffer;
+    void* user_data;
     zx_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
@@ -204,6 +209,7 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
     sys->type = desc->type;
     sys->joystick_type = desc->joystick_type;
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
+    sys->user_data = desc->user_data;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _ZX_DEFAULT(desc->audio_num_samples, ZX_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= ZX_MAX_AUDIO_SAMPLES);
@@ -417,7 +423,7 @@ static uint64_t _zx_tick(int num_ticks, uint64_t pins, void* user_data) {
             sys->sample_buffer[sys->sample_pos++] = sample;
             if (sys->sample_pos == sys->num_samples) {
                 if (sys->audio_cb) {
-                    sys->audio_cb(sys->sample_buffer, sys->num_samples);
+                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
                 }
                 sys->sample_pos = 0;
             }

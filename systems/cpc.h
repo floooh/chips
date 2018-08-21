@@ -95,11 +95,14 @@ typedef enum {
 } cpc_joystick_t;
 
 /* audio sample data callback */
-typedef int (*cpc_audio_callback_t)(const float* samples, int num_samples);
+typedef void (*cpc_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 /* max number of audio samples in internal sample buffer */
 #define CPC_MAX_AUDIO_SAMPLES (1024)
 /* default number of audio samples to generate until audio callback is invoked */
 #define CPC_DEFAULT_AUDIO_SAMPLES (128)
+
+/* optional video-decode-debugging callback */
+typedef void (*cpc_video_debug_callback_t)(uint64_t crtc_pins, void* user_data);
 
 /* configuration parameters for cpc_init() */
 typedef struct {
@@ -110,11 +113,17 @@ typedef struct {
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 1024*312*4 bytes */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
 
+    /* optional user-data for audio- and video-debugging callbacks */
+    void* user_data;
+
     /* audio output config (if you don't want audio, set audio_cb to zero) */
     cpc_audio_callback_t audio_cb;  /* called when audio_num_samples are ready */
     int audio_num_samples;          /* default is ZX_AUDIO_NUM_SAMPLES */
     int audio_sample_rate;          /* playback sample rate, default is 44100 */
     float audio_volume;             /* audio volume: 0.0..1.0, default is 0.25 */
+
+    /* an optional callback to generate a video-decode debug visualization */
+    cpc_video_debug_callback_t video_debug_cb;
 
     /* ROM images */
     const void* rom_464_os;
@@ -175,6 +184,8 @@ typedef struct {
     kbd_t kbd;
     mem_t mem;
     uint32_t* pixel_buffer;
+    void* user_data;
+    cpc_video_debug_callback_t video_debug_cb;
     cpc_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
@@ -273,6 +284,8 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
         memcpy(sys->rom_basic, desc->rom_kcc_basic, 0x4000);
     }
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
+    sys->user_data = desc->user_data;
+    sys->video_debug_cb = desc->video_debug_cb;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _CPC_DEFAULT(desc->audio_num_samples, CPC_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= CPC_MAX_AUDIO_SAMPLES);
@@ -472,7 +485,7 @@ uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
                     sys->sample_buffer[sys->sample_pos++] = sys->psg.sample;
                     if (sys->sample_pos == sys->num_samples) {
                         if (sys->audio_cb) {
-                            sys->audio_cb(sys->sample_buffer, sys->num_samples);
+                            sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
                         }
                         sys->sample_pos = 0;
                     }

@@ -97,7 +97,7 @@ typedef enum {
 } z9001_type_t;
 
 /* Z9001 audio sample data callback */
-typedef int (*z9001_audio_callback_t)(const float* samples, int num_samples);
+typedef void (*z9001_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
 
 /* configuration parameters for z9001_init() */
@@ -107,6 +107,9 @@ typedef struct {
     /* video output config */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*192*4 bytes */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
+
+    /* optional user data for call back functions */
+    void* user_data;
 
     /* audio output config (if you don't want audio, set audio_cb to zero) */
     z9001_audio_callback_t audio_cb;    /* called when audio_num_samples are ready */
@@ -152,6 +155,7 @@ typedef struct {
     mem_t mem;
     kbd_t kbd;
     uint32_t* pixel_buffer;
+    void* user_data;
     z9001_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
@@ -241,6 +245,7 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z9001_DISPLAY_SIZE));
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
+    sys->user_data = desc->user_data;
     sys->num_samples = _Z9001_DEFAULT(desc->audio_num_samples, Z9001_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= Z9001_MAX_AUDIO_SAMPLES);
 
@@ -427,7 +432,7 @@ static uint64_t _z9001_tick(int num_ticks, uint64_t pins, void* user_data) {
             sys->sample_buffer[sys->sample_pos++] = sys->beeper.sample;
             if (sys->sample_pos == sys->num_samples) {
                 if (sys->audio_cb) {
-                    sys->audio_cb(sys->sample_buffer, sys->num_samples);
+                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
                 }
                 sys->sample_pos = 0;
             }
