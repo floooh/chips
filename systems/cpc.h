@@ -185,11 +185,12 @@ typedef struct {
     mem_t mem;
     uint32_t* pixel_buffer;
     void* user_data;
-    cpc_video_debug_callback_t video_debug_cb;
     cpc_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
     float sample_buffer[CPC_MAX_AUDIO_SAMPLES];
+    cpc_video_debug_callback_t video_debug_cb;
+    bool video_debug_enabled;
     uint8_t ram[8][0x4000];
     uint8_t rom_os[0x4000];
     uint8_t rom_basic[0x4000];
@@ -214,10 +215,10 @@ extern bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 extern bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 /* remove currently inserted tape */
 extern void cpc_remove_tape(cpc_t* cpc);
-/* enable/disable the display debug visualization (size is CPC_DISPLAY_WIDTH_DEBUG x CPC_DISPLAY_HEIGHT_DEBUG !) */
-extern void cpc_enable_dbgvis(cpc_t* cpc, bool enabled);
+/* if enabled, start calling the video-debugging-callback */
+extern void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
 /* get current display debug visualization enabled/disabled state */
-extern bool cpc_dbgvis_enabled(cpc_t* cpc);
+extern bool cpc_video_debugging_enabled(cpc_t* cpc);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -414,8 +415,18 @@ void cpc_key_up(cpc_t* sys, int key_code) {
     }
 }
 
+void cpc_enable_video_debugging(cpc_t* sys, bool enabled) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->video_debug_enabled = enabled;
+}
+
+bool cpc_video_debugging_enabled(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->video_debug_enabled;
+}
+
 /* the CPU tick callback */
-uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
+static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
 
     /* interrupt acknowledge? */
@@ -499,7 +510,7 @@ uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     return pins;
 }
 
-uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
+static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
     /*
         CPU IO REQUEST
 
@@ -623,7 +634,7 @@ uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
     return pins;
 }
 
-uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data) {
+static uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     /*
         i8255 PPI to AY-3-8912 PSG pin connections:
@@ -658,7 +669,7 @@ uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data)
     return pins;
 }
 
-uint8_t _cpc_ppi_in(int port_id, void* user_data) {
+static uint8_t _cpc_ppi_in(int port_id, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     if (I8255_PORT_A == port_id) {
         /* AY-3-8912 PSG function (indirectly this may also trigger
@@ -703,11 +714,11 @@ uint8_t _cpc_ppi_in(int port_id, void* user_data) {
     }
 }
 
-void _cpc_psg_out(int port_id, uint8_t data, void* user_data) {
+static void _cpc_psg_out(int port_id, uint8_t data, void* user_data) {
     /* this shouldn't be called */
 }
 
-uint8_t _cpc_psg_in(int port_id, void* user_data) {
+static uint8_t _cpc_psg_in(int port_id, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     /* read the keyboard matrix and joystick port */
     if (port_id == AY38910_PORT_A) {
@@ -820,7 +831,7 @@ static void _cpc_ga_init(cpc_t* sys) {
     }
 }
 
-void _cpc_ga_int_ack(cpc_t* sys) {
+static void _cpc_ga_int_ack(cpc_t* sys) {
     /* on interrupt acknowledge from the CPU, clear the top bit from the
         hsync counter, so the next interrupt can't occur closer then 
         32 HSYNC, and clear the gate array interrupt pin state
@@ -837,7 +848,7 @@ static bool _cpc_rising_edge(uint64_t new_pins, uint64_t old_pins, uint64_t mask
     return 0 != (mask & (new_pins & (new_pins ^ old_pins)));
 }
 
-uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
+static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
     /*
         http://cpctech.cpc-live.com/docs/ints.html
         http://www.cpcwiki.eu/forum/programming/frame-flyback-and-interrupts/msg25106/#msg25106
@@ -943,7 +954,7 @@ uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
     return cpu_pins;
 }
 
-void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
+static void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
     /*
         compute the source address from current CRTC ma (memory address)
         and ra (raster address) like this:
@@ -1007,9 +1018,13 @@ void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
     }
 }
 
-/* FIXME: debug visualzation! */
-void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
-    if (sys->crt.visible) {
+static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
+    if (sys->video_debug_enabled) {
+        if (sys->video_debug_cb) {
+            sys->video_debug_cb(crtc_pins, sys->user_data);
+        }
+    }
+    else if (sys->crt.visible) {
         int dst_x = sys->crt.pos_x * 16;
         int dst_y = sys->crt.pos_y;
         uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * CPC_DISPLAY_WIDTH]);
@@ -1179,7 +1194,7 @@ typedef struct {
     uint8_t pad1[0x93];
 } _cpc_sna_header;
 
-bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
+static bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
     if (num_bytes <= (int)sizeof(_cpc_sna_header)) {
         return false;
     }
@@ -1194,7 +1209,7 @@ bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     const _cpc_sna_header* hdr = (const _cpc_sna_header*) ptr;
     ptr += sizeof(_cpc_sna_header);
     
@@ -1275,14 +1290,14 @@ typedef struct {
     uint8_t pad_5[0x60];
 } _cpc_bin_header;
 
-bool _cpc_is_valid_bin(const uint8_t* ptr, int num_bytes) {
+static bool _cpc_is_valid_bin(const uint8_t* ptr, int num_bytes) {
     if (num_bytes <= (int)sizeof(_cpc_bin_header)) {
         return false;
     }
     return true;
 }
 
-bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+static bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     const _cpc_bin_header* hdr = (const _cpc_bin_header*) ptr;
     ptr += sizeof(_cpc_bin_header);
     const uint16_t load_addr = (hdr->load_addr_h<<8)|hdr->load_addr_l;
