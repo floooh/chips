@@ -126,7 +126,7 @@ First let's include the right headers:
 #include "roms/cpc-roms.h"
 ```
 
-```common/commoh.h``` includes the helper function headers (the stuff
+```common/common.h``` includes the helper function headers (the stuff
 mentioned above starting with *args_*, *clock_*, *fs_*, *gfx_* and
 *keybuf_*).
 
