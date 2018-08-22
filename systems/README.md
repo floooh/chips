@@ -148,7 +148,7 @@ into another source file.
 (the CPC actually uses the AY-3-8912 which only has one IO port, this is
 supported as a subtype by the ay38910.h emulator)
 - **chips/i8255**: the Intel 8255 'Programmable Peripheral Interface' chip,
-this is used on the CPC for interfacing the keyboard, sound chips and cassette player
+this is used on the CPC for interfacing the keyboard, sound chip and tape-deck
 - **chips/mc6845.h**: the Motorola MC6845 video address generator chip, this
 creates the timing- and address-signals for the CPC custom gate array chip,
 which in turn generates the video signal
