@@ -477,7 +477,7 @@ that easy since the CPC is a PAL machine which updates its display at 50Hz,
 but typical modern computers update their display at 60Hz, so there will
 always be a small amount of stuttering and screen tearing)
 - if the application is suspended for a long time (for instance when running
-as in a web browser, and the browser tab is switched to the background),
+in a web browser, and the browser tab is switched to the background),
 the first frame after bringing the tab back to the front will be clipped to
 33 milliseconds duration, that way the emulator won't try to 'catch up'
 several seconds or even minutes of idle time, which would freeze
