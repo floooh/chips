@@ -96,7 +96,7 @@ headers:
 
 - **args.h**: argument parser for cmdline and URL args
 - **clock.h**: measure frame time and count frames
-- **fs.h**: load files into memory via fopen() of HTTP
+- **fs.h**: load files into memory via fopen() or HTTP
 - **gfx.h**: small wrapper over sokol_gfx.h to render the emulator framebuffer
 - **keybuf.h**: split a string into a sequence of key strokes to send into the emulator
 
