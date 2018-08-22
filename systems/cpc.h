@@ -187,8 +187,8 @@ typedef struct {
     int num_samples;
     int sample_pos;
     float sample_buffer[CPC_MAX_AUDIO_SAMPLES];
-    cpc_video_debug_callback_t video_debug_cb;
     bool video_debug_enabled;
+    cpc_video_debug_callback_t video_debug_cb;
     uint8_t ram[8][0x4000];
     uint8_t rom_os[0x4000];
     uint8_t rom_basic[0x4000];
@@ -281,7 +281,7 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
         memcpy(sys->rom_basic, desc->rom_6128_basic, 0x4000);
         memcpy(sys->rom_amsdos, desc->rom_6128_amsdos, 0x4000);
     }
-    else {
+    else { /* KC Compact */
         CHIPS_ASSERT(desc->rom_kcc_os && (desc->rom_kcc_os_size == 0x4000));
         CHIPS_ASSERT(desc->rom_kcc_basic && (desc->rom_kcc_basic_size == 0x4000));
         memcpy(sys->rom_os, desc->rom_kcc_os, 0x4000);
@@ -432,7 +432,7 @@ bool cpc_video_debugging_enabled(cpc_t* sys) {
 static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
 
-    /* interrupt acknowledge? */
+    /* gate array snoops for interrupt acknowledge */
     if ((pins & (Z80_M1|Z80_IORQ)) == (Z80_M1|Z80_IORQ)) {
         _cpc_ga_int_ack(sys);
     }
@@ -495,15 +495,19 @@ static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
             }
             /* on every 4th clock cycle, tick the system */
             if (!wait_pin) {
+                /* tick the sound generator */
                 if (ay38910_tick(&sys->psg)) {
+                    /* new sample is ready */
                     sys->sample_buffer[sys->sample_pos++] = sys->psg.sample;
                     if (sys->sample_pos == sys->num_samples) {
                         if (sys->audio_cb) {
+                            /* new sample packet is ready */
                             sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
                         }
                         sys->sample_pos = 0;
                     }
                 }
+                /* tick the gate array */
                 pins = _cpc_ga_tick(sys, pins);
             }
         }
@@ -637,6 +641,7 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
     return pins;
 }
 
+/* PPI OUT callback  (write to PSG, select keyboard matrix line and cassette tape control) */
 static uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     /*
@@ -657,7 +662,7 @@ static uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* use
         }
     }
     if (I8255_PORT_C == port_id) {
-        // bits 0..3: select keyboard matrix line
+        /* bits 0..3: select keyboard matrix line */
         kbd_set_active_columns(&sys->kbd, 1<<(data & 0x0F));
 
         /* FIXME: cassette write data */
@@ -672,6 +677,7 @@ static uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* use
     return pins;
 }
 
+/* PPI IN callback (read from PSG, and misc stuff) */
 static uint8_t _cpc_ppi_in(int port_id, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     if (I8255_PORT_A == port_id) {
@@ -717,13 +723,14 @@ static uint8_t _cpc_ppi_in(int port_id, void* user_data) {
     }
 }
 
+/* PSG OUT callback (nothing to do here) */
 static void _cpc_psg_out(int port_id, uint8_t data, void* user_data) {
     /* this shouldn't be called */
 }
 
+/* PSG IN callback (read keyboard matrix and joystick port) */
 static uint8_t _cpc_psg_in(int port_id, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
-    /* read the keyboard matrix and joystick port */
     if (port_id == AY38910_PORT_A) {
         uint8_t data = (uint8_t) kbd_scan_lines(&sys->kbd);
         if (sys->kbd.active_columns & (1<<9)) {
@@ -748,6 +755,8 @@ static uint8_t _cpc_psg_in(int port_id, void* user_data) {
         return 0xFF;
     }
 }
+
+/*=== GATE ARRAY STUFF =======================================================*/
 
 /* the first 32 bytes of the KC Compact color ROM */
 static uint8_t _cpc_kcc_color_rom[32] = {
@@ -801,6 +810,7 @@ static uint32_t _cpc_colors[32] = {
     0xffF67B6E,         // #5F pastel blue
 };
 
+/* initialize the gate array */
 static void _cpc_ga_init(cpc_t* sys) {
     memset(&sys->ga, 0, sizeof(sys->ga));
     sys->ga.next_video_mode = 1;
@@ -834,6 +844,7 @@ static void _cpc_ga_init(cpc_t* sys) {
     }
 }
 
+/* snoop interrupt acknowledge cycle from CPU */
 static void _cpc_ga_int_ack(cpc_t* sys) {
     /* on interrupt acknowledge from the CPU, clear the top bit from the
         hsync counter, so the next interrupt can't occur closer then 
@@ -851,6 +862,7 @@ static bool _cpc_rising_edge(uint64_t new_pins, uint64_t old_pins, uint64_t mask
     return 0 != (mask & (new_pins & (new_pins ^ old_pins)));
 }
 
+/* the main tick function of the gate array */
 static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
     /*
         http://cpctech.cpc-live.com/docs/ints.html
@@ -957,6 +969,7 @@ static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
     return cpu_pins;
 }
 
+/* gate array pixel decoding for the 3 video modes */
 static void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
     /*
         compute the source address from current CRTC ma (memory address)
@@ -1021,6 +1034,7 @@ static void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins)
     }
 }
 
+/* video decode for current tick (pixels, border, blank) */
 static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
     if (sys->video_debug_enabled) {
         if (sys->video_debug_cb) {
@@ -1050,6 +1064,7 @@ static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
     }
 }
 
+/* keyboard matrix initialization */
 static void _cpc_init_keymap(cpc_t* sys) {
     /*
         http://cpctech.cpc-live.com/docs/keyboard.html
@@ -1120,6 +1135,7 @@ static int _cpc_ram_config[8][4] = {
     { 0, 7, 2, 3 }
 };
 
+/* memory banking */
 static void _cpc_update_memory_mapping(cpc_t* sys) {
     /* select RAM config and ROMs */
     int ram_config_index;
@@ -1330,6 +1346,7 @@ bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     }
 }
 
+/*=== CASSETTE TAPE FILE LOADING =============================================*/
 bool cpc_insert_tape(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid);
     CHIPS_ASSERT(ptr);
