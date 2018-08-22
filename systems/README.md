@@ -4,7 +4,7 @@ This directory contains header-only 8-bit home computer emulators
 written in C (more specifically, a subset of C99 that compiles
 on gcc, clang and cl.exe both in C and C++ mode).
 
-The emulators are don't contain any platform-specific code and
+The emulators don't contain any platform-specific code and
 are easy to embed into bigger applications.
 
 ## Emulated systems:
