@@ -467,7 +467,7 @@ First the most important call: ticking the emulator:
     ...
 ```
 
-The call to **clock_frame_time()*** returns the measured frame time of the
+The call to **clock_frame_time()** returns the measured frame time of the
 last frame in seconds, 'rounded' to either the duration of a 60Hz or 30Hz
 frame (0.016667 or 0.33333 seconds). This might seem a bit strange but
 fixes a couple of minor issues:
