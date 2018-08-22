@@ -506,7 +506,7 @@ This will copy the current framebuffer content into a texture
 and render the texture as a 'fullscreen rectangle' through the 
 *gfx_* helper functions in the **common** library.
 
-This is enough code for the emulator to boot up and display an image,
+This is already enough code for the emulator to boot up and display an image,
 but keyboard input doesn't work yet, and there's no way to load data.
 
 First let's complete the per-frame callback with support for loading
