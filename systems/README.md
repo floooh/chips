@@ -488,7 +488,7 @@ emulator ticks (in the case of a CPC, which is running at 4 MHz, and a
 60 Hz frame rate, this would result in around 4000000 / 60 = 66667 ticks
 per frame. 
 
-During this time the emulator will generate new audio samples
+During the call to cpc_exec() the emulator will generate new audio samples
 and decode new pixels into the shared framebuffer memory chunk.
 
 If enough audio samples have been created to fill an audio-packet (usually
