@@ -324,7 +324,7 @@ the *CPC6128*, and the more exotic *KC Compact* (an East German CPC clone).
 These can be selected with the command line options ```type=cpc464```, ```type=kccompact```, and by default, the CPC 6128 will be selected.
 
 The CPC's digital joystick emulation can be activated with ```joystick=*```.
-With activated joystick emulations, the key codes for left/right/up/down/space
+With activated joystick emulation, the key codes for left/right/up/down/space
 are not interpreted as key presses, but as joystick buttons.
 
 Other emulators (for instance the ZX Spectrum) may support different
@@ -359,7 +359,7 @@ Finally the CPC is initialized with a call to **cpc_init()**:
 
 That's quite a mouthful so let's look at it in detail:
 
-First the CPC model and joystick type defined by command line args, not much to see here:
+First the CPC model and joystick type as defined by command line args, not much to see here:
 ```cpp
         .type = type,
         .joystick_type = joy_type,
@@ -469,7 +469,7 @@ First the most important call: ticking the emulator:
 
 The call to **clock_frame_time()** returns the measured frame time of the
 last frame in seconds, 'rounded' to either the duration of a 60Hz or 30Hz
-frame (0.016667 or 0.33333 seconds). This might seem a bit strange but
+frame (0.016667 or 0.033333 seconds). This might seem a bit strange but
 fixes a couple of minor issues:
 
 - the emulator won't suffer from micro-stuttering (actually it's not quite
