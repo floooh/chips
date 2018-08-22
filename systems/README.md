@@ -23,7 +23,7 @@ are easy to embed into bigger applications.
     - *CPC 464*: the original 64 KByte Amstrad CPC
     - *CPC 6128*: the improved CPC with 128 KB RAM
     - *KC Compact*: an East German CPC clone (the emulator only differs in color palette and ROM, it doesn't emulate gate array 'hardware-emulation' in the KC Compact
-- **atom.h**: an *Acorn Atom* with modern extensions (32 KB RAM + 8 KB video memory, a rudinmentary VIA 6522 emulation and MMC joystick support)
+- **atom.h**: an *Acorn Atom* with modern extensions (32 KB RAM + 8 KB video memory, a rudimentary VIA 6522 emulation and MMC joystick support)
 - (TODO) **c64.h**: a *C64* emulator with PAL display
 - (TODO) **kc85.h**: an emulator for 3 KC85 models from VEB Mikroelektronik MühlhausenÖ
     - *KC 85/2*: the original KC85 model with 16 KB RAM, CAOS 2.2 and no integrated BASIC
