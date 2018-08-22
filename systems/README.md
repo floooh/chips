@@ -41,8 +41,8 @@ is defined in one source file before including the headers
 - The declaration part only includes the following CRT headers:
     - stdint.h (for integer typedefs, uint32_t, etc...)
     - stdbool.h (for the bool typedef)
-    - string.h (for memcpy and memset)
 - The implementation part will additionally include:
+    - string.h (for memcpy and memset)
     - assert.h (unless the CHIPS_ASSERT macro is overridden with your own assert implementation)
 - Except for memset() and memcpy(), no C runtime functions are called in the headers (most importantly, there's no memory allocation or file I/O happening).
 

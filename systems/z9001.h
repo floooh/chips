@@ -79,7 +79,6 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -186,6 +185,7 @@ extern bool z9001_quickload(z9001_t* sys, const uint8_t* ptr, int num_bytes);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
+#include <string.h>
 #ifndef CHIPS_DEBUG
     #ifdef _DEBUG
         #define CHIPS_DEBUG
