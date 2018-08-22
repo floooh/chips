@@ -377,7 +377,7 @@ memory chunk that's used as display frame buffer:
 In the example embedding, the gfx_* functions in the **common** lib manage
 this chunk of memory, and I have created two functions to get a pointer to,
 and the size in bytes of the this memory chunk. The cpc_init() function
-will make sure that the provided size if sufficient for the CPC display through 
+will make sure that the provided size is sufficient for the CPC display through 
 an assert-check.
 
 ```cpp
