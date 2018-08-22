@@ -27,7 +27,7 @@ and games.
 ## General properties of the emulator headers
 
 - all headers are "STB-style" with a declaration part that's always
-parsed, and an implemented part that's only parsed when ```CHIPS_IMPL```
+parsed, and an implementation part that's only parsed when ```CHIPS_IMPL```
 is defined in one source file
 - the declaration part only includes the following headers: ```stdint.h```, ```stdbool.h```, ```string.h```
 - the implementation part will additionally include ```assert.h```, unless you define your own CHIPS_ASSERT macro
