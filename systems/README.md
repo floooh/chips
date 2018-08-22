@@ -254,7 +254,7 @@ context, and then proceed by calling the initialization callback function
 
 ## app_init()
 
-This is where all the one-time-initialization happens. Were doing a bit more here
+This is where all the one-time-initialization happens. We're doing a bit more here
 than what a minimal emulator would need.
 
 First some more subsystem initialization:
