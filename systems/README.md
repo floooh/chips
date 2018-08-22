@@ -572,7 +572,7 @@ enter by hand):
 
 ```
 |TAPE[Enter]
-RUN[Enter]
+RUN"[Enter]
 [Enter]
 ```
 
@@ -595,7 +595,7 @@ appear on the CPC display as if typed in by the user:
 
 ```
 |TAPE[Enter]
-RUN[Enter]
+RUN"[Enter]
 [Enter]
 ```
 
