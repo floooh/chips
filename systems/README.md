@@ -136,7 +136,7 @@ headers. The reason why **cpc.h** doesn't include those headers directly is
 that this gives you more freedom where you put those headers in your own
 project.
 
-The ```#define CHIPS_IMPL``` tells the headers that both the implementation
+The ```#define CHIPS_IMPL``` tells the headers that the implementation
 part should be included. Again, this is a detail that's very specific to the
 example emulators, in your own code you might decide to place the header implementations
 into another source file.
