@@ -437,11 +437,6 @@ are happening:
 void app_frame(void) {
     cpc_exec(&cpc, clock_frame_time());
     gfx_draw();
-    uint8_t key_code;
-    if (0 != (key_code = keybuf_get())) {
-        cpc_key_down(&cpc, key_code);
-        cpc_key_up(&cpc, key_code);
-    }
     /* load a data file? */
     if (fs_ptr() && clock_frame_count() > 120) {
         if (args_has("file")) {
@@ -456,6 +451,11 @@ void app_frame(void) {
             }
         }
         fs_free();
+    }
+    uint8_t key_code;
+    if (0 != (key_code = keybuf_get())) {
+        cpc_key_down(&cpc, key_code);
+        cpc_key_up(&cpc, key_code);
     }
 }
 ```
