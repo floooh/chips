@@ -20,7 +20,7 @@ Emulated systems:
 - ```c64.h```: a ```C64``` emulator with PAL display
 
 This is just a short overview, more detailed per-emulator documentation can
-be found in the respictive headers. The emulation quality differs quite a
+be found in the respective headers. The emulation quality differs quite a
 bit, but will improve over time as I'm adding support for more tests, demos
 and games.
 
