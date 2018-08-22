@@ -167,7 +167,7 @@ the emulated system would run slightly faster than intended)
  (the CPC has a fairly straight-forward 10x8 keyboard matrix)
 - **chips/mem.h**: implements a memory subsystem to map 16-bit emulator
 addresses to host system addresses using page-tables, and access the
-memory as RAM, ROM or RAM-behin-ROM.
+memory as RAM, ROM or RAM-behind-ROM.
 
 After the chips-headers, the actual CPC emulator header **systems/cpc.h** is
 included, and after that the ROM images (I have converted the actual ROM
