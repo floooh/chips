@@ -474,7 +474,7 @@ fixes a couple of minor issues:
 
 - the emulator won't suffer from micro-stuttering (actually it's not quite that
 easy since the CPC is a PAL machine which updates its display at 50Hz, but
-typical computers update their display at 60Hz, so there will be a small amount
+typical modern computers update their display at 60Hz, so there will be a small amount
 of stuttering and screen tearing)
 - if the application is suspended for a long time (for instance when running
 as in a web browser, and the browser tab is switched to the background),
