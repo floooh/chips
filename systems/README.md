@@ -245,7 +245,7 @@ call for initialization (**app_init()**), per-frame work (**app_frame()**),
 notifying the application about input events (**app_input()**), and
 cleanup/shutdown (**app_cleanup()**). The next three attributes **width**,
 **height** and **window_title** describe the application window (note that the CPC
-emulator has non-square pixels since it's highest pixel resolution is
+emulator has non-square pixels since its highest pixel resolution is
 640x200, that's why the vertical size of the application window is doubled).
 
 After **sokol_main()** returns, sokol_app.h will create a window and 3D-API
