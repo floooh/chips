@@ -18,7 +18,7 @@
     ~~~
         your own assert macro (default: assert(c))
 
-    You need to include the following headers before including z1013.h:
+    You need to include the following headers before including zx.h:
 
     - chips/z80.h
     - chips/beeper.h
