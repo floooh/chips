@@ -25,7 +25,7 @@ are easy to embed into bigger applications.
     - *KC Compact*: an East German CPC clone (the emulator only differs in color palette and ROM, it doesn't emulate gate array 'hardware-emulation' in the KC Compact
 - **atom.h**: an *Acorn Atom* with modern extensions (32 KB RAM + 8 KB video memory, a rudimentary VIA 6522 emulation and MMC joystick support)
 - (TODO) **c64.h**: a *C64* emulator with PAL display
-- (TODO) **kc85.h**: an emulator for 3 KC85 models from VEB Mikroelektronik MühlhausenÖ
+- (TODO) **kc85.h**: an emulator for 3 KC85 models from VEB Mikroelektronik Mühlhausen:
     - *KC85/2*: the original KC85 model with 16 KB RAM, CAOS 2.2 and no integrated BASIC
     - *KC85/3*: an incremental improvement with CAOS 3.1 and integrated BASIC ROM
     - *KC85/4*: a vastly improved model with 128 KB RAM, higher color resolution and double buffered display 
