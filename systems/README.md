@@ -26,9 +26,9 @@ are easy to embed into bigger applications.
 - **atom.h**: an *Acorn Atom* with modern extensions (32 KB RAM + 8 KB video memory, a rudimentary VIA 6522 emulation and MMC joystick support)
 - (TODO) **c64.h**: a *C64* emulator with PAL display
 - (TODO) **kc85.h**: an emulator for 3 KC85 models from VEB Mikroelektronik MühlhausenÖ
-    - *KC 85/2*: the original KC85 model with 16 KB RAM, CAOS 2.2 and no integrated BASIC
-    - *KC 85/3*: an incremental improvement with CAOS 3.1 and integrated BASIC ROM
-    - *KC 85/4*: a vastly improved model with 128 KB RAM, higher color resolution and double buffered display 
+    - *KC85/2*: the original KC85 model with 16 KB RAM, CAOS 2.2 and no integrated BASIC
+    - *KC85/3*: an incremental improvement with CAOS 3.1 and integrated BASIC ROM
+    - *KC85/4*: a vastly improved model with 128 KB RAM, higher color resolution and double buffered display 
 
 The accuracy of emulation differs quite a bit, please refer to the embedded documentation
 in the header files for details.
@@ -43,47 +43,45 @@ is defined in one source file before including the headers
     - stdbool.h (for the bool typedef)
     - string.h (for memcpy and memset)
 - The implementation part will additionally include:
-    - assert.h (unless the CHIPS_ASSERT macor is overridden with your own assert macro)
+    - assert.h (unless the CHIPS_ASSERT macro is overridden with your own assert implementation)
 - Except for memset() and memcpy(), no C runtime functions are called in the headers (most importantly, there's no memory allocation or file I/O happening).
 
 ## Embedding Guide
 
-The following embedding guide will use the **cpc.h** (Amstrad CPC) as an
+The following embedding guide will use the **cpc.h** header (Amstrad CPC) as an
 example, other emulators only differ in details which are explained in the
 emulator-specific documentation embedded in the respective headers.
 
 In general, you provide:
 
+- system ROM dumps in memory
 - keyboard input events
-- required system ROM dumps in memory
 - a memory chunk used as shared RGBA8 framebuffer
 - a callback function which receives small packets of audio samples
-- optionally snapshot-, tape- or disk-images in memory to load into the emulator
+- optional snapshot-, tape- or disk-images in memory to load into the emulator
 
 The emulator provides:
 
-- the decoded video image as RGBA8 pixels in the provided framebuffer memory chunk
+- a continuously updated RGBA8 video image in the shared framebuffer
 - audio data as a stream of 32-bit float samples in the range -1.0..1.0
 
-Normally your embedding app will do the following per 60Hz-frame:
+The embedding app will normally do the following per 60Hz-frame:
 
 - tell the emulator to execute the right number of ticks for the frame duration
-- call the emulator's key up/down functions to communicate keyboard input to the emulator
+- provide keyboard input
 - render the framebuffer
 
-Independently from the per-frame-work, the emulator will call your
-audio callback whenever it has finished generating a new packet of 
-audio samples (by default one packet is 128 samples, but this number
-is tweakable).
+While 'ticking', the emulator will call your audio callback whenever it has
+finished generating a new packet of (usually) 128 audio samples 
 
 ## Platform Abstraction
 
-The emulator headers themselves don't care how you're getting keyboard input,
-or implement the rendering and audio playback, instead this must be provided
-by your embedding code.
+The emulator headers themselves don't care how you're getting keyboard input
+from the host platform,
+or how rendering and audio playback happens, this must be implemented by your
+embedding code.
 
-The example embedding uses the following portability headers to abstract
-from the underlying platform:
+The example embedding uses the following portability headers for this:
 
 - [sokol_app.h](https://github.com/floooh/sokol/blob/master/sokol_app.h): as cross-platform application-wrapper (app entry, window- and 3D-context creation, and input)
 - [sokol_gfx.h](https://github.com/floooh/sokol/blob/master/sokol_gfx.h): to copy the emulator's framebuffer into a texture and render it through a 3D-API (using GL, D3D11 or Metal)
@@ -92,13 +90,9 @@ from the underlying platform:
 
 ## The ```common``` helper-function library
 
-The above low-level headers are further wrapped into a small library called
-*common* which all emulators link against, consisting of the following
-headers. Most of these functions are *not* essential to
-an emulator to boot up, but they're useful for loading games into the
-emulator, or boot into different hardware configurations without recompiling.
-
-The *common* library is built from the following headers in ```examples/common```
+The above low-level platform-abstraction-headers are further wrapped into a small library called
+*common* which all example emulators link against, consisting of the following
+headers:
 
 - **args.h**: argument parser for cmdline and URL args
 - **clock.h**: measure frame time and count frames
@@ -106,10 +100,12 @@ The *common* library is built from the following headers in ```examples/common``
 - **gfx.h**: small wrapper over sokol_gfx.h to render the emulator framebuffer
 - **keybuf.h**: split a string into a sequence of key strokes to send into the emulator
 
-Function names starting with *args_*, *clock_*, *fs_*, *gfx_* and *keybuf_* are from the above headers.
+Any function names in the following code starting with *args_*, *clock_*, *fs_*, *gfx_* and *keybuf_* are part of the common-library and implemented in these headers.
 
 It's important to understand that these functions are neither required, nor
-part of the **chips** project. In your own embedding code, these might look completely different!
+part of the **chips** project. While your own embedding code most likely will
+implement similar helper functions, their specific APIs and implementations might look
+entirely different!
 
 ### Step 1: Header includes and app-skeleton
 
@@ -134,16 +130,16 @@ First let's include the right headers:
 mentioned above starting with *args_*, *clock_*, *fs_*, *gfx_* and
 *keybuf_*).
 
-Next are the chips headers that are needed by ```cpc.h```. The list of required
-headers can be looked up in the embedded documentation in the system
-emulator headers. The reason why *cpc.h* doesn't include thos headers directly is that this gives you more freedom where you put those headers in your own 
+Next are the chips-headers that are needed by **cpc.h**. The list of required
+headers can be looked up in the embedded documentation in the system emulator
+headers. The reason why **cpc.h** doesn't include those headers directly is
+that this gives you more freedom where you put those headers in your own
 project.
 
 The ```#define CHIPS_IMPL``` tells the headers that both the implementation
-part should be included. This makes sense here because all emulator embedding
-code is in a single source file. For more complex applications it may make
-sense to put all the chips-header implementations into a separate
-'implementation file' and set the CHIPS_IMPL define there.
+part should be included. Again, this is a detail that's very specific to the
+example emulators, in your own code you might decide to place the header implementations
+into another source file.
 
 **cpc.h** needs the following chip emulator headers:
 
@@ -157,9 +153,9 @@ this is used on the CPC for interfacing the keyboard, sound chips and cassette p
 creates the timing- and address-signals for the CPC custom gate array chip,
 which in turn generates the video signal
 
-In addition, there are a number of 'subsystem headers' which don't emulate
+A number of 'subsystem headers' are required which don't emulate
 a specific microchip, but instead offer generic functionality needed by
-8-bit emulators:
+most 8-bit home computer emulators:
 
 - **chips/crt.h**: this provides beam-position- and timing-information for a
 PAL- or NTSC cathode-ray-tube
@@ -173,10 +169,11 @@ the emulated system would run slightly faster than intended)
 addresses to host system addresses using page-tables, and access the
 memory as RAM, ROM or RAM-behin-ROM.
 
-Next the actual CPC emulator header **systems/cpc.h** is included, and after
-that the ROM images (I have converted the actual ROM dumps to
-embedded C arrays using a python code generator script, of course you're free
-to load the images with more traditional methods).
+After the chips-headers, the actual CPC emulator header **systems/cpc.h** is
+included, and after that the ROM images (I have converted the actual ROM
+dumps to embedded C arrays using a python code generator script, of course
+you're free to provide the ROM images in different ways, as long as they're
+in memory when **cpc_init()** is called.
 
 The CPC emulator state is in a single global variable:
 
@@ -187,7 +184,7 @@ cpc_t cpc;
 You're also free put this variable into a heap allocation or on the stack,
 but for stack variables be aware that the emulator state can be up to few
 hundred KBytes because the memory, ROM images and tape/disk drive buffers are
-part of the emulator state). On some platforms this may be too big for a
+part of the emulator state. On some platforms this may be too big for a
 stack variable.
 
 Next the empty application skeleton, this is using the **sokol_app.h**
