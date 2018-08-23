@@ -843,7 +843,7 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
                 else if (0xED == val[0]) {
                     if (0xED == val[1]) {
                         uint8_t count = val[2];
-                        assert(0 != count);
+                        CHIPS_ASSERT(0 != count);
                         uint8_t data = val[3];
                         src_pos += 4;
                         for (int i = 0; i < count; i++) {
@@ -862,7 +862,7 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
                     src_pos++;
                 }
             }
-            assert(src_pos == src_len);
+            CHIPS_ASSERT(src_pos == src_len);
         }
         if (0xFFFF == src_len) {
             ptr += 0x4000;
