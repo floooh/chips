@@ -93,10 +93,6 @@ typedef enum {
 
 /* audio sample data callback */
 typedef void (*cpc_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-/* max number of audio samples in internal sample buffer */
-#define CPC_MAX_AUDIO_SAMPLES (1024)
-/* default number of audio samples to generate until audio callback is invoked */
-#define CPC_DEFAULT_AUDIO_SAMPLES (128)
 
 /* optional video-decode-debugging callback */
 typedef void (*cpc_video_debug_callback_t)(uint64_t crtc_pins, void* user_data);

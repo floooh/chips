@@ -78,10 +78,6 @@ typedef enum {
 
 /* audio sample data callback */
 typedef void (*atom_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-/* max number of audio samples in internal sample buffer */
-#define ATOM_MAX_AUDIO_SAMPLES (1024)
-/* default number of audio samples to generate until audio callback is invoked */
-#define ATOM_DEFAULT_AUDIO_SAMPLES (128)
 
 /* configuration parameters for atom_init() */
 typedef struct {

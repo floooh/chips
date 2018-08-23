@@ -86,10 +86,6 @@ typedef enum {
 
 /* audio sample data callback */
 typedef void (*zx_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-/* max number of audio samples in internal sample buffer */
-#define ZX_MAX_AUDIO_SAMPLES (1024)
-/* default number of audio samples to generate until audio callback is invoked */
-#define ZX_DEFAULT_AUDIO_SAMPLES (128)
 
 /* config parameters for zx_init() */
 typedef struct {

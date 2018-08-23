@@ -98,7 +98,6 @@ typedef enum {
 /* Z9001 audio sample data callback */
 typedef void (*z9001_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
-
 /* configuration parameters for z9001_init() */
 typedef struct {
     z9001_type_t type;                  /* default is Z9001_TYPE_Z9001 */
