@@ -99,7 +99,6 @@ typedef struct {
     /* optional user-data for callback functions */
     void* user_data;
 
-    /* optional user data for callback functions */
     /* audio output config (if you don't want audio, set audio_cb to zero) */
     zx_audio_callback_t audio_cb;   /* called when audio_num_samples are ready */
     int audio_num_samples;          /* default is ZX_AUDIO_NUM_SAMPLES */
