@@ -20,12 +20,13 @@
 
     You need to include the following headers before including cpc.h:
 
-    - chips/m6502.h"
-    - chips/m6526.h"
-    - chips/m6569.h"
-    - chips/m6581.h"
-    - chips/kbd.h"
-    - chips/mem.h"
+    - chips/m6502.h
+    - chips/m6526.h
+    - chips/m6569.h
+    - chips/m6581.h
+    - chips/beeper.h
+    - chips/kbd.h
+    - chips/mem.h
     - chips/clk.h
 
     ## The Commodore C64
@@ -66,7 +67,7 @@ extern "C" {
 #define C64_DISPLAY_HEIGHT (272)            /* required framebuffer hight in pixels */
 #define C64_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
 #define C64_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */ 
-#define C64_MAX_TAPE_SIZE (128*1024)        /* max size of cassette tape image */
+#define C64_MAX_TAPE_SIZE (512*1024)        /* max size of cassette tape image */
 
 /* C64 joystick types */
 typedef enum {
@@ -93,7 +94,9 @@ typedef struct {
     c64_audio_callback_t audio_cb;  /* called when audio_num_samples are ready */
     int audio_num_samples;          /* default is C64_AUDIO_NUM_SAMPLES */
     int audio_sample_rate;          /* playback sample rate, default is 44100 */
-    float audio_volume;             /* audio volume (0.0 .. 1.0), default is 1.0 */
+    float audio_sid_volume;         /* audio volume of the SID chip (0.0 .. 1.0), default is 1.0 */
+    float audio_beeper_volume;      /* audio volume of the tape-beeper (0.0 .. 1.0), default is 0.1 */
+    bool audio_tape_sound;          /* if true, tape loading is audible */
 
     /* ROM images */
     const void* rom_char;           /* 4 KByte character ROM dump */
@@ -111,6 +114,7 @@ typedef struct {
     m6526_t cia_2;
     m6569_t vic;
     m6581_t sid;
+    beeper_t beeper;            /* used for the tape-sound */
     
     bool valid;
     c64_joystick_t joystick_type;
@@ -139,8 +143,10 @@ typedef struct {
 
     bool tape_motor;    /* tape motor on/off */
     bool tape_button;   /* play button on tape pressed/unpressed */
+    bool tape_sound;    /* true when tape is audible */
     int tape_size;      /* tape_size > 0: a tape is inserted */
     int tape_pos;        
+    int tape_tick_count;
     uint8_t tape_buf[C64_MAX_TAPE_SIZE];
 } c64_t;
 
@@ -157,9 +163,13 @@ extern void c64_key_down(c64_t* sys, int key_code);
 /* send a key-up event to the C64 */
 extern void c64_key_up(c64_t* sys, int key_code);
 /* insert a tape file */
-extern void c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
+extern bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
 /* remove tape file */
 extern void c64_remove_tape(c64_t* sys);
+/* start the tape (press the Play button) */
+extern void c64_start_tape(c64_t* sys);
+/* stop the tape (unpress the Play button */
+extern void c64_stop_tape(c64_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -207,6 +217,7 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     memset(sys, 0, sizeof(c64_t));
     sys->valid = true;
     sys->joystick_type = desc->joystick_type;
+    sys->tape_sound = desc->audio_tape_sound;
     CHIPS_ASSERT(desc->rom_char && (desc->rom_char_size == sizeof(sys->rom_char)));
     CHIPS_ASSERT(desc->rom_basic && (desc->rom_basic_size == sizeof(sys->rom_basic)));
     CHIPS_ASSERT(desc->rom_kernal && (desc->rom_kernal_size == sizeof(sys->rom_kernal)));
@@ -253,10 +264,16 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     vic_desc.user_data = sys;
     m6569_init(&sys->vic, &vic_desc);
 
+    const float sound_hz = _C64_DEFAULT(desc->audio_sample_rate, 44100);
+    const float sid_volume = _C64_DEFAULT(desc->audio_sid_volume, 1.0f);
+    const float beeper_volume = _C64_DEFAULT(desc->audio_beeper_volume, 0.1f);
     m6581_desc_t sid_desc = {0};
     sid_desc.tick_hz = _C64_FREQUENCY;
-    sid_desc.sound_hz = _C64_DEFAULT(desc->audio_sample_rate, 44100);
-    sid_desc.magnitude = _C64_DEFAULT(desc->audio_volume, 1.0f);
+    sid_desc.sound_hz = sound_hz;
+    sid_desc.magnitude = sid_volume;
+    m6581_init(&sys->sid, &sid_desc);
+
+    beeper_init(&sys->beeper, _C64_FREQUENCY, sound_hz, beeper_volume);
 
     _c64_init_key_map(sys);
     _c64_init_memory_map(sys);
@@ -280,10 +297,12 @@ void c64_reset(c64_t* sys) {
     m6526_reset(&sys->cia_2);
     m6569_reset(&sys->vic);
     m6581_reset(&sys->sid);
+    beeper_reset(&sys->beeper);
     sys->tape_motor = false;
     sys->tape_button = false;
-    sys->tape_pos = 0;
     sys->tape_size = 0;
+    sys->tape_pos = 0;
+    sys->tape_tick_count = 0;
 }
 
 void c64_exec(c64_t* sys, double seconds) {
@@ -340,10 +359,19 @@ static uint64_t _c64_tick(uint64_t pins, void* user_data) {
         cia1_pins |= M6526_FLAG;
     }
 
+    /* if the tape should be audible, toggle the beeper */
+    if (sys->tape_sound) {
+        beeper_tick(&sys->beeper);
+    }
+
     /* tick the SID */
     if (m6581_tick(&sys->sid)) {
         /* new audio sample ready */
-        sys->sample_buffer[sys->sample_pos++] = sys->sid.sample;
+        float sample = sys->sid.sample;
+        if (sys->tape_motor) {
+            sample += sys->beeper.sample;
+        }
+        sys->sample_buffer[sys->sample_pos++] = sample;
         if (sys->sample_pos == sys->num_samples) {
             if (sys->audio_cb) {
                 sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
@@ -511,7 +539,7 @@ static uint8_t _c64_cia1_in(int port_id, void* user_data) {
         return ~sys->joy_mask;
     }
     else {
-        /* read keyboard matrix columns (joystick 1 not implemented) */
+        /* read keyboard matrix columns */
         return ~(kbd_scan_columns(&sys->kbd) | sys->joy_mask);
     }
 }
@@ -711,8 +739,88 @@ static void _c64_init_key_map(c64_t* sys) {
 
 /*=== CASSETTE TAPE FILE LOADING =============================================*/
 
+/* C64 TAP file header */
+typedef struct {
+    uint8_t signature[12];  /* "C64-TAPE-RAW" */
+    uint8_t version;        /* 0x00 or 0x01 */
+    uint8_t pad[3];         /* reserved */
+    uint32_t size;          /* size of the following data */
+} _c64_tap_header;
+
+bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid && ptr);
+    c64_remove_tape(sys);
+    if (num_bytes <= (int) sizeof(_c64_tap_header)) {
+        return false;
+    }
+    const _c64_tap_header* hdr = (const _c64_tap_header*) ptr;
+    ptr += sizeof(_c64_tap_header);
+    const uint8_t sig[12] = { 'C','6','4','-','T','A','P','E','-','R','A','W'};
+    for (int i = 0; i < 12; i++) {
+        if (sig[i] != hdr->signature[i]) {
+            return false;
+        }
+    }
+    if (1 != hdr->version) {
+        return false;
+    }
+    if (num_bytes < (int)(hdr->size + sizeof(_c64_tap_header))) {
+        return false;
+    }
+    if (num_bytes > (int)sizeof(sys->tape_buf)) {
+        return false;
+    }
+    memcpy(sys->tape_buf, ptr, hdr->size);
+    sys->tape_size = hdr->size;
+    sys->tape_pos = 0;
+    sys->tape_tick_count = 0;
+    return true;
+}
+
+void c64_remove_tape(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->tape_motor = false;
+    sys->tape_button = false;
+    sys->tape_size = 0;
+    sys->tape_pos = 0;
+    sys->tape_tick_count = 0;
+}
+
+void c64_start_tape(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->tape_button = true;
+    sys->tape_motor = true;
+}
+
+void c64_stop_tape(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->tape_button = false;
+    sys->tape_motor = false;
+}
+
 static bool _c64_tape_tick(c64_t* sys) {
-    /* FIXME! */
+    if (sys->tape_motor && (sys->tape_size > 0) && (sys->tape_pos <= sys->tape_size)) {
+        if (sys->tape_tick_count == 0) {
+            if (sys->tape_sound) {
+                beeper_toggle(&sys->beeper);
+            }
+            uint8_t val = sys->tape_buf[sys->tape_pos++];
+            if (val == 0) {
+                uint8_t s[3];
+                for (int i = 0; i < 3; i++) {
+                    s[i] = sys->tape_buf[sys->tape_pos++];
+                }
+                sys->tape_tick_count = (s[2]<<16) | (s[1]<<8) | s[0];
+            }
+            else {
+                sys->tape_tick_count = val * 8;
+            }
+            return true;
+        }
+        else {
+            sys->tape_tick_count--;
+        }
+    }
     return false;
 }
 
