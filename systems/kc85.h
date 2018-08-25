@@ -92,6 +92,8 @@ typedef enum {
 
 /* audio sample callback */
 typedef void (*kc85_audio_callback_t)(const float* samples, int num_samples, void* user_data);
+/* callback to patch system after a snapshot is loaded */
+typedef void (*kc85_patch_callback_t)(const char* snapshot_name, void* user_data);
 
 /* config parameters for kc85_init() */
 typedef struct {
@@ -109,6 +111,9 @@ typedef struct {
     int audio_num_samples;              /* default is KC85_AUDIO_NUM_SAMPLES */
     int audio_sample_rate;              /* playback sample rate, default is 44100 */
     float audio_volume;                 /* audio volume (0.0 .. 1.0), default is 0.5 */
+    
+    /* an optional callback to be invoked after a snapshot file is loaded to patch the system */
+    kc85_patch_callback_t patch_cb;
 
     /* ROM images */
     const void* rom_caos22;             /* CAOS 2.2 (used in KC85/2) */
@@ -153,6 +158,7 @@ typedef struct {
     int num_samples;
     int sample_pos;
     float sample_buffer[KC85_MAX_AUDIO_SAMPLES];
+    kc85_patch_callback_t patch_cb;
 
     uint8_t ram[8][0x4000];         /* up to 8 16-KByte RAM banks */
     uint8_t rom_basic[0x2000];      /* 8 KByte BASIC ROM (KC85/3 and /4 only) */
@@ -173,7 +179,7 @@ void kc85_key_down(kc85_t* sys, int key_code);
 /* send a key-up event */
 void kc85_key_up(kc85_t* sys, int key_code);
 /* load a .KCC or .TAP snapshot file into the emulator */
-void kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
+bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -270,8 +276,8 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
         memcpy(sys->rom_caos_e, desc->rom_caos42e, sizeof(sys->rom_caos_e));
     }
 
-    /* fill RAM with noise */
-    {
+    /* fill RAM with noise (only KC85/2 and /3) */
+    if (KC85_TYPE_4 != sys->type) {
         uint32_t r = 0x6D98302B;
         uint8_t* ptr = &sys->ram[0][0];
         for (int i = 0; i < (int)sizeof(sys->ram);) {
@@ -287,6 +293,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _KC85_DISPLAY_SIZE));
     sys->pixel_buffer = desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
+    sys->patch_cb = desc->patch_cb;
     sys->user_data = desc->user_data;
     sys->num_samples = _KC85_DEFAULT(desc->audio_num_samples, KC85_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= KC85_MAX_AUDIO_SAMPLES);
@@ -481,20 +488,22 @@ static uint64_t _kc85_tick(int num_ticks, uint64_t pins, void* user_data) {
                             port 0x80: expansion module control, high byte
                             of port address contains module slot address
                         */
-                        /* FIXME
                         {
-                            const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
+                            //const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
                             if (pins & Z80_WR) {
+                                /*
                                 if (kc85.exp.slot_exists(slot_addr)) {
                                     kc85.exp.update_control_byte(slot_addr, data);
                                     kc85.update_bank_switching();
                                 }
+                                */
                             }
                             else {
-                                Z80_SET_DATA(pins, kc85.exp.module_type_in_slot(slot_addr));
+                                // FIXME:
+                                Z80_SET_DATA(pins, 0xFF);
+                                //Z80_SET_DATA(pins, kc85.exp.module_type_in_slot(slot_addr));
                             }
                         }
-                        */
                         break;
 
                     case 0x04:
@@ -643,16 +652,13 @@ static void _kc85_decode_scanline(kc85_t* sys) {
 
 static void _kc85_init_memory_map(kc85_t* sys) {
     mem_init(&sys->mem);
-
-    /* intitial memory config */
     sys->pio_a = _KC85_PIO_A_RAM | _KC85_PIO_A_IRM | _KC85_PIO_A_CAOS_ROM;
-    if (KC85_TYPE_3 == sys->type) {
-        sys->pio_a |= _KC85_PIO_A_BASIC_ROM;
-    }
     _kc85_update_memory_map(sys);
 }
 
 static void _kc85_update_memory_map(kc85_t* sys) {
+    mem_unmap_layer(&sys->mem, 0);
+
     /* all models have 16 KB builtin RAM at 0x0000 and 8 KB ROM at 0xE000 */
     if (sys->pio_a & _KC85_PIO_A_RAM) {
         mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[0]);
@@ -709,7 +715,18 @@ static void _kc85_update_memory_map(kc85_t* sys) {
     }
 }
 
-/* keyboard emulation */
+/*
+    KEYBOARD INPUT
+
+    this is a simplified version of the PIO-B interrupt service routine
+    which is normally triggered when the serial keyboard hardware
+    sends a new pulse (for details, see
+    https://github.com/floooh/yakc/blob/master/misc/kc85_3_kbdint.md )
+
+    we ignore the whole tricky serial decoding and patch the
+    keycode directly into the right memory locations.
+*/
+
 #define _KC85_KBD_TIMEOUT (1<<3)
 #define _KC85_KBD_KEYREADY (1<<0)
 #define _KC85_KBD_REPEAT (1<<4)
@@ -717,16 +734,6 @@ static void _kc85_update_memory_map(kc85_t* sys) {
 #define _KC85_KBD_LONG_REPEAT_COUNT (60)
 
 static void _kc85_handle_keyboard(kc85_t* sys) {
-    /*
-        this is a simplified version of the PIO-B interrupt service routine
-        which is normally triggered when the serial keyboard hardware
-        sends a new pulse (for details, see
-        https://github.com/floooh/yakc/blob/master/misc/kc85_3_kbdint.md )
-    
-        we ignore the whole tricky serial decoding and patch the
-        keycode directly into the right memory locations.
-    */
-
     /* don't do anything if interrupts disabled, IX might point to the wrong base address! */
     if (!z80_iff1(&sys->cpu)) {
         return;
@@ -784,6 +791,181 @@ static void _kc85_handle_keyboard(kc85_t* sys) {
             mem_wr(&sys->mem, ix+0x8, mem_rd(&sys->mem, ix+0x8)|_KC85_KBD_KEYREADY);
             mem_wr(&sys->mem, ix+0xA, 0);
         }
+    }
+}
+
+/*=== FILE LOADING ===========================================================*/
+
+/* common start function for all snapshot file formats */
+static void _kc85_load_start(kc85_t* sys, uint16_t exec_addr) {
+    z80_set_a(&sys->cpu, 0x00);
+    z80_set_f(&sys->cpu, 0x10);
+    z80_set_bc(&sys->cpu, 0x0000); z80_set_bc_(&sys->cpu, 0x0000);
+    z80_set_de(&sys->cpu, 0x0000); z80_set_de_(&sys->cpu, 0x0000);
+    z80_set_hl(&sys->cpu, 0x0000); z80_set_hl_(&sys->cpu, 0x0000);
+    z80_set_af_(&sys->cpu, 0x0000);
+    z80_set_sp(&sys->cpu, 0x01C2);
+    /* delete ASCII buffer */
+    for (uint16_t addr = 0xb200; addr < 0xb700; addr++) {
+        mem_wr(&sys->mem, addr, 0);
+    }
+    mem_wr(&sys->mem, 0xb7a0, 0);
+    if (KC85_TYPE_3 == sys->type) {
+        _kc85_tick(1, Z80_MAKE_PINS(Z80_IORQ|Z80_WR, 0x89, 0x9f), sys);
+        mem_wr16(&sys->mem, z80_sp(&sys->cpu), 0xf15c);
+    }
+    else if (KC85_TYPE_4 == sys->type) {
+        _kc85_tick(1, Z80_MAKE_PINS(Z80_IORQ|Z80_WR, 0x89, 0xff), sys);
+        mem_wr16(&sys->mem, z80_sp(&sys->cpu), 0xf17e);
+    }
+    z80_set_pc(&sys->cpu, exec_addr);
+}
+
+/* KCC file format support */
+typedef struct {
+    uint8_t name[16];
+    uint8_t num_addr;
+    uint8_t load_addr_l;
+    uint8_t load_addr_h;
+    uint8_t end_addr_l;
+    uint8_t end_addr_h;
+    uint8_t exec_addr_l;
+    uint8_t exec_addr_h;
+    uint8_t pad[128 - 23];  /* pad to 128 bytes */
+} _kc85_kcc_header;
+
+/* invoke the post-snapshot-loading patch callback */
+static void _kc85_invoke_patch_callback(kc85_t* sys, const _kc85_kcc_header* hdr) {
+    if (sys->patch_cb) {
+        char img_name[17];
+        memcpy(img_name, hdr->name, 16);
+        img_name[16] = 0;
+        sys->patch_cb(img_name, sys->user_data);
+    }
+}
+
+/* KCC files cannot really be identified since they have no magic number */
+static bool _kc85_is_valid_kcc(const uint8_t* ptr, int num_bytes) {
+    if (num_bytes <= (int) sizeof (_kc85_kcc_header)) {
+        return false;
+    }
+    const _kc85_kcc_header* hdr = (const _kc85_kcc_header*) ptr;
+    for (int i = 0; i < 16; i++) {
+        if (hdr->name[i] >= 128) {
+            return false;
+        }
+    }
+    if (hdr->num_addr > 3) {
+        return false;
+    }
+    uint16_t load_addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
+    uint16_t end_addr = hdr->end_addr_h<<8 | hdr->end_addr_l;
+    if (end_addr <= load_addr) {
+        return false;
+    }
+    if (hdr->num_addr > 2) {
+        uint16_t exec_addr = hdr->exec_addr_h<<8 | hdr->exec_addr_l;
+        if ((exec_addr < load_addr) || (exec_addr > end_addr)) {
+            return false;
+        }
+    }
+    int required_len = (end_addr - load_addr) + sizeof(_kc85_kcc_header);
+    if (required_len > num_bytes) {
+        return false;
+    }
+    /* could be a KCC file */
+    return true;
+}
+
+static bool _kc85_load_kcc(kc85_t* sys, const uint8_t* ptr, int num_bytes) {
+    const _kc85_kcc_header* hdr = (_kc85_kcc_header*) ptr;
+    uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
+    uint16_t end_addr  = hdr->end_addr_h<<8 | hdr->end_addr_l;
+    ptr += sizeof(_kc85_kcc_header);
+    while (addr < end_addr) {
+        /* data is continuous */
+        mem_wr(&sys->mem, addr++, *ptr++);
+    }
+    _kc85_invoke_patch_callback(sys, hdr);
+    /* if file has an exec-address, start the program */
+    if (hdr->num_addr > 2) {
+        _kc85_load_start(sys, hdr->exec_addr_h<<8 | hdr->exec_addr_l);
+    }
+    return false;
+}
+
+/* KC TAP file format support */
+typedef struct {
+    uint8_t sig[16];        /* "\xC3KC-TAPE by AF. " */
+    uint8_t type;           /* 00: KCTAP_Z9001, 01: KCTAP_KC85, else: KCTAP_SYS */
+    _kc85_kcc_header kcc;   /* from here on identical with KCC */
+} _kc85_kctap_header;
+
+static bool _kc85_is_valid_kctap(const uint8_t* ptr, int num_bytes) {
+    if (num_bytes <= (int) sizeof (_kc85_kctap_header)) {
+        return false;
+    }
+    const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) ptr;
+    static uint8_t sig[16] = { 0xC3,'K','C','-','T','A','P','E',0x20,'b','y',0x20,'A','F','.',0x20 };
+    for (int i = 0; i < 16; i++) {
+        if (sig[i] != hdr->sig[i]) {
+            return false;
+        }
+    }
+    if (hdr->kcc.num_addr > 3) {
+        return false;
+    }
+    uint16_t load_addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
+    uint16_t end_addr = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
+    if (end_addr <= load_addr) {
+        return false;
+    }
+    if (hdr->kcc.num_addr > 2) {
+        uint16_t exec_addr = hdr->kcc.exec_addr_h<<8 | hdr->kcc.exec_addr_l;
+        if ((exec_addr < load_addr) || (exec_addr > end_addr)) {
+            return false;
+        }
+    }
+    int required_len = (end_addr - load_addr) + sizeof(_kc85_kctap_header);
+    if (required_len > num_bytes) {
+        return false;
+    }
+    /* this appears to be a valid KC TAP file */
+    return true;
+}
+
+static bool _kc85_load_kctap(kc85_t* sys, const uint8_t* ptr, int num_bytes) {
+    const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) ptr;
+    uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
+    uint16_t end_addr  = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
+    ptr += sizeof(_kc85_kctap_header);
+    while (addr < end_addr) {
+        /* each block is 1 lead-byte + 128 bytes data */
+        ptr++;
+        for (int i = 0; i < 128; i++) {
+            mem_wr(&sys->mem, addr++, *ptr++);
+        }
+    }
+    _kc85_invoke_patch_callback(sys, &hdr->kcc);
+    /* if file has an exec-address, start the program */
+    if (hdr->kcc.num_addr > 2) {
+        _kc85_load_start(sys, hdr->kcc.exec_addr_h<<8 | hdr->kcc.exec_addr_l);
+    }
+    return true;
+}
+
+bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid && ptr);
+    /* first check for KC-TAP format, since this can be properly identified */
+    if (_kc85_is_valid_kctap(ptr, num_bytes)) {
+        return _kc85_load_kctap(sys, ptr, num_bytes);
+    }
+    else if (_kc85_is_valid_kcc(ptr, num_bytes)) {
+        return _kc85_load_kcc(sys, ptr, num_bytes);
+    }
+    else {
+        /* not a known file type, or not enough data */
+        return false;
     }
 }
 
