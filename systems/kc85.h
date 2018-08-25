@@ -92,7 +92,7 @@ typedef enum {
 
 /* audio sample callback */
 typedef void (*kc85_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-/* callback to patch system after a snapshot is loaded */
+/* callback to apply patches after a snapshot is loaded */
 typedef void (*kc85_patch_callback_t)(const char* snapshot_name, void* user_data);
 
 /* config parameters for kc85_init() */
@@ -112,7 +112,7 @@ typedef struct {
     int audio_sample_rate;              /* playback sample rate, default is 44100 */
     float audio_volume;                 /* audio volume (0.0 .. 1.0), default is 0.5 */
     
-    /* an optional callback to be invoked after a snapshot file is loaded to patch the system */
+    /* an optional callback to be invoked after a snapshot file is loaded to apply patches */
     kc85_patch_callback_t patch_cb;
 
     /* ROM images */
