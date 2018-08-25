@@ -35,6 +35,7 @@
 
     ## TODO:
 
+    - emulate separate joystick 1 and 2
     - improve game fast loader compatibility
     - floppy disc support
 
