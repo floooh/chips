@@ -359,6 +359,16 @@ void kc85_exec(kc85_t* sys, double seconds) {
     _kc85_handle_keyboard(sys);
 }
 
+void kc85_key_down(kc85_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_down(&sys->kbd, key_code);
+}
+
+void kc85_key_up(kc85_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_up(&sys->kbd, key_code);
+}
+
 static uint64_t _kc85_tick(int num_ticks, uint64_t pins, void* user_data) {
     kc85_t* sys = (kc85_t*) user_data;
 
@@ -699,8 +709,82 @@ static void _kc85_update_memory_map(kc85_t* sys) {
     }
 }
 
+/* keyboard emulation */
+#define _KC85_KBD_TIMEOUT (1<<3)
+#define _KC85_KBD_KEYREADY (1<<0)
+#define _KC85_KBD_REPEAT (1<<4)
+#define _KC85_KBD_SHORT_REPEAT_COUNT (8)
+#define _KC85_KBD_LONG_REPEAT_COUNT (60)
+
 static void _kc85_handle_keyboard(kc85_t* sys) {
-    // FIXME!
+    /*
+        this is a simplified version of the PIO-B interrupt service routine
+        which is normally triggered when the serial keyboard hardware
+        sends a new pulse (for details, see
+        https://github.com/floooh/yakc/blob/master/misc/kc85_3_kbdint.md )
+    
+        we ignore the whole tricky serial decoding and patch the
+        keycode directly into the right memory locations.
+    */
+
+    /* don't do anything if interrupts disabled, IX might point to the wrong base address! */
+    if (!z80_iff1(&sys->cpu)) {
+        return;
+    }
+
+    /* get the first valid key code from the key buffer */
+    uint8_t key_code = 0;
+    for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
+        if (sys->kbd.key_buffer[i].key != 0) {
+            key_code = sys->kbd.key_buffer[i].key;
+            break;
+        }
+    }
+
+    const uint16_t ix = z80_ix(&sys->cpu);
+    if (0 == key_code) {
+        /* if keycode is 0, this basically means the CTC3 timeout was hit */
+        mem_wr(&sys->mem, ix+0x8, mem_rd(&sys->mem, ix+0x8) | _KC85_KBD_TIMEOUT); /* set the CTC3 timeout bit */
+        mem_wr(&sys->mem, ix+0xD, 0); /* clear current keycode */
+    }
+    else {
+        /* a valid keycode has been received, clear the timeout bit */
+        mem_wr(&sys->mem, ix+0x8, mem_rd(&sys->mem, ix+0x8) & ~_KC85_KBD_TIMEOUT);
+
+        /* check for key-repeat */
+        if (key_code != mem_rd(&sys->mem, ix+0xD)) {
+            /* no key-repeat */
+            mem_wr(&sys->mem, ix+0xD, key_code);                                    /* write new keycode */
+            mem_wr(&sys->mem, ix+0x8, mem_rd(&sys->mem, ix+0x8)&~_KC85_KBD_REPEAT);  /* clear the first-key-repeat bit */
+            mem_wr(&sys->mem, ix+0x8, mem_rd(&sys->mem, ix+0x8)|_KC85_KBD_KEYREADY); /* set the key-ready bit */
+            mem_wr(&sys->mem, ix+0xA, 0);                                           /* clear the key-repeat counter */
+        }
+        else {
+            /* handle key-repeat */
+            mem_wr(&sys->mem, ix+0xA, mem_rd(&sys->mem, ix+0xA)+1);   /* increment repeat-pause-counter */
+            if (mem_rd(&sys->mem, ix+0x8) & _KC85_KBD_REPEAT) {
+                /* this is a followup, short key-repeat */
+                if (mem_rd(&sys->mem, ix+0xA) < _KC85_KBD_SHORT_REPEAT_COUNT) {
+                    /* wait some more... */
+                    return;
+                }
+            }
+            else {
+                /* this is the first, long key-repeat */
+                if (mem_rd(&sys->mem, ix+0xA) < _KC85_KBD_LONG_REPEAT_COUNT) {
+                    // wait some more...
+                    return;
+                }
+                else {
+                    // first key-repeat pause over, set first-key-repeat flag
+                    mem_wr(&sys->mem, ix+0x8, mem_rd(&sys->mem, ix+0x8)|_KC85_KBD_REPEAT);
+                }
+            }
+            /* key-repeat triggered, just set the key-ready flag and reset repeat-count */
+            mem_wr(&sys->mem, ix+0x8, mem_rd(&sys->mem, ix+0x8)|_KC85_KBD_KEYREADY);
+            mem_wr(&sys->mem, ix+0xA, 0);
+        }
+    }
 }
 
 #endif /* CHIPS_IMPL */
