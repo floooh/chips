@@ -394,7 +394,7 @@ static uint64_t _kc85_tick(int num_ticks, uint64_t pins, void* user_data) {
         }
     }
 
-    /* tick the CTC */
+    /* tick the CTC and beepers */
     for (int i = 0; i < num_ticks; i++) {
         pins = z80ctc_tick(&sys->ctc, pins);
         /* CTC channels 0 and 1 triggers control audio frequencies */
