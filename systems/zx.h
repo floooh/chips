@@ -792,10 +792,9 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
     const bool v1_compr = 0 != (hdr->flags0 & (1<<5));
     while (ptr < end_ptr) {
         int page_index = 0;
-        int src_len = 0, dst_len = 0;
+        int src_len = 0;
         if (is_version1) {
             src_len = num_bytes - sizeof(_zx_z80_header);
-            dst_len = 48 * 1024;
         }
         else {
             _zx_z80_page_header* phdr = (_zx_z80_page_header*) ptr;
@@ -804,7 +803,6 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
             }
             ptr += sizeof(_zx_z80_page_header);
             src_len = (phdr->len_h<<8 | phdr->len_l) & 0xFFFF;
-            dst_len = 0x4000;
             page_index = phdr->page_nr - 3;
             if ((sys->type == ZX_TYPE_48K) && (page_index == 5)) {
                 page_index = 0;
@@ -821,7 +819,7 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
             dst_ptr = sys->ram[page_index];
         }
         if (0xFFFF == src_len) {
-            // FIXME: uncompressed not supported yet
+            /* FIXME: uncompressed not supported yet */
             return false;
         }
         else {
