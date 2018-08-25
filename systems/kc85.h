@@ -353,7 +353,7 @@ void kc85_reset(kc85_t* sys) {
     sys->cur_scanline = 0;
     sys->scanline_counter = sys->scanline_period;
 
-    /* execution after reset starts at 0xF000 */
+    /* execution after reset starts at 0xE000 */
     z80_set_pc(&sys->cpu, 0xE000);
 }
 
