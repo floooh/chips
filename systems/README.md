@@ -484,7 +484,7 @@ the first frame after bringing the tab back to the front will be clipped to
 several seconds or even minutes of idle time, which would freeze
 the entire application for a while)
 
-The function **cpc_exec()** will now compute the required number of
+The function **cpc_exec()** will now run the emulation for the required number of
 emulator ticks (in the case of a CPC, which is running at 4 MHz, and a 
 60 Hz frame rate, this would result in around 4000000 / 60 = 66667 ticks
 per frame. 
