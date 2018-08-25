@@ -573,7 +573,7 @@ static uint32_t _kc85_fg_pal[16] = {
     0xFFFFFFFF,     /* white #2 */
 };
 
-// background colors
+/* background colors */
 static uint32_t _kc85_bg_pal[8] = {
     0xFF000000,      /* black */
     0xFFA00000,      /* dark-blue */
@@ -779,11 +779,11 @@ static void _kc85_handle_keyboard(kc85_t* sys) {
             else {
                 /* this is the first, long key-repeat */
                 if (mem_rd(&sys->mem, ix+0xA) < _KC85_KBD_LONG_REPEAT_COUNT) {
-                    // wait some more...
+                    /* wait some more... */
                     return;
                 }
                 else {
-                    // first key-repeat pause over, set first-key-repeat flag
+                    /* first key-repeat pause over, set first-key-repeat flag */
                     mem_wr(&sys->mem, ix+0x8, mem_rd(&sys->mem, ix+0x8)|_KC85_KBD_REPEAT);
                 }
             }
