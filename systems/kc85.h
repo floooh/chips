@@ -226,7 +226,7 @@ void kc85_key_up(kc85_t* sys, int key_code);
 /* insert a module (slot addr must be 0x08 or 0x0C) */
 bool kc85_insert_module(kc85_t* sys, uint8_t slot_addr, const kc85_module_t* mod);
 /* remove module in slot */
-void kc85_remove_module(kc85_t* sys, uint8_t slot_addr);
+bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr);
 /* load a .KCC or .TAP snapshot file into the emulator */
 bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
 
@@ -1051,7 +1051,7 @@ bool kc85_insert_module(kc85_t* sys, uint8_t slot_addr, const kc85_module_t* mod
     return true;
 }
 
-bool kc85_free_module(kc85_t* sys, uint8_t slot_addr) {
+bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr) {
     CHIPS_ASSERT(sys && sys->valid);
     kc85_slot_t* slot = _kc85_exp_slot_by_addr(sys, slot_addr);
     if (!slot) {
