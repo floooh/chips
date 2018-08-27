@@ -985,6 +985,10 @@ static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type
     else {
         memset(&sys->exp_buf[slot->buf_offset], 0, slot->mod.size);
     }
+
+    /* update the memory mapping */
+    _kc85_update_memory_map(sys);
+
     return true;
 }
 
@@ -1022,6 +1026,10 @@ bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr) {
     slot->mod.writable = false;
     slot->mod.addr_mask = 0;
     slot->mod.size = 0;
+
+    /* update the memory mapping */
+    _kc85_update_memory_map(sys);
+
     return true;
 }
 
