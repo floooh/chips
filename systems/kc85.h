@@ -133,7 +133,6 @@ typedef struct {
 /* KC85 expansion module types */
 typedef enum {
     KC85_MODULE_NONE,
-    KC85_MODULE_UNKNOWN,
     KC85_MODULE_M006_BASIC,         /* BASIC+CAOS 16K ROM module for the KC85/2 (id=0xFC) */
     KC85_MODULE_M011_64KBYE,        /* 64 KByte RAM expansion (id=0xF6) */
     KC85_MODULE_M012_TEXOR,         /* TEXOR text editing (id=0xFB) */
@@ -142,24 +141,21 @@ typedef enum {
     KC85_MODULE_M027_DEVELOPMENT,   /* Assembler IDE (id=0xFB) */
 } kc85_module_type_t;
 
-/* KC85 expansion module */
+/* KC85 expansion module attributes */
 typedef struct {
-    kc85_module_type_t type;        /* cannot be KC85_MODULE_NONE! */
-    uint8_t id;                     /* only needed for KC85_MODULE_UNKNOWN */
-    bool writable;                  /* only needed for KC85_MODULE_UNKNOWN */
-    uint8_t addr_mask;              /* only needed for KC85_MODULE_UNKNOWN */
-    int size;                       /* only needed for KC85_MODULE_UNKNOWN */
-    const void* rom_image_ptr;      /* must be provided for ROM modules */
-    int rom_image_size;             /* must be provided for ROM moduels */
+    kc85_module_type_t type;
+    uint8_t id;                     /* id of currently inserted module */
+    bool writable;                  /* RAM or ROM module */
+    uint8_t addr_mask;              /* the module's address mask */
+    int size;                       /* the module's byte size */
 } kc85_module_t;
 
 /* KC85 expansion slot */
 typedef struct {
-    uint8_t addr;           /* 0x0C (left slot) or 0x08 (right slot) */
-    uint8_t ctrl;           /* current control byte */
-    uint32_t buf_offset;    /* byte-offset in expansion system data buffer */
-    uint32_t buf_size;      /* byte-size in expansion system data buffer */
-    kc85_module_t mod;      /* currently inserted module (mod.type is KC85_MODULE_NONE if no module inserted) */
+    uint8_t addr;                   /* 0x0C (left slot) or 0x08 (right slot) */
+    uint8_t ctrl;                   /* current control byte */
+    uint32_t buf_offset;            /* byte-offset in expansion system data buffer */
+    kc85_module_t mod;              /* attributes of currently inserted module */
 } kc85_slot_t;
 
 /* KC85 expansion system state:
@@ -223,10 +219,12 @@ void kc85_exec(kc85_t* sys, double seconds);
 void kc85_key_down(kc85_t* sys, int key_code);
 /* send a key-up event */
 void kc85_key_up(kc85_t* sys, int key_code);
-/* insert a module (slot addr must be 0x08 or 0x0C) */
-bool kc85_insert_module(kc85_t* sys, uint8_t slot_addr, const kc85_module_t* mod);
+/* insert a RAM module (slot must be 0x08 or 0x0C) */
+bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type);
+/* insert a ROM module (slot must be 0x08 or 0x0C) */
+bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type, const void* rom_ptr, int rom_size);
 /* remove module in slot */
-bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr);
+bool kc85_remove_module(kc85_t* sys, uint8_t slot);
 /* load a .KCC or .TAP snapshot file into the emulator */
 bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
 
@@ -884,112 +882,19 @@ static kc85_slot_t* _kc85_exp_slot_by_addr(kc85_t* sys, uint8_t slot_addr) {
     return 0;
 }
 
-/* return the implicit module id for known modules, or the provided id */
-static uint8_t _kc85_exp_mod_id(kc85_module_type_t mod_type, uint8_t mod_id) {
-    switch (mod_type) {
-        case KC85_MODULE_UNKNOWN:
-            CHIPS_ASSERT(mod_id != 0);
-            return mod_id;
-        case KC85_MODULE_M006_BASIC:
-            return 0xFC;
-        case KC85_MODULE_M011_64KBYE:
-            return 0xF6;
-        case KC85_MODULE_M012_TEXOR:
-        case KC85_MODULE_M026_FORTH:
-        case KC85_MODULE_M027_DEVELOPMENT:
-            return 0xFB;
-        case KC85_MODULE_M022_16KBYTE:
-            return 0xF4;
-        default:
-            CHIPS_ASSERT(false);
-            return 0;
-    }
-}
-
-/* return the implicit writable attribute for known modules, or the provided attr */
-static bool _kc85_exp_mod_writable(kc85_module_type_t mod_type, bool writable) {
-    switch (mod_type) {
-        case KC85_MODULE_UNKNOWN:
-            return writable;
-        case KC85_MODULE_M011_64KBYE:
-        case KC85_MODULE_M022_16KBYTE:
-            return true;
-        default:
-            return false;
-    }
-}
-
-/* return the implicit address mask for known modules, or the provided mask */
-static uint8_t _kc85_exp_mod_addr_mask(kc85_module_type_t mod_type, uint8_t mask) {
-    switch (mod_type) {
-        case KC85_MODULE_UNKNOWN:
-            return mask;
-        /* mappable at 16 KB interval */
-        case KC85_MODULE_M006_BASIC:
-        case KC85_MODULE_M011_64KBYE:
-        case KC85_MODULE_M022_16KBYTE:
-            return 0xC0;
-        /* mappable at 8 KB interval */
-        case KC85_MODULE_M012_TEXOR:
-        case KC85_MODULE_M026_FORTH:
-        case KC85_MODULE_M027_DEVELOPMENT:
-            return 0xE0;
-        default:
-            CHIPS_ASSERT(false);
-            return 0;
-    }
-}
-
-/* return the implicit module size for known modules, or the provided size */
-static int _kc85_exp_mod_size(kc85_module_type_t mod_type, int mod_size) {
-    switch (mod_type) {
-        case KC85_MODULE_UNKNOWN:
-            CHIPS_ASSERT(mod_size > 0);
-            return mod_size;
-        /* 8 KByte modules */
-        case KC85_MODULE_M012_TEXOR:
-        case KC85_MODULE_M026_FORTH:
-        case KC85_MODULE_M027_DEVELOPMENT:
-            return (8*1024);
-        /* 16 KByte modules */
-        case KC85_MODULE_M006_BASIC:
-        case KC85_MODULE_M022_16KBYTE:
-            return (16*1024);
-        /* 64 KByte modules */
-        case KC85_MODULE_M011_64KBYE:
-            return (64*1024);
-        default:
-            CHIPS_ASSERT(false);
-            return 0;
-    }
-}
-
 /* allocate expansion buffer space for a module to be inserted into a slot
     updates:
         slot->buf_offset
-        slot->buf_size
         sys->exp.buf_top
 */
-static bool _kc85_exp_alloc(kc85_t* sys, kc85_slot_t* slot, const kc85_module_t* mod) {
-    const int mod_size = _kc85_exp_mod_size(mod->type, mod->size);
+static bool _kc85_exp_alloc(kc85_t* sys, kc85_slot_t* slot) {
     /* check if there's enough room */
-    if ((mod_size + sys->exp.buf_top) > KC85_EXP_BUFSIZE) {
+    if ((slot->mod.size + sys->exp.buf_top) > KC85_EXP_BUFSIZE) {
         return false;
     }
-
     /* update offsets and sizes */
     slot->buf_offset = sys->exp.buf_top;
-    slot->buf_size = mod_size;
-    sys->exp.buf_top += mod_size;
-
-    /* if image data is provided, copy it over, otherwise clear the memory buffer */
-    if (mod->rom_image_ptr) {
-        CHIPS_ASSERT(mod_size == mod->rom_image_size);
-        memcpy(&sys->exp_buf[slot->buf_offset], mod->rom_image_ptr, slot->buf_size);
-    }
-    else {
-        memset(&sys->exp_buf[slot->buf_offset], 0, slot->buf_size);
-    }
+    sys->exp.buf_top += slot->mod.size;
     return true;
 }
 
@@ -999,12 +904,10 @@ static bool _kc85_exp_alloc(kc85_t* sys, kc85_slot_t* slot, const kc85_module_t*
         sys->exp_buf (any holes are merged)
         for each slot "behind" the to-be-freed slot:
             slot->buf_offset
-        free_slot->buf_offset = 0
-        free_slot->buf_size = 0
 */
 static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
-    CHIPS_ASSERT(free_slot->buf_size > 0);
-    const uint32_t bytes_to_free = free_slot->buf_size;
+    CHIPS_ASSERT(free_slot->mod.size > 0);
+    const uint32_t bytes_to_free = free_slot->mod.size;
     CHIPS_ASSERT(sys->exp.buf_top >= bytes_to_free);
     sys->exp.buf_top -= bytes_to_free;
     for (int i = 0; i < KC85_NUM_SLOTS; i++) {
@@ -1025,30 +928,76 @@ static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
     }
 }
 
-bool kc85_insert_module(kc85_t* sys, uint8_t slot_addr, const kc85_module_t* mod) {
-    CHIPS_ASSERT(sys && sys->valid && mod && (mod->type != KC85_MODULE_NONE));
-    
-    /* if slot is already occupied, remove current module */
-    kc85_remove_module(sys, slot_addr);
-    
+static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, const void* rom_ptr, int rom_size) {
     kc85_slot_t* slot = _kc85_exp_slot_by_addr(sys, slot_addr);
     if (!slot) {
         return false;
     }
+    slot->mod.type = type;
+    switch (type) {
+        case KC85_MODULE_M006_BASIC:
+            slot->mod.id = 0xFC;
+            slot->mod.writable = false;
+            slot->mod.addr_mask = 0xC0;
+            slot->mod.size = 16*1024;
+            break;
+        case KC85_MODULE_M011_64KBYE:
+            slot->mod.id = 0xF6;
+            slot->mod.writable = true;
+            slot->mod.addr_mask = 0xC0;
+            slot->mod.size = 64*1024;
+            break;
+        case KC85_MODULE_M022_16KBYTE:
+            slot->mod.id = 0xF4;
+            slot->mod.writable = true;
+            slot->mod.addr_mask = 0xC0;
+            slot->mod.size = 16*1024;
+            break;
+        case KC85_MODULE_M012_TEXOR:
+        case KC85_MODULE_M026_FORTH:
+        case KC85_MODULE_M027_DEVELOPMENT:
+            slot->mod.id = 0xFB;
+            slot->mod.writable = false;
+            slot->mod.addr_mask = 0xE0;
+            slot->mod.size = 8*1024;
+            break;
+        default:
+            CHIPS_ASSERT(false);
+            break;
+    }
 
-    /* allocate room in the expansion system buffer */
-    if (!_kc85_exp_alloc(sys, slot, mod)) {
-        /* not enough room in buffer */
+    /* allocate space in expansion buffer */
+    if (!_kc85_exp_alloc(sys, slot)) {
+        /* not enough space left in buffer */
+        slot->mod.type = KC85_MODULE_NONE;
+        slot->mod.id = 0xFF;
+        slot->mod.size = 0;
         return false;
     }
 
-    /* setup module parameters */
-    slot->mod.type = mod->type;
-    slot->mod.id = _kc85_exp_mod_id(mod->type, mod->id);
-    slot->mod.writable = _kc85_exp_mod_writable(mod->type, mod->writable);
-    slot->mod.addr_mask = _kc85_exp_mod_addr_mask(mod->type, mod->addr_mask);
-    slot->mod.size = _kc85_exp_mod_size(mod->type, mod->size);
+    /* copy optional ROM image, or clear RAM */
+    if (rom_ptr) {
+        if (rom_size != slot->mod.size) {
+            return false;
+        }
+        memcpy(&sys->exp_buf[slot->buf_offset], rom_ptr, slot->mod.size);
+    }
+    else {
+        memset(&sys->exp_buf[slot->buf_offset], 0, slot->mod.size);
+    }
     return true;
+}
+
+bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type) {
+    CHIPS_ASSERT(sys && sys->valid && (type != KC85_MODULE_NONE));
+    kc85_remove_module(sys, slot_addr);
+    return _kc85_insert_module(sys, slot_addr, type, 0, 0);
+}
+
+bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, const void* rom_ptr, int rom_size) {
+    CHIPS_ASSERT(sys && sys->valid && (type != KC85_MODULE_NONE));
+    kc85_remove_module(sys, slot_addr);
+    return _kc85_insert_module(sys, slot_addr, type, rom_ptr, rom_size);
 }
 
 bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr) {
@@ -1059,14 +1008,13 @@ bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr) {
     }
     /* slot not occupied? */
     if (slot->mod.type == KC85_MODULE_NONE) {
-        CHIPS_ASSERT(slot->buf_size = 0);
         CHIPS_ASSERT(slot->mod.id == 0xFF);
+        CHIPS_ASSERT(slot->mod.size == 0);
         return false;
     }
 
     /* first free the expansion buffer space */
     _kc85_exp_free(sys, slot);
-    CHIPS_ASSERT((0 == slot->buf_offset) && (0 == slot->buf_size));
 
     /* de-init the module attributes */
     slot->mod.type = KC85_MODULE_NONE;
@@ -1098,7 +1046,7 @@ static void _kc85_exp_update_memory_mapping(kc85_t* sys) {
         const kc85_slot_t* slot = &sys->exp.slot[i];
 
         /* nothing to do if no module in slot */
-        if (0xFF == slot->mod.id) {
+        if (KC85_MODULE_NONE == slot->mod.type) {
             continue;
         }
 
@@ -1117,10 +1065,10 @@ static void _kc85_exp_update_memory_mapping(kc85_t* sys) {
             /* RAM modules are only writable if bit 1 in control-byte is set */
             const bool writable = (slot->ctrl & 0x02) && slot->mod.writable;
             if (writable) {
-                mem_map_ram(&sys->mem, layer, addr, slot->buf_size, host_addr);
+                mem_map_ram(&sys->mem, layer, addr, slot->mod.size, host_addr);
             }
             else {
-                mem_map_rom(&sys->mem, layer, addr, slot->buf_size, host_addr);
+                mem_map_rom(&sys->mem, layer, addr, slot->mod.size, host_addr);
             }
         }
     }
