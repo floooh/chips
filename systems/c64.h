@@ -265,7 +265,7 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     vic_desc.user_data = sys;
     m6569_init(&sys->vic, &vic_desc);
 
-    const float sound_hz = _C64_DEFAULT(desc->audio_sample_rate, 44100);
+    const int sound_hz = _C64_DEFAULT(desc->audio_sample_rate, 44100);
     const float sid_volume = _C64_DEFAULT(desc->audio_sid_volume, 1.0f);
     const float beeper_volume = _C64_DEFAULT(desc->audio_beeper_volume, 0.1f);
     m6581_desc_t sid_desc = {0};
