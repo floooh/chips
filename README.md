@@ -1,7 +1,8 @@
 # chips
 
-A toolbox of chips and helper code to write 8-bit emulators in
-dependency-free C99-headers.
+A toolbox of 8-bit chip-emulators, helper code and complete embeddable 
+system emulators in dependency-free C headers (a subset of C99 that
+compiles on gcc, clang and cl.exe).
 
 Tests and example code is in a separate repo: https://github.com/floooh/chips-test
 
@@ -12,6 +13,7 @@ The YAKC emulator is here:
 - github repo: https://github.com/floooh/yakc
 - asm.js/wasm demo: http://floooh.github.io/virtualkc/
 
+For schematics, manuals and research material, see: https://github.com/floooh/emu-info
 
 ## What's New
 
@@ -19,6 +21,10 @@ The YAKC emulator is here:
 ```user_data``` argument in the callbacks which is provided in the init
 function, this makes the chip emulators a bit more flexible when more than
 one emulator of the same type is used in a program
+
+## System Emulators
+
+TODO!
 
 ## Chip Emulators
 
@@ -33,13 +39,21 @@ The Zilog Z80 CPU.
 - all undocumented instructions supported
 - internal WZ register and undocumented XF and YF flags supported
 - support for interrupt-priority handling (daisy chain) with help from the tick callback
-- runs the ZEXDOC and ZEXALL tests (more to be added)
+- runs the ZEXDOC and ZEXALL tests
+- runs the CPU test of the FUSE ZX Spectrum emulator, with the following exceptions:
+  - the state of the XF/YF undocumented flags is ignored for indirect BIT
+  test instructions, FUSE doesn't agree here with ZEXALL and I think ZEXALL
+  is right (the state of the XF/YF flags depends on the current state of the
+  internal WZ register)
+  - FUSE assumes that the PC after a HALT instruction has been incremented,
+  while the chips Z80 emulator doesn't incrmenent the PC, this shouldn't make
+  any difference though
+- properly handles sequences of DD/FD prefix bytes
 - NOT IMPLEMENTED/TODO:
     - NMI (non-maskable interrupts)
     - interrupt mode 0
     - refresh cycle in second half of opcode fetch machine cycle
     - bus request/acknowledge (BUSRQ/BUSAK pins)
-    - sequences of DD/FD prefix bytes behave differently than a real CPU
 
 ### Z80 PIO (chips/z80pio.h)
 
