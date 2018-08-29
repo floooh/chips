@@ -1138,11 +1138,6 @@ static bool _kc85_is_valid_kcc(const uint8_t* ptr, int num_bytes) {
         return false;
     }
     const _kc85_kcc_header* hdr = (const _kc85_kcc_header*) ptr;
-    for (int i = 0; i < 16; i++) {
-        if (hdr->name[i] >= 128) {
-            return false;
-        }
-    }
     if (hdr->num_addr > 3) {
         return false;
     }
