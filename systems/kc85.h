@@ -33,22 +33,21 @@
     This was the ur-model of the KC85 family designed and manufactured
     by VEB Mikroelekronikkombinat Muehlhausen.
 
-        - 1.75 MHz U880 CPU ("unlicensed" East German Z80 clone)
+        - U880 CPU @ 1.75 MHz (the U880 was an "unlicensed" East German Z80 clone)
         - 1x U855 (clone of the Z80-PIO)
         - 1x U857 (clone of the Z80-CTC)
         - 16 KByte RAM at 0000..3FFF
         - 16 KByte video RAM (IRM) at 8000..BFFF
-        - 2x 2 KByte ROM (E000..E800 and F000..F800)
+        - 4 KByte ROM in 2 sections (E000..E800 and F000..F800)
         - the operating system was called CAOS (Cassette Aided Operatin System)
         - 50 Hz PAL video at 320x256 pixels
-        - Speccy-like color attributes (8x4 pixels)
+        - Speccy-like color attributes (1 color byte per 8x4 pixels)
         - fixed palette of 16 foreground and 8 background colors
-        - simple beeper sound
-        - separate keyboard with serial encoder
-        - powerful expansion module system (2 slots in the base units,
+        - square-wave-beeper sound
+        - separate keyboard with a serial-encoder chip to transfer
+          key strokes to the main unit
+        - flexible expansion module system (2 slots in the base units,
           4 additional slots per 'BUSDRIVER' units)
-
-        NOTE: the 16 KByte video memory block is called 'IRM'
 
     ### Memory Map:
         - 0000..01FF:   OS vars, interrupt vectors, and stack (see below)
@@ -70,7 +69,7 @@
         it needs to share memory accesses with the video system. Also, CPU
         accesses to this RAM block are visible as 'display needling' artefacts.
 
-        Both effects are not currently emulated.
+        Both video memory effects are not currently emulated.
 
     ### Special Operating System Conditions
 
@@ -105,7 +104,7 @@
         - PIO-A:
             - bit 0:    switch ROM at E000..FFFF on/off
             - bit 1:    switch RAM at 0000..3FFF on/off
-            - bit 2:    switch IRM at 8000..BFFF on/off
+            - bit 2:    switch video RAM (IRM) at 8000..BFFF on/off
             - bit 3:    write-protect RAM at 0000 (not implemented)
             - bit 4:    unused
             - bit 5:    switch the front-plate LED on/off
@@ -125,7 +124,7 @@
             
     ## The Module System:
 
-    This emulator can emulates the most common RAM- and ROM-modules,
+    This emulator supports the most common RAM- and ROM-modules,
     but doesn't emulate special-hardware modules like the V24 or 
     A/D converter module.
 
