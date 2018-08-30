@@ -31,7 +31,9 @@
     ## The KC85/2
 
     This was the ur-model of the KC85 family designed and manufactured
-    by VEB Mikroelekronikkombinat Muehlhausen.
+    by VEB Mikroelekronikkombinat Muehlhausen. The KC85/2 was introduced
+    in 1984 as HC-900, and renamed to KC85/2 in 1985 (at the same time
+    when the completely unrelated Z9001 was renamed to KC85/1).
 
         - U880 CPU @ 1.75 MHz (the U880 was an "unlicensed" East German Z80 clone)
         - 1x U855 (clone of the Z80-PIO)
@@ -48,12 +50,16 @@
           key strokes to the main unit
         - flexible expansion module system (2 slots in the base units,
           4 additional slots per 'BUSDRIVER' units)
+        - a famously bizarre video memory layout, consisting of a
+          256x256 chunk on the left, and a separate 64x256 chunk on the right,
+          with vertically 'interleaved' vertical addressing similar to the
+          ZX Spectrum but with different offsets
 
     ### Memory Map:
-        - 0000..01FF:   OS vars, interrupt vectors, and stack (see below)
+        - 0000..01FF:   OS variables, interrupt vectors, and stack
         - 0200..3FFF:   usable RAM
-        - 8000..A7FF:   pixel RAM (1 byte => 8 pixels)
-        - A800..B1FF:   color RAM (1 byte => 8x4 color attribute block)
+        - 8000..A7FF:   pixel video RAM (1 byte => 8 pixels)
+        - A800..B1FF:   color video RAM (1 byte => 8x4 color attribute block)
         - B200..B6FF:   ASCII backing buffer
         - B700..B77F:   cassette tape buffer
         - B780..B8FF:   more OS variables
@@ -105,7 +111,7 @@
             - bit 0:    switch ROM at E000..FFFF on/off
             - bit 1:    switch RAM at 0000..3FFF on/off
             - bit 2:    switch video RAM (IRM) at 8000..BFFF on/off
-            - bit 3:    write-protect RAM at 0000 (not implemented)
+            - bit 3:    write-protect RAM at 0000
             - bit 4:    unused
             - bit 5:    switch the front-plate LED on/off
             - bit 6:    cassette tape player motor control
@@ -164,11 +170,59 @@
 
     The KC85/3 had the same hardware as the KC85/2 but came with a builtin
     8 KByte BASIC ROM at address C000..DFFF, and the OS was bumped to 
-    CAOS 3.1, now taking up a full 8 KBytes.
+    CAOS 3.1, now taking up a full 8 KBytes. Despite being just a minor
+    update to the KC85/2, the KC85/3 was (most likely) the most popular
+    model of the KC85/2 family.
 
     ## The KC85/4
 
-    TODO!
+    The KC85/4 was a major upgrade to the KC85/2 hardware architecture:
+
+    - 64 KByte usable RAM
+    - 64 KByte video RAM split up into 4 16-KByte banks
+    - 20 KByte ROM (8 KByte BASIC, and 8+4 KByte OS)
+    - Improved color attribute resolution (8x1 pixels instead of 8x4)
+    - An additional per-pixel color mode which allowed to assign each
+      individual pixel one of 4 hardwired colors at full 320x256
+      resolution, this was realized by using 1 bit from the 
+      pixel-bank and the other bit from the color-bank, so setting
+      one pixel required 2 memory accesses and a bank switch. Maybe
+      this was the reason why this mode was hardly used (this
+      per-pixel-color mode is currently not implemented in this emulator).
+    - Improved '90-degree-rotated' video memory layout, the 320x256
+      pixel video memory was organized as 40 vertical stacks of 256 bytes,
+      and the entire video memory was linear, this was perfectly suited
+      to the Z80's 8+8 bit register pairs. The upper 8-bit register 
+      (for instance H) would hold the 'x coordinate' (columns 0 to 39),
+      and the lower 8-bit register (L) the y coordinate (lines 0 to 255).
+    - 64 KByte video memory was organized into 4 16-KByte banks, 2 banks
+      for pixels, and 2 banks for colors. One pixel+color bank pair could
+      be displayed while the other could be accessed by the CPU, this enabled
+      true hardware double-buffering (unfortunately everything else was
+      hardwired, so things like hardware-scrolling were not possible).
+
+    The additional memory bank switching options were realized through
+    previously unused bits in the PIO A/B ports, and 2 additional
+    write-only 8-bit latches at port address 84 and 86:
+
+    New bits in PIO port B:
+        - bit 5:    enable the 2 stacked RAM bank at address 8000
+        - bit 6:    write protect RAM bank at address 8000 
+
+    Output port 84:
+        - bit 0:    select  the pixel/color bank pair 0 or 1 for display
+        - bit 1:    select the pixel (0) or color bank (1) for CPU access
+        - bit 2:    select the pixel/color bank pair 0 or 1 for CPU access
+        - bit 3:    active the per-pixel-color-mode
+        - bit 4:    select one of two RAM banks at address 8000
+        - bit 5:    ??? (the docs say "RAM Block Select Bit for RAM8")
+        - bits 6/7: unused
+
+    Output port 86:
+        - bit 0:        enable the 16K RAM bank at address 4000
+        - bit 1:        write-protection for for RAM bank at address 4000
+        - bits 2..6:    unused
+        - bit 7:        enable the 4 KByte CAOS ROM bank at C000
 
     ## TODO:
 
@@ -179,7 +233,6 @@
     - KC85/4 pixel-color mode
     - wait states for video RAM access
     - display needling
-    - the READ-ONLY mapping bits for RAM banks are ignored
     - audio volume is currently not implemented
 
     ## zlib/libpng license
