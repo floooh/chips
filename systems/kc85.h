@@ -30,11 +30,142 @@
 
     ## The KC85/2
 
-    TODO!
+    This was the ur-model of the KC85 family designed and manufactured
+    by VEB Mikroelekronikkombinat Muehlhausen.
+
+        - 1.75 MHz U880 CPU ("unlicensed" East German Z80 clone)
+        - 1x U855 (clone of the Z80-PIO)
+        - 1x U857 (clone of the Z80-CTC)
+        - 16 KByte RAM at 0000..3FFF
+        - 16 KByte video RAM (IRM) at 8000..BFFF
+        - 2x 2 KByte ROM (E000..E800 and F000..F800)
+        - the operating system was called CAOS (Cassette Aided Operatin System)
+        - 50 Hz PAL video at 320x256 pixels
+        - Speccy-like color attributes (8x4 pixels)
+        - fixed palette of 16 foreground and 8 background colors
+        - simple beeper sound
+        - separate keyboard with serial encoder
+        - powerful expansion module system (2 slots in the base units,
+          4 additional slots per 'BUSDRIVER' units)
+
+        NOTE: the 16 KByte video memory block is called 'IRM'
+
+    ### Memory Map:
+        - 0000..01FF:   OS vars, interrupt vectors, and stack (see below)
+        - 0200..3FFF:   usable RAM
+        - 8000..A7FF:   pixel RAM (1 byte => 8 pixels)
+        - A800..B1FF:   color RAM (1 byte => 8x4 color attribute block)
+        - B200..B6FF:   ASCII backing buffer
+        - B700..B77F:   cassette tape buffer
+        - B780..B8FF:   more OS variables
+        - B800..B8FF:   backing buffer for expansion module control bytes
+        - B900..B97F:   buffer for actions assigned to function keys
+        - B980..B9FF:   window attributes buffers
+        - BA00..BBFF:   "additional programs"
+        - BC00..BFFF:   usable 'slow-RAM'
+        - E000..E7FF:   2 KB ROM
+        - F000..F7FF:   2 KB ROM
+
+        The video memory from A000..BFFF has slow CPU access (2.4us) because
+        it needs to share memory accesses with the video system. Also, CPU
+        accesses to this RAM block are visible as 'display needling' artefacts.
+
+        Both effects are not currently emulated.
+
+    ### Special Operating System Conditions
+
+        - the index register IX is reserved for operating system use
+          and must not be changed while interrupts are enabled
+        - only interrupt mode IM2 is supported
+    
+    ### Interrupt Vectors:
+        - 01E4:     PIO-A (cassette tape input)
+        - 01E6:     PIO-B (keyboard input)
+        - 01E8:     CTC-0 (free)
+        - 01EA:     CTC-1 (cassette tape output)
+        - 01EC:     CTC-2 (timer interrupt used for sound length)
+
+    ## IO Port Map: 
+        - 80:   Expansion module control (OUT: write module control byte,
+                IN: read module id in slot). The upper 8 bits on the 
+                address bus identify the module slot (in the base 
+                unit the two slot addresses are 08 and 0C).
+        - 88:   PIO port A, data
+        - 89:   PIO port B, data
+        - 8A:   PIO port A, control
+        - 8B:   PIO port B, control
+        - 8C:   CTC channel 0
+        - 8D:   CTC channel 1
+        - 8E:   CTC channel 2
+        - 8F:   CTC channel 3
+        
+        The PIO port A and B bits are used to control bank switching and
+        other hardware features:
+
+        - PIO-A:
+            - bit 0:    switch ROM at E000..FFFF on/off
+            - bit 1:    switch RAM at 0000..3FFF on/off
+            - bit 2:    switch IRM at 8000..BFFF on/off
+            - bit 3:    write-protect RAM at 0000 (not implemented)
+            - bit 4:    unused
+            - bit 5:    switch the front-plate LED on/off
+            - bit 6:    cassette tape player motor control
+            - bit 7:    expansion ROM at C000 on/off
+        - PIO-B:
+            - bits 0..4:    sound volume (currently not implemented)
+            - bits 5/6:     unused
+            - bit 7:        enable/disable the foreground-color blinking
+
+        The CTC channels are used for sound frequency and other timing tasks:
+
+        - CTC-0:    sound output (left?)
+        - CTC-1:    sound output (right?)
+        - CTC-2:    foreground color blink frequency, timer for cassette input
+        - CTC-3:    timer for keyboard input
+            
+    ## The Module System:
+
+    This emulator can emulates the most common RAM- and ROM-modules,
+    but doesn't emulate special-hardware modules like the V24 or 
+    A/D converter module.
+
+    The module system works with 4 byte values:
+
+    - The **slot address**, the two base unit slots are at address 08 and 0C
+    - The **module id**, this is a fixed value that identifies a module type,
+      most notable, all 16 KByte ROM application modules had the same id,
+      the module id can be queried by reading from port 80, with the
+      slot address in the upper 8 bit of the 16-bit port address (so 
+      to query what module is in slot C, you would do an IN A,(C),
+      with the value 0C80 in BC). If no module is in the slot, the value
+      FF would be written to A, otherwise the module's id byte
+    - The module's **address mask**, this is a byte value that's ANDed
+      against the upper 8 address bytes when mapping the module to memory,
+      this essentially clamps a module's address to a 'round' 8- or
+      16 KByte value (these are the 2 values I've seen in the wild)
+    - The module control byte, this controls whether a module is currently
+      activate (bit 0), write-protected (bit 1), and at what address the 
+      module is mapped into the 16-bit address space (upper 3 bits)
+
+    The module system is controlled with the SWITCH command, for instance
+    the following command would map a ROM module in slot 8 to address
+    C000:
+
+        SWITCH 8 C1
+
+    A RAM module in slot 0C mapped to address 4000:
+
+        SWITCH C 43
+
+    If you want to write-protect the RAM:
+
+        SWITCH C 41
 
     ## The KC85/3
 
-    TODO!
+    The KC85/3 had the same hardware as the KC85/2 but came with a builtin
+    8 KByte BASIC ROM at address C000..DFFF, and the OS was bumped to 
+    CAOS 3.1, now taking up a full 8 KBytes.
 
     ## The KC85/4
 
@@ -511,9 +642,9 @@ static uint64_t _kc85_tick(int num_ticks, uint64_t pins, void* user_data) {
                  0x8A:   PIO Port A, control
                  0x8B:   PIO Port B, control
                  0x8C:   CTC Channel 0
-                 0x8D:   CTC Channel 0
-                 0x8E:   CTC Channel 0
-                 0x8F:   CTC Channel 0
+                 0x8D:   CTC Channel 1
+                 0x8E:   CTC Channel 2
+                 0x8F:   CTC Channel 3
 
                  0x80:   controls the expansion module system, the upper
                          8-bits of the port number address the module slot
