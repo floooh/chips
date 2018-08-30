@@ -895,7 +895,7 @@ static void _kc85_decode_scanline(kc85_t* sys) {
 
 static void _kc85_init_memory_map(kc85_t* sys) {
     mem_init(&sys->mem);
-    sys->pio_a = _KC85_PIO_A_RAM | _KC85_PIO_A_IRM | _KC85_PIO_A_CAOS_ROM;
+    sys->pio_a = _KC85_PIO_A_RAM | _KC85_PIO_A_RAM_RO | _KC85_PIO_A_IRM | _KC85_PIO_A_CAOS_ROM;
     _kc85_update_memory_map(sys);
 }
 
@@ -904,7 +904,12 @@ static void _kc85_update_memory_map(kc85_t* sys) {
 
     /* all models have 16 KB builtin RAM at 0x0000 and 8 KB ROM at 0xE000 */
     if (sys->pio_a & _KC85_PIO_A_RAM) {
-        mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[0]);
+        if (sys->pio_a & _KC85_PIO_A_RAM_RO) {
+            mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[0]);
+        }
+        else {
+            mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->ram[0]);
+        }
     }
     if (sys->pio_a & _KC85_PIO_A_CAOS_ROM) {
         mem_map_rom(&sys->mem, 0, 0xE000, 0x2000, sys->rom_caos_e);
@@ -926,13 +931,23 @@ static void _kc85_update_memory_map(kc85_t* sys) {
     else { /* KC85/4 */
         /* 16 KB RAM at 0x4000 */
         if (sys->io86 & _KC85_IO86_RAM4) {
-            mem_map_ram(&sys->mem, 0, 0x4000, 0x4000, sys->ram[1]);
+            if (sys->io86 & _KC85_IO86_RAM4_RO) {
+                mem_map_ram(&sys->mem, 0, 0x4000, 0x4000, sys->ram[1]);
+            }
+            else {
+                mem_map_rom(&sys->mem, 0, 0x4000, 0x4000, sys->ram[1]);
+            }
         }
         /* 16 KB RAM at 0x8000 (2 banks) */
         if (sys->pio_b & _KC85_PIO_B_RAM8) {
             /* select one of two RAM banks */
             uint8_t* ram8_ptr = (sys->io84 & _KC85_IO84_SEL_RAM8) ? sys->ram[3] : sys->ram[2];
-            mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, ram8_ptr);
+            if (sys->pio_b & _KC85_PIO_B_RAM8_RO) {
+                mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, ram8_ptr);
+            }
+            else {
+                mem_map_rom(&sys->mem, 0, 0x8000, 0x4000, ram8_ptr);
+            }
         }
         /* video memory is 4 banks, 2 for pixels, 2 for colors,
             the area at 0xA800 to 0xBFFF is alwazs mapped to IRM0!
