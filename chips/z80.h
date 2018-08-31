@@ -462,6 +462,7 @@ extern void z80_set_iy(z80_t* cpu, uint16_t v);
 extern void z80_set_im(z80_t* cpu, uint8_t v);
 extern void z80_set_iff1(z80_t* cpu, bool b);
 extern void z80_set_iff2(z80_t* cpu, bool b);
+extern void z80_set_ei_pending(z80_t* cpu, bool b);
 
 extern uint8_t z80_a(z80_t* cpu);
 extern uint8_t z80_f(z80_t* cpu);
@@ -491,6 +492,7 @@ extern uint16_t z80_iy(z80_t* cpu);
 extern uint8_t z80_im(z80_t* cpu);
 extern bool z80_iff1(z80_t* cpu);
 extern bool z80_iff2(z80_t* cpu);
+extern bool z80_ei_pending(z80_t* cpu);
 
 /* helper macro to start interrupt handling in tick callback */
 #define Z80_DAISYCHAIN_BEGIN(pins) if (pins&Z80_M1) { pins|=Z80_IEIO;
