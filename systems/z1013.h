@@ -153,6 +153,8 @@ static uint8_t _z1013_pio_in(int port_id, void* user_data);
 static void _z1013_pio_out(int port_id, uint8_t data, void* user_data);
 static void _z1013_decode_vidmem(z1013_t* sys);
 
+#define _Z1013_CLEAR(val) memset(&val, 0, sizeof(val))
+
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z1013_DISPLAY_SIZE));
@@ -177,11 +179,13 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     }
 
     /* initialize the hardware */
-    z80_desc_t cpu_desc = {0};
+    z80_desc_t cpu_desc;
+    _Z1013_CLEAR(cpu_desc);
     cpu_desc.tick_cb = _z1013_tick;
     cpu_desc.user_data = sys;
     z80_init(&sys->cpu, &cpu_desc);
-    z80pio_desc_t pio_desc = {0};
+    z80pio_desc_t pio_desc;
+    _Z1013_CLEAR(pio_desc);
     pio_desc.in_cb = _z1013_pio_in;
     pio_desc.out_cb = _z1013_pio_out;
     pio_desc.user_data = sys;

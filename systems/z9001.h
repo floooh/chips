@@ -214,6 +214,7 @@ static inline uint32_t _z9001_xorshift32(uint32_t x) {
 }
 
 #define _Z9001_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+#define _Z9001_CLEAR(val) memset(&val, 0, sizeof(val))
 
 void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -252,18 +253,21 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     clk_init(&sys->clk, _Z9001_FREQUENCY);
     z80ctc_init(&sys->ctc);
 
-    z80_desc_t cpu_desc = {0};
+    z80_desc_t cpu_desc;
+    _Z9001_CLEAR(cpu_desc);
     cpu_desc.tick_cb = _z9001_tick;
     cpu_desc.user_data = sys;
     z80_init(&sys->cpu, &cpu_desc);
     
-    z80pio_desc_t pio1_desc = {0};
+    z80pio_desc_t pio1_desc;
+    _Z9001_CLEAR(pio1_desc);
     pio1_desc.in_cb = _z9001_pio1_in;
     pio1_desc.out_cb = _z9001_pio1_out;
     pio1_desc.user_data = sys;
     z80pio_init(&sys->pio1, &pio1_desc);
     
-    z80pio_desc_t pio2_desc = {0};
+    z80pio_desc_t pio2_desc;
+    _Z9001_CLEAR(pio2_desc);
     pio2_desc.in_cb = _z9001_pio2_in;
     pio2_desc.out_cb = _z9001_pio2_out;
     pio2_desc.user_data = sys;

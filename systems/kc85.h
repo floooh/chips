@@ -482,6 +482,7 @@ static inline uint32_t _kc85_xorshift32(uint32_t x) {
 }
 
 #define _KC85_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+#define _KC85_CLEAR(val) memset(&val, 0, sizeof(val))
 
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -528,7 +529,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
 
     /* video- and audio-output */
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _KC85_DISPLAY_SIZE));
-    sys->pixel_buffer = desc->pixel_buffer;
+    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
     sys->patch_cb = desc->patch_cb;
     sys->user_data = desc->user_data;
@@ -540,12 +541,14 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     clk_init(&sys->clk, freq_hz);
     z80ctc_init(&sys->ctc);
 
-    z80_desc_t cpu_desc = {0};
+    z80_desc_t cpu_desc;
+    _KC85_CLEAR(cpu_desc);
     cpu_desc.tick_cb = _kc85_tick;
     cpu_desc.user_data = sys;
     z80_init(&sys->cpu, &cpu_desc);
 
-    z80pio_desc_t pio_desc = {0};
+    z80pio_desc_t pio_desc;
+    _KC85_CLEAR(pio_desc);
     pio_desc.in_cb = _kc85_pio_in;
     pio_desc.out_cb = _kc85_pio_out;
     pio_desc.user_data = sys;

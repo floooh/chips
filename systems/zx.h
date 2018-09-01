@@ -193,6 +193,7 @@ static void _zx_init_keyboard_matrix(zx_t* sys);
 static bool _zx_decode_scanline(zx_t* sys);
 
 #define _ZX_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+#define _ZX_CLEAR(val) memset(&val, 0, sizeof(val))
 
 void zx_init(zx_t* sys, const zx_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -233,7 +234,8 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
     const int cpu_freq = (sys->type == ZX_TYPE_48K) ? _ZX_48K_FREQUENCY : _ZX_128_FREQUENCY;
     clk_init(&sys->clk, cpu_freq);
 
-    z80_desc_t cpu_desc = {0};
+    z80_desc_t cpu_desc;
+    _ZX_CLEAR(cpu_desc);
     cpu_desc.tick_cb = _zx_tick;
     cpu_desc.user_data = sys;
     z80_init(&sys->cpu, &cpu_desc);
@@ -242,7 +244,8 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
     const float beeper_vol = _ZX_DEFAULT(desc->audio_beeper_volume, 0.25f);
     beeper_init(&sys->beeper, cpu_freq, audio_hz, beeper_vol);
     if (ZX_TYPE_128 == sys->type) {
-        ay38910_desc_t ay_desc = {0};
+        ay38910_desc_t ay_desc;
+        _ZX_CLEAR(ay_desc);
         ay_desc.type = AY38910_TYPE_8912;
         ay_desc.tick_hz = cpu_freq / 2;
         ay_desc.sound_hz = audio_hz;

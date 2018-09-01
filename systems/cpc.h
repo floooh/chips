@@ -253,6 +253,7 @@ static void _cpc_update_memory_mapping(cpc_t* sys);
 static void _cpc_casread(cpc_t* sys);
 
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+#define _CPC_CLEAR(val) memset(&val, 0, sizeof(val))
 
 void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -292,18 +293,21 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
     /* initialize the hardware */
     clk_init(&sys->clk, _CPC_FREQUENCY);
 
-    z80_desc_t cpu_desc = {0};
+    z80_desc_t cpu_desc;
+    _CPC_CLEAR(cpu_desc);
     cpu_desc.tick_cb = _cpc_tick;
     cpu_desc.user_data = sys;
     z80_init(&sys->cpu, &cpu_desc);
 
-    i8255_desc_t ppi_desc = {0};
+    i8255_desc_t ppi_desc;
+    _CPC_CLEAR(ppi_desc);
     ppi_desc.in_cb = _cpc_ppi_in;
     ppi_desc.out_cb = _cpc_ppi_out;
     ppi_desc.user_data = sys;
     i8255_init(&sys->ppi, &ppi_desc);
 
-    ay38910_desc_t psg_desc = {0};
+    ay38910_desc_t psg_desc;
+    _CPC_CLEAR(psg_desc);
     psg_desc.type = AY38910_TYPE_8912;
     psg_desc.in_cb = _cpc_psg_in;
     psg_desc.out_cb = _cpc_psg_out;

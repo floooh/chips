@@ -188,7 +188,8 @@ static void _atom_init_keymap(atom_t* sys);
 static void _atom_init_memorymap(atom_t* sys);
 static void _atom_osload(atom_t* sys);
 
-#define _ATOM_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+#define _ATOM_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
+#define _ATOM_CLEAR(val) memset(&val, 0, sizeof(val))
 
 void atom_init(atom_t* sys, const atom_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -212,26 +213,30 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     clk_init(&sys->clk, _ATOM_FREQUENCY);
     sys->period_2_4khz = _ATOM_FREQUENCY / 4800;
 
-    m6502_desc_t cpu_desc = {0};
+    m6502_desc_t cpu_desc;
+    _ATOM_CLEAR(cpu_desc);
     cpu_desc.tick_cb = _atom_tick;
     cpu_desc.user_data = sys;
     m6502_init(&sys->cpu, &cpu_desc);
 
-    mc6847_desc_t vdg_desc = {0};
+    mc6847_desc_t vdg_desc;
+    _ATOM_CLEAR(vdg_desc);
     vdg_desc.tick_hz = _ATOM_FREQUENCY;
-    vdg_desc.rgba8_buffer = desc->pixel_buffer;
+    vdg_desc.rgba8_buffer = (uint32_t*) desc->pixel_buffer;
     vdg_desc.rgba8_buffer_size = desc->pixel_buffer_size;
     vdg_desc.fetch_cb = _atom_vdg_fetch;
     vdg_desc.user_data = sys;
     mc6847_init(&sys->vdg, &vdg_desc);
 
-    i8255_desc_t ppi_desc = {0};
+    i8255_desc_t ppi_desc;
+    _ATOM_CLEAR(ppi_desc);
     ppi_desc.in_cb = _atom_ppi_in;
     ppi_desc.out_cb = _atom_ppi_out;
     ppi_desc.user_data = sys;
     i8255_init(&sys->ppi, &ppi_desc);
 
-    m6522_desc_t via_desc = {0};
+    m6522_desc_t via_desc;
+    _ATOM_CLEAR(via_desc);
     via_desc.in_cb = _atom_via_in;
     via_desc.out_cb = _atom_via_out;
     via_desc.user_data = sys;

@@ -191,7 +191,6 @@ extern void c64_stop_tape(c64_t* sys);
 
 #define _C64_DISPLAY_SIZE (C64_DISPLAY_WIDTH*C64_DISPLAY_HEIGHT*4)
 #define _C64_FREQUENCY (985248)
-#define _C64_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 #define _C64_DISPLAY_X (64)
 #define _C64_DISPLAY_Y (24)
 #define _C64_CPUPORT_CHAREN (1<<2)
@@ -211,6 +210,9 @@ static void _c64_init_key_map(c64_t* sys);
 static void _c64_init_memory_map(c64_t* sys);
 static bool _c64_tape_tick(c64_t* sys);
 
+#define _C64_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+#define _C64_CLEAR(val) memset(&val, 0, sizeof(val))
+
 void c64_init(c64_t* sys, const c64_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _C64_DISPLAY_SIZE));
@@ -225,7 +227,6 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     memcpy(sys->rom_char, desc->rom_char, sizeof(sys->rom_char));
     memcpy(sys->rom_basic, desc->rom_basic, sizeof(sys->rom_basic));
     memcpy(sys->rom_kernal, desc->rom_kernal, sizeof(sys->rom_kernal));
-    sys->pixel_buffer = desc->pixel_buffer;
     sys->user_data = desc->user_data;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _C64_DEFAULT(desc->audio_num_samples, C64_DEFAULT_AUDIO_SAMPLES);
@@ -236,7 +237,8 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     sys->cpu_port = 0xF7;       /* for initial memory mapping */
     sys->io_mapped = true;
     
-    m6502_desc_t cpu_desc = {0};
+    m6502_desc_t cpu_desc;
+    _C64_CLEAR(cpu_desc);
     cpu_desc.tick_cb = _c64_tick;
     cpu_desc.in_cb = _c64_cpu_port_in;
     cpu_desc.out_cb = _c64_cpu_port_out;
@@ -245,7 +247,8 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     cpu_desc.user_data = sys;
     m6502_init(&sys->cpu, &cpu_desc);
 
-    m6526_desc_t cia_desc = {0};
+    m6526_desc_t cia_desc;
+    _C64_CLEAR(cia_desc);
     cia_desc.user_data = sys;
     cia_desc.in_cb = _c64_cia1_in;
     cia_desc.out_cb = _c64_cia1_out;
@@ -254,9 +257,10 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     cia_desc.out_cb = _c64_cia2_out;
     m6526_init(&sys->cia_2, &cia_desc);
 
-    m6569_desc_t vic_desc = {0};
+    m6569_desc_t vic_desc;
+    _C64_CLEAR(vic_desc);
     vic_desc.fetch_cb = _c64_vic_fetch;
-    vic_desc.rgba8_buffer = desc->pixel_buffer;
+    vic_desc.rgba8_buffer = (uint32_t*) desc->pixel_buffer;
     vic_desc.rgba8_buffer_size = desc->pixel_buffer_size;
     vic_desc.vis_x = _C64_DISPLAY_X;
     vic_desc.vis_y = _C64_DISPLAY_Y;
@@ -268,7 +272,8 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     const int sound_hz = _C64_DEFAULT(desc->audio_sample_rate, 44100);
     const float sid_volume = _C64_DEFAULT(desc->audio_sid_volume, 1.0f);
     const float beeper_volume = _C64_DEFAULT(desc->audio_beeper_volume, 0.1f);
-    m6581_desc_t sid_desc = {0};
+    m6581_desc_t sid_desc;
+    _C64_CLEAR(sid_desc);
     sid_desc.tick_hz = _C64_FREQUENCY;
     sid_desc.sound_hz = sound_hz;
     sid_desc.magnitude = sid_volume;
