@@ -72,17 +72,24 @@ extern "C" {
 
 /* C64 joystick types */
 typedef enum {
-    C64_JOYSTICK_NONE,
-    C64_JOYSTICK_DIGITAL,
-    C64_JOYSTICK_PADDLE     /* FIXME: not emulated */
-} c64_joystick_t;
+    C64_JOYSTICKTYPE_NONE,
+    C64_JOYSTICKTYPE_DIGITAL,
+    C64_JOYSTICKTYPE_PADDLE     /* FIXME: not emulated */
+} c64_joystick_type_t;
+
+/* joystick mask bits */
+#define C64_JOYSTICK_DOWN  (1<<1)
+#define C64_JOYSTICK_UP    (1<<0)
+#define C64_JOYSTICK_LEFT  (1<<2)
+#define C64_JOYSTICK_RIGHT (1<<3)
+#define C64_JOYSTICK_BTN   (1<<4)
 
 /* audio sample data callback */
 typedef void (*c64_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
 /* config parameters for c64_init() */
 typedef struct {
-    c64_joystick_t joystick_type;       /* default is C64_JOYSTICK_NONE */
+    c64_joystick_type_t joystick_type;  /* default is C64_JOYSTICK_NONE */
 
     /* video output config */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 392*272*4 bytes */
@@ -118,10 +125,11 @@ typedef struct {
     beeper_t beeper;            /* used for the tape-sound */
     
     bool valid;
-    c64_joystick_t joystick_type;
+    c64_joystick_type_t joystick_type;
     bool io_mapped;             /* true when D000..DFFF is has IO area mapped in */
     uint8_t cpu_port;           /* last state of CPU port (for memory mapping) */
-    uint8_t joy_mask;           /* current joystick state */
+    uint8_t kbd_joymask;        /* current joystick state from keyboard-joystick emulation */
+    uint8_t joy_joymask;        /* current joystick state from c64_joystick() */
     uint16_t vic_bank_select;   /* upper 4 address bits from CIA-2 port A */
 
     clk_t clk;
@@ -163,6 +171,12 @@ extern void c64_exec(c64_t* sys, uint32_t micro_seconds);
 extern void c64_key_down(c64_t* sys, int key_code);
 /* send a key-up event to the C64 */
 extern void c64_key_up(c64_t* sys, int key_code);
+/* enable/disable joystick emulation */
+extern void c64_set_joystick_type(c64_t* sys, c64_joystick_type_t type);
+/* get current joystick emulation type */
+extern c64_joystick_type_t c64_joystick_type(c64_t* sys);
+/* set joystick mask (combination of C64_JOYSTICK_*) */
+extern void c64_joystick(c64_t* sys, uint8_t mask);
 /* insert a tape file */
 extern bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
 /* remove tape file */
@@ -295,7 +309,8 @@ void c64_discard(c64_t* sys) {
 void c64_reset(c64_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->cpu_port = 0xF7;
-    sys->joy_mask = 0;
+    sys->kbd_joymask = 0;
+    sys->joy_joymask = 0;
     sys->io_mapped = true;
     _c64_update_memory_map(sys);
     m6502_reset(&sys->cpu);
@@ -321,13 +336,13 @@ void c64_exec(c64_t* sys, uint32_t micro_seconds) {
 
 void c64_key_down(c64_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (sys->joystick_type == C64_JOYSTICK_DIGITAL) {
+    if (sys->joystick_type == C64_JOYSTICKTYPE_DIGITAL) {
         switch (key_code) {
-            case 0x20: sys->joy_mask |= 1<<4; break;    /* fire */
-            case 0x08: sys->joy_mask |= 1<<2; break;    /* left */
-            case 0x09: sys->joy_mask |= 1<<3; break;    /* right */
-            case 0x0A: sys->joy_mask |= 1<<1; break;    /* down */
-            case 0x0B: sys->joy_mask |= 1<<0; break;    /* up */
+            case 0x20: sys->kbd_joymask |= C64_JOYSTICK_BTN; break;
+            case 0x08: sys->kbd_joymask |= C64_JOYSTICK_LEFT; break;
+            case 0x09: sys->kbd_joymask |= C64_JOYSTICK_RIGHT; break;
+            case 0x0A: sys->kbd_joymask |= C64_JOYSTICK_DOWN; break;
+            case 0x0B: sys->kbd_joymask |= C64_JOYSTICK_UP; break;
             default: kbd_key_down(&sys->kbd, key_code); break;
         }
     }
@@ -338,19 +353,34 @@ void c64_key_down(c64_t* sys, int key_code) {
 
 void c64_key_up(c64_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (sys->joystick_type == C64_JOYSTICK_DIGITAL) {
+    if (sys->joystick_type == C64_JOYSTICKTYPE_DIGITAL) {
         switch (key_code) {
-            case 0x20: sys->joy_mask &= ~(1<<4); break;    /* fire */
-            case 0x08: sys->joy_mask &= ~(1<<2); break;    /* left */
-            case 0x09: sys->joy_mask &= ~(1<<3); break;    /* right */
-            case 0x0A: sys->joy_mask &= ~(1<<1); break;    /* down */
-            case 0x0B: sys->joy_mask &= ~(1<<0); break;    /* up */
+            case 0x20: sys->kbd_joymask &= ~C64_JOYSTICK_BTN; break;
+            case 0x08: sys->kbd_joymask &= ~C64_JOYSTICK_LEFT; break;
+            case 0x09: sys->kbd_joymask &= ~C64_JOYSTICK_RIGHT; break;
+            case 0x0A: sys->kbd_joymask &= ~C64_JOYSTICK_DOWN; break;
+            case 0x0B: sys->kbd_joymask &= ~C64_JOYSTICK_UP; break;
             default: kbd_key_up(&sys->kbd, key_code); break;
         }
     }
     else {
         kbd_key_up(&sys->kbd, key_code);
     }
+}
+
+void c64_set_joystick_type(c64_t* sys, c64_joystick_type_t type) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joystick_type = type;
+}
+
+c64_joystick_type_t c64_joystick_type(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->joystick_type;
+}
+
+void c64_joystick(c64_t* sys, uint8_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joy_joymask = mask;
 }
 
 static uint64_t _c64_tick(uint64_t pins, void* user_data) {
@@ -542,11 +572,11 @@ static uint8_t _c64_cia1_in(int port_id, void* user_data) {
     */
     if (port_id == M6526_PORT_A) {
         /* FIXME: currently use the same input for joystick 2 and joystick 1 */
-        return ~sys->joy_mask;
+        return ~(sys->kbd_joymask | sys->joy_joymask);
     }
     else {
         /* read keyboard matrix columns */
-        return ~(kbd_scan_columns(&sys->kbd) | sys->joy_mask);
+        return ~(kbd_scan_columns(&sys->kbd) | sys->kbd_joymask | sys->joy_joymask);
     }
 }
 

@@ -72,16 +72,23 @@ extern "C" {
 
 /* joystick emulation types */
 typedef enum {
-    ATOM_JOYSTICK_NONE,
-    ATOM_JOYSTICK_MMC
-} atom_joystick_t;
+    ATOM_JOYSTICKTYPE_NONE,
+    ATOM_JOYSTICKTYPE_MMC
+} atom_joystick_type_t;
+
+/* joystick mask bits */
+#define ATOM_JOYSTICK_RIGHT (1<<0)
+#define ATOM_JOYSTICK_LEFT  (1<<1)
+#define ATOM_JOYSTICK_DOWN  (1<<2)
+#define ATOM_JOYSTICK_UP    (1<<3)
+#define ATOM_JOYSTICK_BTN   (1<<4)
 
 /* audio sample data callback */
 typedef void (*atom_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
 /* configuration parameters for atom_init() */
 typedef struct {
-    atom_joystick_t joystick_type;  /* what joystick type to emulate, default is ATOM_JOYSTICK_NONE */
+    atom_joystick_type_t joystick_type;     /* what joystick type to emulate, default is ATOM_JOYSTICK_NONE */
 
     /* video output config */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes */
@@ -118,8 +125,9 @@ typedef struct {
     bool state_2_4khz;
     bool out_cass0;
     bool out_cass1;
-    atom_joystick_t joystick_type;
-    uint8_t mmc_joymask;
+    atom_joystick_type_t joystick_type;
+    uint8_t kbd_joymask;        /* joystick mask from keyboard-joystick-emulation */
+    uint8_t joy_joymask;        /* joystick mask from calls to atom_joystick() */
     uint8_t mmc_cmd;
     uint8_t mmc_latch;
     clk_t clk;
@@ -141,21 +149,27 @@ typedef struct {
 } atom_t;
 
 /* initialize a new Atom instance */
-void atom_init(atom_t* sys, const atom_desc_t* desc);
+extern void atom_init(atom_t* sys, const atom_desc_t* desc);
 /* discard Atom instance */
-void atom_discard(atom_t* sys);
+extern void atom_discard(atom_t* sys);
 /* reset Atom instance */
-void atom_reset(atom_t* sys);
+extern void atom_reset(atom_t* sys);
 /* run Atom instance for a number of microseconds */
-void atom_exec(atom_t* sys, uint32_t micro_seconds);
+extern void atom_exec(atom_t* sys, uint32_t micro_seconds);
 /* send a key down event */
-void atom_key_down(atom_t* sys, int key_code);
+extern void atom_key_down(atom_t* sys, int key_code);
 /* send a key up event */
-void atom_key_up(atom_t* sys, int key_code);
+extern void atom_key_up(atom_t* sys, int key_code);
+/* enable/disable joystick emulation */
+extern void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type);
+/* get current joystick emulation type */
+extern atom_joystick_type_t atom_joystick_type(atom_t* sys);
+/* set joystick mask (combination of ATOM_JOYSTICK_*) */
+extern void atom_joystick(atom_t* sys, uint8_t mask);
 /* insert a tape for loading (must be an Atom TAP file), data will be copied */
-bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes);
+extern bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes);
 /* remove tape */
-void atom_remove_tape(atom_t* sys);
+extern void atom_remove_tape(atom_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -289,16 +303,16 @@ void atom_exec(atom_t* sys, uint32_t micro_seconds) {
 void atom_key_down(atom_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     switch (sys->joystick_type) {
-        case ATOM_JOYSTICK_NONE:
+        case ATOM_JOYSTICKTYPE_NONE:
             kbd_key_down(&sys->kbd, key_code);
             break;
-        case ATOM_JOYSTICK_MMC:
+        case ATOM_JOYSTICKTYPE_MMC:
             switch (key_code) {
-                case 0x20:  sys->mmc_joymask |= (1<<4); break;    /* fire */
-                case 0x08:  sys->mmc_joymask |= (1<<1); break;    /* left */
-                case 0x09:  sys->mmc_joymask |= (1<<0); break;    /* right */
-                case 0x0A:  sys->mmc_joymask |= (1<<2); break;    /* down */
-                case 0x0B:  sys->mmc_joymask |= (1<<3); break;    /* up */
+                case 0x20:  sys->kbd_joymask |= ATOM_JOYSTICK_BTN; break;
+                case 0x08:  sys->kbd_joymask |= ATOM_JOYSTICK_LEFT; break;
+                case 0x09:  sys->kbd_joymask |= ATOM_JOYSTICK_RIGHT; break;
+                case 0x0A:  sys->kbd_joymask |= ATOM_JOYSTICK_DOWN; break;
+                case 0x0B:  sys->kbd_joymask |= ATOM_JOYSTICK_UP; break;
                 default:    kbd_key_down(&sys->kbd, key_code); break;
             }
             break;
@@ -308,20 +322,35 @@ void atom_key_down(atom_t* sys, int key_code) {
 void atom_key_up(atom_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     switch (sys->joystick_type) {
-        case ATOM_JOYSTICK_NONE:
+        case ATOM_JOYSTICKTYPE_NONE:
             kbd_key_up(&sys->kbd, key_code);
             break;
-        case ATOM_JOYSTICK_MMC:
+        case ATOM_JOYSTICKTYPE_MMC:
             switch (key_code) {
-                case 0x20:  sys->mmc_joymask &= ~(1<<4); break;    /* fire */
-                case 0x08:  sys->mmc_joymask &= ~(1<<1); break;    /* left */
-                case 0x09:  sys->mmc_joymask &= ~(1<<0); break;    /* right */
-                case 0x0A:  sys->mmc_joymask &= ~(1<<2); break;    /* down */
-                case 0x0B:  sys->mmc_joymask &= ~(1<<3); break;    /* up */
+                case 0x20:  sys->kbd_joymask &= ~ATOM_JOYSTICK_BTN; break;
+                case 0x08:  sys->kbd_joymask &= ~ATOM_JOYSTICK_LEFT; break;
+                case 0x09:  sys->kbd_joymask &= ~ATOM_JOYSTICK_RIGHT; break;
+                case 0x0A:  sys->kbd_joymask &= ~ATOM_JOYSTICK_DOWN; break;
+                case 0x0B:  sys->kbd_joymask &= ~ATOM_JOYSTICK_UP; break;
                 default:    kbd_key_up(&sys->kbd, key_code); break;
             }
             break;
     }
+}
+
+void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joystick_type = type;
+}
+
+atom_joystick_type_t atom_joystick_type(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->joystick_type;
+}
+
+void atom_joystick(atom_t* sys, uint8_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joy_joymask = mask;
 }
 
 /* CPU tick callback */
@@ -382,7 +411,7 @@ uint64_t _atom_tick(uint64_t pins, void* user_data) {
                 }
                 else if ((addr == 0xB401) && (sys->mmc_cmd == 0xA2)) {
                     /* read MMC joystick */
-                    M6502_SET_DATA(pins, ~sys->mmc_joymask);
+                    M6502_SET_DATA(pins, ~(sys->kbd_joymask | sys->joy_joymask));
                 }
             }
             else {
