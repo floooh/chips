@@ -169,8 +169,8 @@ extern void z9001_init(z9001_t* sys, const z9001_desc_t* desc);
 extern void z9001_discard(z9001_t* sys);
 /* reset Z9001 instance */
 extern void z9001_reset(z9001_t* sys);
-/* run Z9001 instance for a given time in seconds */
-extern void z9001_exec(z9001_t* sys, double seconds);
+/* run Z9001 instance for a given number of microseconds */
+extern void z9001_exec(z9001_t* sys, uint32_t micro_seconds);
 /* send a key-down event */
 extern void z9001_key_down(z9001_t* sys, int key_code);
 /* send a key-up event */
@@ -389,9 +389,9 @@ void z9001_reset(z9001_t* sys) {
     z80_set_pc(&sys->cpu, 0xF000);
 }
 
-void z9001_exec(z9001_t* sys, double seconds) {
+void z9001_exec(z9001_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);

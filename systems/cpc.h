@@ -200,8 +200,8 @@ extern void cpc_init(cpc_t* cpc, cpc_desc_t* desc);
 extern void cpc_discard(cpc_t* cpc);
 /* reset a CPC instance */
 extern void cpc_reset(cpc_t* cpc);
-/* run CPC instance for given amount of seconds */
-extern void cpc_exec(cpc_t* cpc, double seconds);
+/* run CPC instance for given amount of micro_seconds */
+extern void cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
 /* send a key down event */
 extern void cpc_key_down(cpc_t* cpc, int key_code);
 /* send a key up event */
@@ -363,9 +363,9 @@ void cpc_reset(cpc_t* sys) {
     _cpc_update_memory_mapping(sys);
 }
 
-void cpc_exec(cpc_t* sys, double seconds) {
+void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);

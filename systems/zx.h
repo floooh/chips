@@ -157,8 +157,8 @@ extern void zx_init(zx_t* sys, const zx_desc_t* desc);
 extern void zx_discard(zx_t* sys);
 /* reset a ZX Spectrum instance */
 extern void zx_reset(zx_t* sys);
-/* run ZX Spectrum instance for a given time in seconds */
-extern void zx_exec(zx_t* sys, double seconds);
+/* run ZX Spectrum instance for a given number of microseconds */
+extern void zx_exec(zx_t* sys, uint32_t micro_seconds);
 /* send a key-down event */
 extern void zx_key_down(zx_t* sys, int key_code);
 /* send a key-up event */
@@ -286,9 +286,9 @@ void zx_reset(zx_t* sys) {
     z80_set_pc(&sys->cpu, 0x0000);
 }
 
-void zx_exec(zx_t* sys, double seconds) {
+void zx_exec(zx_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);

@@ -396,8 +396,8 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc);
 void kc85_discard(kc85_t* sys);
 /* reset a KC85 instance */
 void kc85_reset(kc85_t* sys);
-/* run KC85 emulation for a given time in seconds */
-void kc85_exec(kc85_t* sys, double seconds);
+/* run KC85 emulation for a given number of microseconds */
+void kc85_exec(kc85_t* sys, uint32_t micro_seconds);
 /* send a key-down event */
 void kc85_key_down(kc85_t* sys, int key_code);
 /* send a key-up event */
@@ -606,9 +606,9 @@ void kc85_reset(kc85_t* sys) {
     z80_set_pc(&sys->cpu, 0xE000);
 }
 
-void kc85_exec(kc85_t* sys, double seconds) {
+void kc85_exec(kc85_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);

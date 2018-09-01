@@ -120,8 +120,8 @@ extern void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
 extern void z1013_discard(z1013_t* sys);
 /* reset Z1013 instance */
 extern void z1013_reset(z1013_t* sys);
-/* run the Z1013 instance for a given time in seconds */
-extern void z1013_exec(z1013_t* sys, double seconds);
+/* run the Z1013 instance for a given number of microseconds */
+extern void z1013_exec(z1013_t* sys, uint32_t micro_seconds);
 /* send a key-down event */
 extern void z1013_key_down(z1013_t* sys, int key_code);
 /* send a key-up event */
@@ -302,9 +302,9 @@ void z1013_reset(z1013_t* sys) {
     z80_set_pc(&sys->cpu, 0xF000);
 }
 
-void z1013_exec(z1013_t* sys, double seconds) {
+void z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);

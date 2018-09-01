@@ -146,8 +146,8 @@ void atom_init(atom_t* sys, const atom_desc_t* desc);
 void atom_discard(atom_t* sys);
 /* reset Atom instance */
 void atom_reset(atom_t* sys);
-/* run Atom instance for a given time in seconds */
-void atom_exec(atom_t* sys, double seconds);
+/* run Atom instance for a number of microseconds */
+void atom_exec(atom_t* sys, uint32_t micro_seconds);
 /* send a key down event */
 void atom_key_down(atom_t* sys, int key_code);
 /* send a key up event */
@@ -274,9 +274,9 @@ void atom_reset(atom_t* sys) {
     sys->out_cass1 = false;
 }
 
-void atom_exec(atom_t* sys, double seconds) {
+void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = m6502_exec(&sys->cpu, ticks_to_run);
     /* check if the trapped OSLoad function was hit to implement tape file loading */
     if (1 == sys->cpu.trap_id) {

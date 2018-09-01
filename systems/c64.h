@@ -157,8 +157,8 @@ extern void c64_init(c64_t* sys, const c64_desc_t* desc);
 extern void c64_discard(c64_t* sys);
 /* reset a C64 instance */
 extern void c64_reset(c64_t* sys);
-/* tick C64 instance for a given time in seconds */
-extern void c64_exec(c64_t* sys, double seconds);
+/* tick C64 instance for a given number of microseconds */
+extern void c64_exec(c64_t* sys, uint32_t micro_seconds);
 /* send a key-down event to the C64 */
 extern void c64_key_down(c64_t* sys, int key_code);
 /* send a key-up event to the C64 */
@@ -311,9 +311,9 @@ void c64_reset(c64_t* sys) {
     sys->tape_tick_count = 0;
 }
 
-void c64_exec(c64_t* sys, double seconds) {
+void c64_exec(c64_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, seconds);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = m6502_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);
