@@ -78,8 +78,8 @@ typedef enum {
 } c64_joystick_type_t;
 
 /* joystick mask bits */
-#define C64_JOYSTICK_DOWN  (1<<1)
 #define C64_JOYSTICK_UP    (1<<0)
+#define C64_JOYSTICK_DOWN  (1<<1)
 #define C64_JOYSTICK_LEFT  (1<<2)
 #define C64_JOYSTICK_RIGHT (1<<3)
 #define C64_JOYSTICK_BTN   (1<<4)
