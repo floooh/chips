@@ -216,6 +216,8 @@ extern void cpc_remove_tape(cpc_t* cpc);
 extern void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
 /* get current display debug visualization enabled/disabled state */
 extern bool cpc_video_debugging_enabled(cpc_t* cpc);
+/* low-level pixel decoding, this is public as support for video debugging callbacks */
+extern void cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -247,7 +249,6 @@ static void _cpc_ga_init(cpc_t* sys);
 static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t pins);
 static void _cpc_ga_int_ack(cpc_t* sys);
 static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins);
-static void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins);
 static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_update_memory_mapping(cpc_t* sys);
 static void _cpc_casread(cpc_t* sys);
@@ -969,7 +970,7 @@ static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
 }
 
 /* gate array pixel decoding for the 3 video modes */
-static void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
+void cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
     /*
         compute the source address from current CRTC ma (memory address)
         and ra (raster address) like this:
@@ -1046,7 +1047,7 @@ static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
         uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * CPC_DISPLAY_WIDTH]);
         if (crtc_pins & MC6845_DE) {
             /* decode visible pixels */
-            _cpc_ga_decode_pixels(sys, dst, crtc_pins);
+            cpc_ga_decode_pixels(sys, dst, crtc_pins);
         }
         else if (crtc_pins & (MC6845_HS|MC6845_VS)) {
             /* during horizontal/vertical sync: blacker than black */
