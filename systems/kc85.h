@@ -268,6 +268,31 @@ extern "C" {
 #define KC85_NUM_SLOTS (2)                  /* 2 expansion slots in main unit, each needs one mem_t layer! */
 #define KC85_EXP_BUFSIZE (KC85_NUM_SLOTS*64*1024) /* expansion system buffer size (64 KB per slot) */
 
+/* IO bits */
+#define KC85_PIO_A_CAOS_ROM        (1<<0)
+#define KC85_PIO_A_RAM             (1<<1)
+#define KC85_PIO_A_IRM             (1<<2)
+#define KC85_PIO_A_RAM_RO          (1<<3)
+#define KC85_PIO_A_UNUSED          (1<<4)
+#define KC85_PIO_A_TAPE_LED        (1<<5)
+#define KC85_PIO_A_TAPE_MOTOR      (1<<6)
+#define KC85_PIO_A_BASIC_ROM       (1<<7)
+#define KC85_PIO_B_VOLUME_MASK     ((1<<5)-1)
+#define KC85_PIO_B_RAM8            (1<<5)  /* KC85/4 only */
+#define KC85_PIO_B_RAM8_RO         (1<<6)  /* KC85/4 only */
+#define KC85_PIO_B_BLINK_ENABLED   (1<<7)
+/* KC85/4 only IO latches */
+#define KC85_IO84_SEL_VIEW_IMG     (1<<0)  /* 0: display img0, 1: display img1 */
+#define KC85_IO84_SEL_CPU_COLOR    (1<<1)  /* 0: access pixels, 1: access colors */
+#define KC85_IO84_SEL_CPU_IMG      (1<<2)  /* 0: access img0, 1: access img1 */
+#define KC85_IO84_HICOLOR          (1<<3)  /* 0: hicolor mode off, 1: hicolor mode on */
+#define KC85_IO84_SEL_RAM8         (1<<4)  /* select RAM8 block 0 or 1 */
+#define KC85_IO84_BLOCKSEL_RAM8    (1<<5)  /* no idea what that does...? */
+#define KC85_IO86_RAM4             (1<<0)
+#define KC85_IO86_RAM4_RO          (1<<1)
+#define KC85_IO86_CAOS_ROM_C       (1<<7)
+
+
 /* KC85 model types */
 typedef enum {
     KC85_TYPE_2,        /* KC85/2 (default) */
@@ -433,30 +458,6 @@ bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
 #define _KC85_4_FREQUENCY (1770000)
 #define _KC85_IRM0_PAGE (4)
 #define _KC85_NUM_SCANLINES (312)
-
-/* IO bits */
-#define _KC85_PIO_A_CAOS_ROM        (1<<0)
-#define _KC85_PIO_A_RAM             (1<<1)
-#define _KC85_PIO_A_IRM             (1<<2)
-#define _KC85_PIO_A_RAM_RO          (1<<3)
-#define _KC85_PIO_A_UNUSED          (1<<4)
-#define _KC85_PIO_A_TAPE_LED        (1<<5)
-#define _KC85_PIO_A_TAPE_MOTOR      (1<<6)
-#define _KC85_PIO_A_BASIC_ROM       (1<<7)
-#define _KC85_PIO_B_VOLUME_MASK     ((1<<5)-1)
-#define _KC85_PIO_B_RAM8            (1<<5)  /* KC85/4 only */
-#define _KC85_PIO_B_RAM8_RO         (1<<6)  /* KC85/4 only */
-#define _KC85_PIO_B_BLINK_ENABLED   (1<<7)
-/* KC85/4 only IO latches */
-#define _KC85_IO84_SEL_VIEW_IMG     (1<<0)  /* 0: display img0, 1: display img1 */
-#define _KC85_IO84_SEL_CPU_COLOR    (1<<1)  /* 0: access pixels, 1: access colors */
-#define _KC85_IO84_SEL_CPU_IMG      (1<<2)  /* 0: access img0, 1: access img1 */
-#define _KC85_IO84_HICOLOR          (1<<3)  /* 0: hicolor mode off, 1: hicolor mode on */
-#define _KC85_IO84_SEL_RAM8         (1<<4)  /* select RAM8 block 0 or 1 */
-#define _KC85_IO84_BLOCKSEL_RAM8    (1<<5)  /* no idea what that does...? */
-#define _KC85_IO86_RAM4             (1<<0)
-#define _KC85_IO86_RAM4_RO          (1<<1)
-#define _KC85_IO86_CAOS_ROM_C       (1<<7)
 
 static uint64_t _kc85_tick(int num, uint64_t pins, void* user_data);
 static uint8_t _kc85_pio_in(int port_id, void* user_data);
@@ -856,7 +857,7 @@ static inline void _kc85_decode_8pixels(uint32_t* ptr, uint8_t pixels, uint8_t c
 
 static void _kc85_decode_scanline(kc85_t* sys) {
     const int y = sys->cur_scanline;
-    const bool blink_bg = sys->blink_flag && (sys->pio_b & _KC85_PIO_B_BLINK_ENABLED);
+    const bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
     const int width = KC85_DISPLAY_WIDTH>>3;
     unsigned int* dst_ptr = &(sys->pixel_buffer[y*KC85_DISPLAY_WIDTH]);
     if (KC85_TYPE_4 == sys->type) {
@@ -898,7 +899,7 @@ static void _kc85_decode_scanline(kc85_t* sys) {
 
 static void _kc85_init_memory_map(kc85_t* sys) {
     mem_init(&sys->mem);
-    sys->pio_a = _KC85_PIO_A_RAM | _KC85_PIO_A_RAM_RO | _KC85_PIO_A_IRM | _KC85_PIO_A_CAOS_ROM;
+    sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
     _kc85_update_memory_map(sys);
 }
 
@@ -906,35 +907,35 @@ static void _kc85_update_memory_map(kc85_t* sys) {
     mem_unmap_layer(&sys->mem, 0);
 
     /* all models have 16 KB builtin RAM at 0x0000 and 8 KB ROM at 0xE000 */
-    if (sys->pio_a & _KC85_PIO_A_RAM) {
-        if (sys->pio_a & _KC85_PIO_A_RAM_RO) {
+    if (sys->pio_a & KC85_PIO_A_RAM) {
+        if (sys->pio_a & KC85_PIO_A_RAM_RO) {
             mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[0]);
         }
         else {
             mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->ram[0]);
         }
     }
-    if (sys->pio_a & _KC85_PIO_A_CAOS_ROM) {
+    if (sys->pio_a & KC85_PIO_A_CAOS_ROM) {
         mem_map_rom(&sys->mem, 0, 0xE000, 0x2000, sys->rom_caos_e);
     }
 
     /* KC85/3 and KC85/4: builtin 8 KB BASIC ROM at 0xC000 */
     if (sys->type != KC85_TYPE_2) {
-        if (sys->pio_a & _KC85_PIO_A_BASIC_ROM) {
+        if (sys->pio_a & KC85_PIO_A_BASIC_ROM) {
             mem_map_rom(&sys->mem, 0, 0xC000, 0x2000, sys->rom_basic);
         }
     }
 
     if (sys->type != KC85_TYPE_4) { /* KC85/2 and /3 */
         /* 16 KB Video RAM at 0x8000 */
-        if (sys->pio_a & _KC85_PIO_A_IRM) {
+        if (sys->pio_a & KC85_PIO_A_IRM) {
             mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[_KC85_IRM0_PAGE]);
         }
     }
     else { /* KC85/4 */
         /* 16 KB RAM at 0x4000 */
-        if (sys->io86 & _KC85_IO86_RAM4) {
-            if (sys->io86 & _KC85_IO86_RAM4_RO) {
+        if (sys->io86 & KC85_IO86_RAM4) {
+            if (sys->io86 & KC85_IO86_RAM4_RO) {
                 mem_map_ram(&sys->mem, 0, 0x4000, 0x4000, sys->ram[1]);
             }
             else {
@@ -942,10 +943,10 @@ static void _kc85_update_memory_map(kc85_t* sys) {
             }
         }
         /* 16 KB RAM at 0x8000 (2 banks) */
-        if (sys->pio_b & _KC85_PIO_B_RAM8) {
+        if (sys->pio_b & KC85_PIO_B_RAM8) {
             /* select one of two RAM banks */
-            uint8_t* ram8_ptr = (sys->io84 & _KC85_IO84_SEL_RAM8) ? sys->ram[3] : sys->ram[2];
-            if (sys->pio_b & _KC85_PIO_B_RAM8_RO) {
+            uint8_t* ram8_ptr = (sys->io84 & KC85_IO84_SEL_RAM8) ? sys->ram[3] : sys->ram[2];
+            if (sys->pio_b & KC85_PIO_B_RAM8_RO) {
                 mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, ram8_ptr);
             }
             else {
@@ -955,7 +956,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
         /* video memory is 4 banks, 2 for pixels, 2 for colors,
             the area at 0xA800 to 0xBFFF is alwazs mapped to IRM0!
         */
-        if (sys->pio_a & _KC85_PIO_A_IRM) {
+        if (sys->pio_a & KC85_PIO_A_IRM) {
             uint32_t irm_index = (sys->io84 & 6)>>1;
             uint8_t* irm_ptr = sys->ram[_KC85_IRM0_PAGE + irm_index];
             /* on the KC85, an access to IRM banks other than the
@@ -970,7 +971,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
             mem_map_ram(&sys->mem, 0, 0xA800, 0x1800, sys->ram[_KC85_IRM0_PAGE] + 0x2800);
        }
        /* 4 KB CAOS-C ROM at 0xC000 (on top of BASIC) */
-       if (sys->io86 & _KC85_IO86_CAOS_ROM_C) {
+       if (sys->io86 & KC85_IO86_CAOS_ROM_C) {
            mem_map_rom(&sys->mem, 0, 0xC000, 0x1000, sys->rom_caos_c);
        }
     }
