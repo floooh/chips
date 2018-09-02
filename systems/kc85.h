@@ -347,6 +347,8 @@ typedef enum {
     KC85_MODULE_M022_16KBYTE,       /* 16 KByte RAM expansion (id=0xF4) */
     KC85_MODULE_M026_FORTH,         /* FORTH IDE (id=0xFB) */
     KC85_MODULE_M027_DEVELOPMENT,   /* Assembler IDE (id=0xFB) */
+
+    KC85_MODULE_NUM,
 } kc85_module_type_t;
 
 /* KC85 expansion module attributes */
@@ -433,6 +435,14 @@ bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type);
 bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type, const void* rom_ptr, int rom_size);
 /* remove module in slot */
 bool kc85_remove_module(kc85_t* sys, uint8_t slot);
+/* lookup slot struct by slot address (0x08 or 0x0C) */
+kc85_slot_t* kc85_slot_by_addr(kc85_t* sys, uint8_t slot_addr);
+/* return true if a slot contains a module */
+bool kc85_slot_occupied(kc85_t* sys, uint8_t slot_addr);
+/* test if module in slot is currently mapped to CPU-visible memory */
+bool kc85_slot_cpu_visible(kc85_t* sys, uint8_t slot_addr);
+/* compute the current CPU address of module in slot (0 if no active module in slot) */
+uint16_t kc85_slot_cpu_addr(kc85_t* sys, uint8_t slot_addr);
 /* load a .KCC or .TAP snapshot file into the emulator */
 bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
 
@@ -1074,7 +1084,8 @@ static void _kc85_exp_reset(kc85_t* sys) {
     /* FIXME? */
 }
 
-static kc85_slot_t* _kc85_exp_slot_by_addr(kc85_t* sys, uint8_t slot_addr) {
+kc85_slot_t* kc85_slot_by_addr(kc85_t* sys, uint8_t slot_addr) {
+    CHIPS_ASSERT(sys && sys->valid);
     for (int i = 0; i < KC85_NUM_SLOTS; i++) {
         kc85_slot_t* slot = &sys->exp.slot[i];
         if (slot_addr == slot->addr) {
@@ -1082,6 +1093,40 @@ static kc85_slot_t* _kc85_exp_slot_by_addr(kc85_t* sys, uint8_t slot_addr) {
         }
     }
     return 0;
+}
+
+bool kc85_slot_occupied(kc85_t* sys, uint8_t slot_addr) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
+    return slot && (slot->mod.type != KC85_MODULE_NONE);
+}
+
+bool kc85_slot_cpu_visible(kc85_t* sys, uint8_t slot_addr) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
+    if (slot) {
+        if (slot->mod.type != KC85_MODULE_NONE) {
+            const uint16_t addr = (slot->ctrl & slot->mod.addr_mask) << 8;
+            const uint8_t* mod_ptr = mem_readptr(&sys->mem, addr);
+            const uint8_t* start_ptr = &sys->exp_buf[slot->buf_offset];
+            const uint8_t* end_ptr = start_ptr + slot->mod.size;
+            if ((mod_ptr >= start_ptr) && (mod_ptr < end_ptr)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+uint16_t kc85_slot_cpu_addr(kc85_t* sys, uint8_t slot_addr) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
+    if (slot) {
+        return (slot->ctrl & slot->mod.addr_mask) << 8;
+    }
+    else {
+        return 0;
+    }
 }
 
 /* allocate expansion buffer space for a module to be inserted into a slot
@@ -1131,7 +1176,7 @@ static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
 }
 
 static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, const void* rom_ptr, int rom_size) {
-    kc85_slot_t* slot = _kc85_exp_slot_by_addr(sys, slot_addr);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     if (!slot) {
         return false;
     }
@@ -1208,7 +1253,7 @@ bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t t
 
 bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr) {
     CHIPS_ASSERT(sys && sys->valid);
-    kc85_slot_t* slot = _kc85_exp_slot_by_addr(sys, slot_addr);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     if (!slot) {
         return false;
     }
@@ -1236,7 +1281,7 @@ bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr) {
 }
 
 static bool _kc85_exp_write_ctrl(kc85_t* sys, uint8_t slot_addr, uint8_t ctrl_byte) {
-    kc85_slot_t* slot = _kc85_exp_slot_by_addr(sys, slot_addr);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     if (slot) {
         slot->ctrl = ctrl_byte;
         return true;
@@ -1247,7 +1292,7 @@ static bool _kc85_exp_write_ctrl(kc85_t* sys, uint8_t slot_addr, uint8_t ctrl_by
 }
 
 static uint8_t _kc85_exp_module_id(kc85_t* sys, uint8_t slot_addr) {
-    const kc85_slot_t* slot = _kc85_exp_slot_by_addr(sys, slot_addr);
+    const kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     return slot ? slot->mod.id : 0xFF;
 }
 
