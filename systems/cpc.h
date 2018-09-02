@@ -89,7 +89,14 @@ typedef enum {
     CPC_JOYSTICK_NONE,
     CPC_JOYSTICK_DIGITAL,
     CPC_JOYSTICK_ANALOG,
-} cpc_joystick_t;
+} cpc_joystick_type_t;
+
+/* joystick mask bits */
+#define CPC_JOYSTICK_UP    (1<<0)
+#define CPC_JOYSTICK_DOWN  (1<<1)
+#define CPC_JOYSTICK_LEFT  (1<<2)
+#define CPC_JOYSTICK_RIGHT (1<<3)
+#define CPC_JOYSTICK_BTN   (1<<4)
 
 /* audio sample data callback */
 typedef void (*cpc_audio_callback_t)(const float* samples, int num_samples, void* user_data);
@@ -100,7 +107,7 @@ typedef void (*cpc_video_debug_callback_t)(uint64_t crtc_pins, void* user_data);
 /* configuration parameters for cpc_init() */
 typedef struct {
     cpc_type_t type;                /* default is the CPC 6128 */
-    cpc_joystick_t joystick_type;
+    cpc_joystick_type_t joystick_type;
 
     /* video output config */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 1024*312*4 bytes */
@@ -164,8 +171,9 @@ typedef struct {
     bool valid;
     bool dbgvis;                    /* debug visualzation enabled? */
     cpc_type_t type;
-    cpc_joystick_t joystick_type;
-    uint8_t joy_mask;
+    cpc_joystick_type_t joystick_type;
+    uint8_t kbd_joymask;
+    uint8_t joy_joymask;
     uint8_t upper_rom_select;
     uint32_t tick_count;
     uint16_t casread_trap;
@@ -206,6 +214,12 @@ extern void cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
 extern void cpc_key_down(cpc_t* cpc, int key_code);
 /* send a key up event */
 extern void cpc_key_up(cpc_t* cpc, int key_code);
+/* enable/disable joystick emulation */
+extern void cpc_set_joystick_type(cpc_t* sys, cpc_joystick_type_t type);
+/* get current joystick emulation type */
+extern cpc_joystick_type_t cpc_joystick_type(cpc_t* sys);
+/* set joystick mask (combination of CPC_JOYSTICK_*) */
+extern void cpc_joystick(cpc_t* sys, uint8_t mask);
 /* load a snapshot file (.sna or .bin) into the emulator */
 extern bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 /* insert a tape file (.tap) */
@@ -356,7 +370,8 @@ void cpc_reset(cpc_t* sys) {
     i8255_reset(&sys->ppi);
     z80_reset(&sys->cpu);
     z80_set_pc(&sys->cpu, 0x0000);
-    sys->joy_mask = 0;
+    sys->kbd_joymask = 0;
+    sys->joy_joymask = 0;
     sys->tick_count = 0;
     sys->upper_rom_select = 0;
     _cpc_ga_init(sys);
@@ -388,11 +403,11 @@ void cpc_key_down(cpc_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->joystick_type == CPC_JOYSTICK_DIGITAL) {
         switch (key_code) {
-            case 0x20: sys->joy_mask |= 1<<4; break;    /* fire */
-            case 0x08: sys->joy_mask |= 1<<2; break;    /* left */
-            case 0x09: sys->joy_mask |= 1<<3; break;    /* right */
-            case 0x0A: sys->joy_mask |= 1<<1; break;    /* down */
-            case 0x0B: sys->joy_mask |= 1<<0; break;    /* up */
+            case 0x20: sys->kbd_joymask |= CPC_JOYSTICK_BTN; break;
+            case 0x08: sys->kbd_joymask |= CPC_JOYSTICK_LEFT; break;
+            case 0x09: sys->kbd_joymask |= CPC_JOYSTICK_RIGHT; break;
+            case 0x0A: sys->kbd_joymask |= CPC_JOYSTICK_DOWN; break;
+            case 0x0B: sys->kbd_joymask |= CPC_JOYSTICK_UP; break;
             default: kbd_key_down(&sys->kbd, key_code); break;
         }
     }
@@ -405,17 +420,32 @@ void cpc_key_up(cpc_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->joystick_type == CPC_JOYSTICK_DIGITAL) {
         switch (key_code) {
-            case 0x20: sys->joy_mask &= ~(1<<4); break; /* fire */
-            case 0x08: sys->joy_mask &= ~(1<<2); break; /* left */
-            case 0x09: sys->joy_mask &= ~(1<<3); break; /* right */
-            case 0x0A: sys->joy_mask &= ~(1<<1); break; /* down */
-            case 0x0B: sys->joy_mask &= ~(1<<0); break; /* up */
+            case 0x20: sys->kbd_joymask &= ~CPC_JOYSTICK_BTN; break;
+            case 0x08: sys->kbd_joymask &= ~CPC_JOYSTICK_LEFT; break;
+            case 0x09: sys->kbd_joymask &= ~CPC_JOYSTICK_RIGHT; break;
+            case 0x0A: sys->kbd_joymask &= ~CPC_JOYSTICK_DOWN; break;
+            case 0x0B: sys->kbd_joymask &= ~CPC_JOYSTICK_UP; break;
             default: kbd_key_up(&sys->kbd, key_code); break;
         }
     }
     else {
         kbd_key_up(&sys->kbd, key_code);
     }
+}
+
+void cpc_set_joystick_type(cpc_t* sys, cpc_joystick_type_t type) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joystick_type = type;
+}
+
+cpc_joystick_type_t cpc_joystick_type(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->joystick_type;
+}
+
+void cpc_joystick(cpc_t* sys, uint8_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joy_joymask = mask;
 }
 
 void cpc_enable_video_debugging(cpc_t* sys, bool enabled) {
@@ -746,7 +776,7 @@ static uint8_t _cpc_psg_in(int port_id, void* user_data) {
                   joystick input will be provided on the keyboard
                   matrix lines
             */
-            data |= sys->joy_mask;
+            data |= (sys->kbd_joymask | sys->joy_joymask);
         }
         return ~data;
     }
