@@ -96,7 +96,8 @@ typedef enum {
 #define CPC_JOYSTICK_DOWN  (1<<1)
 #define CPC_JOYSTICK_LEFT  (1<<2)
 #define CPC_JOYSTICK_RIGHT (1<<3)
-#define CPC_JOYSTICK_BTN   (1<<4)
+#define CPC_JOYSTICK_BTN0  (1<<4)
+#define CPC_JOYSTICK_BTN1  (1<<4)
 
 /* audio sample data callback */
 typedef void (*cpc_audio_callback_t)(const float* samples, int num_samples, void* user_data);
@@ -403,7 +404,7 @@ void cpc_key_down(cpc_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->joystick_type == CPC_JOYSTICK_DIGITAL) {
         switch (key_code) {
-            case 0x20: sys->kbd_joymask |= CPC_JOYSTICK_BTN; break;
+            case 0x20: sys->kbd_joymask |= CPC_JOYSTICK_BTN0; break;
             case 0x08: sys->kbd_joymask |= CPC_JOYSTICK_LEFT; break;
             case 0x09: sys->kbd_joymask |= CPC_JOYSTICK_RIGHT; break;
             case 0x0A: sys->kbd_joymask |= CPC_JOYSTICK_DOWN; break;
@@ -420,7 +421,7 @@ void cpc_key_up(cpc_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->joystick_type == CPC_JOYSTICK_DIGITAL) {
         switch (key_code) {
-            case 0x20: sys->kbd_joymask &= ~CPC_JOYSTICK_BTN; break;
+            case 0x20: sys->kbd_joymask &= ~CPC_JOYSTICK_BTN0; break;
             case 0x08: sys->kbd_joymask &= ~CPC_JOYSTICK_LEFT; break;
             case 0x09: sys->kbd_joymask &= ~CPC_JOYSTICK_RIGHT; break;
             case 0x0A: sys->kbd_joymask &= ~CPC_JOYSTICK_DOWN; break;
