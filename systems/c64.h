@@ -73,8 +73,10 @@ extern "C" {
 /* C64 joystick types */
 typedef enum {
     C64_JOYSTICKTYPE_NONE,
-    C64_JOYSTICKTYPE_DIGITAL,
-    C64_JOYSTICKTYPE_PADDLE     /* FIXME: not emulated */
+    C64_JOYSTICKTYPE_DIGITAL_1,
+    C64_JOYSTICKTYPE_DIGITAL_2,
+    C64_JOYSTICKTYPE_PADDLE_1,  /* FIXME: not emulated */
+    C64_JOYSTICKTYPE_PADDLE_2,  /* FIXME: not emulated */
 } c64_joystick_type_t;
 
 /* joystick mask bits */
@@ -126,10 +128,13 @@ typedef struct {
     
     bool valid;
     c64_joystick_type_t joystick_type;
+    uint8_t joystick_active;
     bool io_mapped;             /* true when D000..DFFF is has IO area mapped in */
     uint8_t cpu_port;           /* last state of CPU port (for memory mapping) */
-    uint8_t kbd_joymask;        /* current joystick state from keyboard-joystick emulation */
-    uint8_t joy_joymask;        /* current joystick state from c64_joystick() */
+    uint8_t kbd_joy1_mask;      /* current joystick-1 state from keyboard-joystick emulation */
+    uint8_t kbd_joy2_mask;      /* current joystick-2 state from keyboard-joystick emulation */
+    uint8_t joy_joy1_mask;      /* current joystick-1 state from c64_joystick() */
+    uint8_t joy_joy2_mask;      /* current joystick-2 state from c64_joystick() */
     uint16_t vic_bank_select;   /* upper 4 address bits from CIA-2 port A */
 
     clk_t clk;
@@ -176,7 +181,7 @@ extern void c64_set_joystick_type(c64_t* sys, c64_joystick_type_t type);
 /* get current joystick emulation type */
 extern c64_joystick_type_t c64_joystick_type(c64_t* sys);
 /* set joystick mask (combination of C64_JOYSTICK_*) */
-extern void c64_joystick(c64_t* sys, uint8_t mask);
+extern void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask);
 /* insert a tape file */
 extern bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
 /* remove tape file */
@@ -185,6 +190,8 @@ extern void c64_remove_tape(c64_t* sys);
 extern void c64_start_tape(c64_t* sys);
 /* stop the tape (unpress the Play button */
 extern void c64_stop_tape(c64_t* sys);
+/* quickload a .bin file (only tested with wlorenz tests) */
+extern bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -309,8 +316,8 @@ void c64_discard(c64_t* sys) {
 void c64_reset(c64_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->cpu_port = 0xF7;
-    sys->kbd_joymask = 0;
-    sys->joy_joymask = 0;
+    sys->kbd_joy1_mask = sys->kbd_joy2_mask = 0;
+    sys->joy_joy1_mask = sys->joy_joy2_mask = 0;
     sys->io_mapped = true;
     _c64_update_memory_map(sys);
     m6502_reset(&sys->cpu);
@@ -336,35 +343,53 @@ void c64_exec(c64_t* sys, uint32_t micro_seconds) {
 
 void c64_key_down(c64_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (sys->joystick_type == C64_JOYSTICKTYPE_DIGITAL) {
-        switch (key_code) {
-            case 0x20: sys->kbd_joymask |= C64_JOYSTICK_BTN; break;
-            case 0x08: sys->kbd_joymask |= C64_JOYSTICK_LEFT; break;
-            case 0x09: sys->kbd_joymask |= C64_JOYSTICK_RIGHT; break;
-            case 0x0A: sys->kbd_joymask |= C64_JOYSTICK_DOWN; break;
-            case 0x0B: sys->kbd_joymask |= C64_JOYSTICK_UP; break;
-            default: kbd_key_down(&sys->kbd, key_code); break;
-        }
+    if (sys->joystick_type == C64_JOYSTICKTYPE_NONE) {
+        kbd_key_down(&sys->kbd, key_code);
     }
     else {
-        kbd_key_down(&sys->kbd, key_code);
+        uint8_t m = 0;
+        switch (key_code) {
+            case 0x20: m = C64_JOYSTICK_BTN; break;
+            case 0x08: m = C64_JOYSTICK_LEFT; break;
+            case 0x09: m = C64_JOYSTICK_RIGHT; break;
+            case 0x0A: m = C64_JOYSTICK_DOWN; break;
+            case 0x0B: m = C64_JOYSTICK_UP; break;
+            default: kbd_key_down(&sys->kbd, key_code); break;
+        }
+        if (m != 0) {
+            if (sys->joystick_type == C64_JOYSTICKTYPE_DIGITAL_1) {
+                sys->kbd_joy1_mask |= m;
+            }
+            else {
+                sys->kbd_joy2_mask |= m;
+            }
+        }
     }
 }
 
 void c64_key_up(c64_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (sys->joystick_type == C64_JOYSTICKTYPE_DIGITAL) {
-        switch (key_code) {
-            case 0x20: sys->kbd_joymask &= ~C64_JOYSTICK_BTN; break;
-            case 0x08: sys->kbd_joymask &= ~C64_JOYSTICK_LEFT; break;
-            case 0x09: sys->kbd_joymask &= ~C64_JOYSTICK_RIGHT; break;
-            case 0x0A: sys->kbd_joymask &= ~C64_JOYSTICK_DOWN; break;
-            case 0x0B: sys->kbd_joymask &= ~C64_JOYSTICK_UP; break;
-            default: kbd_key_up(&sys->kbd, key_code); break;
-        }
+    if (sys->joystick_type == C64_JOYSTICKTYPE_NONE) {
+        kbd_key_up(&sys->kbd, key_code);
     }
     else {
-        kbd_key_up(&sys->kbd, key_code);
+        uint8_t m = 0;
+        switch (key_code) {
+            case 0x20: m = C64_JOYSTICK_BTN; break;
+            case 0x08: m = C64_JOYSTICK_LEFT; break;
+            case 0x09: m = C64_JOYSTICK_RIGHT; break;
+            case 0x0A: m = C64_JOYSTICK_DOWN; break;
+            case 0x0B: m = C64_JOYSTICK_UP; break;
+            default: kbd_key_up(&sys->kbd, key_code); break;
+        }
+        if (m != 0) {
+            if (sys->joystick_type == C64_JOYSTICKTYPE_DIGITAL_1) {
+                sys->kbd_joy1_mask &= ~m;
+            }
+            else {
+                sys->kbd_joy2_mask &= ~m;
+            }
+        }
     }
 }
 
@@ -378,9 +403,10 @@ c64_joystick_type_t c64_joystick_type(c64_t* sys) {
     return sys->joystick_type;
 }
 
-void c64_joystick(c64_t* sys, uint8_t mask) {
+void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask) {
     CHIPS_ASSERT(sys && sys->valid);
-    sys->joy_joymask = mask;
+    sys->joy_joy1_mask = joy1_mask;
+    sys->joy_joy2_mask = joy2_mask;
 }
 
 static uint64_t _c64_tick(uint64_t pins, void* user_data) {
@@ -572,11 +598,11 @@ static uint8_t _c64_cia1_in(int port_id, void* user_data) {
     */
     if (port_id == M6526_PORT_A) {
         /* FIXME: currently use the same input for joystick 2 and joystick 1 */
-        return ~(sys->kbd_joymask | sys->joy_joymask);
+        return ~(sys->kbd_joy2_mask | sys->joy_joy2_mask);
     }
     else {
         /* read keyboard matrix columns */
-        return ~(kbd_scan_columns(&sys->kbd) | sys->kbd_joymask | sys->joy_joymask);
+        return ~(kbd_scan_columns(&sys->kbd) | sys->kbd_joy1_mask | sys->joy_joy1_mask);
     }
 }
 
@@ -860,4 +886,19 @@ static bool _c64_tape_tick(c64_t* sys) {
     return false;
 }
 
+/* FIXME: add proper snapshot file formats */
+bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (num_bytes < 2) {
+        return false;
+    }
+    const uint16_t start_addr = ptr[0]<<8 | ptr[1];
+    ptr += 2;
+    const uint16_t end_addr = start_addr + (num_bytes - 2);
+    uint16_t addr = start_addr;
+    while (addr < end_addr) {
+        mem_wr(&sys->mem_cpu, addr++, *ptr++);
+    }
+    return true;
+}
 #endif /* CHIPS_IMPL */
