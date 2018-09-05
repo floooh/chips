@@ -226,7 +226,6 @@
 
     ## TODO:
 
-    - fix 'slowdown' problem triggered by the SERIOUS.KCC demo
     - optionally proper keyboard emulation (the current implementation
       uses a shortcut to directly write the key code into a memory address)
     - video-decoding is currently per-scanline

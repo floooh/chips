@@ -367,7 +367,6 @@ static inline uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
             }
             /* need to request interrupt? */
             if (chn->int_state & Z80CTC_INT_NEEDED) {
-                pins |= Z80CTC_INT;
                 chn->int_state &= ~Z80CTC_INT_NEEDED;
                 chn->int_state |= Z80CTC_INT_REQUESTED;
             }
@@ -383,6 +382,10 @@ static inline uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
             /* disable interrupts for downstream devices? */
             if (0 != chn->int_state) {
                 pins &= ~Z80CTC_IEIO;
+            }
+            /* set Z80_INT pin state during INT_REQUESTED */
+            if (chn->int_state & Z80CTC_INT_REQUESTED) {
+                pins |= Z80CTC_INT;
             }
         }
     }

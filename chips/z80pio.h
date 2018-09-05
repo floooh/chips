@@ -310,7 +310,6 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
             }
             /* need to request interrupt? */
             if (p->int_state & Z80PIO_INT_NEEDED) {
-                pins |= Z80PIO_INT;
                 p->int_state &= ~Z80PIO_INT_NEEDED;
                 p->int_state |= Z80PIO_INT_REQUESTED;
             }
@@ -326,6 +325,10 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
             /* disable interrupts for downstream devices? */
             if (0 != p->int_state) {
                 pins &= ~Z80PIO_IEIO;
+            }
+            /* set Z80_INT pin state during INT_REQUESTED */
+            if (p->int_state & Z80PIO_INT_REQUESTED) {
+                pins |= Z80PIO_INT;
             }
         }
     }
