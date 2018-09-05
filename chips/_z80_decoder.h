@@ -367,7 +367,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
           case 0x4a:/*ADC HL,BC*/{uint16_t acc=_G_HL();_S_WZ(acc+1);d16=_G_BC();uint32_t r=acc+d16+(_G_F()&Z80_CF);_S_HL(r);uint8_t f=((d16^acc^0x8000)&(d16^r)&0x8000)>>13;f|=((acc^r^d16)>>8)&Z80_HF;f|=(r>>16)&Z80_CF;f|=(r>>8)&(Z80_SF|Z80_YF|Z80_XF);f|=(r&0xFFFF)?0:Z80_ZF;_S_F(f);_T(7);}break;
           case 0x4b:/*LD BC,(nn)*/_IMM16(addr);_MR(addr++,d8);d16=d8;_MR(addr,d8);d16|=d8<<8;_S_BC(d16);_S_WZ(addr);break;
           case 0x4c:/*NEG*/d8=_G_A();_S_A(0);{uint8_t acc=_G_A();uint32_t res=(uint32_t)((int)acc-(int)d8);_S_F(_SUB_FLAGS(acc,d8,res));_S_A(res);}break;
-          case 0x4d:/*RETI*/pins|=Z80_RETI;d16=_G_SP();_MR(d16++,d8);pc=d8;_MR(d16++,d8);pc|=d8<<8;_S_SP(d16);_S_WZ(pc);break;
+          case 0x4d:/*RETI*/pins|=Z80_RETI;d16=_G_SP();_MR(d16++,d8);pc=d8;_MR(d16++,d8);pc|=d8<<8;_S_SP(d16);_S_WZ(pc);if (r2&_BIT_IFF2){r2|=_BIT_IFF1;}else{r2&=~_BIT_IFF1;}break;
           case 0x4e:/*IM 0*/_S_IM(0);break;
           case 0x4f:/*LD R,A*/_T(1);_S_R(_G_A());break;
           case 0x50:/*IN D,(C)*/{addr=_G_BC();_IN(addr++,d8);_S_WZ(addr);uint8_t f=(_G_F()&Z80_CF)|_z80_szp[d8];_S8(ws,_F,f);_S_D(d8);}break;

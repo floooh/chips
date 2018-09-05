@@ -804,23 +804,14 @@ def ret_cc(y):
     return src
 
 #-------------------------------------------------------------------------------
-#   reti()
+#   retin()
 #
-def reti():
+#   NOTE: according to Undocumented Z80 Documented, IFF2 is also 
+#   copied into IFF1 in RETI, not just RETN, and RETI and RETN
+#   are in fact identical!
+#
+def retin():
     # same as RET, but also set the virtual Z80_RETI pin
-    src  = 'pins|=Z80_RETI;'
-    src += 'd16=_G_SP();'
-    src += '_MR(d16++,d8);pc=d8;'
-    src += '_MR(d16++,d8);pc|=d8<<8;'
-    src += '_S_SP(d16);'
-    src += '_S_WZ(pc);'
-    return src
-
-#-------------------------------------------------------------------------------
-#   reti()
-#
-def retn():
-    # same as RET, but also set the virtual Z80_RETI pin and copy IFF2->IFF1
     src  = 'pins|=Z80_RETI;'
     src += 'd16=_G_SP();'
     src += '_MR(d16++,d8);pc=d8;'
@@ -829,7 +820,6 @@ def retn():
     src += '_S_WZ(pc);'
     src += 'if (r2&_BIT_IFF2){r2|=_BIT_IFF1;}else{r2&=~_BIT_IFF1;}'
     return src
-
 
 #-------------------------------------------------------------------------------
 #   rst()
@@ -1385,13 +1375,12 @@ def enc_ed_op(op) :
             o.cmt = 'NEG'
             o.src = neg8()
         if z == 5:
-            # RETN, RETI (only RETI implemented!)
+            # RETN, RETI (both are identical according to Undocumented Z80 Documented)
             if y == 1:
                 o.cmt = 'RETI'
-                o.src = reti()
             else:
                 o.cmt = 'RETN'
-                o.src = retn()
+            o.src = retin()
         if z == 6:
             # IM m
             im_mode = [ 0, 0, 1, 2, 0, 0, 1, 2 ]
