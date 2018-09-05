@@ -239,8 +239,12 @@ def write_footer() :
 #   INT MODE 1: 13 cycles
 #   INT MODE 2: 19 cycles
 #
+#   Updated:
+#       - 05-Sep-2018: don't handle interrupt when _BIT_EI is set, this prevents
+#                      interrupt handling during sequences of EI
+#
 def write_interrupt_handling():
-    l('    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1)) {')
+    l('    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1) && !(r2 & _BIT_EI)) {')
     l('      r2 &= ~(_BIT_IFF1|_BIT_IFF2);')
     l('      if (pins & Z80_HALT) {')
     l('        pins &= ~Z80_HALT;')

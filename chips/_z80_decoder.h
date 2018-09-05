@@ -458,7 +458,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xff:/*RST 0x38*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x38;_S_WZ(pc);break;
       default: break;
     }
-    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1)) {
+    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1) && !(r2 & _BIT_EI)) {
       r2 &= ~(_BIT_IFF1|_BIT_IFF2);
       if (pins & Z80_HALT) {
         pins &= ~Z80_HALT;
