@@ -319,7 +319,7 @@ typedef struct {
     kc85_audio_callback_t audio_cb;     /* called when audio_num_samples are ready */
     int audio_num_samples;              /* default is KC85_AUDIO_NUM_SAMPLES */
     int audio_sample_rate;              /* playback sample rate, default is 44100 */
-    float audio_volume;                 /* audio volume (0.0 .. 1.0), default is 0.5 */
+    float audio_volume;                 /* audio volume (0.0 .. 1.0), default is 0.4 */
     
     /* an optional callback to be invoked after a snapshot file is loaded to apply patches */
     kc85_patch_callback_t patch_cb;
@@ -565,7 +565,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     z80pio_init(&sys->pio, &pio_desc);
 
     const int audio_hz = _KC85_DEFAULT(desc->audio_sample_rate, 44100);
-    const float audio_vol = _KC85_DEFAULT(desc->audio_volume, 0.5f);
+    const float audio_vol = _KC85_DEFAULT(desc->audio_volume, 0.4f);
     beeper_init(&sys->beeper_1, freq_hz, audio_hz, audio_vol);
     beeper_init(&sys->beeper_2, freq_hz, audio_hz, audio_vol);
 
