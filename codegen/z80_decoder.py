@@ -244,7 +244,7 @@ def write_footer() :
 #                      interrupt handling during sequences of EI
 #
 def write_interrupt_handling():
-    l('    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1) && !(r2 & _BIT_EI)) {')
+    l('    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1)) {')
     l('      r2 &= ~(_BIT_IFF1|_BIT_IFF2);')
     l('      if (pins & Z80_HALT) {')
     l('        pins &= ~Z80_HALT;')
@@ -1072,6 +1072,10 @@ def rld():
 #-------------------------------------------------------------------------------
 #   misc ops
 #
+#   NOTE: during EI, interrupts are not accepted (for instance, during
+#   a long sequence of EI, no interrupts will be handled, see 
+#   Undocumented Z80 Documented)
+#
 def halt():
     return 'pins|=Z80_HALT;pc--;'
 
@@ -1079,7 +1083,7 @@ def di():
     return 'r2&=~(_BIT_IFF1|_BIT_IFF2);'
 
 def ei():
-    return 'r2|=_BIT_EI;'
+    return 'r2=(r2&~(_BIT_IFF1|_BIT_IFF2))|_BIT_EI;'
 
 #-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.

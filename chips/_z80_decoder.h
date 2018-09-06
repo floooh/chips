@@ -451,14 +451,14 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xf8:/*RET M*/_T(1);if ((_G_F()&Z80_SF)){uint8_t w,z;d16=_G_SP();_MR(d16++,z);_MR(d16++,w);_S_SP(d16);pc=(w<<8)|z;_S_WZ(pc);}break;
       case 0xf9:/*LD SP,HL*/_T(2);_S_SP(_G_HL());break;
       case 0xfa:/*JP M,nn*/_IMM16(addr);if((_G_F()&Z80_SF)){pc=addr;}break;
-      case 0xfb:/*EI*/r2|=_BIT_EI;break;
+      case 0xfb:/*EI*/r2=(r2&~(_BIT_IFF1|_BIT_IFF2))|_BIT_EI;break;
       case 0xfc:/*CALL M,nn*/_IMM16(addr);if((_G_F()&Z80_SF)){_T(1);uint16_t sp=_G_SP();_MW(--sp,pc>>8);_MW(--sp,pc);_S_SP(sp);pc=addr;}break;
       case 0xfd:/*FD prefix*/map_bits|=_BIT_USE_IY;continue;break;
       case 0xfe:/*CP n*/_IMM8(d8);{uint8_t acc=_G_A();int32_t res=(uint32_t)((int)acc-(int)d8);_S_F(_CP_FLAGS(acc,d8,res));}break;
       case 0xff:/*RST 0x38*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x38;_S_WZ(pc);break;
       default: break;
     }
-    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1) && !(r2 & _BIT_EI)) {
+    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1)) {
       r2 &= ~(_BIT_IFF1|_BIT_IFF2);
       if (pins & Z80_HALT) {
         pins &= ~Z80_HALT;
