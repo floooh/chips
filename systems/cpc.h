@@ -353,7 +353,6 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
         sys->casread_ret  = 0x29E2;
     }
     z80_set_trap(&sys->cpu, 1, sys->casread_trap);
-
     /* execution starts as address 0 */
     z80_set_pc(&sys->cpu, 0x0000);
 }
@@ -383,21 +382,24 @@ void cpc_reset(cpc_t* sys) {
 void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
-    uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
-    clk_ticks_executed(&sys->clk, ticks_executed);
-    kbd_update(&sys->kbd);
-    /* check if casread trap has been hit, and the right ROM is mapped in */
-    if (sys->cpu.trap_id == 1) {
-        if (sys->type == CPC_TYPE_6128) {
-            if (0 == (sys->ga.config & (1<<2))) {
+    uint32_t ticks_executed = 0;
+    while (ticks_executed < ticks_to_run) {
+        ticks_executed += z80_exec(&sys->cpu, ticks_to_run);
+        /* check if casread trap has been hit, and the right ROM is mapped in */
+        if (sys->cpu.trap_id == 1) {
+            if (sys->type == CPC_TYPE_6128) {
+                if (0 == (sys->ga.config & (1<<2))) {
+                    _cpc_casread(sys);
+                }
+            }
+            else {
+                /* no memory mapping on KC Compact, 464 or 664 */
                 _cpc_casread(sys);
             }
         }
-        else {
-            /* no memory mapping on KC Compact, 464 or 664 */
-            _cpc_casread(sys);
-        }
     }
+    clk_ticks_executed(&sys->clk, ticks_executed);
+    kbd_update(&sys->kbd);
 }
 
 void cpc_key_down(cpc_t* sys, int key_code) {
@@ -1274,7 +1276,7 @@ static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     }
     memcpy(sys->ram, ptr, dump_num_bytes);
 
-    z80_reset(&sys->cpu);
+//    z80_reset(&sys->cpu);
     z80_set_f(&sys->cpu, hdr->F); z80_set_a(&sys->cpu,hdr->A);
     z80_set_c(&sys->cpu, hdr->C); z80_set_b(&sys->cpu, hdr->B);
     z80_set_e(&sys->cpu, hdr->E); z80_set_d(&sys->cpu, hdr->D);

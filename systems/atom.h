@@ -291,10 +291,13 @@ void atom_reset(atom_t* sys) {
 void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
-    uint32_t ticks_executed = m6502_exec(&sys->cpu, ticks_to_run);
-    /* check if the trapped OSLoad function was hit to implement tape file loading */
-    if (1 == sys->cpu.trap_id) {
-        _atom_osload(sys);
+    uint32_t ticks_executed = 0;
+    while (ticks_executed < ticks_to_run) {
+        ticks_executed += m6502_exec(&sys->cpu, ticks_to_run);
+        /* check if the trapped OSLoad function was hit to implement tape file loading */
+        if (1 == sys->cpu.trap_id) {
+            _atom_osload(sys);
+        }
     }
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);
