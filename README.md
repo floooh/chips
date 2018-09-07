@@ -24,7 +24,56 @@ one emulator of the same type is used in a program
 
 ## System Emulators
 
-TODO!
+The directory ```systems``` contains a number of header-only 8-bit
+computer emulators which can be embedded into applications that
+provide keyboard input, and render the emulator's generated
+video- and audio-output.
+
+Note that accuracy of the system emulators varies quite a lot,
+and is mainly defined by what games, demos and tests have been
+used for testing and improving the emulation.
+
+The following system emulators are provided:
+
+### KC85/2, /3 and /4
+
+An East German Z80-based computer with 320x256 color graphics, beeper
+sound a powerful expansion slot system and (for its time) innovative
+operating system. The KC85/2 family was designed and built
+by VEB Mikroelektronik Mühlhausen between 1984 and 1989.
+
+### Z9001 (aka KC85/1), KC87
+
+Another East German 8-bitter created by Robotron Dresden.
+This was a more conventional, less innovative design compared 
+to the KC85/2, both in hardware and software. The Z9001 family
+only had 40x20 ASCII pseudo-graphics display with optional
+color support.
+
+### Z1013
+
+This was the most simple and cheapest Z80-based computer built
+in Eastern Germany that still resembled a 'proper' computer which
+could be attached to a TV. It was also the only Eastern German computer
+that was available as assemble-youself-kit for the general public.
+
+### ZX Spectrum 48k and 128
+
+The Sinclair ZX Spectrum is supported as the original 48k model and
+the improved 128 model with a proper sound chip (the AY-3-8912, which was 
+also used in the Amstrad CPC).
+
+### CPC 464, 6128 and KC Compact
+
+FIXME
+
+### C64
+
+FIXME
+
+### Acorn Atom
+
+FIXME
 
 ## Chip Emulators
 
