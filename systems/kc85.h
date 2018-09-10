@@ -308,7 +308,7 @@ typedef void (*kc85_patch_callback_t)(const char* snapshot_name, void* user_data
 typedef struct {
     kc85_type_t type;           /* default is KC85_TYPE_2 */
 
-    /* video output config */
+    /* video output config (if you don't need display decoding, set pixel_buffer to 0) */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
 
@@ -538,7 +538,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     }
 
     /* video- and audio-output */
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _KC85_DISPLAY_SIZE));
+    CHIPS_ASSERT((0 == desc->pixel_buffer) || (desc->pixel_buffer && (desc->pixel_buffer_size >= _KC85_DISPLAY_SIZE)));
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->audio_cb = desc->audio_cb;
     sys->patch_cb = desc->patch_cb;
@@ -865,6 +865,10 @@ static inline void _kc85_decode_8pixels(uint32_t* ptr, uint8_t pixels, uint8_t c
 }
 
 static void _kc85_decode_scanline(kc85_t* sys) {
+    /* early out if no pixel buffer was set */
+    if (!sys->pixel_buffer) {
+        return;
+    }
     const int y = sys->cur_scanline;
     const bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
     const int width = KC85_DISPLAY_WIDTH>>3;
