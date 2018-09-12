@@ -116,9 +116,9 @@ typedef uint16_t (*m6569_fetch_t)(uint16_t addr, void* user_data);
 
 /* setup parameters for m6569_init() function */
 typedef struct {
-    /* pointer to RGBA8 framebuffer for generated image */
+    /* pointer to RGBA8 framebuffer for generated image (optional) */
     uint32_t* rgba8_buffer;
-    /* size of the RGBA framebuffer (must be at least 512x312) */
+    /* size of the RGBA framebuffer (must be at least 512x312, optional) */
     uint32_t rgba8_buffer_size;
     /* visible CRT area blitted to rgba8_buffer (in pixels) */
     uint16_t vis_x, vis_y, vis_w, vis_h;
@@ -215,6 +215,7 @@ typedef struct {
     uint16_t left, right, top, bottom;
     bool main;          /* main border flip-flop */
     bool vert;          /* vertical border flip flop */
+    uint8_t bc_index;   /* border color as palette index (not used, but may be usefil for outside code) */
     uint32_t bc_rgba8;  /* border color as RGBA8, udpated when border color register is updated */
 } _m6569_border_unit_t;
 
@@ -235,6 +236,7 @@ typedef struct {
     uint8_t outp;               /* current output byte (bit 7) */
     uint8_t outp2;              /* current output byte at half frequency (bits 7 and 6) */
     uint16_t c_data;            /* loaded from video matrix line buffer */
+    uint8_t bg_index[4];        /* background color as palette index (not used, but may be useful for outside code) */
     uint32_t bg_rgba8[4];       /* background colors as RGBA8 */
 } _m6569_graphics_unit_t;
 
@@ -389,7 +391,7 @@ static void _m6569_init_crt(_m6569_crt_t* crt, m6569_desc_t* desc) {
 
 void m6569_init(m6569_t* vic, m6569_desc_t* desc) {
     CHIPS_ASSERT(vic && desc);
-    CHIPS_ASSERT(desc->rgba8_buffer_size >= (_M6569_HTOTAL*8*_M6569_VTOTAL*sizeof(uint32_t)));
+    CHIPS_ASSERT((0 == desc->rgba8_buffer) || (desc->rgba8_buffer_size >= (_M6569_HTOTAL*8*_M6569_VTOTAL*sizeof(uint32_t))));
     memset(vic, 0, sizeof(*vic));
     _m6569_init_crt(&vic->crt, desc);
     vic->mem.fetch_cb = desc->fetch_cb;
@@ -668,14 +670,17 @@ uint64_t m6569_iorq(m6569_t* vic, uint64_t pins) {
                     break;
                 case 0x20:
                     /* border color */
+                    vic->brd.bc_index = data & 0xF;
                     vic->brd.bc_rgba8 = _m6569_colors[data & 0xF];
                     break;
                 case 0x21: case 0x22:
                     /* background colors (alpha bits 0 because these count as MCM BG colors) */
+                    vic->gunit.bg_index[r_addr-0x21] = data & 0xF;
                     vic->gunit.bg_rgba8[r_addr-0x21] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
                     break;
                 case 0x23: case 0x24:
                     /* background colors (alpha bits 1 because these count as MCM FG colors) */
+                    vic->gunit.bg_index[r_addr-0x21] = data & 0xF;
                     vic->gunit.bg_rgba8[r_addr-0x21] = _m6569_colors[data & 0xF];
                     break;
                 case 0x25:
@@ -1418,7 +1423,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     }
 
     /*--- decode pixels into framebuffer -------------------------------------*/
-    {
+    if (vic->crt.rgba8_buffer) {
         int x, y, w;
         if (vic->debug_vis) {
             x = vic->rs.h_count;

@@ -93,7 +93,7 @@ typedef void (*c64_audio_callback_t)(const float* samples, int num_samples, void
 typedef struct {
     c64_joystick_type_t joystick_type;  /* default is C64_JOYSTICK_NONE */
 
-    /* video output config */
+    /* video output config (if you don't want video decoding, set these to 0) */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 392*272*4 bytes */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
 
@@ -236,7 +236,7 @@ static bool _c64_tape_tick(c64_t* sys);
 
 void c64_init(c64_t* sys, const c64_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _C64_DISPLAY_SIZE));
+    CHIPS_ASSERT(!desc->pixel_buffer || (desc->pixel_buffer_size >= _C64_DISPLAY_SIZE));
 
     memset(sys, 0, sizeof(c64_t));
     sys->valid = true;
