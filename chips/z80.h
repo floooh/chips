@@ -47,7 +47,7 @@
     void z80_init(z80_t* cpu, z80_desc_t* desc)
     ~~~
         Initializes a new Z80 CPU instance. The z80_desc_t struct
-        provided initialization attributes:
+        provides initialization attributes:
             ~~~C
             typedef struct {
                 z80_tick_t tick_cb; // the CPU tick callback

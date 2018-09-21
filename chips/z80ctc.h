@@ -48,7 +48,7 @@
 
     ## Functions:
     ~~~C
-     void z80ctc_init(z80ctc_t* ctc)
+    void z80ctc_init(z80ctc_t* ctc)
     ~~~
         Initializes a new Z80 CTC instance and puts it into the reset state.
 
@@ -64,7 +64,7 @@
         Takes a pin mask as input, and returns a potentially modified
         pin mask.
 
-        The following input pins are read:
+        The following input pins are read function:
 
         - **M1**:       must be unset
         - **IORQ|CE**:  must both be set
@@ -114,20 +114,6 @@
     ~~~
         extract 8-bit data bus value from 64-bit pin mask (identical with
         Z80_GET_DATA() from the z80.h header)
-
-    ## Pin Definitions
-
-    All pin locations from 0 to 36 are shared with the CPU. Chip-type
-    specific pins start at position 44 This enables efficient bus-sharing
-    with the CPU and other Z80-family chips.
-
-    The Z80 CTC pin layout is as follows:
-
-    - 0..16:    address bus A0..A15 (not connected)
-    - 16..23:   data bus D0..D7
-    - 24..36:   CPU pins (some shared directly with CTC)
-    - 37..39:   'virtual' interrupt system pins
-    - 44..53:   CTC-specific pins
 
     ## zlib/libpng license
 

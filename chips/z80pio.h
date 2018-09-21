@@ -40,8 +40,99 @@
     ## Not Emulated
         - bidirectional mode
 
-    !!! Note FIXME
-        function and usage documentation
+    ## Functions:
+    ~~~C
+    void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc)
+    ~~~
+        Initialize a new Z80 PIO instance and enter the reset state. You need
+        to provide an input- and output-callback in the desc structure:
+
+        ~~~C
+        typedef struct {
+            z80pio_in_t in_cb;      // port-input callback
+            z80pio_out_t out_cb;    // port-output callback
+            void* user_data;        // user-data handed to callbacks
+        } z80pio_desc_t;
+        ~~~
+
+        The callbacks are used to read and write the state of the 
+        port A and B pins:
+
+        ~~~C
+        uint8_t in_cb(int port_id, void* user_data) {
+            // port_id is either Z80PIO_PORT_A (0), or Z80PIO_PORT_B (1)
+            uint8_t port_data = ...;
+            return port_data;
+        }
+
+        void out_cb(int port_id, uint8_t port_data, void* user_data) {
+            // port_id is either Z80PIO_PORT_A (0), or Z80PIO_PORT_B (1)
+            ...
+        }
+        ~~~
+        <br>
+
+    ~~~C
+    void z80pio_reset(z80pio_t* pio)
+    ~~~
+        Reset the Z80 PIO instance. 
+
+        The reset state performs the following functions:
+        1. Both port mask registers are reset to inhibit all port data bits.
+        2. Port data bus lines are set to a high impedance state and the Ready
+           "handshake" signals are inactive (low) Mode 1 is automatically selected.
+        3. The vector address registers are NOT reset.
+        4. Both port interrupt enable flip flops are reset
+        5. Both port output registers are reset.
+
+    ~~~C
+    uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins)
+    ~~~~
+        Performs an IO request on the PIO. Call this from the CPU
+        tick callback when the CPU executes an IO machine cycle
+        on a port address assigned to the PIO. This takes the
+        state of PIO pins as input (control pins and data bus), and 
+        returns a pin mask with new data-bus state.
+
+        The following input pins are read by the function:
+
+        - **M1**:       must be unset (otherwise this would be an interrupt request cycle)
+        - **IORQ|CE**:  must be set ('chip-enable')
+        - **RD**:       set for read/input operations
+        - **WR**:       set for write/output operations
+        - **CDSEL**:    set to read/write control byte, unset to read/write data byte
+        - **BASEL**:    set to select port B, unset to select port A
+        - **D0..D7**:   control- or data-byte to write into PIO
+
+        The following output pins may be modified by the function:
+
+        - **D0..D7**:   control- or data-byte read from PIO
+
+    ~~~C
+    void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data)
+    ~~~
+        Actively write a byte to PIO port A or B. This may trigger an interrupt.
+
+    ~~~C
+    uint64_t z80pio_int(z80pio_t* pio, uint64_t pins)
+    ~~~
+        Handle the daisy-chain interrupt protocol. See the z80.h header
+        for details.
+
+    ## Macros
+
+    ~~~C
+    Z80PIO_SET_DATA(p,d)
+    ~~~
+        set 8-bit data bus pins in 64-bit pin mask (identical with
+        Z80_SET_DATA() from the z80.h header)
+
+    ~~~C
+    Z80PIO_GET_DATA(p)
+    ~~~
+        extract 8-bit data bus value from 64-bit pin mask (identical with
+        Z80_GET_DATA() from the z80.h header)
+
 
     ## zlib/libpng license
 
@@ -216,57 +307,14 @@ typedef struct {
 /* merge 8-bit data bus value into 64-bit pins */
 #define Z80PIO_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
-/*
-    z80pio_init
-
-    Call this once to initialize a new Z80 PIO instance, this will
-    clear the z80pio structure and go into reset state:
-
-    pio     -- pointer to a z80pio_t instance
-    desc    -- pointer to a z80pio_desc_t structure
-
-*/
+/* initialize a new Z80 PIO instance */
 extern void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc);
-
-/*
-    z80pio_reset
-
-    The Z80-PIO automatically enters a reset state when power is applied.
-    The reset state performs the following functions:
-    1) Both port mask registers are reset to inhibit all port data bits.
-    2) Port data bus lines are set to a high impedance state and the
-       Ready "handshake" signals are inactive (low) Mode 1 is automatically
-       selected.
-    3) The vector address registers are NOT reset.
-    4) Both port interrupt enable flip flops are reset
-    5) Both port output registers are reset.
-*/
+/* reset a Z80 PIO instance */
 extern void z80pio_reset(z80pio_t* pio);
-
-/*
-    z80pio_iorq
-
-    IORQ machine cycle function, before calling this function the pins argument
-    must be prepared with the functions the PIO should control. Usually
-    the PIO control pins Z80PIO_BASEL and Z80PIO_CDSEL are connected
-    to two address bus pins, forming 4 consecutive port addresses
-    for PIO data/control operations on port A or B:
-
-    ... get shared pins from CPU (ADDR, DATA, IORQ, RD, M1, INT)
-    uint64_t pio_pins = cpu_pins & Z80_PIN_MASK
-    ... if the PIO needs to perform a task, set the chip-enable pin:
-    pio_pins |= Z80PIO_CE
-    ... select the control/data operation:
-    if (control) pio_pins |= Z80PIO_CDSEL; (else: data operation)
-    ... select port A or B
-    if (port_b) pio_pins |= Z80PIO_BASEL; (else: port A)
-    ... tick the PIO, and merge any results back into CPU pins
-    cpu_pins = z80pio_tick(&pio, pio_pins) & Z80_PIN_MASK;
-*/
+/* perform an IO request */
 extern uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins);
-
 /* write value to a PIO port, this may trigger an interrupt */
-void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data);
+extern void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data);
 /* call this once per machine cycle to handle the interrupt daisy chain */
 static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
     for (int i = 0; i < Z80PIO_NUM_PORTS; i++) {
