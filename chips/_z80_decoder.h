@@ -15,6 +15,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   uint16_t addr, d16;
   uint16_t pc = _G_PC();
   do {
+    uint64_t pre_pins = pins;
     _FETCH(op)
     if (op == 0xED) {
       map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
@@ -458,48 +459,63 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       case 0xff:/*RST 0x38*/_T(1);d16= _G_SP();_MW(--d16, pc>>8);_MW(--d16, pc);_S_SP(d16);pc=0x38;_S_WZ(pc);break;
       default: break;
     }
-    if (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1)) {
-      r2 &= ~(_BIT_IFF1|_BIT_IFF2);
+    bool nmi = 0 != ((pins & (pre_pins ^ pins)) & Z80_NMI);
+    if (nmi || (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1))) {
+      r2 &= ~_BIT_IFF1;
+      if (pins & Z80_INT) {
+        r2 &= ~_BIT_IFF2;
+      }
       if (pins & Z80_HALT) {
         pins &= ~Z80_HALT;
         pc++;
       }
       _SA(pc);
-      _TWM(4,Z80_M1|Z80_IORQ);
-      const uint8_t int_vec = _GD();
-      _BUMPR();
-      _T(2);
-      switch (_G_IM()) {
-        case 0:
-          break;
-        case 1:
-          {
-            uint16_t sp = _G_SP();
-            _MW(--sp,pc>>8);
-            _MW(--sp,pc);
-            _S_SP(sp);
-            pc = 0x0038;
-            _S_WZ(pc);
-          }
-          break;
-        case 2:
-          {
-            uint16_t sp = _G_SP();
-            _MW(--sp,pc>>8);
-            _MW(--sp,pc);
-            _S_SP(sp);
-            addr = (_G_I()<<8) | (int_vec & 0xFE);
-            uint8_t z,w;
-            _MR(addr++,z);
-            _MR(addr,w);
-            pc = (w<<8)|z;
-            _S_WZ(pc);
-          }
-          break;
+      if (nmi) {
+        _TWM(5,Z80_M1|Z80_MREQ|Z80_RD);_BUMPR();
+        uint16_t sp = _G_SP();
+        _MW(--sp,pc>>8);
+        _MW(--sp,pc);
+        _S_SP(sp);
+        pc = 0x0066;
+        _S_WZ(pc);
       }
+      else {
+        _TWM(4,Z80_M1|Z80_IORQ);
+        const uint8_t int_vec = _GD();
+        _BUMPR();
+        _T(2);
+        switch (_G_IM()) {
+          case 0:
+            break;
+          case 1:
+            {
+              uint16_t sp = _G_SP();
+              _MW(--sp,pc>>8);
+              _MW(--sp,pc);
+              _S_SP(sp);
+              pc = 0x0038;
+              _S_WZ(pc);
+            }
+            break;
+          case 2:
+            {
+              uint16_t sp = _G_SP();
+              _MW(--sp,pc>>8);
+              _MW(--sp,pc);
+              _S_SP(sp);
+              addr = (_G_I()<<8) | (int_vec & 0xFE);
+              uint8_t z,w;
+              _MR(addr++,z);
+              _MR(addr,w);
+              pc = (w<<8)|z;
+              _S_WZ(pc);
+            }
+            break;
+        }
+       }
     }
     map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
-    pins&=~Z80_INT;
+    pins&=~(Z80_INT|Z80_NMI);
     /* delay-enable interrupt flags */
     if (r2 & _BIT_EI) {
       r2 &= ~_BIT_EI;

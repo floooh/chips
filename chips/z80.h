@@ -36,7 +36,6 @@
 
     ## Not Emulated
     - refresh cycles (RFSH pin)
-    - non-maskable interrupts (NMI pin)
     - interrupt mode 0
     - bus request/acknowledge (BUSRQ and BUSAK pins)
     - the RESET pin is currently not tested, call the z80_reset() 
@@ -354,7 +353,7 @@ typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins, void* user_data);
 /* CPU control pins */
 #define  Z80_HALT  (1ULL<<29)       /* halt state */
 #define  Z80_INT   (1ULL<<30)       /* interrupt request */
-#define  Z80_RESET (1ULL<<31)       /* reset */
+#define  Z80_NMI   (1ULL<<31)       /* non-maskable interrupt */
 #define  Z80_BUSREQ (1ULL<<32)      /* bus request */
 #define  Z80_BUSACK (1ULL<<33)      /* bus acknowledge */
 
