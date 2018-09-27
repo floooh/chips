@@ -261,7 +261,11 @@ First some more subsystem initialization:
 
 ```cpp
 void app_init(void) {
-    gfx_init(CPC_DISPLAY_WIDTH, CPC_DISPLAY_HEIGHT, 1, 2);
+    gfx_init(&(gfx_desc_t) {
+        .fb_width = CPC_DISPLAY_WIDTH,
+        .fb_height = CPC_DISPLAY_HEIGHT,
+        .aspect_y = 2
+    });
     clock_init();
     saudio_setup(&(saudio_desc){0});
     fs_init();
