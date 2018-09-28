@@ -99,7 +99,7 @@ The Zilog Z80 CPU.
   any difference though
 - properly handles sequences of DD/FD prefix bytes
 - NOT IMPLEMENTED/TODO:
-    - NMI (non-maskable interrupts)
+    - ~~NMI (non-maskable interrupts)~~
     - interrupt mode 0
     - refresh cycle in second half of opcode fetch machine cycle
     - bus request/acknowledge (BUSRQ/BUSAK pins)
