@@ -14,8 +14,8 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   uint8_t op, d8;
   uint16_t addr, d16;
   uint16_t pc = _G_PC();
+  uint64_t pre_pins = pins;
   do {
-    uint64_t pre_pins = pins;
     _FETCH(op)
     if (op == 0xED) {
       map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
@@ -531,6 +531,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
         ta >>= 16;
       }
     }
+    pre_pins = pins;
   } while ((ticks < num_ticks) && (trap_id < 0));
   _S_PC(pc);
   r0 = _z80_flush_r0(ws, r0, r2);
