@@ -177,7 +177,7 @@ def write_op_post():
 #
 def write_footer() :
     l('    map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
-    l('    pins&=~(Z80_INT|Z80_NMI);')
+    l('    pins&=~Z80_INT;')
     l('    /* delay-enable interrupt flags */')
     l('    if (r2 & _BIT_EI) {')
     l('      r2 &= ~_BIT_EI;')

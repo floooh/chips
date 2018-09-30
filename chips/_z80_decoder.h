@@ -515,7 +515,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
        }
     }
     map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
-    pins&=~(Z80_INT|Z80_NMI);
+    pins&=~Z80_INT;
     /* delay-enable interrupt flags */
     if (r2 & _BIT_EI) {
       r2 &= ~_BIT_EI;
