@@ -1,6 +1,6 @@
 #pragma once
 /*#
-    # nec765.h
+    # upd765.h
 
     NEC uPD765 floppy disc controller.
 
@@ -44,39 +44,39 @@ extern "C" {
 #endif
 
 /* data bus pins (in/out) */
-#define NEC765_D0   (1ULL<<16)
-#define NEC765_D1   (1ULL<<17)
-#define NEC765_D2   (1ULL<<18)
-#define NEC765_D3   (1ULL<<19)
-#define NEC765_D4   (1ULL<<20)
-#define NEC765_D5   (1ULL<<21)
-#define NEC765_D6   (1ULL<<22)
-#define NEC765_D7   (1ULL<<23)
+#define UPD765_D0   (1ULL<<16)
+#define UPD765_D1   (1ULL<<17)
+#define UPD765_D2   (1ULL<<18)
+#define UPD765_D3   (1ULL<<19)
+#define UPD765_D4   (1ULL<<20)
+#define UPD765_D5   (1ULL<<21)
+#define UPD765_D6   (1ULL<<22)
+#define UPD765_D7   (1ULL<<23)
 
 /* control pins shared with CPU */
-#define NEC765_RD   (1ULL<<27)  /* in: read data from controller */
-#define NEC765_WR   (1ULL<<28)  /* in: write data to controller */
+#define UPD765_RD   (1ULL<<27)  /* in: read data from controller */
+#define UPD765_WR   (1ULL<<28)  /* in: write data to controller */
 
 /* control pins */
-#define NEC765_CS   (1ULL<<40)  /* in: chip select */
-#define NEC765_A0   (1ULL<<41)  /* in: data/status register select */
-#define NEC765_DACK (1ULL<<42)  /* FIXME */
-#define NEC765_TC   (1ULL<<43)  /* FIXME */
+#define UPD765_CS   (1ULL<<40)  /* in: chip select */
+#define UPD765_A0   (1ULL<<41)  /* in: data/status register select */
+#define UPD765_DACK (1ULL<<42)  /* FIXME */
+#define UPD765_TC   (1ULL<<43)  /* FIXME */
 
 /* extract 8-bit data bus from 64-bit pins */
-#define NEC765_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define UPD765_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define NEC765_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+#define UPD765_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
 /* main status register bits */
-#define NEC765_STATUS_D0B   (1<<0)      /* FDD 0 busy */
-#define NEC765_STATUS_D1B   (1<<1)      /* FDD 1 busy */
-#define NEC765_STATUS_D2B   (1<<2)      /* FDD 2 busy */
-#define NEC765_STATUS_D3B   (1<<3)      /* FDD 3 busy */
-#define NEC765_STATUS_CB    (1<<4)      /* FDC busy */
-#define NEC765_STATUS_EXM   (1<<5)      /* execution mode */
-#define NEC765_STATUS_DIO   (1<<6)      /* direction of data transfer */
-#define NEC765_STATUS_RQM   (1<<7)      /* request for master */
+#define UPD765_STATUS_D0B   (1<<0)      /* FDD 0 busy */
+#define UPD765_STATUS_D1B   (1<<1)      /* FDD 1 busy */
+#define UPD765_STATUS_D2B   (1<<2)      /* FDD 2 busy */
+#define UPD765_STATUS_D3B   (1<<3)      /* FDD 3 busy */
+#define UPD765_STATUS_CB    (1<<4)      /* FDC busy */
+#define UPD765_STATUS_EXM   (1<<5)      /* execution mode */
+#define UPD765_STATUS_DIO   (1<<6)      /* direction of data transfer */
+#define UPD765_STATUS_RQM   (1<<7)      /* request for master */
 
 #ifdef __cplusplus
 } /* extern "C" */
