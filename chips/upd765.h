@@ -60,8 +60,6 @@ extern "C" {
 /* control pins */
 #define UPD765_CS   (1ULL<<40)  /* in: chip select */
 #define UPD765_A0   (1ULL<<41)  /* in: data/status register select */
-#define UPD765_DACK (1ULL<<42)  /* FIXME */
-#define UPD765_TC   (1ULL<<43)  /* FIXME */
 
 /* extract 8-bit data bus from 64-bit pins */
 #define UPD765_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
