@@ -140,7 +140,6 @@ typedef struct {
     /* internal state machine */
     int phase;                  /* current phase in command */
     int cmd;                    /* current command */
-    int cmd_tick;               /* current command tick */
     int cmd_byte_count;         /* remaining expected bytes in command phase */
     int res_byte_count;         /* remaining expected bytes in result phase */
     int exec_tick_count;        /* number of ticks in execute phase */
