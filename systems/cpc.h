@@ -24,6 +24,7 @@
     - chips/ay38910.h
     - chips/i8255.h
     - chips/mc6845.h
+    - chips/upd765.h
     - chips/crt.h
     - chips/mem.h
     - chips/kbd.h
@@ -168,6 +169,7 @@ typedef struct {
     ay38910_t psg;
     mc6845_t vdg;
     i8255_t ppi;
+    upd765_t fdc;
 
     bool valid;
     bool dbgvis;                    /* debug visualzation enabled? */
@@ -336,6 +338,12 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
     mc6845_init(&sys->vdg, MC6845_TYPE_UM6845R);
     crt_init(&sys->crt, CRT_PAL, 6, 32, CPC_DISPLAY_WIDTH/16, CPC_DISPLAY_HEIGHT);
 
+    upd765_desc_t fdc_desc;
+    _CPC_CLEAR(fdc_desc);
+    //fdc_desc.read_cb = _cpc_fdc_read;
+    //fdc_desc.write_cb = _cpc_fdc_write;
+    upd765_init(&sys->fdc, &fdc_desc);
+
     _cpc_ga_init(sys);
     _cpc_init_keymap(sys);
     mem_init(&sys->mem);
@@ -468,6 +476,11 @@ static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     /* gate array snoops for interrupt acknowledge */
     if ((pins & (Z80_M1|Z80_IORQ)) == (Z80_M1|Z80_IORQ)) {
         _cpc_ga_int_ack(sys);
+    }
+
+    /* tick the floppy disc controller (at 4 MHz) */
+    for (int i = 0; i < num_ticks; i++) {
+        upd765_tick(&sys->fdc);
     }
 
     /* memory and IO requests */
@@ -667,9 +680,8 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
     }
     else if ((pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
         /* floppy controller status/data register */
-        if (pins & Z80_RD) {
-            Z80_SET_DATA(pins, 0xFF);
-        }
+        uint64_t fdc_pins = UPD765_CS | (pins & Z80_PIN_MASK);
+        pins = upd765_iorq(&sys->fdc, fdc_pins) & Z80_PIN_MASK;
     }
     return pins;
 }
