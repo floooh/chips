@@ -26,6 +26,25 @@
         - no DMA mode
         - no interrupt-driven operation
 
+    ## WIP IMPLEMENTATION NOTES
+
+    - the chips is always in one of four phases:
+        - IDLE: expects a command byte to be written
+        - COMMAND: a command byte has been written, and parameter bytes are
+          expected to be written, at the end of the COMMAND phase (last
+          parameter byte received), an CommandAction function will be executed,
+          this prepares and switches to either the EXECUTE, RESULT or IDLE phase
+        - EXECUTE (optional): a variable length execution phase, controlled by a command-
+          specifc execute function, the execute function defines when it is
+          done and switches to the RESULT phase
+        - RESULT (optional): a fixed number of result bytes are expected to be
+          read by the CPU, after all are read, switch back to the IDLE phase
+    - a floppy disk is described by:
+        - 1 or 2 sides
+        - N tracks
+        - N sectors per track
+        - N bytes per sector
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
@@ -87,6 +106,7 @@ extern "C" {
 #define UPD765_STATUS_RQM   (1<<7)      /* request for master */
 
 /* command codes */
+#define UPD765_CMD_INVALID                  (0)
 #define UPD765_CMD_READ_DATA                ((1<<2)|(1<<1))
 #define UPD765_CMD_READ_DELETED_DATA        ((1<<3)|(1<<2))
 #define UPD765_CMD_WRITE_DATA               ((1<<2)|(1<<0))
@@ -120,16 +140,16 @@ typedef uint16_t (*upd765_write_cb)(int drive, int side, int track, int sector, 
 
 /* upd765 initialization parameters */
 typedef struct {
-    /* data read callback */
     upd765_read_cb read_cb;
-    /* data write callback */
     upd765_write_cb write_cb;
+    void* user_data;
 } upd765_desc_t;
 
 /* internal floppy disc drive state */
 typedef struct {
-    int cylinder;
+    int side;
     int track;
+    int sector;
 } upd765_fdd_t;
 
 /* upd765 state */
@@ -140,24 +160,12 @@ typedef struct {
     /* internal state machine */
     int phase;                  /* current phase in command */
     int cmd;                    /* current command */
-    int cmd_byte_count;         /* remaining expected bytes in command phase */
-    int res_byte_count;         /* remaining expected bytes in result phase */
-    int exec_tick_count;        /* number of ticks in execute phase */
     int fifo_pos;               /* position in fifo buffer */
     uint8_t fifo[UPD765_FIFO_SIZE];
 
     /* status registers */
-    uint8_t st0;
-    uint8_t st1;
-    uint8_t st2;
-    uint8_t st3;
+    uint8_t st[4];
     
-    /* written by SPECIFY command */
-    uint8_t srt;                /* step rate time */
-    uint8_t hut;                /* head unload time */
-    uint8_t hlt;                /* head load time */
-    uint8_t nd;                 /* non-dma mode */
-
     /* floppy-disc-drive state */
     int fdd_index;
     upd765_fdd_t fdd[UPD765_MAX_FDDS];
@@ -189,180 +197,202 @@ extern void upd765_tick(upd765_t* upd);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-static inline void _upd765_start_execute(upd765_t* upd, int ticks) {
-    upd->phase = UPD765_PHASE_EXECUTE;
-    upd->exec_tick_count = ticks;
-}
-
-static inline void _upd765_start_cmd(upd765_t* upd, int cmd) {
-    upd->cmd = cmd & 0x1F;
+static inline void _upd765_fifo_reset(upd765_t* upd) {
     upd->fifo_pos = 0;
-    switch (upd->cmd) {
-        case UPD765_CMD_READ_DATA:
-        case UPD765_CMD_READ_DELETED_DATA:
-        case UPD765_CMD_WRITE_DATA:
-        case UPD765_CMD_WRITE_DELETED_DATA:
-        case UPD765_CMD_READ_A_TRACK:
-        case UPD765_CMD_SCAN_EQUAL:
-        case UPD765_CMD_SCAN_LOW_OR_EQUAL:
-        case UPD765_CMD_SCAN_HIGH_OR_EQUAL:
-            upd->phase = UPD765_PHASE_COMMAND;
-            upd->cmd_byte_count = 8;
-            break;
-        case UPD765_CMD_READ_ID:
-            upd->phase = UPD765_PHASE_COMMAND;
-            upd->cmd_byte_count = 1;
-            break;
-        case UPD765_CMD_FORMAT_A_TRACK:
-            upd->phase = UPD765_PHASE_COMMAND;
-            upd->cmd_byte_count = 5;
-            break;
-        case UPD765_CMD_RECALIBRATE:
-            upd->phase = UPD765_PHASE_COMMAND;
-            upd->cmd_byte_count = 1;
-            break;
-        case UPD765_CMD_SENSE_INTERRUPT_STATUS:
-            upd->cmd_byte_count = 0;
-            _upd765_start_execute(upd, 0);
-            break;
-        case UPD765_CMD_SPECIFY:
-            upd->phase = UPD765_PHASE_COMMAND;
-            upd->cmd_byte_count = 2;
-            break;
-        case UPD765_CMD_SENSE_DRIVE_STATUS:
-            upd->phase = UPD765_PHASE_COMMAND;
-            upd->cmd_byte_count = 1;
-            break;
-        case UPD765_CMD_SEEK:
-            upd->phase = UPD765_PHASE_COMMAND;
-            upd->cmd_byte_count = 2;
-            break;
-        default:
-            upd->phase = UPD765_PHASE_RESULT;
-            upd->cmd_byte_count = 0;
-            break;
-    }
 }
 
-static inline void _upd765_continue_cmd(upd765_t* upd, uint8_t data) {
+static inline void _upd765_fifo_put(upd765_t* upd, uint8_t val) {
     CHIPS_ASSERT(upd->fifo_pos < UPD765_FIFO_SIZE);
-    CHIPS_ASSERT(upd->phase == UPD765_PHASE_COMMAND);
-    upd->fifo[upd->fifo_pos++] = data;
-    upd->cmd_byte_count--;
-    if (0 == upd->cmd_byte_count) {
-        /* transition to next phase */
-        switch (upd->cmd) {
-            case UPD765_CMD_READ_DATA:
-            case UPD765_CMD_READ_DELETED_DATA:
-            case UPD765_CMD_WRITE_DATA:
-            case UPD765_CMD_WRITE_DELETED_DATA:
-            case UPD765_CMD_READ_A_TRACK:
-            case UPD765_CMD_READ_ID:
-            case UPD765_CMD_FORMAT_A_TRACK:
-            case UPD765_CMD_SCAN_EQUAL:
-            case UPD765_CMD_SCAN_LOW_OR_EQUAL:
-            case UPD765_CMD_SCAN_HIGH_OR_EQUAL:
-            case UPD765_CMD_SEEK:
-                _upd765_start_execute(upd, 1);
-                break;
-            case UPD765_CMD_RECALIBRATE:
-                _upd765_start_execute(upd, 100);
-                break;
-            case UPD765_CMD_SPECIFY:
-                _upd765_start_execute(upd, 0);
-                break;
-            case UPD765_CMD_SENSE_INTERRUPT_STATUS:
-                /* can't happen */
-                CHIPS_ASSERT(false);
-                break;
-            case UPD765_CMD_SENSE_DRIVE_STATUS:
-                // FIXME
-                upd->phase = UPD765_PHASE_RESULT;
-                break;
-            default:
-                // FIXME
-                upd->phase = UPD765_PHASE_RESULT;
-                break;
-        }
-    }
+    upd->fifo[upd->fifo_pos++] = val;
 }
 
-static inline void _upd765_execute_invalid(upd765_t* upd) {
-    if (0 == upd->exec_tick_count) {
-        upd->phase = UPD765_PHASE_IDLE;
-    }
-    else {
-        upd->exec_tick_count--;
-    }
+static inline uint8_t _upd765_fifo_get(upd765_t* upd) {
+    CHIPS_ASSERT(upd->fifo_pos > 0);
+    return upd->fifo[--upd->fifo_pos];
 }
 
-static inline void _upd765_execute_specify(upd765_t* upd) {
-    if (0 == upd->exec_tick_count) {
-        upd->srt = (upd->fifo[0]>>4) & 0x0F;    /* step rate time */
-        upd->hut = upd->fifo[0] & 0x0F;         /* head unload time */
-        upd->hlt = (upd->fifo[1]>>1) & 0x7F;    /* head load time */
-        upd->nd  = upd->fifo[1] & 1;            /* non-dma mode */
-        upd->phase = UPD765_PHASE_IDLE;
-    }
-    else {
-        upd->exec_tick_count--;
-    }
+static void _upd765_to_phase_result(upd765_t* upd);
+static void _upd765_to_phase_idle(upd765_t* upd);
+
+static void _upd765_result_invalid(upd765_t* upd) {
+    // FIXME
 }
 
-static inline void _upd765_execute_recalibrate(upd765_t* upd) {
-    if (0 == upd->exec_tick_count) {
-        upd->fdd_index = upd->fifo[0] & 3;
-        upd->fdd[upd->fdd_index].track = 0;
-        upd->phase = UPD765_PHASE_IDLE;
-    }
-    else {
-        upd->exec_tick_count--;
-    }
+static void _upd765_result_std(upd765_t* upd) {
+
 }
 
-static inline void _upd765_execute_sense_interrupt_status(upd765_t* upd) {
-    if (0 == upd->exec_tick_count) {
-        upd->phase = UPD765_PHASE_RESULT;
-        upd->res_byte_count = 2;
-        upd->fifo_pos = 0;
-        upd->fifo[0] = upd->st0;    // FIXME: status register 0 content
-        upd->fifo[1] = upd->fdd[upd->fdd_index].cylinder;   // FIXME: present cylinder number
-    }
-    else {
-        upd->exec_tick_count--;
-    }
+static void _upd765_action_read_a_track(upd765_t* upd) {
+    // FIXME
 }
 
-static inline void _upd765_execute(upd765_t* upd) {
-    switch (upd->cmd) {
-        case UPD765_CMD_READ_DATA:
-        case UPD765_CMD_READ_DELETED_DATA:
-        case UPD765_CMD_WRITE_DATA:
-        case UPD765_CMD_WRITE_DELETED_DATA:
-        case UPD765_CMD_READ_A_TRACK:
-        case UPD765_CMD_READ_ID:
-        case UPD765_CMD_FORMAT_A_TRACK:
-        case UPD765_CMD_SCAN_EQUAL:
-        case UPD765_CMD_SCAN_LOW_OR_EQUAL:
-        case UPD765_CMD_SCAN_HIGH_OR_EQUAL:
-        case UPD765_CMD_SEEK:
-            _upd765_execute_invalid(upd);
-            break;
-        case UPD765_CMD_RECALIBRATE:
-            _upd765_execute_recalibrate(upd);
-            break;
-        case UPD765_CMD_SPECIFY:
-            _upd765_execute_specify(upd);
-            break;
-        case UPD765_CMD_SENSE_INTERRUPT_STATUS:
-            _upd765_execute_sense_interrupt_status(upd);
-            break;
-        case UPD765_CMD_SENSE_DRIVE_STATUS:
-        default:
-            _upd765_execute_invalid(upd);
-            break;
-    }
+static void _upd765_exec_read_a_track(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_idle(upd);
 }
+
+static void _upd765_action_specify(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_action_sense_drive_status(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_result_sense_drive_status(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_action_write_data(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_write_data(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+static void _upd765_action_read_data(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_read_data(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+static void _upd765_action_recalibrate(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_recalibrate(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_idle(upd);
+}
+
+static void _upd765_action_sense_interrupt_status(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_result_sense_interrupt_status(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_action_write_deleted_data(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_write_deleted_data(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+static void _upd765_action_read_id(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_read_id(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+static void _upd765_action_read_deleted_data(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_read_deleted_data(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+static void _upd765_action_format_a_track(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_format_a_track(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+static void _upd765_action_seek(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_seek(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_idle(upd);
+}
+
+static void _upd765_action_scan_equal(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_scan_equal(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+static void _upd765_action_scan_low_or_equal(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_scan_low_or_equal(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+static void _upd765_action_scan_high_or_equal(upd765_t* upd) {
+    // FIXME
+}
+
+static void _upd765_exec_scan_high_or_equal(upd765_t* upd) {
+    // FIXME
+    _upd765_to_phase_result(upd);
+}
+
+typedef struct {
+    int cmd;            /* the command */
+    int cmd_num_bytes;  /* number of expected command bytes */
+    int res_num_bytes;  /* number of result bytes */
+    void (*action)(upd765_t*);  /* the action handler to be called at end of command phase */
+    void (*exec)(upd765_t*);    /* the exec handler to be called during execute phase */
+    void (*result)(upd765_t*);  /* the result handler called before result phase */
+} _upd765_cmd_desc_t;
+
+static _upd765_cmd_desc_t _upd765_cmd_table[32] = {
+    /* 0 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /* 1 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /* 2 */     { UPD765_CMD_READ_A_TRACK,              9, 7, _upd765_action_read_a_track, _upd765_exec_read_a_track, _upd765_result_std },
+    /* 3 */     { UPD765_CMD_SPECIFY,                   3, 0, _upd765_action_specify, 0, 0 },
+    /* 4 */     { UPD765_CMD_SENSE_DRIVE_STATUS,        2, 1, _upd765_action_sense_drive_status, 0, _upd765_result_sense_drive_status },
+    /* 5 */     { UPD765_CMD_WRITE_DATA,                9, 7, _upd765_action_write_data, _upd765_exec_write_data, _upd765_result_std },
+    /* 6 */     { UPD765_CMD_READ_DATA,                 9, 7, _upd765_action_read_data, _upd765_exec_read_data, _upd765_result_std },
+    /* 7 */     { UPD765_CMD_RECALIBRATE,               2, 0, _upd765_action_recalibrate, _upd765_exec_recalibrate, 0 },
+    /* 8 */     { UPD765_CMD_SENSE_INTERRUPT_STATUS,    1, 1, _upd765_action_sense_interrupt_status, 0, _upd765_result_sense_interrupt_status },
+    /* 9 */     { UPD765_CMD_WRITE_DELETED_DATA,        9, 7, _upd765_action_write_deleted_data, _upd765_exec_write_deleted_data, _upd765_result_std },
+    /*10 */     { UPD765_CMD_READ_ID,                   2, 7, _upd765_action_read_id, _upd765_exec_read_id, _upd765_result_std },
+    /*11 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*12 */     { UPD765_CMD_READ_DELETED_DATA,         9, 7, _upd765_action_read_deleted_data, _upd765_exec_read_deleted_data, _upd765_result_std },
+    /*13 */     { UPD765_CMD_FORMAT_A_TRACK,            6, 7, _upd765_action_format_a_track, _upd765_exec_format_a_track, _upd765_result_std },
+    /*14 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*15 */     { UPD765_CMD_SEEK,                      3, 0, _upd765_action_seek, _upd765_exec_seek, 0 },
+    /*16 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*17 */     { UPD765_CMD_SCAN_EQUAL,                9, 7, _upd765_action_scan_equal, _upd765_exec_scan_equal, _upd765_result_std },
+    /*18 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*19 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*20 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*21 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*22 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*23 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*24 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*25 */     { UPD765_CMD_SCAN_LOW_OR_EQUAL,         1, 1, _upd765_action_scan_low_or_equal, _upd765_exec_scan_low_or_equal, _upd765_result_std },
+    /*26 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*27 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*28 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*29 */     { UPD765_CMD_SCAN_HIGH_OR_EQUAL,        1, 1, _upd765_action_scan_high_or_equal, _upd765_exec_scan_high_or_equal, _upd765_result_std },
+    /*30 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
+    /*31 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid }
+};
 
 static inline uint8_t _upd765_read_status(upd765_t* upd) {
     // FIXME: drive seek bits
@@ -388,25 +418,87 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
     return status;
 }
 
-static inline uint8_t _upd765_read_data(upd765_t* upd) {
-    if (UPD765_PHASE_RESULT == upd->phase) {
-        CHIPS_ASSERT(upd->res_byte_count > 0);
-        if (--upd->res_byte_count == 0) {
-            upd->phase = UPD765_PHASE_IDLE;
-        }
-        return upd->fifo[upd->fifo_pos++];
-    }
-    else {
-        return 0xFF;
+/* start the command, exec, result, idle phases */
+static void _upd765_to_phase_command(upd765_t* upd, uint8_t data) {
+    CHIPS_ASSERT(upd->phase == UPD765_PHASE_IDLE);
+    upd->phase = UPD765_PHASE_COMMAND;
+    upd->cmd = data & 0x1F;
+    CHIPS_ASSERT((_upd765_cmd_table[upd->cmd].cmd == UPD765_CMD_INVALID) || 
+                (_upd765_cmd_table[upd->cmd].cmd == upd->cmd));
+    _upd765_fifo_reset(upd);
+    _upd765_fifo_put(upd, data);
+}
+
+static void _upd765_to_phase_exec(upd765_t* upd) {
+    CHIPS_ASSERT(upd->phase == UPD765_PHASE_COMMAND);
+    upd->phase = UPD765_PHASE_EXECUTE;
+}
+
+static void _upd765_to_phase_result(upd765_t* upd) {
+    CHIPS_ASSERT((upd->phase == UPD765_PHASE_COMMAND) || (upd->phase == UPD765_PHASE_EXECUTE));
+    upd->phase = UPD765_PHASE_RESULT;
+    _upd765_fifo_reset(upd);
+    if (_upd765_cmd_table[upd->cmd].result) {
+        _upd765_cmd_table[upd->cmd].result(upd);
     }
 }
 
-static inline void _upd765_write_data(upd765_t* upd, uint8_t data) {
-    if (UPD765_PHASE_IDLE == upd->phase) {
-        _upd765_start_cmd(upd, data);
+static void _upd765_to_phase_idle(upd765_t* upd) {
+    CHIPS_ASSERT((upd->phase == UPD765_PHASE_EXECUTE) || (upd->phase == UPD765_PHASE_RESULT));
+    upd->phase = UPD765_PHASE_IDLE;
+}
+
+/* write a data byte to the upd765 */
+static void _upd765_write_data(upd765_t* upd, uint8_t data) {
+    if ((UPD765_PHASE_IDLE == upd->phase) || (UPD765_PHASE_COMMAND == upd->phase)) {
+        if (UPD765_PHASE_IDLE == upd->phase) {
+            /* start a new command */
+            _upd765_to_phase_command(upd, data);
+        }
+        else {
+            /* continue gathering parameters */
+            _upd765_fifo_put(upd, data);
+        }
+        /* if no more params expected, proceed to exec, result or idle phase */
+        if (upd->fifo_pos == _upd765_cmd_table[upd->cmd].cmd_num_bytes) {
+            const _upd765_cmd_desc_t* cmd_desc = &_upd765_cmd_table[upd->cmd];
+            /* invoke command action callback */
+            if (cmd_desc->action) {
+                cmd_desc->action(upd);
+            }
+            /* decide what's the next phase */
+            if (cmd_desc->exec) {
+                _upd765_to_phase_exec(upd);
+            }
+            else if (cmd_desc->result) {
+                _upd765_to_phase_result(upd);
+            }
+            else {
+                _upd765_to_phase_idle(upd);
+            }
+        }
     }
-    else if (UPD765_PHASE_COMMAND == upd->phase) {
-        _upd765_continue_cmd(upd, data);
+    else if (UPD765_PHASE_EXECUTE == upd->phase) {
+        // FIXME
+    }
+}
+
+/* read a data byte from the upd765 */
+static uint8_t _upd765_read_data(upd765_t* upd) {
+    if (UPD765_PHASE_RESULT == upd->phase) {
+        uint8_t data = _upd765_fifo_get(upd);
+        if (upd->fifo_pos == _upd765_cmd_table[upd->cmd].res_num_bytes) {
+            /* all result bytes transfered, transition to idle phase */
+            _upd765_to_phase_idle(upd);
+        }
+        return data;
+    }
+    else if (UPD765_PHASE_EXECUTE == upd->phase) {
+        // FIXME
+        return 0xFF;
+    }
+    else {
+        return 0xFF;
     }
 }
 
@@ -422,6 +514,7 @@ void upd765_init(upd765_t* upd, upd765_desc_t* desc) {
 void upd765_reset(upd765_t* upd) {
     CHIPS_ASSERT(upd);
     upd->phase = UPD765_PHASE_IDLE;
+    _upd765_fifo_reset(upd);
 }
 
 uint64_t upd765_iorq(upd765_t* upd, uint64_t pins) {
@@ -445,7 +538,9 @@ uint64_t upd765_iorq(upd765_t* upd, uint64_t pins) {
 
 void upd765_tick(upd765_t* upd) {
     if (upd->phase == UPD765_PHASE_EXECUTE) {
-        _upd765_execute(upd);
+        if (_upd765_cmd_table[upd->cmd].exec) {
+            _upd765_cmd_table[upd->cmd].exec(upd);
+        }
     }
 }
 
