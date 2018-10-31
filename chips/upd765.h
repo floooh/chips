@@ -105,6 +105,19 @@ extern "C" {
 #define UPD765_STATUS_DIO   (1<<6)      /* direction of data transfer */
 #define UPD765_STATUS_RQM   (1<<7)      /* request for master */
 
+/* status register 0 bits */
+#define UPD765_ST0_US0      (1<<0)      /* unit select 0 */
+#define UPD765_ST0_US1      (1<<1)      /* unit select 1 */
+#define UPD765_ST0_HD       (1<<2)      /* head address */
+#define UPD765_ST0_NR       (1<<3)      /* not ready */
+#define UPD765_ST0_EC       (1<<4)      /* equipment check */
+#define UPD765_ST0_SE       (1<<5)      /* seek end */
+#define UPD765_ST0_RES      ((1<<7)|(1<<6)) /* command result bitmask */
+#define UPD765_ST0_NT       (0)         /* D7=0,D6=0: normal termination of command */
+#define UPD765_ST0_AT       (1<<6)      /* D7=0,D6=0: abnormal termination of command */
+#define UPD765_ST0_IC       (1<<7)      /* D7=1,D6=0: invalid command issue */
+#define UPD765_ST0_ATRM     ((1<<7)|(1<<6)) /* D7=1,D6=1: abormal terminantion */
+
 /* command codes */
 #define UPD765_CMD_INVALID                  (0)
 #define UPD765_CMD_READ_DATA                ((1<<2)|(1<<1))
@@ -161,13 +174,13 @@ typedef struct {
     int phase;                  /* current phase in command */
     int cmd;                    /* current command */
     int fifo_pos;               /* position in fifo buffer */
+    int fifo_num;               /* number of valid or expected items in fifo */
     uint8_t fifo[UPD765_FIFO_SIZE];
 
     /* status registers */
     uint8_t st[4];
     
     /* floppy-disc-drive state */
-    int fdd_index;
     upd765_fdd_t fdd[UPD765_MAX_FDDS];
 } upd765_t;
 
@@ -197,25 +210,26 @@ extern void upd765_tick(upd765_t* upd);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-static inline void _upd765_fifo_reset(upd765_t* upd) {
+static inline void _upd765_fifo_reset(upd765_t* upd, int num) {
     upd->fifo_pos = 0;
+    upd->fifo_num = num;
 }
 
-static inline void _upd765_fifo_put(upd765_t* upd, uint8_t val) {
+static inline void _upd765_fifo_wr(upd765_t* upd, uint8_t val) {
     CHIPS_ASSERT(upd->fifo_pos < UPD765_FIFO_SIZE);
     upd->fifo[upd->fifo_pos++] = val;
 }
 
-static inline uint8_t _upd765_fifo_get(upd765_t* upd) {
-    CHIPS_ASSERT(upd->fifo_pos > 0);
-    return upd->fifo[--upd->fifo_pos];
+static inline uint8_t _upd765_fifo_rd(upd765_t* upd) {
+    CHIPS_ASSERT(upd->fifo_pos < UPD765_FIFO_SIZE);
+    return upd->fifo[upd->fifo_pos++];
 }
 
 static void _upd765_to_phase_result(upd765_t* upd);
 static void _upd765_to_phase_idle(upd765_t* upd);
 
 static void _upd765_result_invalid(upd765_t* upd) {
-    // FIXME
+    upd->fifo[0] = UPD765_ST0_IC;
 }
 
 static void _upd765_result_std(upd765_t* upd) {
@@ -232,7 +246,10 @@ static void _upd765_exec_read_a_track(upd765_t* upd) {
 }
 
 static void _upd765_action_specify(upd765_t* upd) {
-    // FIXME
+    /* nothing useful to do in specify, this just configures some
+       timing and DMA-mode params that are not relevant for
+       this emulation
+    */
 }
 
 static void _upd765_action_sense_drive_status(upd765_t* upd) {
@@ -261,21 +278,27 @@ static void _upd765_exec_read_data(upd765_t* upd) {
     _upd765_to_phase_result(upd);
 }
 
-static void _upd765_action_recalibrate(upd765_t* upd) {
-    // FIXME
-}
-
 static void _upd765_exec_recalibrate(upd765_t* upd) {
-    // FIXME
+    /* set drive head to track 0 */
+    const int fdd_index = upd->fifo[1] & 3;
+    upd->fdd[fdd_index].track = 0;
+    upd->st[0] = fdd_index | UPD765_ST0_SE;
     _upd765_to_phase_idle(upd);
 }
 
-static void _upd765_action_sense_interrupt_status(upd765_t* upd) {
-    // FIXME
-}
-
 static void _upd765_result_sense_interrupt_status(upd765_t* upd) {
-    // FIXME
+    if (upd->st[0] & UPD765_ST0_SE) {
+        /* on seek-end, return current track */
+        const int fdd_index = upd->st[0] & 3;
+        upd->fifo[0] = upd->st[0];
+        upd->fifo[1] = upd->fdd[fdd_index].track;
+        /* FIXME: INVALID COMMAND ISSUE bit here too? */
+        upd->st[0] &= ~(UPD765_ST0_RES|UPD765_ST0_SE);
+    }
+    else {
+        upd->fifo[0] = UPD765_ST0_IC;
+        upd->fifo_num = 1;
+    }
 }
 
 static void _upd765_action_write_deleted_data(upd765_t* upd) {
@@ -367,8 +390,8 @@ static _upd765_cmd_desc_t _upd765_cmd_table[32] = {
     /* 4 */     { UPD765_CMD_SENSE_DRIVE_STATUS,        2, 1, _upd765_action_sense_drive_status, 0, _upd765_result_sense_drive_status },
     /* 5 */     { UPD765_CMD_WRITE_DATA,                9, 7, _upd765_action_write_data, _upd765_exec_write_data, _upd765_result_std },
     /* 6 */     { UPD765_CMD_READ_DATA,                 9, 7, _upd765_action_read_data, _upd765_exec_read_data, _upd765_result_std },
-    /* 7 */     { UPD765_CMD_RECALIBRATE,               2, 0, _upd765_action_recalibrate, _upd765_exec_recalibrate, 0 },
-    /* 8 */     { UPD765_CMD_SENSE_INTERRUPT_STATUS,    1, 1, _upd765_action_sense_interrupt_status, 0, _upd765_result_sense_interrupt_status },
+    /* 7 */     { UPD765_CMD_RECALIBRATE,               2, 0, 0, _upd765_exec_recalibrate, 0 },
+    /* 8 */     { UPD765_CMD_SENSE_INTERRUPT_STATUS,    1, 2, 0, 0, _upd765_result_sense_interrupt_status },
     /* 9 */     { UPD765_CMD_WRITE_DELETED_DATA,        9, 7, _upd765_action_write_deleted_data, _upd765_exec_write_deleted_data, _upd765_result_std },
     /*10 */     { UPD765_CMD_READ_ID,                   2, 7, _upd765_action_read_id, _upd765_exec_read_id, _upd765_result_std },
     /*11 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
@@ -395,7 +418,7 @@ static _upd765_cmd_desc_t _upd765_cmd_table[32] = {
 };
 
 static inline uint8_t _upd765_read_status(upd765_t* upd) {
-    // FIXME: drive seek bits
+    // FIXME: drive bits 0..2 should be set while drive is seeking
     uint8_t status = 0;
     /* FIXME: RQM is a handshake flag and remains inactive 
         for between 2us and 50us, for now just indicate
@@ -409,7 +432,7 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
             status |= UPD765_STATUS_CB|UPD765_STATUS_RQM;
             break;
         case UPD765_PHASE_EXECUTE:
-            status |= UPD765_STATUS_CB|UPD765_STATUS_EXM;
+            status |= UPD765_STATUS_CB|UPD765_STATUS_EXM|UPD765_STATUS_RQM;
             break;
         case UPD765_PHASE_RESULT:
             status |= UPD765_STATUS_CB|UPD765_STATUS_DIO|UPD765_STATUS_RQM;
@@ -425,8 +448,8 @@ static void _upd765_to_phase_command(upd765_t* upd, uint8_t data) {
     upd->cmd = data & 0x1F;
     CHIPS_ASSERT((_upd765_cmd_table[upd->cmd].cmd == UPD765_CMD_INVALID) || 
                 (_upd765_cmd_table[upd->cmd].cmd == upd->cmd));
-    _upd765_fifo_reset(upd);
-    _upd765_fifo_put(upd, data);
+    _upd765_fifo_reset(upd, _upd765_cmd_table[upd->cmd].cmd_num_bytes);
+    _upd765_fifo_wr(upd, data);
 }
 
 static void _upd765_to_phase_exec(upd765_t* upd) {
@@ -437,14 +460,14 @@ static void _upd765_to_phase_exec(upd765_t* upd) {
 static void _upd765_to_phase_result(upd765_t* upd) {
     CHIPS_ASSERT((upd->phase == UPD765_PHASE_COMMAND) || (upd->phase == UPD765_PHASE_EXECUTE));
     upd->phase = UPD765_PHASE_RESULT;
-    _upd765_fifo_reset(upd);
+    _upd765_fifo_reset(upd, _upd765_cmd_table[upd->cmd].res_num_bytes);
     if (_upd765_cmd_table[upd->cmd].result) {
         _upd765_cmd_table[upd->cmd].result(upd);
     }
 }
 
 static void _upd765_to_phase_idle(upd765_t* upd) {
-    CHIPS_ASSERT((upd->phase == UPD765_PHASE_EXECUTE) || (upd->phase == UPD765_PHASE_RESULT));
+    CHIPS_ASSERT(upd->phase != UPD765_PHASE_IDLE);
     upd->phase = UPD765_PHASE_IDLE;
 }
 
@@ -457,10 +480,10 @@ static void _upd765_write_data(upd765_t* upd, uint8_t data) {
         }
         else {
             /* continue gathering parameters */
-            _upd765_fifo_put(upd, data);
+            _upd765_fifo_wr(upd, data);
         }
         /* if no more params expected, proceed to exec, result or idle phase */
-        if (upd->fifo_pos == _upd765_cmd_table[upd->cmd].cmd_num_bytes) {
+        if (upd->fifo_pos == upd->fifo_num) {
             const _upd765_cmd_desc_t* cmd_desc = &_upd765_cmd_table[upd->cmd];
             /* invoke command action callback */
             if (cmd_desc->action) {
@@ -486,8 +509,8 @@ static void _upd765_write_data(upd765_t* upd, uint8_t data) {
 /* read a data byte from the upd765 */
 static uint8_t _upd765_read_data(upd765_t* upd) {
     if (UPD765_PHASE_RESULT == upd->phase) {
-        uint8_t data = _upd765_fifo_get(upd);
-        if (upd->fifo_pos == _upd765_cmd_table[upd->cmd].res_num_bytes) {
+        uint8_t data = _upd765_fifo_rd(upd);
+        if (upd->fifo_pos == upd->fifo_num) {
             /* all result bytes transfered, transition to idle phase */
             _upd765_to_phase_idle(upd);
         }
@@ -514,7 +537,7 @@ void upd765_init(upd765_t* upd, upd765_desc_t* desc) {
 void upd765_reset(upd765_t* upd) {
     CHIPS_ASSERT(upd);
     upd->phase = UPD765_PHASE_IDLE;
-    _upd765_fifo_reset(upd);
+    _upd765_fifo_reset(upd, 0);
 }
 
 uint64_t upd765_iorq(upd765_t* upd, uint64_t pins) {
