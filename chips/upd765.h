@@ -116,7 +116,7 @@ extern "C" {
 #define UPD765_ST0_NT       (0)         /* D7=0,D6=0: normal termination of command */
 #define UPD765_ST0_AT       (1<<6)      /* D7=0,D6=0: abnormal termination of command */
 #define UPD765_ST0_IC       (1<<7)      /* D7=1,D6=0: invalid command issue */
-#define UPD765_ST0_ATRM     ((1<<7)|(1<<6)) /* D7=1,D6=1: abormal terminantion */
+#define UPD765_ST0_ATRM     ((1<<7)|(1<<6)) /* D7=1,D6=1: abormal termination */
 
 /* command codes */
 #define UPD765_CMD_INVALID                  (0)
@@ -146,15 +146,22 @@ extern "C" {
 #define UPD765_FIFO_SIZE (16)
 #define UPD765_MAX_FDDS  (4)
 
-/* callback to read data byte and status flags from disc drive */
-typedef uint16_t (*upd765_read_cb)(int drive, int side, int track, int sector, int index);
-/* callback to write data byte to disc, and return status flags */
-typedef uint16_t (*upd765_write_cb)(int drive, int side, int track, int sector, int index, uint8_t value);
+/* sector info block for the info callback */
+typedef struct {
+    uint8_t track;
+    uint8_t side;
+    uint8_t sector_id;
+    uint8_t sector_size;
+    uint8_t st1;
+    uint8_t st2;
+} upd765_track_info_t;
+
+/* callback to read 4-byte id of first sector of a track */
+typedef bool (*upd765_info_cb)(int drive, int side, int track, void* user_data, upd765_track_info_t* out_info);
 
 /* upd765 initialization parameters */
 typedef struct {
-    upd765_read_cb read_cb;
-    upd765_write_cb write_cb;
+    upd765_info_cb info_cb;
     void* user_data;
 } upd765_desc_t;
 
@@ -167,8 +174,8 @@ typedef struct {
 
 /* upd765 state */
 typedef struct {
-    upd765_read_cb read_cb;
-    upd765_write_cb write_cb;
+    upd765_info_cb info_cb;
+    void* user_data;
 
     /* internal state machine */
     int phase;                  /* current phase in command */
@@ -179,7 +186,7 @@ typedef struct {
 
     /* status registers */
     uint8_t st[4];
-    
+
     /* floppy-disc-drive state */
     upd765_fdd_t fdd[UPD765_MAX_FDDS];
 } upd765_t;
@@ -310,13 +317,27 @@ static void _upd765_exec_write_deleted_data(upd765_t* upd) {
     _upd765_to_phase_result(upd);
 }
 
-static void _upd765_action_read_id(upd765_t* upd) {
-    // FIXME
-}
-
-static void _upd765_exec_read_id(upd765_t* upd) {
-    // FIXME
-    _upd765_to_phase_result(upd);
+static void _upd765_result_read_id(upd765_t* upd) {
+    const int fdd_index = upd->fifo[1] & 3;
+    const int head_index = (upd->fifo[1] & 4) >> 2;
+    upd765_track_info_t track_info;
+    if (upd->info_cb(fdd_index, head_index, upd->fdd[fdd_index].track, upd->user_data, &track_info)) {
+        upd->st[0] = upd->fifo[1] & 7;
+        upd->st[1] = track_info.st1;
+        upd->st[2] = track_info.st2;
+        upd->fifo[0] = upd->st[0];
+        upd->fifo[1] = upd->st[1];
+        upd->fifo[2] = upd->st[2];
+        upd->fifo[3] = track_info.track;
+        upd->fifo[4] = track_info.side;
+        upd->fifo[5] = track_info.sector_id;
+        upd->fifo[6] = track_info.sector_size;
+    }
+    else {
+        /* FIXME: ??? */
+        upd->fifo[0] = UPD765_ST0_IC;
+        upd->fifo_num = 1;
+    }
 }
 
 static void _upd765_action_read_deleted_data(upd765_t* upd) {
@@ -393,7 +414,7 @@ static _upd765_cmd_desc_t _upd765_cmd_table[32] = {
     /* 7 */     { UPD765_CMD_RECALIBRATE,               2, 0, 0, _upd765_exec_recalibrate, 0 },
     /* 8 */     { UPD765_CMD_SENSE_INTERRUPT_STATUS,    1, 2, 0, 0, _upd765_result_sense_interrupt_status },
     /* 9 */     { UPD765_CMD_WRITE_DELETED_DATA,        9, 7, _upd765_action_write_deleted_data, _upd765_exec_write_deleted_data, _upd765_result_std },
-    /*10 */     { UPD765_CMD_READ_ID,                   2, 7, _upd765_action_read_id, _upd765_exec_read_id, _upd765_result_std },
+    /*10 */     { UPD765_CMD_READ_ID,                   2, 7, 0, 0, _upd765_result_read_id },
     /*11 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
     /*12 */     { UPD765_CMD_READ_DELETED_DATA,         9, 7, _upd765_action_read_deleted_data, _upd765_exec_read_deleted_data, _upd765_result_std },
     /*13 */     { UPD765_CMD_FORMAT_A_TRACK,            6, 7, _upd765_action_format_a_track, _upd765_exec_format_a_track, _upd765_result_std },
@@ -527,10 +548,10 @@ static uint8_t _upd765_read_data(upd765_t* upd) {
 
 void upd765_init(upd765_t* upd, upd765_desc_t* desc) {
     CHIPS_ASSERT(upd && desc);
-//    CHIPS_ASSERT(desc->read_cb && desc->write_cb);
+    CHIPS_ASSERT(desc->info_cb);
     memset(upd, 0, sizeof(upd765_t));
-    upd->read_cb = desc->read_cb;
-    upd->write_cb = desc->write_cb;
+    upd->info_cb = desc->info_cb;
+    upd->user_data = desc->user_data;
     upd765_reset(upd);
 }
 

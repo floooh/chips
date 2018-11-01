@@ -268,7 +268,8 @@ static void _cpc_ga_int_ack(cpc_t* sys);
 static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins);
 static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_update_memory_mapping(cpc_t* sys);
-static void _cpc_casread(cpc_t* sys);
+static void _cpc_cas_read(cpc_t* sys);
+static bool _cpc_fdc_info(int drive, int side, int track, void* user_data, upd765_track_info_t* out_info);
 
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 #define _CPC_CLEAR(val) memset(&val, 0, sizeof(val))
@@ -340,8 +341,10 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
 
     upd765_desc_t fdc_desc;
     _CPC_CLEAR(fdc_desc);
+    fdc_desc.info_cb = _cpc_fdc_info;
     //fdc_desc.read_cb = _cpc_fdc_read;
     //fdc_desc.write_cb = _cpc_fdc_write;
+    fdc_desc.user_data = sys;
     upd765_init(&sys->fdc, &fdc_desc);
 
     _cpc_ga_init(sys);
@@ -397,12 +400,12 @@ void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
         if (sys->cpu.trap_id == 1) {
             if (sys->type == CPC_TYPE_6128) {
                 if (0 == (sys->ga.config & (1<<2))) {
-                    _cpc_casread(sys);
+                    _cpc_cas_read(sys);
                 }
             }
             else {
                 /* no memory mapping on KC Compact, 464 or 664 */
-                _cpc_casread(sys);
+                _cpc_cas_read(sys);
             }
         }
     }
@@ -1412,7 +1415,7 @@ void cpc_remove_tape(cpc_t* sys) {
 }
 
 /* the trapped OS casread function, reads one tape block into memory */
-static void _cpc_casread(cpc_t* sys) {
+static void _cpc_cas_read(cpc_t* sys) {
     bool success = false;
     /* if no tape is currently inserted, both tape_pos and tape_size is 0 */
     if ((sys->tape_pos + 3) < sys->tape_size) {
@@ -1434,6 +1437,18 @@ static void _cpc_casread(cpc_t* sys) {
     }
     z80_set_f(&sys->cpu, success ? 0x45 : 0x00);
     z80_set_pc(&sys->cpu, sys->casread_ret);
+}
+
+/*=== FLOPPY DISC LOADING ====================================================*/
+static bool _cpc_fdc_info(int drive, int side, int track, void* user_data, upd765_track_info_t* out_info) {
+    // FIXME
+    out_info->side = side;
+    out_info->track = track;
+    out_info->sector_id = 0xC1;
+    out_info->sector_size = 2;
+    out_info->st1 = 0;
+    out_info->st2 = 0;
+    return true;
 }
 
 #endif /* CHIPS_IMPL */
