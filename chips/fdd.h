@@ -18,6 +18,7 @@
     ~~~
         your own assert macro (default: assert(c))
 
+    FIXME: disk image loading code should probably go into separate headers
     FIXME: DOCS
 
     ## zlib/libpng license
@@ -49,7 +50,7 @@ extern "C" {
 #define FDD_MAX_TRACKS (80)         /* max number of tracks per side */
 #define FDD_MAX_SECTORS (12)        /* max sectors per track */
 #define FDD_MAX_SECTOR_SIZE (512)   /* max size of a sector in bytes */
-#define FDD_MAX_TRACKS_SIZE (FDD_MAX_SECTORS*FDD_MAX_SECTOR_SIZE)
+#define FDD_MAX_TRACK_SIZE (FDD_MAX_SECTORS*FDD_MAX_SECTOR_SIZE)
 #define FDD_MAX_DISC_SIZE (FDD_MAX_SIDES*FDD_MAX_TRACKS*FDD_MAX_TRACK_SIZE)
 
 /* UPD765 disc controller overlay of the sector info bytes */
@@ -58,14 +59,14 @@ typedef struct {
     uint8_t h;      /* head address (side) */
     uint8_t r;      /* record (sector number) */
     uint8_t n;      /* number (sector size) */
-    uint8_t st0;    /* ST0 status register result */
     uint8_t st1;    /* ST1 status register result */
-} fdd_upd765_info;
+    uint8_t st2;    /* ST2 status register result */
+} fdd_upd765_info_t;
 
 /* a sector description */
 typedef struct {
     union {
-        fdd_upd765_info upd765;
+        fdd_upd765_info_t upd765;
         uint8_t raw[8];
     } info;
     int data_offset;    /* start of sector data in disc data blob */
@@ -82,8 +83,8 @@ typedef struct {
 
 /* a disc description */
 typedef struct {
-    bool formatted;     /* disc is formatted */
-    bool protected;     /* disc is write protected */
+    bool formatted;         /* disc is formatted */
+    bool write_protected;   /* disc is write protected */
     int num_sides;
     int num_tracks;
     fdd_track_t tracks[FDD_MAX_SIDES][FDD_MAX_TRACKS];
@@ -111,7 +112,7 @@ extern bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* d
 extern void fdd_eject_disc(fdd_t* fdd);
 
 /* load Amstrad CPC .dsk file format */
-extern bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint_t* data, int data_size);
+extern bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint8_t* data, int data_size);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -140,7 +141,7 @@ void fdd_motor(fdd_t* fdd, bool on) {
     fdd->motor_on = on;
 }
 
-void fdd_eject(fdd_t* fdd) {
+void fdd_eject_disc(fdd_t* fdd) {
     CHIPS_ASSERT(fdd);
     fdd->cur_side = 0;
     fdd->cur_track = 0;
@@ -151,7 +152,7 @@ void fdd_eject(fdd_t* fdd) {
     memset(&fdd->data, 0, sizeof(fdd->data));
 }
 
-bool _fdd_validate_disc(fdd_disc_t* disc) {
+bool _fdd_validate_disc(const fdd_disc_t* disc) {
     CHIPS_ASSERT(disc);
     if ((disc->num_sides < 0) || (disc->num_sides > FDD_MAX_SIDES)) {
         return false;
@@ -161,11 +162,11 @@ bool _fdd_validate_disc(fdd_disc_t* disc) {
     }
     for (int side_index = 0; side_index < disc->num_sides; side_index++) {
         for (int track_index = 0; track_index < disc->num_tracks; track_index++) {
-            const fdd_track_t* track = &(fdd->tracks[side_index][track_index]);
+            const fdd_track_t* track = &(disc->tracks[side_index][track_index]);
             if (track->data_offset < 0) {
                 return false;
             }
-            if ((track->data_size < 0) || (fdd->data_size > FDD_MAX_TRACK_SIZE)) {
+            if ((track->data_size < 0) || (track->data_size > FDD_MAX_TRACK_SIZE)) {
                 return false;
             }
             if ((track->data_offset + track->data_size) > FDD_MAX_DISC_SIZE) {
@@ -174,7 +175,7 @@ bool _fdd_validate_disc(fdd_disc_t* disc) {
             if ((track->num_sectors < 0) || (track->num_sectors > FDD_MAX_SECTORS)) {
                 return false;
             }
-            for (sector_index = 0; sector_index < track->num_sectors; sector_index++) {
+            for (int sector_index = 0; sector_index < track->num_sectors; sector_index++) {
                 const fdd_sector_t* sector = &(track->sectors[sector_index]);
                 if (sector->data_offset < 0) {
                     return false;
@@ -203,7 +204,7 @@ bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, in
         /* invalid disc structure */
         return false;
     }
-    if (data)
+    if (data) {
         if ((data_size > 0) && (data_size <= FDD_MAX_DISC_SIZE)) {
             fdd->data_size = data_size;
             memcpy(&fdd->data, data, data_size);
@@ -222,19 +223,127 @@ bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, in
 }
 
 /*
-    load an Amstrad .DSK disc image */
+    load an Amstrad .DSK disc image
 
     http://www.cpcwiki.eu/index.php/Format:DSK_disk_image_file_format#Disk_image_file_format
 */
-bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint_t* data, int data_size) {
+typedef struct {
+    uint8_t magic[34];      /* MV - CPCEMU.... */
+    uint8_t creator[14];
+    uint8_t num_tracks;
+    uint8_t num_sides;
+    uint8_t track_size_l;
+    uint8_t track_size_h;
+    uint8_t pad[204];
+} _fdd_cpc_dsk_header;
+
+typedef struct {
+    uint8_t magic[13];      /* Track-Info\r\n */
+    uint8_t unused_0[3];
+    uint8_t track_number;
+    uint8_t side_number;
+    uint8_t unused_1[2];
+    uint8_t sector_size;
+    uint8_t num_sectors;
+    uint8_t gap_length;
+    uint8_t filler_byte;
+} _fdd_cpc_dsk_track_info;
+
+typedef struct {
+    uint8_t track;
+    uint8_t side;
+    uint8_t sector_id;
+    uint8_t sector_size;
+    uint8_t st1;
+    uint8_t st2;
+    uint8_t unused[2];
+} _fdd_cpc_dsk_sector_info;
+
+bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint8_t* data, int data_size) {
     CHIPS_ASSERT(fdd);
+    CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_header) == 256);
+    CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_track_info) == 24);
+    CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_sector_info) == 8);
+    CHIPS_ASSERT(data && (data_size > 0));
     if (fdd->has_disc) {
         fdd_eject_disc(fdd);
     }
 
-    /* 
+    /* check if the header is valid */
+    if (data_size > FDD_MAX_DISC_SIZE) {
+        goto error;
+    }
+    if (data_size <= (int)sizeof(_fdd_cpc_dsk_header)) {
+        goto error;
+    }
+    _fdd_cpc_dsk_header* hdr = (_fdd_cpc_dsk_header*) data;
+    if (0 != memcmp(hdr->magic, "MV - CPC", 8)) {
+        goto error;
+    }
+    if (hdr->num_sides > 2) {
+        goto error;
+    }
+    if (hdr->num_tracks > FDD_MAX_TRACKS) {
+        goto error;
+    }
+    const uint16_t track_size = (hdr->track_size_h<<8) | hdr->track_size_l;
+    int file_size = hdr->num_sides * hdr->num_tracks * track_size + sizeof(_fdd_cpc_dsk_header);
+    if (file_size != data_size) {
+        goto error;
+    }
 
+    /* copy the data blob to the local buffer */
+    fdd->data_size = data_size;
+    memcpy(fdd->data, data, fdd->data_size);
+
+    /* setup the disc structure */
+    fdd_disc_t* disc = &fdd->disc;
+    disc->formatted = true;
+    disc->num_sides = hdr->num_sides;
+    disc->num_tracks = hdr->num_tracks;
+    int data_offset = sizeof(_fdd_cpc_dsk_header);
+    for (int track_index = 0; track_index < disc->num_tracks; track_index++) {
+        for (int side_index = 0; side_index < disc->num_sides; side_index++) {
+            fdd_track_t* track = &disc->tracks[side_index][track_index];
+            const _fdd_cpc_dsk_track_info* track_info = (const _fdd_cpc_dsk_track_info*) &fdd->data[data_offset];
+            if (0 != memcmp("Track-Info\r\n", track_info->magic, sizeof(track_info->magic))) {
+                goto error;
+            }
+            if ((data_offset + track_size) > data_size) {
+                goto error;
+            }
+            track->data_offset = data_offset;
+            track->data_size = track_size;
+            track->num_sectors = track_info->num_sectors;
+            const int sector_size = track_info->sector_size * 0x100;
+            if (sector_size != 512) {
+                goto error;
+            }
+            int sector_data_offset = data_offset + 0x100;
+            const _fdd_cpc_dsk_sector_info* sector_infos = (const _fdd_cpc_dsk_sector_info*) (track_info+1);
+            for (int sector_index = 0; sector_index < track->num_sectors; sector_index++) {
+                fdd_sector_t* sector = &track->sectors[sector_index];
+                const _fdd_cpc_dsk_sector_info* sector_info = &sector_infos[sector_index];
+                sector->info.upd765.c = sector_info->track;
+                sector->info.upd765.h = sector_info->side;
+                sector->info.upd765.r = sector_info->sector_id;
+                sector->info.upd765.n = sector_info->sector_size;
+                sector->info.upd765.st1 = sector_info->st1;
+                sector->info.upd765.st2 = sector_info->st2;
+                sector->data_offset = sector_data_offset;
+                sector->data_size = sector_size;
+                sector_data_offset += sector_size;
+            }
+            data_offset += 0x100 + track->num_sectors * sector_size;
+            CHIPS_ASSERT(data_offset == sector_data_offset);
+        }
+    }
+
+    fdd->has_disc = true;
     return true;
+error:
+    fdd_eject_disc(fdd);
+    return false;
 }
 
 #endif /* CHIPS_IMPL */
