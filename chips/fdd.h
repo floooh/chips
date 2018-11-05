@@ -92,9 +92,7 @@ typedef struct {
 
 /* a floppy disc drive description */
 typedef struct {
-    int cur_side;
     int cur_track;
-    int cur_sector;
     bool has_disc;
     bool motor_on;
     fdd_disc_t disc;
@@ -110,6 +108,8 @@ extern void fdd_motor(fdd_t* fdd, bool on);
 extern bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, int data_size);
 /* eject current disc */
 extern void fdd_eject_disc(fdd_t* fdd);
+/* seek to track (happens instantly) */
+extern bool fdd_seek(fdd_t* fdd, int track);
 
 /* load Amstrad CPC .dsk file format */
 extern bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint8_t* data, int data_size);
@@ -143,9 +143,7 @@ void fdd_motor(fdd_t* fdd, bool on) {
 
 void fdd_eject_disc(fdd_t* fdd) {
     CHIPS_ASSERT(fdd);
-    fdd->cur_side = 0;
     fdd->cur_track = 0;
-    fdd->cur_sector = 0;
     fdd->has_disc = false;
     fdd->motor_on = false;
     memset(&fdd->disc, 0, sizeof(fdd->disc));
@@ -220,6 +218,17 @@ bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, in
     }
     fdd->has_disc = true;
     return true;
+}
+
+bool fdd_seek(fdd_t* fdd, int track) {
+    CHIPS_ASSERT(fdd);
+    if (fdd->has_disc && fdd->motor_on && (track < fdd->disc.num_tracks)) {
+        fdd->cur_track = track;
+        return true;
+    }
+    else {
+        return false;
+    }
 }
 
 /*
@@ -338,7 +347,6 @@ bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint8_t* data, int data_size) {
             CHIPS_ASSERT(data_offset == sector_data_offset);
         }
     }
-
     fdd->has_disc = true;
     return true;
 error:

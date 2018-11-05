@@ -148,33 +148,33 @@ extern "C" {
 
 /* sector info block for the info callback */
 typedef struct {
-    uint8_t track;
-    uint8_t side;
-    uint8_t sector_id;
-    uint8_t sector_size;
-    uint8_t st1;
-    uint8_t st2;
-} upd765_track_info_t;
+    /* physical track content */
+    int physical_track;
+    /* first sector-info block (with logical attributes) */
+    uint8_t c;              /* cylinder (logical track number) */
+    uint8_t h;              /* head address (logical side) */
+    uint8_t r;              /* record (sector id byte) */
+    uint8_t n;              /* number (sector size byte) */
+    uint8_t st1;            /* return status 1 */
+    uint8_t st2;            /* return status 2 */
+} upd765_trackinfo_t;
 
-/* callback to read 4-byte id of first sector of a track */
-typedef bool (*upd765_info_cb)(int drive, int side, int track, void* user_data, upd765_track_info_t* out_info);
+/* callback to seek to a track */
+typedef bool (*upd765_seek_cb)(int drive, int track, void* user_data);
+/* callback to read info about currently seeked-to track */
+typedef bool (*upd765_trackinfo_cb)(int drive, int side, void* user_data, upd765_trackinfo_t* out_info);
 
 /* upd765 initialization parameters */
 typedef struct {
-    upd765_info_cb info_cb;
+    upd765_seek_cb seek_cb;
+    upd765_trackinfo_cb trackinfo_cb;
     void* user_data;
 } upd765_desc_t;
 
-/* internal floppy disc drive state */
-typedef struct {
-    int side;
-    int track;
-    int sector;
-} upd765_fdd_t;
-
 /* upd765 state */
 typedef struct {
-    upd765_info_cb info_cb;
+    upd765_seek_cb seek_cb;
+    upd765_trackinfo_cb trackinfo_cb;
     void* user_data;
 
     /* internal state machine */
@@ -186,9 +186,6 @@ typedef struct {
 
     /* status registers */
     uint8_t st[4];
-
-    /* floppy-disc-drive state */
-    upd765_fdd_t fdd[UPD765_MAX_FDDS];
 } upd765_t;
 
 /* initialize a new upd765 instance */
@@ -288,7 +285,7 @@ static void _upd765_exec_read_data(upd765_t* upd) {
 static void _upd765_exec_recalibrate(upd765_t* upd) {
     /* set drive head to track 0 */
     const int fdd_index = upd->fifo[1] & 3;
-    upd->fdd[fdd_index].track = 0;
+    upd->seek_cb(fdd_index, 0, upd->user_data);
     upd->st[0] = fdd_index | UPD765_ST0_SE;
     _upd765_to_phase_idle(upd);
 }
@@ -297,10 +294,14 @@ static void _upd765_result_sense_interrupt_status(upd765_t* upd) {
     if (upd->st[0] & UPD765_ST0_SE) {
         /* on seek-end, return current track */
         const int fdd_index = upd->st[0] & 3;
-        upd->fifo[0] = upd->st[0];
-        upd->fifo[1] = upd->fdd[fdd_index].track;
-        /* FIXME: INVALID COMMAND ISSUE bit here too? */
-        upd->st[0] &= ~(UPD765_ST0_RES|UPD765_ST0_SE);
+        upd765_trackinfo_t track_info;
+        if (upd->trackinfo_cb(fdd_index, 0, upd->user_data, &track_info)) {
+            upd->fifo[0] = upd->st[0];
+            upd->fifo[1] = track_info.physical_track;
+            /* FIXME: INVALID COMMAND ISSUE bit here too? */
+            upd->st[0] &= ~(UPD765_ST0_RES|UPD765_ST0_SE);
+            return;
+        }
     }
     else {
         upd->fifo[0] = UPD765_ST0_IC;
@@ -320,18 +321,18 @@ static void _upd765_exec_write_deleted_data(upd765_t* upd) {
 static void _upd765_result_read_id(upd765_t* upd) {
     const int fdd_index = upd->fifo[1] & 3;
     const int head_index = (upd->fifo[1] & 4) >> 2;
-    upd765_track_info_t track_info;
-    if (upd->info_cb(fdd_index, head_index, upd->fdd[fdd_index].track, upd->user_data, &track_info)) {
+    upd765_trackinfo_t track_info;
+    if (upd->trackinfo_cb(fdd_index, head_index, upd->user_data, &track_info)) {
         upd->st[0] = upd->fifo[1] & 7;
         upd->st[1] = track_info.st1;
         upd->st[2] = track_info.st2;
         upd->fifo[0] = upd->st[0];
         upd->fifo[1] = upd->st[1];
         upd->fifo[2] = upd->st[2];
-        upd->fifo[3] = track_info.track;
-        upd->fifo[4] = track_info.side;
-        upd->fifo[5] = track_info.sector_id;
-        upd->fifo[6] = track_info.sector_size;
+        upd->fifo[3] = track_info.c;
+        upd->fifo[4] = track_info.h;
+        upd->fifo[5] = track_info.r;
+        upd->fifo[6] = track_info.n;
     }
     else {
         /* FIXME: ??? */
@@ -548,9 +549,11 @@ static uint8_t _upd765_read_data(upd765_t* upd) {
 
 void upd765_init(upd765_t* upd, upd765_desc_t* desc) {
     CHIPS_ASSERT(upd && desc);
-    CHIPS_ASSERT(desc->info_cb);
+    CHIPS_ASSERT(desc->seek_cb);
+    CHIPS_ASSERT(desc->trackinfo_cb);
     memset(upd, 0, sizeof(upd765_t));
-    upd->info_cb = desc->info_cb;
+    upd->seek_cb = desc->seek_cb;
+    upd->trackinfo_cb = desc->trackinfo_cb;
     upd->user_data = desc->user_data;
     upd765_reset(upd);
 }

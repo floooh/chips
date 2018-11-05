@@ -29,6 +29,7 @@
     - chips/mem.h
     - chips/kbd.h
     - chips/clk.h
+    - chips/fdd.h
 
     ## The Amstrad CPC 464
 
@@ -203,6 +204,8 @@ typedef struct {
     int tape_size;      /* tape_size is > 0 if a tape is inserted */
     int tape_pos;
     uint8_t tape_buf[CPC_MAX_TAPE_SIZE];
+    /* floppy disc srive */
+    fdd_t fdd;
 } cpc_t;
 
 /* initialize a new CPC instance */
@@ -229,6 +232,10 @@ extern bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 extern bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 /* remove currently inserted tape */
 extern void cpc_remove_tape(cpc_t* cpc);
+/* insert a disk image file (.dsk) */
+extern bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+/* remove current disc */
+extern void cpc_remove_disc(cpc_t* cpc);
 /* if enabled, start calling the video-debugging-callback */
 extern void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
 /* get current display debug visualization enabled/disabled state */
@@ -269,7 +276,8 @@ static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins);
 static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_update_memory_mapping(cpc_t* sys);
 static void _cpc_cas_read(cpc_t* sys);
-static bool _cpc_fdc_info(int drive, int side, int track, void* user_data, upd765_track_info_t* out_info);
+static bool _cpc_fdc_seek(int drive, int track, void* user_data);
+static bool _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info);
 
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 #define _CPC_CLEAR(val) memset(&val, 0, sizeof(val))
@@ -341,11 +349,11 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
 
     upd765_desc_t fdc_desc;
     _CPC_CLEAR(fdc_desc);
-    fdc_desc.info_cb = _cpc_fdc_info;
-    //fdc_desc.read_cb = _cpc_fdc_read;
-    //fdc_desc.write_cb = _cpc_fdc_write;
+    fdc_desc.seek_cb = _cpc_fdc_seek;
+    fdc_desc.trackinfo_cb = _cpc_fdc_trackinfo;
     fdc_desc.user_data = sys;
     upd765_init(&sys->fdc, &fdc_desc);
+    fdd_init(&sys->fdd);
 
     _cpc_ga_init(sys);
     _cpc_init_keymap(sys);
@@ -679,7 +687,9 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
         Floppy Disk Interface
     */
     if ((pins & (Z80_A10|Z80_A8|Z80_A7)) == 0) {
-        /* FIXME: floppy disk motor control */
+        if (pins & Z80_WR) {
+            fdd_motor(&sys->fdd, 0 != (Z80_GET_DATA(pins) & 1));
+        }
     }
     else if ((pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
         /* floppy controller status/data register */
@@ -1439,16 +1449,37 @@ static void _cpc_cas_read(cpc_t* sys) {
     z80_set_pc(&sys->cpu, sys->casread_ret);
 }
 
-/*=== FLOPPY DISC LOADING ====================================================*/
-static bool _cpc_fdc_info(int drive, int side, int track, void* user_data, upd765_track_info_t* out_info) {
-    // FIXME
-    out_info->side = side;
-    out_info->track = track;
-    out_info->sector_id = 0xC1;
-    out_info->sector_size = 2;
-    out_info->st1 = 0;
-    out_info->st2 = 0;
-    return true;
+/*=== FLOPPY DISC SUPPORT ====================================================*/
+static bool _cpc_fdc_seek(int drive, int track, void* user_data) {
+    cpc_t* sys = (cpc_t*) user_data;
+    return fdd_seek(&sys->fdd, track);
+}
+
+static bool _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info) {
+    CHIPS_ASSERT((side >= 0) && (side < 2));
+    cpc_t* sys = (cpc_t*) user_data;
+    if (sys->fdd.has_disc && sys->fdd.motor_on) {
+        out_info->physical_track = sys->fdd.cur_track;
+        const fdd_sector_t* sector = &sys->fdd.disc.tracks[side][sys->fdd.cur_track].sectors[0];
+        out_info->c = sector->info.upd765.c;
+        out_info->h = sector->info.upd765.h;
+        out_info->r = sector->info.upd765.r;
+        out_info->n = sector->info.upd765.n;
+        out_info->st1 = sector->info.upd765.st1;
+        out_info->st2 = sector->info.upd765.st2;
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+bool cpc_insert_disc(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+    return fdd_insert_cpc_dsk(&sys->fdd, ptr, num_bytes);
+}
+
+void cpc_remove_disc(cpc_t* sys) {
+    fdd_eject_disc(&sys->fdd);
 }
 
 #endif /* CHIPS_IMPL */
