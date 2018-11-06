@@ -106,8 +106,8 @@ extern "C" {
 #define UPD765_STATUS_RQM   (1<<7)      /* request for master */
 
 /* status register 0 bits */
-#define UPD765_ST0_US0      (1<<0)      /* unit select 0 */
-#define UPD765_ST0_US1      (1<<1)      /* unit select 1 */
+#define UPD765_ST0_US0      (1<<0)      /* drive unit number at interrupt */
+#define UPD765_ST0_US1      (1<<1)      /* drive unit number at interrupt */
 #define UPD765_ST0_HD       (1<<2)      /* head address */
 #define UPD765_ST0_NR       (1<<3)      /* not ready */
 #define UPD765_ST0_EC       (1<<4)      /* equipment check */
@@ -117,6 +117,36 @@ extern "C" {
 #define UPD765_ST0_AT       (1<<6)      /* D7=0,D6=0: abnormal termination of command */
 #define UPD765_ST0_IC       (1<<7)      /* D7=1,D6=0: invalid command issue */
 #define UPD765_ST0_ATRM     ((1<<7)|(1<<6)) /* D7=1,D6=1: abormal termination */
+
+/* status register 1 bits */
+#define UPD765_ST1_MA       (1<<0)      /* missing address mark */
+#define UPD765_ST1_NW       (1<<1)      /* not writable */
+#define UPD765_ST1_ND       (1<<2)      /* no data */
+#define UPD765_ST1_D3       (1<<3)      /* UNUSED */
+#define UPD765_ST1_OR       (1<<4)      /* overrun */
+#define UPD765_ST1_DE       (1<<5)      /* data error (crc check failed) */
+#define UPD765_ST1_D6       (1<<6)      /* UNUSED */
+#define UPD765_ST1_EN       (1<<7)      /* end of cylinder */
+
+/* status register 2 bits */
+#define UPD765_ST2_MD       (1<<0)      /* missing address mark */
+#define UPD765_ST2_BC       (1<<1)      /* bad cylinder */
+#define UPD765_ST2_SN       (1<<2)      /* scan not satisfied */
+#define UPD765_ST2_SH       (1<<3)      /* scan equal hit */
+#define UPD765_ST2_WC       (1<<4)      /* wrong cylinder */
+#define UPD765_ST2_DD       (1<<5)      /* data error in data field */
+#define UPD765_ST2_CM       (1<<6)      /* control mark */
+#define UPD765_ST2_D7       (1<<7)      /* UNUSED */
+
+/* status register 3 bits */
+#define UPD765_ST3_US0      (1<<0)      /* unit select 0 signal to FDD */
+#define UPD765_ST3_US1      (1<<1)      /* unit select 1 signal to FDD */
+#define UPD765_ST3_HD       (1<<2)      /* head select signal to FDD */
+#define UPD765_ST3_TS       (1<<3)      /* two-side signal to FDD */
+#define UPD765_ST3_T0       (1<<4)      /* track-0 signal to FDD */
+#define UPD765_ST3_RY       (1<<5)      /* status of READY signal from FDD */
+#define UPD765_ST3_WP       (1<<6)      /* status of WRITE PROTECT signal from FDD */
+#define UPD765_ST3_FT       (1<<7)      /* status of FAULT signal from FDD */
 
 /* command codes */
 #define UPD765_CMD_INVALID                  (0)
@@ -159,21 +189,25 @@ typedef struct {
     uint8_t st2;            /* return status 2 */
 } upd765_trackinfo_t;
 
-/* callback to seek to a track */
-typedef bool (*upd765_seek_cb)(int drive, int track, void* user_data);
+/* callback to seek to a phyiscal track */
+typedef bool (*upd765_seektrack_cb)(int drive, int track, void* user_data);
+/* callback to seek to a sector on current physical track */
+typedef bool (*upd765_seeksector_cb)(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data);
 /* callback to read info about currently seeked-to track */
 typedef bool (*upd765_trackinfo_cb)(int drive, int side, void* user_data, upd765_trackinfo_t* out_info);
 
 /* upd765 initialization parameters */
 typedef struct {
-    upd765_seek_cb seek_cb;
+    upd765_seektrack_cb seektrack_cb;
+    upd765_seeksector_cb seeksector_cb;
     upd765_trackinfo_cb trackinfo_cb;
     void* user_data;
 } upd765_desc_t;
 
 /* upd765 state */
 typedef struct {
-    upd765_seek_cb seek_cb;
+    upd765_seektrack_cb seektrack_cb;
+    upd765_seeksector_cb seeksector_cb;
     upd765_trackinfo_cb trackinfo_cb;
     void* user_data;
 
@@ -184,7 +218,8 @@ typedef struct {
     int fifo_num;               /* number of valid or expected items in fifo */
     uint8_t fifo[UPD765_FIFO_SIZE];
 
-    /* status registers */
+    /* current status */
+    upd765_trackinfo_t track_info;
     uint8_t st[4];
 } upd765_t;
 
@@ -237,7 +272,7 @@ static void _upd765_result_invalid(upd765_t* upd) {
 }
 
 static void _upd765_result_std(upd765_t* upd) {
-
+    // FIXME
 }
 
 static void _upd765_action_read_a_track(upd765_t* upd) {
@@ -274,18 +309,51 @@ static void _upd765_exec_write_data(upd765_t* upd) {
 }
 
 static void _upd765_action_read_data(upd765_t* upd) {
-    // FIXME
+    /* seek to requested sector on current physical track */
+    upd->track_info.c = upd->fifo[2];
+    upd->track_info.h = upd->fifo[3];
+    upd->track_info.r = upd->fifo[4];
+    upd->track_info.n = upd->fifo[5];
+    upd->track_info.st1 = 0;
+    upd->track_info.st2 = 0;
+    upd->st[0] = upd->fifo[1] & 7;
+    const int fdd_index = upd->fifo[1] & 3;
+    if (!upd->seeksector_cb(fdd_index,
+            upd->track_info.c,
+            upd->track_info.h,
+            upd->track_info.r,
+            upd->track_info.n,
+            upd->user_data))
+    {
+        /* seek failed, switch to result phase with error */
+        upd->st[0] = upd->st[0] | UPD765_ST0_AT; /* FIXME: NOT READY if no disc in drive */
+        upd->st[1] = UPD765_ST1_ND; /* FIXME: 0 if no disc in drive */
+        upd->st[2] = 0;
+        _upd765_to_phase_result(upd);
+    }
 }
 
 static void _upd765_exec_read_data(upd765_t* upd) {
-    // FIXME
+    // FIXME, read next sector byte and update track_info
     _upd765_to_phase_result(upd);
+}
+
+static void _upd765_result_read_data(upd765_t* upd) {
+    upd->fifo[0] = upd->st[0];
+    upd->fifo[1] = upd->st[1];
+    upd->fifo[2] = upd->st[2];
+    upd->fifo[3] = upd->track_info.c;
+    upd->fifo[4] = upd->track_info.c;
+    upd->fifo[5] = upd->track_info.h;
+    upd->fifo[6] = upd->track_info.r;
+    upd->fifo[7] = upd->track_info.n;
 }
 
 static void _upd765_exec_recalibrate(upd765_t* upd) {
     /* set drive head to track 0 */
     const int fdd_index = upd->fifo[1] & 3;
-    upd->seek_cb(fdd_index, 0, upd->user_data);
+    upd->seektrack_cb(fdd_index, 0, upd->user_data);
+    upd->track_info.physical_track = 0;
     upd->st[0] = fdd_index | UPD765_ST0_SE;
     _upd765_to_phase_idle(upd);
 }
@@ -294,10 +362,9 @@ static void _upd765_result_sense_interrupt_status(upd765_t* upd) {
     if (upd->st[0] & UPD765_ST0_SE) {
         /* on seek-end, return current track */
         const int fdd_index = upd->st[0] & 3;
-        upd765_trackinfo_t track_info;
-        if (upd->trackinfo_cb(fdd_index, 0, upd->user_data, &track_info)) {
+        if (upd->trackinfo_cb(fdd_index, 0, upd->user_data, &upd->track_info)) {
             upd->fifo[0] = upd->st[0];
-            upd->fifo[1] = track_info.physical_track;
+            upd->fifo[1] = upd->track_info.physical_track;
             /* FIXME: INVALID COMMAND ISSUE bit here too? */
             upd->st[0] &= ~(UPD765_ST0_RES|UPD765_ST0_SE);
             return;
@@ -321,18 +388,17 @@ static void _upd765_exec_write_deleted_data(upd765_t* upd) {
 static void _upd765_result_read_id(upd765_t* upd) {
     const int fdd_index = upd->fifo[1] & 3;
     const int head_index = (upd->fifo[1] & 4) >> 2;
-    upd765_trackinfo_t track_info;
-    if (upd->trackinfo_cb(fdd_index, head_index, upd->user_data, &track_info)) {
+    if (upd->trackinfo_cb(fdd_index, head_index, upd->user_data, &upd->track_info)) {
         upd->st[0] = upd->fifo[1] & 7;
-        upd->st[1] = track_info.st1;
-        upd->st[2] = track_info.st2;
+        upd->st[1] = upd->track_info.st1;
+        upd->st[2] = upd->track_info.st2;
         upd->fifo[0] = upd->st[0];
         upd->fifo[1] = upd->st[1];
         upd->fifo[2] = upd->st[2];
-        upd->fifo[3] = track_info.c;
-        upd->fifo[4] = track_info.h;
-        upd->fifo[5] = track_info.r;
-        upd->fifo[6] = track_info.n;
+        upd->fifo[3] = upd->track_info.c;
+        upd->fifo[4] = upd->track_info.h;
+        upd->fifo[5] = upd->track_info.r;
+        upd->fifo[6] = upd->track_info.n;
     }
     else {
         /* FIXME: ??? */
@@ -411,7 +477,7 @@ static _upd765_cmd_desc_t _upd765_cmd_table[32] = {
     /* 3 */     { UPD765_CMD_SPECIFY,                   3, 0, _upd765_action_specify, 0, 0 },
     /* 4 */     { UPD765_CMD_SENSE_DRIVE_STATUS,        2, 1, _upd765_action_sense_drive_status, 0, _upd765_result_sense_drive_status },
     /* 5 */     { UPD765_CMD_WRITE_DATA,                9, 7, _upd765_action_write_data, _upd765_exec_write_data, _upd765_result_std },
-    /* 6 */     { UPD765_CMD_READ_DATA,                 9, 7, _upd765_action_read_data, _upd765_exec_read_data, _upd765_result_std },
+    /* 6 */     { UPD765_CMD_READ_DATA,                 9, 7, _upd765_action_read_data, _upd765_exec_read_data, _upd765_result_read_data },
     /* 7 */     { UPD765_CMD_RECALIBRATE,               2, 0, 0, _upd765_exec_recalibrate, 0 },
     /* 8 */     { UPD765_CMD_SENSE_INTERRUPT_STATUS,    1, 2, 0, 0, _upd765_result_sense_interrupt_status },
     /* 9 */     { UPD765_CMD_WRITE_DELETED_DATA,        9, 7, _upd765_action_write_deleted_data, _upd765_exec_write_deleted_data, _upd765_result_std },
@@ -549,10 +615,12 @@ static uint8_t _upd765_read_data(upd765_t* upd) {
 
 void upd765_init(upd765_t* upd, upd765_desc_t* desc) {
     CHIPS_ASSERT(upd && desc);
-    CHIPS_ASSERT(desc->seek_cb);
+    CHIPS_ASSERT(desc->seektrack_cb);
+    CHIPS_ASSERT(desc->seeksector_cb);
     CHIPS_ASSERT(desc->trackinfo_cb);
     memset(upd, 0, sizeof(upd765_t));
-    upd->seek_cb = desc->seek_cb;
+    upd->seektrack_cb = desc->seektrack_cb;
+    upd->seeksector_cb = desc->seeksector_cb;
     upd->trackinfo_cb = desc->trackinfo_cb;
     upd->user_data = desc->user_data;
     upd765_reset(upd);

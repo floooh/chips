@@ -276,7 +276,8 @@ static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins);
 static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_update_memory_mapping(cpc_t* sys);
 static void _cpc_cas_read(cpc_t* sys);
-static bool _cpc_fdc_seek(int drive, int track, void* user_data);
+static bool _cpc_fdc_seektrack(int drive, int track, void* user_data);
+static bool _cpc_fdc_seeksector(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data);
 static bool _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info);
 
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
@@ -349,7 +350,8 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
 
     upd765_desc_t fdc_desc;
     _CPC_CLEAR(fdc_desc);
-    fdc_desc.seek_cb = _cpc_fdc_seek;
+    fdc_desc.seektrack_cb = _cpc_fdc_seektrack;
+    fdc_desc.seeksector_cb = _cpc_fdc_seeksector;
     fdc_desc.trackinfo_cb = _cpc_fdc_trackinfo;
     fdc_desc.user_data = sys;
     upd765_init(&sys->fdc, &fdc_desc);
@@ -1450,17 +1452,22 @@ static void _cpc_cas_read(cpc_t* sys) {
 }
 
 /*=== FLOPPY DISC SUPPORT ====================================================*/
-static bool _cpc_fdc_seek(int drive, int track, void* user_data) {
+static bool _cpc_fdc_seektrack(int drive, int track, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
-    return fdd_seek(&sys->fdd, track);
+    return fdd_seek_track(&sys->fdd, track);
+}
+
+static bool _cpc_fdc_seeksector(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data) {
+    cpc_t* sys = (cpc_t*) user_data;
+    return fdd_seek_sector(&sys->fdd, c, h, r, n);
 }
 
 static bool _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info) {
     CHIPS_ASSERT((side >= 0) && (side < 2));
     cpc_t* sys = (cpc_t*) user_data;
     if (sys->fdd.has_disc && sys->fdd.motor_on) {
-        out_info->physical_track = sys->fdd.cur_track;
-        const fdd_sector_t* sector = &sys->fdd.disc.tracks[side][sys->fdd.cur_track].sectors[0];
+        out_info->physical_track = sys->fdd.cur_track_index;
+        const fdd_sector_t* sector = &sys->fdd.disc.tracks[side][sys->fdd.cur_track_index].sectors[0];
         out_info->c = sector->info.upd765.c;
         out_info->h = sector->info.upd765.h;
         out_info->r = sector->info.upd765.r;
