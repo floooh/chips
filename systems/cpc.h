@@ -278,6 +278,7 @@ static void _cpc_update_memory_mapping(cpc_t* sys);
 static void _cpc_cas_read(cpc_t* sys);
 static bool _cpc_fdc_seektrack(int drive, int track, void* user_data);
 static bool _cpc_fdc_seeksector(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data);
+static bool _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_data);
 static bool _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info);
 
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
@@ -352,6 +353,7 @@ void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
     _CPC_CLEAR(fdc_desc);
     fdc_desc.seektrack_cb = _cpc_fdc_seektrack;
     fdc_desc.seeksector_cb = _cpc_fdc_seeksector;
+    fdc_desc.read_cb = _cpc_fdc_read;
     fdc_desc.trackinfo_cb = _cpc_fdc_trackinfo;
     fdc_desc.user_data = sys;
     upd765_init(&sys->fdc, &fdc_desc);
@@ -1460,6 +1462,11 @@ static bool _cpc_fdc_seektrack(int drive, int track, void* user_data) {
 static bool _cpc_fdc_seeksector(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     return fdd_seek_sector(&sys->fdd, c, h, r, n);
+}
+
+static bool _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_data) {
+    cpc_t* sys = (cpc_t*) user_data;
+    return fdd_read(&sys->fdd, h, out_data);
 }
 
 static bool _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info) {

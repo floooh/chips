@@ -193,6 +193,8 @@ typedef struct {
 typedef bool (*upd765_seektrack_cb)(int drive, int track, void* user_data);
 /* callback to seek to a sector on current physical track */
 typedef bool (*upd765_seeksector_cb)(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data);
+/* callback to read the next sector data byte */
+typedef bool (*upd765_read_cb)(int drive, uint8_t h, void* user_data, uint8_t* out_data);
 /* callback to read info about currently seeked-to track */
 typedef bool (*upd765_trackinfo_cb)(int drive, int side, void* user_data, upd765_trackinfo_t* out_info);
 
@@ -200,6 +202,7 @@ typedef bool (*upd765_trackinfo_cb)(int drive, int side, void* user_data, upd765
 typedef struct {
     upd765_seektrack_cb seektrack_cb;
     upd765_seeksector_cb seeksector_cb;
+    upd765_read_cb read_cb;
     upd765_trackinfo_cb trackinfo_cb;
     void* user_data;
 } upd765_desc_t;
@@ -208,6 +211,7 @@ typedef struct {
 typedef struct {
     upd765_seektrack_cb seektrack_cb;
     upd765_seeksector_cb seeksector_cb;
+    upd765_read_cb read_cb;
     upd765_trackinfo_cb trackinfo_cb;
     void* user_data;
 
@@ -220,6 +224,9 @@ typedef struct {
 
     /* current status */
     upd765_trackinfo_t track_info;
+    uint8_t eot;                /* end-of-track param of last command */
+    uint8_t gpl;                /* gap-length param of last command */
+    uint8_t dtl;                /* data-length param of last command */
     uint8_t st[4];
 } upd765_t;
 
@@ -316,8 +323,15 @@ static void _upd765_action_read_data(upd765_t* upd) {
     upd->track_info.n = upd->fifo[5];
     upd->track_info.st1 = 0;
     upd->track_info.st2 = 0;
+    upd->eot = upd->fifo[6];
+    upd->gpl = upd->fifo[7];
+    upd->dtl = upd->fifo[8];
+    /* FIXME: handle length of read data via n=0 and dtl!=0xFF */
+    CHIPS_ASSERT((upd->track_info.n != 0) && (upd->dtl == 0xFF));
+    /* FIXME: handle read several sectors at a time */
+    CHIPS_ASSERT(upd->track_info.r == upd->eot);
     upd->st[0] = upd->fifo[1] & 7;
-    const int fdd_index = upd->fifo[1] & 3;
+    const int fdd_index = upd->st[0] & 3;
     if (!upd->seeksector_cb(fdd_index,
             upd->track_info.c,
             upd->track_info.h,
@@ -334,8 +348,7 @@ static void _upd765_action_read_data(upd765_t* upd) {
 }
 
 static void _upd765_exec_read_data(upd765_t* upd) {
-    // FIXME, read next sector byte and update track_info
-    _upd765_to_phase_result(upd);
+    // FIXME
 }
 
 static void _upd765_result_read_data(upd765_t* upd) {
@@ -343,10 +356,9 @@ static void _upd765_result_read_data(upd765_t* upd) {
     upd->fifo[1] = upd->st[1];
     upd->fifo[2] = upd->st[2];
     upd->fifo[3] = upd->track_info.c;
-    upd->fifo[4] = upd->track_info.c;
-    upd->fifo[5] = upd->track_info.h;
-    upd->fifo[6] = upd->track_info.r;
-    upd->fifo[7] = upd->track_info.n;
+    upd->fifo[4] = upd->track_info.h;
+    upd->fifo[5] = upd->track_info.r;
+    upd->fifo[6] = upd->track_info.n;
 }
 
 static void _upd765_exec_recalibrate(upd765_t* upd) {
@@ -596,31 +608,37 @@ static void _upd765_write_data(upd765_t* upd, uint8_t data) {
 
 /* read a data byte from the upd765 */
 static uint8_t _upd765_read_data(upd765_t* upd) {
+    uint8_t data = 0xFF;
     if (UPD765_PHASE_RESULT == upd->phase) {
-        uint8_t data = _upd765_fifo_rd(upd);
+        data = _upd765_fifo_rd(upd);
         if (upd->fifo_pos == upd->fifo_num) {
             /* all result bytes transfered, transition to idle phase */
             _upd765_to_phase_idle(upd);
         }
-        return data;
     }
     else if (UPD765_PHASE_EXECUTE == upd->phase) {
-        // FIXME
-        return 0xFF;
+        switch (upd->cmd) {
+            case UPD765_CMD_READ_DATA:
+                /* read next sector data byte from FDD */
+                if (!upd->read_cb(upd->st[0]&3, upd->track_info.h, upd->user_data, &data)) {
+                    _upd765_to_phase_result(upd);
+                }
+                break;
+        }
     }
-    else {
-        return 0xFF;
-    }
+    return data;
 }
 
 void upd765_init(upd765_t* upd, upd765_desc_t* desc) {
     CHIPS_ASSERT(upd && desc);
     CHIPS_ASSERT(desc->seektrack_cb);
     CHIPS_ASSERT(desc->seeksector_cb);
+    CHIPS_ASSERT(desc->read_cb);
     CHIPS_ASSERT(desc->trackinfo_cb);
     memset(upd, 0, sizeof(upd765_t));
     upd->seektrack_cb = desc->seektrack_cb;
     upd->seeksector_cb = desc->seeksector_cb;
+    upd->read_cb = desc->read_cb;
     upd->trackinfo_cb = desc->trackinfo_cb;
     upd->user_data = desc->user_data;
     upd765_reset(upd);
