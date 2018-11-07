@@ -53,6 +53,12 @@ extern "C" {
 #define FDD_MAX_TRACK_SIZE (FDD_MAX_SECTORS*FDD_MAX_SECTOR_SIZE)
 #define FDD_MAX_DISC_SIZE (FDD_MAX_SIDES*FDD_MAX_TRACKS*FDD_MAX_TRACK_SIZE)
 
+/* result bits (compatible with UPD765_RESULT_*) */
+#define FDD_RESULT_SUCCESS (0)
+#define FDD_RESULT_NOT_READY (1<<0)
+#define FDD_RESULT_NOT_FOUND (1<<1)
+#define FDD_RESULT_END_OF_SECTOR (1<<2)
+
 /* UPD765 disc controller overlay of the sector info bytes */
 typedef struct {
     uint8_t c;      /* cylinder number (track number) */
@@ -110,12 +116,12 @@ extern void fdd_motor(fdd_t* fdd, bool on);
 extern bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, int data_size);
 /* eject current disc */
 extern void fdd_eject_disc(fdd_t* fdd);
-/* seek to physical track (happens instantly) */
-extern bool fdd_seek_track(fdd_t* fdd, int track);
-/* seek to sector on current physical track (happens instantly) */
-extern bool fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
-/* read the next byte from the seeked-to sector */
-extern bool fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data);
+/* seek to physical track (happens instantly), returns FDD_RESULT_* */
+extern int fdd_seek_track(fdd_t* fdd, int track);
+/* seek to sector on current physical track (happens instantly), returns FDD_RESULT_* */
+extern int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
+/* read the next byte from the seeked-to sector, return FDD_RESULT_* */
+extern int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data);
 
 /* load Amstrad CPC .dsk file format */
 extern bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint8_t* data, int data_size);
@@ -228,18 +234,18 @@ bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, in
     return true;
 }
 
-bool fdd_seek_track(fdd_t* fdd, int track) {
+int fdd_seek_track(fdd_t* fdd, int track) {
     CHIPS_ASSERT(fdd);
     if (fdd->has_disc && fdd->motor_on && (track < fdd->disc.num_tracks)) {
         fdd->cur_track_index = track;
-        return true;
+        return FDD_RESULT_SUCCESS;
     }
     else {
-        return false;
+        return FDD_RESULT_NOT_READY;
     }
 }
 
-bool fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
+int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
     CHIPS_ASSERT(fdd);
     CHIPS_ASSERT(h < FDD_MAX_SIDES);
     if (fdd->has_disc && fdd->motor_on) {
@@ -249,15 +255,17 @@ bool fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
             if (sector->info.upd765.r == r) {
                 fdd->cur_sector_index = si;
                 fdd->cur_sector_pos = 0;
-                return true;
+                return FDD_RESULT_SUCCESS;
             }
         }
+        return FDD_RESULT_NOT_FOUND;
     }
-    /* fallthrough: no disc or sector not found on track */
-    return false;
+    else {
+        return FDD_RESULT_NOT_READY;
+    }
 }
 
-bool fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data) {
+int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data) {
     CHIPS_ASSERT(fdd && (h < FDD_MAX_SIDES) && out_data);
     if (fdd->has_disc & fdd->motor_on) {
         const fdd_sector_t* sector = &fdd->disc.tracks[h][fdd->cur_track_index].sectors[fdd->cur_sector_index];
@@ -265,11 +273,17 @@ bool fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data) {
             const int data_offset = sector->data_offset + fdd->cur_sector_pos;
             *out_data = fdd->data[data_offset];
             fdd->cur_sector_pos++;
-            return fdd->cur_sector_pos < sector->data_size;
+            if (fdd->cur_sector_pos < sector->data_size) {
+                return FDD_RESULT_SUCCESS;
+            }
+            else {
+                return FDD_RESULT_END_OF_SECTOR;
+            }
         }
+        return FDD_RESULT_NOT_FOUND;
     }
     out_data = 0xFF;
-    return false;
+    return FDD_RESULT_NOT_READY;
 }
 
 /*
