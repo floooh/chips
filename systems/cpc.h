@@ -1455,38 +1455,53 @@ static void _cpc_cas_read(cpc_t* sys) {
 
 /*=== FLOPPY DISC SUPPORT ====================================================*/
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data) {
-    cpc_t* sys = (cpc_t*) user_data;
-    return fdd_seek_track(&sys->fdd, track);
+    if (0 == drive) {
+        cpc_t* sys = (cpc_t*) user_data;
+        return fdd_seek_track(&sys->fdd, track);
+    }
+    else {
+        return UPD765_RESULT_NOT_READY;
+    }
 }
 
 static int _cpc_fdc_seeksector(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data) {
-    cpc_t* sys = (cpc_t*) user_data;
-    return fdd_seek_sector(&sys->fdd, c, h, r, n);
+    if (0 == drive) {
+        cpc_t* sys = (cpc_t*) user_data;
+        return fdd_seek_sector(&sys->fdd, c, h, r, n);
+    }
+    else {
+        return UPD765_RESULT_NOT_READY;
+    }
 }
 
 static int _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_data) {
-    cpc_t* sys = (cpc_t*) user_data;
-    return fdd_read(&sys->fdd, h, out_data);
+    if (0 == drive) {
+        cpc_t* sys = (cpc_t*) user_data;
+        return fdd_read(&sys->fdd, h, out_data);
+    }
+    else {
+        return UPD765_RESULT_NOT_READY;
+    }
 }
 
 static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info) {
     CHIPS_ASSERT((side >= 0) && (side < 2));
-    cpc_t* sys = (cpc_t*) user_data;
-    if (sys->fdd.has_disc && sys->fdd.motor_on) {
-        // FIXME: this should be a fdd_ call
-        out_info->physical_track = sys->fdd.cur_track_index;
-        const fdd_sector_t* sector = &sys->fdd.disc.tracks[side][sys->fdd.cur_track_index].sectors[0];
-        out_info->c = sector->info.upd765.c;
-        out_info->h = sector->info.upd765.h;
-        out_info->r = sector->info.upd765.r;
-        out_info->n = sector->info.upd765.n;
-        out_info->st1 = sector->info.upd765.st1;
-        out_info->st2 = sector->info.upd765.st2;
-        return FDD_RESULT_SUCCESS;
+    if (0 == drive) {
+        cpc_t* sys = (cpc_t*) user_data;
+        if (sys->fdd.has_disc && sys->fdd.motor_on) {
+            // FIXME: this should be a fdd_ call
+            out_info->physical_track = sys->fdd.cur_track_index;
+            const fdd_sector_t* sector = &sys->fdd.disc.tracks[side][sys->fdd.cur_track_index].sectors[0];
+            out_info->c = sector->info.upd765.c;
+            out_info->h = sector->info.upd765.h;
+            out_info->r = sector->info.upd765.r;
+            out_info->n = sector->info.upd765.n;
+            out_info->st1 = sector->info.upd765.st1;
+            out_info->st2 = sector->info.upd765.st2;
+            return FDD_RESULT_SUCCESS;
+        }
     }
-    else {
-        return FDD_RESULT_NOT_READY;
-    }
+    return FDD_RESULT_NOT_READY;
 }
 
 bool cpc_insert_disc(cpc_t* sys, const uint8_t* ptr, int num_bytes) {

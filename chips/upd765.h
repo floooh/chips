@@ -451,12 +451,19 @@ static void _upd765_exec_format_a_track(upd765_t* upd) {
     _upd765_to_phase_result(upd);
 }
 
-static void _upd765_action_seek(upd765_t* upd) {
-    // FIXME
-}
-
 static void _upd765_exec_seek(upd765_t* upd) {
-    // FIXME
+    /* seek to track in fifo 2 */
+    const int fdd_index = upd->fifo[1] & 3;
+    const int track = upd->fifo[2];
+    const int res = upd->seektrack_cb(fdd_index, track, upd->user_data);
+    upd->track_info.physical_track = track;
+    upd->st[0] = fdd_index | UPD765_ST0_SE;
+    if (UPD765_RESULT_SUCCESS != res) {
+        upd->st[0] |= UPD765_ST0_EC | UPD765_ST0_AT;
+    }
+    if (UPD765_RESULT_NOT_READY & res) {
+        upd->st[0] |= UPD765_ST0_NR;
+    }
     _upd765_to_phase_idle(upd);
 }
 
@@ -512,7 +519,7 @@ static _upd765_cmd_desc_t _upd765_cmd_table[32] = {
     /*12 */     { UPD765_CMD_READ_DELETED_DATA,         9, 7, _upd765_action_read_deleted_data, _upd765_exec_read_deleted_data, _upd765_result_std },
     /*13 */     { UPD765_CMD_FORMAT_A_TRACK,            6, 7, _upd765_action_format_a_track, _upd765_exec_format_a_track, _upd765_result_std },
     /*14 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
-    /*15 */     { UPD765_CMD_SEEK,                      3, 0, _upd765_action_seek, _upd765_exec_seek, 0 },
+    /*15 */     { UPD765_CMD_SEEK,                      3, 0, 0, _upd765_exec_seek, 0 },
     /*16 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
     /*17 */     { UPD765_CMD_SCAN_EQUAL,                9, 7, _upd765_action_scan_equal, _upd765_exec_scan_equal, _upd765_result_std },
     /*18 */     { UPD765_CMD_INVALID,                   1, 1, 0, 0, _upd765_result_invalid },
