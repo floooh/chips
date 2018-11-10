@@ -66,12 +66,12 @@ typedef struct {
     uint8_t n;      /* number (sector size) */
     uint8_t st1;    /* ST1 status register result */
     uint8_t st2;    /* ST2 status register result */
-} fdd_upd765_info_t;
+} fdd_upd765_sectorinfo_t;
 
 /* a sector description */
 typedef struct {
     union {
-        fdd_upd765_info_t upd765;
+        fdd_upd765_sectorinfo_t upd765;
         uint8_t raw[8];
     } info;
     int data_offset;    /* start of sector data in disc data blob */

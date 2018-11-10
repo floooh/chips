@@ -278,9 +278,9 @@ static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_update_memory_mapping(cpc_t* sys);
 static void _cpc_cas_read(cpc_t* sys);
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data);
-static int _cpc_fdc_seeksector(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data);
+static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void* user_data);
 static int _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_data);
-static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info);
+static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info);
 
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 #define _CPC_CLEAR(val) memset(&val, 0, sizeof(val))
@@ -492,11 +492,6 @@ static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     /* gate array snoops for interrupt acknowledge */
     if ((pins & (Z80_M1|Z80_IORQ)) == (Z80_M1|Z80_IORQ)) {
         _cpc_ga_int_ack(sys);
-    }
-
-    /* tick the floppy disc controller (at 4 MHz) */
-    for (int i = 0; i < num_ticks; i++) {
-        upd765_tick(&sys->fdc);
     }
 
     /* memory and IO requests */
@@ -1465,10 +1460,24 @@ static int _cpc_fdc_seektrack(int drive, int track, void* user_data) {
     }
 }
 
-static int _cpc_fdc_seeksector(int drive, uint8_t c, uint8_t h, uint8_t r, uint8_t n, void* user_data) {
+static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void* user_data) {
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
-        return fdd_seek_sector(&sys->fdd, c, h, r, n);
+        const uint8_t c = inout_info->c;
+        const uint8_t h = inout_info->h;
+        const uint8_t r = inout_info->r;
+        const uint8_t n = inout_info->n;
+        int res = fdd_seek_sector(&sys->fdd, c, h, r, n);
+        if (res == UPD765_RESULT_SUCCESS) {
+            const fdd_sector_t* sector = &sys->fdd.disc.tracks[h][sys->fdd.cur_track_index].sectors[0];
+            inout_info->c = sector->info.upd765.c;
+            inout_info->h = sector->info.upd765.h;
+            inout_info->r = sector->info.upd765.r;
+            inout_info->n = sector->info.upd765.n;
+            inout_info->st1 = sector->info.upd765.st1;
+            inout_info->st2 = sector->info.upd765.st2;
+        }
+        return res;
     }
     else {
         return UPD765_RESULT_NOT_READY;
@@ -1485,7 +1494,7 @@ static int _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_dat
     }
 }
 
-static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_trackinfo_t* out_info) {
+static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info) {
     CHIPS_ASSERT((side >= 0) && (side < 2));
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
