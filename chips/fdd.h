@@ -282,7 +282,7 @@ int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data) {
         }
         return FDD_RESULT_NOT_FOUND;
     }
-    out_data = 0xFF;
+    *out_data = 0xFF;
     return FDD_RESULT_NOT_READY;
 }
 
