@@ -18,7 +18,6 @@
     ~~~
         your own assert macro (default: assert(c))
 
-    FIXME: disk image loading code should probably go into separate headers
     FIXME: DOCS
 
     ## zlib/libpng license
@@ -122,9 +121,6 @@ extern int fdd_seek_track(fdd_t* fdd, int track);
 extern int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
 /* read the next byte from the seeked-to sector, return FDD_RESULT_* */
 extern int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data);
-
-/* load Amstrad CPC .dsk file format */
-extern bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint8_t* data, int data_size);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -284,129 +280,6 @@ int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data) {
     }
     *out_data = 0xFF;
     return FDD_RESULT_NOT_READY;
-}
-
-/*
-    load an Amstrad .DSK disc image
-
-    http://www.cpcwiki.eu/index.php/Format:DSK_disk_image_file_format#Disk_image_file_format
-*/
-typedef struct {
-    uint8_t magic[34];      /* MV - CPCEMU.... */
-    uint8_t creator[14];
-    uint8_t num_tracks;
-    uint8_t num_sides;
-    uint8_t track_size_l;
-    uint8_t track_size_h;
-    uint8_t pad[204];
-} _fdd_cpc_dsk_header;
-
-typedef struct {
-    uint8_t magic[13];      /* Track-Info\r\n */
-    uint8_t unused_0[3];
-    uint8_t track_number;
-    uint8_t side_number;
-    uint8_t unused_1[2];
-    uint8_t sector_size;
-    uint8_t num_sectors;
-    uint8_t gap_length;
-    uint8_t filler_byte;
-} _fdd_cpc_dsk_track_info;
-
-typedef struct {
-    uint8_t track;
-    uint8_t side;
-    uint8_t sector_id;
-    uint8_t sector_size;    /* size_in_bytes = 0x80<<sector_size */
-    uint8_t st1;
-    uint8_t st2;
-    uint8_t unused[2];
-} _fdd_cpc_dsk_sector_info;
-
-bool fdd_insert_cpc_dsk(fdd_t* fdd, const uint8_t* data, int data_size) {
-    CHIPS_ASSERT(fdd);
-    CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_header) == 256);
-    CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_track_info) == 24);
-    CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_sector_info) == 8);
-    CHIPS_ASSERT(data && (data_size > 0));
-    if (fdd->has_disc) {
-        fdd_eject_disc(fdd);
-    }
-
-    /* check if the header is valid */
-    if (data_size > FDD_MAX_DISC_SIZE) {
-        goto error;
-    }
-    if (data_size <= (int)sizeof(_fdd_cpc_dsk_header)) {
-        goto error;
-    }
-    _fdd_cpc_dsk_header* hdr = (_fdd_cpc_dsk_header*) data;
-    if (0 != memcmp(hdr->magic, "MV - CPC", 8)) {
-        goto error;
-    }
-    if (hdr->num_sides > 2) {
-        goto error;
-    }
-    if (hdr->num_tracks > FDD_MAX_TRACKS) {
-        goto error;
-    }
-    const uint16_t track_size = (hdr->track_size_h<<8) | hdr->track_size_l;
-    int file_size = hdr->num_sides * hdr->num_tracks * track_size + sizeof(_fdd_cpc_dsk_header);
-    if (file_size != data_size) {
-        goto error;
-    }
-
-    /* copy the data blob to the local buffer */
-    fdd->data_size = data_size;
-    memcpy(fdd->data, data, fdd->data_size);
-
-    /* setup the disc structure */
-    fdd_disc_t* disc = &fdd->disc;
-    disc->formatted = true;
-    disc->num_sides = hdr->num_sides;
-    disc->num_tracks = hdr->num_tracks;
-    int data_offset = sizeof(_fdd_cpc_dsk_header);
-    for (int track_index = 0; track_index < disc->num_tracks; track_index++) {
-        for (int side_index = 0; side_index < disc->num_sides; side_index++) {
-            fdd_track_t* track = &disc->tracks[side_index][track_index];
-            const _fdd_cpc_dsk_track_info* track_info = (const _fdd_cpc_dsk_track_info*) &fdd->data[data_offset];
-            if (0 != memcmp("Track-Info\r\n", track_info->magic, sizeof(track_info->magic))) {
-                goto error;
-            }
-            if ((data_offset + track_size) > data_size) {
-                goto error;
-            }
-            track->data_offset = data_offset;
-            track->data_size = track_size;
-            track->num_sectors = track_info->num_sectors;
-            const int sector_size = 0x80 << track_info->sector_size;
-            if (sector_size != 512) {
-                goto error;
-            }
-            int sector_data_offset = data_offset + 0x100;
-            const _fdd_cpc_dsk_sector_info* sector_infos = (const _fdd_cpc_dsk_sector_info*) (track_info+1);
-            for (int sector_index = 0; sector_index < track->num_sectors; sector_index++) {
-                fdd_sector_t* sector = &track->sectors[sector_index];
-                const _fdd_cpc_dsk_sector_info* sector_info = &sector_infos[sector_index];
-                sector->info.upd765.c = sector_info->track;
-                sector->info.upd765.h = sector_info->side;
-                sector->info.upd765.r = sector_info->sector_id;
-                sector->info.upd765.n = sector_info->sector_size;
-                sector->info.upd765.st1 = sector_info->st1;
-                sector->info.upd765.st2 = sector_info->st2;
-                sector->data_offset = sector_data_offset;
-                sector->data_size = sector_size;
-                sector_data_offset += sector_size;
-            }
-            data_offset += 0x100 + track->num_sectors * sector_size;
-            CHIPS_ASSERT(data_offset == sector_data_offset);
-        }
-    }
-    fdd->has_disc = true;
-    return true;
-error:
-    fdd_eject_disc(fdd);
-    return false;
 }
 
 #endif /* CHIPS_IMPL */

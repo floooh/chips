@@ -30,6 +30,7 @@
     - chips/kbd.h
     - chips/clk.h
     - chips/fdd.h
+    - chips/fdd_cpc.h
 
     ## The Amstrad CPC 464
 
@@ -1505,7 +1506,7 @@ static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_track
 }
 
 bool cpc_insert_disc(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
-    return fdd_insert_cpc_dsk(&sys->fdd, ptr, num_bytes);
+    return fdd_cpc_insert_dsk(&sys->fdd, ptr, num_bytes);
 }
 
 void cpc_remove_disc(cpc_t* sys) {
