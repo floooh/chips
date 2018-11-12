@@ -20,7 +20,29 @@
 
     ## Usage
 
-        FIXME
+    There's only one function to call which consumes a stream of instruction bytes
+    and produces a stream of ASCII characters for exactly one instruction:
+
+    ~~~C
+    uint16_t z80dasm_op(uint16_t pc, z80dasm_input_cb in_cb, z80dasm_output_cb out_cb, void* user_data)
+    ~~~
+
+    pc      - the current 16-bit program counter, this is used to compute 
+              absolute target addresses for relative jumps
+    in_cb   - this function is called when the disassembler needs the next 
+              instruction byte: uint8_t in_cb(void* user_data)
+    out_cb  - this function is called when the disassembler produces a single
+              ASCII character: void out_cb(char c, void* user_data)
+    user_data   - a user-provided context pointer for the callbacks
+
+    z80dasm_op() returns the new program counter (pc), this should be
+    used as input arg when calling z80dasm_op() for the next instruction.
+
+    NOTE that the output callback will never be called with a null character,
+    you need to terminate the resulting string yourself if needed.
+
+    All undocumented instructions are supported, but are currently
+    not marked as such.
 
     ## Links
 
@@ -116,12 +138,17 @@ extern uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t 
 #undef _M
 #endif
 #define _M() _STR(r[6]);if(pre){_FETCH_I8(d);_STR_D8(d);_CHR(')');}
+/* same as _M, but with given offset byte */
+#ifdef _Md
+#undef _Md
+#endif
+#define _Md(d) _STR(r[6]);if(pre){_STR_D8(d);_CHR(')');}
 /* (HL)/(IX+d)/(IX+d) or r */
 #ifdef _MR
 #undef _MR
 #endif
 #define _MR(i) if(i==6){_M();}else{_STR(r[i]);}
-/* same as _MR, but with existing offset byte */
+/* same as _MR, but with given offset byte */
 #ifdef _MRd
 #undef _MRd
 #endif
@@ -137,7 +164,32 @@ extern uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t 
 #endif
 #define _IMM8() _FETCH_U8(u8); _STR_U8(u8);
 
-/* output a string, return number of characters written */
+static const char* _z80dasm_r[8] = { "B", "C", "D", "E", "H", "L", "(HL)", "A" };
+static const char* _z80dasm_rix[8] = { "B", "C", "D", "E", "IXH", "IXL", "(IX", "A" };
+static const char* _z80dasm_riy[8] = { "B", "C", "D", "E", "IYH", "IYL", "(IY", "A" };
+static const char* _z80dasm_rp[4] = { "BC", "DE", "HL", "SP" };
+static const char* _z80dasm_rpix[4] = { "BC", "DE", "IX", "SP" };
+static const char* _z80dasm_rpiy[4] = { "BC", "DE", "IY", "SP" };
+static const char* _z80dasm_rp2[4] = { "BC", "DE", "HL", "AF"};
+static const char* _z80dasm_rp2ix[4] = { "BC", "DE", "IX", "AF"};
+static const char* _z80dasm_rp2iy[4] = { "BC", "DE", "IY", "AF"};
+static const char* _z80dasm_cc[8] = { "NZ", "Z", "NC", "C", "PO", "PE", "P", "M" };
+static const char* _z80dasm_alu[8] = { "ADD A,", "ADC A,", "SUB ", "SBC A,", "AND ", "XOR ", "OR ", "CP " };
+static const char* _z80dasm_rot[8] = { "RLC ", "RRC ", "RL ", "RR ", "SLA ", "SRA ", "SLL ", "SRL " };
+static const char* _z80dasm_x0z7[8] = { "RLCA", "RRCA", "RLA", "RRA", "DAA", "CPL", "SCF", "CCF" };
+static const char* _z80dasm_edx1z7[8] = { "LD I,A", "LD R,A", "LD A,I", "LD A,R", "RRD", "RLD", "NOP (ED)", "NOP (ED)" };
+static const char* _z80dasm_im[8] = { "0", "0", "1", "2", "0", "0", "1", "2" };
+static const char* _z80dasm_bli[4][4] = {
+    { "LDI", "CPI", "INI", "OUTI" },
+    { "LDD", "CPD", "IND", "OUTD" },
+    { "LDIR", "CPIR", "INIR", "OTIR" },
+    { "LDDR", "CPDR", "INDR", "OTDR" }
+};
+static const char* _z80dasm_oct = "01234567";
+static const char* _z80dasm_dec = "0123456789";
+static const char* _z80dasm_hex = "0123456789ABCDEF";
+
+/* output a string */
 static void _z80dasm_str(const char* str, z80dasm_output_t out_cb, void* user_data) {
     char c;
     while (0 != (c = *str++)) {
@@ -159,15 +211,15 @@ static void _z80dasm_d8(int8_t val, z80dasm_output_t out_cb, void* user_data) {
         val -= 100;
     }
     if ((val/10) != 0) {
-        out_cb("0123456789"[val/10], user_data);
+        out_cb(_z80dasm_dec[val/10], user_data);
     }
-    out_cb("0123456789"[val%10], user_data);
+    out_cb(_z80dasm_dec[val%10], user_data);
 }
 
 /* output an unsigned 8-bit value as hex string */
 static void _z80dasm_u8(uint8_t val, z80dasm_output_t out_cb, void* user_data) {
     for (int i = 1; i >= 0; i--) {
-        out_cb("0123456789ABCDEF"[(val>>(i*4)) & 0xF], user_data);
+        out_cb(_z80dasm_hex[(val>>(i*4)) & 0xF], user_data);
     }
     out_cb('H',user_data);
 }
@@ -175,64 +227,51 @@ static void _z80dasm_u8(uint8_t val, z80dasm_output_t out_cb, void* user_data) {
 /* output an unsigned 16-bit value as hex string */
 static void _z80dasm_u16(uint16_t val, z80dasm_output_t out_cb, void* user_data) {
     for (int i = 3; i >= 0; i--) {
-        out_cb("0123456789ABCDEF"[(val>>(i*4)) & 0xF], user_data);
+        out_cb(_z80dasm_hex[(val>>(i*4)) & 0xF], user_data);
     }
     out_cb('H',user_data);
 }
 
-static const char* _z80dasm_r[8] = { "B", "C", "D", "E", "H", "L", "(HL)", "A" };
-static const char* _z80dasm_rix[8] = { "B", "C", "D", "E", "IXH", "IXL", "(IX", "A" };
-static const char* _z80dasm_riy[8] = { "B", "C", "D", "E", "IYH", "IYL", "(IY", "A" };
-static const char* _z80dasm_rp[4] = { "BC", "DE", "HL", "SP" };
-static const char* _z80dasm_rpix[4] = { "BC", "DE", "IX", "SP" };
-static const char* _z80dasm_rpiy[4] = { "BC", "DE", "IY", "SP" };
-static const char* _z80dasm_rp2[4] = { "BC", "DE", "HL", "AF"};
-static const char* _z80dasm_rp2ix[4] = { "BC", "DE", "IX", "AF"};
-static const char* _z80dasm_rp2iy[4] = { "BC", "DE", "IY", "AF"};
-static const char* _z80dasm_cc[8] = { "NZ", "Z", "NC", "C", "PO", "PE", "P", "M" };
-static const char* _z80dasm_alu[8] = { "ADD A,", "ADC A,", "SUB ", "SBC A,", "AND ", "XOR ", "OR ", "CP " };
-static const char* _z80dasm_rot[8] = { "RLC ", "RRC ", "RL ", "RR ", "SLA ", "SRA ", "SLL ", "SRL " };
-static const char* _z80dasm_x0z7[8] = { "RLCA", "RRCA", "RLA", "RRA", "DAA", "CPL", "SCF", "CCF" };
-static const char* _z80dasm_edx1z7[8] = { "LD I,A", "LD R,A", "LD A,I", "LD A,R", "RRD", "RLD", "NOP (ED)", "NOP (ED)" };
-static const char* _z80dasm_im[8] = { "0", "0/1", "1", "2", "0", "0/1", "1", "2" };
-static const char* _z80dasm_bli[4][4] = {
-    { "LDI", "CPI", "INI", "OUTI" },
-    { "LDD", "CPD", "IND", "OUTD" },
-    { "LDIR", "CPIR", "INIR", "OTIR" },
-    { "LDDR", "CPPR", "INDR", "OTDR" }
-};
-
+/* main disassembler function */
 uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb, void* user_data) {
     CHIPS_ASSERT(in_cb && out_cb);
-
-    uint8_t op;
-    uint8_t pre = 0;
-    int8_t d, u8;
-    uint16_t u16;
-
-    _FETCH_U8(op);
+    uint8_t op = 0, pre = 0, u8 = 0;
+    int8_t d = 0;
+    uint16_t u16 = 0;
     const char** cc = _z80dasm_cc;
     const char** alu = _z80dasm_alu;
     const char** r = _z80dasm_r;
     const char** rp = _z80dasm_rp;
     const char** rp2 = _z80dasm_rp2;
+
+    /* fetch the first instruction byte */
+    _FETCH_U8(op);
+    /* prefixed op? */
     if ((0xFD == op) || (0xDD == op)) {
-        /* prefixed op */
         pre = op;
         _FETCH_U8(op);
         if (op == 0xED) {
-            pre = 0;
+            pre = 0; /* an ED following a prefix cancels the prefix */
         }
-        r  = (0xDD == pre) ? _z80dasm_rix : _z80dasm_riy;
-        rp = (0xDD == pre) ? _z80dasm_rpix : _z80dasm_rpiy;
-        rp2 = (0xDD == pre) ? _z80dasm_rp2ix : _z80dasm_rp2iy;
+        /* if prefixed op, use register tables that replace HL with IX/IY */
+        if (pre == 0xDD) {
+            r  = _z80dasm_rix;
+            rp = _z80dasm_rpix;
+            rp2 = _z80dasm_rp2ix;
+        }
+        else if (pre == 0xFD) {
+            r  = _z80dasm_riy;
+            rp = _z80dasm_rpiy;
+            rp2 = _z80dasm_rp2iy;
+        }
     }
+    
+    /* parse the opcode */
     uint8_t x = (op >> 6) & 3;
     uint8_t y = (op >> 3) & 7;
     uint8_t z = op & 7;
     uint8_t p = y >> 1;
     uint8_t q = y & 1;
-
     if (x == 1) {
         /* 8-bit load block */
         if (y == 6) {
@@ -281,7 +320,7 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                     case 1: _STR("EX AF,AF'"); break;
                     case 2: _STR("DJNZ "); _FETCH_I8(d); _STR_U16(pc+d); break;
                     case 3: _STR("JR "); _FETCH_I8(d); _STR_U16(pc+d); break;
-                    default: _STR("JR "); _STR(cc[y-4]); _FETCH_I8(d); _STR_U16(pc+d); break;
+                    default: _STR("JR "); _STR(cc[y-4]); _CHR(','); _FETCH_I8(d); _STR_U16(pc+d); break;
                 }
                 break;
             case 1:
@@ -289,7 +328,7 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                     _STR("LD "); _STR(rp[p]); _CHR(','); _IMM16();
                 }
                 else {
-                    _STR("ADD HL,"); _STR(rp[p]);
+                    _STR("ADD "); _STR(rp[2]); _CHR(','); _STR(rp[p]);
                 }
                 break;
             case 2: 
@@ -334,7 +373,7 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
             case 3:
                 switch (y) {
                     case 0: _STR("JP "); _IMM16(); break;
-                    case 2: _STR("OUT ("); _IMM8(); _CHR(')'); break;
+                    case 2: _STR("OUT ("); _IMM8(); _CHR(')'); _STR(",A"); break;
                     case 3: _STR("IN A,("); _IMM8(); _CHR(')'); break;
                     case 4: _STR("EX (SP),"); _STR(rp[2]); break;
                     case 5: _STR("EX DE,HL"); break;
@@ -348,13 +387,23 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                         x = (op >> 6) & 3;
                         y = (op >> 3) & 7;
                         z = op & 7;
-                        switch (x) {
-                            case 0: _STR(_z80dasm_rot[y]); break;
-                            case 1: _STR("BIT "); _CHR("01234567"[y]); _CHR(','); break;
-                            case 2: _STR("RES "); _CHR("01234567"[y]); _CHR(','); break;
-                            case 3: _STR("SET "); _CHR("01234567"[y]); _CHR(','); break;
+                        if (x == 0) {
+                            /* rot and shift instructions */
+                            _STR(_z80dasm_rot[y]); _MRd(z,d);
                         }
-                        _MRd(z,d);
+                        else {
+                            /* bit instructions */
+                            if (x == 1) { _STR("BIT "); }
+                            else if (x == 2) { _STR("RES "); }
+                            else { _STR("SET "); }
+                            _CHR(_z80dasm_oct[y]);
+                            if (pre) {
+                                _CHR(','); _Md(d);
+                            }
+                            if (!pre || (z != 6)) {
+                                _CHR(','); _STR(r[z]);
+                            }
+                        }
                         break;
                 }
                 break;
@@ -366,8 +415,8 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                 else {
                     switch (p) {
                         case 0: _STR("CALL "); _IMM16(); break;
-                        case 1: _STR("???"); break; /* double prefix */
-                        case 3: _STR("???"); break; /* double prefix */
+                        case 1: _STR("DBL PREFIX"); break;
+                        case 3: _STR("DBL PREFIX"); break;
                         case 2: /* ED prefix */
                             _FETCH_U8(op);
                             x = (op >> 6) & 3;
@@ -376,7 +425,7 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                             p = y >> 1;
                             q = y & 1;
                             if ((x == 0) || (x == 3)) {
-                                _STR("???");
+                                _STR("NOP (ED)");
                             }
                             else if (x == 2) {
                                 if ((y >= 4) && (z <= 3)) {
@@ -384,12 +433,12 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                                     _STR(_z80dasm_bli[y-4][z]);
                                 }
                                 else {
-                                    _STR("???");
+                                    _STR("NOP (ED)");
                                 }
                             }
                             else {
                                 switch (z) {
-                                    case 0: _STR("IN "); _STR(y==6?"":r[y]); _STR("(C)"); break;
+                                    case 0: _STR("IN "); if(y!=6){_STR(r[y]);_CHR(',');} _STR("(C)"); break;
                                     case 1: _STR("OUT (C),"); _STR(y==6?"0":r[y]); break;
                                     case 2: _STR(q==0?"SBC":"ADC"); _STR(" HL,"); _STR(rp[p]); break;
                                     case 3:
@@ -411,11 +460,25 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                     }
                 }
                 break;
-            case 6: _STR(alu[y]); _IMM8(); break;
+            case 6: _STR(alu[y]); _IMM8(); break; /* ALU n */
             case 7: _STR("RST "); _STR_U8(y*8); break;
         }
     }
     return pc;
 }
 
+#undef _FETCH_U8
+#undef _FETCH_I8
+#undef _FETCH_U16
+#undef _CHR
+#undef _STR
+#undef _STR_D8
+#undef _STR_U8
+#undef _STR_U16
+#undef _M
+#undef _Md
+#undef _MR
+#undef _MRd
+#undef _IMM16
+#undef _IMM8
 #endif /* CHIPS_IMPL */
