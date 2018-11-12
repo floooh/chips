@@ -26,6 +26,10 @@
         - no DMA mode
         - no interrupt-driven operation
 
+    ## TODO
+        - DOCS!
+        - cleanup callbacks
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
