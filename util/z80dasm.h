@@ -24,7 +24,7 @@
     and produces a stream of ASCII characters for exactly one instruction:
 
     ~~~C
-    uint16_t z80dasm_op(uint16_t pc, z80dasm_input_cb in_cb, z80dasm_output_cb out_cb, void* user_data)
+    uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb, void* user_data)
     ~~~
 
     pc      - the current 16-bit program counter, this is used to compute 
