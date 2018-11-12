@@ -2,7 +2,7 @@
 /*#
     # z80dasm.h
 
-    A stateless Z80 disassembler without CRT IO functions.
+    A stateless Z80 disassembler that doesn't call any CRT functions.
 
     Do this:
     ~~~C
