@@ -610,6 +610,7 @@ void kc85_reset(kc85_t* sys) {
     sys->cur_scanline = 0;
     sys->scanline_counter = sys->scanline_period;
     _kc85_exp_reset(sys);
+    sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
     _kc85_update_memory_map(sys);
 
     /* execution after reset starts at 0xE000 */
