@@ -1,14 +1,14 @@
 #pragma once
 /*#
-    # memui.h
+    # ui_mem.h
 
-    Memory viewer/editor UI.
+    Memory viewer/editor UI using Dear ImGui.
 
     Do this:
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C++ file to create the 
     implementation.
 
     Optionally provide the following macros with your own implementation
@@ -22,6 +22,9 @@
     *implementation*:
 
         - imgui.h
+
+    All strings provided to ui_mem_init() must remain alive until
+    ui_mem_discard() is called!
 
     Includes a (slightly extended) version of imgui_memory_editor.h:
 
@@ -58,50 +61,51 @@ struct MemoryEditor;
 typedef void MemoryEditor;
 #endif
 
-#define MEMUI_MAX_LAYERS (8)
+#define UI_MEM_MAX_LAYERS (8)
 
 /* callbacks for reading and writing bytes */
-typedef uint8_t (*memui_read_t)(int layer, uint16_t addr, void* user_data);
-typedef void (*memui_write_t)(int layer, uint16_t addr, uint8_t data, void* user_data);
+typedef uint8_t (*ui_mem_read_t)(int layer, uint16_t addr, void* user_data);
+typedef void (*ui_mem_write_t)(int layer, uint16_t addr, uint8_t data, void* user_data);
 
-/* setup parameters for memui_init()
+/* setup parameters for ui_mem_init()
 
     NOTE: all strings must be static!
 */
 typedef struct {
-    const char* title;
-    const char* layers[MEMUI_MAX_LAYERS];
-    memui_read_t read_cb;
-    memui_write_t write_cb;
+    const char* title;  /* window title */
+    const char* layers[UI_MEM_MAX_LAYERS];   /* memory system layer names */
+    ui_mem_read_t read_cb;
+    ui_mem_write_t write_cb;
     void* user_data;
     bool read_only;
-    int x, y, w, h;
-} memui_desc_t;
+    int x, y, w, h;     /* initial window pos and size */
+} ui_mem_desc_t;
 
 typedef struct {
     const char* title;
-    memui_read_t read_cb;
-    memui_write_t write_cb;
+    ui_mem_read_t read_cb;
+    ui_mem_write_t write_cb;
     void* user_data;
-    int initial_x, initial_y;
-    int initial_w, initial_h;
+    int init_x, init_y;
+    int init_w, init_h;
     MemoryEditor* ed;
-} memui_t;
+    bool valid;
+} ui_mem_t;
 
-/* initialize a new memui window, NOTE: win MUST be zero-initialized already! */
-void memui_init(memui_t* win, memui_desc_t* desc);
-/* discard a memui window (frees memory) */
-void memui_discard(memui_t* win);
-/* open the memui window */
-void memui_open(memui_t* win);
-/* close the memui window */
-void memui_close(memui_t* win);
+/* initialize a new window, NOTE: win MUST be zero-initialized already! */
+void ui_mem_init(ui_mem_t* win, ui_mem_desc_t* desc);
+/* discard a window (frees memory) */
+void ui_mem_discard(ui_mem_t* win);
+/* open the window */
+void ui_mem_open(ui_mem_t* win);
+/* close the window */
+void ui_mem_close(ui_mem_t* win);
 /* toggle visibility */
-void memui_toggle(memui_t* win);
-/* return true if memui window is open */
-bool memui_isopen(memui_t* win);
-/* draw the memui window */
-void memui_draw(memui_t* win);
+void ui_mem_toggle(ui_mem_t* win);
+/* return true if window is open */
+bool ui_mem_isopen(ui_mem_t* win);
+/* draw the window */
+void ui_mem_draw(ui_mem_t* win);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -110,7 +114,7 @@ void memui_draw(memui_t* win);
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
 #ifdef CHIPS_IMPL
 #ifndef __cplusplus
-#error "memui.h implementation must be compiled as C++"
+#error "implementation must be compiled as C++"
 #endif
 #include <string.h> /* memset */
 #include <stdio.h>  /* sscanf, sprintf (ImGui memory editor) */
@@ -180,11 +184,11 @@ struct MemoryEditor
     void            (*WriteFn)(u8* data, size_t off, u8 d); // = NULL   // optional handler to write bytes
     bool            (*HighlightFn)(u8* data, size_t off);   // = NULL   // optional handler to return Highlight property (to support non-contiguous highlighting)
 
-    /*--- BEGIN memui.h changes ---*/
+    /*--- BEGIN ui_mem.h changes ---*/
     int NumLayers;
     int CurLayer;
-    const char* Layers[MEMUI_MAX_LAYERS];
-    /*--- END memui.h changes ---*/
+    const char* Layers[UI_MEM_MAX_LAYERS];
+    /*--- END ui_mem.h changes ---*/
 
     // State/Internals
     bool            ContentsWidthChanged;
@@ -220,13 +224,13 @@ struct MemoryEditor
         GotoAddr = (size_t)-1;
         HighlightMin = HighlightMax = (size_t)-1;
 
-        /*--- BEGIN memui.h changes ---*/
+        /*--- BEGIN ui_mem.h changes ---*/
         NumLayers = 0;
         CurLayer = 0;
-        for (int i = 0; i < MEMUI_MAX_LAYERS; i++) {
+        for (int i = 0; i < UI_MEM_MAX_LAYERS; i++) {
             Layers[i] = nullptr;
         }
-        /*--- END memui.h changes ---*/
+        /*--- END ui_mem.h changes ---*/
     }
 
     void GotoAddrAndHighlight(size_t addr_min, size_t addr_max)
@@ -307,6 +311,9 @@ struct MemoryEditor
     {
         Sizes s;
         CalcSizes(s, mem_size, base_display_addr);
+        if (0 == AddrInputBuf[0]) {
+            sprintf(AddrInputBuf, "%0*" _PRISizeT, s.AddrDigitsCount, base_display_addr);
+        }
         ImGuiStyle& style = ImGui::GetStyle();
 
         const float footer_height_to_reserve = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing(); // 1 separator, 1 input text
@@ -528,8 +535,6 @@ struct MemoryEditor
         }
 
         ImGui::SameLine();
-        ImGui::Text("Addr:");
-        ImGui::SameLine();
         ImGui::PushItemWidth((s.AddrDigitsCount + 1) * s.GlyphWidth + style.FramePadding.x * 2.0f);
         if (ImGui::InputText("##addr", AddrInputBuf, 32, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue))
         {
@@ -542,14 +547,12 @@ struct MemoryEditor
         }
         ImGui::PopItemWidth();
 
-        /*--- BEGIN memui.h changes */
-        ImGui::SameLine();
-        ImGui::Text("Layer:");
+        /*--- BEGIN ui_mem.h changes */
         ImGui::SameLine();
         ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth());
         ImGui::Combo("##layer", &CurLayer, Layers, NumLayers);
         ImGui::PopItemWidth();
-        /*--- END memui.h changes */
+        /*--- END ui_mem.h changes */
 
         if (GotoAddr != (size_t)-1)
         {
@@ -572,9 +575,9 @@ struct MemoryEditor
 /*== end of imgui_memory_editor.h ============================================*/
 
 /* ImGui MemoryEditor read/write callbacks */
-static uint8_t _memui_readfn(uint8_t* ptr, size_t off) {
+static uint8_t _ui_mem_readfn(uint8_t* ptr, size_t off) {
     /* we'll treat the "data ptr" as "user data" */
-    const memui_t* win = (memui_t*) ptr;
+    const ui_mem_t* win = (ui_mem_t*) ptr;
     CHIPS_ASSERT(win && win->ed);
     if (win->read_cb) {
         return win->read_cb(win->ed->CurLayer, (uint16_t)off, win->user_data);
@@ -584,34 +587,35 @@ static uint8_t _memui_readfn(uint8_t* ptr, size_t off) {
     }
 }
 
-static void _memui_writefn(uint8_t* ptr, size_t off, uint8_t val) {
+static void _ui_mem_writefn(uint8_t* ptr, size_t off, uint8_t val) {
     /* we'll treat the "data ptr" as "user data" */
-    const memui_t* win = (memui_t*) ptr;
+    const ui_mem_t* win = (ui_mem_t*) ptr;
     CHIPS_ASSERT(win && win->ed);
     if (win->write_cb) {
         win->write_cb(win->ed->CurLayer, (uint16_t)off, val, win->user_data);
     }
 }
 
-void memui_init(memui_t* win, memui_desc_t* desc) {
+void ui_mem_init(ui_mem_t* win, ui_mem_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(0 == win->ed);
-    memset(win, 0, sizeof(memui_t));
+    memset(win, 0, sizeof(ui_mem_t));
     win->title = desc->title;
     win->read_cb = desc->read_cb;
     win->write_cb = desc->write_cb;
     win->user_data = desc->user_data;
-    win->initial_x = desc->x;
-    win->initial_y = desc->y;
-    win->initial_w = desc->w;
-    win->initial_h = desc->h;
+    win->init_x = desc->x;
+    win->init_y = desc->y;
+    win->init_w = desc->w;
+    win->init_h = desc->h;
     win->ed = new MemoryEditor;
     win->ed->ReadOnly = desc->read_only;
-    win->ed->ReadFn = _memui_readfn;
-    win->ed->WriteFn = _memui_writefn;
+    win->ed->ReadFn = _ui_mem_readfn;
+    win->ed->WriteFn = _ui_mem_writefn;
     win->ed->Open = false;
-    for (int i = 0; i < MEMUI_MAX_LAYERS; i++) {
+    win->ed->OptAddrDigitsCount = 4;
+    for (int i = 0; i < UI_MEM_MAX_LAYERS; i++) {
         if (desc->layers[i]) {
             win->ed->NumLayers++;
             win->ed->Layers[i] = desc->layers[i];
@@ -620,39 +624,42 @@ void memui_init(memui_t* win, memui_desc_t* desc) {
             break;
         }
     }
+    win->valid = true;
 }
 
-void memui_discard(memui_t* win) {
-    CHIPS_ASSERT(win && win->ed);
+void ui_mem_discard(ui_mem_t* win) {
+    CHIPS_ASSERT(win && win->ed && win->valid);
     delete win->ed; win->ed = nullptr;
+    win->valid = false;
 }
 
-void memui_open(memui_t* win) {
-    CHIPS_ASSERT(win && win->ed);
+void ui_mem_open(ui_mem_t* win) {
+    CHIPS_ASSERT(win && win->ed && win->valid);
     win->ed->Open = true;
 }
 
-void memui_close(memui_t* win) {
-    CHIPS_ASSERT(win && win->ed);
+void ui_mem_close(ui_mem_t* win) {
+    CHIPS_ASSERT(win && win->ed && win->valid);
     win->ed->Open = false;
 }
 
-void memui_toggle(memui_t* win) {
-    CHIPS_ASSERT(win && win->ed);
+void ui_mem_toggle(ui_mem_t* win) {
+    CHIPS_ASSERT(win && win->ed && win->valid);
     win->ed->Open = !win->ed->Open;
 }
 
-bool memui_isopen(memui_t* win) {
-    CHIPS_ASSERT(win && win->ed);
+bool ui_mem_isopen(ui_mem_t* win) {
+    CHIPS_ASSERT(win && win->ed && win->valid);
     return win->ed->Open;
 }
 
-void memui_draw(memui_t* win) {
-    CHIPS_ASSERT(win && win->ed);
-    if (win->ed->Open) {
-        ImGui::SetNextWindowPos(ImVec2(win->initial_x, win->initial_y), ImGuiSetCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(win->initial_w, win->initial_h), ImGuiSetCond_Once);
-        win->ed->DrawWindow(win->title, (uint8_t*)win, (1<<16));
+void ui_mem_draw(ui_mem_t* win) {
+    CHIPS_ASSERT(win && win->ed && win->valid);
+    if (!win->ed->Open) {
+        return;
     }
+    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
+    win->ed->DrawWindow(win->title, (uint8_t*)win, (1<<16));
 }
 #endif /* CHIPS_IMPL */
