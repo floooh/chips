@@ -23,6 +23,10 @@
 
         - imgui.h
 
+    Includes a (slightly extended) version of imgui_memory_editor.h:
+
+    https://github.com/ocornut/imgui_club/blob/master/imgui_memory_editor/imgui_memory_editor.h
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
