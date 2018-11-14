@@ -249,6 +249,11 @@ static inline uint16_t mem_rd16(mem_t* mem, uint16_t addr) {
     return (h<<8)|l;
 }
 
+/* read a byte from a specific layer (slow!) */
+extern uint8_t mem_layer_rd(mem_t* mem, int layer, uint16_t addr);
+/* write a byte to a specific layer (slow!) */
+extern void mem_layer_wr(mem_t* mem, int layer, uint16_t addr, uint8_t data);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
@@ -368,4 +373,22 @@ void mem_write_range(mem_t* m, uint16_t addr, const uint8_t* src, int num_bytes)
         mem_wr(m, addr++, src[i]);
     }
 }
+
+uint8_t mem_layer_rd(mem_t* mem, int layer, uint16_t addr) {
+    CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
+    if (mem->layers[layer][addr>>MEM_PAGE_SHIFT].read_ptr) {
+        return mem->layers[layer][addr>>MEM_PAGE_SHIFT].read_ptr[addr&MEM_PAGE_MASK];
+    }
+    else {
+        return 0xFF;
+    }
+}
+
+void mem_layer_wr(mem_t* mem, int layer, uint16_t addr, uint8_t data) {
+    CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
+    if (mem->layers[layer][addr>>MEM_PAGE_SHIFT].write_ptr) {
+        mem->layers[layer][addr>>MEM_PAGE_SHIFT].write_ptr[addr&MEM_PAGE_MASK] = data;
+    }
+}
+
 #endif /* CHIPS_IMPL */
