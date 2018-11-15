@@ -95,6 +95,8 @@ typedef struct {
     int stack_num;
     int stack_pos;
     uint16_t stack[UI_DASM_MAX_STACK];
+    uint16_t highlight_addr;
+    uint32_t highlight_color;
 } ui_dasm_t;
 
 /* initialize a new window */
@@ -145,6 +147,7 @@ void ui_dasm_init(ui_dasm_t* win, ui_dasm_desc_t* desc) {
     win->init_y = desc->y;
     win->init_w = desc->w;
     win->init_h = desc->h;
+    win->highlight_color = 0xFF30FF30;
     for (int i = 0; i < UI_DASM_MAX_LAYERS; i++) {
         if (desc->layers[i]) {
             win->num_layers++;
@@ -289,7 +292,7 @@ static void _ui_dasm_draw_controls(ui_dasm_t* win) {
     win->start_addr = ui_util_hex16("##addr", win->start_addr);
     ImGui::SameLine();
     uint16_t addr = 0;
-    if (ImGui::Button(" < ")) {
+    if (ImGui::ArrowButton("##back", ImGuiDir_Left)) {
         if (_ui_dasm_stack_back(win, &addr)) {
             _ui_dasm_goto(win, addr);
         }
@@ -325,9 +328,16 @@ static void _ui_dasm_draw_disasm(ui_dasm_t* win) {
 
     /* visible items */
     for (int line_i = clipper.DisplayStart; line_i < clipper.DisplayEnd; line_i++) {
-        const int op_addr = (int)win->cur_addr;
+        const uint16_t op_addr = win->cur_addr;
         _ui_dasm_disasm(win);
         const int num_bytes = win->bin_pos;
+
+        /* highlight current hovered address */
+        bool highlight = false;
+        if (win->highlight_addr == op_addr) {
+            ImGui::PushStyleColor(ImGuiCol_Text, win->highlight_color);
+            highlight = true;
+        }
 
         /* address */
         ImGui::Text("%04X: ", op_addr);
@@ -344,18 +354,23 @@ static void _ui_dasm_draw_disasm(ui_dasm_t* win) {
         ImGui::SameLine(line_start_x + cell_width*4 + glyph_width*2);
         ImGui::Text("%s", win->str_buf);
 
-        /* check for jump instruction */
+        if (highlight) {
+            ImGui::PopStyleColor();
+        }
+
+        /* check for jump instruction and draw an arrow  */
         uint16_t jump_addr = 0;
         if (_ui_dasm_jumptarget(win, win->cur_addr, &jump_addr)) {
             ImGui::SameLine(line_start_x + cell_width*4 + glyph_width*2 + glyph_width*20);
             ImGui::PushID(line_i);
-            if (ImGui::Button(" > ")) {
+            if (ImGui::ArrowButton("##btn", ImGuiDir_Right)) {
                 ImGui::SetScrollY(0);
                 _ui_dasm_goto(win, jump_addr);
                 _ui_dasm_stack_push(win, op_addr);
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Goto %04X", jump_addr);
+                win->highlight_addr = jump_addr;
             }
             ImGui::PopID();
         }
@@ -383,6 +398,7 @@ static void _ui_dasm_draw_stack(ui_dasm_t* win) {
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Goto %04X", win->stack[i]);
+                win->highlight_addr = win->stack[i];
             }
             ImGui::PopID();
         }
