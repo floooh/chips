@@ -1,6 +1,6 @@
 #pragma once
 /*#
-    # ui_mem.h
+    # ui_memedit.h
 
     Memory viewer/editor UI using Dear ImGui.
 
@@ -23,8 +23,8 @@
 
         - imgui.h
 
-    All strings provided to ui_mem_init() must remain alive until
-    ui_mem_discard() is called!
+    All strings provided to ui_memedit_init() must remain alive until
+    ui_memedit_discard() is called!
 
     Includes a (slightly extended) version of imgui_memory_editor.h:
 
@@ -61,51 +61,51 @@ struct MemoryEditor;
 typedef void MemoryEditor;
 #endif
 
-#define UI_MEM_MAX_LAYERS (8)
+#define UI_MEMEDIT_MAX_LAYERS (8)
 
 /* callbacks for reading and writing bytes */
-typedef uint8_t (*ui_mem_read_t)(int layer, uint16_t addr, void* user_data);
-typedef void (*ui_mem_write_t)(int layer, uint16_t addr, uint8_t data, void* user_data);
+typedef uint8_t (*ui_memedit_read_t)(int layer, uint16_t addr, void* user_data);
+typedef void (*ui_memedit_write_t)(int layer, uint16_t addr, uint8_t data, void* user_data);
 
-/* setup parameters for ui_mem_init()
+/* setup parameters for ui_memedit_init()
 
     NOTE: all strings must be static!
 */
 typedef struct {
     const char* title;  /* window title */
-    const char* layers[UI_MEM_MAX_LAYERS];   /* memory system layer names */
-    ui_mem_read_t read_cb;
-    ui_mem_write_t write_cb;
+    const char* layers[UI_MEMEDIT_MAX_LAYERS];   /* memory system layer names */
+    ui_memedit_read_t read_cb;
+    ui_memedit_write_t write_cb;
     void* user_data;
     bool read_only;
     int x, y, w, h;     /* initial window pos and size */
-} ui_mem_desc_t;
+} ui_memedit_desc_t;
 
 typedef struct {
     const char* title;
-    ui_mem_read_t read_cb;
-    ui_mem_write_t write_cb;
+    ui_memedit_read_t read_cb;
+    ui_memedit_write_t write_cb;
     void* user_data;
     int init_x, init_y;
     int init_w, init_h;
     MemoryEditor* ed;
     bool valid;
-} ui_mem_t;
+} ui_memedit_t;
 
 /* initialize a new window, NOTE: win MUST be zero-initialized already! */
-void ui_mem_init(ui_mem_t* win, ui_mem_desc_t* desc);
+void ui_memedit_init(ui_memedit_t* win, ui_memedit_desc_t* desc);
 /* discard a window (frees memory) */
-void ui_mem_discard(ui_mem_t* win);
+void ui_memedit_discard(ui_memedit_t* win);
 /* open the window */
-void ui_mem_open(ui_mem_t* win);
+void ui_memedit_open(ui_memedit_t* win);
 /* close the window */
-void ui_mem_close(ui_mem_t* win);
+void ui_memedit_close(ui_memedit_t* win);
 /* toggle visibility */
-void ui_mem_toggle(ui_mem_t* win);
+void ui_memedit_toggle(ui_memedit_t* win);
 /* return true if window is open */
-bool ui_mem_isopen(ui_mem_t* win);
+bool ui_memedit_isopen(ui_memedit_t* win);
 /* draw the window */
-void ui_mem_draw(ui_mem_t* win);
+void ui_memedit_draw(ui_memedit_t* win);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -184,11 +184,11 @@ struct MemoryEditor
     void            (*WriteFn)(u8* data, size_t off, u8 d); // = NULL   // optional handler to write bytes
     bool            (*HighlightFn)(u8* data, size_t off);   // = NULL   // optional handler to return Highlight property (to support non-contiguous highlighting)
 
-    /*--- BEGIN ui_mem.h changes ---*/
+    /*--- BEGIN ui_memedit.h changes ---*/
     int NumLayers;
     int CurLayer;
-    const char* Layers[UI_MEM_MAX_LAYERS];
-    /*--- END ui_mem.h changes ---*/
+    const char* Layers[UI_MEMEDIT_MAX_LAYERS];
+    /*--- END ui_memedit.h changes ---*/
 
     // State/Internals
     bool            ContentsWidthChanged;
@@ -224,13 +224,13 @@ struct MemoryEditor
         GotoAddr = (size_t)-1;
         HighlightMin = HighlightMax = (size_t)-1;
 
-        /*--- BEGIN ui_mem.h changes ---*/
+        /*--- BEGIN ui_memedit.h changes ---*/
         NumLayers = 0;
         CurLayer = 0;
-        for (int i = 0; i < UI_MEM_MAX_LAYERS; i++) {
+        for (int i = 0; i < UI_MEMEDIT_MAX_LAYERS; i++) {
             Layers[i] = nullptr;
         }
-        /*--- END ui_mem.h changes ---*/
+        /*--- END ui_memedit.h changes ---*/
     }
 
     void GotoAddrAndHighlight(size_t addr_min, size_t addr_max)
@@ -547,12 +547,12 @@ struct MemoryEditor
         }
         ImGui::PopItemWidth();
 
-        /*--- BEGIN ui_mem.h changes */
+        /*--- BEGIN ui_memedit.h changes */
         ImGui::SameLine();
         ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth());
         ImGui::Combo("##layer", &CurLayer, Layers, NumLayers);
         ImGui::PopItemWidth();
-        /*--- END ui_mem.h changes */
+        /*--- END ui_memedit.h changes */
 
         if (GotoAddr != (size_t)-1)
         {
@@ -575,9 +575,9 @@ struct MemoryEditor
 /*== end of imgui_memory_editor.h ============================================*/
 
 /* ImGui MemoryEditor read/write callbacks */
-static uint8_t _ui_mem_readfn(uint8_t* ptr, size_t off) {
+static uint8_t _ui_memedit_readfn(uint8_t* ptr, size_t off) {
     /* we'll treat the "data ptr" as "user data" */
-    const ui_mem_t* win = (ui_mem_t*) ptr;
+    const ui_memedit_t* win = (ui_memedit_t*) ptr;
     CHIPS_ASSERT(win && win->ed);
     if (win->read_cb) {
         return win->read_cb(win->ed->CurLayer, (uint16_t)off, win->user_data);
@@ -587,20 +587,20 @@ static uint8_t _ui_mem_readfn(uint8_t* ptr, size_t off) {
     }
 }
 
-static void _ui_mem_writefn(uint8_t* ptr, size_t off, uint8_t val) {
+static void _ui_memedit_writefn(uint8_t* ptr, size_t off, uint8_t val) {
     /* we'll treat the "data ptr" as "user data" */
-    const ui_mem_t* win = (ui_mem_t*) ptr;
+    const ui_memedit_t* win = (ui_memedit_t*) ptr;
     CHIPS_ASSERT(win && win->ed);
     if (win->write_cb) {
         win->write_cb(win->ed->CurLayer, (uint16_t)off, val, win->user_data);
     }
 }
 
-void ui_mem_init(ui_mem_t* win, ui_mem_desc_t* desc) {
+void ui_memedit_init(ui_memedit_t* win, ui_memedit_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(0 == win->ed);
-    memset(win, 0, sizeof(ui_mem_t));
+    memset(win, 0, sizeof(ui_memedit_t));
     win->title = desc->title;
     win->read_cb = desc->read_cb;
     win->write_cb = desc->write_cb;
@@ -611,11 +611,11 @@ void ui_mem_init(ui_mem_t* win, ui_mem_desc_t* desc) {
     win->init_h = desc->h;
     win->ed = new MemoryEditor;
     win->ed->ReadOnly = desc->read_only;
-    win->ed->ReadFn = _ui_mem_readfn;
-    win->ed->WriteFn = _ui_mem_writefn;
+    win->ed->ReadFn = _ui_memedit_readfn;
+    win->ed->WriteFn = _ui_memedit_writefn;
     win->ed->Open = false;
     win->ed->OptAddrDigitsCount = 4;
-    for (int i = 0; i < UI_MEM_MAX_LAYERS; i++) {
+    for (int i = 0; i < UI_MEMEDIT_MAX_LAYERS; i++) {
         if (desc->layers[i]) {
             win->ed->NumLayers++;
             win->ed->Layers[i] = desc->layers[i];
@@ -627,33 +627,33 @@ void ui_mem_init(ui_mem_t* win, ui_mem_desc_t* desc) {
     win->valid = true;
 }
 
-void ui_mem_discard(ui_mem_t* win) {
+void ui_memedit_discard(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->ed && win->valid);
     delete win->ed; win->ed = nullptr;
     win->valid = false;
 }
 
-void ui_mem_open(ui_mem_t* win) {
+void ui_memedit_open(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->ed && win->valid);
     win->ed->Open = true;
 }
 
-void ui_mem_close(ui_mem_t* win) {
+void ui_memedit_close(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->ed && win->valid);
     win->ed->Open = false;
 }
 
-void ui_mem_toggle(ui_mem_t* win) {
+void ui_memedit_toggle(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->ed && win->valid);
     win->ed->Open = !win->ed->Open;
 }
 
-bool ui_mem_isopen(ui_mem_t* win) {
+bool ui_memedit_isopen(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->ed && win->valid);
     return win->ed->Open;
 }
 
-void ui_mem_draw(ui_mem_t* win) {
+void ui_memedit_draw(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->ed && win->valid);
     if (!win->ed->Open) {
         return;
