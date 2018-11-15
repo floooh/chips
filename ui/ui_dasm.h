@@ -125,11 +125,6 @@ void ui_dasm_draw(ui_dasm_t* win);
 #endif
 #include <string.h> /* memset */
 #include <stdio.h>  /* sscanf, sprintf (ImGui memory editor) */
-#ifndef CHIPS_DEBUG
-    #ifdef _DEBUG
-        #define CHIPS_DEBUG
-    #endif
-#endif
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)

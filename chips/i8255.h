@@ -245,11 +245,6 @@ extern uint64_t i8255_iorq(i8255_t* ppi, uint64_t pins);
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
 #ifdef CHIPS_IMPL
 #include <string.h>
-#ifndef CHIPS_DEBUG
-    #ifdef _DEBUG
-        #define CHIPS_DEBUG
-    #endif
-#endif
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)

@@ -240,11 +240,6 @@ extern bool m6581_tick(m6581_t* sid);
 #define _USE_MATH_DEFINES
 #endif
 #include <math.h>   /* tanh */
-#ifndef CHIPS_DEBUG
-    #ifdef _DEBUG
-        #define CHIPS_DEBUG
-    #endif
-#endif
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
