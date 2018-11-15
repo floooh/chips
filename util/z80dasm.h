@@ -221,7 +221,7 @@ static void _z80dasm_u8(uint8_t val, z80dasm_output_t out_cb, void* user_data) {
     for (int i = 1; i >= 0; i--) {
         out_cb(_z80dasm_hex[(val>>(i*4)) & 0xF], user_data);
     }
-    out_cb('H',user_data);
+    out_cb('h',user_data);
 }
 
 /* output an unsigned 16-bit value as hex string */
@@ -229,7 +229,7 @@ static void _z80dasm_u16(uint16_t val, z80dasm_output_t out_cb, void* user_data)
     for (int i = 3; i >= 0; i--) {
         out_cb(_z80dasm_hex[(val>>(i*4)) & 0xF], user_data);
     }
-    out_cb('H',user_data);
+    out_cb('h',user_data);
 }
 
 /* main disassembler function */
