@@ -203,9 +203,9 @@ void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc) {
     win->init_h = desc->h;
     win->left_padding = 80;
     win->layer_height = 20;
-    win->grid_color = 0xFFAAAAAA;
-    win->on_color = 0xFF00CC00;
-    win->off_color = 0xFF222222;
+    win->grid_color = 0xFFDDDDDD;
+    win->on_color = 0xFF00EE00;
+    win->off_color = 0xFF004400;
     win->valid = true;
 }
 
