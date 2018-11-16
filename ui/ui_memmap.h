@@ -56,7 +56,7 @@ extern "C" {
 
 /* memory region states */
 typedef enum {
-    UI_MEMMAP_REGIONSTATE_INACTIVE,     /* not currently active */
+    UI_MEMMAP_REGIONSTATE_OFF,          /* not currently active */
     UI_MEMMAP_REGIONSTATE_ACTIVE,       /* active and CPU-visible */
     UI_MEMMAP_REGIONSTATE_HIDDEN,       /* active, but hidden behind a higher-priority region */
 } ui_memmap_regionstate_t;
@@ -67,7 +67,6 @@ typedef struct {
     ui_memmap_regionstate_t state;      /* current mapping-state of the region */
     uint16_t addr;                      /* start address */
     uint16_t len;                       /* length in bytes */
-    const char* desc;                   /* description (for tooltip, must be a static string!) */
 } ui_memmap_region_t;
 
 /* describes a memory layer */
@@ -92,6 +91,12 @@ typedef struct {
     const char* title;
     int init_x, init_y;
     int init_w, init_h;
+    int layer_height;
+    int left_padding;
+    uint32_t grid_color;
+    uint32_t off_color;
+    uint32_t active_color;
+    uint32_t hidden_color;
     bool open;
     bool valid;
 } ui_memmap_t;
@@ -109,7 +114,7 @@ void ui_memmap_toggle(ui_memmap_t* win);
 /* return true if window is open */
 bool ui_memmap_isopen(ui_memmap_t* win);
 /* draw the window */
-void ui_memmap_draw(ui_memmap_t* win, ui_memmap_state_t* state);
+void ui_memmap_draw(ui_memmap_t* win, const ui_memmap_state_t* state);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -126,6 +131,79 @@ void ui_memmap_draw(ui_memmap_t* win, ui_memmap_state_t* state);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+static const int _ui_memmap_left_padding = 80;
+static const int _ui_memmap_layer_height = 20;
+
+static int _ui_memmap_num_layers(const ui_memmap_state_t* state) {
+    int num_layers = 0;
+    for (int i = 0; i < UI_MEMMAP_MAX_LAYERS; i++) {
+        if (state->layers[i].name) {
+            num_layers++;
+        }
+        else {
+            break;
+        }
+    }
+    return num_layers;
+}
+
+static void _ui_memmap_draw_grid(ui_memmap_t* win, const ui_memmap_state_t* state, const ImVec2& canvas_pos, const ImVec2& canvas_area) {
+    ImDrawList* l = ImGui::GetWindowDrawList();
+    const int y1 = canvas_pos.y + canvas_area.y - win->layer_height;
+    /* line rulers */
+    if (canvas_area.x > win->left_padding) {
+        static const char* addr[5] = { "0000", "4000", "8000", "C000", "FFFF" };
+        const float glyph_width = ImGui::CalcTextSize("X").x;
+        const int x0 = canvas_pos.x + win->left_padding;
+        int dx = (canvas_area.x - win->left_padding) / 4;
+        const int y0 = canvas_pos.y;
+        const int y1 = canvas_pos.y + canvas_area.y + 4 - win->layer_height;
+        for (int i = 0, x = x0; i < 5; i++, x += dx) {
+            l->AddLine(ImVec2(x, y0), ImVec2(x, y1), win->grid_color);
+            const float addr_x = (i == 4) ? x - 4*glyph_width : x;
+            l->AddText(ImVec2(addr_x, y1), win->grid_color, addr[i]);
+        }
+        const ImVec2 p0(canvas_pos.x + win->left_padding, y1);
+        const ImVec2 p1(x0 + 4*dx, p0.y);
+        l->AddLine(p0, p1, win->grid_color);
+    }
+    /* layer names to the left */
+    const int num_layers = _ui_memmap_num_layers(state);
+    ImVec2 text_pos(canvas_pos.x, y1 - win->layer_height);
+    for (int i = 0; i < num_layers; i++) {
+        l->AddText(text_pos, win->grid_color, state->layers[i].name);
+        text_pos.y -= win->layer_height;
+    }
+}
+
+static void _ui_memmap_draw_region(ui_memmap_t* win, const ImVec2& pos, float width, const ui_memmap_region_t& reg) {
+    ImU32 color = 0xFFFFFFFF;
+    switch (reg.state) {
+        case UI_MEMMAP_REGIONSTATE_OFF:     color = win->off_color; break;
+        case UI_MEMMAP_REGIONSTATE_ACTIVE:  color = win->active_color; break;
+        case UI_MEMMAP_REGIONSTATE_HIDDEN:  color = win->hidden_color; break;
+    }
+    ImVec2 a((pos.x + ((reg.addr * width) / 0x10000)), pos.y);
+    ImVec2 b((pos.x + (((reg.addr+reg.len) * width) / 0x10000))-2, (pos.y + win->layer_height)-2);
+    ImGui::GetWindowDrawList()->AddRectFilled(a, b, color);
+    if (ImGui::IsMouseHoveringRect(a, b)) {
+        ImGui::SetTooltip("%04X..%04X: %s", reg.addr, reg.addr+reg.len-1, reg.name);
+    }
+}
+
+static void _ui_memmap_draw_regions(ui_memmap_t* win, const ui_memmap_state_t* state, const ImVec2& canvas_pos, const ImVec2& canvas_area) {
+    const int num_layers = _ui_memmap_num_layers(state);
+    ImVec2 pos(canvas_pos.x + win->left_padding, canvas_pos.y + canvas_area.y + 4 - 2*win->layer_height);
+    for (int li = 0; li < num_layers; li++, pos.y -= win->layer_height) {
+        for (int ri = 0; ri < UI_MEMMAP_MAX_REGIONS; ri++) {
+            const ui_memmap_region_t& reg = state->layers[li].regions[ri];
+            if (reg.name) {
+                _ui_memmap_draw_region(win, pos, canvas_area.x - win->left_padding, reg);
+            }
+        }
+    }
+}
+
 void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
@@ -135,6 +213,12 @@ void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc) {
     win->init_y = desc->y;
     win->init_w = desc->w;
     win->init_h = desc->h;
+    win->left_padding = 80;
+    win->layer_height = 20;
+    win->grid_color = 0xFFAAAAAA;
+    win->off_color = 0xFF222222;
+    win->active_color = 0xFF00CC00;
+    win->hidden_color = 0xFF006600;
     win->valid = true;
 }
 
@@ -163,16 +247,21 @@ bool ui_memmap_isopen(ui_memmap_t* win) {
     return win->open;
 }
 
-void ui_memmap_draw(ui_memmap_t* win, ui_memmap_state_t* state) {
+void ui_memmap_draw(ui_memmap_t* win, const ui_memmap_state_t* state) {
     CHIPS_ASSERT(win && win->valid);
     CHIPS_ASSERT(state);
     if (!win->open) {
         return;
     }
+    const int min_height = 40 + (_ui_memmap_num_layers(state)+1) * win->layer_height;
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(120, min_height), ImVec2(FLT_MAX,FLT_MAX));
     if (ImGui::Begin(win->title, &win->open)) {
-        // FIXME
+        const ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+        const ImVec2 canvas_area = ImGui::GetContentRegionAvail();
+        _ui_memmap_draw_regions(win, state, canvas_pos, canvas_area);
+        _ui_memmap_draw_grid(win, state, canvas_pos, canvas_area);
     }
     ImGui::End();
 }
