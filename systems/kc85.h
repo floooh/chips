@@ -434,6 +434,8 @@ bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type);
 bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type, const void* rom_ptr, int rom_size);
 /* remove module in slot */
 bool kc85_remove_module(kc85_t* sys, uint8_t slot);
+/* get a module name by module type */
+const char* kc85_module_name(kc85_module_type_t mod_type);
 /* lookup slot struct by slot address (0x08 or 0x0C) */
 kc85_slot_t* kc85_slot_by_addr(kc85_t* sys, uint8_t slot_addr);
 /* return true if a slot contains a module */
@@ -442,6 +444,12 @@ bool kc85_slot_occupied(kc85_t* sys, uint8_t slot_addr);
 bool kc85_slot_cpu_visible(kc85_t* sys, uint8_t slot_addr);
 /* compute the current CPU address of module in slot (0 if no active module in slot) */
 uint16_t kc85_slot_cpu_addr(kc85_t* sys, uint8_t slot_addr);
+/* get byte-size of module in slot (0 if no module in slot) */
+int kc85_slot_mod_size(kc85_t* sys, uint8_t slot_addr);
+/* get name of module in slot ("NONE" if no module in slot) */
+const char* kc85_slot_mod_name(kc85_t* sys, uint8_t slot_addr);
+/* get a slot's control byte */
+uint8_t kc85_slot_ctrl(kc85_t* sys, uint8_t slot_addr);
 /* load a .KCC or .TAP snapshot file into the emulator */
 bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
 
@@ -1083,6 +1091,19 @@ static void _kc85_exp_reset(kc85_t* sys) {
     /* FIXME? */
 }
 
+const char* kc85_module_name(kc85_module_type_t mod_type) {
+    switch (mod_type) {
+        case KC85_MODULE_NONE:          return "NONE";
+        case KC85_MODULE_M006_BASIC:    return "M006 BASIC";
+        case KC85_MODULE_M011_64KBYE:   return "M011 64KBYTE";
+        case KC85_MODULE_M012_TEXOR:    return "M012 TEXOR";
+        case KC85_MODULE_M022_16KBYTE:  return "M022 16KBYTE";
+        case KC85_MODULE_M026_FORTH:    return "M026 FORTH";
+        case KC85_MODULE_M027_DEVELOPMENT:  return "M027 DEV";
+        default: return "???";
+    }
+}
+
 kc85_slot_t* kc85_slot_by_addr(kc85_t* sys, uint8_t slot_addr) {
     CHIPS_ASSERT(sys && sys->valid);
     for (int i = 0; i < KC85_NUM_SLOTS; i++) {
@@ -1122,6 +1143,39 @@ uint16_t kc85_slot_cpu_addr(kc85_t* sys, uint8_t slot_addr) {
     kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     if (slot) {
         return (slot->ctrl & slot->mod.addr_mask) << 8;
+    }
+    else {
+        return 0;
+    }
+}
+
+int kc85_slot_mod_size(kc85_t* sys, uint8_t slot_addr) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
+    if (slot) {
+        return slot->mod.size;
+    }
+    else {
+        return 0;
+    }
+}
+
+const char* kc85_slot_mod_name(kc85_t* sys, uint8_t slot_addr) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
+    if (slot) {
+        return kc85_module_name(slot->mod.type);
+    }
+    else {
+        return "NONE";
+    }
+}
+
+uint8_t kc85_slot_ctrl(kc85_t* sys, uint8_t slot_addr) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
+    if (slot) {
+        return slot->ctrl;
     }
     else {
         return 0;
