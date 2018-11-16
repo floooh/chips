@@ -54,31 +54,20 @@ extern "C" {
 #define UI_MEMMAP_MAX_LAYERS (8)
 #define UI_MEMMAP_MAX_REGIONS (16)
 
-/* memory region states */
-typedef enum {
-    UI_MEMMAP_REGIONSTATE_OFF,          /* not currently active */
-    UI_MEMMAP_REGIONSTATE_ACTIVE,       /* active and CPU-visible */
-    UI_MEMMAP_REGIONSTATE_HIDDEN,       /* active, but hidden behind a higher-priority region */
-} ui_memmap_regionstate_t;
-
 /* describes a memory region in a layer */
 typedef struct {
     const char* name;                   /* region name (must be a static string) */
-    ui_memmap_regionstate_t state;      /* current mapping-state of the region */
     uint16_t addr;                      /* start address */
-    uint16_t len;                       /* length in bytes */
+    int len;                            /* length in bytes (up to 0x10000) */
+    bool on;                            /* on or off? */
 } ui_memmap_region_t;
 
 /* describes a memory layer */
 typedef struct {
     const char* name;           /* layer name (must be a static string) */
+    int num_regions;
     ui_memmap_region_t regions[UI_MEMMAP_MAX_REGIONS];  /* memory regions in layer */
 } ui_memmap_layer_t;
-
-/* describes the entire memory mapping state */
-typedef struct {
-    ui_memmap_layer_t layers[UI_MEMMAP_MAX_LAYERS];
-} ui_memmap_state_t;
 
 /* setup params for ui_memmap_init() */
 typedef struct {
@@ -94,11 +83,12 @@ typedef struct {
     int layer_height;
     int left_padding;
     uint32_t grid_color;
+    uint32_t on_color;
     uint32_t off_color;
-    uint32_t active_color;
-    uint32_t hidden_color;
     bool open;
     bool valid;
+    int num_layers;
+    ui_memmap_layer_t layers[UI_MEMMAP_MAX_LAYERS];
 } ui_memmap_t;
 
 /* initialize a new window */
@@ -114,7 +104,13 @@ void ui_memmap_toggle(ui_memmap_t* win);
 /* return true if window is open */
 bool ui_memmap_isopen(ui_memmap_t* win);
 /* draw the window */
-void ui_memmap_draw(ui_memmap_t* win, const ui_memmap_state_t* state);
+void ui_memmap_draw(ui_memmap_t* win);
+/* reset/clear memory map description */
+void ui_memmap_reset(ui_memmap_t* win);
+/* add a layer to the memory map description (call after ui_memmap_reset) */
+void ui_memmap_layer(ui_memmap_t* win, const char* name);
+/* add a region in the last added layer of the memory map description */
+void ui_memmap_region(ui_memmap_t* win, const char* name, uint16_t addr, int len, bool on);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -134,20 +130,7 @@ void ui_memmap_draw(ui_memmap_t* win, const ui_memmap_state_t* state);
 static const int _ui_memmap_left_padding = 80;
 static const int _ui_memmap_layer_height = 20;
 
-static int _ui_memmap_num_layers(const ui_memmap_state_t* state) {
-    int num_layers = 0;
-    for (int i = 0; i < UI_MEMMAP_MAX_LAYERS; i++) {
-        if (state->layers[i].name) {
-            num_layers++;
-        }
-        else {
-            break;
-        }
-    }
-    return num_layers;
-}
-
-static void _ui_memmap_draw_grid(ui_memmap_t* win, const ui_memmap_state_t* state, const ImVec2& canvas_pos, const ImVec2& canvas_area) {
+static void _ui_memmap_draw_grid(ui_memmap_t* win, const ImVec2& canvas_pos, const ImVec2& canvas_area) {
     ImDrawList* l = ImGui::GetWindowDrawList();
     const int y1 = canvas_pos.y + canvas_area.y - win->layer_height;
     /* line rulers */
@@ -168,35 +151,40 @@ static void _ui_memmap_draw_grid(ui_memmap_t* win, const ui_memmap_state_t* stat
         l->AddLine(p0, p1, win->grid_color);
     }
     /* layer names to the left */
-    const int num_layers = _ui_memmap_num_layers(state);
     ImVec2 text_pos(canvas_pos.x, y1 - win->layer_height);
-    for (int i = 0; i < num_layers; i++) {
-        l->AddText(text_pos, win->grid_color, state->layers[i].name);
+    for (int i = 0; i < win->num_layers; i++) {
+        l->AddText(text_pos, win->grid_color, win->layers[i].name);
         text_pos.y -= win->layer_height;
     }
 }
 
 static void _ui_memmap_draw_region(ui_memmap_t* win, const ImVec2& pos, float width, const ui_memmap_region_t& reg) {
-    ImU32 color = 0xFFFFFFFF;
-    switch (reg.state) {
-        case UI_MEMMAP_REGIONSTATE_OFF:     color = win->off_color; break;
-        case UI_MEMMAP_REGIONSTATE_ACTIVE:  color = win->active_color; break;
-        case UI_MEMMAP_REGIONSTATE_HIDDEN:  color = win->hidden_color; break;
+    ImU32 color = reg.on ? win->on_color : win->off_color;
+    uint32_t addr = reg.addr;
+    uint32_t end_addr = reg.addr + reg.len;
+    if (end_addr > 0x10000) {
+        /* wraparound */
+        ImVec2 a(pos.x, pos.y);
+        ImVec2 b((pos.x + (((end_addr & 0xFFFF) * width) / 0x10000))-2, (pos.y + win->layer_height)-2);
+        ImGui::GetWindowDrawList()->AddRectFilled(a, b, color);
+        if (ImGui::IsMouseHoveringRect(a, b)) {
+            ImGui::SetTooltip("%s (%04X..%04X)", reg.name, 0, (end_addr&0xFFFF)-1);
+        }
+        end_addr = 0x10000;
     }
-    ImVec2 a((pos.x + ((reg.addr * width) / 0x10000)), pos.y);
-    ImVec2 b((pos.x + (((reg.addr+reg.len) * width) / 0x10000))-2, (pos.y + win->layer_height)-2);
+    ImVec2 a((pos.x + ((addr * width) / 0x10000)), pos.y);
+    ImVec2 b((pos.x + ((end_addr * width) / 0x10000))-2, (pos.y + win->layer_height)-2);
     ImGui::GetWindowDrawList()->AddRectFilled(a, b, color);
     if (ImGui::IsMouseHoveringRect(a, b)) {
-        ImGui::SetTooltip("%04X..%04X: %s", reg.addr, reg.addr+reg.len-1, reg.name);
+        ImGui::SetTooltip("%s (%04X..%04X)", reg.name, addr, end_addr-1);
     }
 }
 
-static void _ui_memmap_draw_regions(ui_memmap_t* win, const ui_memmap_state_t* state, const ImVec2& canvas_pos, const ImVec2& canvas_area) {
-    const int num_layers = _ui_memmap_num_layers(state);
+static void _ui_memmap_draw_regions(ui_memmap_t* win, const ImVec2& canvas_pos, const ImVec2& canvas_area) {
     ImVec2 pos(canvas_pos.x + win->left_padding, canvas_pos.y + canvas_area.y + 4 - 2*win->layer_height);
-    for (int li = 0; li < num_layers; li++, pos.y -= win->layer_height) {
-        for (int ri = 0; ri < UI_MEMMAP_MAX_REGIONS; ri++) {
-            const ui_memmap_region_t& reg = state->layers[li].regions[ri];
+    for (int li = 0; li < win->num_layers; li++, pos.y -= win->layer_height) {
+        for (int ri = 0; ri < win->layers[li].num_regions; ri++) {
+            const ui_memmap_region_t& reg = win->layers[li].regions[ri];
             if (reg.name) {
                 _ui_memmap_draw_region(win, pos, canvas_area.x - win->left_padding, reg);
             }
@@ -216,9 +204,8 @@ void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc) {
     win->left_padding = 80;
     win->layer_height = 20;
     win->grid_color = 0xFFAAAAAA;
+    win->on_color = 0xFF00CC00;
     win->off_color = 0xFF222222;
-    win->active_color = 0xFF00CC00;
-    win->hidden_color = 0xFF006600;
     win->valid = true;
 }
 
@@ -247,23 +234,49 @@ bool ui_memmap_isopen(ui_memmap_t* win) {
     return win->open;
 }
 
-void ui_memmap_draw(ui_memmap_t* win, const ui_memmap_state_t* state) {
+void ui_memmap_draw(ui_memmap_t* win) {
     CHIPS_ASSERT(win && win->valid);
-    CHIPS_ASSERT(state);
     if (!win->open) {
         return;
     }
-    const int min_height = 40 + (_ui_memmap_num_layers(state)+1) * win->layer_height;
+    const int min_height = 40 + ((win->num_layers + 1) * win->layer_height);
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     ImGui::SetNextWindowSizeConstraints(ImVec2(120, min_height), ImVec2(FLT_MAX,FLT_MAX));
     if (ImGui::Begin(win->title, &win->open)) {
         const ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
         const ImVec2 canvas_area = ImGui::GetContentRegionAvail();
-        _ui_memmap_draw_regions(win, state, canvas_pos, canvas_area);
-        _ui_memmap_draw_grid(win, state, canvas_pos, canvas_area);
+        _ui_memmap_draw_regions(win, canvas_pos, canvas_area);
+        _ui_memmap_draw_grid(win, canvas_pos, canvas_area);
     }
     ImGui::End();
+}
+
+void ui_memmap_reset(ui_memmap_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    win->num_layers = 0;
+    memset(win->layers, 0, sizeof(win->layers));
+}
+
+void ui_memmap_layer(ui_memmap_t* win, const char* name) {
+    CHIPS_ASSERT(win && win->valid);
+    CHIPS_ASSERT((win->num_layers >= 0) && (win->num_layers < UI_MEMMAP_MAX_LAYERS));
+    CHIPS_ASSERT(name);
+    win->layers[win->num_layers++].name = name;
+}
+
+void ui_memmap_region(ui_memmap_t* win, const char* name, uint16_t addr, int len, bool on) {
+    CHIPS_ASSERT(win && win->valid);
+    CHIPS_ASSERT((win->num_layers > 0) && (win->num_layers <= UI_MEMMAP_MAX_LAYERS));
+    CHIPS_ASSERT((len >= 0) && (len <= 0x10000));
+    CHIPS_ASSERT(name);
+    ui_memmap_layer_t& layer = win->layers[win->num_layers-1];
+    CHIPS_ASSERT((layer.num_regions >= 0) && (layer.num_regions < UI_MEMMAP_MAX_REGIONS));
+    ui_memmap_region_t& reg = layer.regions[layer.num_regions++];
+    reg.name = name;
+    reg.addr = addr;
+    reg.len = len;
+    reg.on = on;
 }
 
 #endif /* CHIPS_IMPL */
