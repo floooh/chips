@@ -91,20 +91,14 @@ typedef struct {
     ui_memmap_layer_t layers[UI_MEMMAP_MAX_LAYERS];
 } ui_memmap_t;
 
-/* initialize a new window */
 void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc);
-/* discard a window */
 void ui_memmap_discard(ui_memmap_t* win);
-/* open a window */
 void ui_memmap_open(ui_memmap_t* win);
-/* close a window */
 void ui_memmap_close(ui_memmap_t* win);
-/* toggle window visibility */
 void ui_memmap_toggle(ui_memmap_t* win);
-/* return true if window is open */
 bool ui_memmap_isopen(ui_memmap_t* win);
-/* draw the window */
 void ui_memmap_draw(ui_memmap_t* win);
+
 /* reset/clear memory map description */
 void ui_memmap_reset(ui_memmap_t* win);
 /* add a layer to the memory map description (call after ui_memmap_reset) */
@@ -126,9 +120,6 @@ void ui_memmap_region(ui_memmap_t* win, const char* name, uint16_t addr, int len
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
-
-static const int _ui_memmap_left_padding = 80;
-static const int _ui_memmap_layer_height = 20;
 
 static void _ui_memmap_draw_grid(ui_memmap_t* win, const ImVec2& canvas_pos, const ImVec2& canvas_area) {
     ImDrawList* l = ImGui::GetWindowDrawList();

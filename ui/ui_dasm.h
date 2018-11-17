@@ -99,19 +99,12 @@ typedef struct {
     uint32_t highlight_color;
 } ui_dasm_t;
 
-/* initialize a new window */
 void ui_dasm_init(ui_dasm_t* win, ui_dasm_desc_t* desc);
-/* discard a window */
 void ui_dasm_discard(ui_dasm_t* win);
-/* open a window */
 void ui_dasm_open(ui_dasm_t* win);
-/* close a window */
 void ui_dasm_close(ui_dasm_t* win);
-/* toggle window visibility */
 void ui_dasm_toggle(ui_dasm_t* win);
-/* return true if window is open */
 bool ui_dasm_isopen(ui_dasm_t* win);
-/* draw the window */
 void ui_dasm_draw(ui_dasm_t* win);
 
 #ifdef __cplusplus
@@ -284,7 +277,7 @@ static void _ui_dasm_goto(ui_dasm_t* win, uint16_t addr) {
 
 /* draw the address entry field and layer combo */
 static void _ui_dasm_draw_controls(ui_dasm_t* win) {
-    win->start_addr = ui_util_hex16("##addr", win->start_addr);
+    win->start_addr = ui_util_input_u16("##addr", win->start_addr);
     ImGui::SameLine();
     uint16_t addr = 0;
     if (ImGui::ArrowButton("##back", ImGuiDir_Left)) {

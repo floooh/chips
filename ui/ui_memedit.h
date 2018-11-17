@@ -92,19 +92,14 @@ typedef struct {
     bool valid;
 } ui_memedit_t;
 
-/* initialize a new window, NOTE: win MUST be zero-initialized already! */
+/* NOTE: win MUST be zero-initialized already, allocates memory via new() */
 void ui_memedit_init(ui_memedit_t* win, ui_memedit_desc_t* desc);
-/* discard a window (frees memory) */
+/* frees memory via delete() */
 void ui_memedit_discard(ui_memedit_t* win);
-/* open the window */
 void ui_memedit_open(ui_memedit_t* win);
-/* close the window */
 void ui_memedit_close(ui_memedit_t* win);
-/* toggle visibility */
 void ui_memedit_toggle(ui_memedit_t* win);
-/* return true if window is open */
 bool ui_memedit_isopen(ui_memedit_t* win);
-/* draw the window */
 void ui_memedit_draw(ui_memedit_t* win);
 
 #ifdef __cplusplus

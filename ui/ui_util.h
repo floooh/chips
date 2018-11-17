@@ -49,9 +49,16 @@ extern "C" {
 #endif
 
 /* draw an 16-bit hex text input field */
-uint16_t ui_util_hex16(const char* label, uint16_t val);
+uint16_t ui_util_input_u16(const char* label, uint16_t val);
 /* draw an 8-bit hex text input field */
-uint8_t ui_util_hex8(const char* label, uint8_t val);
+uint8_t ui_util_input_u8(const char* label, uint8_t val);
+/* draw an 8-bit hex label/value text */
+void ui_util_u8(const char* label, uint8_t val);
+/* draw a 16-bit hex label/value text */
+void ui_util_u16(const char* label, uint16_t val);
+/* draw an 8-bit binary label/value text */
+void ui_util_b8(const char* label, uint8_t val);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
@@ -64,7 +71,7 @@ uint8_t ui_util_hex8(const char* label, uint8_t val);
 #include <string.h> /* memset */
 #include <stdio.h>  /* sscanf */
 
-uint16_t ui_util_hex16(const char* label, uint16_t val) {
+uint16_t ui_util_input_u16(const char* label, uint16_t val) {
     static char buf[5];
     for (int i = 0; i < 4; i++) {
         buf[i] = "0123456789ABCDEF"[val>>((3-i)*4) & 0xF];
@@ -82,6 +89,23 @@ uint16_t ui_util_hex16(const char* label, uint16_t val) {
     }
     ImGui::PopItemWidth();
     return val;
+}
+
+void ui_util_u8(const char* label, uint8_t val) {
+    ImGui::Text("%s", label); ImGui::SameLine(); ImGui::Text("%02X", val);
+}
+
+void ui_util_u8(const char* label, uint16_t val) {
+    ImGui::Text("%s", label); ImGui::SameLine(); ImGui::Text("%04X", val);
+}
+
+void ui_util_b8(const char* label, uint8_t val) {
+    char str[9];
+    for (int i = 0; i < 8; i++) {
+        str[i] = (val & (1<<(7-i))) ? '1':'0';
+    }
+    str[8] = 0;
+    ImGui::Text("%s", label); ImGui::SameLine(); ImGui::Text("%s", str);
 }
 
 #endif /* CHIPS_IMPL */
