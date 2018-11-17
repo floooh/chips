@@ -137,31 +137,66 @@ bool ui_z80pio_isopen(ui_z80pio_t* win) {
 
 static const char* _ui_z80pio_mode_str(uint8_t mode) {
     switch (mode) {
-        case 0: return "OUTPUT";
-        case 1: return "INPUT";
-        case 2: return "BIDIRECTIONAL";
-        case 3: return "BITCONTROL";
+        case 0: return "OUT";
+        case 1: return "INP";
+        case 2: return "BDIR";
+        case 3: return "BITC";
         default: return "INVALID";
     }
 }
 
-static void _ui_z80pio_port(ui_z80pio_t* win, int port_id) {
-    z80pio_port_t* p = &win->pio->port[port_id];
-    ui_util_u8("Mode:         ", p->mode); ImGui::SameLine(); ImGui::Text("(%s)", _ui_z80pio_mode_str(p->mode));
-    ui_util_u8("Output:       ", p->output);
-    ui_util_u8("Input:        ", p->input);
-    ui_util_b8("IO Select:    ", p->io_select);
-    ui_util_u8("INT Control:  ", p->int_control);
-    ImGui::Text("    Enabled:  %s", (p->int_control & Z80PIO_INTCTRL_EI) ? "ENABLED":"DISABLED");
-    ImGui::Text("    And/Or:   %s", (p->int_control & Z80PIO_INTCTRL_ANDOR) ? "AND":"OR");
-    ImGui::Text("    High/Low: %s", (p->int_control & Z80PIO_INTCTRL_HILO) ? "HIGH":"LOW");
-    ui_util_u8("INT Vector:   ", p->int_vector);
-    ui_util_b8("INT Mask:     ", p->int_mask);
-    const char* exp = "???";
-    if (p->expect_int_mask) exp = "MASK";
-    else if (p->expect_io_select) exp = "IOSELECT";
-    else exp = "ANY";
-    ImGui::Text("Expect:       %s", exp);
+static void _ui_z80pio_ports(ui_z80pio_t* win) {
+    const z80pio_t* pio = win->pio;
+
+    ImGui::Columns(3, "##pio_columns", false);
+    ImGui::SetColumnWidth(0, 80);
+    ImGui::SetColumnWidth(1, 40);
+    ImGui::SetColumnWidth(2, 40);
+    ImGui::NextColumn();
+    ImGui::Text("PA"); ImGui::NextColumn();
+    ImGui::Text("PB"); ImGui::NextColumn();
+    ImGui::Separator();
+
+    ImGui::Text("Mode"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%s", _ui_z80pio_mode_str(pio->port[i].mode)); ImGui::NextColumn();
+    }
+    ImGui::Text("Output"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%02X", pio->port[i].output); ImGui::NextColumn();
+    }
+    ImGui::Text("Input"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%02X", pio->port[i].input); ImGui::NextColumn();
+    }
+    ImGui::Text("IO Select"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%02X", pio->port[i].io_select); ImGui::NextColumn();
+    }
+    ImGui::Text("INT Ctrl"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%02X", pio->port[i].int_control); ImGui::NextColumn();
+    }
+    ImGui::Text("  ei/di"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_EI ? "EI":"DI"); ImGui::NextColumn();
+    }
+    ImGui::Text("  and/or"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_ANDOR ? "AND":"OR"); ImGui::NextColumn();
+    }
+    ImGui::Text("  hi/lo"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_HILO ? "HI":"LO"); ImGui::NextColumn();
+    }
+    ImGui::Text("INT Vec"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%02X", pio->port[i].int_vector); ImGui::NextColumn();
+    }
+    ImGui::Text("INT Mask"); ImGui::NextColumn();
+    for (int i = 0; i < 2; i++) {
+        ImGui::Text("%02X", pio->port[i].int_mask); ImGui::NextColumn();
+    }
 }
 
 void ui_z80pio_draw(ui_z80pio_t* win) {
@@ -170,19 +205,14 @@ void ui_z80pio_draw(ui_z80pio_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(220, 300), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(360, 300), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
-        ImGui::BeginChild("Last IORQ", ImVec2(176, 0), true, ImGuiWindowF);
+        ImGui::BeginChild("##pio_chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->pio->pins);
         ImGui::EndChild();
         ImGui::SameLine();
-        ImGui::BeginChild("##pio_ports", ImVec2(0, 0), true);
-        if (ImGui::CollapsingHeader("PIO Port A", "#pio_a", true, true)) {
-            _ui_z80pio_port(win, Z80PIO_PORT_A);
-        }
-        if (ImGui::CollapsingHeader("PIO Port B", "#pio_b", true, true)) {
-            _ui_z80pio_port(win, Z80PIO_PORT_B);
-        }
+        ImGui::BeginChild("##pio_vals", ImVec2(0, 0), true);
+        _ui_z80pio_ports(win);
         ImGui::EndChild();
     }
     ImGui::End();
