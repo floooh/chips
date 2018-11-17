@@ -290,16 +290,12 @@ typedef struct {
 
 /* Z80 PIO state. */
 typedef struct {
-    /* port A and B register sets */
     z80pio_port_t port[Z80PIO_NUM_PORTS];
-    /* currently in reset state? (until a control word is received) */
-    bool reset_active;
-    /* port-input callback */
+    bool reset_active;  /* currently in reset state? (until a control word is received) */
     z80pio_in_t in_cb;
-    /* port-output callback */
     z80pio_out_t out_cb;
-    /* user-data for callbacks */
     void* user_data;
+    uint64_t pins;      /* last pin state (useful for debugging) */
 } z80pio_t;
 
 /* extract 8-bit data bus from 64-bit pins */
@@ -369,6 +365,7 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
                 Z80PIO_SET_DATA(pins, p->int_vector);
                 p->int_state &= ~Z80PIO_INT_REQUESTED;
                 p->int_state |= Z80PIO_INT_SERVICING;
+                pio->pins = pins;
             }
             /* disable interrupts for downstream devices? */
             if (0 != p->int_state) {
@@ -377,6 +374,7 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
             /* set Z80_INT pin state during INT_REQUESTED */
             if (p->int_state & Z80PIO_INT_REQUESTED) {
                 pins |= Z80PIO_INT;
+                pio->pins = pins;
             }
         }
     }
@@ -567,6 +565,7 @@ uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins) {
                 _z80pio_write_data(pio, port_id, data);
             }
         }
+        pio->pins = pins;
     }
     return pins;
 }

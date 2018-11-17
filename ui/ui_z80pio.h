@@ -18,6 +18,10 @@
     ~~~
         your own assert macro (default: assert(c))
 
+    Include the following header both before the declaration and implementation:
+
+        - ui_chip.h
+
     You need to include the following headers before including the
     *implementation*:
 
@@ -58,9 +62,10 @@ extern "C" {
     NOTE: all string data must remain alive until ui_z80pio_discard()!
 */
 typedef struct {
-    const char* title;  /* window title */
-    z80pio_t* pio;      /* pointer to PIO to track */
-    int x, y;           /* initial window position */
+    const char* title;      /* window title */
+    z80pio_t* pio;          /* pointer to PIO to track */
+    int x, y;               /* initial window position */
+    ui_chip_desc_t chip_desc;   /* chip visualization desc */
 } ui_z80pio_desc_t;
 
 
@@ -70,6 +75,7 @@ typedef struct {
     int init_x, init_y;
     bool open;
     bool valid;
+    ui_chip_t chip;
 } ui_z80pio_t;
 
 void ui_z80pio_init(ui_z80pio_t* win, ui_z80pio_desc_t* desc);
@@ -101,6 +107,7 @@ void ui_z80pio_init(ui_z80pio_t* win, ui_z80pio_desc_t* desc) {
     win->init_x = desc->x;
     win->init_y = desc->y;
     win->valid = true;
+    ui_chip_init(&win->chip, &desc->chip_desc);
 }
 
 void ui_z80pio_discard(ui_z80pio_t* win) {
@@ -163,14 +170,20 @@ void ui_z80pio_draw(ui_z80pio_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(220, 420), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(220, 300), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
+        ImGui::BeginChild("Last IORQ", ImVec2(176, 0), true, ImGuiWindowF);
+        ui_chip_draw(&win->chip, win->pio->pins);
+        ImGui::EndChild();
+        ImGui::SameLine();
+        ImGui::BeginChild("##pio_ports", ImVec2(0, 0), true);
         if (ImGui::CollapsingHeader("PIO Port A", "#pio_a", true, true)) {
             _ui_z80pio_port(win, Z80PIO_PORT_A);
         }
         if (ImGui::CollapsingHeader("PIO Port B", "#pio_b", true, true)) {
             _ui_z80pio_port(win, Z80PIO_PORT_B);
         }
+        ImGui::EndChild();
     }
     ImGui::End();
 }
