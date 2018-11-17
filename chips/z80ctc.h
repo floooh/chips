@@ -218,6 +218,7 @@ typedef struct {
 */
 typedef struct {
     z80ctc_channel_t chn[Z80CTC_NUM_CHANNELS];
+    uint64_t pins;
 } z80ctc_t;
 
 /* extract 8-bit data bus from 64-bit pins */
@@ -238,7 +239,7 @@ extern uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins);
     called when the downcounter reaches zero, request interrupt,
     trigger ZCTO pin and reload downcounter
 */
-static inline uint64_t _z80ctc_counter_zero(z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
+static inline uint64_t _z80ctc_counter_zero(z80ctc_t* ctc, z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
     /* down counter has reached zero, trigger interrupt and ZCTO pin */
     if (chn->control & Z80CTC_CTRL_EI) {
         /* interrupt enabled, request an interrupt */
@@ -248,6 +249,7 @@ static inline uint64_t _z80ctc_counter_zero(z80ctc_channel_t* chn, uint64_t pins
     if (chn_id < 4) {
         /* set the zcto pin */
         pins |= Z80CTC_ZCTO0<<chn_id;
+        ctc->pins = pins;
     }
     /* reload the down counter */
     chn->down_counter = chn->constant;
@@ -265,11 +267,11 @@ static inline uint64_t _z80ctc_counter_zero(z80ctc_channel_t* chn, uint64_t pins
       the waiting flag is cleared and timing starts
     - if the channel is in counter mode, the counter decrements
 */
-static inline uint64_t _z80ctc_active_edge(z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
+static inline uint64_t _z80ctc_active_edge(z80ctc_t* ctc, z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
     if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
         /* counter mode */
         if (0 == --chn->down_counter) {
-            pins = _z80ctc_counter_zero(chn, pins, chn_id);
+            pins = _z80ctc_counter_zero(ctc, chn, pins, chn_id);
         }
     }
     else if (chn->waiting_for_trigger) {
@@ -293,7 +295,7 @@ static inline uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
                 chn->ext_trigger = trg;
                 /* rising/falling edge trigger */
                 if (chn->trigger_edge == trg) {
-                    pins = _z80ctc_active_edge(chn, pins, chn_id);
+                    pins = _z80ctc_active_edge(ctc, chn, pins, chn_id);
                 }
             }
         }
@@ -302,7 +304,7 @@ static inline uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
             if (0 == ((--chn->prescaler) & chn->prescaler_mask)) {
                 /* prescaler has reached zero, tick the down counter */
                 if (0 == --chn->down_counter) {
-                    pins = _z80ctc_counter_zero(chn, pins, chn_id);
+                    pins = _z80ctc_counter_zero(ctc, chn, pins, chn_id);
                 }
             }
         }
@@ -372,6 +374,7 @@ static inline uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
             /* set Z80_INT pin state during INT_REQUESTED */
             if (chn->int_state & Z80CTC_INT_REQUESTED) {
                 pins |= Z80CTC_INT;
+                ctc->pins = pins;
             }
         }
     }
@@ -454,7 +457,7 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn_id, uint8_t data) {
 
         /* changing the Trigger Slope trigger an 'active edge' */
         if ((old_ctrl & Z80CTC_CTRL_EDGE) != (chn->control & Z80CTC_CTRL_EDGE)) {
-            pins = _z80ctc_active_edge(chn, pins, chn_id);
+            pins = _z80ctc_active_edge(ctc, chn, pins, chn_id);
         }
     }
     else {
@@ -488,6 +491,7 @@ uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
             const uint8_t data = Z80CTC_GET_DATA(pins);
             pins = _z80ctc_write(ctc, pins, chn_id, data);
         }
+        ctc->pins = pins;
     }
     return pins;
 }

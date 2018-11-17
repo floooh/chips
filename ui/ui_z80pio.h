@@ -27,7 +27,6 @@
 
         - imgui.h
         - z80pio.h
-        - ui_util.h
 
     All strings provided to ui_z80pio_init() must remain alive until
     ui_z80pio_discard() is called!
@@ -57,7 +56,7 @@
 extern "C" {
 #endif
 
-/* setup parameeters for ui_z80pio_init()
+/* setup parameters for ui_z80pio_init()
 
     NOTE: all string data must remain alive until ui_z80pio_discard()!
 */
@@ -67,7 +66,6 @@ typedef struct {
     int x, y;               /* initial window position */
     ui_chip_desc_t chip_desc;   /* chip visualization desc */
 } ui_z80pio_desc_t;
-
 
 typedef struct {
     const char* title;
