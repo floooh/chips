@@ -476,6 +476,7 @@ extern uint16_t z80_bc_(z80_t* cpu);
 extern uint16_t z80_pc(z80_t* cpu);
 extern uint16_t z80_wz(z80_t* cpu);
 extern uint16_t z80_sp(z80_t* cpu);
+extern uint16_t z80_ir(z80_t* cpu);
 extern uint8_t z80_i(z80_t* cpu);
 extern uint8_t z80_r(z80_t* cpu);
 extern uint16_t z80_ix(z80_t* cpu);
