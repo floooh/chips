@@ -144,6 +144,7 @@ typedef struct {
     z80ctc_t ctc;
     beeper_t beeper;
     bool valid;
+    bool z9001_has_basic_rom;
     z9001_type_t type;
     uint64_t ctc_zcto2;     /* pin mask to store state of CTC ZCTO2 */
     uint32_t blink_counter;
@@ -223,6 +224,7 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
         if (desc->rom_z9001_basic) {
             CHIPS_ASSERT(desc->rom_z9001_basic_size == 0x2800);
             memcpy(&sys->rom[0x0000], desc->rom_z9001_basic, 0x2800);
+            sys->z9001_has_basic_rom = true;
         }
         CHIPS_ASSERT(desc->rom_z9001_os_1 && (desc->rom_z9001_os_1_size == 0x0800));
         memcpy(&sys->rom[0x3000], desc->rom_z9001_os_1, 0x0800);
