@@ -194,13 +194,26 @@ extern "C" {
 #define Z80PIO_ASTB     (1ULL<<45)      /* Port A Strobe */
 #define Z80PIO_BSTB     (1ULL<<46)      /* Port B Strobe */
 
-/* FIXME: Port A/B 8-bit port pins? these are currently not needed because
-   port in/out is handled through callback functions
-*/
+/* A/B 8-bit port pins */
+#define Z80PIO_PA0      (1ULL<<48)
+#define Z80PIO_PA1      (1ULL<<49)
+#define Z80PIO_PA2      (1ULL<<50)
+#define Z80PIO_PA3      (1ULL<<51)
+#define Z80PIO_PA4      (1ULL<<52)
+#define Z80PIO_PA5      (1ULL<<53)
+#define Z80PIO_PA6      (1ULL<<54)
+#define Z80PIO_PA7      (1ULL<<55)
 
-/*
-    Port Names
-*/
+#define Z80PIO_PB0      (1ULL<<56)
+#define Z80PIO_PB1      (1ULL<<57)
+#define Z80PIO_PB2      (1ULL<<58)
+#define Z80PIO_PB3      (1ULL<<59)
+#define Z80PIO_PB4      (1ULL<<60)
+#define Z80PIO_PB5      (1ULL<<61)
+#define Z80PIO_PB6      (1ULL<<62)
+#define Z80PIO_PB7      (1ULL<<63)
+
+/* Port Names */
 #define Z80PIO_PORT_A       (0)
 #define Z80PIO_PORT_B       (1)
 #define Z80PIO_NUM_PORTS    (2)

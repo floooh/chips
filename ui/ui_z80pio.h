@@ -203,7 +203,7 @@ void ui_z80pio_draw(ui_z80pio_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(360, 300), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(360, 364), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##pio_chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->pio->pins);
