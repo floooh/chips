@@ -18,15 +18,14 @@
     ~~~
         your own assert macro (default: assert(c))
 
-    Include the following header both before the declaration and implementation:
-
+    Include the following headers before the including the *declaration*:
+        - z80pio.h
         - ui_chip.h
 
-    You need to include the following headers before including the
-    *implementation*:
-
+    Include the following headers before including the *implementation*:
         - imgui.h
         - z80pio.h
+        - ui_chip.h
 
     All strings provided to ui_z80pio_init() must remain alive until
     ui_z80pio_discard() is called!
