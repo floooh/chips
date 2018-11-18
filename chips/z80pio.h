@@ -274,6 +274,7 @@ extern "C" {
 typedef struct {
     uint8_t input;          /* 8-bit data input register */
     uint8_t output;         /* 8-bit data output register */
+    uint8_t port;           /* current state of the port I/O pins */
     uint8_t mode;           /* 2-bit mode control register (Z80PIO_MODE_*) */
     uint8_t io_select;      /* 8-bit input/output select register */
     uint8_t int_vector;     /* 8-bit interrupt vector */
@@ -315,6 +316,10 @@ typedef struct {
 #define Z80PIO_GET_DATA(p) ((uint8_t)(p>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define Z80PIO_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+/* set 8-bit port A data on 64-bit pin mask */
+#define Z80PIO_SET_PA(p,d) {p=((p&~0x00FF000000000000ULL)|((((uint64_t)d)&0xFFULL)<<48));}
+/* set 8-bit port B data on 64-bit pin mask */
+#define Z80PIO_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
 
 /* initialize a new Z80 PIO instance */
 extern void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc);
@@ -378,7 +383,6 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
                 Z80PIO_SET_DATA(pins, p->int_vector);
                 p->int_state &= ~Z80PIO_INT_REQUESTED;
                 p->int_state |= Z80PIO_INT_SERVICING;
-                pio->pins = pins;
             }
             /* disable interrupts for downstream devices? */
             if (0 != p->int_state) {
@@ -387,7 +391,7 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
             /* set Z80_INT pin state during INT_REQUESTED */
             if (p->int_state & Z80PIO_INT_REQUESTED) {
                 pins |= Z80PIO_INT;
-                pio->pins = pins;
+                pio->pins |= Z80PIO_INT;
             }
         }
     }
@@ -466,7 +470,8 @@ void _z80pio_write_ctrl(z80pio_t* pio, int port_id, uint8_t data) {
             p->mode = data>>6;
             if (p->mode == Z80PIO_MODE_OUTPUT) {
                 /* make output visible */
-                pio->out_cb(port_id, p->output, pio->user_data);
+                p->port = p->output;
+                pio->out_cb(port_id, p->port, pio->user_data);
             }
             else if (p->mode == Z80PIO_MODE_BITCONTROL) {
                 /* next control word is the io_select mask */
@@ -506,8 +511,9 @@ uint8_t _z80pio_read_ctrl(z80pio_t* pio) {
        returned when reading the control word, this
        is what MAME does
     */
-    return (pio->port[Z80PIO_PORT_A].int_control & 0xC0) |
-           (pio->port[Z80PIO_PORT_B].int_control >> 4);
+    uint8_t data = (pio->port[Z80PIO_PORT_A].int_control & 0xC0) |
+                   (pio->port[Z80PIO_PORT_B].int_control >> 4);
+    return data;
 }
 
 /* new data word received from CPU */
@@ -516,8 +522,8 @@ void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
     z80pio_port_t* p = &pio->port[port_id];
     switch (p->mode) {
         case Z80PIO_MODE_OUTPUT:
-            p->output = data;
-            pio->out_cb(port_id, data, pio->user_data);
+            p->output = p->port = data;
+            pio->out_cb(port_id, p->port, pio->user_data);
             break;
         case Z80PIO_MODE_INPUT:
             p->output = data;
@@ -526,8 +532,11 @@ void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
             // FIXME
             break;
         case Z80PIO_MODE_BITCONTROL:
-            p->output = data;
-            pio->out_cb(port_id, p->io_select | (p->output & ~p->io_select), pio->user_data);
+            {
+                p->output = data;
+                p->port = p->io_select | (p->output & ~p->io_select);
+                pio->out_cb(port_id, p->port, pio->user_data);
+            }
             break;
     }
 }
@@ -542,15 +551,16 @@ uint8_t _z80pio_read_data(z80pio_t* pio, int port_id) {
             data = p->output;
             break;
         case Z80PIO_MODE_INPUT:
-            p->input = pio->in_cb(port_id, pio->user_data);
-            data = p->input;
+            p->input = p->port = pio->in_cb(port_id, pio->user_data);
+            data = p->port;
             break;
         case Z80PIO_MODE_BIDIRECTIONAL:
             // FIXME
             break;
         case Z80PIO_MODE_BITCONTROL:
             p->input = pio->in_cb(port_id, pio->user_data);
-            data = (p->input & p->io_select) | (p->output & ~p->io_select);
+            p->port = (p->input & p->io_select) | (p->output & ~p->io_select);
+            data = p->port;
             break;
     }
     return data;
@@ -567,10 +577,10 @@ uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins) {
             else {
                 data = _z80pio_read_data(pio, port_id);
             }
-            Z80PIO_SET_DATA(pins, data);
+            Z80_SET_DATA(pins, data);
         }
         else {
-            const uint8_t data = Z80PIO_GET_DATA(pins);
+            uint8_t data = Z80_GET_DATA(pins);
             if (pins & Z80PIO_CDSEL) {
                 _z80pio_write_ctrl(pio, port_id, data);
             }
@@ -578,6 +588,8 @@ uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins) {
                 _z80pio_write_data(pio, port_id, data);
             }
         }
+        Z80PIO_SET_PA(pins, pio->port[Z80PIO_PORT_A].port);
+        Z80PIO_SET_PB(pins, pio->port[Z80PIO_PORT_B].port);
         pio->pins = pins;
     }
     return pins;
@@ -590,6 +602,7 @@ void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data) {
     if (Z80PIO_MODE_BITCONTROL == p->mode) {
         p->input = data;
         uint8_t val = (p->input & p->io_select) | (p->output & ~p->io_select);
+        p->port = val;
         uint8_t mask = ~p->int_mask;
         bool match = false;
         val &= mask;
