@@ -186,13 +186,13 @@ extern "C" {
 #define Z80PIO_RETI     (1ULL<<38)      /* CPU has decoded a RETI instruction (same as Z80_RETI) */
 
 /* PIO specific pins start at bit 40 */
-#define Z80PIO_CE       (1ULL<<44)      /* Chip Enable */
-#define Z80PIO_BASEL    (1ULL<<45)      /* Port A/B Select (inactive: A, active: B) */
-#define Z80PIO_CDSEL    (1ULL<<46)      /* Control/Data Select (inactive: data, active: control) */
-#define Z80PIO_ARDY     (1ULL<<47)      /* Port A Ready */
-#define Z80PIO_BRDY     (1ULL<<48)      /* Port B Ready */
-#define Z80PIO_ASTB     (1ULL<<49)      /* Port A Strobe */
-#define Z80PIO_BSTB     (1ULL<<40)      /* Port B Strobe */
+#define Z80PIO_CE       (1ULL<<40)      /* Chip Enable */
+#define Z80PIO_BASEL    (1ULL<<41)      /* Port A/B Select (inactive: A, active: B) */
+#define Z80PIO_CDSEL    (1ULL<<42)      /* Control/Data Select (inactive: data, active: control) */
+#define Z80PIO_ARDY     (1ULL<<43)      /* Port A Ready */
+#define Z80PIO_BRDY     (1ULL<<44)      /* Port B Ready */
+#define Z80PIO_ASTB     (1ULL<<45)      /* Port A Strobe */
+#define Z80PIO_BSTB     (1ULL<<46)      /* Port B Strobe */
 
 /* FIXME: Port A/B 8-bit port pins? these are currently not needed because
    port in/out is handled through callback functions
