@@ -163,7 +163,7 @@ extern "C" {
     Pin definitions. 
     
     All pin locations from 0 to 39 are shared with the CPU. Chip-type
-    specific pins start at position 44. This enables efficient bus-sharing
+    specific pins start at position 40. This enables efficient bus-sharing
     with the CPU and other Z80-family chips.
 
     Thus the Z80 PIO pin layout is as follows:
@@ -172,7 +172,7 @@ extern "C" {
     16..23:     data bus D0..D7
     24..36:     CPU pins (some of those shared directly with PIO)
     37..39      'virtual' interrupt system pins
-    44..50      PIO-specific pins
+    40..63      PIO-specific pins
 */
 
 /* control pins directly shared with CPU */
