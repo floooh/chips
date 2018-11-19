@@ -61,7 +61,7 @@ struct MemoryEditor;
 typedef void MemoryEditor;
 #endif
 
-#define UI_MEMEDIT_MAX_LAYERS (8)
+#define UI_MEMEDIT_MAX_LAYERS (16)
 
 /* callbacks for reading and writing bytes */
 typedef uint8_t (*ui_memedit_read_t)(int layer, uint16_t addr, void* user_data);

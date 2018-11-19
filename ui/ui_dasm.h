@@ -53,7 +53,7 @@
 extern "C" {
 #endif
 
-#define UI_DASM_MAX_LAYERS (8)
+#define UI_DASM_MAX_LAYERS (16)
 #define UI_DASM_MAX_STRLEN (32)
 #define UI_DASM_MAX_BINLEN (16)
 #define UI_DASM_NUM_LINES (512)
