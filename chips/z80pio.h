@@ -577,10 +577,10 @@ uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins) {
             else {
                 data = _z80pio_read_data(pio, port_id);
             }
-            Z80_SET_DATA(pins, data);
+            Z80PIO_SET_DATA(pins, data);
         }
         else {
-            uint8_t data = Z80_GET_DATA(pins);
+            uint8_t data = Z80PIO_GET_DATA(pins);
             if (pins & Z80PIO_CDSEL) {
                 _z80pio_write_ctrl(pio, port_id, data);
             }
