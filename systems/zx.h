@@ -136,6 +136,7 @@ typedef struct {
     uint8_t kbd_joymask;        /* joystick mask from keyboard joystick emulation */
     uint8_t joy_joymask;        /* joystick mask from zx_joystick() */
     uint32_t tick_count;
+    uint8_t last_mem_config;        /* last out to 0x7FFD */
     uint8_t last_fe_out;            /* last out value to 0xFE port */
     uint8_t blink_counter;          /* incremented on each vblank */
     int frame_scan_lines;
@@ -545,6 +546,7 @@ static uint64_t _zx_tick(int num_ticks, uint64_t pins, void* user_data) {
                 */
                 if ((pins & (Z80_A15|Z80_A1)) == 0) {
                     if (!sys->memory_paging_disabled) {
+                        sys->last_mem_config = data;
                         /* bit 3 defines the video scanout memory bank (5 or 7) */
                         sys->display_ram_bank = (data & (1<<3)) ? 7 : 5;
                         /* only last memory bank is mappable */
