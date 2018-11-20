@@ -41,7 +41,7 @@
         - 16 KByte RAM at 0000..3FFF
         - 16 KByte video RAM (IRM) at 8000..BFFF
         - 4 KByte ROM in 2 sections (E000..E800 and F000..F800)
-        - the operating system was called CAOS (Cassette Aided Operatin System)
+        - the operating system was called CAOS (Cassette Aided Operating System)
         - 50 Hz PAL video at 320x256 pixels
         - Speccy-like color attributes (1 color byte per 8x4 pixels)
         - fixed palette of 16 foreground and 8 background colors
