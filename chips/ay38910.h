@@ -14,17 +14,17 @@
     EMULATED PINS:
 
              +-----------+
-      BC1 -->|           |<-> DA7
+      BC1 -->|           |<-> DA0
      BDIR -->|           |...
              |           |<-> DA7
              |           |
-             |           |<-> (IOA7)
-             |           |...
              |           |<-> (IOA0)
-             |           |
-             |           |<-> (IOB7)
              |           |...
+             |           |<-> (IOA7)
+             |           |
              |           |<-> (IOB0)
+             |           |...
+             |           |<-> (IOB7)
              +-----------+
 
     NOT EMULATED:
@@ -63,7 +63,7 @@ extern "C" {
 
     Note that the BC2 is not emulated since it is usually always
     set to active when not connected to a CP1610 processor. The
-    remaining BDIR and BC1 pins are interprested as follows:
+    remaining BDIR and BC1 pins are interpreted as follows:
 
     |BDIR|BC1|
     +----+---+
@@ -87,9 +87,27 @@ extern "C" {
 #define AY38910_RESET   (1ULL<<34)
 
 /* chip-specific pins start at position 44 */
-#define AY38910_BDIR    (1ULL<<44)
-#define AY38910_BC1     (1ULL<<45)
-#define AY38910_A8      (1ULL<<46)
+#define AY38910_BDIR    (1ULL<<40)
+#define AY38910_BC1     (1ULL<<41)
+
+/* IO port pins */
+#define AY38910_IOA0    (1ULL<<48)
+#define AY38910_IOA1    (1ULL<<49)
+#define AY38910_IOA2    (1ULL<<50)
+#define AY38910_IOA3    (1ULL<<51)
+#define AY38910_IOA4    (1ULL<<52)
+#define AY38910_IOA5    (1ULL<<53)
+#define AY38910_IOA6    (1ULL<<54)
+#define AY38910_IOA7    (1ULL<<55)
+
+#define AY38910_IOB0    (1ULL<<56)
+#define AY38910_IOB1    (1ULL<<57)
+#define AY38910_IOB2    (1ULL<<58)
+#define AY38910_IOB3    (1ULL<<59)
+#define AY38910_IOB4    (1ULL<<60)
+#define AY38910_IOB5    (1ULL<<61)
+#define AY38910_IOB6    (1ULL<<62)
+#define AY38910_IOB7    (1ULL<<63)
 
 /* AY-3-8910 registers */
 #define AY38910_REG_PERIOD_A_FINE       (0)
@@ -206,6 +224,7 @@ typedef struct {
     ay38910_tone_t tone[AY38910_NUM_CHANNELS];  /* the 3 tone channels */
     ay38910_noise_t noise;                      /* the noise generator state */
     ay38910_env_t env;                          /* the envelope generator state */
+    uint64_t pins;          /* last pin state for debug inspection */
 
     /* sample generation state */
     int sample_period;
@@ -545,6 +564,7 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                 AY38910_SET_DATA(pins, data);
             }
         }
+        ay->pins = pins;
     }
     return pins;
 }
