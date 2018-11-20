@@ -237,6 +237,10 @@ typedef struct {
 #define AY38910_GET_DATA(p) ((uint8_t)(p>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define AY38910_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+/* set 8-bit port A data on 64-bit pin mask */
+#define AY38910_SET_PA(p,d) {p=((p&~0x00FF000000000000ULL)|((((uint64_t)d)&0xFFULL)<<48));}
+/* set 8-bit port B data on 64-bit pin mask */
+#define AY38910_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
 
 /* initialize a AY-3-8910 instance */
 extern void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc);
@@ -564,6 +568,8 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
                 AY38910_SET_DATA(pins, data);
             }
         }
+        AY38910_SET_PA(pins, ay->port_a);
+        AY38910_SET_PB(pins, ay->port_b);
         ay->pins = pins;
     }
     return pins;
