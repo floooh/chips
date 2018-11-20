@@ -129,6 +129,10 @@ void ui_ay38190_draw(ui_ay38910_t* win) {
         ImGui::BeginChild("##ay_chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->ay->pins);
         ImGui::EndChild();
+        ImGui::SameLine();
+        ImGui::BeginChild("##ay_state", ImVec2(0, 0), true);
+        ImGui::Text("FIXME FIXME FIXME");
+        ImGui::EndChild();
     }
     ImGui::End();
 }
