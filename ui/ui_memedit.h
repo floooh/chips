@@ -89,6 +89,7 @@ typedef struct {
     int init_x, init_y;
     int init_w, init_h;
     MemoryEditor* ed;
+    bool open;
     bool valid;
 } ui_memedit_t;
 
@@ -645,11 +646,13 @@ bool ui_memedit_isopen(ui_memedit_t* win) {
 
 void ui_memedit_draw(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->ed && win->valid);
+    win->ed->Open = win->open;
     if (!win->ed->Open) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     win->ed->DrawWindow(win->title, (uint8_t*)win, (1<<16));
+    win->open = win->ed->Open;
 }
 #endif /* CHIPS_IMPL */
