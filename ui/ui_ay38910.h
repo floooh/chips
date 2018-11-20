@@ -1,8 +1,8 @@
 #pragma once
 /*#
-    # ui_z80.h
+    # ui_ay38910.h
 
-    Debug visualization UI of Z80 CPU.
+    Debug visualization for AY-3-8910 sound chip.
 
     Do this:
     ~~~C
@@ -19,17 +19,17 @@
         your own assert macro (default: assert(c))
 
     Include the following headers before the including the *declaration*:
-        - z80.h
+        - ay38910.h
         - ui_chip.h
 
     Include the following headers before including the *implementation*:
         - imgui.h
-        - z80.h
+        - ay38910.h
         - ui_chip.h
         - ui_util.h
 
-    All strings provided to ui_z80_init() must remain alive until
-    ui_z80_discard() is called!
+    All string data provided to the ui_ay38910_init() must remain alive until
+    until ui_ay38910_discard() is called!
 
     ## zlib/libpng license
 
@@ -56,29 +56,31 @@
 extern "C" {
 #endif
 
-/* setup parameters for ui_z80_init()
+/* setup parameters for ui_ay38910_init()
     NOTE: all string data must remain alive until ui_z80_discard()!
 */
 typedef struct {
     const char* title;          /* window title */
-    z80_t* cpu;                 /* pointer to CPU to track */
+    ay38910_t* ay;              /* pointer to ay38910_t instance to track */
     int x, y;                   /* initial window pos */
+    int w, h;               /* initial window width and height */
     bool open;                  /* initial open state */
     ui_chip_desc_t chip_desc;   /* chip visualization desc */
-} ui_z80_desc_t;
+} ui_ay38910_desc_t;
 
 typedef struct {
     const char* title;
-    z80_t* cpu;
+    ay38910_t* ay;
     int init_x, init_y;
+    int init_w, init_h;
     bool open;
     bool valid;
     ui_chip_t chip;
-} ui_z80_t;
+} ui_ay38910_t;
 
-void ui_z80_init(ui_z80_t* win, const ui_z80_desc_t* desc);
-void ui_z80_discard(ui_z80_t* win);
-void ui_z80_draw(ui_z80_t* win);
+void ui_ay38910_init(ui_ay38910_t* win, const ui_ay38910_desc_t* desc);
+void ui_ay38910_discard(ui_ay38910_t* win);
+void ui_ay38190_draw(ui_ay38910_t* win);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -95,75 +97,39 @@ void ui_z80_draw(ui_z80_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_z80_init(ui_z80_t* win, const ui_z80_desc_t* desc) {
+void ui_ay38910_init(ui_ay38910_t* win, const ui_ay38910_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
-    CHIPS_ASSERT(desc->cpu);
-    memset(win, 0, sizeof(ui_z80_t));
+    CHIPS_ASSERT(desc->ay);
+    memset(win, 0, sizeof(ui_ay38910_t));
     win->title = desc->title;
-    win->cpu = desc->cpu;
+    win->ay = desc->ay;
     win->init_x = desc->x;
     win->init_y = desc->y;
+    win->init_w = desc->w;
+    win->init_h = desc->h;
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
 }
 
-void ui_z80_discard(ui_z80_t* win) {
+void ui_ay38910_discard(ui_ay38910_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
 }
 
-static void _ui_z80_regs(ui_z80_t* win) {
-    z80_t* cpu = win->cpu;
-    ImGui::Text("AF: %04X  AF': %04X", z80_af(cpu), z80_af_(cpu));
-    ImGui::Text("BC: %04X  BC': %04X", z80_bc(cpu), z80_bc_(cpu));
-    ImGui::Text("DE: %04X  DE': %04X", z80_de(cpu), z80_de_(cpu));
-    ImGui::Text("HL: %04X  HL': %04X", z80_hl(cpu), z80_hl_(cpu));
-    ImGui::Separator();
-    ImGui::Text("IX: %04X  IY:  %04X", z80_ix(cpu), z80_iy(cpu));
-    ImGui::Text("PC: %04X  SP:  %04X", z80_pc(cpu), z80_sp(cpu));
-    ImGui::Text("IR: %04X  WZ:  %04X", z80_ir(cpu), z80_wz(cpu));
-    ImGui::Text("IM: %02X", z80_im(cpu));
-    ImGui::Separator();
-    const uint8_t f = z80_f(cpu);
-    char f_str[9] = {
-        (f & Z80_SF) ? 'S':'-',
-        (f & Z80_ZF) ? 'Z':'-',
-        (f & Z80_YF) ? 'X':'-',
-        (f & Z80_HF) ? 'H':'-',
-        (f & Z80_XF) ? 'Y':'-',
-        (f & Z80_VF) ? 'V':'-',
-        (f & Z80_NF) ? 'N':'-',
-        (f & Z80_CF) ? 'C':'-',
-        0,
-    };
-    ImGui::Text("Flags: %s", f_str);
-    ImGui::Text("IFF1:  %s", z80_iff1(cpu)?"ON":"OFF");
-    ImGui::Text("IFF2:  %s", z80_iff2(cpu)?"ON":"OFF");
-    ImGui::Separator();
-    ImGui::Text("Addr:  %04X", Z80_GET_ADDR(cpu->pins));
-    ImGui::Text("Data:  %02X", Z80_GET_DATA(cpu->pins));
-    ImGui::Text("Wait:  %d", (int)Z80_GET_WAIT(cpu->pins));
-}
-
-void ui_z80_draw(ui_z80_t* win) {
-    CHIPS_ASSERT(win && win->valid && win->cpu);
+void ui_ay38190_draw(ui_ay38910_t* win) {
+    CHIPS_ASSERT(win && win->valid && win->ay);
     if (!win->open) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(360, 340), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
-        ImGui::BeginChild("##z80_chip", ImVec2(176, 0), true);
-        ui_chip_draw(&win->chip, win->cpu->pins);
-        ImGui::EndChild();
-        ImGui::SameLine();
-        ImGui::BeginChild("##z80_regs", ImVec2(0, 0), true);
-        _ui_z80_regs(win);
+        ImGui::BeginChild("##ay_chip", ImVec2(176, 0), true);
+        ui_chip_draw(&win->chip, win->ay->pins);
         ImGui::EndChild();
     }
     ImGui::End();
 }
-
 #endif /* CHIPS_IMPL */

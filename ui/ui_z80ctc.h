@@ -63,6 +63,7 @@ typedef struct {
     const char* title;          /* window title */
     z80ctc_t* ctc;              /* pointer to CTC to track */
     int x, y;                   /* initial window position */
+    bool open;                  /* initial open state */
     ui_chip_desc_t chip_desc;   /* chips visualization desc */
 } ui_z80ctc_desc_t;
 
@@ -75,12 +76,8 @@ typedef struct {
     ui_chip_t chip;
 } ui_z80ctc_t;
 
-void ui_z80ctc_init(ui_z80ctc_t* win, ui_z80ctc_desc_t* desc);
+void ui_z80ctc_init(ui_z80ctc_t* win, const ui_z80ctc_desc_t* desc);
 void ui_z80ctc_discard(ui_z80ctc_t* win);
-void ui_z80ctc_open(ui_z80ctc_t* win);
-void ui_z80ctc_close(ui_z80ctc_t* win);
-void ui_z80ctc_toggle(ui_z80ctc_t* win);
-bool ui_z80ctc_isopen(ui_z80ctc_t* win);
 void ui_z80ctc_draw(ui_z80ctc_t* win);
 
 #ifdef __cplusplus
@@ -98,7 +95,7 @@ void ui_z80ctc_draw(ui_z80ctc_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_z80ctc_init(ui_z80ctc_t* win, ui_z80ctc_desc_t* desc) {
+void ui_z80ctc_init(ui_z80ctc_t* win, const ui_z80ctc_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->ctc);
@@ -107,6 +104,7 @@ void ui_z80ctc_init(ui_z80ctc_t* win, ui_z80ctc_desc_t* desc) {
     win->ctc = desc->ctc;
     win->init_x = desc->x;
     win->init_y = desc->y;
+    win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
 }
@@ -114,26 +112,6 @@ void ui_z80ctc_init(ui_z80ctc_t* win, ui_z80ctc_desc_t* desc) {
 void ui_z80ctc_discard(ui_z80ctc_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
-}
-
-void ui_z80ctc_open(ui_z80ctc_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = true;
-}
-
-void ui_z80ctc_close(ui_z80ctc_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = false;
-}
-
-void ui_z80ctc_toggle(ui_z80ctc_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = !win->open;
-}
-
-bool ui_z80ctc_isopen(ui_z80ctc_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    return win->open;
 }
 
 static void _ui_z80ctc_channels(ui_z80ctc_t* win) {

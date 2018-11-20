@@ -73,6 +73,7 @@ typedef struct {
 typedef struct {
     const char* title;  /* window title */
     int x, y, w, h;     /* initial window pos and size */
+    bool open;          /* initial open state */
 } ui_memmap_desc_t;
 
 /* ui_memmap window state */
@@ -91,12 +92,8 @@ typedef struct {
     ui_memmap_layer_t layers[UI_MEMMAP_MAX_LAYERS];
 } ui_memmap_t;
 
-void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc);
+void ui_memmap_init(ui_memmap_t* win, const ui_memmap_desc_t* desc);
 void ui_memmap_discard(ui_memmap_t* win);
-void ui_memmap_open(ui_memmap_t* win);
-void ui_memmap_close(ui_memmap_t* win);
-void ui_memmap_toggle(ui_memmap_t* win);
-bool ui_memmap_isopen(ui_memmap_t* win);
 void ui_memmap_draw(ui_memmap_t* win);
 
 /* reset/clear memory map description */
@@ -183,7 +180,7 @@ static void _ui_memmap_draw_regions(ui_memmap_t* win, const ImVec2& canvas_pos, 
     }
 }
 
-void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc) {
+void ui_memmap_init(ui_memmap_t* win, const ui_memmap_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     memset(win, 0, sizeof(ui_memmap_t));
@@ -192,6 +189,7 @@ void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc) {
     win->init_y = desc->y;
     win->init_w = desc->w;
     win->init_h = desc->h;
+    win->open = desc->open;
     win->left_padding = 80;
     win->layer_height = 20;
     win->grid_color = 0xFFDDDDDD;
@@ -203,26 +201,6 @@ void ui_memmap_init(ui_memmap_t* win, ui_memmap_desc_t* desc) {
 void ui_memmap_discard(ui_memmap_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
-}
-
-void ui_memmap_open(ui_memmap_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = true;
-}
-
-void ui_memmap_close(ui_memmap_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = false;
-}
-
-void ui_memmap_toggle(ui_memmap_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = !win->open;
-}
-
-bool ui_memmap_isopen(ui_memmap_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    return win->open;
 }
 
 void ui_memmap_draw(ui_memmap_t* win) {

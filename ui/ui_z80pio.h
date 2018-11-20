@@ -63,6 +63,7 @@ typedef struct {
     const char* title;      /* window title */
     z80pio_t* pio;          /* pointer to PIO to track */
     int x, y;               /* initial window position */
+    bool open;              /* initial open state */
     ui_chip_desc_t chip_desc;   /* chip visualization desc */
 } ui_z80pio_desc_t;
 
@@ -75,12 +76,8 @@ typedef struct {
     ui_chip_t chip;
 } ui_z80pio_t;
 
-void ui_z80pio_init(ui_z80pio_t* win, ui_z80pio_desc_t* desc);
+void ui_z80pio_init(ui_z80pio_t* win, const ui_z80pio_desc_t* desc);
 void ui_z80pio_discard(ui_z80pio_t* win);
-void ui_z80pio_open(ui_z80pio_t* win);
-void ui_z80pio_close(ui_z80pio_t* win);
-void ui_z80pio_toggle(ui_z80pio_t* win);
-bool ui_z80pio_isopen(ui_z80pio_t* win);
 void ui_z80pio_draw(ui_z80pio_t* win);
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
@@ -94,7 +91,7 @@ void ui_z80pio_draw(ui_z80pio_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_z80pio_init(ui_z80pio_t* win, ui_z80pio_desc_t* desc) {
+void ui_z80pio_init(ui_z80pio_t* win, const ui_z80pio_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->pio);
@@ -103,6 +100,7 @@ void ui_z80pio_init(ui_z80pio_t* win, ui_z80pio_desc_t* desc) {
     win->pio = desc->pio;
     win->init_x = desc->x;
     win->init_y = desc->y;
+    win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
 }
@@ -110,26 +108,6 @@ void ui_z80pio_init(ui_z80pio_t* win, ui_z80pio_desc_t* desc) {
 void ui_z80pio_discard(ui_z80pio_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
-}
-
-void ui_z80pio_open(ui_z80pio_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = true;
-}
-
-void ui_z80pio_close(ui_z80pio_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = false;
-}
-
-void ui_z80pio_toggle(ui_z80pio_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = !win->open;
-}
-
-bool ui_z80pio_isopen(ui_z80pio_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    return win->open;
 }
 
 static const char* _ui_z80pio_mode_str(uint8_t mode) {

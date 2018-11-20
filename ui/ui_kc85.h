@@ -61,6 +61,7 @@ typedef struct {
     const char* title;      /* window title */
     kc85_t* kc85;           /* pointer to kc85_t instance to track */
     int x, y;               /* initial position */
+    bool open;              /* initial open state */
 } ui_kc85_desc_t;
 
 typedef struct {
@@ -71,12 +72,8 @@ typedef struct {
     bool valid;
 } ui_kc85_t;
 
-void ui_kc85_init(ui_kc85_t* win, ui_kc85_desc_t* desc);
+void ui_kc85_init(ui_kc85_t* win, const ui_kc85_desc_t* desc);
 void ui_kc85_discard(ui_kc85_t* win);
-void ui_kc85_open(ui_kc85_t* win);
-void ui_kc85_close(ui_kc85_t* win);
-void ui_kc85_toggle(ui_kc85_t* win);
-bool ui_kc85_isopen(ui_kc85_t* win);
 void ui_kc85_draw(ui_kc85_t* win);
 
 #ifdef __cplusplus
@@ -94,7 +91,7 @@ void ui_kc85_draw(ui_kc85_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_kc85_init(ui_kc85_t* win, ui_kc85_desc_t* desc) {
+void ui_kc85_init(ui_kc85_t* win, const ui_kc85_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->kc85);
@@ -103,32 +100,13 @@ void ui_kc85_init(ui_kc85_t* win, ui_kc85_desc_t* desc) {
     win->kc85 = desc->kc85;
     win->init_x = desc->x;
     win->init_y = desc->y;
+    win->open = desc->open;
     win->valid = true;
 }
 
 void ui_kc85_discard(ui_kc85_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
-}
-
-void ui_kc85_open(ui_kc85_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = true;
-}
-
-void ui_kc85_close(ui_kc85_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = false;
-}
-
-void ui_kc85_toggle(ui_kc85_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = !win->open;
-}
-
-bool ui_kc85_isopen(ui_kc85_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    return win->open;
 }
 
 void ui_kc85_draw(ui_kc85_t* win) {

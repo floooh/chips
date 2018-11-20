@@ -73,6 +73,7 @@ typedef struct {
     ui_dasm_read_t read_cb;
     void* user_data;
     int x, y, w, h;     /* initial window pos and size */
+    bool open;          /* initial open state */
 } ui_dasm_desc_t;
 
 typedef struct {
@@ -99,12 +100,8 @@ typedef struct {
     uint32_t highlight_color;
 } ui_dasm_t;
 
-void ui_dasm_init(ui_dasm_t* win, ui_dasm_desc_t* desc);
+void ui_dasm_init(ui_dasm_t* win, const ui_dasm_desc_t* desc);
 void ui_dasm_discard(ui_dasm_t* win);
-void ui_dasm_open(ui_dasm_t* win);
-void ui_dasm_close(ui_dasm_t* win);
-void ui_dasm_toggle(ui_dasm_t* win);
-bool ui_dasm_isopen(ui_dasm_t* win);
 void ui_dasm_draw(ui_dasm_t* win);
 
 #ifdef __cplusplus
@@ -123,7 +120,7 @@ void ui_dasm_draw(ui_dasm_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_dasm_init(ui_dasm_t* win, ui_dasm_desc_t* desc) {
+void ui_dasm_init(ui_dasm_t* win, const ui_dasm_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     memset(win, 0, sizeof(ui_dasm_t));
@@ -135,6 +132,7 @@ void ui_dasm_init(ui_dasm_t* win, ui_dasm_desc_t* desc) {
     win->init_y = desc->y;
     win->init_w = desc->w;
     win->init_h = desc->h;
+    win->open = desc->open;
     win->highlight_color = 0xFF30FF30;
     for (int i = 0; i < UI_DASM_MAX_LAYERS; i++) {
         if (desc->layers[i]) {
@@ -151,26 +149,6 @@ void ui_dasm_init(ui_dasm_t* win, ui_dasm_desc_t* desc) {
 void ui_dasm_discard(ui_dasm_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
-}
-
-void ui_dasm_open(ui_dasm_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = true;
-}
-
-void ui_dasm_close(ui_dasm_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = false;
-}
-
-void ui_dasm_toggle(ui_dasm_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->open = !win->open;
-}
-
-bool ui_dasm_isopen(ui_dasm_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    return win->open;
 }
 
 /* disassembler callback to fetch the next instruction byte */

@@ -77,8 +77,8 @@ typedef struct {
     ui_memedit_read_t read_cb;
     ui_memedit_write_t write_cb;
     void* user_data;
-    bool read_only;
     int x, y, w, h;     /* initial window pos and size */
+    bool open;          /* initial open state */
 } ui_memedit_desc_t;
 
 typedef struct {
@@ -94,13 +94,9 @@ typedef struct {
 } ui_memedit_t;
 
 /* NOTE: win MUST be zero-initialized already, allocates memory via new() */
-void ui_memedit_init(ui_memedit_t* win, ui_memedit_desc_t* desc);
+void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc);
 /* frees memory via delete() */
 void ui_memedit_discard(ui_memedit_t* win);
-void ui_memedit_open(ui_memedit_t* win);
-void ui_memedit_close(ui_memedit_t* win);
-void ui_memedit_toggle(ui_memedit_t* win);
-bool ui_memedit_isopen(ui_memedit_t* win);
 void ui_memedit_draw(ui_memedit_t* win);
 
 #ifdef __cplusplus
@@ -587,7 +583,7 @@ static void _ui_memedit_writefn(uint8_t* ptr, size_t off, uint8_t val) {
     }
 }
 
-void ui_memedit_init(ui_memedit_t* win, ui_memedit_desc_t* desc) {
+void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(0 == win->ed);
@@ -600,11 +596,11 @@ void ui_memedit_init(ui_memedit_t* win, ui_memedit_desc_t* desc) {
     win->init_y = desc->y;
     win->init_w = desc->w;
     win->init_h = desc->h;
+    win->open = desc->open;
     win->ed = new MemoryEditor;
-    win->ed->ReadOnly = desc->read_only;
+    win->ed->Open = win->open;
     win->ed->ReadFn = _ui_memedit_readfn;
     win->ed->WriteFn = _ui_memedit_writefn;
-    win->ed->Open = false;
     win->ed->OptAddrDigitsCount = 4;
     for (int i = 0; i < UI_MEMEDIT_MAX_LAYERS; i++) {
         if (desc->layers[i]) {
@@ -622,26 +618,6 @@ void ui_memedit_discard(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->ed && win->valid);
     delete win->ed; win->ed = nullptr;
     win->valid = false;
-}
-
-void ui_memedit_open(ui_memedit_t* win) {
-    CHIPS_ASSERT(win && win->ed && win->valid);
-    win->ed->Open = true;
-}
-
-void ui_memedit_close(ui_memedit_t* win) {
-    CHIPS_ASSERT(win && win->ed && win->valid);
-    win->ed->Open = false;
-}
-
-void ui_memedit_toggle(ui_memedit_t* win) {
-    CHIPS_ASSERT(win && win->ed && win->valid);
-    win->ed->Open = !win->ed->Open;
-}
-
-bool ui_memedit_isopen(ui_memedit_t* win) {
-    CHIPS_ASSERT(win && win->ed && win->valid);
-    return win->ed->Open;
 }
 
 void ui_memedit_draw(ui_memedit_t* win) {

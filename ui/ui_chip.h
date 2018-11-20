@@ -77,7 +77,7 @@ typedef struct {
     ui_chip_pin_t pins[UI_CHIP_MAX_PINS];   
 } ui_chip_t;
 
-void ui_chip_init(ui_chip_t* chip, ui_chip_desc_t* desc);
+void ui_chip_init(ui_chip_t* chip, const ui_chip_desc_t* desc);
 void ui_chip_draw(ui_chip_t* chip, uint64_t pins);
 
 #ifdef __cplusplus
@@ -96,7 +96,7 @@ void ui_chip_draw(ui_chip_t* chip, uint64_t pins);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_chip_init(ui_chip_t* c, ui_chip_desc_t* desc) {
+void ui_chip_init(ui_chip_t* c, const ui_chip_desc_t* desc) {
     CHIPS_ASSERT(c && desc);
     CHIPS_ASSERT(desc->name && desc->num_slots > 0);
     memset(c, 0, sizeof(ui_chip_t));
