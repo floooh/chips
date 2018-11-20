@@ -31,7 +31,7 @@
     ## The KC85/2
 
     This was the ur-model of the KC85 family designed and manufactured
-    by VEB Mikroelekronikkombinat Muehlhausen. The KC85/2 was introduced
+    by VEB Mikroelektronikkombinat Muehlhausen. The KC85/2 was introduced
     in 1984 as HC-900, and renamed to KC85/2 in 1985 (at the same time
     when the completely unrelated Z9001 was renamed to KC85/1).
 
