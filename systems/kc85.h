@@ -137,19 +137,19 @@
     The module system works with 4 byte values:
 
     - The **slot address**, the two base unit slots are at address 08 and 0C
-    - The **module id**, this is a fixed value that identifies a module type,
-      most notable, all 16 KByte ROM application modules had the same id,
-      the module id can be queried by reading from port 80, with the
+    - The **module id**, this is a fixed value that identifies a module type.
+      All 16 KByte ROM application modules had the same id.
+      The module id can be queried by reading from port 80, with the
       slot address in the upper 8 bit of the 16-bit port address (so 
       to query what module is in slot C, you would do an IN A,(C),
       with the value 0C80 in BC). If no module is in the slot, the value
-      FF would be written to A, otherwise the module's id byte
+      FF would be written to A, otherwise the module's id byte.
     - The module's **address mask**, this is a byte value that's ANDed
       against the upper 8 address bytes when mapping the module to memory,
       this essentially clamps a module's address to a 'round' 8- or
       16 KByte value (these are the 2 values I've seen in the wild)
     - The module control byte, this controls whether a module is currently
-      activate (bit 0), write-protected (bit 1), and at what address the 
+      active (bit 0), write-protected (bit 1), and at what address the 
       module is mapped into the 16-bit address space (upper 3 bits)
 
     The module system is controlled with the SWITCH command, for instance
@@ -206,7 +206,7 @@
     write-only 8-bit latches at port address 84 and 86:
 
     New bits in PIO port B:
-        - bit 5:    enable the 2 stacked RAM bank at address 8000
+        - bit 5:    enable the 2 stacked RAM banks at address 8000
         - bit 6:    write protect RAM bank at address 8000 
 
     Output port 84:
@@ -586,7 +586,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
        base unit, since the keyboard unit sent keystroke information
        in a serial-encoded signal to the base unit. Currently this
        serial encoding/decoding isn't emulated (it wasn't very reliable
-       anyway and required slot typing).
+       anyway and required slow typing).
     */
     kbd_init(&sys->kbd, 1);
 
