@@ -57,7 +57,7 @@ extern "C" {
 #endif
 
 /* setup parameters for ui_ay38910_init()
-    NOTE: all string data must remain alive until ui_z80_discard()!
+    NOTE: all string data must remain alive until ui_ay38910_discard()!
 */
 typedef struct {
     const char* title;          /* window title */
