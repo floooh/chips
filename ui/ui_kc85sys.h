@@ -1,6 +1,6 @@
 #pragma once
 /*#
-    # ui_kc85.h
+    # ui_kc85sys.h
 
     Debug visualization for the KC85 system state.
 
@@ -25,8 +25,8 @@
         - imgui.h
         - kc85.h
 
-    All strings provided to ui_kc85_init() must remain alive until
-    ui_kc85_discard() is called!
+    All strings provided to ui_kc85sys_init() must remain alive until
+    ui_kc85sys_discard() is called!
 
     ## zlib/libpng license
 
@@ -55,14 +55,14 @@ extern "C" {
 
 /* setup params for ui_kc85_init()
 
-    NOTE: all strings must remain alive until ui_kc85_discard();
+    NOTE: all strings must remain alive until ui_kc85sys_discard();
 */
 typedef struct {
     const char* title;      /* window title */
     kc85_t* kc85;           /* pointer to kc85_t instance to track */
     int x, y;               /* initial position */
     bool open;              /* initial open state */
-} ui_kc85_desc_t;
+} ui_kc85sys_desc_t;
 
 typedef struct {
     const char* title;
@@ -70,11 +70,11 @@ typedef struct {
     int init_x, init_y;
     bool open;
     bool valid;
-} ui_kc85_t;
+} ui_kc85sys_t;
 
-void ui_kc85_init(ui_kc85_t* win, const ui_kc85_desc_t* desc);
-void ui_kc85_discard(ui_kc85_t* win);
-void ui_kc85_draw(ui_kc85_t* win);
+void ui_kc85sys_init(ui_kc85sys_t* win, const ui_kc85sys_desc_t* desc);
+void ui_kc85sys_discard(ui_kc85sys_t* win);
+void ui_kc85sys_draw(ui_kc85sys_t* win);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -91,11 +91,11 @@ void ui_kc85_draw(ui_kc85_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_kc85_init(ui_kc85_t* win, const ui_kc85_desc_t* desc) {
+void ui_kc85sys_init(ui_kc85sys_t* win, const ui_kc85sys_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->kc85);
-    memset(win, 0, sizeof(ui_kc85_t));
+    memset(win, 0, sizeof(ui_kc85sys_t));
     win->title = desc->title;
     win->kc85 = desc->kc85;
     win->init_x = desc->x;
@@ -104,12 +104,12 @@ void ui_kc85_init(ui_kc85_t* win, const ui_kc85_desc_t* desc) {
     win->valid = true;
 }
 
-void ui_kc85_discard(ui_kc85_t* win) {
+void ui_kc85sys_discard(ui_kc85sys_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
 }
 
-void ui_kc85_draw(ui_kc85_t* win) {
+void ui_kc85sys_draw(ui_kc85sys_t* win) {
     CHIPS_ASSERT(win && win->valid && win->kc85);
     if (!win->open) {
         return;
