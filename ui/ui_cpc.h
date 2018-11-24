@@ -116,7 +116,12 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
                 ui->boot_cb(ui->cpc, CPC_TYPE_KCCOMPACT);
             }
             if (ImGui::MenuItem("Joystick", 0, ui->cpc->joystick_type != CPC_JOYSTICK_NONE)) {
-                ui->cpc->joystick_type = CPC_JOYSTICK_DIGITAL;
+                if (ui->cpc->joystick_type == CPC_JOYSTICK_NONE) {
+                    ui->cpc->joystick_type = CPC_JOYSTICK_DIGITAL;
+                }
+                else {
+                    ui->cpc->joystick_type = CPC_JOYSTICK_NONE;
+                }
             }
             ImGui::EndMenu();
         }
