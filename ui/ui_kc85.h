@@ -2,7 +2,7 @@
 /*#
     # ui_kc85.h
 
-    Integrated debugging UI for KC85/2../4.
+    Integrated debugging UI for kc85.h
 
     Do this:
     ~~~C
