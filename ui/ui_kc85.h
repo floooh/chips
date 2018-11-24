@@ -75,9 +75,9 @@ typedef struct {
     ui_z80ctc_t ctc;
     ui_kc85sys_t sys;
     ui_audio_t audio;
-    ui_memedit_t memedit;
     ui_memmap_t memmap;
-    ui_dasm_t dasm;
+    ui_memedit_t memedit[4];
+    ui_dasm_t dasm[4];
 } ui_kc85_t;
 
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc);
@@ -129,8 +129,20 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
-            ImGui::MenuItem("Memory Editor", 0, &ui->memedit.open);
-            ImGui::MenuItem("Disassembler", 0, &ui->dasm.open);
+            if (ImGui::BeginMenu("Memory Editor")) {
+                ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
+                ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
+                ImGui::MenuItem("Window #3", 0, &ui->memedit[2].open);
+                ImGui::MenuItem("Window #4", 0, &ui->memedit[3].open);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Disassembler")) {
+                ImGui::MenuItem("Window #1", 0, &ui->dasm[0].open);
+                ImGui::MenuItem("Window #2", 0, &ui->dasm[1].open);
+                ImGui::MenuItem("Window #3", 0, &ui->dasm[2].open);
+                ImGui::MenuItem("Window #4", 0, &ui->dasm[3].open);
+                ImGui::EndMenu();
+            }
             ImGui::MenuItem("CPU Debugger (TODO)");
             ImGui::MenuItem("Scan Commands (TODO)");
             ImGui::EndMenu();
@@ -328,53 +340,58 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
     CHIPS_ASSERT(desc->boot_cb);
     ui->kc85 = desc->kc85;
     ui->boot_cb = desc->boot_cb;
+    int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_z80_desc_t desc = {0};
         desc.title = "Z80 CPU";
         desc.cpu = &ui->kc85->cpu;
-        desc.x = 40;
-        desc.y = 60;
+        desc.x = x;
+        desc.y = y;
         ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nCPU", 36, _ui_kc85_cpu_pins);
         ui_z80_init(&ui->cpu, &desc);
     }
+    x += dx; y += dy;
     {
         ui_z80pio_desc_t desc = {0};
         desc.title = "Z80 PIO";
         desc.pio = &ui->kc85->pio;
-        desc.x = 40;
-        desc.y = 60;
+        desc.x = x;
+        desc.y = y;
         ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nPIO", 40, _ui_kc85_pio_pins);
         ui_z80pio_init(&ui->pio, &desc);
     }
+    x += dx; y += dy;
     {
         ui_z80ctc_desc_t desc = {0};
         desc.title = "Z80 CTC";
         desc.ctc = &ui->kc85->ctc;
-        desc.x = 40;
-        desc.y = 60;
+        desc.x = x;
+        desc.y = y;
         ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nCTC", 32, _ui_kc85_ctc_pins);
         ui_z80ctc_init(&ui->ctc, &desc);
     }
+    x += dx; y += dy;
     {
         ui_kc85sys_desc_t desc = {0};
         desc.title = "System State";
         desc.kc85 = ui->kc85;
-        desc.x = 40;
-        desc.y = 60;
+        desc.x = x;
+        desc.y = y;
         ui_kc85sys_init(&ui->sys, &desc);
     }
+    x += dx; y += dy;
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
         desc.sample_buffer = ui->kc85->sample_buffer;
         desc.num_samples = ui->kc85->num_samples;
-        desc.x = 40;
-        desc.y = 60;
+        desc.x = x;
+        desc.y = y;
         ui_audio_init(&ui->audio, &desc);
     }
+    x += dx; y += dy;
     {
         ui_memedit_desc_t desc = {0};
-        desc.title = "Memory Editor";
         desc.layers[0] = "CPU Mapped";
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
@@ -382,23 +399,26 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
         desc.read_cb = _ui_kc85_mem_read;
         desc.write_cb = _ui_kc85_mem_write;
         desc.user_data = ui->kc85;
-        desc.x = 20;
-        desc.y = 40;
         desc.h = 120;
-        ui_memedit_init(&ui->memedit, &desc);
+        static const char* titles[] = { "Memory Editor #1", "Memory Editor #2", "Memory Editor #3", "Memory Editor #4" };
+        for (int i = 0; i < 4; i++) {
+            desc.title = titles[i]; desc.x = x; desc.y = y;
+            ui_memedit_init(&ui->memedit[i], &desc);
+            x += dx; y += dy;
+        }
     }
     {
         ui_memmap_desc_t desc = {0};
         desc.title = "Memory Map";
-        desc.x = 30;
-        desc.y = 50;
+        desc.x = x;
+        desc.y = y;
         desc.w = 400;
         desc.h = 64;
         ui_memmap_init(&ui->memmap, &desc);
     }
+    x += dx; y += dy;
     {
         ui_dasm_desc_t desc = {0};
-        desc.title = "Disassembler";
         desc.layers[0] = "CPU Mapped";
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
@@ -406,11 +426,14 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
         desc.start_addr = 0xF000;
         desc.read_cb = _ui_kc85_mem_read;
         desc.user_data = ui->kc85;
-        desc.x = 40;
-        desc.y = 60;
         desc.w = 400;
         desc.h = 256;
-        ui_dasm_init(&ui->dasm, &desc);
+        static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };
+        for (int i = 0; i < 4; i++) {
+            desc.title = titles[i]; desc.x = x; desc.y = y;
+            ui_dasm_init(&ui->dasm[i], &desc);
+            x += dx; y += dy;
+        }
     }
 }
 
@@ -422,9 +445,11 @@ void ui_kc85_discard(ui_kc85_t* ui) {
     ui_z80ctc_discard(&ui->ctc);
     ui_kc85sys_discard(&ui->sys);
     ui_audio_discard(&ui->audio);
-    ui_memedit_discard(&ui->memedit);
     ui_memmap_discard(&ui->memmap);
-    ui_dasm_discard(&ui->dasm);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_discard(&ui->memedit[i]);
+        ui_dasm_discard(&ui->dasm[i]);
+    }
 }
 
 void ui_kc85_draw(ui_kc85_t* ui, double time_ms) {
@@ -437,10 +462,12 @@ void ui_kc85_draw(ui_kc85_t* ui, double time_ms) {
     ui_z80_draw(&ui->cpu);
     ui_z80pio_draw(&ui->pio);
     ui_z80ctc_draw(&ui->ctc);
-    ui_memedit_draw(&ui->memedit);
     ui_memmap_draw(&ui->memmap);
-    ui_dasm_draw(&ui->dasm);
     ui_kc85sys_draw(&ui->sys);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_draw(&ui->memedit[i]);
+        ui_dasm_draw(&ui->dasm[i]);
+    }
 }
 
 #pragma clang diagnostic pop
