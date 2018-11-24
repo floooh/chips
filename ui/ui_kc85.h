@@ -102,19 +102,19 @@ void ui_kc85_draw(ui_kc85_t* ui, double time_ms);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 
 static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
-    CHIPS_ASSERT(ui && ui->kc85);
+    CHIPS_ASSERT(ui && ui->kc85 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
                 kc85_reset(ui->kc85);
             }
-            if (ImGui::MenuItem("KC85/2")) {
+            if (ImGui::MenuItem("KC85/2", 0, ui->kc85->type == KC85_TYPE_2)) {
                 ui->boot_cb(ui->kc85, KC85_TYPE_2);
             }
-            if (ImGui::MenuItem("KC85/3")) {
+            if (ImGui::MenuItem("KC85/3", 0, ui->kc85->type == KC85_TYPE_3)) {
                 ui->boot_cb(ui->kc85, KC85_TYPE_3);
             }
-            if (ImGui::MenuItem("KC85/4")) {
+            if (ImGui::MenuItem("KC85/4", 0, ui->kc85->type == KC85_TYPE_4)) {
                 ui->boot_cb(ui->kc85, KC85_TYPE_4);
             }
             ImGui::EndMenu();

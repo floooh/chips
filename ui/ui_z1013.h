@@ -96,19 +96,19 @@ void ui_z1013_draw(ui_z1013_t* ui, double time_ms);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 
 static void _ui_z1013_draw_menu(ui_z1013_t* ui, double time_ms) {
-    CHIPS_ASSERT(ui && ui->z1013);
+    CHIPS_ASSERT(ui && ui->z1013 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
                 z1013_reset(ui->z1013);
             }
-            if (ImGui::MenuItem("Z1013.01")) {
+            if (ImGui::MenuItem("Z1013.01", 0, ui->z1013->type == Z1013_TYPE_01)) {
                 ui->boot_cb(ui->z1013, Z1013_TYPE_01);
             }
-            if (ImGui::MenuItem("Z1013.16")) {
+            if (ImGui::MenuItem("Z1013.16", 0, ui->z1013->type == Z1013_TYPE_16)) {
                 ui->boot_cb(ui->z1013, Z1013_TYPE_16);
             }
-            if (ImGui::MenuItem("Z1013.64")) {
+            if (ImGui::MenuItem("Z1013.64", 0, ui->z1013->type == Z1013_TYPE_64)) {
                 ui->boot_cb(ui->z1013, Z1013_TYPE_64);
             }
             ImGui::EndMenu();

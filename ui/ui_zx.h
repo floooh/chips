@@ -98,16 +98,16 @@ void ui_zx_draw(ui_zx_t* ui, double time_ms);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 
 static void _ui_zx_draw_menu(ui_zx_t* ui, double time_ms) {
-    CHIPS_ASSERT(ui && ui->zx);
+    CHIPS_ASSERT(ui && ui->zx && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
                 zx_reset(ui->zx);
             }
-            if (ImGui::MenuItem("ZX Spectrum 48K")) {
+            if (ImGui::MenuItem("ZX Spectrum 48K", 0, (ui->zx->type == ZX_TYPE_48K))) {
                 ui->boot_cb(ui->zx, ZX_TYPE_48K);
             }
-            if (ImGui::MenuItem("ZX Spectrum 128")) {
+            if (ImGui::MenuItem("ZX Spectrum 128", 0, (ui->zx->type == ZX_TYPE_128))) {
                 ui->boot_cb(ui->zx, ZX_TYPE_128);
             }
             if (ImGui::BeginMenu("Joystick")) {

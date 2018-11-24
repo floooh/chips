@@ -100,16 +100,16 @@ void ui_z9001_draw(ui_z9001_t* ui, double time_ms);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 
 static void _ui_z9001_draw_menu(ui_z9001_t* ui, double time_ms) {
-    CHIPS_ASSERT(ui && ui->z9001);
+    CHIPS_ASSERT(ui && ui->z9001 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
                 z9001_reset(ui->z9001);
             }
-            if (ImGui::MenuItem("Z9001")) {
+            if (ImGui::MenuItem("Z9001", 0, ui->z9001->type == Z9001_TYPE_Z9001)) {
                 ui->boot_cb(ui->z9001, Z9001_TYPE_Z9001);
             }
-            if (ImGui::MenuItem("KC87")) {
+            if (ImGui::MenuItem("KC87", 0, ui->z9001->type == Z9001_TYPE_KC87)) {
                 ui->boot_cb(ui->z9001, Z9001_TYPE_KC87);
             }
             ImGui::EndMenu();
