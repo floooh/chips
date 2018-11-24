@@ -72,6 +72,7 @@ typedef struct {
     ui_cpc_boot_t boot_cb;
     ui_z80_t cpu;
     ui_ay38910_t psg;
+    ui_mc6845_t vdc;
     ui_audio_t audio;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
@@ -128,11 +129,11 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
         if (ImGui::BeginMenu("Hardware")) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
-            ImGui::MenuItem("System State (TODO)");
+            ImGui::MenuItem("Gate Array (TODO)");
             ImGui::MenuItem("Z80 CPU", 0, &ui->cpu.open);
             ImGui::MenuItem("AY-3-8912", 0, &ui->psg.open);
+            ImGui::MenuItem("MC6845", 0, &ui->vdc.open);
             ImGui::MenuItem("i8255 (TODO)");
-            ImGui::MenuItem("MC6845 (TODO)");
             ImGui::MenuItem("uPD765 (TODO)");
             ImGui::EndMenu();
         }
@@ -374,6 +375,42 @@ static const ui_chip_pin_t _ui_cpc_psg_pins[] = {
     { 0, 0, 0 }
 };
 
+static const ui_chip_pin_t _ui_cpc_vdc_pins[] = {
+    { "D0",     0,      MC6845_D0 },
+    { "D1",     1,      MC6845_D1 },
+    { "D2",     2,      MC6845_D2 },
+    { "D3",     3,      MC6845_D3 },
+    { "D4",     4,      MC6845_D4 },
+    { "D5",     5,      MC6845_D5 },
+    { "D6",     6,      MC6845_D6 },
+    { "D7",     7,      MC6845_D7 },
+    { "CS",     9,      MC6845_CS },
+    { "RS",    10,      MC6845_RS },
+    { "RW",    11,      MC6845_RW },
+    { "DE",    13,      MC6845_DE },
+    { "VS",    14,      MC6845_VS },
+    { "HS",    15,      MC6845_HS },
+    { "MA0",   20,      MC6845_MA0 },
+    { "MA1",   21,      MC6845_MA1 },
+    { "MA2",   22,      MC6845_MA2 },
+    { "MA3",   23,      MC6845_MA3 },
+    { "MA4",   24,      MC6845_MA4 },
+    { "MA5",   25,      MC6845_MA5 },
+    { "MA6",   26,      MC6845_MA6 },
+    { "MA7",   27,      MC6845_MA7 },
+    { "MA8",   28,      MC6845_MA8 },
+    { "MA9",   29,      MC6845_MA9 },
+    { "MA10",  30,      MC6845_MA10 },
+    { "MA11",  31,      MC6845_MA11 },
+    { "MA12",  32,      MC6845_MA12 },
+    { "MA13",  33,      MC6845_MA13 },
+    { "RA0",   35,      MC6845_RA0 },
+    { "RA1",   36,      MC6845_RA1 },
+    { "RA2",   37,      MC6845_RA2 },
+    { "RA3",   38,      MC6845_RA3 },
+    { "RA4",   39,      MC6845_RA4 },
+};
+
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->cpc);
@@ -398,6 +435,16 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.y = y;
         ui_chip_init_chip_desc(&desc.chip_desc, "8912", 22, _ui_cpc_psg_pins);
         ui_ay38910_init(&ui->psg, &desc);
+    }
+    x += dx; y += dy;
+    {
+        ui_mc6845_desc_t desc = {0};
+        desc.title = "MC6845";
+        desc.mc6845 = &ui->cpc->vdg;
+        desc.x = x;
+        desc.y = y;
+        ui_chip_init_chip_desc(&desc.chip_desc, "6845", 40, _ui_cpc_vdc_pins);
+        ui_mc6845_init(&ui->vdc, &desc);
     }
     x += dx; y += dy;
     {
@@ -460,6 +507,7 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui->cpc = 0;
     ui_z80_discard(&ui->cpu);
     ui_ay38910_discard(&ui->psg);
+    ui_mc6845_discard(&ui->vdc);
     ui_audio_discard(&ui->audio);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
@@ -477,6 +525,7 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
     ui_audio_draw(&ui->audio, ui->cpc->sample_pos);
     ui_z80_draw(&ui->cpu);
     ui_ay38910_draw(&ui->psg);
+    ui_mc6845_draw(&ui->vdc);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);

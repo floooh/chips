@@ -186,7 +186,7 @@ typedef struct {
             uint8_t v_total;            /* vertical total (minus 1) */
             uint8_t v_total_adjust;     /* end-of-frame scanline adjust value */
             uint8_t v_displayed;        /* vertical displayed */
-            uint8_t v_sync_pos;          /* vertical sync pos */
+            uint8_t v_sync_pos;         /* vertical sync pos */
             uint8_t interlace_mode;     /* interlace and skew */
             uint8_t max_scanline_addr;  /* max scanline ctr value (minus 1) */
             uint8_t cursor_start;
