@@ -78,7 +78,7 @@ typedef struct {
 
 void ui_ay38910_init(ui_ay38910_t* win, const ui_ay38910_desc_t* desc);
 void ui_ay38910_discard(ui_ay38910_t* win);
-void ui_ay38190_draw(ui_ay38910_t* win);
+void ui_ay38910_draw(ui_ay38910_t* win);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -114,7 +114,7 @@ void ui_ay38910_discard(ui_ay38910_t* win) {
     win->valid = false;
 }
 
-static void _ui_ay38190_draw_state(ui_ay38910_t* win) {
+static void _ui_ay38910_draw_state(ui_ay38910_t* win) {
     ay38910_t* ay = win->ay;
     ImGui::Columns(4, "##ay_channels", false);
     ImGui::SetColumnWidth(0, 96);
@@ -194,7 +194,7 @@ static void _ui_ay38190_draw_state(ui_ay38910_t* win) {
     }
 }
 
-void ui_ay38190_draw(ui_ay38910_t* win) {
+void ui_ay38910_draw(ui_ay38910_t* win) {
     CHIPS_ASSERT(win && win->valid && win->ay);
     if (!win->open) {
         return;
@@ -207,7 +207,7 @@ void ui_ay38190_draw(ui_ay38910_t* win) {
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##ay_state", ImVec2(0, 0), true);
-        _ui_ay38190_draw_state(win);
+        _ui_ay38910_draw_state(win);
         ImGui::EndChild();
     }
     ImGui::End();
