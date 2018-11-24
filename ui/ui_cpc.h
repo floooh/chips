@@ -160,6 +160,19 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
     }
 }
 
+#define _UI_CPC_MEMLAYER_CPU      (0)
+#define _UI_CPC_MEMLAYER_ROMS     (1)
+#define _UI_CPC_MEMLAYER_AMSDOS   (2)
+#define _UI_CPC_MEMLAYER_RAM0     (3)
+#define _UI_CPC_MEMLAYER_RAM1     (4)
+#define _UI_CPC_MEMLAYER_RAM2     (5)
+#define _UI_CPC_MEMLAYER_RAM3     (6)
+#define _UI_CPC_MEMLAYER_RAM4     (7)
+#define _UI_CPC_MEMLAYER_RAM5     (8)
+#define _UI_CPC_MEMLAYER_RAM6     (9)
+#define _UI_CPC_MEMLAYER_RAM7     (10)
+#define _UI_CPC_MEMLAYER_NUM      (11)
+
 static int _ui_cpc_ram_config[8][4] = {
     { 0, 1, 2, 3 },
     { 0, 1, 2, 7 },
@@ -176,6 +189,10 @@ static const char* _ui_cpc_ram_name[8] = {
 };
 static const char* _ui_cpc_ram_banks[8] = {
     "RAM Bank 0", "RAM Bank 1", "RAM Bank 2", "RAM Bank 3", "RAM Bank 4", "RAM Bank 5", "RAM Bank 6", "RAM Bank 7"
+};
+
+static const char* _ui_cpc_memlayer_names[_UI_CPC_MEMLAYER_NUM] = {
+    "CPU Mapped", "OS ROMS", "AMSDOS ROM", "RAM 0", "RAM 1", "RAM 2", "RAM 3", "RAM 4", "RAM 5", "RAM 6", "RAM 7"
 };
 
 static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
@@ -215,24 +232,86 @@ static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
     }
 }
 
+static uint8_t* _ui_cpc_memptr(cpc_t* cpc, int layer, uint16_t addr) {
+    CHIPS_ASSERT((layer >= _UI_CPC_MEMLAYER_ROMS) && (layer < _UI_CPC_MEMLAYER_NUM));
+    if (layer == _UI_CPC_MEMLAYER_ROMS) {
+        if (addr < 0x4000) {
+            return &cpc->rom_os[addr];
+        }
+        else if (addr >= 0xC000) {
+            return &cpc->rom_basic[addr - 0xC000];
+        }
+        else {
+            return 0;
+        }
+    }
+    if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
+        if ((CPC_TYPE_6128 == cpc->type) && (addr >= 0xC000)) {
+            return &cpc->rom_amsdos[addr - 0xC000];
+        }
+        else {
+            return 0;
+        }
+    }
+    else {
+        /* one of the 7 RAM layers */
+        CHIPS_ASSERT((layer >= _UI_CPC_MEMLAYER_RAM0) && (layer <= _UI_CPC_MEMLAYER_RAM7));
+        const int ram_config_index = (CPC_TYPE_6128 == cpc->type) ? (cpc->ga.ram_config & 7) : 0;
+        const int ram_bank = layer - _UI_CPC_MEMLAYER_RAM0;
+        bool ram_mapped = false;
+        for (int i = 0; i < 4; i++) {
+            if (ram_bank == _ui_cpc_ram_config[ram_config_index][i]) {
+                const uint16_t start = 0x4000 * i;
+                const uint32_t end = start + 0x4000;
+                ram_mapped = true;
+                if ((addr >= start) && (addr < end)) {
+                    return &cpc->ram[ram_bank][addr - start];
+                }
+            }
+        }
+        if (!ram_mapped && (CPC_TYPE_6128 != cpc->type)) {
+            /* if the RAM bank is not currently mapped to a CPU visible address,
+                just use start address zero, this will throw off disassemblers
+                though
+            */
+            if (addr < 0x4000) {
+                return &cpc->ram[ram_bank][addr];
+            }
+        }
+    }
+    /* fallthrough: address isn't mapped to physical RAM */
+    return 0;
+}
+
 static uint8_t _ui_cpc_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
     cpc_t* cpc = (cpc_t*) user_data;
-    if (layer == 0) {
+    if (layer == _UI_CPC_MEMLAYER_CPU) {
         /* CPU mapped RAM layer */
         return mem_rd(&cpc->mem, addr);
     }
     else {
-        // FIXME
-        return 0xFF;
+        uint8_t* ptr = _ui_cpc_memptr(cpc, layer, addr);
+        if (ptr) {
+            return *ptr;
+        }
+        else {
+            return 0xFF;
+        }
     }
 }
 
 static void _ui_cpc_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
     CHIPS_ASSERT(user_data);
     cpc_t* cpc = (cpc_t*) user_data;
-    if (layer == 0) {
+    if (layer == _UI_CPC_MEMLAYER_CPU) {
         mem_wr(&cpc->mem, addr, data);
+    }
+    else {
+        uint8_t* ptr = _ui_cpc_memptr(cpc, layer, addr);
+        if (ptr) {
+            *ptr = data;
+        }
     }
 }
 
@@ -333,17 +412,9 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
     x += dx; y += dy;
     {
         ui_memedit_desc_t desc = {0};
-        desc.layers[0] = "CPU Mapped";
-        desc.layers[1] = "System ROMs";
-        desc.layers[2] = "AMSDOS ROM";
-        desc.layers[3] = "RAM Bank 0";
-        desc.layers[4] = "RAM Bank 1";
-        desc.layers[5] = "RAM Bank 2";
-        desc.layers[6] = "RAM Bank 3";
-        desc.layers[7] = "RAM Bank 4";
-        desc.layers[8] = "RAM Bank 5";
-        desc.layers[9] = "RAM Bank 6";
-        desc.layers[10] = "RAM Bank 7";
+        for (int i = 0; i < _UI_CPC_MEMLAYER_NUM; i++) {
+            desc.layers[i] = _ui_cpc_memlayer_names[i];
+        }
         desc.read_cb = _ui_cpc_mem_read;
         desc.write_cb = _ui_cpc_mem_write;
         desc.user_data = ui->cpc;
@@ -367,17 +438,9 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
     x += dx; y += dy;
     {
         ui_dasm_desc_t desc = {0};
-        desc.layers[0] = "CPU Mapped";
-        desc.layers[1] = "System ROMs";
-        desc.layers[2] = "AMSDOS ROM";
-        desc.layers[3] = "RAM Bank 0";
-        desc.layers[4] = "RAM Bank 1";
-        desc.layers[5] = "RAM Bank 2";
-        desc.layers[6] = "RAM Bank 3";
-        desc.layers[7] = "RAM Bank 4";
-        desc.layers[8] = "RAM Bank 5";
-        desc.layers[9] = "RAM Bank 6";
-        desc.layers[10] = "RAM Bank 7";
+        for (int i = 0; i < _UI_CPC_MEMLAYER_NUM; i++) {
+            desc.layers[i] = _ui_cpc_memlayer_names[i];
+        }
         desc.start_addr = 0x0000;
         desc.read_cb = _ui_cpc_mem_read;
         desc.user_data = ui->cpc;
