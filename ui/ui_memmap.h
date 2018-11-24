@@ -51,7 +51,7 @@
 extern "C" {
 #endif
 
-#define UI_MEMMAP_MAX_LAYERS (8)
+#define UI_MEMMAP_MAX_LAYERS (16)
 #define UI_MEMMAP_MAX_REGIONS (16)
 
 /* describes a memory region in a layer */
