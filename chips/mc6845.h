@@ -139,6 +139,9 @@ extern "C" {
 #define MC6845_RA3      (1ULL<<51)
 #define MC6845_RA4      (1ULL<<52)
 
+/* I/O request pin mask (control and databus) */
+#define MC6845_IORQ_PINS (MC6845_D0|MC6845_D1|MC6845_D2|MC6845_D3|MC6845_D4|MC6845_D5|MC6845_D6|MC6845_D7|MC6845_CS|MC6845_RS|MC6845_RW|MC6845_LPSTB)
+
 /* register names */
 #define MC6845_HTOTAL           (0)
 #define MC6845_HDISPLAYED       (1)
@@ -345,6 +348,7 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
                 c->sel = MC6845_GET_DATA(pins) & 0x1F;
             }
         }
+        c->pins = (c->pins & ~MC6845_IORQ_PINS) | pins;
     }
     return pins;
 }
@@ -467,7 +471,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
     if (c->h_de && c->v_de) {
         new_pins |= MC6845_DE;
     }
-    c->pins = new_pins;
+    c->pins = (c->pins & MC6845_IORQ_PINS) | new_pins;
     return new_pins;
 }
 
