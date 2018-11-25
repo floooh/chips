@@ -73,6 +73,7 @@ typedef struct {
     ui_z80_t cpu;
     ui_ay38910_t psg;
     ui_mc6845_t vdc;
+    ui_i8255_t ppi;
     ui_audio_t audio;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
@@ -133,7 +134,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
             ImGui::MenuItem("Z80 CPU", 0, &ui->cpu.open);
             ImGui::MenuItem("AY-3-8912", 0, &ui->psg.open);
             ImGui::MenuItem("MC6845", 0, &ui->vdc.open);
-            ImGui::MenuItem("i8255 (TODO)");
+            ImGui::MenuItem("i8255", 0, &ui->ppi.open);
             ImGui::MenuItem("uPD765 (TODO)");
             ImGui::EndMenu();
         }
@@ -411,6 +412,51 @@ static const ui_chip_pin_t _ui_cpc_vdc_pins[] = {
     { "RA4",   39,      MC6845_RA4 },
 };
 
+static const ui_chip_pin_t _ui_cpc_ppi_pins[] = {
+    { "D0",     0,      I8255_D0 },
+    { "D1",     1,      I8255_D1 },
+    { "D2",     2,      I8255_D2 },
+    { "D3",     3,      I8255_D3 },
+    { "D4",     4,      I8255_D4 },
+    { "D5",     5,      I8255_D5 },
+    { "D6",     6,      I8255_D6 },
+    { "D7",     7,      I8255_D7 },
+
+    { "CS",     9,      I8255_CS },
+    { "RD",    10,      I8255_RD },
+    { "WR",    11,      I8255_WR },
+    { "A0",    12,      I8255_A0 },
+    { "A1",    13,      I8255_A1 },
+
+    { "PC0",   16,      I8255_PC0 },
+    { "PC1",   17,      I8255_PC1 },
+    { "PC2",   18,      I8255_PC2 },
+    { "PC3",   19,      I8255_PC3 },
+
+    { "PA0",   20,      I8255_PA0 },
+    { "PA1",   21,      I8255_PA1 },
+    { "PA2",   22,      I8255_PA2 },
+    { "PA3",   23,      I8255_PA3 },
+    { "PA4",   24,      I8255_PA4 },
+    { "PA5",   25,      I8255_PA5 },
+    { "PA6",   26,      I8255_PA6 },
+    { "PA7",   27,      I8255_PA7 },
+
+    { "PB0",   28,      I8255_PB0 },
+    { "PB1",   29,      I8255_PB1 },
+    { "PB2",   30,      I8255_PB2 },
+    { "PB3",   31,      I8255_PB3 },
+    { "PB4",   32,      I8255_PB4 },
+    { "PB5",   33,      I8255_PB5 },
+    { "PB6",   34,      I8255_PB6 },
+    { "PB7",   35,      I8255_PB7 },
+
+    { "PC4",   36,      I8255_PC4 },
+    { "PC5",   37,      I8255_PC5 },
+    { "PC6",   38,      I8255_PC6 },
+    { "PC7",   39,      I8255_PC7 },
+};
+
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->cpc);
@@ -445,6 +491,16 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.y = y;
         ui_chip_init_chip_desc(&desc.chip_desc, "6845", 40, _ui_cpc_vdc_pins);
         ui_mc6845_init(&ui->vdc, &desc);
+    }
+    x += dx; y += dy;
+    {
+        ui_i8255_desc_t desc = {0};
+        desc.title = "i8255";
+        desc.i8255 = &ui->cpc->ppi;
+        desc.x = x;
+        desc.y = y;
+        ui_chip_init_chip_desc(&desc.chip_desc, "i8255", 40, _ui_cpc_ppi_pins);
+        ui_i8255_init(&ui->ppi, &desc);
     }
     x += dx; y += dy;
     {
@@ -506,6 +562,7 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     CHIPS_ASSERT(ui && ui->cpc);
     ui->cpc = 0;
     ui_z80_discard(&ui->cpu);
+    ui_i8255_discard(&ui->ppi);
     ui_ay38910_discard(&ui->psg);
     ui_mc6845_discard(&ui->vdc);
     ui_audio_discard(&ui->audio);
@@ -526,6 +583,7 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
     ui_z80_draw(&ui->cpu);
     ui_ay38910_draw(&ui->psg);
     ui_mc6845_draw(&ui->vdc);
+    ui_i8255_draw(&ui->ppi);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);
