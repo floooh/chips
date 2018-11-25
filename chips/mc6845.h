@@ -348,7 +348,7 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
                 c->sel = MC6845_GET_DATA(pins) & 0x1F;
             }
         }
-        c->pins = (c->pins & ~MC6845_IORQ_PINS) | pins;
+        c->pins = (c->pins & ~MC6845_IORQ_PINS) | (pins & MC6845_IORQ_PINS);
     }
     return pins;
 }
