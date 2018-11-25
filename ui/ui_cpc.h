@@ -34,6 +34,7 @@
     - ui_dasm.h
     - ui_memedit.h
     - ui_memmap.h
+    - ui_kbd.h
 
     ## zlib/libpng license
 
@@ -75,6 +76,7 @@ typedef struct {
     ui_mc6845_t vdc;
     ui_i8255_t ppi;
     ui_audio_t audio;
+    ui_kbd_t kbd;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
@@ -129,6 +131,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
         }
         if (ImGui::BeginMenu("Hardware")) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
+            ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("Gate Array (TODO)");
             ImGui::MenuItem("Z80 CPU", 0, &ui->cpu.open);
@@ -514,6 +517,18 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
     }
     x += dx; y += dy;
     {
+        ui_kbd_desc_t desc = {0};
+        desc.title = "Keyboard Matrix";
+        desc.kbd = &ui->cpc->kbd;
+        desc.layers[0] = "None";
+        desc.layers[1] = "Shift";
+        desc.layers[2] = "Ctrl";
+        desc.x = x;
+        desc.y = y;
+        ui_kbd_init(&ui->kbd, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_memedit_desc_t desc = {0};
         for (int i = 0; i < _UI_CPC_MEMLAYER_NUM; i++) {
             desc.layers[i] = _ui_cpc_memlayer_names[i];
@@ -565,6 +580,7 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui_i8255_discard(&ui->ppi);
     ui_ay38910_discard(&ui->psg);
     ui_mc6845_discard(&ui->vdc);
+    ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
@@ -580,6 +596,7 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
         _ui_cpc_update_memmap(ui);
     }
     ui_audio_draw(&ui->audio, ui->cpc->sample_pos);
+    ui_kbd_draw(&ui->kbd);
     ui_z80_draw(&ui->cpu);
     ui_ay38910_draw(&ui->psg);
     ui_mc6845_draw(&ui->vdc);

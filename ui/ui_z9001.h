@@ -32,6 +32,7 @@
     - ui_dasm.h
     - ui_memedit.h
     - ui_memmap.h
+    - ui_kbd.h
 
     ## zlib/libpng license
 
@@ -73,6 +74,7 @@ typedef struct {
     ui_z80pio_t pio[2];
     ui_z80ctc_t ctc;
     ui_audio_t audio;
+    ui_kbd_t kbd;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
@@ -116,6 +118,7 @@ static void _ui_z9001_draw_menu(ui_z9001_t* ui, double time_ms) {
         }
         if (ImGui::BeginMenu("Hardware")) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
+            ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("Z80 CPU", 0, &ui->cpu.open);
             ImGui::MenuItem("Z80 PIO #1", 0, &ui->pio[0].open);
@@ -339,6 +342,17 @@ void ui_z9001_init(ui_z9001_t* ui, const ui_z9001_desc_t* desc) {
     }
     x += dx; y += dy;
     {
+        ui_kbd_desc_t desc = {0};
+        desc.title = "Keyboard Matrix";
+        desc.kbd = &ui->z9001->kbd;
+        desc.layers[0] = "None";
+        desc.layers[1] = "Shift";
+        desc.x = x;
+        desc.y = y;
+        ui_kbd_init(&ui->kbd, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_memedit_desc_t desc = {0};
         desc.layers[0] = "System";
         desc.read_cb = _ui_z9001_mem_read;
@@ -387,6 +401,7 @@ void ui_z9001_discard(ui_z9001_t* ui) {
     ui_z80pio_discard(&ui->pio[1]);
     ui_z80ctc_discard(&ui->ctc);
     ui_audio_discard(&ui->audio);
+    ui_kbd_discard(&ui->kbd);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
@@ -401,6 +416,7 @@ void ui_z9001_draw(ui_z9001_t* ui, double time_ms) {
         _ui_z9001_update_memmap(ui);
     }
     ui_audio_draw(&ui->audio, ui->z9001->sample_pos);
+    ui_kbd_draw(&ui->kbd);
     ui_z80_draw(&ui->cpu);
     ui_z80pio_draw(&ui->pio[0]);
     ui_z80pio_draw(&ui->pio[1]);
