@@ -161,7 +161,7 @@ extern "C" {
                                     01=mode1 (strobed in/out)
                                     1x=mode2 (bi-directional bus)
     
-    C7: 1 to for 'mode select'
+    C7: 1 for 'mode select'
 
     INTERRUPT CONTROL (bit 7: 0)
 
@@ -186,7 +186,7 @@ extern "C" {
 /* group B mode select */
 #define I8255_CTRL_BCLO_MODE        (1<<2)
 #define I8255_CTRL_BCLO_MODE_0      (0)
-#define I8255_CTRL_BCLO_MIDE_1      (1<<2)
+#define I8255_CTRL_BCLO_MODE_1      (1<<2)
 
 /* port C (upper) input/output select */
 #define I8255_CTRL_CHI              (1<<3)
