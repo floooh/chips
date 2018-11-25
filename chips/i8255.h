@@ -14,17 +14,18 @@
     EMULATED PINS:
 
                   +-----------+
-            CS -->|           |<-> D0
+            CS -->|           |<-> PA0
             RD -->|           |...
-            WR -->|   i8255   |<-> D7
+            WR -->|   i8255   |<-> PA7
             A0 -->|           |
-            A1 -->|           |
-                  |           |
+            A1 -->|           |<-> PB0
+                  |           |...
+            D0 <->|           |<-> PB7
+               ...|           |
+            D7 <->|           |<-> PC0
+                  |           |...
+                  |           |<-> PC7
                   +-----------+
-
-    The 24 port A,B and C data pins are not emulated through pin masks, but
-    are accessed through callback- and 'active write'-functions (similar to
-    z80pio.h).
 
     NOT IMPLEMENTED:
         - mode 1 (strobed input/output)
@@ -96,6 +97,44 @@ extern "C" {
 #define I8255_D5  (1ULL<<21)
 #define I8255_D6  (1ULL<<22)
 #define I8255_D7  (1ULL<<23)
+
+/* NOTE the Port I/O pins are only visible in the 'pins' member,
+   they are not accepted as input, and are not returned as output
+   of the i8255_iorq() function! Usually the pins member
+   is used for debug visualization, since the port I/O is handled
+   through callback functions.
+*/
+#define I8255_PA0       (1ULL<<0)
+#define I8255_PA1       (1ULL<<1)
+#define I8255_PA2       (1ULL<<2)
+#define I8255_PA3       (1ULL<<3)
+#define I8255_PA4       (1ULL<<4)
+#define I8255_PA5       (1ULL<<5)
+#define I8255_PA6       (1ULL<<6)
+#define I8255_PA7       (1ULL<<7)
+
+#define I8255_PB0       (1ULL<<8)
+#define I8255_PB1       (1ULL<<9)
+#define I8255_PB2       (1ULL<<10)
+#define I8255_PB3       (1ULL<<11)
+#define I8255_PB4       (1ULL<<12)
+#define I8255_PB5       (1ULL<<13)
+#define I8255_PB6       (1ULL<<14)
+#define I8255_PB7       (1ULL<<15)
+
+#define I8255_PC0       (1ULL<<48)
+#define I8255_PC1       (1ULL<<49)
+#define I8255_PC2       (1ULL<<50)
+#define I8255_PC3       (1ULL<<51)
+#define I8255_PC4       (1ULL<<52)
+#define I8255_PC5       (1ULL<<53)
+#define I8255_PC6       (1ULL<<54)
+#define I8255_PC7       (1ULL<<55)
+
+#define I8255_PA_BITS   (0x00000000000000FFULL)
+#define I8255_PB_BITS   (0x000000000000FF00ULL)
+#define I8255_PC_BITS   (0x00FF000000000000ULL)
+#define I8255_PORT_BITS (I8255_PA_BITS|I8255_PB_BITS|I8255_PC_BITS)
 
 /* port names */
 #define I8255_PORT_A    (0)
@@ -187,8 +226,10 @@ typedef struct {
     uint8_t output[I8255_NUM_PORTS];
     /* control word */
     uint8_t control;
-    /* last input value (only for debugging) */
-    uint8_t dbg_input[I8255_NUM_PORTS];
+    /* last input or output value on port */
+    uint8_t port[I8255_NUM_PORTS];
+    /* last pin state in i8255_iorq(), with PA/PB/PC pins merged in */
+    uint64_t pins;
     /* port-input callback */
     i8255_in_t in_cb;
     /* port-output callback */
@@ -269,12 +310,25 @@ void i8255_reset(i8255_t* ppi) {
                     I8255_CTRL_A_INPUT;
     for (int i = 0; i < I8255_NUM_PORTS; i++) {
         ppi->output[i] = 0;
-        ppi->dbg_input[i] = 0xFF;
+        ppi->port[i] = 0xFF;
     }
 }
 
+/* handle output on port A or B */
+static inline uint64_t _i8255_out_a(i8255_t* ppi, uint64_t pins, uint8_t data) {
+    ppi->output[I8255_PORT_A] = data;
+    ppi->port[I8255_PORT_A] = data;
+    return ppi->out_cb(I8255_PORT_A, pins, data, ppi->user_data);
+}
+
+static inline uint64_t _i8255_out_b(i8255_t* ppi, uint64_t pins, uint8_t data) {
+    ppi->output[I8255_PORT_B] = data;
+    ppi->port[I8255_PORT_B] = data;
+    return ppi->out_cb(I8255_PORT_B, pins, data, ppi->user_data);
+}
+
 /* handle output on port C (which is split in upper/lower half) */
-static uint64_t _i8255_out_c(i8255_t* ppi, uint64_t pins) {
+static inline uint64_t _i8255_out_c(i8255_t* ppi, uint64_t pins) {
     uint8_t mask = 0, data = 0;
     if ((ppi->control & I8255_CTRL_CHI) == I8255_CTRL_CHI_OUTPUT) {
         mask |= 0xF0;
@@ -289,12 +343,38 @@ static uint64_t _i8255_out_c(i8255_t* ppi, uint64_t pins) {
         data |= 0x0F;
     }
     data |= ppi->output[I8255_PORT_C] & mask;
+    ppi->port[I8255_PORT_C] = (ppi->port[I8255_PORT_C] & ~mask) | (data & mask);
     pins = ppi->out_cb(I8255_PORT_C, pins, data, ppi->user_data);
     return pins;
 }
 
+/* handle input from port A or B */
+static inline uint8_t _i8255_in_a(i8255_t* ppi) {
+    uint8_t data;
+    if ((ppi->control & I8255_CTRL_A) == I8255_CTRL_A_OUTPUT) {
+        data = ppi->output[I8255_PORT_A];
+    }
+    else {
+        data = ppi->in_cb(I8255_PORT_A, ppi->user_data);
+    }
+    ppi->port[I8255_PORT_A] = data;
+    return data;
+}
+
+static inline uint8_t _i8255_in_b(i8255_t* ppi) {
+    uint8_t data;
+    if ((ppi->control & I8255_CTRL_B) == I8255_CTRL_B_OUTPUT) {
+        data = ppi->output[I8255_PORT_B];
+    }
+    else {
+        data = ppi->in_cb(I8255_PORT_B, ppi->user_data);
+    }
+    ppi->port[I8255_PORT_B] = data;
+    return data;
+}
+
 /* handle input on port C (which is split in upper and lower half) */
-static uint8_t _i8255_in_c(i8255_t* ppi) {
+static inline uint8_t _i8255_in_c(i8255_t* ppi) {
     uint8_t mask = 0, data = 0;
     if ((ppi->control & I8255_CTRL_CHI) == I8255_CTRL_CHI_OUTPUT) {
         /* read data from output latch */
@@ -315,6 +395,7 @@ static uint8_t _i8255_in_c(i8255_t* ppi) {
     if (0 != mask) {
         data |= ppi->in_cb(I8255_PORT_C, ppi->user_data);
     }
+    ppi->port[I8255_PORT_C] = (ppi->port[I8255_PORT_C] & ~mask) | (data & mask);
     return data;
 }
 
@@ -323,19 +404,19 @@ static uint64_t _i8255_select_mode(i8255_t* ppi, uint64_t pins, uint8_t data) {
     ppi->control = data;
     for (int i = 0; i < I8255_NUM_PORTS; i++) {
         ppi->output[i] = 0;
-        ppi->dbg_input[i] = 0x00;
+        ppi->port[i] = 0;
     }
     if ((ppi->control & I8255_CTRL_A) == I8255_CTRL_A_OUTPUT) {
-        pins = ppi->out_cb(I8255_PORT_A, pins, 0, ppi->user_data);
+        pins = _i8255_out_a(ppi, pins, 0);
     }
     else {
-        pins = ppi->out_cb(I8255_PORT_A, pins, 0xFF, ppi->user_data);
+        pins = _i8255_out_a(ppi, pins, 0xFF);
     }
     if ((ppi->control & I8255_CTRL_B) == I8255_CTRL_B_OUTPUT) {
-        pins = ppi->out_cb(I8255_PORT_B, pins, 0, ppi->user_data);
+        pins = _i8255_out_b(ppi, pins, 0);
     }
     else {
-        pins = ppi->out_cb(I8255_PORT_B, pins, 0xFF, ppi->user_data);
+        pins = _i8255_out_b(ppi, pins, 0xFF);
     }
     pins = _i8255_out_c(ppi, pins);
     return pins;
@@ -346,14 +427,12 @@ static uint64_t _i8255_write(i8255_t* ppi, uint64_t pins, uint8_t data) {
     switch (pins & (I8255_A0|I8255_A1)) {
         case 0: /* write to port A */
             if ((ppi->control & I8255_CTRL_A) == I8255_CTRL_A_OUTPUT) {
-                ppi->output[I8255_PORT_A] = data;
-                pins = ppi->out_cb(I8255_PORT_A, pins, data, ppi->user_data);
+                pins = _i8255_out_a(ppi, pins, data);
             }
             break;
         case I8255_A0: /* write to port B */
             if ((ppi->control & I8255_CTRL_B) == I8255_CTRL_B_OUTPUT) {
-                ppi->output[I8255_PORT_B] = data;
-                pins = ppi->out_cb(I8255_PORT_B, pins, data, ppi->user_data);
+                pins = _i8255_out_b(ppi, pins, data);
             }
             break;
         case I8255_A1: /* write to port C */
@@ -389,26 +468,13 @@ static uint8_t _i8255_read(i8255_t* ppi, uint64_t pins) {
     uint8_t data = 0xFF;
     switch (pins & (I8255_A0|I8255_A1)) {
         case 0: /* read from port A */
-            if ((ppi->control & I8255_CTRL_A) == I8255_CTRL_A_OUTPUT) {
-                data = ppi->output[I8255_PORT_A];
-            }
-            else {
-                data = ppi->in_cb(I8255_PORT_A, ppi->user_data);
-            }
-            ppi->dbg_input[I8255_PORT_A] = data;
+            data = _i8255_in_a(ppi);
             break;
         case I8255_A0: /* read from port B */
-            if ((ppi->control & I8255_CTRL_B) == I8255_CTRL_B_OUTPUT) {
-                data = ppi->output[I8255_PORT_B];
-            }
-            else {
-                data = ppi->in_cb(I8255_PORT_B, ppi->user_data);
-            }
-            ppi->dbg_input[I8255_PORT_B] = data;
+            data = _i8255_in_b(ppi);
             break;
         case I8255_A1: /* read from port C */
             data = _i8255_in_c(ppi);
-            ppi->dbg_input[I8255_PORT_C] = data;
             break;
         case (I8255_A0|I8255_A1): /* read control word */
             data = ppi->control;
@@ -430,6 +496,10 @@ uint64_t i8255_iorq(i8255_t* ppi, uint64_t pins) {
             const uint8_t data = I8255_GET_DATA(pins);
             pins = _i8255_write(ppi, pins, data);
         }
+        ppi->pins = (pins & ~I8255_PORT_BITS) |
+                    (ppi->port[I8255_PORT_A] * I8255_PA0) |
+                    (ppi->port[I8255_PORT_B] * I8255_PB0) |
+                    (ppi->port[I8255_PORT_C] * I8255_PC0);
     }
     return pins;
 }
