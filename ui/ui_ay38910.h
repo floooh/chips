@@ -125,6 +125,7 @@ static void _ui_ay38910_draw_state(ui_ay38910_t* win) {
     ImGui::Text("ChnA"); ImGui::NextColumn();
     ImGui::Text("ChnB"); ImGui::NextColumn();
     ImGui::Text("ChnC"); ImGui::NextColumn();
+    ImGui::Separator();
     ImGui::Text("Tone Period"); ImGui::NextColumn();
     for (int i = 0; i < 3; i++) {
         ImGui::Text("%04X", ay->tone[i].period); ImGui::NextColumn();

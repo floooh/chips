@@ -113,7 +113,41 @@ void ui_i8255_discard(ui_i8255_t* win) {
 }
 
 static void _ui_i8255_draw_state(ui_i8255_t* win) {
-    ImGui::Text("FIXME!");
+    i8255_t* ppi = win->i8255;
+    ImGui::Columns(5, "##ppi_ports", false);
+    ImGui::SetColumnWidth(0, 64);
+    ImGui::SetColumnWidth(1, 32);
+    ImGui::SetColumnWidth(2, 32);
+    ImGui::SetColumnWidth(3, 32);
+    ImGui::SetColumnWidth(4, 32);
+    ImGui::NextColumn();
+    ImGui::Text("A"); ImGui::NextColumn();
+    ImGui::Text("B"); ImGui::NextColumn();
+    ImGui::Text("CHI"); ImGui::NextColumn();
+    ImGui::Text("CLO"); ImGui::NextColumn();
+    ImGui::Separator();
+    ImGui::Text("Mode"); ImGui::NextColumn();
+    ImGui::Text("%d", (ppi->control & I8255_CTRL_ACHI_MODE) >> 5); ImGui::NextColumn();
+    ImGui::Text("%d", (ppi->control & I8255_CTRL_BCLO_MODE) >> 2); ImGui::NextColumn();
+    ImGui::Text("%d", (ppi->control & I8255_CTRL_ACHI_MODE) >> 5); ImGui::NextColumn();
+    ImGui::Text("%d", (ppi->control & I8255_CTRL_BCLO_MODE) >> 2); ImGui::NextColumn();
+    ImGui::Text("In/Out"); ImGui::NextColumn();
+    ImGui::Text("%s", ((ppi->control & I8255_CTRL_A) == I8255_CTRL_A_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
+    ImGui::Text("%s", ((ppi->control & I8255_CTRL_B) == I8255_CTRL_B_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
+    ImGui::Text("%s", ((ppi->control & I8255_CTRL_CHI) == I8255_CTRL_CHI_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
+    ImGui::Text("%s", ((ppi->control & I8255_CTRL_CLO) == I8255_CTRL_CLO_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
+    ImGui::Text("Output"); ImGui::NextColumn();
+    ImGui::Text("%02X", ppi->output[I8255_PORT_A]); ImGui::NextColumn();
+    ImGui::Text("%02X", ppi->output[I8255_PORT_B]); ImGui::NextColumn();
+    ImGui::Text("%X", ppi->output[I8255_PORT_C] >> 4); ImGui::NextColumn();
+    ImGui::Text("%X", ppi->output[I8255_PORT_C] & 0xF); ImGui::NextColumn();
+    ImGui::Text("Port"); ImGui::NextColumn();
+    ImGui::Text("%02X", ppi->port[I8255_PORT_A]); ImGui::NextColumn();
+    ImGui::Text("%02X", ppi->port[I8255_PORT_B]); ImGui::NextColumn();
+    ImGui::Text("%X", ppi->port[I8255_PORT_C] >> 4); ImGui::NextColumn();
+    ImGui::Text("%X", ppi->port[I8255_PORT_C] & 0xF); ImGui::NextColumn();
+    ImGui::Columns(); ImGui::Separator();
+    ImGui::Text("Control: %02X", ppi->control);
 }
 
 void ui_i8255_draw(ui_i8255_t* win) {
@@ -134,5 +168,4 @@ void ui_i8255_draw(ui_i8255_t* win) {
     }
     ImGui::End();
 }
-
 #endif
