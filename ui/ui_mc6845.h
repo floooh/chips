@@ -162,7 +162,7 @@ static void _ui_mc6845_draw_state(ui_mc6845_t* win) {
 }
 
 void ui_mc6845_draw(ui_mc6845_t* win) {
-    CHIPS_ASSERT(win && win->valid && win->mc6845);
+    CHIPS_ASSERT(win && win->valid && win->title && win->mc6845);
     if (!win->open) {
         return;
     }

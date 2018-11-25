@@ -110,7 +110,7 @@ void ui_kc85sys_discard(ui_kc85sys_t* win) {
 }
 
 void ui_kc85sys_draw(ui_kc85sys_t* win) {
-    CHIPS_ASSERT(win && win->valid && win->kc85);
+    CHIPS_ASSERT(win && win->valid && win->title && win->kc85);
     if (!win->open) {
         return;
     }

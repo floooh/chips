@@ -621,7 +621,7 @@ void ui_memedit_discard(ui_memedit_t* win) {
 }
 
 void ui_memedit_draw(ui_memedit_t* win) {
-    CHIPS_ASSERT(win && win->ed && win->valid);
+    CHIPS_ASSERT(win && win->ed && win->title && win->valid);
     win->ed->Open = win->open;
     if (!win->ed->Open) {
         return;

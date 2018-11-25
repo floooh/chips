@@ -196,7 +196,7 @@ static void _ui_ay38910_draw_state(ui_ay38910_t* win) {
 }
 
 void ui_ay38910_draw(ui_ay38910_t* win) {
-    CHIPS_ASSERT(win && win->valid && win->ay);
+    CHIPS_ASSERT(win && win->valid && win->title && win->ay);
     if (!win->open) {
         return;
     }

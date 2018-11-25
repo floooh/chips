@@ -111,7 +111,7 @@ void ui_audio_discard(ui_audio_t* win) {
 }
 
 void ui_audio_draw(ui_audio_t* win, int sample_pos) {
-    CHIPS_ASSERT(win && win->valid && win->sample_buffer);
+    CHIPS_ASSERT(win && win->valid && win->title && win->sample_buffer);
     if (!win->open) {
         return;
     }

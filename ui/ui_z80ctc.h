@@ -181,7 +181,7 @@ static void _ui_z80ctc_channels(ui_z80ctc_t* win) {
 }
 
 void ui_z80ctc_draw(ui_z80ctc_t* win) {
-    CHIPS_ASSERT(win && win->valid && win->ctc);
+    CHIPS_ASSERT(win && win->valid && win->title && win->ctc);
     if (!win->open) {
         return;
     }

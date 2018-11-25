@@ -103,6 +103,7 @@ void ui_i8255_init(ui_i8255_t* win, ui_i8255_desc_t* desc) {
     win->i8255 = desc->i8255;
     win->init_x = desc->x;
     win->init_y = desc->y;
+    win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
 }
@@ -151,7 +152,7 @@ static void _ui_i8255_draw_state(ui_i8255_t* win) {
 }
 
 void ui_i8255_draw(ui_i8255_t* win) {
-    CHIPS_ASSERT(win && win->valid && win->i8255);
+    CHIPS_ASSERT(win && win->valid && win->title && win->i8255);
     if (!win->open) {
         return;
     }

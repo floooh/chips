@@ -148,7 +148,7 @@ static void _ui_z80_regs(ui_z80_t* win) {
 }
 
 void ui_z80_draw(ui_z80_t* win) {
-    CHIPS_ASSERT(win && win->valid && win->cpu);
+    CHIPS_ASSERT(win && win->valid && win->title && win->cpu);
     if (!win->open) {
         return;
     }

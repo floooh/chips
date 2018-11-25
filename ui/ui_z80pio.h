@@ -175,7 +175,7 @@ static void _ui_z80pio_ports(ui_z80pio_t* win) {
 }
 
 void ui_z80pio_draw(ui_z80pio_t* win) {
-    CHIPS_ASSERT(win && win->valid && win->pio);
+    CHIPS_ASSERT(win && win->valid && win->title && win->pio);
     if (!win->open) {
         return;
     }

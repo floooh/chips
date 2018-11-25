@@ -204,7 +204,7 @@ void ui_memmap_discard(ui_memmap_t* win) {
 }
 
 void ui_memmap_draw(ui_memmap_t* win) {
-    CHIPS_ASSERT(win && win->valid);
+    CHIPS_ASSERT(win && win->valid && win->title);
     if (!win->open) {
         return;
     }
