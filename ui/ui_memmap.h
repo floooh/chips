@@ -139,7 +139,7 @@ static void _ui_memmap_draw_grid(ui_memmap_t* win, const ImVec2& canvas_pos, con
         l->AddLine(p0, p1, win->grid_color);
     }
     /* layer names to the left */
-    ImVec2 text_pos(canvas_pos.x, y1 - win->layer_height);
+    ImVec2 text_pos(canvas_pos.x, (y1 - win->layer_height + 6));
     for (int i = 0; i < win->num_layers; i++) {
         l->AddText(text_pos, win->grid_color, win->layers[i].name);
         text_pos.y -= win->layer_height;
