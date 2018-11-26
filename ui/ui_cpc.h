@@ -415,6 +415,7 @@ static const ui_chip_pin_t _ui_cpc_vdc_pins[] = {
     { "RA2",   37,      MC6845_RA2 },
     { "RA3",   38,      MC6845_RA3 },
     { "RA4",   39,      MC6845_RA4 },
+    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_cpc_ppi_pins[] = {
@@ -460,6 +461,7 @@ static const ui_chip_pin_t _ui_cpc_ppi_pins[] = {
     { "PC5",   37,      I8255_PC5 },
     { "PC6",   38,      I8255_PC6 },
     { "PC7",   39,      I8255_PC7 },
+    { 0, 0, 0 }
 };
 
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
