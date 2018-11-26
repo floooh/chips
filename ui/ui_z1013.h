@@ -92,8 +92,10 @@ void ui_z1013_draw(ui_z1013_t* ui, double time_ms);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#endif
 
 static void _ui_z1013_draw_menu(ui_z1013_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->z1013 && ui->boot_cb);
@@ -345,5 +347,7 @@ void ui_z1013_draw(ui_z1013_t* ui, double time_ms) {
     }
 }
 
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 #endif /* CHIPS_IMPL */

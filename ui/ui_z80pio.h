@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
     const char* title;
     z80pio_t* pio;
-    int init_x, init_y;
+    float init_x, init_y;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -98,8 +98,8 @@ void ui_z80pio_init(ui_z80pio_t* win, const ui_z80pio_desc_t* desc) {
     memset(win, 0, sizeof(ui_z80pio_t));
     win->title = desc->title;
     win->pio = desc->pio;
-    win->init_x = desc->x;
-    win->init_y = desc->y;
+    win->init_x = (float) desc->x;
+    win->init_y = (float) desc->y;
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);

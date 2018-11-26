@@ -72,9 +72,9 @@ typedef struct {
     int cur_layer;
     int num_layers;
     const char* layers[UI_KBD_MAX_LAYERS];
-    int init_x, init_y;
-    int left_padding, top_padding;
-    int cell_width, cell_height;
+    float init_x, init_y;
+    float left_padding, top_padding;
+    float cell_width, cell_height;
     int num_columns, num_lines;
     uint32_t last_key_mask;
     int last_key_frame_count;
@@ -153,12 +153,12 @@ void ui_kbd_init(ui_kbd_t* win, const ui_kbd_desc_t* desc) {
             break;
         }
     }
-    win->init_x = desc->x;
-    win->init_y = desc->y;
-    win->left_padding = 32;
-    win->top_padding = 20;
-    win->cell_width = 32;
-    win->cell_height = 32;
+    win->init_x = (float) desc->x;
+    win->init_y = (float) desc->y;
+    win->left_padding = 32.0f;
+    win->top_padding = 20.0f;
+    win->cell_width = 32.0f;
+    win->cell_height = 32.0f;
     win->grid_color = 0xFFDDDDDD;
     win->down_color = 0xFF0000FF;
     win->open = desc->open;
@@ -226,30 +226,34 @@ static void _ui_kbd_draw_matrix(ui_kbd_t* win, const ImVec2& canvas_pos, const I
     const uint32_t line_bits = _ui_kbd_line_bits(mask);
     const uint32_t column_bits = _ui_kbd_column_bits(mask);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const int dx = win->cell_width;
-    const int dy = win->cell_height;
-    const int x0 = canvas_pos.x + win->left_padding;
-    const int y0 = canvas_pos.y + win->top_padding;
-    const int x1 = x0 + win->num_columns * dx;
-    const int y1 = y0 + win->num_lines * dy;
-    const int tdy = ImGui::GetTextLineHeight();
-    const int tdx = -10;
+    const float dx = win->cell_width;
+    const float dy = win->cell_height;
+    const float x0 = canvas_pos.x + win->left_padding;
+    const float y0 = canvas_pos.y + win->top_padding;
+    const float x1 = x0 + win->num_columns * dx;
+    const float y1 = y0 + win->num_lines * dy;
+    const float tdy = ImGui::GetTextLineHeight();
+    const float tdx = -10.0f;
     char buf[8];
-    for (int l=0, y=y0; l<win->num_lines; l++, y+=dy) {
+    float y = y0;
+    for (int l=0; l<win->num_lines; l++, y+=dy) {
         snprintf(buf, sizeof(buf), "%d", l);
         const uint32_t down = line_bits & (1<<l);
         dl->AddLine(ImVec2(x0, y+dy), ImVec2(x1, y+dy), down?win->down_color:win->grid_color, down?2.0f:1.0f);
         dl->AddText(ImVec2(x0, y+dy-tdy), win->grid_color, buf);
     }
-    for (int c=0, x=x0; c<win->num_columns; c++, x+=dx) {
+    float x = x0;
+    for (int c=0; c<win->num_columns; c++, x+=dx) {
         snprintf(buf, sizeof(buf), "%d", c);
         const uint32_t down = column_bits & (1<<c);
         dl->AddLine(ImVec2(x+dx, y0), ImVec2(x+dx, y1), down?win->down_color:win->grid_color, down?2.0f:1.0f);
         dl->AddText(ImVec2(x+dx+tdx, y0), win->grid_color, buf);
     }
+    y = y0;
     buf[1] = 0;
-    for (int l=0, y=y0; l<win->num_lines; l++, y+=dy) {
-        for (int c=0, x=x0; c<win->num_columns; c++, x+=dx) {
+    for (int l=0; l<win->num_lines; l++, y+=dy) {
+        x = x0;
+        for (int c=0; c<win->num_columns; c++, x+=dx) {
             const bool down = (line_bits & (1<<l)) && (column_bits & (1<<c));
             if (down) {
                 dl->AddCircleFilled(ImVec2(x+dx,y+dy), 4.0f, win->down_color, 12);
@@ -270,9 +274,9 @@ void ui_kbd_draw(ui_kbd_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    const int min_w = win->num_columns * win->cell_width + win->left_padding + 40;
-    const int min_h = win->num_lines * win->cell_height + win->top_padding + 64;
-    ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_Once);
+    const float min_w = win->num_columns * win->cell_width + win->left_padding + 40.0f;
+    const float min_h = win->num_lines * win->cell_height + win->top_padding + 64.0f;
+    ImGui::SetNextWindowSize(ImVec2(200.0f, 200.0f), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(min_w, min_h), ImGuiSetCond_Once);
     ImGui::SetNextWindowSizeConstraints(ImVec2(min_w, min_h), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::Begin(win->title, &win->open)) {

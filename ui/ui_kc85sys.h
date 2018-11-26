@@ -67,7 +67,7 @@ typedef struct {
 typedef struct {
     const char* title;
     kc85_t* kc85;
-    int init_x, init_y;
+    float init_x, init_y;
     bool open;
     bool valid;
 } ui_kc85sys_t;
@@ -98,8 +98,8 @@ void ui_kc85sys_init(ui_kc85sys_t* win, const ui_kc85sys_desc_t* desc) {
     memset(win, 0, sizeof(ui_kc85sys_t));
     win->title = desc->title;
     win->kc85 = desc->kc85;
-    win->init_x = desc->x;
-    win->init_y = desc->y;
+    win->init_x = (float) desc->x;
+    win->init_y = (float) desc->y;
     win->open = desc->open;
     win->valid = true;
 }

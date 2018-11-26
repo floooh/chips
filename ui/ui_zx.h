@@ -96,8 +96,10 @@ void ui_zx_draw(ui_zx_t* ui, double time_ms);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#endif
 
 static void _ui_zx_draw_menu(ui_zx_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->zx && ui->boot_cb);
@@ -183,7 +185,7 @@ static void _ui_zx_update_memmap(ui_zx_t* ui) {
             ui_memmap_region(&ui->memmap, "RAM 2", 0x8000, 0x4000, true);
             ui_memmap_region(&ui->memmap, "RAM 0", 0xC000, 0x4000, 0 == (m & 7));
         ui_memmap_layer(&ui->memmap, "Layer 1");
-            ui_memmap_region(&ui->memmap, "ZX48K ROM", 0x0000, 0x4000, m & (1<<4));
+            ui_memmap_region(&ui->memmap, "ZX48K ROM", 0x0000, 0x4000, 0 != (m & (1<<4)));
             ui_memmap_region(&ui->memmap, "RAM 1", 0xC000, 0x4000, 1 == (m & 7));
         ui_memmap_layer(&ui->memmap, "Layer 2");
             ui_memmap_region(&ui->memmap, "RAM 2", 0xC000, 0x4000, 2 == (m & 7));
@@ -458,5 +460,7 @@ void ui_zx_draw(ui_zx_t* ui, double time_ms) {
         ui_dasm_draw(&ui->dasm[i]);
     }
 }
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 #endif /* CHIPS_IMPL */

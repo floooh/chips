@@ -68,6 +68,10 @@ void ui_util_b8(const char* label, uint8_t val);
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4996)   /* sscanf */
+#endif
 #include <string.h> /* memset */
 #include <stdio.h>  /* sscanf */
 
@@ -128,4 +132,7 @@ void ui_util_b8(const char* label, uint8_t val) {
     ImGui::Text("%s", label); ImGui::SameLine(); ImGui::Text("%s", str);
 }
 
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 #endif /* CHIPS_IMPL */

@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
     const char* title;
     mc6845_t* mc6845;
-    int init_x, init_y;
+    float init_x, init_y;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -102,8 +102,8 @@ void ui_mc6845_init(ui_mc6845_t* win, const ui_mc6845_desc_t* desc) {
     memset(win, 0, sizeof(ui_mc6845_t));
     win->title = desc->title;
     win->mc6845 = desc->mc6845;
-    win->init_x = desc->x;
-    win->init_y = desc->y;
+    win->init_x = (float) desc->x;
+    win->init_y = (float) desc->y;
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);

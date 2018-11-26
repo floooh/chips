@@ -100,8 +100,10 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#endif
 
 static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->cpc && ui->boot_cb);
@@ -607,5 +609,7 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
         ui_dasm_draw(&ui->dasm[i]);
     }
 }
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 #endif /* CHIPS_IMPL */

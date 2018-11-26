@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
     const char* title;
     ay38910_t* ay;
-    int init_x, init_y;
+    float init_x, init_y;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -102,8 +102,8 @@ void ui_ay38910_init(ui_ay38910_t* win, const ui_ay38910_desc_t* desc) {
     memset(win, 0, sizeof(ui_ay38910_t));
     win->title = desc->title;
     win->ay = desc->ay;
-    win->init_x = desc->x;
-    win->init_y = desc->y;
+    win->init_x = (float) desc->x;
+    win->init_y = (float) desc->y;
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);

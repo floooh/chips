@@ -69,7 +69,7 @@ typedef struct {
 typedef struct {
     const char* title;
     i8255_t* i8255;
-    int init_x, init_y;
+    float init_x, init_y;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -101,8 +101,8 @@ void ui_i8255_init(ui_i8255_t* win, ui_i8255_desc_t* desc) {
     memset(win, 0, sizeof(ui_i8255_t));
     win->title = desc->title;
     win->i8255 = desc->i8255;
-    win->init_x = desc->x;
-    win->init_y = desc->y;
+    win->init_x = (float) desc->x;
+    win->init_y = (float) desc->y;
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);

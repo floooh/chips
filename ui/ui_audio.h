@@ -64,7 +64,7 @@ typedef struct {
     const char* title;
     const float* sample_buffer;
     int num_samples;
-    int init_x, init_y;
+    float init_x, init_y;
     uint32_t cursor_color;
     bool open;
     bool valid;
@@ -98,8 +98,8 @@ void ui_audio_init(ui_audio_t* win, const ui_audio_desc_t* desc) {
     win->title = desc->title;
     win->sample_buffer = desc->sample_buffer;
     win->num_samples = desc->num_samples;
-    win->init_x = desc->x;
-    win->init_y = desc->y;
+    win->init_x = (float)  desc->x;
+    win->init_y = (float) desc->y;
     win->cursor_color = 0xFF0000FF;
     win->open = desc->open;
     win->valid = true;

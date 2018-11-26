@@ -86,8 +86,8 @@ typedef struct {
     ui_memedit_read_t read_cb;
     ui_memedit_write_t write_cb;
     void* user_data;
-    int init_x, init_y;
-    int init_w, init_h;
+    float init_x, init_y;
+    float init_w, init_h;
     MemoryEditor* ed;
     bool open;
     bool valid;
@@ -107,6 +107,10 @@ void ui_memedit_draw(ui_memedit_t* win);
 #ifdef CHIPS_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
+#endif
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4996)   /* sscanf */
 #endif
 #include <string.h> /* memset */
 #include <stdio.h>  /* sscanf, sprintf (ImGui memory editor) */
@@ -592,10 +596,10 @@ void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc) {
     win->read_cb = desc->read_cb;
     win->write_cb = desc->write_cb;
     win->user_data = desc->user_data;
-    win->init_x = desc->x;
-    win->init_y = desc->y;
-    win->init_w = desc->w;
-    win->init_h = desc->h;
+    win->init_x = (float) desc->x;
+    win->init_y = (float) desc->y;
+    win->init_w = (float) desc->w;
+    win->init_h = (float) desc->h;
     win->open = desc->open;
     win->ed = new MemoryEditor;
     win->ed->Open = win->open;
@@ -631,4 +635,7 @@ void ui_memedit_draw(ui_memedit_t* win) {
     win->ed->DrawWindow(win->title, (uint8_t*)win, (1<<16));
     win->open = win->ed->Open;
 }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 #endif /* CHIPS_IMPL */
