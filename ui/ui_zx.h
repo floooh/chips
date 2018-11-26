@@ -302,7 +302,6 @@ static const ui_chip_pin_t _ui_zx_cpu_pins[] = {
     { "A13",    31,     Z80_A13 },
     { "A14",    32,     Z80_A14 },
     { "A15",    33,     Z80_A15 },
-    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_zx_ay_pins[] = {
@@ -324,7 +323,6 @@ static const ui_chip_pin_t _ui_zx_ay_pins[] = {
     { "IOA5", 16, AY38910_IOA5 },
     { "IOA6", 17, AY38910_IOA6 },
     { "IOA7", 18, AY38910_IOA7 },
-    { 0, 0, 0 }
 };
 
 void ui_zx_init(ui_zx_t* ui, const ui_zx_desc_t* desc) {
@@ -340,7 +338,7 @@ void ui_zx_init(ui_zx_t* ui, const ui_zx_desc_t* desc) {
         desc.cpu = &ui->zx->cpu;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nCPU", 36, _ui_zx_cpu_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCPU", 36, _ui_zx_cpu_pins);
         ui_z80_init(&ui->cpu, &desc);
     }
     {
@@ -349,7 +347,7 @@ void ui_zx_init(ui_zx_t* ui, const ui_zx_desc_t* desc) {
         desc.ay = &ui->zx->ay;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "8912", 22, _ui_zx_ay_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "8912", 22, _ui_zx_ay_pins);
         ui_ay38910_init(&ui->ay, &desc);
     }
     x += dx; y += dy;

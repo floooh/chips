@@ -246,7 +246,6 @@ static const ui_chip_pin_t _ui_kc85_cpu_pins[] = {
     { "A13",    31,     Z80_A13 },
     { "A14",    32,     Z80_A14 },
     { "A15",    33,     Z80_A15 },
-    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_kc85_pio_pins[] = {
@@ -285,7 +284,6 @@ static const ui_chip_pin_t _ui_kc85_pio_pins[] = {
     { "PB5",    37,     Z80PIO_PB5 },
     { "PB6",    38,     Z80PIO_PB6 },
     { "PB7",    39,     Z80PIO_PB7 },
-    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_kc85_ctc_pins[] = {
@@ -311,7 +309,6 @@ static const ui_chip_pin_t _ui_kc85_ctc_pins[] = {
     { "CT2",    22,     Z80CTC_CLKTRG2 },
     { "ZT2",    23,     Z80CTC_ZCTO2 },
     { "CT3",    25,     Z80CTC_CLKTRG3 },
-    { 0, 0, 0 }
 };
 
 static uint8_t _ui_kc85_mem_read(int layer, uint16_t addr, void* user_data) {
@@ -349,7 +346,7 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
         desc.cpu = &ui->kc85->cpu;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nCPU", 36, _ui_kc85_cpu_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCPU", 36, _ui_kc85_cpu_pins);
         ui_z80_init(&ui->cpu, &desc);
     }
     x += dx; y += dy;
@@ -359,7 +356,7 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
         desc.pio = &ui->kc85->pio;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nPIO", 40, _ui_kc85_pio_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nPIO", 40, _ui_kc85_pio_pins);
         ui_z80pio_init(&ui->pio, &desc);
     }
     x += dx; y += dy;
@@ -369,7 +366,7 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
         desc.ctc = &ui->kc85->ctc;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nCTC", 32, _ui_kc85_ctc_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCTC", 32, _ui_kc85_ctc_pins);
         ui_z80ctc_init(&ui->ctc, &desc);
     }
     x += dx; y += dy;

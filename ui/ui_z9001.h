@@ -212,7 +212,6 @@ static const ui_chip_pin_t _ui_z9001_cpu_pins[] = {
     { "A13",    31,     Z80_A13 },
     { "A14",    32,     Z80_A14 },
     { "A15",    33,     Z80_A15 },
-    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_z9001_pio_pins[] = {
@@ -251,7 +250,6 @@ static const ui_chip_pin_t _ui_z9001_pio_pins[] = {
     { "PB5",    37,     Z80PIO_PB5 },
     { "PB6",    38,     Z80PIO_PB6 },
     { "PB7",    39,     Z80PIO_PB7 },
-    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_z9001_ctc_pins[] = {
@@ -277,7 +275,6 @@ static const ui_chip_pin_t _ui_z9001_ctc_pins[] = {
     { "CT2",    22,     Z80CTC_CLKTRG2 },
     { "ZT2",    23,     Z80CTC_ZCTO2 },
     { "CT3",    25,     Z80CTC_CLKTRG3 },
-    { 0, 0, 0 }
 };
 
 static uint8_t _ui_z9001_mem_read(int layer, uint16_t addr, void* user_data) {
@@ -305,7 +302,7 @@ void ui_z9001_init(ui_z9001_t* ui, const ui_z9001_desc_t* desc) {
         desc.cpu = &ui->z9001->cpu;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nCPU", 36, _ui_z9001_cpu_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCPU", 36, _ui_z9001_cpu_pins);
         ui_z80_init(&ui->cpu, &desc);
     }
     x += dx; y += dy;
@@ -315,7 +312,7 @@ void ui_z9001_init(ui_z9001_t* ui, const ui_z9001_desc_t* desc) {
         desc.pio = &ui->z9001->pio1;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nPIO", 40, _ui_z9001_pio_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nPIO", 40, _ui_z9001_pio_pins);
         ui_z80pio_init(&ui->pio[0], &desc);
         x += dx; y += dy;
         desc.title = "Z80 PIO #2";
@@ -329,7 +326,7 @@ void ui_z9001_init(ui_z9001_t* ui, const ui_z9001_desc_t* desc) {
         desc.ctc = &ui->z9001->ctc;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nCTC", 32, _ui_z9001_ctc_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCTC", 32, _ui_z9001_ctc_pins);
         ui_z80ctc_init(&ui->ctc, &desc);
     }
     x += dx; y += dy;

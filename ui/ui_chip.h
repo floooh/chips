@@ -80,12 +80,9 @@ typedef struct {
 void ui_chip_init(ui_chip_t* chip, const ui_chip_desc_t* desc);
 void ui_chip_draw(ui_chip_t* chip, uint64_t pins);
 
-/* helper function to initialize a chip desc
-
-    pins must be an array of ui_chip_pin_t, with the last
-    item initialized to all zeros
-*/
-void ui_chip_init_chip_desc(ui_chip_desc_t* desc, const char* name, int num_slots, const ui_chip_pin_t* pins);
+/* helper function and macro to initialize a ui_chip_desc_t from an array of ui_chip_pin_t */
+void ui_chip_init_chip_desc(ui_chip_desc_t* desc, const char* name, int num_slots, const ui_chip_pin_t* pins, int num_pins);
+#define UI_CHIP_INIT_DESC(desc, name, num_slots, pins) ui_chip_init_chip_desc(desc, name, num_slots, pins, (int)(sizeof(pins)/sizeof(ui_chip_pin_t)))
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -167,21 +164,17 @@ void ui_chip_draw(ui_chip_t* c, uint64_t pins) {
     }
 }
 
-void ui_chip_init_chip_desc(ui_chip_desc_t* desc, const char* name, int num_slots, const ui_chip_pin_t* pins) {
+void ui_chip_init_chip_desc(ui_chip_desc_t* desc, const char* name, int num_slots, const ui_chip_pin_t* pins, int num_pins) {
     CHIPS_ASSERT(desc);
     CHIPS_ASSERT(name);
     CHIPS_ASSERT((num_slots >= 0) && (num_slots < UI_CHIP_MAX_PINS));
-    CHIPS_ASSERT(pins);
+    CHIPS_ASSERT(pins && (num_pins <= num_slots));
     memset(desc, 0, sizeof(ui_chip_desc_t));
     desc->name = name;
     desc->num_slots = num_slots;
-    for (int i = 0; i < UI_CHIP_MAX_PINS; i++) {
-        if (pins[i].name) {
-            desc->pins[i] = pins[i];
-        }
-        else {
-            break;
-        }
+    for (int i = 0; i < num_pins; i++) {
+        CHIPS_ASSERT(pins[i].name);
+        desc->pins[i] = pins[i];
     }
 }
 

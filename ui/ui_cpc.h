@@ -356,7 +356,6 @@ static const ui_chip_pin_t _ui_cpc_cpu_pins[] = {
     { "A13",    31,     Z80_A13 },
     { "A14",    32,     Z80_A14 },
     { "A15",    33,     Z80_A15 },
-    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_cpc_psg_pins[] = {
@@ -378,7 +377,6 @@ static const ui_chip_pin_t _ui_cpc_psg_pins[] = {
     { "IOA5", 16, AY38910_IOA5 },
     { "IOA6", 17, AY38910_IOA6 },
     { "IOA7", 18, AY38910_IOA7 },
-    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_cpc_vdc_pins[] = {
@@ -415,7 +413,6 @@ static const ui_chip_pin_t _ui_cpc_vdc_pins[] = {
     { "RA2",   37,      MC6845_RA2 },
     { "RA3",   38,      MC6845_RA3 },
     { "RA4",   39,      MC6845_RA4 },
-    { 0, 0, 0 }
 };
 
 static const ui_chip_pin_t _ui_cpc_ppi_pins[] = {
@@ -461,7 +458,6 @@ static const ui_chip_pin_t _ui_cpc_ppi_pins[] = {
     { "PC5",   37,      I8255_PC5 },
     { "PC6",   38,      I8255_PC6 },
     { "PC7",   39,      I8255_PC7 },
-    { 0, 0, 0 }
 };
 
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
@@ -477,7 +473,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.cpu = &ui->cpc->cpu;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "Z80\nCPU", 36, _ui_cpc_cpu_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCPU", 36, _ui_cpc_cpu_pins);
         ui_z80_init(&ui->cpu, &desc);
     }
     {
@@ -486,7 +482,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.ay = &ui->cpc->psg;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "8912", 22, _ui_cpc_psg_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "8912", 22, _ui_cpc_psg_pins);
         ui_ay38910_init(&ui->psg, &desc);
     }
     x += dx; y += dy;
@@ -496,7 +492,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.mc6845 = &ui->cpc->vdg;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "6845", 40, _ui_cpc_vdc_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6845", 40, _ui_cpc_vdc_pins);
         ui_mc6845_init(&ui->vdc, &desc);
     }
     x += dx; y += dy;
@@ -506,7 +502,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.i8255 = &ui->cpc->ppi;
         desc.x = x;
         desc.y = y;
-        ui_chip_init_chip_desc(&desc.chip_desc, "i8255", 40, _ui_cpc_ppi_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "i8255", 40, _ui_cpc_ppi_pins);
         ui_i8255_init(&ui->ppi, &desc);
     }
     x += dx; y += dy;
