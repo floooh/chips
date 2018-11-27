@@ -30,6 +30,7 @@
     - ui_mc6845.h
     - ui_upd765.h
     - ui_ay38910.h
+    - ui_cpc_ga.h
     - ui_audio.h
     - ui_dasm.h
     - ui_memedit.h
@@ -76,6 +77,7 @@ typedef struct {
     ui_mc6845_t vdc;
     ui_i8255_t ppi;
     ui_audio_t audio;
+    ui_cpc_ga_t ga;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
@@ -135,7 +137,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
-            ImGui::MenuItem("Gate Array (TODO)");
+            ImGui::MenuItem("Gate Array", 0, &ui->ga.open);
             ImGui::MenuItem("Z80 CPU", 0, &ui->cpu.open);
             ImGui::MenuItem("AY-3-8912", 0, &ui->psg.open);
             ImGui::MenuItem("MC6845", 0, &ui->vdc.open);
@@ -507,6 +509,15 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
     }
     x += dx; y += dy;
     {
+        ui_cpc_ga_desc_t desc = {0};
+        desc.title = "CPC Gate Array";
+        desc.cpc = ui->cpc;
+        desc.x = x;
+        desc.y = y;
+        ui_cpc_ga_init(&ui->ga, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
         desc.sample_buffer = ui->cpc->sample_buffer;
@@ -582,6 +593,7 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui_mc6845_discard(&ui->vdc);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
+    ui_cpc_ga_discard(&ui->ga);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
@@ -595,6 +607,7 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
     if (ui->memmap.open) {
         _ui_cpc_update_memmap(ui);
     }
+    ui_cpc_ga_draw(&ui->ga);
     ui_audio_draw(&ui->audio, ui->cpc->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_z80_draw(&ui->cpu);
