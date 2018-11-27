@@ -174,7 +174,6 @@ typedef struct {
     upd765_t fdc;
 
     bool valid;
-    bool dbgvis;                    /* debug visualzation enabled? */
     cpc_type_t type;
     cpc_joystick_type_t joystick_type;
     uint8_t kbd_joymask;
