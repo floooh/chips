@@ -80,7 +80,7 @@ typedef uint8_t (*z80dasm_input_t)(void* user_data);
 typedef void (*z80dasm_output_t)(char c, void* user_data);
 
 /* disassemble a single Z80 instruction into a stream of ASCII characters */
-extern uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb, void* user_data);
+uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb, void* user_data);
 
 #ifdef __cplusplus
 } /* extern "C" */
