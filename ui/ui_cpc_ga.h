@@ -162,7 +162,7 @@ void ui_cpc_ga_draw(ui_cpc_ga_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(428, 240), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(428, 428), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         cpc_t* cpc = win->cpc;
         ImGui::Checkbox("Debug Visualization (FIXME)", &cpc->video_debug_enabled);
@@ -174,6 +174,19 @@ void ui_cpc_ga_draw(ui_cpc_ga_t* win) {
         _ui_cpc_ga_draw_border(win);
         ImGui::Separator();
         ImGui::Text("Video Mode: %d (%s)", cpc->ga.video_mode, _ui_cpc_ga_video_modes[cpc->ga.video_mode % 3]);
+        ImGui::Text("Sync: %s  IRQ: %s", cpc->ga.sync ? "ON ":"OFF", cpc->ga.intr ? "ON":"OFF");
+        ImGui::Separator();
+        ImGui::Text("HSync:");
+        ImGui::Text("  Counter: %d", cpc->ga.hsync_counter);
+        ImGui::Text("  HSync IRQ Counter: %d", cpc->ga.hsync_irq_counter);
+        ImGui::Text("  HSync After VSync Counter: %d\n", cpc->ga.hsync_after_vsync_counter);
+        ImGui::Text("  HSync Delay Counter: %d\n", cpc->ga.hsync_delay_counter);
+        ImGui::Separator();
+        ImGui::Text("CRT:");
+        ImGui::Text("  Sync    H: %s  V: %s", cpc->crt.h_sync?"ON ":"OFF", cpc->crt.v_sync?"ON ":"OFF");
+        ImGui::Text("  Blank   H: %s  V: %s", cpc->crt.h_blank?"ON ":"OFF", cpc->crt.v_blank?"ON":"OFF");
+        ImGui::Text("  Pos     H: %3d  V: %3d", cpc->crt.h_pos, cpc->crt.v_pos);
+        ImGui::Text("  Retrace H: %3d  V: %3d", cpc->crt.h_retrace, cpc->crt.v_retrace);
     }
     ImGui::End();
 }
