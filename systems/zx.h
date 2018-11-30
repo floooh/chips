@@ -161,25 +161,25 @@ typedef struct {
 } zx_t;
 
 /* initialize a new ZX Spectrum instance */
-extern void zx_init(zx_t* sys, const zx_desc_t* desc);
+void zx_init(zx_t* sys, const zx_desc_t* desc);
 /* discard a ZX Spectrum instance */
-extern void zx_discard(zx_t* sys);
+void zx_discard(zx_t* sys);
 /* reset a ZX Spectrum instance */
-extern void zx_reset(zx_t* sys);
+void zx_reset(zx_t* sys);
 /* run ZX Spectrum instance for a given number of microseconds */
-extern void zx_exec(zx_t* sys, uint32_t micro_seconds);
+void zx_exec(zx_t* sys, uint32_t micro_seconds);
 /* send a key-down event */
-extern void zx_key_down(zx_t* sys, int key_code);
+void zx_key_down(zx_t* sys, int key_code);
 /* send a key-up event */
-extern void zx_key_up(zx_t* sys, int key_code);
+void zx_key_up(zx_t* sys, int key_code);
 /* enable/disable joystick emulation */
-extern void zx_set_joystick_type(zx_t* sys, zx_joystick_type_t type);
+void zx_set_joystick_type(zx_t* sys, zx_joystick_type_t type);
 /* get current joystick emulation type */
-extern zx_joystick_type_t zx_joystick_type(zx_t* sys);
+zx_joystick_type_t zx_joystick_type(zx_t* sys);
 /* set joystick mask (combination of ZX_JOYSTICK_*) */
-extern void zx_joystick(zx_t* sys, uint8_t mask);
+void zx_joystick(zx_t* sys, uint8_t mask);
 /* load a ZX Z80 file into the emulator */
-extern bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes); 
+bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes); 
 
 #ifdef __cplusplus
 } /* extern "C" */

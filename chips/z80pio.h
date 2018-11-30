@@ -322,13 +322,13 @@ typedef struct {
 #define Z80PIO_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
 
 /* initialize a new Z80 PIO instance */
-extern void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc);
+void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc);
 /* reset a Z80 PIO instance */
-extern void z80pio_reset(z80pio_t* pio);
+void z80pio_reset(z80pio_t* pio);
 /* perform an IO request */
-extern uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins);
+uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins);
 /* write value to a PIO port, this may trigger an interrupt */
-extern void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data);
+void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data);
 /* call this once per machine cycle to handle the interrupt daisy chain */
 static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
     for (int i = 0; i < Z80PIO_NUM_PORTS; i++) {

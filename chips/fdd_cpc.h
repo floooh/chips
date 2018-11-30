@@ -42,7 +42,7 @@ extern "C" {
 #endif
 
 /* load Amstrad CPC .dsk file format */
-extern bool fdd_cpc_insert_dsk(fdd_t* fdd, const uint8_t* data, int data_size);
+bool fdd_cpc_insert_dsk(fdd_t* fdd, const uint8_t* data, int data_size);
 
 #ifdef __cplusplus
 } /* extern "C" */

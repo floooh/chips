@@ -108,19 +108,19 @@ typedef struct {
 } fdd_t;
 
 /* initialize a floppy disc drive */
-extern void fdd_init(fdd_t* fdd);
+void fdd_init(fdd_t* fdd);
 /* drive motor on/off */
-extern void fdd_motor(fdd_t* fdd, bool on);
+void fdd_motor(fdd_t* fdd, bool on);
 /* insert a disc, the disc structure and data will be copied */
-extern bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, int data_size);
+bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, int data_size);
 /* eject current disc */
-extern void fdd_eject_disc(fdd_t* fdd);
+void fdd_eject_disc(fdd_t* fdd);
 /* seek to physical track (happens instantly), returns FDD_RESULT_* */
-extern int fdd_seek_track(fdd_t* fdd, int track);
+int fdd_seek_track(fdd_t* fdd, int track);
 /* seek to sector on current physical track (happens instantly), returns FDD_RESULT_* */
-extern int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
+int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
 /* read the next byte from the seeked-to sector, return FDD_RESULT_* */
-extern int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data);
+int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data);
 
 #ifdef __cplusplus
 } /* extern "C" */

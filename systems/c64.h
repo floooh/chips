@@ -165,33 +165,33 @@ typedef struct {
 } c64_t;
 
 /* initialize a new C64 instance */
-extern void c64_init(c64_t* sys, const c64_desc_t* desc);
+void c64_init(c64_t* sys, const c64_desc_t* desc);
 /* discard C64 instance */
-extern void c64_discard(c64_t* sys);
+void c64_discard(c64_t* sys);
 /* reset a C64 instance */
-extern void c64_reset(c64_t* sys);
+void c64_reset(c64_t* sys);
 /* tick C64 instance for a given number of microseconds */
-extern void c64_exec(c64_t* sys, uint32_t micro_seconds);
+void c64_exec(c64_t* sys, uint32_t micro_seconds);
 /* send a key-down event to the C64 */
-extern void c64_key_down(c64_t* sys, int key_code);
+void c64_key_down(c64_t* sys, int key_code);
 /* send a key-up event to the C64 */
-extern void c64_key_up(c64_t* sys, int key_code);
+void c64_key_up(c64_t* sys, int key_code);
 /* enable/disable joystick emulation */
-extern void c64_set_joystick_type(c64_t* sys, c64_joystick_type_t type);
+void c64_set_joystick_type(c64_t* sys, c64_joystick_type_t type);
 /* get current joystick emulation type */
-extern c64_joystick_type_t c64_joystick_type(c64_t* sys);
+c64_joystick_type_t c64_joystick_type(c64_t* sys);
 /* set joystick mask (combination of C64_JOYSTICK_*) */
-extern void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask);
+void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask);
 /* insert a tape file */
-extern bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
+bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
 /* remove tape file */
-extern void c64_remove_tape(c64_t* sys);
+void c64_remove_tape(c64_t* sys);
 /* start the tape (press the Play button) */
-extern void c64_start_tape(c64_t* sys);
+void c64_start_tape(c64_t* sys);
 /* stop the tape (unpress the Play button */
-extern void c64_stop_tape(c64_t* sys);
+void c64_stop_tape(c64_t* sys);
 /* quickload a .bin file (only tested with wlorenz tests) */
-extern bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
+bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
 
 #ifdef __cplusplus
 } /* extern "C" */

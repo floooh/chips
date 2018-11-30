@@ -117,14 +117,14 @@ typedef struct {
 
     NOTE: currently only PAL is supported!
 */
-extern void crt_init(crt_t* crt, crt_std video_std, int vis_x, int vis_y, int vis_w, int vis_h);
+void crt_init(crt_t* crt, crt_std video_std, int vis_x, int vis_y, int vis_w, int vis_h);
 
 /*
     crt_reset
 
     This will reset all internal counters, but keep the configuration values.
 */
-extern void crt_reset(crt_t* crt);
+void crt_reset(crt_t* crt);
 
 /*
     crt_tick
@@ -140,7 +140,7 @@ extern void crt_reset(crt_t* crt);
     hsync       -- current state of the hsync signal
     vsync       -- current sttae of the vsync signal
 */
-extern bool crt_tick(crt_t* crt, bool hsync, bool vsync);
+bool crt_tick(crt_t* crt, bool hsync, bool vsync);
 
 #ifdef __cplusplus
 } /* extern "C" */

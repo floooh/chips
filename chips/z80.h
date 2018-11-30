@@ -410,81 +410,81 @@ typedef struct {
 } z80_t;
 
 /* initialize a new z80 instance */
-extern void z80_init(z80_t* cpu, z80_desc_t* desc);
+void z80_init(z80_t* cpu, z80_desc_t* desc);
 /* reset an existing z80 instance */
-extern void z80_reset(z80_t* cpu);
+void z80_reset(z80_t* cpu);
 /* set a trap point */
-extern void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr);
+void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr);
 /* clear a trap point */
-extern void z80_clear_trap(z80_t* cpu, int trap_id);
+void z80_clear_trap(z80_t* cpu, int trap_id);
 /* return true if a trap is valid */
-extern bool z80_has_trap(z80_t* cpu, int trap_id);
+bool z80_has_trap(z80_t* cpu, int trap_id);
 /* execute instructions for at least 'ticks', but at least one, return executed ticks */
-extern uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
+uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 /* return false if z80_exec() returned in the middle of an extended intruction */
-extern bool z80_opdone(z80_t* cpu);
+bool z80_opdone(z80_t* cpu);
 
 /* register access functions */
-extern void z80_set_a(z80_t* cpu, uint8_t v);
-extern void z80_set_f(z80_t* cpu, uint8_t v);
-extern void z80_set_l(z80_t* cpu, uint8_t v);
-extern void z80_set_h(z80_t* cpu, uint8_t v);
-extern void z80_set_e(z80_t* cpu, uint8_t v);
-extern void z80_set_d(z80_t* cpu, uint8_t v);
-extern void z80_set_c(z80_t* cpu, uint8_t v);
-extern void z80_set_b(z80_t* cpu, uint8_t v);
-extern void z80_set_fa(z80_t* cpu, uint16_t v);
-extern void z80_set_af(z80_t* cpi, uint16_t v);
-extern void z80_set_hl(z80_t* cpu, uint16_t v);
-extern void z80_set_de(z80_t* cpu, uint16_t v);
-extern void z80_set_bc(z80_t* cpu, uint16_t v);
-extern void z80_set_fa_(z80_t* cpu, uint16_t v);
-extern void z80_set_af_(z80_t* cpi, uint16_t v);
-extern void z80_set_hl_(z80_t* cpu, uint16_t v);
-extern void z80_set_de_(z80_t* cpu, uint16_t v);
-extern void z80_set_bc_(z80_t* cpu, uint16_t v);
-extern void z80_set_pc(z80_t* cpu, uint16_t v);
-extern void z80_set_wz(z80_t* cpu, uint16_t v);
-extern void z80_set_sp(z80_t* cpu, uint16_t v);
-extern void z80_set_i(z80_t* cpu, uint8_t v);
-extern void z80_set_r(z80_t* cpu, uint8_t v);
-extern void z80_set_ix(z80_t* cpu, uint16_t v);
-extern void z80_set_iy(z80_t* cpu, uint16_t v);
-extern void z80_set_im(z80_t* cpu, uint8_t v);
-extern void z80_set_iff1(z80_t* cpu, bool b);
-extern void z80_set_iff2(z80_t* cpu, bool b);
-extern void z80_set_ei_pending(z80_t* cpu, bool b);
+void z80_set_a(z80_t* cpu, uint8_t v);
+void z80_set_f(z80_t* cpu, uint8_t v);
+void z80_set_l(z80_t* cpu, uint8_t v);
+void z80_set_h(z80_t* cpu, uint8_t v);
+void z80_set_e(z80_t* cpu, uint8_t v);
+void z80_set_d(z80_t* cpu, uint8_t v);
+void z80_set_c(z80_t* cpu, uint8_t v);
+void z80_set_b(z80_t* cpu, uint8_t v);
+void z80_set_fa(z80_t* cpu, uint16_t v);
+void z80_set_af(z80_t* cpi, uint16_t v);
+void z80_set_hl(z80_t* cpu, uint16_t v);
+void z80_set_de(z80_t* cpu, uint16_t v);
+void z80_set_bc(z80_t* cpu, uint16_t v);
+void z80_set_fa_(z80_t* cpu, uint16_t v);
+void z80_set_af_(z80_t* cpi, uint16_t v);
+void z80_set_hl_(z80_t* cpu, uint16_t v);
+void z80_set_de_(z80_t* cpu, uint16_t v);
+void z80_set_bc_(z80_t* cpu, uint16_t v);
+void z80_set_pc(z80_t* cpu, uint16_t v);
+void z80_set_wz(z80_t* cpu, uint16_t v);
+void z80_set_sp(z80_t* cpu, uint16_t v);
+void z80_set_i(z80_t* cpu, uint8_t v);
+void z80_set_r(z80_t* cpu, uint8_t v);
+void z80_set_ix(z80_t* cpu, uint16_t v);
+void z80_set_iy(z80_t* cpu, uint16_t v);
+void z80_set_im(z80_t* cpu, uint8_t v);
+void z80_set_iff1(z80_t* cpu, bool b);
+void z80_set_iff2(z80_t* cpu, bool b);
+void z80_set_ei_pending(z80_t* cpu, bool b);
 
-extern uint8_t z80_a(z80_t* cpu);
-extern uint8_t z80_f(z80_t* cpu);
-extern uint8_t z80_l(z80_t* cpu);
-extern uint8_t z80_h(z80_t* cpu);
-extern uint8_t z80_e(z80_t* cpu);
-extern uint8_t z80_d(z80_t* cpu);
-extern uint8_t z80_c(z80_t* cpu);
-extern uint8_t z80_b(z80_t* cpu);
-extern uint16_t z80_fa(z80_t* cpu);
-extern uint16_t z80_af(z80_t* cpu);
-extern uint16_t z80_hl(z80_t* cpu);
-extern uint16_t z80_de(z80_t* cpu);
-extern uint16_t z80_bc(z80_t* cpu);
-extern uint16_t z80_fa_(z80_t* cpu);
-extern uint16_t z80_af_(z80_t* cpu);
-extern uint16_t z80_hl_(z80_t* cpu);
-extern uint16_t z80_de_(z80_t* cpu);
-extern uint16_t z80_bc_(z80_t* cpu);
-extern uint16_t z80_pc(z80_t* cpu);
-extern uint16_t z80_wz(z80_t* cpu);
-extern uint16_t z80_sp(z80_t* cpu);
-extern uint16_t z80_ir(z80_t* cpu);
-extern uint8_t z80_i(z80_t* cpu);
-extern uint8_t z80_r(z80_t* cpu);
-extern uint16_t z80_ix(z80_t* cpu);
-extern uint16_t z80_iy(z80_t* cpu);
-extern uint8_t z80_im(z80_t* cpu);
-extern bool z80_iff1(z80_t* cpu);
-extern bool z80_iff2(z80_t* cpu);
-extern bool z80_ei_pending(z80_t* cpu);
+uint8_t z80_a(z80_t* cpu);
+uint8_t z80_f(z80_t* cpu);
+uint8_t z80_l(z80_t* cpu);
+uint8_t z80_h(z80_t* cpu);
+uint8_t z80_e(z80_t* cpu);
+uint8_t z80_d(z80_t* cpu);
+uint8_t z80_c(z80_t* cpu);
+uint8_t z80_b(z80_t* cpu);
+uint16_t z80_fa(z80_t* cpu);
+uint16_t z80_af(z80_t* cpu);
+uint16_t z80_hl(z80_t* cpu);
+uint16_t z80_de(z80_t* cpu);
+uint16_t z80_bc(z80_t* cpu);
+uint16_t z80_fa_(z80_t* cpu);
+uint16_t z80_af_(z80_t* cpu);
+uint16_t z80_hl_(z80_t* cpu);
+uint16_t z80_de_(z80_t* cpu);
+uint16_t z80_bc_(z80_t* cpu);
+uint16_t z80_pc(z80_t* cpu);
+uint16_t z80_wz(z80_t* cpu);
+uint16_t z80_sp(z80_t* cpu);
+uint16_t z80_ir(z80_t* cpu);
+uint8_t z80_i(z80_t* cpu);
+uint8_t z80_r(z80_t* cpu);
+uint16_t z80_ix(z80_t* cpu);
+uint16_t z80_iy(z80_t* cpu);
+uint8_t z80_im(z80_t* cpu);
+bool z80_iff1(z80_t* cpu);
+bool z80_iff2(z80_t* cpu);
+bool z80_ei_pending(z80_t* cpu);
 
 /* helper macro to start interrupt handling in tick callback */
 #define Z80_DAISYCHAIN_BEGIN(pins) if (pins&Z80_M1) { pins|=Z80_IEIO;

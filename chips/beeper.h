@@ -42,9 +42,9 @@ typedef struct {
 } beeper_t;
 
 /* initialize beeper instance */
-extern void beeper_init(beeper_t* beeper, int tick_hz, int sound_hz, float magnitude);
+void beeper_init(beeper_t* beeper, int tick_hz, int sound_hz, float magnitude);
 /* reset the beeper instance */
-extern void beeper_reset(beeper_t* beeper);
+void beeper_reset(beeper_t* beeper);
 /* set current on/off state */
 static inline void beeper_set(beeper_t* beeper, bool state) {
     beeper->state = state ? 1 : 0;

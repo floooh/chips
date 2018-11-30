@@ -243,13 +243,13 @@ typedef struct {
 #define AY38910_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
 
 /* initialize a AY-3-8910 instance */
-extern void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc);
+void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc);
 /* reset an existing AY-3-8910 instance */
-extern void ay38910_reset(ay38910_t* ay);
+void ay38910_reset(ay38910_t* ay);
 /* perform an IO request machine cycle */
-extern uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins);
+uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins);
 /* tick the AY-3-8910, return true if a new sample is ready */
-extern bool ay38910_tick(ay38910_t* ay);
+bool ay38910_tick(ay38910_t* ay);
 
 #ifdef __cplusplus
 } /* extern "C" */

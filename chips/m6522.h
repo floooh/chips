@@ -185,13 +185,13 @@ typedef struct {
 #define M6522_SET_ADDR(p,d) {p=((p&~0xF)|(d&0xF));}
 
 /* initialize a new 6522 instance */
-extern void m6522_init(m6522_t* m6522, m6522_desc_t* desc);
+void m6522_init(m6522_t* m6522, m6522_desc_t* desc);
 /* reset an existing 6522 instance */
-extern void m6522_reset(m6522_t* m6522);
+void m6522_reset(m6522_t* m6522);
 /* perform an IO request */
-extern uint64_t m6522_iorq(m6522_t* m6522, uint64_t pins);
+uint64_t m6522_iorq(m6522_t* m6522, uint64_t pins);
 /* tick the m6522 */
-extern void m6522_tick(m6522_t* m6522);
+void m6522_tick(m6522_t* m6522);
 
 #ifdef __cplusplus
 } /* extern "C" */

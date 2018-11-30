@@ -209,39 +209,39 @@ typedef struct {
 } cpc_t;
 
 /* initialize a new CPC instance */
-extern void cpc_init(cpc_t* cpc, cpc_desc_t* desc);
+void cpc_init(cpc_t* cpc, cpc_desc_t* desc);
 /* discard a CPC instance */
-extern void cpc_discard(cpc_t* cpc);
+void cpc_discard(cpc_t* cpc);
 /* reset a CPC instance */
-extern void cpc_reset(cpc_t* cpc);
+void cpc_reset(cpc_t* cpc);
 /* run CPC instance for given amount of micro_seconds */
-extern void cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
+void cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
 /* send a key down event */
-extern void cpc_key_down(cpc_t* cpc, int key_code);
+void cpc_key_down(cpc_t* cpc, int key_code);
 /* send a key up event */
-extern void cpc_key_up(cpc_t* cpc, int key_code);
+void cpc_key_up(cpc_t* cpc, int key_code);
 /* enable/disable joystick emulation */
-extern void cpc_set_joystick_type(cpc_t* sys, cpc_joystick_type_t type);
+void cpc_set_joystick_type(cpc_t* sys, cpc_joystick_type_t type);
 /* get current joystick emulation type */
-extern cpc_joystick_type_t cpc_joystick_type(cpc_t* sys);
+cpc_joystick_type_t cpc_joystick_type(cpc_t* sys);
 /* set joystick mask (combination of CPC_JOYSTICK_*) */
-extern void cpc_joystick(cpc_t* sys, uint8_t mask);
+void cpc_joystick(cpc_t* sys, uint8_t mask);
 /* load a snapshot file (.sna or .bin) into the emulator */
-extern bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 /* insert a tape file (.tap) */
-extern bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 /* remove currently inserted tape */
-extern void cpc_remove_tape(cpc_t* cpc);
+void cpc_remove_tape(cpc_t* cpc);
 /* insert a disk image file (.dsk) */
-extern bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 /* remove current disc */
-extern void cpc_remove_disc(cpc_t* cpc);
+void cpc_remove_disc(cpc_t* cpc);
 /* if enabled, start calling the video-debugging-callback */
-extern void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
+void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
 /* get current display debug visualization enabled/disabled state */
-extern bool cpc_video_debugging_enabled(cpc_t* cpc);
+bool cpc_video_debugging_enabled(cpc_t* cpc);
 /* low-level pixel decoding, this is public as support for video debugging callbacks */
-extern void cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins);
+void cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins);
 
 #ifdef __cplusplus
 } /* extern "C" */

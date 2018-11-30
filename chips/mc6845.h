@@ -231,13 +231,13 @@ typedef struct {
 #define MC6845_SET_RA(p,a) {p=((p&~0x00FF000000000000ULL)|(((a<<48)&)0x00FF000000000000ULL));}
 
 /* initialize a new mc6845 instance */
-extern void mc6845_init(mc6845_t* mc6845, mc6845_type_t type);
+void mc6845_init(mc6845_t* mc6845, mc6845_type_t type);
 /* reset an existing mc6845 instance */
-extern void mc6845_reset(mc6845_t* mc6845);
+void mc6845_reset(mc6845_t* mc6845);
 /* perform an IO request */
-extern uint64_t mc6845_iorq(mc6845_t* mc6845, uint64_t pins);
+uint64_t mc6845_iorq(mc6845_t* mc6845, uint64_t pins);
 /* tick the mc6845, the returned pin mask overwrittes addr bus pins with MA0..MA13! */
-extern uint64_t mc6845_tick(mc6845_t* mc6845);
+uint64_t mc6845_tick(mc6845_t* mc6845);
 
 #ifdef __cplusplus
 } /* extern "C" */

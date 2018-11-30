@@ -280,17 +280,17 @@ typedef struct {
 } m6569_t;
 
 /* initialize a new m6569_t instance */
-extern void m6569_init(m6569_t* vic, m6569_desc_t* desc);
+void m6569_init(m6569_t* vic, m6569_desc_t* desc);
 /* reset a m6569_t instance */
-extern void m6569_reset(m6569_t* vic);
+void m6569_reset(m6569_t* vic);
 /* get the visible display size in pixels (different for PAL/NTSC) */
-extern void m6569_display_size(m6569_t* vic, int* out_width, int* out_height);
+void m6569_display_size(m6569_t* vic, int* out_width, int* out_height);
 /* read/write m6569 registers */
-extern uint64_t m6569_iorq(m6569_t* vic, uint64_t pins);
+uint64_t m6569_iorq(m6569_t* vic, uint64_t pins);
 /* tick the m6569_y instance */
-extern uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
+uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
 /* get 32-bit RGBA8 value from color index (0..15) */
-extern uint32_t m6569_color(int i);
+uint32_t m6569_color(int i);
 
 #ifdef __cplusplus
 } /* extern "C" */

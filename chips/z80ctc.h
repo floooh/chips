@@ -227,11 +227,11 @@ typedef struct {
 #define Z80CTC_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
 /* initialize a new Z80 CTC instance */
-extern void z80ctc_init(z80ctc_t* ctc);
+void z80ctc_init(z80ctc_t* ctc);
 /* reset an existing Z80 CTC instance */
-extern void z80ctc_reset(z80ctc_t* ctc);
+void z80ctc_reset(z80ctc_t* ctc);
 /* perform an IORQ machine cycle */
-extern uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins);
+uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins);
 
 /*
     Internal inline function!

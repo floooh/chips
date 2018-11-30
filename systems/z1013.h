@@ -115,19 +115,19 @@ typedef struct {
 } z1013_t;
 
 /* initialize a new Z1013 instance */
-extern void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
+void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
 /* discard a z1013 instance */
-extern void z1013_discard(z1013_t* sys);
+void z1013_discard(z1013_t* sys);
 /* reset Z1013 instance */
-extern void z1013_reset(z1013_t* sys);
+void z1013_reset(z1013_t* sys);
 /* run the Z1013 instance for a given number of microseconds */
-extern void z1013_exec(z1013_t* sys, uint32_t micro_seconds);
+void z1013_exec(z1013_t* sys, uint32_t micro_seconds);
 /* send a key-down event */
-extern void z1013_key_down(z1013_t* sys, int key_code);
+void z1013_key_down(z1013_t* sys, int key_code);
 /* send a key-up event */
-extern void z1013_key_up(z1013_t* sys, int key_code);
+void z1013_key_up(z1013_t* sys, int key_code);
 /* load a "KC .z80" file into the emulator */
-extern bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
+bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 
 #ifdef __cplusplus
 } /* extern "C" */

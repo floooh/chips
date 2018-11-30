@@ -99,33 +99,33 @@ typedef struct {
 } kbd_t;
 
 /* initialize a keyboard matrix instance */
-extern void kbd_init(kbd_t* kbd, int sticky_count);
+void kbd_init(kbd_t* kbd, int sticky_count);
 /* update keyboard matrix state (releases sticky keys), usually call once per frame */
-extern void kbd_update(kbd_t* kbd);
+void kbd_update(kbd_t* kbd);
 /* register a modifier key, layers are between from 0 to KBD_MAX_MOD_KEYS-1 */
-extern void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line);
+void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line);
 /* register a modifier key where the modifier is mapped to an entire keyboard line */
-extern void kbd_register_modifier_line(kbd_t* kbd, int layer, int line);
+void kbd_register_modifier_line(kbd_t* kbd, int layer, int line);
 /* register a modifier key where the modifier is mapped to an entire keyboard column */
-extern void kbd_register_modifier_column(kbd_t* kbd, int layer, int column);
+void kbd_register_modifier_column(kbd_t* kbd, int layer, int column);
 /* register a key */
-extern void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_mask);
+void kbd_register_key(kbd_t* kbd, int key, int column, int line, int mod_mask);
 /* add a key to the pressed-key buffer */
-extern void kbd_key_down(kbd_t* kbd, int key);
+void kbd_key_down(kbd_t* kbd, int key);
 /* remove a key from the pressed-key buffer */
-extern void kbd_key_up(kbd_t* kbd, int key);
+void kbd_key_up(kbd_t* kbd, int key);
 /* test keyboard matrix against a column bitmask and return lit lines */
-extern uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask);
+uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask);
 /* test keyboard matrix against a line bitmask and return lit columns */
-extern uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask);
+uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask);
 /* set active column mask (use together with kbd_scan_lines */
-extern void kbd_set_active_columns(kbd_t* kbd, uint16_t column_mask);
+void kbd_set_active_columns(kbd_t* kbd, uint16_t column_mask);
 /* scan active lines (used together with kbd_set_active_columns */
-extern uint16_t kbd_scan_lines(kbd_t* kbd);
+uint16_t kbd_scan_lines(kbd_t* kbd);
 /* set active lines mask (use together with kbd_scan_columns */
-extern void kbd_set_active_lines(kbd_t* kbd, uint16_t line_mask);
+void kbd_set_active_lines(kbd_t* kbd, uint16_t line_mask);
 /* scan active columns (used together with kbd_set_active_lines */
-extern uint16_t kbd_scan_columns(kbd_t* kbd);
+uint16_t kbd_scan_columns(kbd_t* kbd);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -92,11 +92,11 @@ typedef struct {
 } clk_t;
 
 /* setup a clock instance with a frequency in Hz */
-extern void clk_init(clk_t* clk, uint32_t freq_hz);
+void clk_init(clk_t* clk, uint32_t freq_hz);
 /* call once per frame to compute number of ticks to execute */
-extern uint32_t clk_ticks_to_run(clk_t* clk, uint32_t micro_seconds);
+uint32_t clk_ticks_to_run(clk_t* clk, uint32_t micro_seconds);
 /* call once per frame with actual number of executed ticks */
-extern void clk_ticks_executed(clk_t* clk, uint32_t ticks);
+void clk_ticks_executed(clk_t* clk, uint32_t ticks);
 
 #ifdef __cplusplus
 } /* extern "C" */

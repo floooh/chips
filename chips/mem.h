@@ -213,21 +213,21 @@ typedef struct {
 } mem_t;
 
 /* initialize a new mem instance */
-extern void mem_init(mem_t* mem);
+void mem_init(mem_t* mem);
 /* map a range of RAM */
-extern void mem_map_ram(mem_t* mem, int layer, uint16_t addr, uint32_t size, uint8_t* ptr);
+void mem_map_ram(mem_t* mem, int layer, uint16_t addr, uint32_t size, uint8_t* ptr);
 /* map a range of ROM */
-extern void mem_map_rom(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* ptr);
+void mem_map_rom(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* ptr);
 /* map a range of memory to different read/write pointers (e.g. for RAM behind ROM) */
-extern void mem_map_rw(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* read_ptr, uint8_t* write_ptr);
+void mem_map_rw(mem_t* mem, int layer, uint16_t addr, uint32_t size, const uint8_t* read_ptr, uint8_t* write_ptr);
 /* unmap all memory pages in a layer, also updates the CPU-visible page-table */
-extern void mem_unmap_layer(mem_t* mem, int layer);
+void mem_unmap_layer(mem_t* mem, int layer);
 /* unmap all memory pages in all layers, also updates the CPU-visible page-table */
-extern void mem_unmap_all(mem_t* mem);
+void mem_unmap_all(mem_t* mem);
 /* get the host-memory read-ptr of an emulator memory address */
-extern uint8_t* mem_readptr(mem_t* mem, uint16_t addr);
+uint8_t* mem_readptr(mem_t* mem, uint16_t addr);
 /* copy a range of bytes into memory via mem_wr() */
-extern void mem_write_range(mem_t* mem, uint16_t addr, const uint8_t* src, int num_bytes);
+void mem_write_range(mem_t* mem, uint16_t addr, const uint8_t* src, int num_bytes);
 
 /* read a byte at 16-bit address */
 static inline uint8_t mem_rd(mem_t* mem, uint16_t addr) {
@@ -250,9 +250,9 @@ static inline uint16_t mem_rd16(mem_t* mem, uint16_t addr) {
 }
 
 /* read a byte from a specific layer (slow!) */
-extern uint8_t mem_layer_rd(mem_t* mem, int layer, uint16_t addr);
+uint8_t mem_layer_rd(mem_t* mem, int layer, uint16_t addr);
 /* write a byte to a specific layer (slow!) */
-extern void mem_layer_wr(mem_t* mem, int layer, uint16_t addr, uint8_t data);
+void mem_layer_wr(mem_t* mem, int layer, uint16_t addr, uint8_t data);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -149,27 +149,27 @@ typedef struct {
 } atom_t;
 
 /* initialize a new Atom instance */
-extern void atom_init(atom_t* sys, const atom_desc_t* desc);
+void atom_init(atom_t* sys, const atom_desc_t* desc);
 /* discard Atom instance */
-extern void atom_discard(atom_t* sys);
+void atom_discard(atom_t* sys);
 /* reset Atom instance */
-extern void atom_reset(atom_t* sys);
+void atom_reset(atom_t* sys);
 /* run Atom instance for a number of microseconds */
-extern void atom_exec(atom_t* sys, uint32_t micro_seconds);
+void atom_exec(atom_t* sys, uint32_t micro_seconds);
 /* send a key down event */
-extern void atom_key_down(atom_t* sys, int key_code);
+void atom_key_down(atom_t* sys, int key_code);
 /* send a key up event */
-extern void atom_key_up(atom_t* sys, int key_code);
+void atom_key_up(atom_t* sys, int key_code);
 /* enable/disable joystick emulation */
-extern void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type);
+void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type);
 /* get current joystick emulation type */
-extern atom_joystick_type_t atom_joystick_type(atom_t* sys);
+atom_joystick_type_t atom_joystick_type(atom_t* sys);
 /* set joystick mask (combination of ATOM_JOYSTICK_*) */
-extern void atom_joystick(atom_t* sys, uint8_t mask);
+void atom_joystick(atom_t* sys, uint8_t mask);
 /* insert a tape for loading (must be an Atom TAP file), data will be copied */
-extern bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes);
+bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes);
 /* remove tape */
-extern void atom_remove_tape(atom_t* sys);
+void atom_remove_tape(atom_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */

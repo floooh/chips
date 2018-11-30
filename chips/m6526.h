@@ -184,13 +184,13 @@ typedef struct {
 #define M6526_SET_ADDR(p,d) {p=((p&~0xF)|(d&0xF));}
 
 /* initialize a new m6526_t instance */
-extern void m6526_init(m6526_t* c, m6526_desc_t* desc);
+void m6526_init(m6526_t* c, m6526_desc_t* desc);
 /* reset an existing m6526_t instance */
-extern void m6526_reset(m6526_t* c);
+void m6526_reset(m6526_t* c);
 /* perform an IO request */
-extern uint64_t m6526_iorq(m6526_t* c, uint64_t pins);
+uint64_t m6526_iorq(m6526_t* c, uint64_t pins);
 /* tick the m6526_t instance, return true if interrupt requested */
-extern uint64_t m6526_tick(m6526_t* c, uint64_t pins);
+uint64_t m6526_tick(m6526_t* c, uint64_t pins);
 
 #ifdef __cplusplus
 } /* extern "C" */

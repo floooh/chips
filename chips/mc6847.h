@@ -242,13 +242,13 @@ typedef struct {
 } mc6847_t;
 
 /* initialize a new mc6847_t instance */
-extern void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc);
+void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc);
 /* reset a mc6847_t instance */
-extern void mc6847_reset(mc6847_t* vdg);
+void mc6847_reset(mc6847_t* vdg);
 /* set or clear control-pins */
-extern void mc6847_ctrl(mc6847_t* vdg, uint64_t pins, uint64_t mask);
+void mc6847_ctrl(mc6847_t* vdg, uint64_t pins, uint64_t mask);
 /* tick the mc6847_t instance, this will call the fetch_cb and generate the image */
-extern void mc6847_tick(mc6847_t* vdg);
+void mc6847_tick(mc6847_t* vdg);
 
 #ifdef __cplusplus
 } /* extern "C" */

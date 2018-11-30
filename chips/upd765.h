@@ -219,11 +219,11 @@ typedef struct {
 } upd765_t;
 
 /* initialize a new upd765 instance */
-extern void upd765_init(upd765_t* upd, upd765_desc_t* desc);
+void upd765_init(upd765_t* upd, upd765_desc_t* desc);
 /* reset an upd765 instance */
-extern void upd765_reset(upd765_t* upd);
+void upd765_reset(upd765_t* upd);
 /* perform an IO request on the upd765 */
-extern uint64_t upd765_iorq(upd765_t* upd, uint64_t pins);
+uint64_t upd765_iorq(upd765_t* upd, uint64_t pins);
 
 #ifdef __cplusplus
 } /* extern "C" */

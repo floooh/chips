@@ -245,19 +245,19 @@ typedef struct {
 } m6502_t;
 
 /* initialize a new m6502 instance */
-extern void m6502_init(m6502_t* cpu, m6502_desc_t* desc);
+void m6502_init(m6502_t* cpu, m6502_desc_t* desc);
 /* reset an existing m6502 instance */
-extern void m6502_reset(m6502_t* cpu);
+void m6502_reset(m6502_t* cpu);
 /* set a trap point */
-extern void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr);
+void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr);
 /* clear a trap point */
-extern void m6502_clear_trap(m6502_t* cpu, int trap_id);
+void m6502_clear_trap(m6502_t* cpu, int trap_id);
 /* return true if a trap is valid */
-extern bool m6502_has_trap(m6502_t* cpu, int trap_id);
+bool m6502_has_trap(m6502_t* cpu, int trap_id);
 /* execute instruction for at least 'ticks' or trap hit, return number of executed ticks */
-extern uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
+uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 /* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
-extern uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
+uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
 
 /* extract 16-bit address bus from 64-bit pins */
 #define M6502_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))

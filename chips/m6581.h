@@ -221,13 +221,13 @@ typedef struct {
 } m6581_t;
 
 /* initialize a new m6581_t instance */
-extern void m6581_init(m6581_t* sid, m6581_desc_t* desc);
+void m6581_init(m6581_t* sid, m6581_desc_t* desc);
 /* reset a m6581_t instance */
-extern void m6581_reset(m6581_t* sid);
+void m6581_reset(m6581_t* sid);
 /* read/write m6581_t registers */
-extern uint64_t m6581_iorq(m6581_t* sid, uint64_t pins);
+uint64_t m6581_iorq(m6581_t* sid, uint64_t pins);
 /* tick a m6581_t instance, returns true when new sample is ready */
-extern bool m6581_tick(m6581_t* sid);
+bool m6581_tick(m6581_t* sid);
 
 #ifdef __cplusplus
 } /* extern "C" */

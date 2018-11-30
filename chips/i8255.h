@@ -253,7 +253,7 @@ typedef struct {
     in_cb   -- function to be called when input on a port is needed
     out_cb  -- function to be called when output on a port is performed
 */
-extern void i8255_init(i8255_t* ppi, i8255_desc_t* desc);
+void i8255_init(i8255_t* ppi, i8255_desc_t* desc);
 
 /*
     i8255_reset
@@ -261,7 +261,7 @@ extern void i8255_init(i8255_t* ppi, i8255_desc_t* desc);
     Puts the i8255 into the reset state. Clears the control word register
     and puts all ports into input mode.
 */
-extern void i8255_reset(i8255_t* ppi);
+void i8255_reset(i8255_t* ppi);
 
 /*
     i8255_iorq
@@ -277,7 +277,7 @@ extern void i8255_reset(i8255_t* ppi);
     callback function, and the data bus pins may be modified
     (if this is a read operation).
 */
-extern uint64_t i8255_iorq(i8255_t* ppi, uint64_t pins);
+uint64_t i8255_iorq(i8255_t* ppi, uint64_t pins);
 
 #ifdef __cplusplus
 } /* extern "C" */
