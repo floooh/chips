@@ -422,6 +422,7 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
         desc.layers[3] = "Slot 0C";
+        desc.cpu_type = UI_DASM_CPUTYPE_Z80;
         desc.start_addr = 0xF000;
         desc.read_cb = _ui_kc85_mem_read;
         desc.user_data = ui->kc85;

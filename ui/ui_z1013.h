@@ -304,6 +304,7 @@ void ui_z1013_init(ui_z1013_t* ui, const ui_z1013_desc_t* desc) {
     {
         ui_dasm_desc_t desc = {0};
         desc.layers[0] = "System";
+        desc.cpu_type = UI_DASM_CPUTYPE_Z80;
         desc.start_addr = 0xF000;
         desc.read_cb = _ui_z1013_mem_read;
         desc.user_data = ui->z1013;

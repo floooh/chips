@@ -414,6 +414,7 @@ void ui_zx_init(ui_zx_t* ui, const ui_zx_desc_t* desc) {
         desc.layers[5] = "Layer 4";
         desc.layers[6] = "Layer 5";
         desc.layers[7] = "Layer 6";
+        desc.cpu_type = UI_DASM_CPUTYPE_Z80;
         desc.start_addr = 0x0000;
         desc.read_cb = _ui_zx_mem_read;
         desc.user_data = ui->zx;

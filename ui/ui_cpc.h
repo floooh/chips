@@ -61,6 +61,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 /* general callback type for rebooting to different configs */
 typedef void (*ui_cpc_boot_t)(cpc_t* sys, cpc_type_t type);
 
@@ -555,6 +556,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
             x += dx; y += dy;
         }
     }
+    x += dx; y += dy;
     {
         ui_memmap_desc_t desc = {0};
         desc.title = "Memory Map";
@@ -570,6 +572,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         for (int i = 0; i < _UI_CPC_MEMLAYER_NUM; i++) {
             desc.layers[i] = _ui_cpc_memlayer_names[i];
         }
+        desc.cpu_type = UI_DASM_CPUTYPE_Z80;
         desc.start_addr = 0x0000;
         desc.read_cb = _ui_cpc_mem_read;
         desc.user_data = ui->cpc;
