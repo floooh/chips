@@ -71,6 +71,7 @@ typedef struct {
 typedef struct {
     atom_t* atom;
     ui_atom_boot_cb boot_cb;
+    ui_m6502_t cpu;
     ui_i8255_t ppi;
     ui_audio_t audio;
     ui_kbd_t kbd;
@@ -127,7 +128,7 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
-            ImGui::MenuItem("m6502 CPU (TODO)");
+            ImGui::MenuItem("MOS 6502", 0, &ui->cpu.open);
             ImGui::MenuItem("MC6847 (TODO)");
             ImGui::MenuItem("i8255", 0, &ui->ppi.open);
             ImGui::MenuItem("m6522 (TODO)");
@@ -168,6 +169,38 @@ static void _ui_atom_mem_write(int layer, uint16_t addr, uint8_t data, void* use
     atom_t* atom = (atom_t*) user_data;
     mem_wr(&atom->mem, addr, data);
 }
+
+static const ui_chip_pin_t _ui_atom_cpu_pins[] = {
+    { "D0",     0,      M6502_D0 },
+    { "D1",     1,      M6502_D1 },
+    { "D2",     2,      M6502_D2 },
+    { "D3",     3,      M6502_D3 },
+    { "D4",     4,      M6502_D4 },
+    { "D5",     5,      M6502_D5 },
+    { "D6",     6,      M6502_D6 },
+    { "D7",     7,      M6502_D7 },
+    { "RW",     9,      M6502_RW },
+    { "SYNC",   10,     M6502_SYNC },
+    { "IRQ",    11,     M6502_IRQ },
+    { "NMI",    12,     M6502_NMI },
+    { "RDY",    13,     M6502_RDY },
+    { "A0",     16,     M6502_A0 },
+    { "A1",     17,     M6502_A1 },
+    { "A2",     18,     M6502_A2 },
+    { "A3",     19,     M6502_A3 },
+    { "A4",     20,     M6502_A4 },
+    { "A5",     21,     M6502_A5 },
+    { "A6",     22,     M6502_A6 },
+    { "A7",     23,     M6502_A7 },
+    { "A8",     24,     M6502_A8 },
+    { "A9",     25,     M6502_A9 },
+    { "A10",    26,     M6502_A10 },
+    { "A11",    27,     M6502_A11 },
+    { "A12",    28,     M6502_A12 },
+    { "A13",    29,     M6502_A13 },
+    { "A14",    30,     M6502_A14 },
+    { "A15",    31,     M6502_A15 },
+};
 
 static const ui_chip_pin_t _ui_atom_ppi_pins[] = {
     { "D0",     0,      I8255_D0 },
@@ -216,6 +249,16 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
     ui->atom = desc->atom;
     ui->boot_cb = desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
+    {
+        ui_m6502_desc_t desc = {0};
+        desc.title = "MOS 6502";
+        desc.cpu = &ui->atom->cpu;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 32, _ui_atom_cpu_pins);
+        ui_m6502_init(&ui->cpu, &desc);
+    }
+    x += dx; y += dy;
     {
         ui_i8255_desc_t desc = {0};
         desc.title = "i8255";
@@ -304,6 +347,7 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
 void ui_atom_discard(ui_atom_t* ui) {
     CHIPS_ASSERT(ui && ui->atom);
     ui->atom = 0;
+    ui_m6502_discard(&ui->cpu);
     ui_i8255_discard(&ui->ppi);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
@@ -319,6 +363,7 @@ void ui_atom_draw(ui_atom_t* ui, double time_ms) {
     _ui_atom_draw_menu(ui, time_ms);
     ui_audio_draw(&ui->audio, ui->atom->sample_pos);
     ui_kbd_draw(&ui->kbd);
+    ui_m6502_draw(&ui->cpu);
     ui_i8255_draw(&ui->ppi);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
