@@ -74,6 +74,7 @@ typedef struct {
     ui_m6502_t cpu;
     ui_i8255_t ppi;
     ui_m6522_t via;
+    ui_mc6847_t vdg;
     ui_audio_t audio;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
@@ -131,7 +132,7 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("MOS 6522 (VIA)", 0, &ui->via.open);
-            ImGui::MenuItem("MC6847 (VDG)");
+            ImGui::MenuItem("MC6847 (VDG)", 0, &ui->vdg.open);
             ImGui::MenuItem("i8255 (PPI)", 0, &ui->ppi.open);
             ImGui::EndMenu();
         }
@@ -253,7 +254,7 @@ static const ui_chip_pin_t _ui_atom_via_pins[] = {
     { "D6",     6,      M6522_D6 },
     { "D7",     7,      M6522_D7 },
     { "RS0",    9,      M6522_RS0 },
-    { "RS1",    10,      M6522_RS1 },
+    { "RS1",    10,     M6522_RS1 },
     { "RS2",    11,     M6522_RS2 },
     { "RS3",    12,     M6522_RS3 },
     { "RW",     14,     M6522_RW },
@@ -281,6 +282,42 @@ static const ui_chip_pin_t _ui_atom_via_pins[] = {
     { "CB2",    39,     M6522_CB2 },
 };
 
+static const ui_chip_pin_t _ui_atom_vdg_pins[] = {
+    { "D0",     0,      MC6847_D0 },
+    { "D1",     1,      MC6847_D1 },
+    { "D2",     2,      MC6847_D2 },
+    { "D3",     3,      MC6847_D3 },
+    { "D4",     4,      MC6847_D4 },
+    { "D5",     5,      MC6847_D5 },
+    { "D6",     6,      MC6847_D6 },
+    { "D7",     7,      MC6847_D7 },
+    { "A/G",    9,      MC6847_AG },
+    { "A/S",    10,     MC6847_AS },
+    { "I/X",    11,     MC6847_INTEXT },
+    { "INV",    12,     MC6847_INV },
+    { "CSS",    13,     MC6847_CSS },
+    { "GM0",    14,     MC6847_GM0 },
+    { "GM1",    15,     MC6847_GM0 },
+    { "GM2",    16,     MC6847_GM0 },
+    { "GM3",    17,     MC6847_GM0 },
+    { "A0",     18,     MC6847_A0 },
+    { "A1",     19,     MC6847_A1 },
+    { "A2",     20,     MC6847_A2 },
+    { "A3",     21,     MC6847_A3 },
+    { "A4",     22,     MC6847_A4 },
+    { "A5",     23,     MC6847_A5 },
+    { "A6",     24,     MC6847_A6 },
+    { "A7",     25,     MC6847_A7 },
+    { "A8",     26,     MC6847_A8 },
+    { "A9",     27,     MC6847_A9 },
+    { "A10",    28,     MC6847_A10 },
+    { "A11",    29,     MC6847_A11 },
+    { "A12",    30,     MC6847_A12 },
+    { "FS",     32,     MC6847_FS },
+    { "HS",     33,     MC6847_HS },
+    { "RP",     34,     MC6847_RP }
+};
+
 void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->atom);
@@ -306,6 +343,16 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6522", 40, _ui_atom_via_pins);
         ui_m6522_init(&ui->via, &desc);
+    }
+    x += dx; y += dy;
+    {
+        ui_mc6847_desc_t desc = {0};
+        desc.title = "MC6847";
+        desc.mc6847 = &ui->atom->vdg;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6847", 36, _ui_atom_vdg_pins);
+        ui_mc6847_init(&ui->vdg, &desc);
     }
     x += dx; y += dy;
     {
@@ -398,6 +445,7 @@ void ui_atom_discard(ui_atom_t* ui) {
     ui->atom = 0;
     ui_m6502_discard(&ui->cpu);
     ui_m6522_discard(&ui->via);
+    ui_mc6847_discard(&ui->vdg);
     ui_i8255_discard(&ui->ppi);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
@@ -415,6 +463,7 @@ void ui_atom_draw(ui_atom_t* ui, double time_ms) {
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
     ui_m6522_draw(&ui->via);
+    ui_mc6847_draw(&ui->vdg);
     ui_i8255_draw(&ui->ppi);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
