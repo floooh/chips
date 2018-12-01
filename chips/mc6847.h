@@ -150,6 +150,7 @@ extern "C" {
 #define MC6847_GM1      (1ULL<<48)      /* graphics mode select 1 */
 #define MC6847_GM2      (1ULL<<49)      /* graphics mode select 2 */
 #define MC6847_CSS      (1ULL<<50)      /* color select pin */
+#define MC6847_CTRL_PINS (MC6847_AG|MC6847_AS|MC6847_INTEXT|MC6847_INV|MC6847_GM0|MC6847_GM1|MC6847_GM2|MC6847_CSS)
 
 /* helper macros to set and extract address and data to/from pin mask */
 
@@ -339,7 +340,7 @@ void mc6847_reset(mc6847_t* vdg) {
 
 void mc6847_ctrl(mc6847_t* vdg, uint64_t pins, uint64_t mask) {
     CHIPS_ASSERT(vdg);
-    vdg->pins = (vdg->pins & ~mask) | pins;
+    vdg->pins = (vdg->pins & ~(mask & MC6847_CTRL_PINS)) | pins;
 }
 
 /*
@@ -414,10 +415,10 @@ static const uint8_t _mc6847_font[64 * 12] = {
 };
 
 
-static inline uint32_t _mc6847_border_color(mc6847_t* vdg) {
-    if (vdg->pins & MC6847_AG) {
+static inline uint32_t _mc6847_border_color(mc6847_t* vdg, uint64_t pins) {
+    if (pins & MC6847_AG) {
         /* a graphics mode, either green or buff, depending on CSS pin */
-        return (vdg->pins & MC6847_CSS) ? vdg->palette[4] : vdg->palette[0];
+        return (pins & MC6847_CSS) ? vdg->palette[4] : vdg->palette[0];
     }
     else {
         /* alphanumeric or semigraphics mode, always black */
@@ -425,18 +426,17 @@ static inline uint32_t _mc6847_border_color(mc6847_t* vdg) {
     }
 }
 
-static void _mc6847_decode_border(mc6847_t* vdg, int y) {
+static void _mc6847_decode_border(mc6847_t* vdg, uint64_t pins, int y) {
     uint32_t* dst = &(vdg->rgba8_buffer[y * MC6847_DISPLAY_WIDTH]);
-    uint32_t c = _mc6847_border_color(vdg);
+    uint32_t c = _mc6847_border_color(vdg, pins);
     for (int x = 0; x < MC6847_DISPLAY_WIDTH; x++) {
         *dst++ = c;
     }
 }
 
-static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
+static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
     uint32_t* dst = &(vdg->rgba8_buffer[(y+MC6847_TOP_BORDER_LINES) * MC6847_DISPLAY_WIDTH]);
-    uint32_t bc = _mc6847_border_color(vdg);
-    uint64_t pins = vdg->pins;
+    uint32_t bc = _mc6847_border_color(vdg, pins);
     void* ud = vdg->user_data;
 
     /* left border */
@@ -578,24 +578,27 @@ static void _mc6847_decode_scanline(mc6847_t* vdg, int y) {
     for (int i = 0; i < MC6847_BORDER_PIXELS; i++) {
         *dst++ = bc;
     }
+
+    return pins;
 }
 
 void mc6847_tick(mc6847_t* vdg) {
     uint64_t prev_pins = vdg->pins;
+    uint64_t pins = vdg->pins;
     vdg->h_count += MC6847_FIXEDPOINT_SCALE;
 
     /* horizontal and field sync */
     if ((vdg->h_count >= vdg->h_sync_start) && (vdg->h_count < vdg->h_sync_end)) {
         /* horizontal sync on */
-        vdg->pins |= MC6847_HS;
+        pins |= MC6847_HS;
         if (vdg->l_count == MC6847_FSYNC_START) {
             /* switch field sync on */
-            vdg->pins |= MC6847_FS;
+            pins |= MC6847_FS;
         }
     }
     else {
         /* horizontal sync off */
-        vdg->pins &= ~MC6847_HS;
+        pins &= ~MC6847_HS;
     }
 
     /* rewind horizontal counter? */
@@ -605,7 +608,7 @@ void mc6847_tick(mc6847_t* vdg) {
         if (vdg->l_count >= MC6847_ALL_LINES) {
             /* rewind line counter, field sync off */
             vdg->l_count = 0;
-            vdg->pins &= ~MC6847_FS;
+            pins &= ~MC6847_FS;
         }
         if (vdg->l_count < MC6847_VBLANK_LINES) {
             /* inside vblank area, nothing to do */
@@ -613,23 +616,24 @@ void mc6847_tick(mc6847_t* vdg) {
         else if (vdg->l_count < MC6847_DISPLAY_START) {
             /* top border */
             int y = vdg->l_count - MC6847_VBLANK_LINES;
-            _mc6847_decode_border(vdg, y);
+            _mc6847_decode_border(vdg, pins, y);
         }
         else if (vdg->l_count < MC6847_DISPLAY_END) {
             /* visible area */
             int y = vdg->l_count - MC6847_DISPLAY_START;
-            _mc6847_decode_scanline(vdg, y);
+            pins = _mc6847_decode_scanline(vdg, pins, y);
         }
         else if (vdg->l_count < MC6847_BOTTOM_BORDER_END) {
             /* bottom border */
             int y = vdg->l_count - MC6847_VBLANK_LINES;
-            _mc6847_decode_border(vdg, y);
+            _mc6847_decode_border(vdg, pins, y);
         }
     }
 
     /* raising/falling edge transitions */
-    vdg->on  = vdg->pins & (vdg->pins ^ prev_pins);
-    vdg->off = ~vdg->pins & (vdg->pins ^ prev_pins);
+    vdg->on  = pins & (pins ^ prev_pins);
+    vdg->off = ~pins & (pins ^ prev_pins);
+    vdg->pins = pins;
 }
 
 # endif /* CHIPS_IMPL */
