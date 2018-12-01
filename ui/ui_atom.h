@@ -73,6 +73,7 @@ typedef struct {
     ui_atom_boot_cb boot_cb;
     ui_m6502_t cpu;
     ui_i8255_t ppi;
+    ui_m6522_t via;
     ui_audio_t audio;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
@@ -128,10 +129,10 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
-            ImGui::MenuItem("MOS 6502", 0, &ui->cpu.open);
-            ImGui::MenuItem("MC6847 (TODO)");
-            ImGui::MenuItem("i8255", 0, &ui->ppi.open);
-            ImGui::MenuItem("m6522 (TODO)");
+            ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
+            ImGui::MenuItem("MOS 6522 (VIA)", 0, &ui->via.open);
+            ImGui::MenuItem("MC6847 (VDG)");
+            ImGui::MenuItem("i8255 (PPI)", 0, &ui->ppi.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -242,6 +243,44 @@ static const ui_chip_pin_t _ui_atom_ppi_pins[] = {
     { "PC7",   39,      I8255_PC7 },
 };
 
+static const ui_chip_pin_t _ui_atom_via_pins[] = {
+    { "D0",     0,      M6522_D0 },
+    { "D1",     1,      M6522_D1 },
+    { "D2",     2,      M6522_D2 },
+    { "D3",     3,      M6522_D3 },
+    { "D4",     4,      M6522_D4 },
+    { "D5",     5,      M6522_D5 },
+    { "D6",     6,      M6522_D6 },
+    { "D7",     7,      M6522_D7 },
+    { "RS0",    9,      M6522_RS0 },
+    { "RS1",    10,      M6522_RS1 },
+    { "RS2",    11,     M6522_RS2 },
+    { "RS3",    12,     M6522_RS3 },
+    { "RW",     14,     M6522_RW },
+    { "CS1",    15,     M6522_CS1 },
+    { "CS2",    16,     M6522_CS2 },
+    { "PA0",    20,     M6522_PA0 },
+    { "PA1",    21,     M6522_PA1 },
+    { "PA2",    22,     M6522_PA2 },
+    { "PA3",    23,     M6522_PA3 },
+    { "PA4",    24,     M6522_PA4 },
+    { "PA5",    25,     M6522_PA5 },
+    { "PA6",    26,     M6522_PA6 },
+    { "PA7",    27,     M6522_PA7 },
+    { "CA1",    28,     M6522_CA1 },
+    { "CA2",    29,     M6522_CA2 },
+    { "PB0",    30,     M6522_PB0 },
+    { "PB1",    31,     M6522_PB1 },
+    { "PB2",    32,     M6522_PB2 },
+    { "PB3",    33,     M6522_PB3 },
+    { "PB4",    34,     M6522_PB4 },
+    { "PB5",    35,     M6522_PB5 },
+    { "PB6",    36,     M6522_PB6 },
+    { "PB7",    37,     M6522_PB7 },
+    { "CB1",    38,     M6522_CB1 },
+    { "CB2",    39,     M6522_CB2 },
+};
+
 void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->atom);
@@ -257,6 +296,16 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 32, _ui_atom_cpu_pins);
         ui_m6502_init(&ui->cpu, &desc);
+    }
+    x += dx; y += dy;
+    {
+        ui_m6522_desc_t desc = {0};
+        desc.title = "MOS 6522";
+        desc.via = &ui->atom->via;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6522", 40, _ui_atom_via_pins);
+        ui_m6522_init(&ui->via, &desc);
     }
     x += dx; y += dy;
     {
@@ -348,6 +397,7 @@ void ui_atom_discard(ui_atom_t* ui) {
     CHIPS_ASSERT(ui && ui->atom);
     ui->atom = 0;
     ui_m6502_discard(&ui->cpu);
+    ui_m6522_discard(&ui->via);
     ui_i8255_discard(&ui->ppi);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
@@ -364,6 +414,7 @@ void ui_atom_draw(ui_atom_t* ui, double time_ms) {
     ui_audio_draw(&ui->audio, ui->atom->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
+    ui_m6522_draw(&ui->via);
     ui_i8255_draw(&ui->ppi);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
