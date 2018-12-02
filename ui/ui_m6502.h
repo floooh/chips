@@ -63,6 +63,7 @@ typedef struct {
     const char* title;          /* window title */
     m6502_t* cpu;               /* m6502_t instance to track */
     int x, y;                   /* initial window position */
+    int w, h;                   /* initial window width and height */
     bool open;                  /* initial open state */
     ui_chip_desc_t chip_desc;   /* chips visualization desc */
 } ui_m6502_desc_t;
@@ -71,6 +72,7 @@ typedef struct {
     const char* title;
     m6502_t* cpu;
     float init_x, init_y;
+    float init_w, init_h;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -104,6 +106,8 @@ void ui_m6502_init(ui_m6502_t* win, ui_m6502_desc_t* desc) {
     win->cpu = desc->cpu;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 360 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 320 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -135,8 +139,14 @@ static void _ui_m6502_regs(ui_m6502_t* win) {
     ImGui::Text("P:  %02X %s", f, f_str);
     ImGui::Text("PC: %04X", cpu->state.PC);
     ImGui::Separator();
-    ImGui::Text("6510 DDR:  %02X", cpu->io_ddr);
-    ImGui::Text("6510 Port: %02X", cpu->io_port);
+    ImGui::Text("6510 I/O Port:");
+    ui_util_b8("  DDR:    ", cpu->io_ddr);
+    ui_util_b8("  Input:  ", cpu->io_inp);
+    ui_util_b8("  Output: ", cpu->io_out);
+    ui_util_b8("  Drive:  ", cpu->io_drive);
+    ui_util_b8("  Float:  ", cpu->io_floating);
+    ui_util_b8("  Pullup: ", cpu->io_pullup);
+    ui_util_b8("  Pins:   ", cpu->io_pins);
     ImGui::Separator();
     ImGui::Text("BCD: %s", cpu->state.bcd_enabled ? "enabled":"disabled");
 }
@@ -147,7 +157,7 @@ void ui_m6502_draw(ui_m6502_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(330, 320), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##m6502_chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->cpu->state.PINS);
