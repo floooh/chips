@@ -349,6 +349,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       }
     }
   } while ((ticks < num_ticks) && (trap_id < 0));
+  M6510_SET_PORT(pins, cpu->io_pins);
   c.PINS = pins;
   cpu->state = c;
   cpu->trap_id = trap_id;

@@ -177,8 +177,17 @@ extern "C" {
 #define M6502_RDY   (1ULL<<28)
 #define M6510_AEC   (1ULL<<29)
 
-/* bit mask for all CPU pins */
-#define M6502_PIN_MASK (0xFFFFFFFF)
+/*--- m6510 specific port pins ---*/
+#define M6510_P0    (1ULL<<32)
+#define M6510_P1    (1ULL<<33)
+#define M6510_P2    (1ULL<<34)
+#define M6510_P3    (1ULL<<35)
+#define M6510_P4    (1ULL<<36)
+#define M6510_P5    (1ULL<<37)
+#define M6510_PORT_BITS (M6510_P0|M6510_P1|M6510_P2|M6510_P3|M6510_P4|M6510_P5)
+
+/* bit mask for all CPU pins (up to bit pos 40) */
+#define M6502_PIN_MASK ((1ULL<<40)-1)
 
 /*--- status indicator flags ---*/
 #define M6502_CF (1<<0)   /* carry */
@@ -233,7 +242,9 @@ typedef struct {
     m6510_in_t in_cb;
     m6510_out_t out_cb;
     uint8_t io_ddr;     /* 1: output, 0: input */
-    uint8_t io_port;
+    uint8_t io_inp;     /* last port input */
+    uint8_t io_out;     /* last port output */
+    uint8_t io_pins;    /* current state of IO pins (combined input/output) */
     uint8_t io_pullup;
     uint8_t io_floating;
     uint8_t io_drive;
@@ -269,6 +280,8 @@ uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
 #define M6502_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 /* return a pin mask with control-pins, address and data bus */
 #define M6502_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
+/* set the port bits on the 64-bit pin mask */
+#define M6510_SET_PORT(p,d) {p=(((p)&~M6510_PORT_BITS)|((((uint64_t)d)<<32)&M6510_PORT_BITS));}
 
 /* M6510: check for IO port access to address 0 or 1 */
 #define M6510_CHECK_IO(p) ((p&0xFFFEULL)==0)
@@ -446,7 +459,9 @@ void m6502_reset(m6502_t* c) {
     uint8_t h = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00), c->user_data));
     c->state.PC = (h<<8)|l;
     c->io_ddr = 0;
-    c->io_port = 0;
+    c->io_out = 0;
+    c->io_inp = 0;
+    c->io_pins = 0;
 }
 
 void m6502_set_trap(m6502_t* c, int trap_id, uint16_t addr) {
@@ -480,23 +495,26 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
         else {
             /* write IO direction bits and update outside world */
             c->io_ddr = M6502_GET_DATA(pins);
-            c->io_drive = (c->io_port & c->io_ddr) | (c->io_drive & ~c->io_ddr);
-            c->out_cb((c->io_port & c->io_ddr) | (c->io_pullup & ~c->io_ddr), c->user_data);
+            c->io_drive = (c->io_out & c->io_ddr) | (c->io_drive & ~c->io_ddr);
+            c->out_cb((c->io_out & c->io_ddr) | (c->io_pullup & ~c->io_ddr), c->user_data);
+            c->io_pins = (c->io_out & c->io_ddr) | (c->io_inp & ~c->io_ddr);
         }
     }
     else {
         /* address 1: perform I/O */
         if (pins & M6502_RW) {
             /* an input operation */
-            uint8_t val = ((c->in_cb(c->user_data) | (c->io_floating & c->io_drive)) & ~c->io_ddr) | (c->io_port & c->io_ddr);
+            c->io_inp = c->in_cb(c->user_data);
+            uint8_t val = ((c->io_inp | (c->io_floating & c->io_drive)) & ~c->io_ddr) | (c->io_out & c->io_ddr);
             M6502_SET_DATA(pins, val);
         }
         else {
             /* an output operation */
-            c->io_port = M6502_GET_DATA(pins);
-            c->io_drive = (c->io_port & c->io_ddr) | (c->io_drive & ~c->io_ddr);
-            c->out_cb((c->io_port & c->io_ddr) | (c->io_pullup & ~c->io_ddr), c->user_data);
+            c->io_out = M6502_GET_DATA(pins);
+            c->io_drive = (c->io_out & c->io_ddr) | (c->io_drive & ~c->io_ddr);
+            c->out_cb((c->io_out & c->io_ddr) | (c->io_pullup & ~c->io_ddr), c->user_data);
         }
+        c->io_pins = (c->io_out & c->io_ddr) | (c->io_inp & ~c->io_ddr);
     }
     return pins;
 }

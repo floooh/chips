@@ -265,6 +265,7 @@ def write_footer():
     write_interrupt_handling()
     write_trap_handling();
     l('  } while ((ticks < num_ticks) && (trap_id < 0));')
+    l('  M6510_SET_PORT(pins, cpu->io_port);')
     l('  c.PINS = pins;')
     l('  cpu->state = c;')
     l('  cpu->trap_id = trap_id;')
