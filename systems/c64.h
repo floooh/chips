@@ -86,6 +86,11 @@ typedef enum {
 #define C64_JOYSTICK_RIGHT (1<<3)
 #define C64_JOYSTICK_BTN   (1<<4)
 
+/* CPU port memory mapping bits */
+#define C64_CPUPORT_LORAM (1<<0)
+#define C64_CPUPORT_HIRAM (1<<1)
+#define C64_CPUPORT_CHAREN (1<<2)
+
 /* audio sample data callback */
 typedef void (*c64_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
@@ -209,9 +214,6 @@ bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
 #define _C64_FREQUENCY (985248)
 #define _C64_DISPLAY_X (64)
 #define _C64_DISPLAY_Y (24)
-#define _C64_CPUPORT_CHAREN (1<<2)
-#define _C64_CPUPORT_HIRAM (1<<1)
-#define _C64_CPUPORT_LORAM (1<<0)
 
 static uint64_t _c64_tick(uint64_t pins, void* user_data);
 static uint8_t _c64_cpu_port_in(void* user_data);
@@ -661,12 +663,12 @@ static void _c64_update_memory_map(c64_t* sys) {
     sys->io_mapped = false;
     uint8_t* read_ptr;
     /* shortcut if HIRAM and LORAM is 0, everything is RAM */
-    if ((sys->cpu_port & (_C64_CPUPORT_HIRAM|_C64_CPUPORT_LORAM)) == 0) {
+    if ((sys->cpu_port & (C64_CPUPORT_HIRAM|C64_CPUPORT_LORAM)) == 0) {
         mem_map_ram(&sys->mem_cpu, 0, 0xA000, 0x6000, sys->ram+0xA000);
     }
     else {
         /* A000..BFFF is either RAM-behind-BASIC-ROM or RAM */
-        if ((sys->cpu_port & (_C64_CPUPORT_HIRAM|_C64_CPUPORT_LORAM)) == (_C64_CPUPORT_HIRAM|_C64_CPUPORT_LORAM)) {
+        if ((sys->cpu_port & (C64_CPUPORT_HIRAM|C64_CPUPORT_LORAM)) == (C64_CPUPORT_HIRAM|C64_CPUPORT_LORAM)) {
             read_ptr = sys->rom_basic;
         }
         else {
@@ -675,7 +677,7 @@ static void _c64_update_memory_map(c64_t* sys) {
         mem_map_rw(&sys->mem_cpu, 0, 0xA000, 0x2000, read_ptr, sys->ram+0xA000);
 
         /* E000..FFFF is either RAM-behind-KERNAL-ROM or RAM */
-        if (sys->cpu_port & _C64_CPUPORT_HIRAM) {
+        if (sys->cpu_port & C64_CPUPORT_HIRAM) {
             read_ptr = sys->rom_kernal;
         }
         else {
@@ -684,7 +686,7 @@ static void _c64_update_memory_map(c64_t* sys) {
         mem_map_rw(&sys->mem_cpu, 0, 0xE000, 0x2000, read_ptr, sys->ram+0xE000);
 
         /* D000..DFFF can be Char-ROM or I/O */
-        if  (sys->cpu_port & _C64_CPUPORT_CHAREN) {
+        if  (sys->cpu_port & C64_CPUPORT_CHAREN) {
             sys->io_mapped = true;
         }
         else {
@@ -887,7 +889,7 @@ bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
     if (num_bytes < 2) {
         return false;
     }
-    const uint16_t start_addr = ptr[0]<<8 | ptr[1];
+    const uint16_t start_addr = ptr[1]<<8 | ptr[0];
     ptr += 2;
     const uint16_t end_addr = start_addr + (num_bytes - 2);
     uint16_t addr = start_addr;
