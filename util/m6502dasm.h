@@ -41,8 +41,7 @@
     NOTE that the output callback will never be called with a null character,
     you need to terminate the resulting string yourself if needed.
 
-    All undocumented instructions are supported, but are currently
-    not marked as such.
+    Undocumented instructions are supported and are marked with a '*'.
 
     ## zlib/libpng license
 
