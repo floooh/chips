@@ -139,66 +139,54 @@ uint16_t m6502dasm_op(uint16_t pc, m6502dasm_input_t in_cb, m6502dasm_output_t o
 #define A_BRA    (12)    /* special relative branch */
 #define A_INV    (13)    /* this is an invalid instruction */
 
-/* memory access modes */
-#define M___     (0)     /* no memory access */
-#define M_R_     (1)     /* read */
-#define M__W     (2)     /* write in current cycle */
-#define M_RW     (3)     /* read-modify-write */
-
-/* opcode addressing and memory access mode description */
-typedef struct {
-    uint8_t addr;       /* addressing mode */
-    uint8_t mem;        /* memory access mode */
-} _m6502dasm_opdesc;        
-
 /* opcode descriptions */
-static _m6502dasm_opdesc _m6502dasm_ops[4][8][8] = {
+static uint8_t _m6502dasm_ops[4][8][8] = {
 /* cc = 00 */
 {
-    //---         BIT          JMP          JMP()        STY          LDY          CPY          CPX
-    {{A____,M___},{A_JSR,M_R_},{A____,M_R_},{A____,M_R_},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_}},
-    {{A_ZER,M_R_},{A_ZER,M_R_},{A_ZER,M_R_},{A_ZER,M_R_},{A_ZER,M__W},{A_ZER,M_R_},{A_ZER,M_R_},{A_ZER,M_R_}},
-    {{A____,M___},{A____,M___},{A____,M__W},{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___}},
-    {{A_ABS,M_R_},{A_ABS,M_R_},{A_JMP,M_R_},{A_JMP,M_R_},{A_ABS,M__W},{A_ABS,M_R_},{A_ABS,M_R_},{A_ABS,M_R_}},
-    {{A_BRA,M_R_},{A_BRA,M_R_},{A_BRA,M_R_},{A_BRA,M_R_},{A_BRA,M_R_},{A_BRA,M_R_},{A_BRA,M_R_},{A_BRA,M_R_}},  /* relative branches */
-    {{A_ZPX,M_R_},{A_ZPX,M_R_},{A_ZPX,M_R_},{A_ZPX,M_R_},{A_ZPX,M__W},{A_ZPX,M_R_},{A_ZPX,M_R_},{A_ZPX,M_R_}},
-    {{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___}},
-    {{A_ABX,M_R_},{A_ABX,M_R_},{A_ABS,M_R_},{A_ABS,M_R_},{A_INV,M___},{A_ABX,M_R_},{A_ABX,M_R_},{A_ABX,M_R_}}
+    //---  BIT   JMP   JMP() STY   LDY   CPY   CPX
+    {A____,A_JSR,A____,A____,A_IMM,A_IMM,A_IMM,A_IMM},
+    {A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER},
+    {A____,A____,A____,A____,A____,A____,A____,A____},
+    {A_ABS,A_ABS,A_JMP,A_JMP,A_ABS,A_ABS,A_ABS,A_ABS},
+    {A_BRA,A_BRA,A_BRA,A_BRA,A_BRA,A_BRA,A_BRA,A_BRA},  /* relative branches */
+    {A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPX},
+    {A____,A____,A____,A____,A____,A____,A____,A____},
+    {A_ABX,A_ABX,A_ABS,A_ABS,A_INV,A_ABX,A_ABX,A_ABX}
 },
 /* cc = 01 */
 {
-    //ORA         AND          EOR          ADC          STA          LDA          CMP          SBC
-    {{A_IDX,M_R_},{A_IDX,M_R_},{A_IDX,M_R_},{A_IDX,M_R_},{A_IDX,M__W},{A_IDX,M_R_},{A_IDX,M_R_},{A_IDX,M_R_}},
-    {{A_ZER,M_R_},{A_ZER,M_R_},{A_ZER,M_R_},{A_ZER,M_R_},{A_ZER,M__W},{A_ZER,M_R_},{A_ZER,M_R_},{A_ZER,M_R_}},
-    {{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_}},
-    {{A_ABS,M_R_},{A_ABS,M_R_},{A_ABS,M_R_},{A_ABS,M_R_},{A_ABS,M__W},{A_ABS,M_R_},{A_ABS,M_R_},{A_ABS,M_R_}},
-    {{A_IDY,M_R_},{A_IDY,M_R_},{A_IDY,M_R_},{A_IDY,M_R_},{A_IDY,M__W},{A_IDY,M_R_},{A_IDY,M_R_},{A_IDY,M_R_}},
-    {{A_ZPX,M_R_},{A_ZPX,M_R_},{A_ZPX,M_R_},{A_ZPX,M_R_},{A_ZPX,M__W},{A_ZPX,M_R_},{A_ZPX,M_R_},{A_ZPX,M_R_}},
-    {{A_ABY,M_R_},{A_ABY,M_R_},{A_ABY,M_R_},{A_ABY,M_R_},{A_ABY,M__W},{A_ABY,M_R_},{A_ABY,M_R_},{A_ABY,M_R_}},
-    {{A_ABX,M_R_},{A_ABX,M_R_},{A_ABX,M_R_},{A_ABX,M_R_},{A_ABX,M__W},{A_ABX,M_R_},{A_ABX,M_R_},{A_ABX,M_R_}},
+    //ORA  AND   EOR   ADC   STA   LDA   CMP   SBC
+    {A_IDX,A_IDX,A_IDX,A_IDX,A_IDX,A_IDX,A_IDX,A_IDX},
+    {A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER},
+    {A_IMM,A_IMM,A_IMM,A_IMM,A_IMM,A_IMM,A_IMM,A_IMM},
+    {A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS},
+    {A_IDY,A_IDY,A_IDY,A_IDY,A_IDY,A_IDY,A_IDY,A_IDY},
+    {A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPX},
+    {A_ABY,A_ABY,A_ABY,A_ABY,A_ABY,A_ABY,A_ABY,A_ABY},
+    {A_ABX,A_ABX,A_ABX,A_ABX,A_ABX,A_ABX,A_ABX,A_ABX},
 },
 /* cc = 02 */
 {
-    //ASL         ROL          LSR          ROR          STX          LDX          DEC          INC
-    {{A_INV,M_RW},{A_INV,M_RW},{A_INV,M_RW},{A_INV,M_RW},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_},{A_IMM,M_R_}},
-    {{A_ZER,M_RW},{A_ZER,M_RW},{A_ZER,M_RW},{A_ZER,M_RW},{A_ZER,M__W},{A_ZER,M_R_},{A_ZER,M_RW},{A_ZER,M_RW}},
-    {{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___},{A____,M___}},
-    {{A_ABS,M_RW},{A_ABS,M_RW},{A_ABS,M_RW},{A_ABS,M_RW},{A_ABS,M__W},{A_ABS,M_R_},{A_ABS,M_RW},{A_ABS,M_RW}},
-    {{A_INV,M_RW},{A_INV,M_RW},{A_INV,M_RW},{A_INV,M_RW},{A_INV,M__W},{A_INV,M_R_},{A_INV,M_RW},{A_INV,M_RW}},
-    {{A_ZPX,M_RW},{A_ZPX,M_RW},{A_ZPX,M_RW},{A_ZPX,M_RW},{A_ZPY,M__W},{A_ZPY,M_R_},{A_ZPX,M_RW},{A_ZPX,M_RW}},
-    {{A____,M_R_},{A____,M_R_},{A____,M_R_},{A____,M_R_},{A____,M___},{A____,M___},{A____,M_R_},{A____,M_R_}},
-    {{A_ABX,M_RW},{A_ABX,M_RW},{A_ABX,M_RW},{A_ABX,M_RW},{A_INV,M__W},{A_ABY,M_R_},{A_ABX,M_RW},{A_ABX,M_RW}},
+    //ASL  ROL   LSR   ROR   STX   LDX   DEC   INC
+    {A_INV,A_INV,A_INV,A_INV,A_IMM,A_IMM,A_IMM,A_IMM},
+    {A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER},
+    {A____,A____,A____,A____,A____,A____,A____,A____},
+    {A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS},
+    {A_INV,A_INV,A_INV,A_INV,A_INV,A_INV,A_INV,A_INV},
+    {A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPY,A_ZPY,A_ZPX,A_ZPX},
+    {A____,A____,A____,A____,A____,A____,A____,A____},
+    {A_ABX,A_ABX,A_ABX,A_ABX,A_INV,A_ABY,A_ABX,A_ABX},
 },
 /* cc = 03 */
 {
-    {{A_IDX,M_RW},{A_IDX,M_RW},{A_IDX,M_RW},{A_IDX,M_RW},{A_IDX,M__W},{A_IDX,M_R_},{A_IDX,M_RW},{A_IDX,M_RW}},
-    {{A_ZER,M_RW},{A_ZER,M_RW},{A_ZER,M_RW},{A_ZER,M_RW},{A_ZER,M__W},{A_ZER,M_R_},{A_ZER,M_RW},{A_ZER,M_RW}},
-    {{A_INV,M___},{A_INV,M___},{A_INV,M___},{A_INV,M___},{A_INV,M___},{A_INV,M___},{A_INV,M___},{A_IMM,M_R_}},
-    {{A_ABS,M_RW},{A_ABS,M_RW},{A_ABS,M_RW},{A_ABS,M_RW},{A_ABS,M__W},{A_ABS,M_R_},{A_ABS,M_RW},{A_ABS,M_RW}},
-    {{A_IDY,M_RW},{A_IDY,M_RW},{A_IDY,M_RW},{A_IDY,M_RW},{A_INV,M___},{A_IDY,M_R_},{A_IDY,M_RW},{A_IDY,M_RW}},
-    {{A_ZPX,M_RW},{A_ZPX,M_RW},{A_ZPX,M_RW},{A_ZPX,M_RW},{A_ZPY,M__W},{A_ZPY,M_R_},{A_ZPX,M_RW},{A_ZPX,M_RW}},
-    {{A_ABY,M_RW},{A_ABY,M_RW},{A_ABY,M_RW},{A_ABY,M_RW},{A_INV,M___},{A_INV,M___},{A_ABY,M_RW},{A_ABY,M_RW}},
-    {{A_ABX,M_RW},{A_ABX,M_RW},{A_ABX,M_RW},{A_ABX,M_RW},{A_INV,M___},{A_ABY,M_R_},{A_ABX,M_RW},{A_ABX,M_RW}}
+    {A_IDX,A_IDX,A_IDX,A_IDX,A_IDX,A_IDX,A_IDX,A_IDX},
+    {A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER,A_ZER},
+    {A_INV,A_INV,A_INV,A_INV,A_INV,A_INV,A_INV,A_IMM},
+    {A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS,A_ABS},
+    {A_IDY,A_IDY,A_IDY,A_IDY,A_INV,A_IDY,A_IDY,A_IDY},
+    {A_ZPX,A_ZPX,A_ZPX,A_ZPX,A_ZPY,A_ZPY,A_ZPX,A_ZPX},
+    {A_ABY,A_ABY,A_ABY,A_ABY,A_INV,A_INV,A_ABY,A_ABY},
+    {A_ABX,A_ABX,A_ABX,A_ABX,A_INV,A_ABY,A_ABX,A_ABX}
 } };
 
 static const char* _m6502dasm_hex = "0123456789ABCDEF";
@@ -420,7 +408,7 @@ uint16_t m6502dasm_op(uint16_t pc, m6502dasm_input_t in_cb, m6502dasm_output_t o
     _STR(n);
 
     uint8_t u8; int8_t i8; uint16_t u16;
-    switch (_m6502dasm_ops[cc][bbb][aaa].addr) {
+    switch (_m6502dasm_ops[cc][bbb][aaa]) {
         case A_IMM:
             _CHR(' '); _FETCH_U8(u8); _CHR('#'); _STR_U8(u8);
             break;
