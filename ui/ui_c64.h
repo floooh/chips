@@ -73,6 +73,7 @@ typedef struct {
     c64_t* c64;
     ui_c64_boot_cb boot_cb;
     ui_m6502_t cpu;
+    ui_m6526_t cia[2];
     ui_audio_t audio;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
@@ -132,8 +133,8 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("MOS 6510 (CPU)", 0, &ui->cpu.open);
-            ImGui::MenuItem("MOS 6526 #1 (CIA-1) TODO!");
-            ImGui::MenuItem("MOS 6526 #2 (CIA-2) TODO!");
+            ImGui::MenuItem("MOS 6526 #1 (CIA)", 0, &ui->cia[0].open);
+            ImGui::MenuItem("MOS 6526 #2 (CIA)", 0, &ui->cia[1].open);
             ImGui::MenuItem("MOS 6581 (SID) TODO!");
             ImGui::MenuItem("MOS 6569 (VIC-II) TODO!");
             ImGui::EndMenu();
@@ -308,6 +309,45 @@ static const ui_chip_pin_t _ui_c64_cpu_pins[] = {
     { "A15",    36,     M6502_A15 },
 };
 
+static const ui_chip_pin_t _ui_c64_cia_pins[] = {
+    { "D0",     0,      M6526_D0 },
+    { "D1",     1,      M6526_D1 },
+    { "D2",     2,      M6526_D2 },
+    { "D3",     3,      M6526_D3 },
+    { "D4",     4,      M6526_D4 },
+    { "D5",     5,      M6526_D5 },
+    { "D6",     6,      M6526_D6 },
+    { "D7",     7,      M6526_D7 },
+    { "RS0",    9,      M6526_RS0 },
+    { "RS1",    10,     M6526_RS1 },
+    { "RS2",    11,     M6526_RS2 },
+    { "RS3",    12,     M6526_RS3 },
+    { "RW",     14,     M6526_RW },
+    { "CS",     15,     M6526_CS },
+    { "PC",     16,     M6526_PC },
+    { "TOD",    17,     M6526_TOD },
+    { "IRQ",    18,     M6526_IRQ },
+    { "FLAG",   19,     M6526_FLAG },
+    { "PA0",    20,     M6526_PA0 },
+    { "PA1",    21,     M6526_PA1 },
+    { "PA2",    22,     M6526_PA2 },
+    { "PA3",    23,     M6526_PA3 },
+    { "PA4",    24,     M6526_PA4 },
+    { "PA5",    25,     M6526_PA5 },
+    { "PA6",    26,     M6526_PA6 },
+    { "PA7",    27,     M6526_PA7 },
+    { "PB0",    29,     M6526_PB0 },
+    { "PB1",    30,     M6526_PB1 },
+    { "PB2",    31,     M6526_PB2 },
+    { "PB3",    32,     M6526_PB3 },
+    { "PB4",    33,     M6526_PB4 },
+    { "PB5",    34,     M6526_PB5 },
+    { "PB6",    35,     M6526_PB6 },
+    { "PB7",    36,     M6526_PB7 },
+    { "SP",     38,     M6526_SP },
+    { "CNT",    39,     M6526_CNT }
+};
+
 void ui_c64_init(ui_c64_t* ui, ui_c64_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->c64);
@@ -324,6 +364,22 @@ void ui_c64_init(ui_c64_t* ui, ui_c64_desc_t* desc) {
         desc.h = 390;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6510", 42, _ui_c64_cpu_pins);
         ui_m6502_init(&ui->cpu, &desc);
+    }
+    x += dx; y += dy;
+    {
+        ui_m6526_desc_t desc = {0};
+        desc.title = "MOS 6526 #1 (CIA)";
+        desc.cia = &ui->c64->cia_1;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6526", 40, _ui_c64_cia_pins);
+        ui_m6526_init(&ui->cia[0], &desc);
+        x += dx; y += dy;
+        desc.title = "MOS 6526 #2 (CIA)";
+        desc.cia = &ui->c64->cia_2;
+        desc.x = x;
+        desc.y = y;
+        ui_m6526_init(&ui->cia[1], &desc);
     }
     x += dx; y += dy;
     {
@@ -399,6 +455,8 @@ void ui_c64_discard(ui_c64_t* ui) {
     CHIPS_ASSERT(ui && ui->c64);
     ui->c64 = 0;
     ui_m6502_discard(&ui->cpu);
+    ui_m6526_discard(&ui->cia[0]);
+    ui_m6526_discard(&ui->cia[1]);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
     ui_memmap_discard(&ui->memmap);
@@ -417,6 +475,8 @@ void ui_c64_draw(ui_c64_t* ui, double time_ms) {
     ui_audio_draw(&ui->audio, ui->c64->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
+    ui_m6526_draw(&ui->cia[0]);
+    ui_m6526_draw(&ui->cia[1]);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);
