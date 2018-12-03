@@ -104,6 +104,25 @@ extern "C" {
 #define M6526_TOD   (1ULL<<44)
 #define M6526_CNT   (1ULL<<45)
 
+/* port I/O pins */
+#define M6526_PA0   (1ULL<<48)
+#define M6526_PA1   (1ULL<<49)
+#define M6526_PA2   (1ULL<<50)
+#define M6526_PA3   (1ULL<<51)
+#define M6526_PA4   (1ULL<<52)
+#define M6526_PA5   (1ULL<<53)
+#define M6526_PA6   (1ULL<<54)
+#define M6526_PA7   (1ULL<<55)
+
+#define M6526_PB0   (1ULL<<56)
+#define M6526_PB1   (1ULL<<57)
+#define M6526_PB2   (1ULL<<58)
+#define M6526_PB3   (1ULL<<59)
+#define M6526_PB4   (1ULL<<60)
+#define M6526_PB5   (1ULL<<61)
+#define M6526_PB6   (1ULL<<62)
+#define M6526_PB7   (1ULL<<63)
+
 /* register indices */
 #define M6526_REG_PRA       (0)     /* peripheral data reg A */
 #define M6526_REG_PRB       (1)     /* peripheral data reg B */
@@ -171,6 +190,7 @@ typedef struct {
     m6526_timer_t ta;
     m6526_timer_t tb;
     m6526_int_t intr;
+    uint64_t pins;
     m6526_in_t in_cb;
     m6526_out_t out_cb;
     void* user_data;
@@ -252,6 +272,7 @@ void m6526_reset(m6526_t* c) {
     _m6526_init_timer(&c->ta);
     _m6526_init_timer(&c->tb);
     _m6526_init_interrupt(&c->intr);
+    c->pins = 0;
 }
 
 /*--- control-register flag testing macros ---*/
