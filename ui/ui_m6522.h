@@ -64,7 +64,7 @@ typedef struct {
     m6522_t* via;               /* m6522_t instance to track */
     int x, y;                   /* initial window pos */
     bool open;                  /* initial window open state */
-    ui_chip_desc_t chip_desc;   /* chips visualization desc */
+    ui_chip_desc_t chip_desc;   /* chip visualization desc */
 } ui_m6522_desc_t;
 
 typedef struct {
