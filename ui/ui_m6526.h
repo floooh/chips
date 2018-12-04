@@ -105,8 +105,8 @@ void ui_m6526_init(ui_m6526_t* win, ui_m6526_desc_t* desc) {
     win->cia = desc->cia;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
-    win->init_w = (float) (desc->w == 0) ? 360 : desc->w;
-    win->init_h = (float) (desc->h == 0) ? 380 : desc->h;
+    win->init_w = (float) ((desc->w == 0) ? 360 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 380 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
