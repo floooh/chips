@@ -129,7 +129,7 @@ void ui_util_b8(const char* label, uint8_t val) {
         str[i] = (val & (1<<(7-i))) ? '1':'0';
     }
     str[8] = 0;
-    ImGui::Text("%s", label); ImGui::SameLine(); ImGui::Text("%s", str);
+    ImGui::Text("%s%s", label, str);
 }
 
 #ifdef _MSC_VER
