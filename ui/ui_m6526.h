@@ -105,8 +105,8 @@ void ui_m6526_init(ui_m6526_t* win, ui_m6526_desc_t* desc) {
     win->cia = desc->cia;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
-    win->init_w = (float) ((desc->w == 0) ? 360 : desc->w);
-    win->init_h = (float) ((desc->h == 0) ? 380 : desc->h);
+    win->init_w = (float) ((desc->w == 0) ? 420 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 460 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -115,6 +115,102 @@ void ui_m6526_init(ui_m6526_t* win, ui_m6526_desc_t* desc) {
 void ui_m6526_discard(ui_m6526_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
+}
+
+static void _ui_m6526_draw_state(ui_m6526_t* win) {
+    const m6526_t* cia = win->cia;
+    ImGui::Columns(3, "##cia_columns", false);
+    ImGui::SetColumnWidth(0, 64);
+    ImGui::SetColumnWidth(1, 80);
+    ImGui::SetColumnWidth(2, 80);
+
+    /* ports */
+    ImGui::NextColumn();
+    ImGui::Text("Port A"); ImGui::NextColumn();
+    ImGui::Text("Port B"); ImGui::NextColumn();
+    ImGui::Separator();
+    ImGui::Text("DDR"); ImGui::NextColumn();
+    ui_util_b8("", cia->pa.ddr); ImGui::NextColumn();
+    ui_util_b8("", cia->pb.ddr); ImGui::NextColumn();
+    ImGui::Text("Register"); ImGui::NextColumn();
+    ui_util_b8("", cia->pa.reg); ImGui::NextColumn();
+    ui_util_b8("", cia->pb.reg); ImGui::NextColumn();
+    ImGui::Text("Input"); ImGui::NextColumn();
+    ui_util_b8("", cia->pa.inp); ImGui::NextColumn();
+    ui_util_b8("", cia->pb.inp); ImGui::NextColumn();
+    ImGui::Text("Output"); ImGui::NextColumn();
+    ui_util_b8("", cia->pa.out); ImGui::NextColumn();
+    ui_util_b8("", cia->pb.out); ImGui::NextColumn();
+    ImGui::Text("Pins"); ImGui::NextColumn();
+    ui_util_b8("", cia->pa.port); ImGui::NextColumn();
+    ui_util_b8("", cia->pb.port); ImGui::NextColumn();
+    
+    /* timers */
+    ImGui::Separator();
+    ImGui::NextColumn();
+    ImGui::Text("Timer A"); ImGui::NextColumn();
+    ImGui::Text("Timer B"); ImGui::NextColumn();
+    ImGui::Separator();
+    ImGui::Text("Latch"); ImGui::NextColumn();
+    ImGui::Text("%04X", cia->ta.latch); ImGui::NextColumn();
+    ImGui::Text("%04X", cia->tb.latch); ImGui::NextColumn();
+    ImGui::Text("Counter"); ImGui::NextColumn();
+    ImGui::Text("%04X", cia->ta.counter); ImGui::NextColumn();
+    ImGui::Text("%04X", cia->tb.counter); ImGui::NextColumn();
+    ImGui::Text("Control"); ImGui::NextColumn();
+    ui_util_b8("", cia->ta.cr); ImGui::NextColumn();
+    ui_util_b8("", cia->tb.cr); ImGui::NextColumn();
+    ImGui::Text(":START"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_TIMER_STARTED(cia->ta.cr) ? "STARTED":"STOP"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_TIMER_STARTED(cia->tb.cr) ? "STARTED":"STOP"); ImGui::NextColumn();
+    ImGui::Text(":PBON"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_PBON(cia->ta.cr) ? "PB6":"---"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_PBON(cia->tb.cr) ? "PB7":"---"); ImGui::NextColumn();
+    ImGui::Text(":OUTMODE"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_OUTMODE_TOGGLE(cia->ta.cr) ? "TOGGLE":"PULSE"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_OUTMODE_TOGGLE(cia->tb.cr) ? "TOGGLE":"PULSE"); ImGui::NextColumn();
+    ImGui::Text(":RUNMODE"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_RUNMODE_ONESHOT(cia->ta.cr) ? "ONESHOT":"CONT"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_RUNMODE_ONESHOT(cia->tb.cr) ? "ONESHOT":"CONT"); ImGui::NextColumn();
+    ImGui::Text(":INMODE"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_TA_INMODE_PHI2(cia->ta.cr) ? "PHI2":"CNT"); ImGui::NextColumn();
+    if (M6526_TB_INMODE_PHI2(cia->tb.cr)) {
+        ImGui::Text("PHI2");
+    }
+    else if (M6526_TB_INMODE_CNT(cia->tb.cr)) {
+        ImGui::Text("CNT");
+    }
+    else if (M6526_TB_INMODE_TA(cia->tb.cr)) {
+        ImGui::Text("TA");
+    }
+    else if (M6526_TB_INMODE_TACNT(cia->tb.cr)) {
+        ImGui::Text("TACNT");
+    }
+    ImGui::NextColumn();
+    ImGui::Text(":SPMODE"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_TA_SPMODE_OUTPUT(cia->ta.cr) ? "OUTPUT":"INPUT"); ImGui::NextColumn();
+    ImGui::Text("---"); ImGui::NextColumn();
+    ImGui::Text(":TODIN"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_TA_TODIN_50HZ(cia->ta.cr) ? "50HZ":"60HZ"); ImGui::NextColumn();
+    ImGui::Text("---"); ImGui::NextColumn();
+    ImGui::Text(":ALARM"); ImGui::NextColumn();
+    ImGui::Text("%s", M6526_TB_ALARM_ALARM(cia->ta.cr) ? "ALARM":"CLOCK"); ImGui::NextColumn();
+    ImGui::Text("---"); ImGui::NextColumn();
+    ImGui::Text("Bit"); ImGui::NextColumn();
+    ImGui::Text("%s", cia->ta.t_bit ? "ON":"OFF"); ImGui::NextColumn();
+    ImGui::Text("%s", cia->tb.t_bit ? "ON":"OFF"); ImGui::NextColumn();
+    ImGui::Text("Out"); ImGui::NextColumn();
+    ImGui::Text("%s", cia->ta.t_out ? "ON":"OFF"); ImGui::NextColumn();
+    ImGui::Text("%s", cia->tb.t_out ? "ON":"OFF"); ImGui::NextColumn();
+
+    /* interrupt */
+    ImGui::Columns();
+    ImGui::Separator();
+    ImGui::Text("Interrupt");
+    ImGui::Separator();
+    ui_util_b8("Mask     ", cia->intr.imr);
+    ui_util_b8("Control  ", cia->intr.icr);
+
 }
 
 void ui_m6526_draw(ui_m6526_t* win) {
@@ -130,7 +226,7 @@ void ui_m6526_draw(ui_m6526_t* win) {
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##m6526_state", ImVec2(0, 0), true);
-        ImGui::Text("FIXME!");
+        _ui_m6526_draw_state(win);
         ImGui::EndChild();
     }
     ImGui::End();
