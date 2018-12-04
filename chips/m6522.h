@@ -185,11 +185,11 @@ typedef struct {
 /* merge 4-bit address into 64-bit pins */
 #define M6522_SET_ADDR(p,d) {p=((p&~0xF)|((d)&0xF));}
 /* merge port A pins into pin mask */
-#define M6522_SET_PA(p,a); {p=(p&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
+#define M6522_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
 /* merge port B pins into pin mask */
-#define M6522_SET_PB(p,b); {p=(p&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
+#define M6522_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
 /* merge port A and B pins into pin mask */
-#define M6522_SET_PAB(p,a,b); {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
+#define M6522_SET_PAB(p,a,b) {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
 /* initialize a new 6522 instance */
 void m6522_init(m6522_t* m6522, m6522_desc_t* desc);
