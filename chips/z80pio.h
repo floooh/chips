@@ -42,7 +42,7 @@
 
     ## Functions:
     ~~~C
-    void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc)
+    void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc)
     ~~~
         Initialize a new Z80 PIO instance and enter the reset state. You need
         to provide an input- and output-callback in the desc structure:
@@ -322,7 +322,7 @@ typedef struct {
 #define Z80PIO_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
 
 /* initialize a new Z80 PIO instance */
-void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc);
+void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc);
 /* reset a Z80 PIO instance */
 void z80pio_reset(z80pio_t* pio);
 /* perform an IO request */
@@ -410,7 +410,7 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void z80pio_init(z80pio_t* pio, z80pio_desc_t* desc) {
+void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc) {
     CHIPS_ASSERT(pio && desc && desc->in_cb && desc->out_cb);
     memset(pio, 0, sizeof(*pio));
     pio->out_cb = desc->out_cb;

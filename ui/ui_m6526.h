@@ -77,7 +77,7 @@ typedef struct ui_m6526_t {
     ui_chip_t chip;
 } ui_m6526_t;
 
-void ui_m6526_init(ui_m6526_t* win, ui_m6526_desc_t* desc);
+void ui_m6526_init(ui_m6526_t* win, const ui_m6526_desc_t* desc);
 void ui_m6526_discard(ui_m6526_t* win);
 void ui_m6526_draw(ui_m6526_t* win);
 
@@ -96,7 +96,7 @@ void ui_m6526_draw(ui_m6526_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_m6526_init(ui_m6526_t* win, ui_m6526_desc_t* desc) {
+void ui_m6526_init(ui_m6526_t* win, const ui_m6526_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->cia);

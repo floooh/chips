@@ -243,7 +243,7 @@ typedef struct {
 } mc6847_t;
 
 /* initialize a new mc6847_t instance */
-void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc);
+void mc6847_init(mc6847_t* vdg, const mc6847_desc_t* desc);
 /* reset a mc6847_t instance */
 void mc6847_reset(mc6847_t* vdg);
 /* set or clear control-pins */
@@ -266,7 +266,7 @@ void mc6847_tick(mc6847_t* vdg);
 #define _MC6847_CLAMP(x) ((x)>255?255:(x))
 #define _MC6847_RGBA(r,g,b) (0xFF000000|_MC6847_CLAMP((r*4)/3)|(_MC6847_CLAMP((g*4)/3)<<8)|(_MC6847_CLAMP((b*4)/3)<<16))
 
-void mc6847_init(mc6847_t* vdg, mc6847_desc_t* desc) {
+void mc6847_init(mc6847_t* vdg, const mc6847_desc_t* desc) {
     CHIPS_ASSERT(vdg && desc);
     CHIPS_ASSERT(desc->rgba8_buffer);
     CHIPS_ASSERT(desc->rgba8_buffer_size >= (MC6847_DISPLAY_WIDTH*MC6847_DISPLAY_HEIGHT*sizeof(uint32_t)));

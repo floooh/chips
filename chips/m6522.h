@@ -192,7 +192,7 @@ typedef struct {
 #define M6522_SET_PAB(p,a,b) {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
 /* initialize a new 6522 instance */
-void m6522_init(m6522_t* m6522, m6522_desc_t* desc);
+void m6522_init(m6522_t* m6522, const m6522_desc_t* desc);
 /* reset an existing 6522 instance */
 void m6522_reset(m6522_t* m6522);
 /* perform an IO request */
@@ -217,7 +217,7 @@ void m6522_tick(m6522_t* m6522);
 #define _M6522_CHECK_ACR_LATCH_B()        ((m6522->acr & (1<<1)) != 0)
 #define _M6522_CHECK_ACR_LATCH_A()        ((m6522->acr & (1<<0)) != 0)
 
-void m6522_init(m6522_t* m6522, m6522_desc_t* desc) {
+void m6522_init(m6522_t* m6522, const m6522_desc_t* desc) {
     CHIPS_ASSERT(m6522 && desc);
     memset(m6522, 0, sizeof(*m6522));
     m6522->in_cb = desc->in_cb;

@@ -43,7 +43,7 @@
 
     ## Functions
     ~~~C
-    void z80_init(z80_t* cpu, z80_desc_t* desc)
+    void z80_init(z80_t* cpu, const z80_desc_t* desc)
     ~~~
         Initializes a new Z80 CPU instance. The z80_desc_t struct
         provides initialization attributes:
@@ -410,7 +410,7 @@ typedef struct {
 } z80_t;
 
 /* initialize a new z80 instance */
-void z80_init(z80_t* cpu, z80_desc_t* desc);
+void z80_init(z80_t* cpu, const z80_desc_t* desc);
 /* reset an existing z80 instance */
 void z80_reset(z80_t* cpu);
 /* set a trap point */
@@ -714,7 +714,7 @@ bool z80_iff1(z80_t* cpu)         { return 0 != (cpu->im_ir_pc_bits & _BIT_IFF1)
 bool z80_iff2(z80_t* cpu)         { return 0 != (cpu->im_ir_pc_bits & _BIT_IFF2); }
 bool z80_ei_pending(z80_t* cpu)   { return 0 != (cpu->im_ir_pc_bits & _BIT_EI); }
 
-void z80_init(z80_t* cpu, z80_desc_t* desc) {
+void z80_init(z80_t* cpu, const z80_desc_t* desc) {
     CHIPS_ASSERT(_FA == 0);
     CHIPS_ASSERT(cpu && desc);
     CHIPS_ASSERT(desc->tick_cb);

@@ -94,7 +94,7 @@ void ui_i8255_draw(ui_i8255_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_i8255_init(ui_i8255_t* win, ui_i8255_desc_t* desc) {
+void ui_i8255_init(ui_i8255_t* win, const ui_i8255_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->i8255);

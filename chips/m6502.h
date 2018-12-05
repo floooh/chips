@@ -48,7 +48,7 @@
 
     ## Functions
     ~~~C
-    void m6502_init(m6502_t* cpu, m6502_desc_t* desc)
+    void m6502_init(m6502_t* cpu, const m6502_desc_t* desc)
     ~~~
         Initialize a m6502_t instance, the desc structure provides initialization
         attributes:
@@ -256,7 +256,7 @@ typedef struct {
 } m6502_t;
 
 /* initialize a new m6502 instance */
-void m6502_init(m6502_t* cpu, m6502_desc_t* desc);
+void m6502_init(m6502_t* cpu, const m6502_desc_t* desc);
 /* reset an existing m6502 instance */
 void m6502_reset(m6502_t* cpu);
 /* set a trap point */
@@ -432,7 +432,7 @@ static inline void _m6502_arr(m6502_state_t* cpu) {
 
 #include "_m6502_decoder.h"
 
-void m6502_init(m6502_t* c, m6502_desc_t* desc) {
+void m6502_init(m6502_t* c, const m6502_desc_t* desc) {
     CHIPS_ASSERT(c && desc);
     CHIPS_ASSERT(desc->tick_cb);
     memset(c, 0, sizeof(*c));

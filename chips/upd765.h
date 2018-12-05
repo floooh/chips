@@ -219,7 +219,7 @@ typedef struct {
 } upd765_t;
 
 /* initialize a new upd765 instance */
-void upd765_init(upd765_t* upd, upd765_desc_t* desc);
+void upd765_init(upd765_t* upd, const upd765_desc_t* desc);
 /* reset an upd765 instance */
 void upd765_reset(upd765_t* upd);
 /* perform an IO request on the upd765 */
@@ -576,7 +576,7 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
     return status;
 }
 
-void upd765_init(upd765_t* upd, upd765_desc_t* desc) {
+void upd765_init(upd765_t* upd, const upd765_desc_t* desc) {
     CHIPS_ASSERT(upd && desc);
     CHIPS_ASSERT(desc->seektrack_cb);
     CHIPS_ASSERT(desc->seeksector_cb);

@@ -209,7 +209,7 @@ typedef struct {
 } cpc_t;
 
 /* initialize a new CPC instance */
-void cpc_init(cpc_t* cpc, cpc_desc_t* desc);
+void cpc_init(cpc_t* cpc, const cpc_desc_t* desc);
 /* discard a CPC instance */
 void cpc_discard(cpc_t* cpc);
 /* reset a CPC instance */
@@ -279,7 +279,7 @@ static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_secto
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 #define _CPC_CLEAR(val) memset(&val, 0, sizeof(val))
 
-void cpc_init(cpc_t* sys, cpc_desc_t* desc) {
+void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _CPC_DISPLAY_SIZE));
 

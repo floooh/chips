@@ -243,7 +243,7 @@ typedef struct {
 #define AY38910_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
 
 /* initialize a AY-3-8910 instance */
-void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc);
+void ay38910_init(ay38910_t* ay, const ay38910_desc_t* desc);
 /* reset an existing AY-3-8910 instance */
 void ay38910_reset(ay38910_t* ay);
 /* perform an IO request machine cycle */
@@ -379,7 +379,7 @@ static void _ay38910_restart_env_shape(ay38910_t* ay) {
     }
 }
 
-void ay38910_init(ay38910_t* ay, ay38910_desc_t* desc) {
+void ay38910_init(ay38910_t* ay, const ay38910_desc_t* desc) {
     CHIPS_ASSERT(ay && desc);
     CHIPS_ASSERT(desc->tick_hz > 0);
     CHIPS_ASSERT(desc->sound_hz > 0);

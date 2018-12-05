@@ -253,7 +253,7 @@ typedef struct {
     in_cb   -- function to be called when input on a port is needed
     out_cb  -- function to be called when output on a port is performed
 */
-void i8255_init(i8255_t* ppi, i8255_desc_t* desc);
+void i8255_init(i8255_t* ppi, const i8255_desc_t* desc);
 
 /*
     i8255_reset
@@ -291,7 +291,7 @@ uint64_t i8255_iorq(i8255_t* ppi, uint64_t pins);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void i8255_init(i8255_t* ppi, i8255_desc_t* desc) {
+void i8255_init(i8255_t* ppi, const i8255_desc_t* desc) {
     CHIPS_ASSERT(ppi && desc && desc->in_cb && desc->out_cb);
     memset(ppi, 0, sizeof(*ppi));
     ppi->in_cb = desc->in_cb;

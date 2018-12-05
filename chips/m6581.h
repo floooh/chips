@@ -221,7 +221,7 @@ typedef struct {
 } m6581_t;
 
 /* initialize a new m6581_t instance */
-void m6581_init(m6581_t* sid, m6581_desc_t* desc);
+void m6581_init(m6581_t* sid, const m6581_desc_t* desc);
 /* reset a m6581_t instance */
 void m6581_reset(m6581_t* sid);
 /* read/write m6581_t registers */
@@ -309,7 +309,7 @@ static void _m6581_init_filter(m6581_filter_t* f, int sound_hz) {
     _m6581_set_resonance(f);
 }
 
-void m6581_init(m6581_t* sid, m6581_desc_t* desc) {
+void m6581_init(m6581_t* sid, const m6581_desc_t* desc) {
     CHIPS_ASSERT(sid && desc);
     CHIPS_ASSERT(desc->tick_hz > 0);
     CHIPS_ASSERT(desc->sound_hz > 0);

@@ -66,7 +66,7 @@ typedef struct {
     bool valid;
 } ui_cpc_ga_t;
 
-void ui_cpc_ga_init(ui_cpc_ga_t* win, ui_cpc_ga_desc_t* desc);
+void ui_cpc_ga_init(ui_cpc_ga_t* win, const ui_cpc_ga_desc_t* desc);
 void ui_cpc_ga_discard(ui_cpc_ga_t* win);
 void ui_cpc_ga_draw(ui_cpc_ga_t* win);
 
@@ -85,7 +85,7 @@ void ui_cpc_ga_draw(ui_cpc_ga_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_cpc_ga_init(ui_cpc_ga_t* win, ui_cpc_ga_desc_t* desc) {
+void ui_cpc_ga_init(ui_cpc_ga_t* win, const ui_cpc_ga_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->cpc);

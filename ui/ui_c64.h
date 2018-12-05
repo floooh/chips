@@ -348,7 +348,7 @@ static const ui_chip_pin_t _ui_c64_cia_pins[] = {
     { "CNT",    39,     M6526_CNT }
 };
 
-void ui_c64_init(ui_c64_t* ui, ui_c64_desc_t* desc) {
+void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->c64);
     CHIPS_ASSERT(desc->boot_cb);

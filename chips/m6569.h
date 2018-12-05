@@ -280,7 +280,7 @@ typedef struct {
 } m6569_t;
 
 /* initialize a new m6569_t instance */
-void m6569_init(m6569_t* vic, m6569_desc_t* desc);
+void m6569_init(m6569_t* vic, const m6569_desc_t* desc);
 /* reset a m6569_t instance */
 void m6569_reset(m6569_t* vic);
 /* get the visible display size in pixels (different for PAL/NTSC) */
@@ -371,7 +371,7 @@ used here: http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt
 #define _M6569_RAST_RANGE(r0,r1)    ((vic->rs.v_count >= (r0)) && (vic->rs.v_count <= (r1)))
 
 /*--- init -------------------------------------------------------------------*/
-static void _m6569_init_crt(_m6569_crt_t* crt, m6569_desc_t* desc) {
+static void _m6569_init_crt(_m6569_crt_t* crt, const m6569_desc_t* desc) {
     /* vis area horizontal coords must be multiple of 8 */
     CHIPS_ASSERT((desc->vis_x & 7) == 0);
     CHIPS_ASSERT((desc->vis_w & 7) == 0);
@@ -384,7 +384,7 @@ static void _m6569_init_crt(_m6569_crt_t* crt, m6569_desc_t* desc) {
     crt->vis_y1 = crt->vis_y0 + crt->vis_h;
 }
 
-void m6569_init(m6569_t* vic, m6569_desc_t* desc) {
+void m6569_init(m6569_t* vic, const m6569_desc_t* desc) {
     CHIPS_ASSERT(vic && desc);
     CHIPS_ASSERT((0 == desc->rgba8_buffer) || (desc->rgba8_buffer_size >= (_M6569_HTOTAL*8*_M6569_VTOTAL*sizeof(uint32_t))));
     memset(vic, 0, sizeof(*vic));

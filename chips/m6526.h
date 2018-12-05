@@ -222,7 +222,7 @@ typedef struct {
 #define M6526_SET_PAB(p,a,b) {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
 /* initialize a new m6526_t instance */
-void m6526_init(m6526_t* c, m6526_desc_t* desc);
+void m6526_init(m6526_t* c, const m6526_desc_t* desc);
 /* reset an existing m6526_t instance */
 void m6526_reset(m6526_t* c);
 /* perform an IO request */
@@ -269,7 +269,7 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->flag = false;
 }
 
-void m6526_init(m6526_t* c, m6526_desc_t* desc) {
+void m6526_init(m6526_t* c, const m6526_desc_t* desc) {
     CHIPS_ASSERT(c && desc && desc->in_cb && desc->out_cb);
     memset(c, 0, sizeof(*c));
     c->in_cb = desc->in_cb;

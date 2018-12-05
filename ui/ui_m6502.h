@@ -97,7 +97,7 @@ void ui_m6502_draw(ui_m6502_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_m6502_init(ui_m6502_t* win, ui_m6502_desc_t* desc) {
+void ui_m6502_init(ui_m6502_t* win, const ui_m6502_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->cpu);
