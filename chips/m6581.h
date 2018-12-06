@@ -218,6 +218,8 @@ typedef struct {
     float sample_accum_count;
     float sample_mag;
     float sample;
+    /* debug inspection */
+    uint64_t pins;
 } m6581_t;
 
 /* initialize a new m6581_t instance */
@@ -338,6 +340,7 @@ void m6581_reset(m6581_t* sid) {
     sid->sample = 0.0f;
     sid->sample_accum = 0.0f;
     sid->sample_accum_count = 1.0f;
+    sid->pins = 0;
 }
 
 /*--- VOICE IMPLEMENTATION ---------------------------------------------------*/
@@ -792,6 +795,7 @@ uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
                     break;
             }
         }
+        sid->pins = pins;
     }
     return pins;
 }

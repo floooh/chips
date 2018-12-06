@@ -97,7 +97,7 @@ void ui_m6581_draw(ui_m6581_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_m6581_init(ui_m6581_t* win, const ui_6581_desc_t* desc) {
+void ui_m6581_init(ui_m6581_t* win, const ui_m6581_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->sid);
@@ -106,8 +106,8 @@ void ui_m6581_init(ui_m6581_t* win, const ui_6581_desc_t* desc) {
     win->sid = desc->sid;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
-    win->init_w = (float) ((desc->w == 0) ? 420 : desc->w);
-    win->init_h = (float) ((desc->h == 0) ? 460 : desc->h);
+    win->init_w = (float) ((desc->w == 0) ? 496 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 400 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -118,9 +118,113 @@ void ui_m6581_discard(ui_m6581_t* win) {
     win->valid = false;
 }
 
+static void _ui_m6581_draw_state(ui_m6581_t* win) {
+    m6581_t* sid = win->sid;
+    const int c0w = 96;
+    const int cw = 64;
+    ImGui::Columns(4, "##sid_channels", false);
+    ImGui::SetColumnWidth(0, c0w);
+    ImGui::SetColumnWidth(1, cw);
+    ImGui::SetColumnWidth(2, cw);
+    ImGui::SetColumnWidth(3, cw);
+    ImGui::NextColumn();
+    ImGui::Text("Chn0"); ImGui::NextColumn();
+    ImGui::Text("Chn1"); ImGui::NextColumn();
+    ImGui::Text("Chn2"); ImGui::NextColumn();
+    ImGui::Separator();
+    ImGui::Columns();
+    ImGui::Text("Wave Generator");
+    ImGui::Columns(4, "##sid_channels", false);
+    ImGui::Separator();
+    ImGui::Text("Muted"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", sid->voice[i].muted ? "YES":"NO"); ImGui::NextColumn();
+    }
+    ImGui::Text("Frequency"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%04X", sid->voice[i].freq); ImGui::NextColumn();
+    }
+    ImGui::Text("Pulse Width"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%04X", sid->voice[i].pulse_width); ImGui::NextColumn();
+    }
+    ImGui::Text("Accum"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%06X", sid->voice[i].wav_accum); ImGui::NextColumn();
+    }
+    ImGui::Text("Noise Shift"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%06X", sid->voice[i].noise_shift); ImGui::NextColumn();
+    }
+    ImGui::Text("Sync"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", sid->voice[i].sync ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Text("Output"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%04X", sid->voice[i].wav_output); ImGui::NextColumn();
+    }
+    ImGui::Text("Control"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ui_util_b8("", sid->voice[i].ctrl); ImGui::NextColumn();
+    }
+    ImGui::Text(":GATE"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_GATE) ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Text(":SYNC"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_SYNC) ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Text(":RINGMOD"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_RINGMOD) ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Text(":TEST"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_TEST) ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Text(":TRIANGLE"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_TRIANGLE) ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Text(":SAWTOOTH"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_SAWTOOTH) ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Text(":PULSE"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_PULSE) ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Text(":NOISE"); ImGui::NextColumn();
+    for (int i = 0; i < 3; i++) {
+        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_NOISE) ? "ON":"OFF"); ImGui::NextColumn();
+    }
+    ImGui::Separator();
+    ImGui::Columns();
+    ImGui::Text("Envelope Generator");
+    ImGui::Columns(4, "##sid_channels", false);
+    ImGui::Separator();
+
+}
+
 void ui_m6581_draw(ui_m6581_t* win) {
     CHIPS_ASSERT(win && win->valid);
-    // FIXME!
+    if (!win->open) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
+    if (ImGui::Begin(win->title, &win->open)) {
+        ImGui::BeginChild("##m6581_chip", ImVec2(176, 0), true);
+        ui_chip_draw(&win->chip, win->sid->pins);
+        ImGui::EndChild();
+        ImGui::SameLine();
+        ImGui::BeginChild("##m6581_state", ImVec2(0, 0), true);
+        _ui_m6581_draw_state(win);
+        ImGui::EndChild();
+    }
+    ImGui::End();
 }
 
 #endif /* CHIPS_IMPL */

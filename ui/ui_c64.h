@@ -74,6 +74,7 @@ typedef struct {
     ui_c64_boot_cb boot_cb;
     ui_m6502_t cpu;
     ui_m6526_t cia[2];
+    ui_m6581_t sid;
     ui_audio_t audio;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
@@ -135,7 +136,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
             ImGui::MenuItem("MOS 6510 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("MOS 6526 #1 (CIA)", 0, &ui->cia[0].open);
             ImGui::MenuItem("MOS 6526 #2 (CIA)", 0, &ui->cia[1].open);
-            ImGui::MenuItem("MOS 6581 (SID) TODO!");
+            ImGui::MenuItem("MOS 6581 (SID)", 0, &ui->sid.open);
             ImGui::MenuItem("MOS 6569 (VIC-II) TODO!");
             ImGui::EndMenu();
         }
@@ -348,6 +349,23 @@ static const ui_chip_pin_t _ui_c64_cia_pins[] = {
     { "CNT",    39,     M6526_CNT }
 };
 
+static const ui_chip_pin_t _ui_c64_sid_pins[] = {
+    { "D0",     0,      M6581_D0 },
+    { "D1",     1,      M6581_D1 },
+    { "D2",     2,      M6581_D2 },
+    { "D3",     3,      M6581_D3 },
+    { "D4",     4,      M6581_D4 },
+    { "D5",     5,      M6581_D5 },
+    { "D6",     6,      M6581_D6 },
+    { "D7",     7,      M6581_D7 },
+    { "A0",     8,      M6581_A0 },
+    { "A1",     9,      M6581_A1 },
+    { "A2",     10,     M6581_A2 },
+    { "A3",     11,     M6581_A3 },
+    { "CS",     13,     M6581_CS },
+    { "RW",     14,     M6581_RW }
+};
+
 void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->c64);
@@ -380,6 +398,16 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc) {
         desc.x = x;
         desc.y = y;
         ui_m6526_init(&ui->cia[1], &desc);
+    }
+    x += dx; y += dy;
+    {
+        ui_m6581_desc_t desc = {0};
+        desc.title = "MOS 6581 (SID)";
+        desc.sid = &ui->c64->sid;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6581", 16, _ui_c64_sid_pins);
+        ui_m6581_init(&ui->sid, &desc);
     }
     x += dx; y += dy;
     {
@@ -457,6 +485,7 @@ void ui_c64_discard(ui_c64_t* ui) {
     ui_m6502_discard(&ui->cpu);
     ui_m6526_discard(&ui->cia[0]);
     ui_m6526_discard(&ui->cia[1]);
+    ui_m6581_discard(&ui->sid);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
     ui_memmap_discard(&ui->memmap);
@@ -477,6 +506,7 @@ void ui_c64_draw(ui_c64_t* ui, double time_ms) {
     ui_m6502_draw(&ui->cpu);
     ui_m6526_draw(&ui->cia[0]);
     ui_m6526_draw(&ui->cia[1]);
+    ui_m6581_draw(&ui->sid);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);
