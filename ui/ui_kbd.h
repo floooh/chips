@@ -78,8 +78,6 @@ typedef struct {
     int num_columns, num_lines;
     uint32_t last_key_mask;
     int last_key_frame_count;
-    uint32_t grid_color;
-    uint32_t down_color;
     bool open;
     bool valid;
     int keymap[UI_KBD_MAX_LAYERS][KBD_MAX_COLUMNS][KBD_MAX_LINES];
@@ -159,8 +157,6 @@ void ui_kbd_init(ui_kbd_t* win, const ui_kbd_desc_t* desc) {
     win->top_padding = 20.0f;
     win->cell_width = 32.0f;
     win->cell_height = 32.0f;
-    win->grid_color = 0xFFDDDDDD;
-    win->down_color = 0xFF0000FF;
     win->open = desc->open;
 
     /* get matrix size */
@@ -234,20 +230,22 @@ static void _ui_kbd_draw_matrix(ui_kbd_t* win, const ImVec2& canvas_pos, const I
     const float y1 = y0 + win->num_lines * dy;
     const float tdy = ImGui::GetTextLineHeight();
     const float tdx = -10.0f;
+    const ImU32 grid_color = ui_util_color(ImGuiCol_Text);
+    const ImU32 down_color = ImColor(1.0f, 0.0f, 0.0f, ImGui::GetStyle().Alpha);
     char buf[8];
     float y = y0;
     for (int l=0; l<win->num_lines; l++, y+=dy) {
         snprintf(buf, sizeof(buf), "%d", l);
         const uint32_t down = line_bits & (1<<l);
-        dl->AddLine(ImVec2(x0, y+dy), ImVec2(x1, y+dy), down?win->down_color:win->grid_color, down?2.0f:1.0f);
-        dl->AddText(ImVec2(x0, y+dy-tdy), win->grid_color, buf);
+        dl->AddLine(ImVec2(x0, y+dy), ImVec2(x1, y+dy), down?down_color:grid_color, down?2.0f:1.0f);
+        dl->AddText(ImVec2(x0, y+dy-tdy), grid_color, buf);
     }
     float x = x0;
     for (int c=0; c<win->num_columns; c++, x+=dx) {
         snprintf(buf, sizeof(buf), "%d", c);
         const uint32_t down = column_bits & (1<<c);
-        dl->AddLine(ImVec2(x+dx, y0), ImVec2(x+dx, y1), down?win->down_color:win->grid_color, down?2.0f:1.0f);
-        dl->AddText(ImVec2(x+dx+tdx, y0), win->grid_color, buf);
+        dl->AddLine(ImVec2(x+dx, y0), ImVec2(x+dx, y1), down?down_color:grid_color, down?2.0f:1.0f);
+        dl->AddText(ImVec2(x+dx+tdx, y0), grid_color, buf);
     }
     y = y0;
     buf[1] = 0;
@@ -256,13 +254,13 @@ static void _ui_kbd_draw_matrix(ui_kbd_t* win, const ImVec2& canvas_pos, const I
         for (int c=0; c<win->num_columns; c++, x+=dx) {
             const bool down = (line_bits & (1<<l)) && (column_bits & (1<<c));
             if (down) {
-                dl->AddCircleFilled(ImVec2(x+dx,y+dy), 4.0f, win->down_color, 12);
+                dl->AddCircleFilled(ImVec2(x+dx,y+dy), 4.0f, down_color, 12);
             }
             int key = win->keymap[win->cur_layer][c][l];
             /* FIXME: special keys (arrow, enter, ...) */
             if ((key > 32) && (key < 128)) {
                 buf[0] = key;
-                dl->AddText(ImVec2(x+dx+tdx, y+dy-tdy), win->grid_color, buf);
+                dl->AddText(ImVec2(x+dx+tdx, y+dy-tdy), grid_color, buf);
             }
         }
     }

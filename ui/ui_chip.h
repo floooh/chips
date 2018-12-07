@@ -22,6 +22,7 @@
     *implementation*:
 
         - imgui.h
+        - ui_util.h
 
     All strings provided to ui_chip_init() must remain alive until
     ui_chip_discard() is called!
@@ -70,9 +71,6 @@ typedef struct {
 /* chip visualization state */
 typedef struct {
     const char* name;
-    uint32_t line_color;
-    uint32_t text_color;
-    uint32_t pin_color;
     int num_slots;
     ui_chip_pin_t pins[UI_CHIP_MAX_PINS];   
 } ui_chip_t;
@@ -105,9 +103,6 @@ void ui_chip_init(ui_chip_t* c, const ui_chip_desc_t* desc) {
     CHIPS_ASSERT(desc->name && desc->num_slots > 0);
     memset(c, 0, sizeof(ui_chip_t));
     c->name = desc->name;
-    c->line_color = 0xFFFFFFFF;
-    c->text_color = 0xFFFFFFFF;
-    c->pin_color = 0xFF00FF00;
     c->num_slots = desc->num_slots;
     for (int i = 0; i < UI_CHIP_MAX_PINS; i++) {
         c->pins[i] = desc->pins[i];
@@ -120,19 +115,22 @@ void ui_chip_draw(ui_chip_t* c, uint64_t pins) {
     const ImVec2 canvas_area = ImGui::GetContentRegionAvail();
     const float w = 64.0f;
     const float h = (c->num_slots / 2) * 16.0f;
-    const float x0 = canvas_pos.x + (canvas_area.x * 0.5f) - (w * 0.5f);
-    const float y0 = canvas_pos.y + (canvas_area.y * 0.5f) - (h * 0.5f);
+    const float x0 = (float)(int) (canvas_pos.x + (canvas_area.x * 0.5f) - (w * 0.5f));
+    const float y0 = (float)(int) (canvas_pos.y + (canvas_area.y * 0.5f) - (h * 0.5f));
     const float x1 = x0 + w;
     const float y1 = y0 + h;
-    const float xm = (x0 + x1) / 2;
-    const float ym = (y0 + y1) / 2;
+    const float xm = (float)(int)((x0 + x1) * 0.5f);
+    const float ym = (float)(int)((y0 + y1) * 0.5f);
     const float slot_height = 16.0f;
     const float pw = 12.0f;
     const float ph = 12.0f;
+    const ImU32 text_color = ui_util_color(ImGuiCol_Text);
+    const ImU32 line_color = text_color;
+    const ImU32 pin_color  = ImColor(0.0f, 1.0f, 0.0f, ImGui::GetStyle().Alpha);
 
-    l->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), c->line_color);
+    l->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), line_color);
     ImVec2 ts = ImGui::CalcTextSize(c->name);
-    l->AddText(ImVec2(xm-(ts.x/2), ym-(ts.y/2)), c->text_color, c->name);
+    l->AddText(ImVec2(xm-(ts.x/2), ym-(ts.y/2)), text_color, c->name);
 
     float px, py, tx, ty;
     for (int i = 0; i < c->num_slots; i++) {
@@ -157,10 +155,10 @@ void ui_chip_draw(ui_chip_t* c, uint64_t pins) {
         }
         ty = py + (ph * 0.5f) - (ts.y * 0.5f);
         if (pins & pin->mask) {
-            l->AddRectFilled(ImVec2(px, py), ImVec2(px+pw, py+ph), c->pin_color);
+            l->AddRectFilled(ImVec2(px, py), ImVec2(px+pw, py+ph), pin_color);
         }
-        l->AddRect(ImVec2(px, py), ImVec2(px+pw, py+ph), c->line_color);
-        l->AddText(ImVec2(tx, ty), c->text_color, pin->name);
+        l->AddRect(ImVec2(px, py), ImVec2(px+pw, py+ph), line_color);
+        l->AddText(ImVec2(tx, ty), text_color, pin->name);
     }
 }
 

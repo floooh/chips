@@ -58,6 +58,10 @@ void ui_util_u8(const char* label, uint8_t val);
 void ui_util_u16(const char* label, uint16_t val);
 /* draw an 8-bit binary label/value text */
 void ui_util_b8(const char* label, uint8_t val);
+/* get an ImGui style color (ImGuiCol_*) with overall alpha applied */
+uint32_t ui_util_color(int imgui_color);
+/* inject the common options menu */
+void ui_util_options_menu(double time_ms);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -130,6 +134,30 @@ void ui_util_b8(const char* label, uint8_t val) {
     }
     str[8] = 0;
     ImGui::Text("%s%s", label, str);
+}
+
+uint32_t ui_util_color(int imgui_color) {
+    CHIPS_ASSERT((imgui_color >= 0) && (imgui_color < ImGuiCol_COUNT));
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 c = style.Colors[imgui_color];
+    c.w *= style.Alpha;
+    return ImColor(c);
+}
+
+void ui_util_options_menu(double time_ms) {
+    if (ImGui::BeginMenu("Options")) {
+        ImGui::SliderFloat("UI Alpha", &ImGui::GetStyle().Alpha, 0.1f, 1.0f);
+        ImGui::SliderFloat("BG Alpha", &ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w, 0.1f, 1.0f);
+        if (ImGui::MenuItem("Dark Theme")) {
+            ImGui::StyleColorsDark();
+        }
+        if (ImGui::MenuItem("Light Theme")) {
+            ImGui::StyleColorsLight();
+        }
+        ImGui::EndMenu();
+    }
+    ImGui::SameLine(ImGui::GetWindowWidth() - 120);
+    ImGui::Text("emu: %.2fms", time_ms);
 }
 
 #ifdef _MSC_VER

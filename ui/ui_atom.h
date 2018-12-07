@@ -154,8 +154,7 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
             ImGui::MenuItem("CPU Debugger (TODO)");
             ImGui::EndMenu();
         }
-        ImGui::SameLine(ImGui::GetWindowWidth() - 120);
-        ImGui::Text("emu: %.2fms", time_ms);
+        ui_util_options_menu(time_ms);
         ImGui::EndMainMenuBar();
     }
 }

@@ -22,6 +22,7 @@
     *implementation*:
 
         - imgui.h
+        - ui_util.h
 
     All strings provided to ui_memmap_init() must remain alive until
     ui_memmap_discard() is called!
@@ -83,9 +84,6 @@ typedef struct {
     float init_w, init_h;
     float layer_height;
     float left_padding;
-    uint32_t grid_color;
-    uint32_t on_color;
-    uint32_t off_color;
     bool open;
     bool valid;
     int num_layers;
@@ -120,35 +118,39 @@ void ui_memmap_region(ui_memmap_t* win, const char* name, uint16_t addr, int len
 
 static void _ui_memmap_draw_grid(ui_memmap_t* win, const ImVec2& canvas_pos, const ImVec2& canvas_area) {
     ImDrawList* l = ImGui::GetWindowDrawList();
+    const ImU32 grid_color = ui_util_color(ImGuiCol_Text);
     const float y1 = canvas_pos.y + canvas_area.y - win->layer_height;
     /* line rulers */
     if (canvas_area.x > win->left_padding) {
         static const char* addr[5] = { "0000", "4000", "8000", "C000", "FFFF" };
         const float glyph_width = ImGui::CalcTextSize("X").x;
         const float x0 = canvas_pos.x + win->left_padding;
-        float dx = (canvas_area.x - win->left_padding) / 4.0f;
+        float dx = (float)(int)((canvas_area.x - win->left_padding) / 4.0f);
         const float y0 = canvas_pos.y;
         const float y1 = canvas_pos.y + canvas_area.y + 4.0f - win->layer_height;
         float x = x0;
         for (int i = 0; i < 5; i++, x += dx) {
-            l->AddLine(ImVec2(x, y0), ImVec2(x, y1), win->grid_color);
+            l->AddLine(ImVec2(x, y0), ImVec2(x, y1), grid_color);
             const float addr_x = (i == 4) ? x - 4.0f*glyph_width : x;
-            l->AddText(ImVec2(addr_x, y1), win->grid_color, addr[i]);
+            l->AddText(ImVec2(addr_x, y1), grid_color, addr[i]);
         }
         const ImVec2 p0(canvas_pos.x + win->left_padding, y1);
         const ImVec2 p1(x0 + 4*dx, p0.y);
-        l->AddLine(p0, p1, win->grid_color);
+        l->AddLine(p0, p1, grid_color);
     }
     /* layer names to the left */
     ImVec2 text_pos(canvas_pos.x, (y1 - win->layer_height + 6));
     for (int i = 0; i < win->num_layers; i++) {
-        l->AddText(text_pos, win->grid_color, win->layers[i].name);
+        l->AddText(text_pos, grid_color, win->layers[i].name);
         text_pos.y -= win->layer_height;
     }
 }
 
 static void _ui_memmap_draw_region(ui_memmap_t* win, const ImVec2& pos, float width, const ui_memmap_region_t& reg) {
-    ImU32 color = reg.on ? win->on_color : win->off_color;
+    const float alpha = ImGui::GetStyle().Alpha;
+    const ImU32 on_color = ImColor(0.0f, 0.75f, 0.0f, alpha);
+    const ImU32 off_color = ImColor(0.0f, 0.25f, 0.0f, alpha);
+    ImU32 color = reg.on ? on_color : off_color;
     uint32_t addr = reg.addr;
     uint32_t end_addr = reg.addr + reg.len;
     if (end_addr > 0x10000) {
@@ -193,9 +195,6 @@ void ui_memmap_init(ui_memmap_t* win, const ui_memmap_desc_t* desc) {
     win->open = desc->open;
     win->left_padding = 80.0f;;
     win->layer_height = 20.0f;
-    win->grid_color = 0xFFDDDDDD;
-    win->on_color = 0xFF00EE00;
-    win->off_color = 0xFF004400;
     win->valid = true;
 }
 
