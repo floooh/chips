@@ -107,7 +107,7 @@ void ui_m6581_init(ui_m6581_t* win, const ui_m6581_desc_t* desc) {
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 496 : desc->w);
-    win->init_h = (float) ((desc->h == 0) ? 400 : desc->h);
+    win->init_h = (float) ((desc->h == 0) ? 410 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -127,85 +127,151 @@ static void _ui_m6581_draw_state(ui_m6581_t* win) {
     ImGui::SetColumnWidth(1, cw);
     ImGui::SetColumnWidth(2, cw);
     ImGui::SetColumnWidth(3, cw);
-    ImGui::NextColumn();
-    ImGui::Text("Chn0"); ImGui::NextColumn();
-    ImGui::Text("Chn1"); ImGui::NextColumn();
-    ImGui::Text("Chn2"); ImGui::NextColumn();
-    ImGui::Separator();
     ImGui::Columns();
-    ImGui::Text("Wave Generator");
-    ImGui::Columns(4, "##sid_channels", false);
-    ImGui::Separator();
-    ImGui::Text("Muted"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", sid->voice[i].muted ? "YES":"NO"); ImGui::NextColumn();
+    if (ImGui::CollapsingHeader("Wave Generator", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Columns(4, "##sid_channels", false);
+        ImGui::NextColumn();
+        ImGui::Text("Chn0"); ImGui::NextColumn();
+        ImGui::Text("Chn1"); ImGui::NextColumn();
+        ImGui::Text("Chn2"); ImGui::NextColumn();
+        ImGui::Separator();
+        ImGui::Text("Muted"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", sid->voice[i].muted ? "YES":"NO"); ImGui::NextColumn();
+        }
+        ImGui::Text("Frequency"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%04X", sid->voice[i].freq); ImGui::NextColumn();
+        }
+        ImGui::Text("Pulse Width"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%04X", sid->voice[i].pulse_width); ImGui::NextColumn();
+        }
+        ImGui::Text("Accum"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%06X", sid->voice[i].wav_accum); ImGui::NextColumn();
+        }
+        ImGui::Text("Noise Shift"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%06X", sid->voice[i].noise_shift); ImGui::NextColumn();
+        }
+        ImGui::Text("Sync"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", sid->voice[i].sync ? "ON":"OFF"); ImGui::NextColumn();
+        }
+        ImGui::Text("Output"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%04X", sid->voice[i].wav_output); ImGui::NextColumn();
+        }
+        ImGui::Text("Control"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ui_util_b8("", sid->voice[i].ctrl); ImGui::NextColumn();
+        }
+        ImGui::Text(":GATE"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_GATE) ? "ON":"OFF"); ImGui::NextColumn();
+        }
+        ImGui::Text(":SYNC"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_SYNC) ? "ON":"OFF"); ImGui::NextColumn();
+        }
+        ImGui::Text(":RINGMOD"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_RINGMOD) ? "ON":"OFF"); ImGui::NextColumn();
+        }
+        ImGui::Text(":TEST"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_TEST) ? "ON":"OFF"); ImGui::NextColumn();
+        }
+        ImGui::Text(":TRIANGLE"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_TRIANGLE) ? "ON":"OFF"); ImGui::NextColumn();
+        }
+        ImGui::Text(":SAWTOOTH"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_SAWTOOTH) ? "ON":"OFF"); ImGui::NextColumn();
+        }
+        ImGui::Text(":PULSE"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_PULSE) ? "ON":"OFF"); ImGui::NextColumn();
+        }
+        ImGui::Text(":NOISE"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_NOISE) ? "ON":"OFF"); ImGui::NextColumn();
+        }
     }
-    ImGui::Text("Frequency"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%04X", sid->voice[i].freq); ImGui::NextColumn();
-    }
-    ImGui::Text("Pulse Width"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%04X", sid->voice[i].pulse_width); ImGui::NextColumn();
-    }
-    ImGui::Text("Accum"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%06X", sid->voice[i].wav_accum); ImGui::NextColumn();
-    }
-    ImGui::Text("Noise Shift"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%06X", sid->voice[i].noise_shift); ImGui::NextColumn();
-    }
-    ImGui::Text("Sync"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", sid->voice[i].sync ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text("Output"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%04X", sid->voice[i].wav_output); ImGui::NextColumn();
-    }
-    ImGui::Text("Control"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ui_util_b8("", sid->voice[i].ctrl); ImGui::NextColumn();
-    }
-    ImGui::Text(":GATE"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_GATE) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text(":SYNC"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_SYNC) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text(":RINGMOD"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_RINGMOD) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text(":TEST"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_TEST) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text(":TRIANGLE"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_TRIANGLE) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text(":SAWTOOTH"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_SAWTOOTH) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text(":PULSE"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_PULSE) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text(":NOISE"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", (sid->voice[i].ctrl & M6581_CTRL_NOISE) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Separator();
     ImGui::Columns();
-    ImGui::Text("Envelope Generator");
-    ImGui::Columns(4, "##sid_channels", false);
-    ImGui::Separator();
-
+    if (ImGui::CollapsingHeader("Envelope Generator")) {
+        ImGui::Columns(4, "##sid_channels", false);
+        ImGui::NextColumn();
+        ImGui::Text("Chn0"); ImGui::NextColumn();
+        ImGui::Text("Chn1"); ImGui::NextColumn();
+        ImGui::Text("Chn2"); ImGui::NextColumn();
+        ImGui::Separator();
+        ImGui::Text("State"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            const char* state;
+            switch (sid->voice[i].env_state) {
+                case M6581_ENV_FROZEN: state = "frozen"; break;
+                case M6581_ENV_ATTACK: state = "attack"; break;
+                case M6581_ENV_DECAY:  state = "decay"; break;
+                case M6581_ENV_RELEASE: state = "release"; break;
+                default: state = "???"; break;
+            }
+            ImGui::Text("%s", state); ImGui::NextColumn();
+        }
+        ImGui::Text("Attack"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%X", sid->voice[i].env_attack_add); ImGui::NextColumn();
+        }
+        ImGui::Text("Decay"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%X", sid->voice[i].env_decay_sub); ImGui::NextColumn();
+        }
+        ImGui::Text("Sustain"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%04X", sid->voice[i].env_sustain_level); ImGui::NextColumn();
+        }
+        ImGui::Text("Release"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%X", sid->voice[i].env_release_sub); ImGui::NextColumn();
+        }
+        ImGui::Text("Cur Level"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%02X", sid->voice[i].env_cur_level); ImGui::NextColumn();
+        }
+        ImGui::Text("Counter"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%04X", sid->voice[i].env_counter); ImGui::NextColumn();
+        }
+        ImGui::Text("Exp Counter"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%02X", sid->voice[i].env_exp_counter); ImGui::NextColumn();
+        } 
+        ImGui::Text("Counter Cmp"); ImGui::NextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%X", sid->voice[i].env_counter_compare); ImGui::NextColumn();
+        }
+    }
+    ImGui::Columns();
+    if (ImGui::CollapsingHeader("Filter")) {
+        ImGui::Text("Voices        %s %s %s", 
+            (0 != (sid->filter.voices & 1)) ? "ON ":"OFF",
+            (0 != (sid->filter.voices & 2)) ? "ON ":"OFF",
+            (0 != (sid->filter.voices & 4)) ? "ON ":"OFF");
+        ImGui::Text("Cutoff        %04X", sid->filter.cutoff);
+        ImGui::Text("Resonance     %X", sid->filter.resonance);
+        ImGui::Text("Volume        %X", sid->filter.volume);
+        ImGui::Text("Mode          %X", sid->filter.mode);
+        ImGui::Text(" :LOWPASS     %s", (0 != (sid->filter.mode & M6581_FILTER_LP)) ? "ON":"OFF");
+        ImGui::Text(" :BANDPASS    %s", (0 != (sid->filter.mode & M6581_FILTER_BP)) ? "ON":"OFF");
+        ImGui::Text(" :HIGHPASS    %s", (0 != (sid->filter.mode & M6581_FILTER_HP)) ? "ON":"OFF");
+        ImGui::Text(" :3OFF        %s", (0 != (sid->filter.mode & M6581_FILTER_3OFF)) ? "ON":"OFF");
+        ImGui::Text("w0            %X", sid->filter.w0);
+        ImGui::Text("v_lp          %X", sid->filter.v_lp);
+        ImGui::Text("v_bp          %X", sid->filter.v_bp);
+        ImGui::Text("v_hp          %X", sid->filter.v_hp);
+    }
 }
 
 void ui_m6581_draw(ui_m6581_t* win) {
