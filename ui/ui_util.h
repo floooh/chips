@@ -136,6 +136,15 @@ void ui_util_b8(const char* label, uint8_t val) {
     ImGui::Text("%s%s", label, str);
 }
 
+void ui_util_b32(const char* label, uint32_t val) {
+    char str[33];
+    for (int i = 0; i < 32; i++) {
+        str[i] = (val & (1<<(31-i))) ? '1':'0';
+    }
+    str[32] = 0;
+    ImGui::Text("%s%s", label, str);
+}
+
 uint32_t ui_util_color(int imgui_color) {
     CHIPS_ASSERT((imgui_color >= 0) && (imgui_color < ImGuiCol_COUNT));
     const ImGuiStyle& style = ImGui::GetStyle();

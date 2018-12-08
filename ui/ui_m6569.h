@@ -134,107 +134,157 @@ static void _ui_m6569_draw_hwcolors(ui_m6569_t* win) {
     }
 }
 
-static void _ui_m6569_regcolor(const char* label, uint8_t val) {
+static void _ui_m6569_draw_color(const char* label, uint8_t val) {
     ImGui::Text("%s%X", label, val); ImGui::SameLine();
     ImGui::ColorButton("##regclr", ImColor(m6569_color(val&0xF)), ImGuiColorEditFlags_NoAlpha, ImVec2(12,12));
 }
 
-static void _ui_m6569_draw_registers(ui_m6569_t* win) {
-    m6569_t* vic = win->vic;
+static void _ui_m6569_draw_rgb(const char* label, uint32_t val) {
+    ImGui::Text("%s", label); ImGui::SameLine();
+    ImGui::ColorButton("##rgbclr", ImColor(val | 0xFF000000), ImGuiColorEditFlags_NoAlpha, ImVec2(12,12));
+}
+
+static void _ui_m6569_draw_registers(const ui_m6569_t* win) {
     if (ImGui::CollapsingHeader("Registers")) {
+        const m6569_registers_t* reg = &win->vic->reg;
         for (int i = 0; i < M6569_NUM_MOBS; i++) {
-            ImGui::Text("m%dx:%02X  m%dy:%02X", i, vic->reg.mxy[i][0], i, vic->reg.mxy[i][1]);
+            ImGui::Text("m%dx:%02X  m%dy:%02X", i, reg->mxy[i][0], i, reg->mxy[i][1]);
             if (((i+1) % 2) != 0) {
                 ImGui::SameLine(); ImGui::Text("  "); ImGui::SameLine();
             }
         }
-        ui_util_b8("mx8:", vic->reg.mx8); ImGui::SameLine();
-        ui_util_b8("me:", vic->reg.me);
-        ui_util_b8("mye:", vic->reg.mye); ImGui::SameLine();
-        ui_util_b8("mxe:", vic->reg.mxe);
-        ui_util_b8("mdp:", vic->reg.mdp); ImGui::SameLine();
-        ui_util_b8("mmc:", vic->reg.mmc);
-        ui_util_b8("mcm:", vic->reg.mcm); ImGui::SameLine();
-        ui_util_b8("mcd:", vic->reg.mcd);
-        ui_util_b8("ctrl1:", vic->reg.ctrl_1);
-            ImGui::Text("  rst8:%d", (0 != (vic->reg.ctrl_1 & M6569_CTRL1_RST8)) ? 1:0); ImGui::SameLine();
-            ImGui::Text("ecm:%s", (0 != (vic->reg.ctrl_1 & M6569_CTRL1_ECM)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("bmm:%s", (0 != (vic->reg.ctrl_1 & M6569_CTRL1_BMM)) ? "ON ":"OFF");
-            ImGui::Text("  den:%s", (0 != (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("rsel:%s", (0 != (vic->reg.ctrl_1 & M6569_CTRL1_RSEL)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("yscroll:%d", vic->reg.ctrl_1 & M6569_CTRL1_YSCROLL);
-        ui_util_b8("ctrl2:", vic->reg.ctrl_2);
-            ImGui::Text("  res:%s", (0 != (vic->reg.ctrl_2 & M6569_CTRL2_RES)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("mcm:%s", (0 != (vic->reg.ctrl_2 & M6569_CTRL2_MCM)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("csel:%s", (0 != (vic->reg.ctrl_2 & M6569_CTRL2_CSEL)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("xscroll:%d", vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL);
-        ImGui::Text("raster:%02X  lpx:%02X  lpy:%02X", vic->reg.raster, vic->reg.lightpen_xy[0], vic->reg.lightpen_xy[1]);
-        ui_util_b8("memptrs:", vic->reg.mem_ptrs);
-            ImGui::Text("  vm:%04X", (((vic->reg.mem_ptrs>>4)&0xF)<<10)); ImGui::SameLine();
-            ImGui::Text("cb:%04X", (((vic->reg.mem_ptrs>>1)&0x7)<<11));
-        ui_util_b8("int latch:", vic->reg.int_latch); ImGui::SameLine();
-        ui_util_b8("mask:", vic->reg.int_mask);
-            ImGui::Text("  IRQ:%s", (0 != (vic->reg.int_latch & M6569_INT_IRQ)) ? "ON ":"OFF");
-            ImGui::Text("  ILP:%s", (0 != (vic->reg.int_latch & M6569_INT_ILP)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("IMMC:%s", (0 != (vic->reg.int_latch & M6569_INT_IMMC)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("IMBC:%s", (0 != (vic->reg.int_latch & M6569_INT_IMBC)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("IRST:%s", (0 != (vic->reg.int_latch & M6569_INT_IRST)) ? "ON ":"OFF");
-            ImGui::Text("  ELP:%s", (0 != (vic->reg.int_mask & M6569_INT_ELP)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("EMMC:%s", (0 != (vic->reg.int_mask & M6569_INT_EMMC)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("EMBC:%s", (0 != (vic->reg.int_mask & M6569_INT_EMBC)) ? "ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("ERST:%s", (0 != (vic->reg.int_mask & M6569_INT_ERST)) ? "ON ":"OFF");
-        _ui_m6569_regcolor("ec:", vic->reg.ec);
-        _ui_m6569_regcolor("bc0:", vic->reg.bc[0]); ImGui::SameLine();
-        _ui_m6569_regcolor("bc1:", vic->reg.bc[1]); ImGui::SameLine();
-        _ui_m6569_regcolor("bc2:", vic->reg.bc[2]); ImGui::SameLine();
-        _ui_m6569_regcolor("bc3:", vic->reg.bc[3]);
-        _ui_m6569_regcolor("mc0:", vic->reg.mc[0]); ImGui::SameLine();
-        _ui_m6569_regcolor("mc1:", vic->reg.mc[1]); ImGui::SameLine();
-        _ui_m6569_regcolor("mc2:", vic->reg.mc[2]); ImGui::SameLine();
-        _ui_m6569_regcolor("mc3:", vic->reg.mc[3]);
-        _ui_m6569_regcolor("mm0:", vic->reg.mm[0]); ImGui::SameLine();
-        _ui_m6569_regcolor("mm1:", vic->reg.mm[1]);
+        ui_util_b8("mx8:", reg->mx8); ImGui::SameLine();
+        ui_util_b8("me:", reg->me);
+        ui_util_b8("mye:", reg->mye); ImGui::SameLine();
+        ui_util_b8("mxe:", reg->mxe);
+        ui_util_b8("mdp:", reg->mdp); ImGui::SameLine();
+        ui_util_b8("mmc:", reg->mmc);
+        ui_util_b8("mcm:", reg->mcm); ImGui::SameLine();
+        ui_util_b8("mcd:", reg->mcd);
+        ui_util_b8("ctrl1:", reg->ctrl_1);
+            ImGui::Text("  rst8:%d", (0 != (reg->ctrl_1 & M6569_CTRL1_RST8)) ? 1:0); ImGui::SameLine();
+            ImGui::Text("ecm:%s", (0 != (reg->ctrl_1 & M6569_CTRL1_ECM)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("bmm:%s", (0 != (reg->ctrl_1 & M6569_CTRL1_BMM)) ? "ON ":"OFF");
+            ImGui::Text("  den:%s", (0 != (reg->ctrl_1 & M6569_CTRL1_DEN)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("rsel:%s", (0 != (reg->ctrl_1 & M6569_CTRL1_RSEL)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("yscroll:%d", reg->ctrl_1 & M6569_CTRL1_YSCROLL);
+        ui_util_b8("ctrl2:", reg->ctrl_2);
+            ImGui::Text("  res:%s", (0 != (reg->ctrl_2 & M6569_CTRL2_RES)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("mcm:%s", (0 != (reg->ctrl_2 & M6569_CTRL2_MCM)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("csel:%s", (0 != (reg->ctrl_2 & M6569_CTRL2_CSEL)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("xscroll:%d", reg->ctrl_2 & M6569_CTRL2_XSCROLL);
+        ImGui::Text("raster:%02X  lpx:%02X  lpy:%02X", reg->raster, reg->lightpen_xy[0], reg->lightpen_xy[1]);
+        ui_util_b8("memptrs:", reg->mem_ptrs);
+            ImGui::Text("  vm:%04X", (((reg->mem_ptrs>>4)&0xF)<<10)); ImGui::SameLine();
+            ImGui::Text("cb:%04X", (((reg->mem_ptrs>>1)&0x7)<<11));
+        ui_util_b8("int latch:", reg->int_latch); ImGui::SameLine();
+        ui_util_b8("mask:", reg->int_mask);
+            ImGui::Text("  IRQ:%s", (0 != (reg->int_latch & M6569_INT_IRQ)) ? "ON ":"OFF");
+            ImGui::Text("  ILP:%s", (0 != (reg->int_latch & M6569_INT_ILP)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("IMMC:%s", (0 != (reg->int_latch & M6569_INT_IMMC)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("IMBC:%s", (0 != (reg->int_latch & M6569_INT_IMBC)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("IRST:%s", (0 != (reg->int_latch & M6569_INT_IRST)) ? "ON ":"OFF");
+            ImGui::Text("  ELP:%s", (0 != (reg->int_mask & M6569_INT_ELP)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("EMMC:%s", (0 != (reg->int_mask & M6569_INT_EMMC)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("EMBC:%s", (0 != (reg->int_mask & M6569_INT_EMBC)) ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("ERST:%s", (0 != (reg->int_mask & M6569_INT_ERST)) ? "ON ":"OFF");
+        _ui_m6569_draw_color("ec:", reg->ec);
+        _ui_m6569_draw_color("bc0:", reg->bc[0]); ImGui::SameLine();
+        _ui_m6569_draw_color("bc1:", reg->bc[1]); ImGui::SameLine();
+        _ui_m6569_draw_color("bc2:", reg->bc[2]); ImGui::SameLine();
+        _ui_m6569_draw_color("bc3:", reg->bc[3]);
+        _ui_m6569_draw_color("mc0:", reg->mc[0]); ImGui::SameLine();
+        _ui_m6569_draw_color("mc1:", reg->mc[1]); ImGui::SameLine();
+        _ui_m6569_draw_color("mc2:", reg->mc[2]); ImGui::SameLine();
+        _ui_m6569_draw_color("mc3:", reg->mc[3]);
+        _ui_m6569_draw_color("mm0:", reg->mm[0]); ImGui::SameLine();
+        _ui_m6569_draw_color("mm1:", reg->mm[1]);
     }
 }
 
-static void _ui_m6569_draw_raster_unit(ui_m6569_t* win) {
+static void _ui_m6569_draw_raster_unit(const ui_m6569_t* win) {
     if (ImGui::CollapsingHeader("Raster Unit")) {
-        ImGui::Text("FIXME!");
+        const m6569_raster_unit_t* rs = &win->vic->rs;
+        ImGui::Text("h_count:%02X v_count:%03X v_irq:%03X", rs->h_count, rs->v_count, rs->v_irqline);
+        ImGui::Text("sh_count:%02X", rs->sh_count);
+        ImGui::Text("vc:%03X vc_base:%03X rc:%X", rs->vc, rs->vc_base, rs->rc);
+        ImGui::Text("display:%s badline:%s", rs->display_state?"ON ":"OFF", rs->badline?"ON ":"OFF");
+        ImGui::Text("badlines enabled: %s", rs->frame_badlines_enabled?"YES":"NO ");
     }
 }
 
-static void _ui_m6569_draw_memory_unit(ui_m6569_t* win) {
+static void _ui_m6569_draw_memory_unit(const ui_m6569_t* win) {
     if (ImGui::CollapsingHeader("Memory Unit")) {
-        ImGui::Text("FIXME!");
+        const m6569_memory_unit_t* mem = &win->vic->mem;
+        ImGui::Text("c_addr_or:  %04X", mem->c_addr_or);
+        ImGui::Text("g_addr_and: %04X", mem->g_addr_and);
+        ImGui::Text("g_addr_or:  %04X", mem->g_addr_or);
+        ImGui::Text("p_addr_or:  %04X", mem->p_addr_or);
+        ImGui::Text("i_addr:     %04X", mem->i_addr);
     }
 }
 
-static void _ui_m6569_draw_video_matrix(ui_m6569_t* win) {
+static void _ui_m6569_draw_video_matrix(const ui_m6569_t* win) {
     if (ImGui::CollapsingHeader("Video Matrix")) {
-        ImGui::Text("FIXME!");
+        const m6569_video_matrix_t* vm = &win->vic->vm;
+        ImGui::Text("vmli:%02X", vm->vmli);
+        ImGui::Text("line buffer:");
+        for (int i = 0; i < 40; i++) {
+            ImGui::Text("%03X", vm->line[i]);
+            if (((i+1) % 8) != 0) {
+                ImGui::SameLine();
+            }
+        }
     }
 }
 
-static void _ui_m6569_draw_border_unit(ui_m6569_t* win) {
+static void _ui_m6569_draw_border_unit(const ui_m6569_t* win) {
     if (ImGui::CollapsingHeader("Border Unit")) {
-        ImGui::Text("FIXME!");
+        const m6569_border_unit_t* brd = &win->vic->brd;
+        ImGui::Text("left:%04X right:%04X", brd->left, brd->right);
+        ImGui::Text("top:%04X bottom:%04X", brd->top, brd->bottom);
+        ImGui::Text("main:%s vert:%s", brd->main?"ON ":"OFF", brd->vert?"ON ":"OFF");
+        _ui_m6569_draw_color("border color: ", brd->bc_index);
     }
 }
 
-static void _ui_m6569_draw_graphics_unit(ui_m6569_t* win) {
+static void _ui_m6569_draw_graphics_unit(const ui_m6569_t* win) {
     if (ImGui::CollapsingHeader("Graphics Unit")) {
-        ImGui::Text("FIXME!");
+        const m6569_graphics_unit_t* gu = &win->vic->gunit;
+        ImGui::Text("enabled:%s", gu->enabled?"YES":"NO "); ImGui::SameLine();
+        ImGui::Text("mode:%X", gu->mode); ImGui::SameLine();
+        ImGui::Text("c_data:%03X", gu->c_data);
+        ImGui::Text("count:%X", gu->count);
+        ui_util_b8("shift: ", gu->shift);
+        ui_util_b8("outp:  ", gu->outp);
+        ui_util_b8("outp2: ", gu->outp2);
+        _ui_m6569_draw_color("bg0:", gu->bg_index[0]); ImGui::SameLine();
+        _ui_m6569_draw_color("bg1:", gu->bg_index[1]); ImGui::SameLine();
+        _ui_m6569_draw_color("bg2:", gu->bg_index[2]); ImGui::SameLine();
+        _ui_m6569_draw_color("bg3:", gu->bg_index[3]); 
     }
 }
 
-static void _ui_m6569_draw_sprite_units(ui_m6569_t* win) {
+static void _ui_m6569_draw_sprite_units(const ui_m6569_t* win) {
     static const char* su_names[8] = {
         "Sprite Unit 0", "Sprite Unit 1", "Sprite Unit 2", "Sprite Unit 3",
         "Sprite Unit 4", "Sprite Unit 5", "Sprite Unit 6", "Sprite Unit 7",
     };
     for (int i = 0; i < 8; i++) {
         if (ImGui::CollapsingHeader(su_names[i])) {
-            ImGui::Text("FIXME!");
+            const m6569_sprite_unit_t* su = &win->vic->sunit[i];
+            ImGui::Text("dma:%s", su->dma_enabled?"ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("display:%s", su->disp_enabled?"ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("expand:%s", su->expand?"ON ":"OFF");
+            ImGui::Text("h_first:%02X h_last:%02X h_offset:%02X", su->h_first, su->h_last, su->h_offset);
+            ImGui::Text("p_data:%02X mc:%02X mc_base:%02X", su->p_data, su->mc, su->mc_base);
+            ImGui::Text("delay_cnt:%02X outp2_cnt:%02X xexp_cnt:%02X", su->delay_count, su->outp2_count, su->xexp_count);
+            ui_util_b32("shift:", su->shift);
+            ui_util_b32("outp: ", su->outp);
+            ui_util_b32("outp2:", su->outp2);
+            _ui_m6569_draw_rgb("multicolor0:", su->colors[1]);
+            _ui_m6569_draw_rgb("main color: ", su->colors[2]);
+            _ui_m6569_draw_rgb("multicolor1:", su->colors[3]);
         }
     }
 }
