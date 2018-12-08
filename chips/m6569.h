@@ -277,6 +277,7 @@ typedef struct {
     _m6569_video_matrix_t vm;
     _m6569_graphics_unit_t gunit;
     _m6569_sprite_unit_t sunit[8];
+    uint64_t pins;
 } m6569_t;
 
 /* initialize a new m6569_t instance */
@@ -700,6 +701,7 @@ uint64_t m6569_iorq(m6569_t* vic, uint64_t pins) {
                 r->regs[r_addr] = data;
             }
         }
+        vic->pins = (vic->pins & (M6569_BA|M6569_AEC|M6569_IRQ)) | (pins & ~(M6569_BA|M6569_AEC|M6569_IRQ));
     }
     return pins;
 }
@@ -1454,6 +1456,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     if (vic->reg.int_latch & (1<<7)) {
         pins |= M6569_IRQ;
     }
+    vic->pins = (vic->pins & ~(M6569_BA|M6569_AEC|M6569_IRQ)) | (pins & (M6569_BA|M6569_AEC|M6569_IRQ));
     return pins;
 }
 

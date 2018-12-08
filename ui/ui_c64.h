@@ -75,6 +75,7 @@ typedef struct {
     ui_m6502_t cpu;
     ui_m6526_t cia[2];
     ui_m6581_t sid;
+    ui_m6569_t vic;
     ui_audio_t audio;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
@@ -137,7 +138,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
             ImGui::MenuItem("MOS 6526 #1 (CIA)", 0, &ui->cia[0].open);
             ImGui::MenuItem("MOS 6526 #2 (CIA)", 0, &ui->cia[1].open);
             ImGui::MenuItem("MOS 6581 (SID)", 0, &ui->sid.open);
-            ImGui::MenuItem("MOS 6569 (VIC-II) TODO!");
+            ImGui::MenuItem("MOS 6569 (VIC-II)", 0, &ui->vic.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -365,6 +366,36 @@ static const ui_chip_pin_t _ui_c64_sid_pins[] = {
     { "RW",     14,     M6581_RW }
 };
 
+static const ui_chip_pin_t _ui_c64_vic_pins[] = {
+    { "DB0",    0,      M6569_D0 },
+    { "DB1",    1,      M6569_D1 },
+    { "DB2",    2,      M6569_D2 },
+    { "DB3",    3,      M6569_D3 },
+    { "DB4",    4,      M6569_D4 },
+    { "DB5",    5,      M6569_D5 },
+    { "DB6",    6,      M6569_D6 },
+    { "DB7",    7,      M6569_D7 },
+    { "CS",     9,     M6569_CS },
+    { "RW",     10,     M6569_RW },
+    { "IRQ",    11,     M6569_IRQ },
+    { "BA",     12,     M6569_BA },
+    { "AEC",    13,     M6569_AEC },
+    { "A0",     14,     M6569_A0 },
+    { "A1",     15,     M6569_A1 },
+    { "A2",     16,     M6569_A2 },
+    { "A3",     17,     M6569_A3 },
+    { "A4",     18,     M6569_A4 },
+    { "A5",     19,     M6569_A5 },
+    { "A6",     20,     M6569_A6 },
+    { "A7",     21,     M6569_A7 },
+    { "A8",     22,     M6569_A8 },
+    { "A9",     23,     M6569_A9 },
+    { "A10",    24,     M6569_A10 },
+    { "A11",    25,     M6569_A11 },
+    { "A12",    26,     M6569_A12 },
+    { "A13",    27,     M6569_A13 }
+};
+
 void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->c64);
@@ -407,6 +438,16 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc) {
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6581", 16, _ui_c64_sid_pins);
         ui_m6581_init(&ui->sid, &desc);
+    }
+    x += dx; y += dy;
+    {
+        ui_m6569_desc_t desc = {0};
+        desc.title = "MOS 6569 (VIC-II)";
+        desc.vic = &ui->c64->vic;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6569", 28, _ui_c64_vic_pins);
+        ui_m6569_init(&ui->vic, &desc);
     }
     x += dx; y += dy;
     {
@@ -485,6 +526,7 @@ void ui_c64_discard(ui_c64_t* ui) {
     ui_m6526_discard(&ui->cia[0]);
     ui_m6526_discard(&ui->cia[1]);
     ui_m6581_discard(&ui->sid);
+    ui_m6569_discard(&ui->vic);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
     ui_memmap_discard(&ui->memmap);
@@ -506,6 +548,7 @@ void ui_c64_draw(ui_c64_t* ui, double time_ms) {
     ui_m6526_draw(&ui->cia[0]);
     ui_m6526_draw(&ui->cia[1]);
     ui_m6581_draw(&ui->sid);
+    ui_m6569_draw(&ui->vic);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);
