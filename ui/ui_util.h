@@ -148,11 +148,15 @@ void ui_util_options_menu(double time_ms) {
     if (ImGui::BeginMenu("Options")) {
         ImGui::SliderFloat("UI Alpha", &ImGui::GetStyle().Alpha, 0.1f, 1.0f);
         ImGui::SliderFloat("BG Alpha", &ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w, 0.1f, 1.0f);
-        if (ImGui::MenuItem("Dark Theme")) {
+        static int theme = 0;
+        if (ImGui::RadioButton("Dark Theme", &theme, 0)) {
             ImGui::StyleColorsDark();
         }
-        if (ImGui::MenuItem("Light Theme")) {
+        if (ImGui::RadioButton("Light Theme", &theme, 1)) {
             ImGui::StyleColorsLight();
+        }
+        if (ImGui::RadioButton("Classic Theme", &theme, 2)) {
+            ImGui::StyleColorsClassic();
         }
         ImGui::EndMenu();
     }
