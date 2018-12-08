@@ -114,21 +114,12 @@ void ui_mc6847_discard(ui_mc6847_t* win) {
     win->valid = false;
 }
 
-static ImVec4 _ui_mc6847_rgba8_to_imvec4(uint32_t c) {
-    ImVec4 v;
-    v.x = float(c & 0xFF) / 255.0f;
-    v.y = float((c>>8) & 0xFF) / 255.0f;
-    v.z = float((c>>16) & 0xFF) / 255.0f;
-    v.w = float((c>>16) & 0xFF) / 255.0f;
-    return v;    
-}
-
 static void _ui_mc6847_draw_hwcolors(ui_mc6847_t* win) {
     ImGui::Text("Gfx Mode Colors:");
     ImVec4 c;
     const ImVec2 size(18,18);
     for (int i = 0; i < 8; i++) {
-        c = _ui_mc6847_rgba8_to_imvec4(win->mc6847->palette[i]);
+        c = ImColor(win->mc6847->palette[i]);
         ImGui::PushID(i);
         ImGui::ColorButton("##gm_color", c, ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
@@ -138,10 +129,10 @@ static void _ui_mc6847_draw_hwcolors(ui_mc6847_t* win) {
     }
     ImGui::Separator();
     ImGui::Text("Text Mode Colors:");
-    ImVec4 tm_green       = _ui_mc6847_rgba8_to_imvec4(win->mc6847->alnum_green);
-    ImVec4 tm_dark_green  = _ui_mc6847_rgba8_to_imvec4(win->mc6847->alnum_dark_green);
-    ImVec4 tm_orange      = _ui_mc6847_rgba8_to_imvec4(win->mc6847->alnum_orange);
-    ImVec4 tm_dark_orange = _ui_mc6847_rgba8_to_imvec4(win->mc6847->alnum_dark_orange);
+    ImVec4 tm_green       = ImColor(win->mc6847->alnum_green);
+    ImVec4 tm_dark_green  = ImColor(win->mc6847->alnum_dark_green);
+    ImVec4 tm_orange      = ImColor(win->mc6847->alnum_orange);
+    ImVec4 tm_dark_orange = ImColor(win->mc6847->alnum_dark_orange);
     ImGui::ColorButton("##tm_green", tm_green, ImGuiColorEditFlags_NoAlpha, size); ImGui::SameLine();
     ImGui::ColorButton("##tm_dark_green", tm_dark_green, ImGuiColorEditFlags_NoAlpha, size); ImGui::SameLine();
     ImGui::ColorButton("##tm_orange", tm_orange, ImGuiColorEditFlags_NoAlpha, size); ImGui::SameLine();

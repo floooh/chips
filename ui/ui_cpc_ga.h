@@ -18,10 +18,14 @@
     ~~~
         your own assert macro (default: assert(c))
 
-    Include the following headers (and their depenencies) before including
-    ui_cpc_ga.h both for the declaration and implementation:
+    Include the following headers (and their depenencies) before the declaration:
 
     - cpc.h
+
+    Include the following header before the implementation:
+
+    - imgui.h
+    - ui_util.h
     
     ## zlib/libpng license
 
@@ -103,21 +107,12 @@ void ui_cpc_ga_discard(ui_cpc_ga_t* win) {
     win->valid = false;
 }
 
-static ImVec4 _ui_cpc_ga_rgba8_to_imvec4(uint32_t c) {
-    ImVec4 v;
-    v.x = float(c & 0xFF) / 255.0f;
-    v.y = float((c>>8) & 0xFF) / 255.0f;
-    v.z = float((c>>16) & 0xFF) / 255.0f;
-    v.w = float((c>>16) & 0xFF) / 255.0f;
-    return v;    
-}
-
 static void _ui_cpc_ga_draw_hw_colors(ui_cpc_ga_t* win) {
     ImGui::Text("Hardware Colors:");
     ImVec4 c;
     const ImVec2 size(18,18);
     for (int i = 0; i < 32; i++) {
-        c = _ui_cpc_ga_rgba8_to_imvec4(win->cpc->ga.colors[i]);
+        c = ImColor(win->cpc->ga.colors[i]);
         ImGui::PushID(i);
         ImGui::ColorButton("##hw_color", c, ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
@@ -132,7 +127,7 @@ static void _ui_cpc_ga_draw_palette(ui_cpc_ga_t* win) {
     const ImVec2 size(18,18);
     ImVec4 c;
     for (int i = 0; i < 16; i++) {
-        c = _ui_cpc_ga_rgba8_to_imvec4(win->cpc->ga.palette[i]);
+        c = ImColor(win->cpc->ga.palette[i]);
         ImGui::PushID(128 + i);
         ImGui::ColorButton("##pal_color", c, ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
@@ -145,7 +140,7 @@ static void _ui_cpc_ga_draw_palette(ui_cpc_ga_t* win) {
 static void _ui_cpc_ga_draw_border(ui_cpc_ga_t* win) {
     ImGui::Text("Border Colors:");
     const ImVec2 size(18,18);
-    const ImVec4 c = _ui_cpc_ga_rgba8_to_imvec4(win->cpc->ga.border_color);
+    const ImVec4 c = ImColor(win->cpc->ga.border_color);
     ImGui::ColorButton("##brd_color", c, ImGuiColorEditFlags_NoAlpha, size);
 }
 
