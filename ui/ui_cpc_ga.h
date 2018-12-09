@@ -164,7 +164,7 @@ void ui_cpc_ga_draw(ui_cpc_ga_t* win) {
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         cpc_t* cpc = win->cpc;
-        ImGui::Checkbox("Debug Visualization (FIXME)", &cpc->video_debug_enabled);
+        ImGui::Checkbox("Debug Visualization", &cpc->video_debug_enabled);
         ImGui::Separator();
         _ui_cpc_ga_draw_hw_colors(win);
         ImGui::Separator();

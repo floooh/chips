@@ -103,9 +103,6 @@ typedef enum {
 /* audio sample data callback */
 typedef void (*cpc_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
-/* optional video-decode-debugging callback */
-typedef void (*cpc_video_debug_callback_t)(uint64_t crtc_pins, void* user_data);
-
 /* configuration parameters for cpc_init() */
 typedef struct {
     cpc_type_t type;                /* default is the CPC 6128 */
@@ -123,9 +120,6 @@ typedef struct {
     int audio_num_samples;          /* default is ZX_AUDIO_NUM_SAMPLES */
     int audio_sample_rate;          /* playback sample rate, default is 44100 */
     float audio_volume;             /* audio volume: 0.0..1.0, default is 0.25 */
-
-    /* an optional callback to generate a video-decode debug visualization */
-    cpc_video_debug_callback_t video_debug_cb;
 
     /* ROM images */
     const void* rom_464_os;
@@ -193,7 +187,6 @@ typedef struct {
     int sample_pos;
     float sample_buffer[CPC_MAX_AUDIO_SAMPLES];
     bool video_debug_enabled;
-    cpc_video_debug_callback_t video_debug_cb;
     uint8_t ram[8][0x4000];
     uint8_t rom_os[0x4000];
     uint8_t rom_basic[0x4000];
@@ -246,8 +239,6 @@ void cpc_remove_disc(cpc_t* cpc);
 void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
 /* get current display debug visualization enabled/disabled state */
 bool cpc_video_debugging_enabled(cpc_t* cpc);
-/* low-level pixel decoding, this is public as support for video debugging callbacks */
-void cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -318,7 +309,6 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     }
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->user_data = desc->user_data;
-    sys->video_debug_cb = desc->video_debug_cb;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _CPC_DEFAULT(desc->audio_num_samples, CPC_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= CPC_MAX_AUDIO_SAMPLES);
@@ -1054,7 +1044,7 @@ static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
 }
 
 /* gate array pixel decoding for the 3 video modes */
-void cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
+static void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
     /*
         compute the source address from current CRTC ma (memory address)
         and ra (raster address) like this:
@@ -1121,8 +1111,41 @@ void cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
 /* video decode for current tick (pixels, border, blank) */
 static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
     if (sys->video_debug_enabled) {
-        if (sys->video_debug_cb) {
-            sys->video_debug_cb(crtc_pins, sys->user_data);
+        int dst_x = sys->crt.h_pos * 16;
+        int dst_y = sys->crt.v_pos;
+        if ((dst_x <= (_CPC_DBG_DISPLAY_WIDTH-16)) && (dst_y < _CPC_DBG_DISPLAY_HEIGHT)) {
+            uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * _CPC_DBG_DISPLAY_WIDTH]);
+            if (!(crtc_pins & MC6845_DE)) {
+                uint8_t r = 0x3F;
+                uint8_t g = 0x3F;
+                uint8_t b = 0x3F;
+                if (crtc_pins & MC6845_HS) {
+                    r = 0x7F; g = 0; b = 0;
+                }
+                if (sys->ga.sync) {
+                    r = 0xFF; g = 0; b = 0;
+                }
+                if (crtc_pins & MC6845_VS) {
+                    g = 0x7F;
+                }
+                if (sys->ga.intr) {
+                    b = 0xFF;
+                }
+                else if (0 == sys->vdg.scanline_ctr) {
+                    r = g = b = 0x00;
+                }
+                for (int i = 0; i < 16; i++) {
+                    if (i == 0) {
+                        *dst++ = 0xFF000000;
+                    }
+                    else {
+                        *dst++ = 0xFF<<24 | b<<16 | g<<8 | r;
+                    }
+                }
+            }
+            else {
+                _cpc_ga_decode_pixels(sys, dst, crtc_pins);
+            }
         }
     }
     else if (sys->crt.visible) {
@@ -1131,7 +1154,7 @@ static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
         uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * _CPC_STD_DISPLAY_WIDTH]);
         if (crtc_pins & MC6845_DE) {
             /* decode visible pixels */
-            cpc_ga_decode_pixels(sys, dst, crtc_pins);
+            _cpc_ga_decode_pixels(sys, dst, crtc_pins);
         }
         else if (crtc_pins & (MC6845_HS|MC6845_VS)) {
             /* during horizontal/vertical sync: blacker than black */

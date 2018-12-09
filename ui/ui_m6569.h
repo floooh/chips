@@ -302,7 +302,7 @@ void ui_m6569_draw(ui_m6569_t* win) {
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##m6569_state", ImVec2(0, 0), true);
-        ImGui::Checkbox("Debug Visualization (FIXME)", &win->vic->debug_vis);
+        ImGui::Checkbox("Debug Visualization", &win->vic->debug_vis);
         _ui_m6569_draw_hwcolors(win);
         _ui_m6569_draw_registers(win);
         _ui_m6569_draw_raster_unit(win);
