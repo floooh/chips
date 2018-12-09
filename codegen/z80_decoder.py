@@ -27,21 +27,30 @@ r = [ 'B', 'C', 'D', 'E', 'H', 'L', 'HL', 'A' ]
 rx = [ 'B', 'C', 'D', 'E', 'H', 'L', 'HL', 'A' ]
 
 # 16-bit register table, with SP
-rp = [ 'BC', 'DE', 'HL', 'SP' ]
+rp = [ 'BC', 'DE', 'HL', 'FA' ]
 
-# 16-bit register table, with AF (only used for PUSH/POP)
-rp2 = [ 'BC', 'DE', 'HL', 'FA' ]
+def rpsp_cmt(p):
+    if p==3:
+        return 'SP'
+    else:
+        return rp[p]
+
+def rpaf_cmt(p):
+    if p==3:
+        return 'AF'
+    else:
+        return rp[p]
 
 # condition-code table (for conditional jumps etc)
 cond = [
-    '!(_G_F()&Z80_ZF)',  # NZ
-    '(_G_F()&Z80_ZF)',   # Z
-    '!(_G_F()&Z80_CF)',   # NC
-    '(_G_F()&Z80_CF)',    # C
-    '!(_G_F()&Z80_PF)',   # PO
-    '(_G_F()&Z80_PF)',    # PE
-    '!(_G_F()&Z80_SF)',   # P
-    '(_G_F()&Z80_SF)'     # M
+    '!(F&Z80_ZF)',  # NZ
+    '(F&Z80_ZF)',   # Z
+    '!(F&Z80_CF)',  # NC
+    '(F&Z80_CF)',   # C
+    '!(F&Z80_PF)',  # PO
+    '(F&Z80_PF)',   # PE
+    '!(F&Z80_SF)',  # P
+    '(F&Z80_SF)'    # M
 ]
 
 # the same as 'human readable' flags for comments
@@ -517,8 +526,8 @@ def exx():
 #   Generate code for POP dd.
 #
 def pop_dd(p):
-    src ='_MR(SP++,'+rp2[p][0]+');'
-    src+='_MR(SP++,'+rp2[p][1]+');'
+    src ='_MR(SP++,'+rp[p][0]+');'
+    src+='_MR(SP++,'+rp[p][1]+');'
     return src
 
 #-------------------------------------------------------------------------------
@@ -528,8 +537,8 @@ def pop_dd(p):
 #
 def push_dd(p):
     src ='_T(1);'
-    src+='_MW(--SP,'+rp2[p][0]+');'
-    src+='_MW(--SP,'+rp2[p][1]+');'
+    src+='_MW(--SP,'+rp[p][0]+');'
+    src+='_MW(--SP,'+rp[p][1]+');'
     return src
 
 #-------------------------------------------------------------------------------
@@ -537,10 +546,13 @@ def push_dd(p):
 #   LD (nn),dd
 #
 def ld_inn_dd(p):
-    src  = '_IMM16(addr);'
-    src += '_MW(addr++,'+rp[p][1]+');'
-    src += '_MW(addr,'+rp[p][0]+');'
-    src += '_S_WZ(addr);'
+    src  = '_IMM16(WZ);'
+    if p==3:
+        src += '_MW(WZ++,SP);'
+        src += '_MW(WZ,SP>>8);'
+    else:
+        src += '_MW(WZ++,'+rp[p][1]+');'
+        src += '_MW(WZ,'+rp[p][0]+');'
     return src
 
 #-------------------------------------------------------------------------------
@@ -548,10 +560,13 @@ def ld_inn_dd(p):
 #   LD dd,(nn)
 #
 def ld_dd_inn(p):
-    src  = '_IMM16(addr);'
-    src += '_MR(addr++,'+rp[p][1]+');'
-    src += '_MR(addr,'+rp[p][0]+');'
-    src += '_S_WZ(addr);'
+    src  = '_IMM16(WZ);'
+    if p==3:
+        src += '_MR(WZ++,SP);'
+        src += '_MR(WZ,SP>>8);'
+    else:
+        src += '_MR(WZ++,'+rp[p][1]+');'
+        src += '_MR(WZ,'+rp[p][0]+');'
     return src
 
 #-------------------------------------------------------------------------------
@@ -855,24 +870,18 @@ def sbc8():
     return src
 
 def and8():
-    src ='{'
-    src+='A&=d8;'
+    src ='A&=d8;'
     src+='F=_z80_szp[A]|Z80_HF;'
-    src+='}'
     return src
 
 def xor8():
-    src ='{'
-    src+='A^=d8^;'
+    src ='A^=d8;'
     src+='F=_z80_szp[A];'
-    src+='}'
     return src
 
 def or8():
-    src ='{'
-    src+='A|=d8;'
+    src ='A|=d8;'
     src+='F=_z80_szp[A];'
-    src+='}'
     return src
 
 def cp8():
@@ -935,7 +944,10 @@ def add16(p):
     src ='{'
     src+='uint16_t acc=(H<<8)|L;'
     src+='WZ=acc+1;'
-    src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
+    if p==3:
+        src+='d16=SP;'
+    else:
+        src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
     src+='uint32_t r=acc+d16;'
     src+='H=r>>8;L=r;'
     src+='uint8_t f=F&(Z80_SF|Z80_ZF|Z80_VF);'
@@ -950,7 +962,10 @@ def adc16(p):
     src ='{'
     src+='uint16_t acc=(H<<8)|L;'
     src+='WZ=acc+1;'
-    src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
+    if p==3:
+        src+='d16=SP;'
+    else:
+        src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
     src+='uint32_t r=acc+d16+(F&Z80_CF);'
     src+='H=r>>8;L=r;'
     src+='uint8_t f=((d16^acc^0x8000)&(d16^r)&0x8000)>>13;'
@@ -967,7 +982,10 @@ def sbc16(p):
     src ='{'
     src+='uint16_t acc=(H<<8)|L;'
     src+='WZ=acc+1;'
-    src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
+    if p==3:
+        src+='d16=SP;'
+    else:
+        src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
     src+='uint32_t r=acc-d16-(F&Z80_CF);'
     src+='uint8_t f=Z80_NF|(((d16^acc)&(acc^r)&0x8000)>>13);'
     src+='H=r>>8;L=r;'
@@ -1102,54 +1120,63 @@ def enc_op(ixy, op) :
         elif z == 1:
             if q == 0:
                 # 16-bit immediate loads
-                o.cmt = 'LD '+rp[p]+',nn'
-                o.src = '_IMM16(d16);_S_'+rp[p]+'(d16);'
+                o.cmt = 'LD '+rpsp_cmt(p)+',nn'
+                if p==3:
+                    o.src = '_IMM16(SP);'
+                else:
+                    o.src = '_IMM16(d16);'+rp[p][0]+'=d16>>8;'+rp[p][1]+'=d16;'
             else :
                 # ADD HL,rr; ADD IX,rr; ADD IY,rr
-                o.cmt = 'ADD '+rp[2]+','+rp[p]
+                o.cmt = 'ADD '+rpsp_cmt(2)+','+rpsp_cmt(p)
                 o.src = add16(p)
         elif z == 2:
             # indirect loads
             op_tbl = [
-                [ 'LD (BC),A',          'addr=_G_BC();d8=_G_A();_MW(addr++,d8);_S_WZ((d8<<8)|(addr&0x00FF));' ],
-                [ 'LD A,(BC)',          'addr=_G_BC();_MR(addr++,d8);_S_A(d8);_S_WZ(addr);' ],
-                [ 'LD (DE),A',          'addr=_G_DE();d8=_G_A();_MW(addr++,d8);_S_WZ((d8<<8)|(addr&0x00FF));' ],
-                [ 'LD A,(DE)',          'addr=_G_DE();_MR(addr++,d8);_S_A(d8);_S_WZ(addr);' ],
-                [ 'LD (nn),'+rp[2],     '_IMM16(addr);_MW(addr++,_G_L());_MW(addr,_G_H());_S_WZ(addr);' ],
-                [ 'LD '+rp[2]+',(nn)',  '_IMM16(addr);_MR(addr++,d8);_S_L(d8);_MR(addr,d8);_S_H(d8);_S_WZ(addr);' ],
-                [ 'LD (nn),A',          '_IMM16(addr);d8=_G_A();_MW(addr++,d8);_S_WZ((d8<<8)|(addr&0x00FF));' ],
-                [ 'LD A,(nn)',          '_IMM16(addr);_MR(addr++,d8);_S_A(d8);_S_WZ(addr);' ],
+                [ 'LD (BC),A',              'WZ=(B<<8)|C;_MW(WZ++,A);WZ=(A<<8)|(WZ&0x00FF);' ],
+                [ 'LD A,(BC)',              'WZ=(B<<8)|C;_MR(WZ++,A);' ],
+                [ 'LD (DE),A',              'WZ=(D<<8)|E;_MW(WZ++,A);WZ=(A<<8)|(WZ&0x00FF);' ],
+                [ 'LD A,(DE)',              'WZ=(D<<8)|E;_MR(WZ++,A);' ],
+                [ 'LD (nn),'+rpsp_cmt(2),   '_IMM16(WZ);_MW(WZ++,'+rp[2][1]+');_MW(WZ,'+rp[2][0]+');' ],
+                [ 'LD '+rpsp_cmt(2)+',(nn)','_IMM16(WZ);_MR(WZ++,'+rp[2][1]+');_MR(WZ,'+rp[2][0]+');' ],
+                [ 'LD (nn),A',              '_IMM16(WZ);_MW(WZ++,A);WZ=(A<<8)|(WZ&0x00FF);' ],
+                [ 'LD A,(nn)',              '_IMM16(WZ);_MR(WZ++,A);' ],
             ]
             o.cmt = op_tbl[y][0]
             o.src = op_tbl[y][1]
         elif z == 3:
             # 16-bit INC/DEC 
             if q == 0:
-                o.cmt = 'INC '+rp[p]
-                o.src = '_T(2);_S_'+rp[p]+'(_G_'+rp[p]+'()+1);'
+                o.cmt = 'INC '+rpsp_cmt(p)
+                if p==3:
+                    o.src = '_T(2);SP++;'
+                else:
+                    o.src = '_T(2);d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';d16++;'+rp[p][0]+'=d16>>8;'+rp[p][1]+'=d16;'
             else:
-                o.cmt = 'DEC '+rp[p]
-                o.src = '_T(2);_S_'+rp[p]+'(_G_'+rp[p]+'()-1);'
+                o.cmt = 'DEC '+rpsp_cmt(p)
+                if p==3:
+                    o.src = '_T(2);SP--;'
+                else:
+                    o.src = '_T(2);d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';d16--;'+rp[p][0]+'=d16>>8;'+rp[p][1]+'=d16;'
         elif z == 4 or z == 5:
             cmt = 'INC' if z == 4 else 'DEC'
             fn = inc8() if z==4 else dec8()
             if y == 6:
                 # INC/DEC (HL)/(IX+d)/(IY+d)
-                o.cmt = cmt+' (HL/IX+d/IY+d)'
+                o.cmt = cmt+' '+addr_cmt(ixy)
                 o.src = addr(ixy,5)+'_T(1);_MR(addr,d8);'+fn+'_MW(addr,d8);'
             else:
                 # INC/DEC r
                 o.cmt = cmt+' '+r[y]
-                o.src = 'd8=_G_'+r[y]+'();'+fn+'_S_'+r[y]+'(d8);'
+                o.src = 'd8='+r[y]+';'+fn+r[y]+'=d8;'
         elif z == 6:
             if y == 6:
                 # LD (HL),n; LD (IX+d),n; LD (IY+d),n
-                o.cmt = 'LD (HL/IX+d/IY+d),n'
+                o.cmt = 'LD '+addr_cmt(ixy)+',n'
                 o.src = addr(ixy,2) + '_IMM8(d8);_MW(addr,d8);'
             else:
                 # LD r,n
                 o.cmt = 'LD '+r[y]+',n'
-                o.src = '_IMM8(d8);_S_'+r[y]+'(d8);'
+                o.src = '_IMM8('+r[y]+');'
         elif z == 7:
             # misc ops on A and F
             op_tbl = [
@@ -1174,30 +1201,30 @@ def enc_op(ixy, op) :
         if z == 1:
             if q == 0:
                 # POP BC,DE,HL,IX,IY,AF
-                o.cmt = 'POP '+rp2[p]
+                o.cmt = 'POP '+rpaf_cmt(p)
                 o.src = pop_dd(p)
             else:
                 # misc ops
                 op_tbl = [
                     [ 'RET', ret() ],
                     [ 'EXX', exx() ],
-                    [ 'JP '+rp[2], 'pc=_G_HL();' ],
-                    [ 'LD SP,'+rp[2], '_T(2);_S_SP(_G_HL());' ]
+                    [ 'JP '+rpsp_cmt(2), 'PC=('+rp[2][0]+'<<8)|'+rp[2][1]+';' ],
+                    [ 'LD SP,'+rpaf_cmt(2), '_T(2);SP=('+rp[2][0]+'<<8)|'+rp[2][1]+';' ]
                 ]
                 o.cmt = op_tbl[p][0]
                 o.src = op_tbl[p][1]
         if z == 2:
             # JP cc,nn
             o.cmt = 'JP {},nn'.format(cond_cmt[y])
-            o.src = '_IMM16(addr);if('+cond[y]+'){pc=addr;}'
+            o.src = '_IMM16(addr);if('+cond[y]+'){PC=addr;}'
         if z == 3:
             # misc ops
             op_tbl = [
-                [ 'JP nn', '_IMM16(pc);' ],
+                [ 'JP nn', '_IMM16(PC);' ],
                 [ None, None ], # CB prefix instructions
                 [ 'OUT (n),A', out_n_a() ],
                 [ 'IN A,(n)', in_n_a() ],
-                [ 'EX (SP),'+rp[2], ex_sp_dd() ],
+                [ 'EX (SP),'+rpaf_cmt(2), ex_sp_dd() ],
                 [ 'EX DE,HL', ex_de_hl() ],
                 [ 'DI', di() ],
                 [ 'EI', ei() ]
@@ -1211,7 +1238,7 @@ def enc_op(ixy, op) :
         if z == 5:
             if q == 0:
                 # PUSH BC,DE,HL,IX,IY,AF
-                o.cmt = 'PUSH {}'.format(rp2[p])
+                o.cmt = 'PUSH '+rpaf_cmt(p)
                 o.src = push_dd(p)
             else:
                 op_tbl = [
@@ -1291,18 +1318,18 @@ def enc_ed_op(op) :
         if z == 2:
             # SBC/ADC HL,rr
             if q==0:
-                o.cmt = 'SBC HL,'+rp[p]
+                o.cmt = 'SBC HL,'+rpsp_cmt(p)
                 o.src = sbc16(p)
             else:
-                o.cmt = 'ADC HL,'+rp[p]
+                o.cmt = 'ADC HL,'+rpsp_cmt(p)
                 o.src = adc16(p)
         if z == 3:
             # 16-bit immediate address load/store
             if q == 0:
-                o.cmt = 'LD (nn),{}'.format(rp[p])
+                o.cmt = 'LD (nn),'+rpsp_cmt(p)
                 o.src = ld_inn_dd(p)
             else:
-                o.cmt = 'LD {},(nn)'.format(rp[p])
+                o.cmt = 'LD '+rpsp_cmt(p)+',(nn)'
                 o.src = ld_dd_inn(p)
         if z == 4:
             # NEG
