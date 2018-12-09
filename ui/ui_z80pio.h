@@ -63,6 +63,7 @@ typedef struct {
     const char* title;      /* window title */
     z80pio_t* pio;          /* pointer to PIO to track */
     int x, y;               /* initial window position */
+    int w, h;               /* initial window size, or 0 for default size */
     bool open;              /* initial open state */
     ui_chip_desc_t chip_desc;   /* chip visualization desc */
 } ui_z80pio_desc_t;
@@ -71,6 +72,7 @@ typedef struct {
     const char* title;
     z80pio_t* pio;
     float init_x, init_y;
+    float init_w, init_h;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -100,6 +102,8 @@ void ui_z80pio_init(ui_z80pio_t* win, const ui_z80pio_desc_t* desc) {
     win->pio = desc->pio;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 360 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 364 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -180,7 +184,7 @@ void ui_z80pio_draw(ui_z80pio_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(360, 364), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##pio_chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->pio->pins);

@@ -77,7 +77,8 @@ typedef struct {
     ui_memedit_read_t read_cb;
     ui_memedit_write_t write_cb;
     void* user_data;
-    int x, y, w, h;     /* initial window pos and size */
+    int x, y;           /* initial window pos */
+    int w, h;           /* initial window size, or 0 for default size */
     bool open;          /* initial open state */
 } ui_memedit_desc_t;
 
@@ -598,8 +599,8 @@ void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc) {
     win->user_data = desc->user_data;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
-    win->init_w = (float) desc->w;
-    win->init_h = (float) desc->h;
+    win->init_w = (float) ((desc->w == 0) ? 512 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 120 : desc->h);
     win->open = desc->open;
     win->ed = new MemoryEditor;
     win->ed->Open = win->open;

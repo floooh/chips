@@ -63,6 +63,7 @@ typedef struct {
     const char* title;          /* window title */
     mc6847_t* mc6847;           /* pointer to mc6847_t instance to track */
     int x, y;                   /* initial window pos */
+    int w, h;                   /* initial window size, or 0 for default size */
     bool open;                  /* initial open state */
     ui_chip_desc_t chip_desc;   /* chip visualization desc */
 } ui_mc6847_desc_t;
@@ -71,6 +72,7 @@ typedef struct {
     const char* title;
     mc6847_t* mc6847;
     float init_x, init_y;
+    float init_w, init_h;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -104,6 +106,8 @@ void ui_mc6847_init(ui_mc6847_t* win, const ui_mc6847_desc_t* desc) {
     win->mc6847 = desc->mc6847;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 348 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 360 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -153,7 +157,7 @@ void ui_mc6847_draw(ui_mc6847_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(348, 360), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->mc6847->pins);

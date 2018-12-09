@@ -61,6 +61,7 @@ typedef struct {
     const char* title;      /* window title */
     kc85_t* kc85;           /* pointer to kc85_t instance to track */
     int x, y;               /* initial position */
+    int w, h;               /* initial window size or 0 for default size */
     bool open;              /* initial open state */
 } ui_kc85sys_desc_t;
 
@@ -68,6 +69,7 @@ typedef struct {
     const char* title;
     kc85_t* kc85;
     float init_x, init_y;
+    float init_w, init_h;
     bool open;
     bool valid;
 } ui_kc85sys_t;
@@ -100,6 +102,8 @@ void ui_kc85sys_init(ui_kc85sys_t* win, const ui_kc85sys_desc_t* desc) {
     win->kc85 = desc->kc85;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 200 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 400 : desc->h);
     win->open = desc->open;
     win->valid = true;
 }
@@ -115,7 +119,7 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(200, 400), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         if (ImGui::CollapsingHeader("Port 88h (PIO A)", ImGuiTreeNodeFlags_DefaultOpen)) {
             const uint8_t v = win->kc85->pio_a;

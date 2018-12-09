@@ -62,6 +62,7 @@ typedef struct {
     const char* title;          /* window title */
     i8255_t* i8255;             /* pointer to i8255_t instance to track */
     int x, y;                   /* initial window position */
+    int w, h;                   /* initial window size or 0 for default size */
     bool open;                  /* initial open state */
     ui_chip_desc_t chip_desc;   /* chip visualization desc */
 } ui_i8255_desc_t;
@@ -70,6 +71,7 @@ typedef struct {
     const char* title;
     i8255_t* i8255;
     float init_x, init_y;
+    float init_w, init_h;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -103,6 +105,8 @@ void ui_i8255_init(ui_i8255_t* win, const ui_i8255_desc_t* desc) {
     win->i8255 = desc->i8255;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 440 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 370 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -157,7 +161,7 @@ void ui_i8255_draw(ui_i8255_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(440, 370), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##i8255_chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->i8255->pins);

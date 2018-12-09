@@ -547,7 +547,6 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.read_cb = _ui_cpc_mem_read;
         desc.write_cb = _ui_cpc_mem_write;
         desc.user_data = ui->cpc;
-        desc.h = 120;
         static const char* titles[] = { "Memory Editor #1", "Memory Editor #2", "Memory Editor #3", "Memory Editor #4" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
@@ -561,8 +560,6 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.title = "Memory Map";
         desc.x = x;
         desc.y = y;
-        desc.w = 400;
-        desc.h = 64;
         ui_memmap_init(&ui->memmap, &desc);
     }
     x += dx; y += dy;
@@ -575,8 +572,6 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         desc.start_addr = 0x0000;
         desc.read_cb = _ui_cpc_mem_read;
         desc.user_data = ui->cpc;
-        desc.w = 400;
-        desc.h = 256;
         static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;

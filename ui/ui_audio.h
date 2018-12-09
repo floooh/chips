@@ -57,6 +57,7 @@ typedef struct {
     const float* sample_buffer; /* pointer to audio sample buffer */
     int num_samples;            /* max number of samples in sample buffer */
     int x, y;                   /* initial window position */
+    int w, h;                   /* initial window size or zero for default size */
     bool open;                  /* initial open state */
 } ui_audio_desc_t;
 
@@ -65,6 +66,7 @@ typedef struct {
     const float* sample_buffer;
     int num_samples;
     float init_x, init_y;
+    float init_w, init_h;
     uint32_t cursor_color;
     bool open;
     bool valid;
@@ -100,6 +102,8 @@ void ui_audio_init(ui_audio_t* win, const ui_audio_desc_t* desc) {
     win->num_samples = desc->num_samples;
     win->init_x = (float)  desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 480 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 120 : desc->h);
     win->cursor_color = 0xFF0000FF;
     win->open = desc->open;
     win->valid = true;
@@ -116,7 +120,7 @@ void ui_audio_draw(ui_audio_t* win, int sample_pos) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(480, 120), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImVec2 pos = ImGui::GetCursorScreenPos();
         ImVec2 area = ImGui::GetContentRegionAvail();

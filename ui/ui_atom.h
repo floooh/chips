@@ -392,7 +392,6 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
         desc.read_cb = _ui_atom_mem_read;
         desc.write_cb = _ui_atom_mem_write;
         desc.user_data = ui->atom;
-        desc.h = 120;
         static const char* titles[] = { "Memory Editor #1", "Memory Editor #2", "Memory Editor #3", "Memory Editor #4" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
@@ -406,8 +405,6 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
         desc.title = "Memory Map";
         desc.x = x;
         desc.y = y;
-        desc.w = 400;
-        desc.h = 64;
         ui_memmap_init(&ui->memmap, &desc);
         /* the memory map is static */
         ui_memmap_layer(&ui->memmap, "System");
@@ -428,8 +425,6 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc) {
         desc.start_addr = mem_rd16(&ui->atom->mem, 0xFFFC);
         desc.read_cb = _ui_atom_mem_read;
         desc.user_data = ui->atom;
-        desc.w = 400;
-        desc.h = 256;
         static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;

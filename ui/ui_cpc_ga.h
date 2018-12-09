@@ -59,6 +59,7 @@ typedef struct {
     const char* title;      /* window title */
     cpc_t* cpc;             /* pointer to cpc instance to track */
     int x, y;               /* initial window position */
+    int w, h;               /* initial window size or zero for default size */
     bool open;              /* initial open state */
 } ui_cpc_ga_desc_t;
 
@@ -66,6 +67,7 @@ typedef struct {
     const char* title;
     cpc_t* cpc;
     float init_x, init_y;
+    float init_w, init_h;
     bool open;
     bool valid;
 } ui_cpc_ga_t;
@@ -98,6 +100,8 @@ void ui_cpc_ga_init(ui_cpc_ga_t* win, const ui_cpc_ga_desc_t* desc) {
     win->cpc = desc->cpc;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 428 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 428 : desc->h);
     win->open = desc->open;
     win->valid = true;
 }
@@ -157,7 +161,7 @@ void ui_cpc_ga_draw(ui_cpc_ga_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(428, 428), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         cpc_t* cpc = win->cpc;
         ImGui::Checkbox("Debug Visualization (FIXME)", &cpc->video_debug_enabled);

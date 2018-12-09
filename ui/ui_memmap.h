@@ -73,7 +73,8 @@ typedef struct {
 /* setup params for ui_memmap_init() */
 typedef struct {
     const char* title;  /* window title */
-    int x, y, w, h;     /* initial window pos and size */
+    int x, y;           /* initial window pos */
+    int w, h;           /* initial window size, or 0 for default size */
     bool open;          /* initial open state */
 } ui_memmap_desc_t;
 
@@ -190,8 +191,8 @@ void ui_memmap_init(ui_memmap_t* win, const ui_memmap_desc_t* desc) {
     win->title = desc->title;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
-    win->init_w = (float) desc->w;
-    win->init_h = (float) desc->h;
+    win->init_w = (float) ((desc->w == 0) ? 400 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 40 : desc->h);
     win->open = desc->open;
     win->left_padding = 80.0f;;
     win->layer_height = 20.0f;

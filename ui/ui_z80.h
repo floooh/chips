@@ -63,6 +63,7 @@ typedef struct {
     const char* title;          /* window title */
     z80_t* cpu;                 /* pointer to CPU to track */
     int x, y;                   /* initial window pos */
+    int w, h;                   /* initial window size, or 0 for default size */
     bool open;                  /* initial open state */
     ui_chip_desc_t chip_desc;   /* chip visualization desc */
 } ui_z80_desc_t;
@@ -71,6 +72,7 @@ typedef struct {
     const char* title;
     z80_t* cpu;
     float init_x, init_y;
+    float init_w, init_h;
     bool open;
     bool valid;
     ui_chip_t chip;
@@ -104,6 +106,8 @@ void ui_z80_init(ui_z80_t* win, const ui_z80_desc_t* desc) {
     win->cpu = desc->cpu;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 360 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 340 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -153,7 +157,7 @@ void ui_z80_draw(ui_z80_t* win) {
         return;
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(360, 340), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##z80_chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->cpu->pins);
