@@ -20,7 +20,11 @@ Out = None
 
 # 8-bit register table, the 'HL' entry is for instructions that use
 # (HL), (IX+d) and (IY+d)
+# for extended ops, H, L, HL will be patched with IXH, IXL, IX
 r = [ 'B', 'C', 'D', 'E', 'H', 'L', 'HL', 'A' ]
+
+# same as 'r', but not patched for extended ops
+rx = [ 'B', 'C', 'D', 'E', 'H', 'L', 'HL', 'A' ]
 
 # 16-bit register table, with SP
 rp = [ 'BC', 'DE', 'HL', 'SP' ]
@@ -135,12 +139,16 @@ def l(s) :
 #
 def write_header() :
     l('uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {')
-    l('  uint64_t r0 = cpu->bc_de_hl_fa;')
-    l('  uint64_t r1 = cpu->wz_ix_iy_sp;')
-    l('  uint64_t r2 = cpu->im_ir_pc_bits;')
-    l('  uint64_t r3 = cpu->bc_de_hl_fa_;')
-    l('  uint64_t ws = _z80_map_regs(r0, r1, r2);')
-    l('  uint64_t map_bits = r2 & _BITS_MAP_REGS;')
+    l('  uint8_t B=cpu->b, C=cpu->c;')
+    l('  uint8_t D=cpu->d, E=cpu->e;')
+    l('  uint8_t H=cpu->h, L=cpu->l;')
+    l('  uint8_t A=cpu->a, F=cpu->f;')
+    l('  uint8_t IXH=cpu->ixh, IXL=cpu->ixl;')
+    l('  uint8_t IYH=cpu->iyh, IYL=cpu->iyl;')
+    l('  uint16_t BC_=cpu->bc_, DE_=cpu->de_, HL_=cpu->hl_, AF_=cpu->af_;')
+    l('  uint16_t WZ=cpu->wz, SP=cpu->sp, PC=cpu->pc;')
+    l('  uint8_t IM=cpu->im, I=cpu->i, R=r;')
+    l('  bool IFF1=cpu->iff1, IFF2=cpu->iff2, EI_PENDING=cpu->ei->pending;')
     l('  uint64_t pins = cpu->pins;')
     l('  const uint64_t trap_addr = cpu->trap_addr;')
     l('  const z80_tick_t tick = cpu->tick;')
@@ -149,20 +157,9 @@ def write_header() :
     l('  uint32_t ticks = 0;')
     l('  uint8_t op, d8;')
     l('  uint16_t addr, d16;')
-    l('  uint16_t pc = _G_PC();')
     l('  uint64_t pre_pins = pins;')
     l('  do {')
     l('    _FETCH(op)')
-    l('    if (op == 0xED) {')
-    l('      map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
-    l('    }')
-    l('    if (map_bits != (r2 & _BITS_MAP_REGS)) {')
-    l('      const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;')
-    l('      r0 = _z80_flush_r0(ws, r0, old_map_bits);')
-    l('      r1 = _z80_flush_r1(ws, r1, old_map_bits);')
-    l('      r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
-    l('      ws = _z80_map_regs(r0, r1, r2);')
-    l('    }')
     l('    switch (op) {')
 
 #-------------------------------------------------------------------------------
@@ -176,12 +173,11 @@ def write_op_post():
 # write source footer
 #
 def write_footer() :
-    l('    map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
     l('    pins&=~Z80_INT;')
     l('    /* delay-enable interrupt flags */')
-    l('    if (r2 & _BIT_EI) {')
-    l('      r2 &= ~_BIT_EI;')
-    l('      r2 |= (_BIT_IFF1 | _BIT_IFF2);')
+    l('    if (EI_PENDING) {')
+    l('      EI_PENDING=false;')
+    l('      IFF1=IFF2=true;')
     l('    }')
     l('    if (trap_addr != 0xFFFFFFFFFFFFFFFF) {')
     l('      uint64_t ta = trap_addr;')
@@ -195,14 +191,16 @@ def write_footer() :
     l('    }')
     l('    pre_pins = pins;')
     l('  } while ((ticks < num_ticks) && (trap_id < 0));')
-    l('  _S_PC(pc);')
-    l('  r0 = _z80_flush_r0(ws, r0, r2);')
-    l('  r1 = _z80_flush_r1(ws, r1, r2);')
-    l('  r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
-    l('  cpu->bc_de_hl_fa = r0;')
-    l('  cpu->wz_ix_iy_sp = r1;')
-    l('  cpu->im_ir_pc_bits = r2;')
-    l('  cpu->bc_de_hl_fa_ = r3;')
+    l('  cpu->b=B; cpu->c=C;')
+    l('  cpu->d=D; cpu->e=E;')
+    l('  cpu->h=H; cpu->l=L;')
+    l('  cpu->a=A; cpu->f=F;')
+    l('  cpu->ixh=IXH; cpu->ixl=IXL;')
+    l('  cpu->iyh=IYH; cpu->iyl=IYL;')
+    l('  cpu->bc_=BC_; cpu->de_=DE_; cpu->hl_=HL_; cpu->af_=AF_;')
+    l('  cpu->wz=WZ; cpu->sp=SP; cpu->pc=PC;')
+    l('  cpu->im=IM; cpu->i=I; cpu->r=R;')
+    l('  cpu->iff1=IFF1; cpu->iff2=IFF2; cpu->ei_pending=EI_PENDING;')
     l('  cpu->pins = pins;')
     l('  cpu->trap_id = trap_id;')
     l('  return ticks;')
@@ -247,55 +245,46 @@ def write_footer() :
 #
 def write_interrupt_handling():
     l('    bool nmi = 0 != ((pins & (pre_pins ^ pins)) & Z80_NMI);')
-    l('    if (nmi || (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1))) {')
-    l('      r2 &= ~_BIT_IFF1;');
+    l('    if (nmi || (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && IFF1)) {')
+    l('      IFF1=false;');
     l('      if (pins & Z80_INT) {');
-    l('        r2 &= ~_BIT_IFF2;');
+    l('        IFF2=false;');
     l('      }')
     l('      if (pins & Z80_HALT) {')
     l('        pins &= ~Z80_HALT;')
-    l('        pc++;')
+    l('        PC++;')
     l('      }')
-    l('      _SA(pc);')
+    l('      _SA(PC);')
     l('      if (nmi) {')
     l('        _TWM(5,Z80_M1|Z80_MREQ|Z80_RD);_BUMPR();')
-    l('        uint16_t sp = _G_SP();')
-    l('        _MW(--sp,pc>>8);')
-    l('        _MW(--sp,pc);')
-    l('        _S_SP(sp);')
-    l('        pc = 0x0066;')
-    l('        _S_WZ(pc);')
+    l('        _MW(--SP,PC>>8);')
+    l('        _MW(--SP,PC);')
+    l('        PC=WZ=0x0066;')
     l('      }')
     l('      else {')
     l('        _TWM(4,Z80_M1|Z80_IORQ);')
-    l('        const uint8_t int_vec = _GD();')
+    l('        const uint8_t int_vec=_GD();')
     l('        _BUMPR();')
     l('        _T(2);')
-    l('        switch (_G_IM()) {')
+    l('        switch (IM) {')
     l('          case 0:')
     l('            break;')
     l('          case 1:')
     l('            {')
-    l('              uint16_t sp = _G_SP();')
-    l('              _MW(--sp,pc>>8);')
-    l('              _MW(--sp,pc);')
-    l('              _S_SP(sp);')
-    l('              pc = 0x0038;')
-    l('              _S_WZ(pc);')
+    l('              _MW(--SP,PC>>8);')
+    l('              _MW(--SP,PC);')
+    l('              PC=WZ=0x0038;')
     l('            }')
     l('            break;')
     l('          case 2:')
     l('            {')
-    l('              uint16_t sp = _G_SP();')
-    l('              _MW(--sp,pc>>8);')
-    l('              _MW(--sp,pc);')
-    l('              _S_SP(sp);')
-    l('              addr = (_G_I()<<8) | (int_vec & 0xFE);')
+    l('              _MW(--SP,PC>>8);')
+    l('              _MW(--SP,PC);')
+    l('              addr = (I<<8) | (int_vec & 0xFE);')
     l('              uint8_t z,w;')
     l('              _MR(addr++,z);')
     l('              _MR(addr,w);')
-    l('              pc = (w<<8)|z;')
-    l('              _S_WZ(pc);')
+    l('              PC=WZ=(w<<8)|z;')
     l('            }')
     l('            break;')
     l('        }')
@@ -420,8 +409,26 @@ def write_cb_ops():
 # or (IX+d), (IY+d). For the index instructions also update WZ with
 # IX+d or IY+d
 #
-def addr(ext_ticks) :
-    return '_ADDR(addr,'+str(ext_ticks)+');'
+def addr(ixy, ext_ticks) :
+    if ixy:
+        res = 'addr='
+        if ixy=='IX':
+            res += 'IXH<<8|IXL;'
+        else:
+            res += 'IYH<<8|IYL;'
+        res += 'int8_t d;_MR(PC++,d);addr+=d;WZ=addr;_T('+ext_ticks+');'
+        return res;
+    else:
+        return 'addr=(H<<8)|L;'
+
+#-------------------------------------------------------------------------------
+# Return a (HL)/(IX+d)/(IY+d) comment string
+#
+def addr_cmt(ixy):
+    if ixy:
+        return '('+ixy+'+d)'
+    else:
+        return '(HL)'
 
 #-------------------------------------------------------------------------------
 #   out_n_a
@@ -431,10 +438,9 @@ def addr(ext_ticks) :
 def out_n_a():
     src = '{'
     src += '_IMM8(d8);'
-    src += 'uint8_t a=_G_A();'
-    src += 'addr=(a<<8)|d8;'
-    src += '_OUT(addr,a);'
-    src += '_S_WZ((addr&0xFF00)|((addr+1)&0x00FF));'
+    src += 'addr=(A<<8)|d8;'
+    src += '_OUT(addr,A);'
+    src += 'WZ=(addr&0xFF00)|((addr+1)&0x00FF);'
     src += '}'
     return src
 
@@ -446,11 +452,8 @@ def out_n_a():
 def in_n_a():
     src = '{'
     src += '_IMM8(d8);'
-    src += 'uint8_t a=_G_A();'
-    src += 'addr=(a<<8)|d8;'
-    src += '_IN(addr++,a);'
-    src += '_S_A(a);'
-    src += '_S_WZ(addr);'
+    src += 'WZ=(A<<8)|d8;'
+    src += '_IN(WZ++,A);'
     src += '}'
     return src
 
@@ -461,12 +464,9 @@ def in_n_a():
 #
 def ex_af():
     src ='{'
-    src+='r0=_z80_flush_r0(ws,r0,r2);'
-    src+='uint16_t fa=_G16(r0,_FA);'
-    src+='uint16_t fa_=_G16(r3,_FA);'
-    src+='_S16(r0,_FA,fa_);'
-    src+='_S16(r3,_FA,fa);'
-    src+='ws=_z80_map_regs(r0,r1,r2);'
+    src+='uint16_t tmp=(F<<8)|A;'
+    src+='A=_FA&0xFF;F=_FA>>8;'
+    src+='FA_=tmp;'
     src+='}'
     return src
 
@@ -476,15 +476,7 @@ def ex_af():
 #   Generate code for EX DE,HL
 #
 def ex_de_hl():
-    src ='{'
-    src+='r0=_z80_flush_r0(ws,r0,r2);'
-    src+='uint16_t de=_G16(r0,_DE);'
-    src+='uint16_t hl=_G16(r0,_HL);'
-    src+='_S16(r0,_DE,hl);'
-    src+='_S16(r0,_HL,de);'
-    src+='ws=_z80_map_regs(r0,r1,r2);'
-    src+='}'
-    return src
+    return 'DE=DE^HL;HL=HL^DE;DE=DE^HL;'
 
 #-------------------------------------------------------------------------------
 #   ex_sp_dd
@@ -494,16 +486,12 @@ def ex_de_hl():
 def ex_sp_dd():
     src ='{'
     src+='_T(3);'
-    src+='addr=_G_SP();'
-    src+='d16=_G_HL();'
     src+='uint8_t l,h;'
-    src+='_MR(addr,l);'
-    src+='_MR(addr+1,h);'
-    src+='_MW(addr,d16);'
-    src+='_MW(addr+1,d16>>8);'
-    src+='d16=(h<<8)|l;'
-    src+='_S_HL(d16);'
-    src+='_S_WZ(d16);'
+    src+='_MR(SP,l);'
+    src+='_MR(SP+1,h);'
+    src+='_MW(SP,L);'
+    src+='_MW(SP+1,H);'
+    src+='HL=WZ=(h<<8)|l;'
     src+='}'
     return src
 
@@ -514,11 +502,12 @@ def ex_sp_dd():
 #
 def exx():
     src ='{'
-    src+='r0=_z80_flush_r0(ws,r0,r2);'
-    src+='const uint64_t rx=r3;'
-    src+='r3=(r3&0xffff)|(r0&0xffffffffffff0000);'
-    src+='r0=(r0&0xffff)|(rx&0xffffffffffff0000);'
-    src+='ws=_z80_map_regs(r0, r1, r2);'
+    src+='uint16_t hl=(H<<8)|L;'
+    src+='uint16_t de=(D<<8)|E;'
+    src+='uint16_t bc=(B<<8)|C;'
+    src+='H=HL_>>8;L=HL_;HL_=hl;'
+    src+='D=DE_>>8;E=DE_;DE_=de;'
+    src+='B=BC_>>8;C=BC_;BC_=bc;'
     src+='}'
     return src
 
@@ -528,20 +517,8 @@ def exx():
 #   Generate code for POP dd.
 #
 def pop_dd(p):
-    src ='addr=_G_SP();'
-    src+='_MR(addr++,d8);'
-    # special case POP AF, F<=>A
-    if p==3:
-        src+='d16=d8<<8;'
-    else:
-        src+='d16=d8;'
-    src+='_MR(addr++,d8);'
-    if p==3:
-        src+='d16|=d8;'
-    else:
-        src+='d16|=d8<<8;'
-    src+='_S_'+rp2[p]+'(d16);'
-    src+='_S_SP(addr);'
+    src ='_MR(SP++,'+rp2[p][0]+');'
+    src+='_MR(SP++,'+rp2[p][1]+');'
     return src
 
 #-------------------------------------------------------------------------------
@@ -551,16 +528,8 @@ def pop_dd(p):
 #
 def push_dd(p):
     src ='_T(1);'
-    src+='addr=_G_SP();'
-    src+='d16=_G_'+rp2[p]+'();'
-    # special case PUSH AF, F<=>A
-    if p==3:
-        src+='_MW(--addr,d16);'
-        src+='_MW(--addr,d16>>8);'
-    else:
-        src+='_MW(--addr,d16>>8);'
-        src+='_MW(--addr,d16);'
-    src+='_S_SP(addr);'
+    src+='_MW(--SP,'+rp2[p][0]+');'
+    src+='_MW(--SP,'+rp2[p][1]+');'
     return src
 
 #-------------------------------------------------------------------------------
@@ -569,9 +538,8 @@ def push_dd(p):
 #
 def ld_inn_dd(p):
     src  = '_IMM16(addr);'
-    src += 'd16=_G_'+rp[p]+'();'
-    src += '_MW(addr++,d16&0xFF);'
-    src += '_MW(addr,d16>>8);'
+    src += '_MW(addr++,'+rp[p][1]+');'
+    src += '_MW(addr,'+rp[p][0]+');'
     src += '_S_WZ(addr);'
     return src
 
@@ -581,9 +549,8 @@ def ld_inn_dd(p):
 #
 def ld_dd_inn(p):
     src  = '_IMM16(addr);'
-    src += '_MR(addr++,d8);d16=d8;'
-    src += '_MR(addr,d8);d16|=d8<<8;'
-    src += '_S_'+rp[p]+'(d16);'
+    src += '_MR(addr++,'+rp[p][1]+');'
+    src += '_MR(addr,'+rp[p][0]+');'
     src += '_S_WZ(addr);'
     return src
 
@@ -595,11 +562,9 @@ def ld_dd_inn(p):
 def call_nn():
     src ='_IMM16(addr);'
     src+='_T(1);'
-    src+='d16=_G_SP();'
-    src+='_MW(--d16,pc>>8);'
-    src+='_MW(--d16,pc);'
-    src+='_S_SP(d16);'
-    src+='pc=addr;'
+    src+='_MW(--SP,PC>>8);'
+    src+='_MW(--SP,PC);'
+    src+='PC=addr;'
     return src
 
 #-------------------------------------------------------------------------------
@@ -611,11 +576,9 @@ def call_cc_nn(y):
     src ='_IMM16(addr);'
     src+='if('+cond[y]+'){'
     src+='_T(1);'
-    src+='uint16_t sp=_G_SP();'
-    src+='_MW(--sp,pc>>8);'
-    src+='_MW(--sp,pc);'
-    src+='_S_SP(sp);'
-    src+='pc=addr;'
+    src+='_MW(--SP,PC>>8);'
+    src+='_MW(--SP,PC);'
+    src+='PC=addr;'
     src+='}'
     return src
 
@@ -626,30 +589,29 @@ def call_cc_nn(y):
 #
 def ldi_ldd_ldir_lddr(y):
     src ='{'
-    src+='uint16_t hl=_G_HL();'
-    src+='uint16_t de=_G_DE();'
+    src+='uint16_t hl=(H<<8)|L;'
+    src+='uint16_t de=(D<<8)|E;'
     src+='_MR(hl,d8);'
     src+='_MW(de,d8);'
     if y & 1:
         src+='hl--;de--;'
     else:
         src+='hl++;de++;'
-    src+='_S_HL(hl);'
-    src+='_S_DE(de);'
+    src+='H=hl>>8;L=hl;'
+    src+='D=de>>8;E=de;'
     src+='_T(2);'
-    src+='d8+=_G_A();'
-    src+='uint8_t f=_G_F()&(Z80_SF|Z80_ZF|Z80_CF);'
-    src+='if(d8&0x02){f|=Z80_YF;}'
-    src+='if(d8&0x08){f|=Z80_XF;}'
-    src+='uint16_t bc=_G_BC();'
+    src+='d8+=A;'
+    src+='F&=Z80_SF|Z80_ZF|Z80_CF;'
+    src+='if(d8&0x02){F|=Z80_YF;}'
+    src+='if(d8&0x08){F|=Z80_XF;}'
+    src+='uint16_t bc=(B<<8)|C;'
     src+='bc--;'
-    src+='_S_BC(bc);'
-    src+='if(bc){f|=Z80_VF;}'
-    src+='_S_F(f);'
+    src+='B=bc>>8;C=bc;'
+    src+='if(bc){F|=Z80_VF;}'
     if y >= 6:
         src+='if(bc){'
-        src+='pc-=2;'
-        src+='_S_WZ(pc+1);'
+        src+='PC-=2;'
+        src+='WZ=PC+1;'
         src+='_T(5);'
         src+='}'
     src+='}'
@@ -662,33 +624,30 @@ def ldi_ldd_ldir_lddr(y):
 #
 def cpi_cpd_cpir_cpdr(y):
     src ='{'
-    src+='uint16_t hl = _G_HL();'
+    src+='uint16_t hl=(H<<8)|L;'
     src+='_MR(hl,d8);'
-    src+='uint16_t wz = _G_WZ();'
     if y & 1:
-        src+='hl--;wz--;'
+        src+='hl--;WZ--;'
     else:
-        src+='hl++;wz++;'
-    src+='_S_WZ(wz);'
-    src+='_S_HL(hl);'
+        src+='hl++;WZ++;'
+    src+='H=hl>>8;L=hl;'
     src+='_T(5);'
-    src+='int r=((int)_G_A())-d8;'
-    src+='uint8_t f=(_G_F()&Z80_CF)|Z80_NF|_SZ(r);'
-    src+='if((r&0x0F)>(_G_A()&0x0F)){'
-    src+='f|=Z80_HF;'
+    src+='int r=((int)A)-d8;'
+    src+='F=(F&Z80_CF)|Z80_NF|_SZ(r);'
+    src+='if((r&0x0F)>(A&0x0F)){'
+    src+='F|=Z80_HF;'
     src+='r--;'
     src+='}'
-    src+='if(r&0x02){f|=Z80_YF;}'
-    src+='if(r&0x08){f|=Z80_XF;}'
-    src+='uint16_t bc=_G_BC();'
+    src+='if(r&0x02){F|=Z80_YF;}'
+    src+='if(r&0x08){F|=Z80_XF;}'
+    src+='uint16_t bc=(B<<8)|C;'
     src+='bc--;'
-    src+='_S_BC(bc);'
-    src+='if(bc){f|=Z80_VF;}'
-    src+='_S8(ws,_F,f);'
+    src+='B=bc>>8;C=bc;'
+    src+='if(bc){F|=Z80_VF;}'
     if y >= 6:
-        src+='if(bc&&!(f&Z80_ZF)){'
-        src+='pc-=2;'
-        src+='_S_WZ(pc+1);'
+        src+='if(bc&&!(F&Z80_ZF)){'
+        src+='PC-=2;'
+        src+='WZ=PC+1;'
         src+='_T(5);'
         src+='}'
     src+='}'
@@ -702,29 +661,24 @@ def cpi_cpd_cpir_cpdr(y):
 def ini_ind_inir_indr(y):
     src ='{'
     src+='_T(1);'
-    src+='addr=_G_BC();'
-    src+='uint16_t hl=_G_HL();'
-    src+='_IN(addr,d8);'
+    src+='WZ=(B<<8)|C;'
+    src+='uint16_t hl=(H<<8)|L;'
+    src+='_IN(WZ,d8);'
     src+='_MW(hl,d8);'
-    src+='uint8_t b=_G_B();'
-    src+='uint8_t c=_G_C();'
-    src+='b--;'
+    src+='B--;'
     if y & 1:
-        src+='addr--;hl--;c--;'
+        src+='WZ--;hl--;C--;'
     else:
-        src+='addr++;hl++;c++;'
-    src+='_S_B(b);'
-    src+='_S_HL(hl);'
-    src+='_S_WZ(addr);'
-    src+='uint8_t f=(b?(b&Z80_SF):Z80_ZF)|(b&(Z80_XF|Z80_YF));'
-    src+='if(d8&Z80_SF){f|=Z80_NF;}'
-    src+='uint32_t t=(uint32_t)(c&0xFF)+d8;'
-    src+='if(t&0x100){f|=Z80_HF|Z80_CF;}'
-    src+='f|=_z80_szp[((uint8_t)(t&0x07))^b]&Z80_PF;'
-    src+='_S_F(f);'
+        src+='WZ++;hl++;C++;'
+    src+='H=hl>>8;L=hl;'
+    src+='F=(B?(B&Z80_SF):Z80_ZF)|(B&(Z80_XF|Z80_YF));'
+    src+='if(d8&Z80_SF){F|=Z80_NF;}'
+    src+='uint32_t t=(uint32_t)(C+d8);'
+    src+='if(t&0x100){F|=Z80_HF|Z80_CF;}'
+    src+='F|=_z80_szp[((uint8_t)(t&0x07))^B]&Z80_PF;'
     if y >= 6:
-        src+='if(b){'
-        src+='pc-=2;'
+        src+='if(B){'
+        src+='PC-=2;'
         src+='_T(5);'
         src+='}'
     src+='}'
@@ -738,28 +692,24 @@ def ini_ind_inir_indr(y):
 def outi_outd_otir_otdr(y):
     src ='{'
     src+='_T(1);'
-    src+='uint16_t hl=_G_HL();'
+    src+='uint16_t hl=(H<<8)|L;'
     src+='_MR(hl,d8);'
-    src+='uint8_t b=_G_B();'
-    src+='b--;'
-    src+='_S_B(b);'
-    src+='addr=_G_BC();'
-    src+='_OUT(addr,d8);'
+    src+='B--;'
+    src+='WZ=(B<<8)|C;'
+    src+='_OUT(WZ,d8);'
     if y & 1:
-        src+='addr--;hl--;'
+        src+='WZ--;hl--;'
     else:
-        src+='addr++; hl++;'
-    src+='_S_HL(hl);'
-    src+='_S_WZ(addr);'
-    src+='uint8_t f=(b?(b&Z80_SF):Z80_ZF)|(b&(Z80_XF|Z80_YF));'
-    src+='if(d8&Z80_SF){f|=Z80_NF;}'
-    src+='uint32_t t=(uint32_t)_G_L()+(uint32_t)d8;'
-    src+='if (t&0x0100){f|=Z80_HF|Z80_CF;}'
-    src+='f|=_z80_szp[((uint8_t)(t&0x07))^b]&Z80_PF;'
-    src+='_S_F(f);'
+        src+='WZ++; hl++;'
+    src+='H=hl>>8;L=hl;'
+    src+='F=(B?(B&Z80_SF):Z80_ZF)|(B&(Z80_XF|Z80_YF));'
+    src+='if(d8&Z80_SF){F|=Z80_NF;}'
+    src+='uint32_t t=(uint32_t)(L+d8);'
+    src+='if (t&0x0100){F|=Z80_HF|Z80_CF;}'
+    src+='F|=_z80_szp[((uint8_t)(t&0x07))^B]&Z80_PF;'
     if y >= 6:
-        src+='if(b){'
-        src+='pc-=2;'
+        src+='if(B){'
+        src+='PC-=2;'
         src+='_T(5);'
         src+='}'
     src+='}'
@@ -772,9 +722,8 @@ def djnz():
     src ='{'
     src+='_T(1);'
     src+='int8_t d;_IMM8(d);'
-    src+='d8=_G_B()-1;'
-    src+='_S_B(d8);'
-    src+='if(d8>0){pc+=d;_S_WZ(pc);_T(5);}'
+    src+='B--;'
+    src+='if(B>0){PC+=d;WZ=PC;_T(5);}'
     src+='}'
     return src
 
@@ -782,14 +731,14 @@ def djnz():
 #   jr()
 #
 def jr():
-    return '{int8_t d;_IMM8(d);pc+=d;_S_WZ(pc);_T(5);}'
+    return '{int8_t d;_IMM8(d);PC+=d;WZ=PC;_T(5);}'
 
 #-------------------------------------------------------------------------------
 #   jr_cc()
 #
 def jr_cc(y):
     src ='{int8_t d;_IMM8(d);'
-    src+='if('+cond[y-4]+'){pc+=d;_S_WZ(pc);_T(5);}'
+    src+='if('+cond[y-4]+'){PC+=d;WZ=PC;_T(5);}'
     src+='}'
     return src
 
@@ -797,11 +746,9 @@ def jr_cc(y):
 #   ret()
 #
 def ret():
-    src  = 'd16=_G_SP();'
-    src += '_MR(d16++,d8);pc=d8;'
-    src += '_MR(d16++,d8);pc|=d8<<8;'
-    src += '_S_SP(d16);'
-    src += '_S_WZ(pc);'
+    src  = '_MR(SP++,d8);PC=d8;'
+    src += '_MR(SP++,d8);PC|=d8<<8;'
+    src += 'WZ=PC;'
     return src
 
 #-------------------------------------------------------------------------------
@@ -811,12 +758,10 @@ def ret_cc(y):
     src ='_T(1);'
     src+='if ('+cond[y]+'){'
     src+='uint8_t w,z;'
-    src+='d16=_G_SP();'
-    src+='_MR(d16++,z);'
-    src+='_MR(d16++,w);'
-    src+='_S_SP(d16);'
-    src+='pc=(w<<8)|z;'
-    src+='_S_WZ(pc);'
+    src+='_MR(SP++,z);'
+    src+='_MR(SP++,w);'
+    src+='PC=(w<<8)|z;'
+    src+='WZ=PC;'
     src+='}'
     return src
 
@@ -830,12 +775,10 @@ def ret_cc(y):
 def retin():
     # same as RET, but also set the virtual Z80_RETI pin
     src  = 'pins|=Z80_RETI;'
-    src += 'd16=_G_SP();'
-    src += '_MR(d16++,d8);pc=d8;'
-    src += '_MR(d16++,d8);pc|=d8<<8;'
-    src += '_S_SP(d16);'
-    src += '_S_WZ(pc);'
-    src += 'if (r2&_BIT_IFF2){r2|=_BIT_IFF1;}else{r2&=~_BIT_IFF1;}'
+    src += '_MR(SP++,d8);PC=d8;'
+    src += '_MR(SP++,d8);PC|=d8<<8;'
+    src += 'WZ=PC;'
+    src += 'IFF1=IFF2;'
     return src
 
 #-------------------------------------------------------------------------------
@@ -843,12 +786,9 @@ def retin():
 #
 def rst(y):
     src ='_T(1);'
-    src+='d16= _G_SP();'
-    src+='_MW(--d16, pc>>8);'
-    src+='_MW(--d16, pc);'
-    src+='_S_SP(d16);'
-    src+='pc='+hex(y*8)+';'
-    src+='_S_WZ(pc);'
+    src+='_MW(--SP,PC>>8);'
+    src+='_MW(--SP,PC);'
+    src+='PC=WZ='+hex(y*8)+';'
     return src
 
 #-------------------------------------------------------------------------------
@@ -857,15 +797,13 @@ def rst(y):
 #
 def in_r_ic(y):
     src ='{'
-    src+='addr=_G_BC();'
-    src+='_IN(addr++,d8);'
-    src+='_S_WZ(addr);'
-    src+='uint8_t f=(_G_F()&Z80_CF)|_z80_szp[d8];'
-    src+='_S8(ws,_F,f);'
+    src+='WZ=(B<<8)|C;'
+    src+='_IN(WZ++,d8);'
+    src+='F=(F&Z80_CF)|_z80_szp[d8];'
     # handle undocumented special case IN F,(C): 
     # only set flags, don't store result
     if (y != 6):
-        src+='_S_'+r[y]+'(d8);'
+        src+=r[y]+'=d8;'
     src+='}'
     return src
 
@@ -874,12 +812,11 @@ def in_r_ic(y):
 #   OUT r,(C)
 #
 def out_r_ic(y):
-    src ='addr=_G_BC();'
+    src ='WZ=(B<<8)|C;'
     if y == 6:
-        src+='_OUT(addr++,0);'
+        src+='_OUT(WZ++,0);'
     else:
-        src+='_OUT(addr++,_G_'+r[y]+'());'
-    src+='_S_WZ(addr);'
+        src+='_OUT(WZ++,'+r[y]+');'
     return src
 
 #-------------------------------------------------------------------------------
@@ -887,69 +824,61 @@ def out_r_ic(y):
 #
 def add8():
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='uint32_t res=acc+d8;'
-    src+='_S_F(_ADD_FLAGS(acc,d8,res));'
-    src+='_S_A(res);'
+    src+='uint32_t res=A+d8;'
+    src+='F=_ADD_FLAGS(A,d8,res);'
+    src+='A=res;'
     src+='}'
     return src
 
 def adc8():
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='uint32_t res=acc+d8+(_G_F()&Z80_CF);'
-    src+='_S_F(_ADD_FLAGS(acc,d8,res));'
-    src+='_S_A(res);'
+    src+='uint32_t res=A+d8+(F&Z80_CF);'
+    src+='F=_ADD_FLAGS(A,d8,res);'
+    src+='A=res;'
     src+='}'
     return src
 
 def sub8():
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='uint32_t res=(uint32_t)((int)acc-(int)d8);'
-    src+='_S_F(_SUB_FLAGS(acc,d8,res));'
-    src+='_S_A(res);'
+    src+='uint32_t res=(uint32_t)((int)A-(int)d8);'
+    src+='F=_SUB_FLAGS(A,d8,res);'
+    src+='A=res;'
     src+='}'
     return src
 
 def sbc8():
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='uint32_t res=(uint32_t)((int)acc-(int)d8-(_G_F()&Z80_CF));'
-    src+='_S_F(_SUB_FLAGS(acc,d8,res));'
-    src+='_S_A(res);'
+    src+='uint32_t res=(uint32_t)((int)A-(int)d8-(F&Z80_CF));'
+    src+='F=_SUB_FLAGS(A,d8,res));'
+    src+='A=res;'
     src+='}'
     return src
 
 def and8():
     src ='{'
-    src+='d8&=_G_A();'
-    src+='_S_F(_z80_szp[d8]|Z80_HF);'
-    src+='_S_A(d8);'
+    src+='A&=d8;'
+    src+='F=_z80_szp[A]|Z80_HF;'
     src+='}'
     return src
 
 def xor8():
     src ='{'
-    src+='d8^=_G_A();'
-    src+='_S_F(_z80_szp[d8]);'
-    src+='_S_A(d8);'
+    src+='A^=d8^;'
+    src+='F=_z80_szp[A];'
     src+='}'
     return src
 
 def or8():
     src ='{'
-    src+='d8|=_G_A();'
-    src+='_S_F(_z80_szp[d8]);'
-    src+='_S_A(d8);'
+    src+='A|=d8;'
+    src+='F=_z80_szp[A];'
     src+='}'
     return src
 
 def cp8():
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='int32_t res=(uint32_t)((int)acc-(int)d8);'
-    src+='_S_F(_CP_FLAGS(acc,d8,res));'
+    src+='int32_t res=(uint32_t)((int)A-(int)d8);'
+    src+='F=_CP_FLAGS(A,d8,res));'
     src+='}'
     return src
 
@@ -972,8 +901,8 @@ def alu8(y):
         return cp8()
 
 def neg8():
-    src ='d8=_G_A();'
-    src+='_S_A(0);'
+    src ='d8=A;'
+    src+='A=0;'
     src+=sub8();
     return src
 
@@ -982,7 +911,7 @@ def inc8():
     src+='uint8_t r=d8+1;'
     src+='uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
     src+='if(r==0x80){f|=Z80_VF;}'
-    src+='_S_F(f|(_G_F()&Z80_CF));'
+    src+='F=f|(F&Z80_CF);'
     src+='d8=r;'
     src+='}'
     return src
@@ -992,7 +921,7 @@ def dec8():
     src+='uint8_t r=d8-1;'
     src+='uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);'
     src+='if(r==0x7F){f|=Z80_VF;}'
-    src+='_S_F(f|(_G_F()&Z80_CF));'
+    src+='F=f|(F&Z80_CF);'
     src+='d8=r;'
     src+='}'
     return src
@@ -1004,49 +933,49 @@ def dec8():
 #
 def add16(p):
     src ='{'
-    src+='uint16_t acc=_G_HL();'
-    src+='_S_WZ(acc+1);'
-    src+='d16=_G_'+rp[p]+'();'
+    src+='uint16_t acc=(H<<8)|L;'
+    src+='WZ=acc+1;'
+    src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
     src+='uint32_t r=acc+d16;'
-    src+='_S_HL(r);'
-    src+='uint8_t f=_G_F()&(Z80_SF|Z80_ZF|Z80_VF);'
+    src+='H=r>>8;L=r;'
+    src+='uint8_t f=F&(Z80_SF|Z80_ZF|Z80_VF);'
     src+='f|=((acc^r^d16)>>8)&Z80_HF;'
     src+='f|=((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));'
-    src+='_S_F(f);'
+    src+='F=f;'
     src+='_T(7);'
     src+='}'
     return src
 
 def adc16(p):
     src ='{'
-    src+='uint16_t acc=_G_HL();'
-    src+='_S_WZ(acc+1);'
-    src+='d16=_G_'+rp[p]+'();'
-    src+='uint32_t r=acc+d16+(_G_F()&Z80_CF);'
-    src+='_S_HL(r);'
+    src+='uint16_t acc=(H<<8)|L;'
+    src+='WZ=acc+1;'
+    src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
+    src+='uint32_t r=acc+d16+(F&Z80_CF);'
+    src+='H=r>>8;L=r;'
     src+='uint8_t f=((d16^acc^0x8000)&(d16^r)&0x8000)>>13;'
     src+='f|=((acc^r^d16)>>8)&Z80_HF;'
     src+='f|=(r>>16)&Z80_CF;'
     src+='f|=(r>>8)&(Z80_SF|Z80_YF|Z80_XF);'
     src+='f|=(r&0xFFFF)?0:Z80_ZF;'
-    src+='_S_F(f);'
+    src+='F=f;'
     src+='_T(7);'
     src+='}'
     return src
 
 def sbc16(p):
     src ='{'
-    src+='uint16_t acc=_G_HL();'
-    src+='_S_WZ(acc+1);'
-    src+='d16=_G_'+rp[p]+'();'
-    src+='uint32_t r=acc-d16-(_G_F()&Z80_CF);'
+    src+='uint16_t acc=(H<<8)|L;'
+    src+='WZ=acc+1;'
+    src+='d16=('+rp[p][0]+'<<8)|'+rp[p][1]+';'
+    src+='uint32_t r=acc-d16-(F&Z80_CF);'
     src+='uint8_t f=Z80_NF|(((d16^acc)&(acc^r)&0x8000)>>13);'
-    src+='_S_HL(r);'
+    src+='H=r>>8;L=r;'
     src+='f|=((acc^r^d16)>>8) & Z80_HF;'
     src+='f|=(r>>16)&Z80_CF;'
     src+='f|=(r>>8)&(Z80_SF|Z80_YF|Z80_XF);'
     src+='f|=(r&0xFFFF)?0:Z80_ZF;'
-    src+='_S_F(f);'
+    src+='F=f;'
     src+='_T(7);'
     src+='}'
     return src
@@ -1056,32 +985,26 @@ def sbc16(p):
 #
 def rrd():
     src ='{'
-    src+='addr=_G_HL();'
-    src+='uint8_t a=_G_A();'
-    src+='_MR(addr,d8);'
-    src+='uint8_t l=a&0x0F;'
-    src+='a=(a&0xF0)|(d8&0x0F);'
-    src+='_S_A(a);'
+    src+='WZ=(H<<8)|L;'
+    src+='_MR(WZ,d8);'
+    src+='uint8_t l=A&0x0F;'
+    src+='A=(A&0xF0)|(d8&0x0F);'
     src+='d8=(d8>>4)|(l<<4);'
-    src+='_MW(addr++,d8);'
-    src+='_S_WZ(addr);'
-    src+='_S_F((_G_F()&Z80_CF)|_z80_szp[a]);'
+    src+='_MW(WZ++,d8);'
+    src+='F=(F&Z80_CF)|_z80_szp[A]);'
     src+='_T(4);'
     src+='}'
     return src
 
 def rld():
     src ='{'
-    src+='addr=_G_HL();'
-    src+='uint8_t a=_G_A();'
-    src+='_MR(addr,d8);'
-    src+='uint8_t l=a&0x0F;'
-    src+='a=(a&0xF0)|(d8>>4);'
-    src+='_S_A(a);'
+    src+='WZ=(H<<8)|L;'
+    src+='_MR(WZ,d8);'
+    src+='uint8_t l=A&0x0F;'
+    src+='A=(A&0xF0)|(d8>>4);'
     src+='d8=(d8<<4)|l;'
-    src+='_MW(addr++,d8);'
-    src+='_S_WZ(addr);'
-    src+='_S_F((_G_F()&Z80_CF)|_z80_szp[a]);'
+    src+='_MW(WZ++,d8);'
+    src+='F=(F&Z80_CF)|_z80_szp[A]);'
     src+='_T(4);'
     src+='}'
     return src
@@ -1094,13 +1017,13 @@ def rld():
 #   Undocumented Z80 Documented)
 #
 def halt():
-    return 'pins|=Z80_HALT;pc--;'
+    return 'pins|=Z80_HALT;PC--;'
 
 def di():
-    return 'r2&=~(_BIT_IFF1|_BIT_IFF2);'
+    return 'IFF1=IFF2=false;'
 
 def ei():
-    return 'r2=(r2&~(_BIT_IFF1|_BIT_IFF2))|_BIT_EI;'
+    return 'IFF1=IFF2=false;EI_PENDING=true;'
 
 #-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
@@ -1108,8 +1031,7 @@ def ei():
 # the opcode object will be in its default state (opcode.src==None).
 # cc is the name of the cycle-count table.
 #
-def enc_op(op) :
-
+def enc_op(ixy, op) :
     o = opcode(op)
 
     # split opcode byte into bit groups, these identify groups
@@ -1132,36 +1054,27 @@ def enc_op(op) :
                 o.src = halt()
             else:
                 # LD (HL),r; LD (IX+d),r; LD (IX+d),r
-                o.cmt = 'LD (HL/IX+d/IY+d),'+r[z]
-                # special case LD (IX+d),L LD (IX+d),H
-                if z in [4,5]:
-                    o.src = 'd8=_IDX()?_G8(r0,_'+r[z]+'):_G_'+r[z]+'();'
-                else:
-                    o.src = 'd8=_G_'+r[z]+'();'
-                o.src += addr(5)+'_MW(addr,d8);'
+                o.cmt = 'LD '+addr_cmt(ixy)+','+r[z]
+                o.src = addr(ixy,5)+'_MW(addr,'+rx[z]+');'
         elif z == 6:
             # LD r,(HL); LD r,(IX+d); LD r,(IY+d)
-            o.cmt = 'LD '+r[y]+',(HL/IX+d/IY+d)'
-            o.src = addr(5)+'_MR(addr,d8);'
-            if y in [4,5]:
-                o.src += 'if(_IDX()){_S8(r0,_'+r[y]+',d8);}else{_S_'+r[y]+'(d8);}'
-            else:
-                o.src += '_S_'+r[y]+'(d8);'
+            o.cmt = 'LD '+r[y]+','+addr_cmt(ixy)
+            o.src = addr(ixy,5)+'_MR(addr,'+rx[y]+');'
         else:
             # LD r,s
             o.cmt = 'LD '+r[y]+','+r[z]
-            o.src = '_S_'+r[y]+'(_G_'+r[z]+'());'
+            o.src = r[y]+'='+r[z]+';'
 
     #---- block 2: 8-bit ALU instructions (ADD, ADC, SUB, SBC, AND, XOR, OR, CP)
     elif x == 2:
         if z == 6:
             # ALU (HL); ALU (IX+d); ALU (IY+d)
-            o.cmt = alu_cmt[y]+',(HL/IX+d/IY+d)'
-            o.src = addr(5) + '_MR(addr,d8);'+alu8(y)
+            o.cmt = alu_cmt[y]+','+addr_cmt(ixy)
+            o.src = addr(ixy,5) + '_MR(addr,d8);'+alu8(y)
         else:
             # ALU r
             o.cmt = alu_cmt[y]+' '+r[z]
-            o.src = 'd8=_G_'+r[z]+'();'+alu8(y)
+            o.src = 'd8='+r[z]+';'+alu8(y)
 
     #---- block 0: misc ops
     elif x == 0:
@@ -1223,7 +1136,7 @@ def enc_op(op) :
             if y == 6:
                 # INC/DEC (HL)/(IX+d)/(IY+d)
                 o.cmt = cmt+' (HL/IX+d/IY+d)'
-                o.src = addr(5)+'_T(1);_MR(addr,d8);'+fn+'_MW(addr,d8);'
+                o.src = addr(ixy,5)+'_T(1);_MR(addr,d8);'+fn+'_MW(addr,d8);'
             else:
                 # INC/DEC r
                 o.cmt = cmt+' '+r[y]
@@ -1232,7 +1145,7 @@ def enc_op(op) :
             if y == 6:
                 # LD (HL),n; LD (IX+d),n; LD (IY+d),n
                 o.cmt = 'LD (HL/IX+d/IY+d),n'
-                o.src = addr(2) + '_IMM8(d8);_MW(addr,d8);'
+                o.src = addr(ixy,2) + '_IMM8(d8);_MW(addr,d8);'
             else:
                 # LD r,n
                 o.cmt = 'LD '+r[y]+',n'
@@ -1478,7 +1391,7 @@ for i in range(0, 256):
         write_cb_ops()
     # non-prefixed instruction
     else:
-        write_op(enc_op(i))
+        write_op(enc_op(None,i))
 indent = 0
 write_op_post()
 write_interrupt_handling()
