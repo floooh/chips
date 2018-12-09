@@ -69,10 +69,6 @@
 extern "C" {
 #endif
 
-/* the width and height of the Z1013 display in pixels */
-#define Z1013_DISPLAY_WIDTH (256)
-#define Z1013_DISPLAY_HEIGHT (256)
-
 /* Z1013 model types */
 typedef enum {
     Z1013_TYPE_64,      /* Z1013.64 (default, latest model with 2 MHz and 64 KB RAM, new ROM) */
@@ -118,6 +114,14 @@ typedef struct {
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
 /* discard a z1013 instance */
 void z1013_discard(z1013_t* sys);
+/* get the standard framebuffer width and height in pixels */
+int z1013_std_display_width(void);
+int z1013_std_display_height(void);
+/* get the maximum framebuffer size in number of bytes */
+int z1013_max_display_size(void);
+/* get the current framebuffer width and height in pixels */
+int z1013_display_width(z1013_t* sys);
+int z1013_display_height(z1013_t* sys);
 /* reset Z1013 instance */
 void z1013_reset(z1013_t* sys);
 /* run the Z1013 instance for a given number of microseconds */
@@ -141,7 +145,9 @@ bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _Z1013_DISPLAY_SIZE (Z1013_DISPLAY_WIDTH*Z1013_DISPLAY_HEIGHT*4)
+#define _Z1013_DISPLAY_WIDTH (256)
+#define _Z1013_DISPLAY_HEIGHT (256)
+#define _Z1013_DISPLAY_SIZE (_Z1013_DISPLAY_WIDTH*_Z1013_DISPLAY_HEIGHT*4)
 
 static uint64_t _z1013_tick(int num, uint64_t pins, void* user_data);
 static uint8_t _z1013_pio_in(int port_id, void* user_data);
@@ -287,6 +293,26 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
 void z1013_discard(z1013_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
+}
+
+int z1013_std_display_width(void) {
+    return _Z1013_DISPLAY_WIDTH;
+}
+
+int z1013_std_display_height(void) {
+    return _Z1013_DISPLAY_HEIGHT;
+}
+
+int z1013_max_display_size(void) {
+    return _Z1013_DISPLAY_SIZE;
+}
+
+int z1013_display_width(z1013_t* sys) {
+    return _Z1013_DISPLAY_WIDTH;
+}
+
+int z1013_display_height(z1013_t* sys) {
+    return _Z1013_DISPLAY_HEIGHT;
 }
 
 void z1013_reset(z1013_t* sys) {

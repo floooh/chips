@@ -64,8 +64,6 @@
 extern "C" {
 #endif
 
-#define ATOM_DISPLAY_WIDTH (MC6847_DISPLAY_WIDTH)
-#define ATOM_DISPLAY_HEIGHT (MC6847_DISPLAY_HEIGHT)
 #define ATOM_MAX_AUDIO_SAMPLES (1024)       /* max number of audio samples in internal sample buffer */
 #define ATOM_DEFAULT_AUDIO_SAMPLES (128)    /* default number of samples in internal sample buffer */
 #define ATOM_MAX_TAPE_SIZE (1<<16)          /* max size of tape file in bytes */
@@ -152,6 +150,14 @@ typedef struct {
 void atom_init(atom_t* sys, const atom_desc_t* desc);
 /* discard Atom instance */
 void atom_discard(atom_t* sys);
+/* get the standard framebuffer width and height in pixels */
+int atom_std_display_width(void);
+int atom_std_display_height(void);
+/* get the maximum framebuffer size in number of bytes */
+int atom_max_display_size(void);
+/* get the current framebuffer width and height in pixels */
+int atom_display_width(atom_t* sys);
+int atom_display_height(atom_t* sys);
 /* reset Atom instance */
 void atom_reset(atom_t* sys);
 /* run Atom instance for a number of microseconds */
@@ -183,7 +189,6 @@ void atom_remove_tape(atom_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _ATOM_DISPLAY_SIZE (ATOM_DISPLAY_WIDTH*ATOM_DISPLAY_HEIGHT*4)
 #define _ATOM_FREQUENCY (1000000)
 #define _ATOM_ROM_DOSROM_SIZE (0x1000)
 
@@ -202,7 +207,7 @@ static void _atom_osload(atom_t* sys);
 
 void atom_init(atom_t* sys, const atom_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _ATOM_DISPLAY_SIZE));
+    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= atom_max_display_size()));
 
     memset(sys, 0, sizeof(atom_t));
     sys->valid = true;
@@ -269,6 +274,28 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
 void atom_discard(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
+}
+
+int atom_std_display_width(void) {
+    return MC6847_DISPLAY_WIDTH;
+}
+
+int atom_std_display_height(void) {
+    return MC6847_DISPLAY_HEIGHT;
+}
+
+int atom_max_display_size(void) {
+    return MC6847_DISPLAY_WIDTH * MC6847_DISPLAY_HEIGHT * 4;
+}
+
+int atom_display_width(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return MC6847_DISPLAY_WIDTH;
+}
+
+int atom_display_height(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return MC6847_DISPLAY_HEIGHT;
 }
 
 void atom_reset(atom_t* sys) {

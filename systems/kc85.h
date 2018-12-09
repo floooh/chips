@@ -259,8 +259,6 @@
 extern "C" {
 #endif
 
-#define KC85_DISPLAY_WIDTH (320)
-#define KC85_DISPLAY_HEIGHT (256)
 #define KC85_MAX_AUDIO_SAMPLES (1024)       /* max number of audio samples in internal sample buffer */
 #define KC85_DEFAULT_AUDIO_SAMPLES (128)    /* default number of samples in internal sample buffer */ 
 #define KC85_MAX_TAPE_SIZE (64 * 1024)      /* max size of a snapshot file in bytes */
@@ -420,6 +418,14 @@ typedef struct {
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc);
 /* discard a KC85 instance */
 void kc85_discard(kc85_t* sys);
+/* get the standard framebuffer width and height in pixels */
+int kc85_std_display_width(void);
+int kc85_std_display_height(void);
+/* get the maximum framebuffer size in number of bytes */
+int kc85_max_display_size(void);
+/* get the current framebuffer width and height in pixels */
+int kc85_display_width(kc85_t* sys);
+int kc85_display_height(kc85_t* sys);
 /* reset a KC85 instance */
 void kc85_reset(kc85_t* sys);
 /* run KC85 emulation for a given number of microseconds */
@@ -465,7 +471,9 @@ bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _KC85_DISPLAY_SIZE (KC85_DISPLAY_WIDTH*KC85_DISPLAY_HEIGHT*4)
+#define _KC85_DISPLAY_WIDTH (320)
+#define _KC85_DISPLAY_HEIGHT (256)
+#define _KC85_DISPLAY_SIZE (_KC85_DISPLAY_WIDTH*_KC85_DISPLAY_HEIGHT*4)
 #define _KC85_2_3_FREQUENCY (1750000)
 #define _KC85_4_FREQUENCY (1770000)
 #define _KC85_IRM0_PAGE (4)
@@ -599,6 +607,26 @@ void kc85_discard(kc85_t* sys) {
     sys->valid = false;
 }
 
+int kc85_std_display_width(void) {
+    return _KC85_DISPLAY_WIDTH;
+}
+
+int kc85_std_display_height(void) {
+    return _KC85_DISPLAY_HEIGHT;
+}
+
+int kc85_max_display_size(void) {
+    return _KC85_DISPLAY_SIZE;
+}
+
+int kc85_display_width(kc85_t* sys) {
+    return _KC85_DISPLAY_WIDTH;
+}
+
+int kc85_display_height(kc85_t* sys) {
+    return _KC85_DISPLAY_HEIGHT;
+}
+
 void kc85_reset(kc85_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     z80_reset(&sys->cpu);
@@ -646,7 +674,7 @@ static uint64_t _kc85_tick(int num_ticks, uint64_t pins, void* user_data) {
     sys->scanline_counter -= num_ticks;
     if (sys->scanline_counter <= 0) {
         sys->scanline_counter += sys->scanline_period;
-        if (sys->cur_scanline < KC85_DISPLAY_HEIGHT) {
+        if (sys->cur_scanline < _KC85_DISPLAY_HEIGHT) {
             _kc85_decode_scanline(sys);
         }
         sys->cur_scanline++;
@@ -875,8 +903,8 @@ static void _kc85_decode_scanline(kc85_t* sys) {
     }
     const int y = sys->cur_scanline;
     const bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
-    const int width = KC85_DISPLAY_WIDTH>>3;
-    unsigned int* dst_ptr = &(sys->pixel_buffer[y*KC85_DISPLAY_WIDTH]);
+    const int width = _KC85_DISPLAY_WIDTH>>3;
+    unsigned int* dst_ptr = &(sys->pixel_buffer[y*_KC85_DISPLAY_WIDTH]);
     if (KC85_TYPE_4 == sys->type) {
         int irm_index = (sys->io84 & 1) * 2;
         const uint8_t* pixel_data = sys->ram[_KC85_IRM0_PAGE + irm_index];

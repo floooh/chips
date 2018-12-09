@@ -65,8 +65,6 @@
 extern "C" {
 #endif
 
-#define ZX_DISPLAY_WIDTH (320)   /* display width in pixels */
-#define ZX_DISPLAY_HEIGHT (256)  /* display height in pixels */
 #define ZX_MAX_AUDIO_SAMPLES (1024)      /* max number of audio samples in internal sample buffer */
 #define ZX_DEFAULT_AUDIO_SAMPLES (128)   /* default number of samples in internal sample buffer */ 
 
@@ -164,6 +162,14 @@ typedef struct {
 void zx_init(zx_t* sys, const zx_desc_t* desc);
 /* discard a ZX Spectrum instance */
 void zx_discard(zx_t* sys);
+/* get the standard framebuffer width and height in pixels */
+int zx_std_display_width(void);
+int zx_std_display_height(void);
+/* get the maximum framebuffer size in number of bytes */
+int zx_max_display_size(void);
+/* get the current framebuffer width and height in pixels */
+int zx_display_width(zx_t* sys);
+int zx_display_height(zx_t* sys);
 /* reset a ZX Spectrum instance */
 void zx_reset(zx_t* sys);
 /* run ZX Spectrum instance for a given number of microseconds */
@@ -193,7 +199,9 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _ZX_DISPLAY_SIZE (ZX_DISPLAY_WIDTH*ZX_DISPLAY_HEIGHT*4)
+#define _ZX_DISPLAY_WIDTH (320)
+#define _ZX_DISPLAY_HEIGHT (256)
+#define _ZX_DISPLAY_SIZE (_ZX_DISPLAY_WIDTH*_ZX_DISPLAY_HEIGHT*4)
 #define _ZX_48K_FREQUENCY (3500000)
 #define _ZX_128_FREQUENCY (3546894)
 
@@ -271,6 +279,26 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
 void zx_discard(zx_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
+}
+
+int zx_std_display_width(void) {
+    return _ZX_DISPLAY_WIDTH;
+}
+
+int zx_std_display_height(void) {
+    return _ZX_DISPLAY_HEIGHT;
+}
+
+int zx_max_display_size(void) {
+    return _ZX_DISPLAY_SIZE;
+}
+
+int zx_display_width(zx_t* sys) {
+    return _ZX_DISPLAY_WIDTH;
+}
+
+int zx_display_height(zx_t* sys) {
+    return _ZX_DISPLAY_HEIGHT;
 }
 
 void zx_reset(zx_t* sys) {
@@ -607,13 +635,13 @@ static bool _zx_decode_scanline(zx_t* sys) {
     const int btm_decode_line = sys->top_border_scanlines + 192 + 32;
     if ((sys->scanline_y >= top_decode_line) && (sys->scanline_y < btm_decode_line)) {
         const uint16_t y = sys->scanline_y - top_decode_line;
-        uint32_t* dst = &sys->pixel_buffer[y * ZX_DISPLAY_WIDTH];
+        uint32_t* dst = &sys->pixel_buffer[y * _ZX_DISPLAY_WIDTH];
         const uint8_t* vidmem_bank = sys->ram[sys->display_ram_bank];
         const bool blink = 0 != (sys->blink_counter & 0x10);
         uint32_t fg, bg;
         if ((y < 32) || (y >= 224)) {
             /* upper/lower border */
-            for (int x = 0; x < ZX_DISPLAY_WIDTH; x++) {
+            for (int x = 0; x < _ZX_DISPLAY_WIDTH; x++) {
                 *dst++ = sys->border_color;
             }
         }

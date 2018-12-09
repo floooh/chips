@@ -284,8 +284,10 @@ typedef struct {
 void m6569_init(m6569_t* vic, const m6569_desc_t* desc);
 /* reset a m6569_t instance */
 void m6569_reset(m6569_t* vic);
-/* get the visible display size in pixels (different for PAL/NTSC) */
-void m6569_display_size(m6569_t* vic, int* out_width, int* out_height);
+/* get the visible display width in pixels */
+int m6569_display_width(m6569_t* vic);
+/* get the visible display height in pixels */
+int m6569_display_height(m6569_t* vic);
 /* read/write m6569 registers */
 uint64_t m6569_iorq(m6569_t* vic, uint64_t pins);
 /* tick the m6569_y instance */
@@ -1460,16 +1462,14 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     return pins;
 }
 
-void m6569_display_size(m6569_t* vic, int* out_width, int* out_height) {
-    CHIPS_ASSERT(vic && out_width && out_height);
-    if (vic->debug_vis) {
-        *out_width = (_M6569_HTOTAL+1)*8;
-        *out_height = _M6569_VTOTAL+1;
-    }
-    else {
-        *out_width = vic->crt.vis_w*8;
-        *out_height = vic->crt.vis_h;
-    }
+int m6569_display_width(m6569_t* vic) {
+    CHIPS_ASSERT(vic);
+    return 8 * (vic->debug_vis ? (_M6569_HTOTAL+1) : vic->crt.vis_w);
+}
+
+int m6569_display_height(m6569_t* vic) {
+    CHIPS_ASSERT(vic);
+    return vic->debug_vis ? (_M6569_VTOTAL+1) : vic->crt.vis_h;
 }
 
 uint32_t m6569_color(int i) {

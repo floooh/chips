@@ -64,8 +64,6 @@
 extern "C" {
 #endif
 
-#define C64_DISPLAY_WIDTH (392)             /* required framebuffer width in pixels */
-#define C64_DISPLAY_HEIGHT (272)            /* required framebuffer hight in pixels */
 #define C64_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
 #define C64_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */ 
 #define C64_MAX_TAPE_SIZE (512*1024)        /* max size of cassette tape image */
@@ -173,6 +171,14 @@ typedef struct {
 void c64_init(c64_t* sys, const c64_desc_t* desc);
 /* discard C64 instance */
 void c64_discard(c64_t* sys);
+/* get the standard framebuffer width and height in pixels */
+int c64_std_display_width(void);
+int c64_std_display_height(void);
+/* get the maximum framebuffer size in number of bytes */
+int c64_max_display_size(void);
+/* get the current framebuffer width and height in pixels */
+int c64_display_width(c64_t* sys);
+int c64_display_height(c64_t* sys);
 /* reset a C64 instance */
 void c64_reset(c64_t* sys);
 /* tick C64 instance for a given number of microseconds */
@@ -210,7 +216,11 @@ bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _C64_DISPLAY_SIZE (C64_DISPLAY_WIDTH*C64_DISPLAY_HEIGHT*4)
+#define _C64_STD_DISPLAY_WIDTH (392)
+#define _C64_STD_DISPLAY_HEIGHT (272)
+#define _C64_DBG_DISPLAY_WIDTH ((_M6569_HTOTAL+1)*8)
+#define _C64_DBG_DISPLAY_HEIGHT (_M6569_VTOTAL+1)
+#define _C64_DISPLAY_SIZE (_C64_DBG_DISPLAY_WIDTH*_C64_DBG_DISPLAY_HEIGHT*4)
 #define _C64_FREQUENCY (985248)
 #define _C64_DISPLAY_X (64)
 #define _C64_DISPLAY_Y (24)
@@ -282,8 +292,8 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     vic_desc.rgba8_buffer_size = desc->pixel_buffer_size;
     vic_desc.vis_x = _C64_DISPLAY_X;
     vic_desc.vis_y = _C64_DISPLAY_Y;
-    vic_desc.vis_w = C64_DISPLAY_WIDTH;
-    vic_desc.vis_h = C64_DISPLAY_HEIGHT;
+    vic_desc.vis_w = _C64_STD_DISPLAY_WIDTH;
+    vic_desc.vis_h = _C64_STD_DISPLAY_HEIGHT;
     vic_desc.user_data = sys;
     m6569_init(&sys->vic, &vic_desc);
 
@@ -308,6 +318,28 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
 void c64_discard(c64_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
+}
+
+int c64_std_display_width(void) {
+    return _C64_STD_DISPLAY_WIDTH;
+}
+
+int c64_std_display_height(void) {
+    return _C64_STD_DISPLAY_HEIGHT;
+}
+
+int c64_max_display_size(void) {
+    return _C64_DISPLAY_SIZE;
+}
+
+int c64_display_width(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return m6569_display_width(&sys->vic);
+}
+
+int c64_display_height(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return m6569_display_height(&sys->vic);
 }
 
 void c64_reset(c64_t* sys) {

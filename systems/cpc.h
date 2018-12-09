@@ -74,8 +74,6 @@
 extern "C" {
 #endif
 
-#define CPC_DISPLAY_WIDTH (768)
-#define CPC_DISPLAY_HEIGHT (272)
 #define CPC_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
 #define CPC_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */
 #define CPC_MAX_TAPE_SIZE (128*1024)        /* max size of tape file in bytes */
@@ -212,6 +210,14 @@ typedef struct {
 void cpc_init(cpc_t* cpc, const cpc_desc_t* desc);
 /* discard a CPC instance */
 void cpc_discard(cpc_t* cpc);
+/* get the standard framebuffer width and height in pixels */
+int cpc_std_display_width(void);
+int cpc_std_display_height(void);
+/* get the maximum framebuffer size in number of bytes */
+int cpc_max_display_size(void);
+/* get the current framebuffer width and height in pixels */
+int cpc_display_width(cpc_t* sys);
+int cpc_display_height(cpc_t* sys);
 /* reset a CPC instance */
 void cpc_reset(cpc_t* cpc);
 /* run CPC instance for given amount of micro_seconds */
@@ -255,8 +261,11 @@ void cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _CPC_DISPLAY_SIZE (CPC_DISPLAY_WIDTH*CPC_DISPLAY_HEIGHT*4)
 #define _CPC_FREQUENCY (4000000)
+#define _CPC_STD_DISPLAY_WIDTH (768)
+#define _CPC_STD_DISPLAY_HEIGHT (272)
+#define _CPC_DBG_DISPLAY_WIDTH (1024)
+#define _CPC_DBG_DISPLAY_HEIGHT (312)
 
 static uint64_t _cpc_tick(int num, uint64_t pins, void* user_data);
 static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins);
@@ -281,7 +290,7 @@ static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_secto
 
 void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _CPC_DISPLAY_SIZE));
+    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= cpc_max_display_size()));
 
     memset(sys, 0, sizeof(cpc_t));
     sys->valid = true;
@@ -342,7 +351,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     ay38910_init(&sys->psg, &psg_desc);
 
     mc6845_init(&sys->vdg, MC6845_TYPE_UM6845R);
-    crt_init(&sys->crt, CRT_PAL, 6, 32, CPC_DISPLAY_WIDTH/16, CPC_DISPLAY_HEIGHT);
+    crt_init(&sys->crt, CRT_PAL, 6, 32, cpc_std_display_width()/16, cpc_std_display_height());
 
     upd765_desc_t fdc_desc;
     _CPC_CLEAR(fdc_desc);
@@ -378,6 +387,29 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
 void cpc_discard(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
+}
+
+int cpc_std_display_width(void) {
+    return _CPC_STD_DISPLAY_WIDTH;
+}
+
+int cpc_std_display_height(void) {
+    return _CPC_STD_DISPLAY_HEIGHT;
+}
+
+int cpc_max_display_size(void) {
+    /* take debugging visualization into account */
+    return _CPC_DBG_DISPLAY_WIDTH * _CPC_DBG_DISPLAY_HEIGHT * 4;
+}
+
+int cpc_display_width(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->video_debug_enabled ? _CPC_DBG_DISPLAY_WIDTH : _CPC_STD_DISPLAY_WIDTH;
+}
+
+int cpc_display_height(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->video_debug_enabled ? _CPC_DBG_DISPLAY_HEIGHT : _CPC_STD_DISPLAY_HEIGHT;
 }
 
 void cpc_reset(cpc_t* sys) {
@@ -1096,7 +1128,7 @@ static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
     else if (sys->crt.visible) {
         int dst_x = sys->crt.pos_x * 16;
         int dst_y = sys->crt.pos_y;
-        uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * CPC_DISPLAY_WIDTH]);
+        uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * _CPC_STD_DISPLAY_WIDTH]);
         if (crtc_pins & MC6845_DE) {
             /* decode visible pixels */
             cpc_ga_decode_pixels(sys, dst, crtc_pins);

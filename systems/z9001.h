@@ -84,8 +84,6 @@
 extern "C" {
 #endif
 
-#define Z9001_DISPLAY_WIDTH (320)   /* display width in pixels */
-#define Z9001_DISPLAY_HEIGHT (192)  /* display height in pixels */
 #define Z9001_MAX_AUDIO_SAMPLES (1024)      /* max number of audio samples in internal sample buffer */
 #define Z9001_DEFAULT_AUDIO_SAMPLES (128)   /* default number of samples in internal sample buffer */ 
 
@@ -168,6 +166,14 @@ typedef struct {
 void z9001_init(z9001_t* sys, const z9001_desc_t* desc);
 /* discard a Z9001 instance */
 void z9001_discard(z9001_t* sys);
+/* get the standard framebuffer width and height in pixels */
+int z9001_std_display_width(void);
+int z9001_std_display_height(void);
+/* get the maximum framebuffer size in number of bytes */
+int z9001_max_display_size(void);
+/* get the current framebuffer width and height in pixels */
+int z9001_display_width(z9001_t* sys);
+int z9001_display_height(z9001_t* sys);
 /* reset Z9001 instance */
 void z9001_reset(z9001_t* sys);
 /* run Z9001 instance for a given number of microseconds */
@@ -191,7 +197,9 @@ bool z9001_quickload(z9001_t* sys, const uint8_t* ptr, int num_bytes);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _Z9001_DISPLAY_SIZE (Z9001_DISPLAY_WIDTH*Z9001_DISPLAY_HEIGHT*4)
+#define _Z9001_DISPLAY_WIDTH (320)
+#define _Z9001_DISPLAY_HEIGHT (192)
+#define _Z9001_DISPLAY_SIZE (_Z9001_DISPLAY_WIDTH*_Z9001_DISPLAY_HEIGHT*4)
 #define _Z9001_FREQUENCY (2457600)
 
 static uint64_t _z9001_tick(int num, uint64_t pins, void* user_data);
@@ -374,6 +382,26 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
 void z9001_discard(z9001_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
+}
+
+int z9001_std_display_width(void) {
+    return _Z9001_DISPLAY_WIDTH;
+}
+
+int z9001_std_display_height(void) {
+    return _Z9001_DISPLAY_HEIGHT;
+}
+
+int z9001_max_display_size(void) {
+    return _Z9001_DISPLAY_SIZE;
+}
+
+int z9001_display_width(z9001_t* sys) {
+    return _Z9001_DISPLAY_WIDTH;
+}
+
+int z9001_display_height(z9001_t* sys) {
+    return _Z9001_DISPLAY_HEIGHT;
 }
 
 void z9001_reset(z9001_t* sys) {
