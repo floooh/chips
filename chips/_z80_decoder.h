@@ -1,4 +1,5 @@
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
+  cpu->trap_id = 0;
   uint64_t r0 = cpu->bc_de_hl_fa;
   uint64_t r1 = cpu->wz_ix_iy_sp;
   uint64_t r2 = cpu->im_ir_pc_bits;
@@ -6,10 +7,9 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   uint64_t ws = _z80_map_regs(r0, r1, r2);
   uint64_t map_bits = r2 & _BITS_MAP_REGS;
   uint64_t pins = cpu->pins;
-  const uint64_t trap_addr = cpu->trap_addr;
-  const z80_tick_t tick = cpu->tick;
+  const z80_tick_t tick = cpu->tick_cb;
+  const z80_trap_t trap = cpu->trap_cb;
   void* ud = cpu->user_data;
-  int trap_id = -1;
   uint32_t ticks = 0;
   uint8_t op, d8;
   uint16_t addr, d16;
@@ -521,18 +521,15 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       r2 &= ~_BIT_EI;
       r2 |= (_BIT_IFF1 | _BIT_IFF2);
     }
-    if (trap_addr != 0xFFFFFFFFFFFFFFFF) {
-      uint64_t ta = trap_addr;
-      for (int i = 0; i < Z80_MAX_NUM_TRAPS; i++) {
-        if (((ta & 0xFFFF) == pc) && (pc != 0xFFFF)) {
-          trap_id = i;
-          break;
-        }
-        ta >>= 16;
+    if (trap) {
+      int trap_id = trap(pc,ud);
+      if (trap_id) {
+        cpu->trap_id=trap_id;
+        break;
       }
     }
     pre_pins = pins;
-  } while ((ticks < num_ticks) && (trap_id < 0));
+  } while (ticks < num_ticks);
   _S_PC(pc);
   r0 = _z80_flush_r0(ws, r0, r2);
   r1 = _z80_flush_r1(ws, r1, r2);
@@ -542,6 +539,5 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   cpu->im_ir_pc_bits = r2;
   cpu->bc_de_hl_fa_ = r3;
   cpu->pins = pins;
-  cpu->trap_id = trap_id;
   return ticks;
 }

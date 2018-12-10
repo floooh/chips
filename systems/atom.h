@@ -264,9 +264,6 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     _atom_init_memorymap(sys);
     _atom_init_keymap(sys);
 
-    /* trap the OSLOAD function (http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis) */
-    m6502_set_trap(&sys->cpu, 1, 0xF96E);
-
     /* CPU start state */
     m6502_reset(&sys->cpu);
 }
@@ -681,6 +678,11 @@ typedef struct {
     uint16_t length;
 } _atom_tap_header;
 
+/* trap the OSLOAD function (http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis) */
+static int _atom_trap_cb(uint16_t pc, void* user_data) {
+    return (pc == 0xF96E) ? 1 : 0;
+}
+
 bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid);
     CHIPS_ASSERT(ptr);
@@ -692,6 +694,7 @@ bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
     memcpy(sys->tape_buf, ptr, num_bytes);
     sys->tape_pos = 0;
     sys->tape_size = num_bytes;
+    m6502_trap_cb(&sys->cpu, _atom_trap_cb);
     return true;
 }
 
@@ -699,6 +702,7 @@ void atom_remove_tape(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->tape_pos = 0;
     sys->tape_size = 0;
+    m6502_trap_cb(&sys->cpu, 0);
 }
 
 /*
@@ -763,6 +767,10 @@ void _atom_osload(atom_t* sys) {
                 success = true;
             }
         }
+    }
+    /* if tape at end, remove tape */
+    if (sys->tape_pos >= sys->tape_size) {
+        atom_remove_tape(sys);
     }
     /* success/fail: set or clear bit 6 and clear bit 7 of 0xDD */
     uint8_t dd = mem_rd(&sys->mem, 0xDD);

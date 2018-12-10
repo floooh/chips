@@ -96,25 +96,15 @@
         input/output callback functions provided in m6510_init().
 
     ~~~C
-    void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr)
+    void m6502_trap_cb(m6502_t* cpu, m6502_trap_t trap_cb)
     ~~~
-        Set a trap breakpoint at a 16-bit CPU address. Up to 8 trap breakpoints
-        can be set. After each instruction, the current PC will be checked
-        against all valid trap points, and if there is a match, m6502_exec() will
-        return early, and the trap_id member of m6502_t will be >= 0. This can be
-        used to set debugger breakpoints, or call out into native host system
-        code for other reasons (for instance replacing operating system functions
-        like loading game files).
-
-    ~~~C
-    bool m6502_has_trap(m6502_t* cpu, int trap_id)
-    ~~~
-        Return true if a trap with number _trap_id_ is currently set.
-
-    ~~~C
-    void m6502_clear_trap(m6502_t* cpu, int trap_id)
-    ~~~
-        Clear the trap with number _trap_id_.
+        Set an optional trap callback. If this is set it will be invoked
+        at the end of an instruction with the current PC (which points
+        to the start of the next instruction). The trap callback should
+        return a non-zero value if the execution loop should exit. The
+        returned value will also be written to m6502_t.trap_id.
+        Set a null ptr as trap callback disables the trap checking.
+        To get the current trap callback, simply access m6502_t.trap_cb directly.
 
     ## zlib/libpng license
 
@@ -202,9 +192,9 @@ extern "C" {
 /* max number of trap points */
 #define M6502_MAX_NUM_TRAPS (8)
 
-/* tick callback function typedef */
+/* callback function typedefs */
 typedef uint64_t (*m6502_tick_t)(uint64_t pins, void* user_data);
-/* callbacks for M6510 port I/O */
+typedef int (*m6502_trap_t)(uint16_t pc, void* user_data);
 typedef void (*m6510_out_t)(uint8_t data, void* user_data);
 typedef uint8_t (*m6510_in_t)(void* user_data);
 
@@ -235,8 +225,10 @@ typedef struct {
 /* M6502 CPU state */
 typedef struct {
     m6502_state_t state;
-    m6502_tick_t tick;
+    m6502_tick_t tick_cb;
+    m6502_trap_t trap_cb;
     void* user_data;
+    int trap_id;        /* index of trap hit (-1 if no trap) */
 
     /* the m6510 IO port stuff */
     m6510_in_t in_cb;
@@ -248,23 +240,14 @@ typedef struct {
     uint8_t io_pullup;
     uint8_t io_floating;
     uint8_t io_drive;
-
-    /* trap points */
-    bool trap_valid[M6502_MAX_NUM_TRAPS];
-    uint16_t trap_addr[M6502_MAX_NUM_TRAPS];
-    int trap_id;        /* index of trap hit (-1 if no trap) */
 } m6502_t;
 
 /* initialize a new m6502 instance */
 void m6502_init(m6502_t* cpu, const m6502_desc_t* desc);
 /* reset an existing m6502 instance */
 void m6502_reset(m6502_t* cpu);
-/* set a trap point */
-void m6502_set_trap(m6502_t* cpu, int trap_id, uint16_t addr);
-/* clear a trap point */
-void m6502_clear_trap(m6502_t* cpu, int trap_id);
-/* return true if a trap is valid */
-bool m6502_has_trap(m6502_t* cpu, int trap_id);
+/* set a trap callback function */
+void m6502_trap_cb(m6502_t* cpu, m6502_trap_t trap_cb);
 /* execute instruction for at least 'ticks' or trap hit, return number of executed ticks */
 uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 /* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
@@ -436,7 +419,7 @@ void m6502_init(m6502_t* c, const m6502_desc_t* desc) {
     CHIPS_ASSERT(c && desc);
     CHIPS_ASSERT(desc->tick_cb);
     memset(c, 0, sizeof(*c));
-    c->tick = desc->tick_cb;
+    c->tick_cb = desc->tick_cb;
     c->user_data = desc->user_data;
     c->state.PINS = M6502_RW;
     c->state.P = M6502_IF|M6502_XF;
@@ -455,8 +438,8 @@ void m6502_reset(m6502_t* c) {
     c->state.S = 0xFD;
     c->state.PINS = M6502_RW;
     /* load reset vector from 0xFFFD into PC */
-    uint8_t l = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFC, 0x00), c->user_data));
-    uint8_t h = M6502_GET_DATA(c->tick(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00), c->user_data));
+    uint8_t l = M6502_GET_DATA(c->tick_cb(M6502_MAKE_PINS(M6502_RW, 0xFFFC, 0x00), c->user_data));
+    uint8_t h = M6502_GET_DATA(c->tick_cb(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00), c->user_data));
     c->state.PC = (h<<8)|l;
     c->io_ddr = 0;
     c->io_out = 0;
@@ -464,23 +447,9 @@ void m6502_reset(m6502_t* c) {
     c->io_pins = 0;
 }
 
-void m6502_set_trap(m6502_t* c, int trap_id, uint16_t addr) {
+void m6502_trap_cb(m6502_t* c, m6502_trap_t trap_cb) {
     CHIPS_ASSERT(c);
-    CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
-    c->trap_valid[trap_id] = true;
-    c->trap_addr[trap_id] = addr;
-}
-
-void m6502_clear_trap(m6502_t* c, int trap_id) {
-    CHIPS_ASSERT(c);
-    CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
-    c->trap_valid[trap_id] = false;
-}
-
-bool m6502_has_trap(m6502_t* c, int trap_id) {
-    CHIPS_ASSERT(c);
-    CHIPS_ASSERT((trap_id >= 0) && (trap_id < M6502_MAX_NUM_TRAPS));
-    return c->trap_valid[trap_id];
+    c->trap_cb = trap_cb;
 }
 
 /* only call this when accessing address 0 or 1 (M6510_CHECK_IO(pins) evaluates to true) */

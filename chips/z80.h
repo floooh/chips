@@ -69,8 +69,8 @@
         has been hit), because complete instructions will be executed. During
         execution the tick callback will be invoked one or multiple times
         (usually once per machine cycle, but also for 'filler ticks' or wait
-        state ticks). To check if a trap has been hit, test whether the 
-        z80_t.trap_id is >= 0.
+        state ticks). To check if a trap has been hit, test whether 
+        z80_t.trap_id != 0
         NOTE: the z80_exec() function may return in the 'middle' of an
         DD/FD extended instruction (right after the prefix byte). If this
         is the case, z80_opdone() will return false.
@@ -90,25 +90,15 @@
         Set and get Z80 registers and flags.
 
     ~~~C
-    void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr)
+    void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb)
     ~~~
-        Set a trap breakpoint at a 16-bit CPU address. Up to 4 trap breakpoints
-        can be set. After each instruction, the current PC will be checked
-        against all valid trap points, and if there is a match, z80_exec() will
-        return early, and the trap_id member of z80_t will be >= 0. This can be
-        used to set debugger breakpoints, or call out into native host system
-        code for other reasons (for instance replacing operating system functions
-        like loading game files). 
-
-    ~~~C
-    void z80_clear_trap(z80_t* cpu, int trap_id)
-    ~~~
-        Clear a trap point.
-
-    ~~~C
-    bool z80_has_trap(z80_t* cpu, int trap_id)
-    ~~~
-        Return true if a trap has been set for the given trap_id.
+        Set an optional trap callback. If this is set it will be invoked
+        at the end of an instruction with the current PC (which points
+        to the start of the next instruction). The trap callback should
+        return a non-zero value if the execution loop should exit. The
+        returned value will also be written to z80_t.trap_id.
+        Set a null ptr as trap callback disables the trap checking.
+        To get the current trap callback, simply access z80_t.trap_cb directly.
 
     ## Macros
     ~~~C
@@ -311,6 +301,7 @@ extern "C" {
 
 /*--- callback function typedefs ---*/
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins, void* user_data);
+typedef int (*z80_trap_t)(uint16_t pc, void* user_data);
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -393,7 +384,7 @@ typedef struct {
 /* Z80 CPU state */
 typedef struct {
     /* tick callback */
-    z80_tick_t tick;
+    z80_tick_t tick_cb;
     /* main register bank (BC, DE, HL, FA) */
     uint64_t bc_de_hl_fa;   /* B:63..56 C:55..48 D:47..40 E:39..32 H:31..24 L:23..16: F:15..8, A:7..0 */
     /* shadow register bank (BC', DE', HL', FA') */
@@ -405,20 +396,16 @@ typedef struct {
     /* last pin state (only for debug inspection) */
     uint64_t pins;
     void* user_data;
+    z80_trap_t trap_cb;
     int trap_id;
-    uint64_t trap_addr;
 } z80_t;
 
 /* initialize a new z80 instance */
 void z80_init(z80_t* cpu, const z80_desc_t* desc);
 /* reset an existing z80 instance */
 void z80_reset(z80_t* cpu);
-/* set a trap point */
-void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr);
-/* clear a trap point */
-void z80_clear_trap(z80_t* cpu, int trap_id);
-/* return true if a trap is valid */
-bool z80_has_trap(z80_t* cpu, int trap_id);
+/* set optional trap callback function */
+void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb);
 /* execute instructions for at least 'ticks', but at least one, return executed ticks */
 uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 /* return false if z80_exec() returned in the middle of an extended intruction */
@@ -720,8 +707,7 @@ void z80_init(z80_t* cpu, const z80_desc_t* desc) {
     CHIPS_ASSERT(desc->tick_cb);
     memset(cpu, 0, sizeof(*cpu));
     z80_reset(cpu);
-    cpu->trap_addr = 0xFFFFFFFFFFFFFFFF;
-    cpu->tick = desc->tick_cb;
+    cpu->tick_cb = desc->tick_cb;
     cpu->user_data = desc->user_data;
 }
 
@@ -745,20 +731,9 @@ void z80_reset(z80_t* cpu) {
     cpu->im_ir_pc_bits &= ~(_BIT_EI|_BIT_USE_IX|_BIT_USE_IY);
 }
 
-void z80_set_trap(z80_t* cpu, int trap_id, uint16_t addr) {
-    CHIPS_ASSERT(cpu && (trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
-    cpu->trap_addr &= ~(0xFFFFULL<<(trap_id<<4));
-    cpu->trap_addr |= addr<<(trap_id<<4);
-}
-
-void z80_clear_trap(z80_t* cpu, int trap_id) {
-    CHIPS_ASSERT(cpu && (trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
-    cpu->trap_addr |= 0xFFFFULL<<(trap_id<<4);
-}
-
-bool z80_has_trap(z80_t* cpu, int trap_id) {
-    CHIPS_ASSERT(cpu && (trap_id >= 0) && (trap_id < Z80_MAX_NUM_TRAPS));
-    return (cpu->trap_addr>>(trap_id<<4) & 0xFFFF) != 0xFFFF;
+void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb) {
+    CHIPS_ASSERT(cpu);
+    cpu->trap_cb = trap_cb;
 }
 
 bool z80_opdone(z80_t* cpu) {

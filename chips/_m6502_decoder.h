@@ -47,13 +47,14 @@
 #define _NZ(v) c.P=((c.P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
 uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
+  cpu->trap_id = 0;
   m6502_state_t c = cpu->state;
-  int trap_id = -1;
   uint8_t l, h;
   uint16_t a, t;
   uint32_t ticks = 0;
   uint64_t pins = c.PINS;
-  const m6502_tick_t tick = cpu->tick;
+  const m6502_tick_t tick = cpu->tick_cb;
+  const m6502_trap_t trap = cpu->trap_cb;
   void* ud = cpu->user_data;
   do {
     uint64_t pre_pins = pins;
@@ -343,16 +344,17 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       }
       c.PC = (h<<8)|l;
     }
-    for (int i=0; i<M6502_MAX_NUM_TRAPS; i++) {
-      if (cpu->trap_valid[i] && (c.PC==cpu->trap_addr[i])) {
-        trap_id=i;
+    if (trap) {
+      int trap_id=trap(c.PC,ud);
+      if (trap_id) {
+        cpu->trap_id=trap_id;
+        break;
       }
     }
-  } while ((ticks < num_ticks) && (trap_id < 0));
+  } while (ticks < num_ticks);
   M6510_SET_PORT(pins, cpu->io_pins);
   c.PINS = pins;
   cpu->state = c;
-  cpu->trap_id = trap_id;
   return ticks;
 }
 #undef _SA
