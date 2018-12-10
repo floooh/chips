@@ -27,10 +27,30 @@ r = [ 'B', 'C', 'D', 'E', 'H', 'L', 'F', 'A' ]
 rx = [ 'B', 'C', 'D', 'E', 'H', 'L', 'F', 'A' ]
 
 def rpsp_cmt(p):
-    return ['BC','DE','HL','SP'][p]
+    if p==3:
+        return 'SP'
+    elif p==2:
+        if r[4]=='IXH':
+            return 'IX'
+        elif r[4]=='IYH':
+            return 'IY'
+        else:
+            return 'HL'
+    else:
+       return r[p*2+0]+r[p*2+1]
 
 def rpaf_cmt(p):
-    return ['BC','DE','HL','AF'][p]
+    if p==3:
+        return 'AF'
+    elif p==2:
+        if r[4]=='IXH':
+            return 'IX'
+        elif r[4]=='IYH':
+            return 'IY'
+        else:
+            return 'HL'
+    else:
+       return r[p*2+0]+r[p*2+1]
 
 # condition-code table (for conditional jumps etc)
 cond = [
@@ -302,7 +322,7 @@ def write_ed_ops():
     inc_indent()
     for i in range(0, 256):
         write_op(enc_ed_op(i))
-    l('default: break;');
+    l('default: break;')
     dec_indent()
     l('}')
     dec_indent()
@@ -341,7 +361,7 @@ def write_cb_ops(ixy):
         l('  case 3: d8=E; break;')
         l('  case 4: d8=H; break;')
         l('  case 5: d8=L; break;')
-        l('  case 6: addr=(H<<8)|L;_MR(addr,d8); break;')
+        l('  case 6: _T(1); addr=(H<<8)|L;_MR(addr,d8); break;')
         l('  case 7: d8=A; break;')
         l('}')
     l('uint8_t r;')
@@ -386,22 +406,54 @@ def write_cb_ops(ixy):
     if ixy:
         l('  _MW(addr,r);')
     l('  switch (z) {')
-    l('    case 0: B=d8; break;')
-    l('    case 1: C=d8; break;')
-    l('    case 2: D=d8; break;')
-    l('    case 3: E=d8; break;')
-    l('    case 4: H=d8; break;')
-    l('    case 5: L=d8; break;')
+    l('    case 0: B=r; break;')
+    l('    case 1: C=r; break;')
+    l('    case 2: D=r; break;')
+    l('    case 3: E=r; break;')
+    l('    case 4: H=r; break;')
+    l('    case 5: L=r; break;')
     if ixy:
         l('    case 6: break;')
     else:
         l('    case 6: _MW(addr,r); break;')
-    l('    case 7: A=d8; break;')
+    l('    case 7: A=r; break;')
     l('  }')
     l('}')
     dec_indent()
     l('}')
     l('break;')
+
+#-------------------------------------------------------------------------------
+# Write the ED extended instruction block.
+#
+def write_ixy_ops(op):
+    if op==0xDD:
+        ixy = 'IX'
+        r[4] = 'IXH'
+        r[5] = 'IXL'
+    else:
+        ixy = 'IY'
+        r[4] = 'IYH'
+        r[5] = 'IYL'
+    l('case '+hex(op)+': {')
+    inc_indent()
+    l('_FETCH(op);')
+    l('switch (op) {')
+    inc_indent()
+    for i in range(0, 256):
+        # CB prefix instructions
+        if i == 0xCB:
+            write_cb_ops(ixy)
+        # non-prefixed instruction
+        else:
+            write_op(enc_op(ixy,i))
+    l('default: break;')
+    l('}')
+    dec_indent()
+    l('}')
+    l('break;')
+    r[4] = 'H'
+    r[5] = 'L'
 
 #-------------------------------------------------------------------------------
 # Return code to setup an address variable 'a' with the address of HL
@@ -415,8 +467,8 @@ def addr(ixy, ext_ticks):
             src += 'IXH<<8|IXL;'
         else:
             src += 'IYH<<8|IYL;'
-        src += 'int8_t d;_MR(PC++,d);addr+=d;WZ=addr;_T('+ext_ticks+');'
-        return src;
+        src += '{int8_t d;_MR(PC++,d);addr+=d;}WZ=addr;_T('+str(ext_ticks)+');'
+        return src
     else:
         return 'addr=(H<<8)|L;'
 
@@ -430,8 +482,8 @@ def addr_cb(ixy, ext_ticks):
             src += 'IXH<<8|IXL;'
         else:
             src += 'IYH<<8|IYL;'
-        src += 'addr+=d;WZ=addr;_T('+ext_ticks+');'
-        return src;
+        src += 'addr+=d;WZ=addr;_T('+str(ext_ticks)+');'
+        return src
     else:
         return 'addr=(H<<8)|L;'
 
@@ -527,7 +579,11 @@ def exx():
 #   Generate code for POP dd.
 #
 def pop_dd(p):
-    return '_MR(SP++,'+r[p*2+1]+');_MR(SP++,'+r[p*2+0]+');'
+    if p==3:
+        # special case PUSH AF
+        return '_MR(SP++,F);_MR(SP++,A);'
+    else:
+        return '_MR(SP++,'+r[p*2+1]+');_MR(SP++,'+r[p*2+0]+');'
 
 #-------------------------------------------------------------------------------
 #   push_dd
@@ -535,7 +591,11 @@ def pop_dd(p):
 #   Generate code for PUSH dd
 #
 def push_dd(p):
-    return '_T(1);_MW(--SP,'+r[p*2+0]+');_MW(--SP,'+r[p*2+1]+');'
+    if p==3:
+        # special case PUSH AF
+        return '_T(1);_MW(--SP,A);_MW(--SP,F);'
+    else:
+        return '_T(1);_MW(--SP,'+r[p*2+0]+');_MW(--SP,'+r[p*2+1]+');'
 
 #-------------------------------------------------------------------------------
 #   ld_inn_dd
@@ -679,14 +739,15 @@ def ini_ind_inir_indr(y):
     src+='_IN(WZ,d8);'
     src+='_MW(hl,d8);'
     src+='B--;'
+    src+='uint8_t c=C;'
     if y & 1:
-        src+='WZ--;hl--;C--;'
+        src+='WZ--;hl--;c--;'
     else:
-        src+='WZ++;hl++;C++;'
+        src+='WZ++;hl++;c++;'
     src+='H=hl>>8;L=hl;'
     src+='F=(B?(B&Z80_SF):Z80_ZF)|(B&(Z80_XF|Z80_YF));'
     src+='if(d8&Z80_SF){F|=Z80_NF;}'
-    src+='uint32_t t=(uint32_t)(C+d8);'
+    src+='uint32_t t=(uint32_t)(c+d8);'
     src+='if(t&0x100){F|=Z80_HF|Z80_CF;}'
     src+='F|=_z80_szp[((uint8_t)(t&0x07))^B]&Z80_PF;'
     if y >= 6:
@@ -918,14 +979,14 @@ def dec8():
 #
 def add16(p):
     src ='{'
-    src+='uint16_t acc=(H<<8)|L;'
+    src+='uint16_t acc=('+r[4]+'<<8)|'+r[5]+';'
     src+='WZ=acc+1;'
     if p==3:
         src+='d16=SP;'
     else:
         src+='d16=('+r[p*2+0]+'<<8)|'+r[p*2+1]+';'
     src+='uint32_t r=acc+d16;'
-    src+='H=r>>8;L=r;'
+    src+=r[4]+'=r>>8;'+r[5]+'=r;'
     src+='uint8_t f=F&(Z80_SF|Z80_ZF|Z80_VF);'
     src+='f|=((acc^r^d16)>>8)&Z80_HF;'
     src+='f|=((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));'
@@ -936,14 +997,14 @@ def add16(p):
 
 def adc16(p):
     src ='{'
-    src+='uint16_t acc=(H<<8)|L;'
+    src+='uint16_t acc=('+r[4]+'<<8)|'+r[5]+';'
     src+='WZ=acc+1;'
     if p==3:
         src+='d16=SP;'
     else:
         src+='d16=('+r[p*2+0]+'<<8)|'+r[p*2+1]+';'
     src+='uint32_t r=acc+d16+(F&Z80_CF);'
-    src+='H=r>>8;L=r;'
+    src+=r[4]+'=r>>8;'+r[5]+'=r;'
     src+='uint8_t f=((d16^acc^0x8000)&(d16^r)&0x8000)>>13;'
     src+='f|=((acc^r^d16)>>8)&Z80_HF;'
     src+='f|=(r>>16)&Z80_CF;'
@@ -956,7 +1017,7 @@ def adc16(p):
 
 def sbc16(p):
     src ='{'
-    src+='uint16_t acc=(H<<8)|L;'
+    src+='uint16_t acc=('+r[4]+'<<8)|'+r[5]+';'
     src+='WZ=acc+1;'
     if p==3:
         src+='d16=SP;'
@@ -964,7 +1025,7 @@ def sbc16(p):
         src+='d16=('+r[p*2+0]+'<<8)|'+r[p*2+1]+';'
     src+='uint32_t r=acc-d16-(F&Z80_CF);'
     src+='uint8_t f=Z80_NF|(((d16^acc)&(acc^r)&0x8000)>>13);'
-    src+='H=r>>8;L=r;'
+    src+=r[4]+'=r>>8;'+r[5]+'=r;'
     src+='f|=((acc^r^d16)>>8) & Z80_HF;'
     src+='f|=(r>>16)&Z80_CF;'
     src+='f|=(r>>8)&(Z80_SF|Z80_YF|Z80_XF);'
@@ -1005,24 +1066,28 @@ def rlca():
     return ('{'
             'uint8_t r=(A<<1)|(A>>7);'
             'F=((A>>7)&Z80_CF)|(F&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+            'A=r;'
             '}')
 
 def rrca():
     return ('{'
             'uint8_t r=(A>>1)|(A<<7);'
             'F=(A&Z80_CF)|(F&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+            'A=r;'
             '}')
 
 def rla():
     return ('{'
             'uint8_t r=(A<<1)|(F&Z80_CF);'
             'F=((A>>7)&Z80_CF)|(F&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+            'A=r;'
             '}')
 
 def rra():
     return ('{'
             'uint8_t r=(A>>1)|((F&Z80_CF)<<7);'
             'F=(A&Z80_CF)|(F&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+            'A=r;'
             '}')
 
 #-------------------------------------------------------------------------------
@@ -1055,6 +1120,7 @@ def daa():
             'F|=(A>0x99)?Z80_CF:0;'
             'F|=(A^v)&Z80_HF;'
             'F|=_z80_szp[v];'
+            'A=v;'
             '}')
 
 def cpl():
@@ -1390,20 +1456,6 @@ def enc_ed_op(op) :
     return o
 
 #-------------------------------------------------------------------------------
-#   CB prefix instructions
-#
-def enc_cb_op(op) :
-    o = opcode(op)
-
-    x = op>>6
-    y = (op>>3)&7
-    z = op&7
-
-    # NOTE x==0 (ROT), x==1 (BIT), x==2 (RES) and x==3 (SET) instructions are
-    # handled dynamically in the fallthrough path!
-    return o
-
-#-------------------------------------------------------------------------------
 # indent and tab stuff
 #
 def inc_indent():
@@ -1442,6 +1494,9 @@ for i in range(0, 256):
     # CB prefix instructions
     elif i == 0xCB:
         write_cb_ops(None)
+    # DD/FD prefixes
+    elif i == 0xDD or i == 0xFD:
+        write_ixy_ops(i)
     # non-prefixed instruction
     else:
         write_op(enc_op(None,i))

@@ -634,6 +634,10 @@ void z80_reset(z80_t* cpu) {
     z80_set_bc(cpu, 0xFFFF);
     z80_set_de(cpu, 0xFFFF);
     z80_set_hl(cpu, 0xFFFF);
+    z80_set_af_(cpu, 0xFFFF);
+    z80_set_bc_(cpu, 0xFFFF);
+    z80_set_de_(cpu, 0xFFFF);
+    z80_set_hl_(cpu, 0xFFFF);
     z80_set_ix(cpu, 0xFFFF);
     z80_set_iy(cpu, 0xFFFF);
     z80_set_wz(cpu, 0xFFFF);
