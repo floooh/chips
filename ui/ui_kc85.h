@@ -31,6 +31,7 @@
     - ui_kc85sys.h
     - ui_audio.h
     - ui_dasm.h
+    - ui_dbg.h
     - ui_memedit.h
     - ui_memmap.h
     
@@ -78,6 +79,7 @@ typedef struct {
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
+    ui_dbg_t dbg;
 } ui_kc85_t;
 
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc);
@@ -145,7 +147,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
                 ImGui::MenuItem("Window #4", 0, &ui->dasm[3].open);
                 ImGui::EndMenu();
             }
-            ImGui::MenuItem("CPU Debugger (TODO)");
+            ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.open);
             ImGui::MenuItem("Scan Commands (TODO)");
             ImGui::EndMenu();
         }
@@ -332,6 +334,10 @@ static void _ui_kc85_mem_write(int layer, uint16_t addr, uint8_t data, void* use
     }
 }
 
+static int _ui_kc85_break(ui_dbg_breakpoint_t* first, int num, uint16_t pc, uint64_t pins, int ticks, void* user_data) {
+    return 0;
+}
+
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
     CHIPS_ASSERT(ui && desc);
     CHIPS_ASSERT(desc->kc85);
@@ -429,6 +435,22 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
             x += dx; y += dy;
         }
     }
+    x += dx; y += dy;
+    {
+        ui_dbg_desc_t desc = {0};
+        desc.title = "CPU Debugger";
+        desc.x = x;
+        desc.y = y;
+        desc.layers[0] = "CPU Mapped";
+        desc.layers[1] = "Motherboard";
+        desc.layers[2] = "Slot 08";
+        desc.layers[3] = "Slot 0C";
+        desc.z80 = &ui->kc85->cpu;
+        desc.read_cb = _ui_kc85_mem_read;
+        desc.break_cb = _ui_kc85_break;
+        desc.user_data = ui->kc85;
+        ui_dbg_init(&ui->dbg, &desc);
+    }
 }
 
 void ui_kc85_discard(ui_kc85_t* ui) {
@@ -444,6 +466,7 @@ void ui_kc85_discard(ui_kc85_t* ui) {
         ui_memedit_discard(&ui->memedit[i]);
         ui_dasm_discard(&ui->dasm[i]);
     }
+    ui_dbg_discard(&ui->dbg);
 }
 
 void ui_kc85_draw(ui_kc85_t* ui, double time_ms) {
@@ -462,6 +485,7 @@ void ui_kc85_draw(ui_kc85_t* ui, double time_ms) {
         ui_memedit_draw(&ui->memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
+    ui_dbg_draw(&ui->dbg);
 }
 
 #ifdef __clang__
