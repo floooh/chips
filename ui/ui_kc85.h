@@ -133,6 +133,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
+            ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.open);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
@@ -147,7 +148,6 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
                 ImGui::MenuItem("Window #4", 0, &ui->dasm[3].open);
                 ImGui::EndMenu();
             }
-            ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.open);
             ImGui::MenuItem("Scan Commands (TODO)");
             ImGui::EndMenu();
         }
