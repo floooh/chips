@@ -133,7 +133,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
-            ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.open);
+            ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
