@@ -254,7 +254,7 @@ def write_interrupt_handling():
 #-------------------------------------------------------------------------------
 def write_trap_handling():
     l('    if (trap) {')
-    l('      int trap_id=trap(c.PC,ud);')
+    l('      int trap_id=trap(c.PC,cpu->trap_user_data);')
     l('      if (trap_id) {')
     l('        cpu->trap_id=trap_id;')
     l('        break;')

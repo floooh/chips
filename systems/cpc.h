@@ -1469,7 +1469,7 @@ bool cpc_insert_tape(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     memcpy(sys->tape_buf, ptr, num_bytes);
     sys->tape_pos = 0;
     sys->tape_size = num_bytes;
-    z80_trap_cb(&sys->cpu, _cpc_trap_cb);
+    z80_trap_cb(&sys->cpu, _cpc_trap_cb, sys);
     return true;
 }
 
@@ -1477,7 +1477,7 @@ void cpc_remove_tape(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->tape_pos = 0;
     sys->tape_size = 0;
-    z80_trap_cb(&sys->cpu, 0);
+    z80_trap_cb(&sys->cpu, 0, 0);
 }
 
 /* the trapped OS casread function, reads one tape block into memory */

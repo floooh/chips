@@ -301,7 +301,7 @@ extern "C" {
 
 /*--- callback function typedefs ---*/
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins, void* user_data);
-typedef int (*z80_trap_t)(uint16_t pc, void* user_data);
+typedef int (*z80_trap_t)(uint16_t pc, void* trap_user_data);
 
 /*--- address lines ---*/
 #define Z80_A0  (1ULL<<0)
@@ -397,6 +397,7 @@ typedef struct {
     uint64_t pins;
     void* user_data;
     z80_trap_t trap_cb;
+    void* trap_user_data;
     int trap_id;
 } z80_t;
 
@@ -405,7 +406,7 @@ void z80_init(z80_t* cpu, const z80_desc_t* desc);
 /* reset an existing z80 instance */
 void z80_reset(z80_t* cpu);
 /* set optional trap callback function */
-void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb);
+void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb, void* trap_user_data);
 /* execute instructions for at least 'ticks', but at least one, return executed ticks */
 uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
 /* return false if z80_exec() returned in the middle of an extended intruction */
@@ -731,9 +732,10 @@ void z80_reset(z80_t* cpu) {
     cpu->im_ir_pc_bits &= ~(_BIT_EI|_BIT_USE_IX|_BIT_USE_IY);
 }
 
-void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb) {
+void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb, void* trap_user_data) {
     CHIPS_ASSERT(cpu);
     cpu->trap_cb = trap_cb;
+    cpu->trap_user_data = trap_user_data;
 }
 
 bool z80_opdone(z80_t* cpu) {

@@ -694,7 +694,7 @@ bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
     memcpy(sys->tape_buf, ptr, num_bytes);
     sys->tape_pos = 0;
     sys->tape_size = num_bytes;
-    m6502_trap_cb(&sys->cpu, _atom_trap_cb);
+    m6502_trap_cb(&sys->cpu, _atom_trap_cb, sys);
     return true;
 }
 
@@ -702,7 +702,7 @@ void atom_remove_tape(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->tape_pos = 0;
     sys->tape_size = 0;
-    m6502_trap_cb(&sys->cpu, 0);
+    m6502_trap_cb(&sys->cpu, 0, 0);
 }
 
 /*

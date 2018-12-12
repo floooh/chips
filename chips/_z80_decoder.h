@@ -522,7 +522,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
       r2 |= (_BIT_IFF1 | _BIT_IFF2);
     }
     if (trap) {
-      int trap_id = trap(pc,ud);
+      int trap_id = trap(pc,cpu->trap_user_data);
       if (trap_id) {
         cpu->trap_id=trap_id;
         break;

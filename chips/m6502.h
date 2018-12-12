@@ -201,12 +201,12 @@ typedef uint8_t (*m6510_in_t)(void* user_data);
 /* the desc structure provided to m6502_init() */
 typedef struct {
     m6502_tick_t tick_cb;   /* the CPU tick callback */
+    void* user_data;        /* optional callback user data */
     bool bcd_disabled;      /* set to true if BCD mode is disabled */
     m6510_in_t in_cb;       /* optional port IO input callback (only on m6510) */
     m6510_out_t out_cb;     /* optional port IO output callback (only on m6510) */
     uint8_t m6510_io_pullup;    /* IO port bits that are 1 when reading */
     uint8_t m6510_io_floating;  /* unconnected IO port pins */
-    void* user_data;        /* optional user-data for callbacks */
 } m6502_desc_t;
 
 /* mutable tick state */
@@ -228,6 +228,7 @@ typedef struct {
     m6502_tick_t tick_cb;
     m6502_trap_t trap_cb;
     void* user_data;
+    void* trap_user_data;
     int trap_id;        /* index of trap hit (-1 if no trap) */
 
     /* the m6510 IO port stuff */
@@ -247,7 +248,7 @@ void m6502_init(m6502_t* cpu, const m6502_desc_t* desc);
 /* reset an existing m6502 instance */
 void m6502_reset(m6502_t* cpu);
 /* set a trap callback function */
-void m6502_trap_cb(m6502_t* cpu, m6502_trap_t trap_cb);
+void m6502_trap_cb(m6502_t* cpu, m6502_trap_t trap_cb, void* trap_user_data);
 /* execute instruction for at least 'ticks' or trap hit, return number of executed ticks */
 uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 /* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
@@ -447,9 +448,10 @@ void m6502_reset(m6502_t* c) {
     c->io_pins = 0;
 }
 
-void m6502_trap_cb(m6502_t* c, m6502_trap_t trap_cb) {
+void m6502_trap_cb(m6502_t* c, m6502_trap_t trap_cb, void* trap_user_data) {
     CHIPS_ASSERT(c);
     c->trap_cb = trap_cb;
+    c->trap_user_data = trap_user_data;
 }
 
 /* only call this when accessing address 0 or 1 (M6510_CHECK_IO(pins) evaluates to true) */
