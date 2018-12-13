@@ -216,39 +216,7 @@ void ui_dbg_after_exec(ui_dbg_t* win);
 #error "please define UI_DBG_USE_Z80 and/or UI_DBG_USE_M6502"
 #endif
 
-static void _ui_dbg_dbgstate_init(ui_dbg_state_t* dbg, ui_dbg_desc_t* desc) {
-    #if defined(UI_DBG_USE_Z80) &&  defined(UI_DBG_USE_M6502)
-        CHIPS_ASSERT((desc->z80 || desc->m6502) && !(desc->z80 && desc->m6502));
-        dbg->z80 = desc->z80;
-        dbg->m6502 = desc->m6502;
-    #elif defined(UI_DBG_USE_Z80)
-        CHIPS_ASSERT(desc->z80);
-        dbg->z80 = desc->z80;
-    #else
-        CHIPS_ASSERT(desc->m6502);
-        dbg->m6502 = desc->m6502;
-    #endif
-}
-
-static void _ui_dbg_uistate_init(ui_dbg_uistate_t* ui, ui_dbg_desc_t* desc) {
-    ui->title = desc->title;
-    ui->open = desc->open;
-    ui->init_x = (float) desc->x;
-    ui->init_y = (float) desc->y;
-    ui->init_w = (float) ((desc->w == 0) ? 460 : desc->w);
-    ui->init_h = (float) ((desc->h == 0) ? 256 : desc->h);
-    ui->show_regs = true;
-    ui->show_buttons = true;
-    ui->show_bytes = true;
-    ui->show_ticks = true;
-    ui->show_history = false;
-    ui->show_breakpoints = false;
-}
-
-static void _ui_dbg_history_init(ui_dbg_history_t* hist, ui_dbg_desc_t* desc) {
-    /* nothing to do here, since hist is already zero-initialized */
-}
-
+/*== DISASSEMBLER ============================================================*/
 static void _ui_dbg_dasm_init(ui_dbg_dasm_t* dasm, ui_dbg_desc_t* desc) {
     /* assuming dasm is already zero-initialized */
     for (int i = 0; i < UI_DBG_MAX_LAYERS; i++) {
@@ -294,172 +262,19 @@ static uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
     return win->dasm.cur_addr;
 }
 
-/* breakpoint evaluation callback, this is installed as CPU trap callback when needed */
-static int _ui_dbg_trap_cb(uint16_t pc, void* user_data) {
-    ui_dbg_t* win = (ui_dbg_t*) user_data;
-    int trap_id = 0;
-    if (win->dbg.step_mode != UI_DBG_STEPMODE_NONE) {
-        switch (win->dbg.step_mode) {
-            case UI_DBG_STEPMODE_INTO:
-                if (pc != win->dbg.trap_pc) {
-                    trap_id = UI_DBG_STEP_TRAPID;
-                }
-                break;
-            case UI_DBG_STEPMODE_OVER:
-                if (pc == win->dbg.stepover_pc) {
-                    trap_id = UI_DBG_STEP_TRAPID;
-                }
-                break;
-            case UI_DBG_STEPMODE_OUT:
-                trap_id = UI_DBG_STEP_TRAPID;
-                break;
-        }
-    }
-    else {
-        /* check breakpoints */
-        for (int i = 0; (i < win->dbg.num_breakpoints) && (trap_id == 0); i++) {
-            const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
-            if (bp->enabled) {
-                switch (bp->type) {
-                    case UI_DBG_BREAKTYPE_EXEC:
-                        if (pc == bp->addr) {
-                            trap_id = UI_DBG_BASE_TRAPID + i;
-                        }
-                        break;
-                }
-            }
-        }
-    }
-    win->dbg.trap_pc = pc;
-    return trap_id;
-}
-
-void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
-    CHIPS_ASSERT(win && desc);
-    CHIPS_ASSERT(desc->title);
-    CHIPS_ASSERT(desc->read_cb && desc->break_cb);
-    memset(win, 0, sizeof(ui_dbg_t));
-    win->valid = true;
-    win->read_cb = desc->read_cb;
-    win->break_cb = desc->break_cb;
-    win->user_data = desc->user_data;
-    _ui_dbg_dbgstate_init(&win->dbg, desc);
-    _ui_dbg_uistate_init(&win->ui, desc);
-    _ui_dbg_dasm_init(&win->dasm, desc);
-    _ui_dbg_history_init(&win->history, desc);
-}
-
-void ui_dbg_discard(ui_dbg_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    win->valid = false;
-}
-
-bool ui_dbg_before_exec(ui_dbg_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    /* only install trap callback if our window is actually open */
-    if (!win->ui.open) {
-        return true;
-    }
-    if (!win->dbg.stopped) {
-        #if defined(UI_DBG_USE_Z80)
-            if (win->dbg.z80) {
-                win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
-                win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
-                z80_trap_cb(win->dbg.z80, _ui_dbg_trap_cb, win);
-            }
-        #endif
-        #if defined(UI_DBG_USE_M6502)
-            if (win->dbg.m6502) {
-                win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
-                win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
-                m6502_trap_cb(win->dbg.m6502, _ui_dbg_trap_cb, win);
-            }
-        #endif
-    }
-    return !win->dbg.stopped;
-}
-
-void ui_dbg_after_exec(ui_dbg_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    /* uninstall our trap callback, but only if it hasn't been overwritten */
-    int trap_id = 0;
-    #if defined(UI_DBG_USE_Z80)
-        if (win->dbg.z80 && (win->dbg.z80->trap_cb == _ui_dbg_trap_cb)) {
-            z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
-        }
-        win->dbg.z80_trap_cb = 0;
-        win->dbg.z80_trap_ud = 0;
-        trap_id = win->dbg.z80->trap_id;
+/*== DEBUGGER STATE ==========================================================*/
+static void _ui_dbg_dbgstate_init(ui_dbg_state_t* dbg, ui_dbg_desc_t* desc) {
+    #if defined(UI_DBG_USE_Z80) &&  defined(UI_DBG_USE_M6502)
+        CHIPS_ASSERT((desc->z80 || desc->m6502) && !(desc->z80 && desc->m6502));
+        dbg->z80 = desc->z80;
+        dbg->m6502 = desc->m6502;
+    #elif defined(UI_DBG_USE_Z80)
+        CHIPS_ASSERT(desc->z80);
+        dbg->z80 = desc->z80;
+    #else
+        CHIPS_ASSERT(desc->m6502);
+        dbg->m6502 = desc->m6502;
     #endif
-    #if defined(UI_DBG_USE_M6502)
-        if (win->dbg.m6502 && (win->dbg.m6502->trap_cb == _ui_dbg_trap_cb)) {
-            m6502_trap_cb(win->dbg.m6502, win->dbg.m6502_trap_cb, win->dbg.m6502_trap_ud);
-        }
-        win->dbg.m6502_trap_cb = 0;
-        trap_id = win->dbg.m6502->trap_id;
-    #endif
-    if (trap_id) {
-        win->dbg.stopped = true;
-        win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
-    }
-}
-
-static bool _ui_dbg_add_breakpoint(ui_dbg_t* win, int type, uint16_t addr, int val) {
-    if (win->dbg.num_breakpoints < UI_DBG_MAX_BREAKPOINTS) {
-        ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[win->dbg.num_breakpoints++];
-        bp->type = type;
-        bp->addr = addr;
-        bp->val = val;
-        bp->enabled = true;
-        return true;
-    }
-    else {
-        /* no more breakpoint slots */
-        return false;
-    }
-}
-
-/* find breakpoint index by type and address, return -1 if not found */
-static int _ui_dbg_find_breakpoint(ui_dbg_t* win, int type, uint16_t addr) {
-    for (int i = 0; i < win->dbg.num_breakpoints; i++) {
-        const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
-        if (bp->type == type && bp->addr == addr) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-/* remove breakpoint by index */
-static void _ui_dbg_rem_breakpoint(ui_dbg_t* win, int index) {
-    if ((win->dbg.num_breakpoints > 0) && (index >= 0) && (index < win->dbg.num_breakpoints)) {
-        for (int i = index; i < (win->dbg.num_breakpoints - 1); i++) {
-            win->dbg.breakpoints[i] = win->dbg.breakpoints[i+1];
-        }
-        win->dbg.num_breakpoints--;
-    }
-}
-
-/* add a new breakpoint, or remove existing one */
-static void _ui_dbg_toggle_breakpoint(ui_dbg_t* win, int type, uint16_t addr) {
-    int index = _ui_dbg_find_breakpoint(win, type, addr);
-    if (index >= 0) {
-        /* breakpoint already exists, remove */
-        _ui_dbg_rem_breakpoint(win, index);
-    }
-    else {
-        /* breakpoint doesn't exist, add a new one */
-        _ui_dbg_add_breakpoint(win, type, addr, 0);
-    }
-}
-
-/* return true if breakpoint is enabled, false is disabled, or index out of bounds */
-static bool _ui_dbg_breakpoint_enabled(ui_dbg_t* win, int index) {
-    if ((index >= 0) && (index < win->dbg.num_breakpoints)) {
-        const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[index];
-        return bp->enabled;
-    }
-    return false;
 }
 
 static uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
@@ -505,6 +320,127 @@ static void _ui_dbg_step_out(ui_dbg_t* win) {
     win->dbg.stopped = false;
     win->dbg.step_mode = UI_DBG_STEPMODE_OUT;
     win->dbg.trap_pc = _ui_dbg_get_pc(win);
+}
+
+/*== HISTORY =================================================================*/
+static void _ui_dbg_history_init(ui_dbg_history_t* hist, ui_dbg_desc_t* desc) {
+    /* nothing to do here, since hist is already zero-initialized */
+}
+
+/*== BREAKPOINTS =============================================================*/
+
+/* breakpoint evaluation callback, this is installed as CPU trap callback when needed */
+static int _ui_dbg_bp_eval(uint16_t pc, void* user_data) {
+    ui_dbg_t* win = (ui_dbg_t*) user_data;
+    int trap_id = 0;
+    if (win->dbg.step_mode != UI_DBG_STEPMODE_NONE) {
+        switch (win->dbg.step_mode) {
+            case UI_DBG_STEPMODE_INTO:
+                if (pc != win->dbg.trap_pc) {
+                    trap_id = UI_DBG_STEP_TRAPID;
+                }
+                break;
+            case UI_DBG_STEPMODE_OVER:
+                if (pc == win->dbg.stepover_pc) {
+                    trap_id = UI_DBG_STEP_TRAPID;
+                }
+                break;
+            case UI_DBG_STEPMODE_OUT:
+                trap_id = UI_DBG_STEP_TRAPID;
+                break;
+        }
+    }
+    else {
+        /* check breakpoints */
+        for (int i = 0; (i < win->dbg.num_breakpoints) && (trap_id == 0); i++) {
+            const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
+            if (bp->enabled) {
+                switch (bp->type) {
+                    case UI_DBG_BREAKTYPE_EXEC:
+                        if (pc == bp->addr) {
+                            trap_id = UI_DBG_BASE_TRAPID + i;
+                        }
+                        break;
+                }
+            }
+        }
+    }
+    win->dbg.trap_pc = pc;
+    return trap_id;
+}
+
+static bool _ui_dbg_bp_add(ui_dbg_t* win, int type, uint16_t addr, int val) {
+    if (win->dbg.num_breakpoints < UI_DBG_MAX_BREAKPOINTS) {
+        ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[win->dbg.num_breakpoints++];
+        bp->type = type;
+        bp->addr = addr;
+        bp->val = val;
+        bp->enabled = true;
+        return true;
+    }
+    else {
+        /* no more breakpoint slots */
+        return false;
+    }
+}
+
+/* find breakpoint index by type and address, return -1 if not found */
+static int _ui_dbg_bp_find(ui_dbg_t* win, int type, uint16_t addr) {
+    for (int i = 0; i < win->dbg.num_breakpoints; i++) {
+        const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
+        if (bp->type == type && bp->addr == addr) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* remove breakpoint by index */
+static void _ui_dbg_bp_rem(ui_dbg_t* win, int index) {
+    if ((win->dbg.num_breakpoints > 0) && (index >= 0) && (index < win->dbg.num_breakpoints)) {
+        for (int i = index; i < (win->dbg.num_breakpoints - 1); i++) {
+            win->dbg.breakpoints[i] = win->dbg.breakpoints[i+1];
+        }
+        win->dbg.num_breakpoints--;
+    }
+}
+
+/* add a new breakpoint, or remove existing one */
+static void _ui_dbg_bp_toggle(ui_dbg_t* win, int type, uint16_t addr) {
+    int index = _ui_dbg_bp_find(win, type, addr);
+    if (index >= 0) {
+        /* breakpoint already exists, remove */
+        _ui_dbg_bp_rem(win, index);
+    }
+    else {
+        /* breakpoint doesn't exist, add a new one */
+        _ui_dbg_bp_add(win, type, addr, 0);
+    }
+}
+
+/* return true if breakpoint is enabled, false is disabled, or index out of bounds */
+static bool _ui_dbg_bp_enabled(ui_dbg_t* win, int index) {
+    if ((index >= 0) && (index < win->dbg.num_breakpoints)) {
+        const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[index];
+        return bp->enabled;
+    }
+    return false;
+}
+
+/*== UI STATE ================================================================*/
+static void _ui_dbg_uistate_init(ui_dbg_uistate_t* ui, ui_dbg_desc_t* desc) {
+    ui->title = desc->title;
+    ui->open = desc->open;
+    ui->init_x = (float) desc->x;
+    ui->init_y = (float) desc->y;
+    ui->init_w = (float) ((desc->w == 0) ? 460 : desc->w);
+    ui->init_h = (float) ((desc->h == 0) ? 256 : desc->h);
+    ui->show_regs = true;
+    ui->show_buttons = true;
+    ui->show_bytes = true;
+    ui->show_ticks = true;
+    ui->show_history = false;
+    ui->show_breakpoints = false;
 }
 
 static void _ui_dbg_draw_menu(ui_dbg_t* win) {
@@ -677,15 +613,15 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         ImGui::PushID(line_i);
         if (ImGui::InvisibleButton("##bp", ImVec2(16, line_height))) {
             /* add or remove execution breakpoint */
-            _ui_dbg_toggle_breakpoint(win, UI_DBG_BREAKTYPE_EXEC, op_addr);
+            _ui_dbg_bp_toggle(win, UI_DBG_BREAKTYPE_EXEC, op_addr);
         }
         ImGui::PopID();
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const ImVec2 mid(pos.x + 6, pos.y + lh2);
-        const int bp_index = _ui_dbg_find_breakpoint(win, UI_DBG_BREAKTYPE_EXEC, op_addr);
+        const int bp_index = _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, op_addr);
         if (bp_index >= 0) {
             /* an execution breakpoint exists for this address */
-            ImU32 bp_color = _ui_dbg_breakpoint_enabled(win, bp_index) ? bp_enabled_color : bp_disabled_color;
+            ImU32 bp_color = _ui_dbg_bp_enabled(win, bp_index) ? bp_enabled_color : bp_disabled_color;
             dl->AddCircleFilled(mid, 6, bp_color);
             dl->AddCircle(mid, 6, brd_color);
         }
@@ -723,6 +659,77 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
     ImGui::PopStyleVar(2);
 
     ImGui::EndChild();
+}
+
+/*== PUBLIC FUNCTIONS ========================================================*/
+void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
+    CHIPS_ASSERT(win && desc);
+    CHIPS_ASSERT(desc->title);
+    CHIPS_ASSERT(desc->read_cb && desc->break_cb);
+    memset(win, 0, sizeof(ui_dbg_t));
+    win->valid = true;
+    win->read_cb = desc->read_cb;
+    win->break_cb = desc->break_cb;
+    win->user_data = desc->user_data;
+    _ui_dbg_dbgstate_init(&win->dbg, desc);
+    _ui_dbg_uistate_init(&win->ui, desc);
+    _ui_dbg_dasm_init(&win->dasm, desc);
+    _ui_dbg_history_init(&win->history, desc);
+}
+
+void ui_dbg_discard(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    win->valid = false;
+}
+
+bool ui_dbg_before_exec(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    /* only install trap callback if our window is actually open */
+    if (!win->ui.open) {
+        return true;
+    }
+    if (!win->dbg.stopped) {
+        #if defined(UI_DBG_USE_Z80)
+            if (win->dbg.z80) {
+                win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
+                win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
+                z80_trap_cb(win->dbg.z80, _ui_dbg_bp_eval, win);
+            }
+        #endif
+        #if defined(UI_DBG_USE_M6502)
+            if (win->dbg.m6502) {
+                win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
+                win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
+                m6502_trap_cb(win->dbg.m6502, _ui_dbg_eval, win);
+            }
+        #endif
+    }
+    return !win->dbg.stopped;
+}
+
+void ui_dbg_after_exec(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    /* uninstall our trap callback, but only if it hasn't been overwritten */
+    int trap_id = 0;
+    #if defined(UI_DBG_USE_Z80)
+        if (win->dbg.z80 && (win->dbg.z80->trap_cb == _ui_dbg_bp_eval)) {
+            z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
+        }
+        win->dbg.z80_trap_cb = 0;
+        win->dbg.z80_trap_ud = 0;
+        trap_id = win->dbg.z80->trap_id;
+    #endif
+    #if defined(UI_DBG_USE_M6502)
+        if (win->dbg.m6502 && (win->dbg.m6502->trap_cb == _ui_dbg_bp_eval)) {
+            m6502_trap_cb(win->dbg.m6502, win->dbg.m6502_trap_cb, win->dbg.m6502_trap_ud);
+        }
+        win->dbg.m6502_trap_cb = 0;
+        trap_id = win->dbg.m6502->trap_id;
+    #endif
+    if (trap_id) {
+        win->dbg.stopped = true;
+        win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
+    }
 }
 
 void ui_dbg_draw(ui_dbg_t* win) {
