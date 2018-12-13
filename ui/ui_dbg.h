@@ -62,7 +62,8 @@
 extern "C" {
 #endif
 
-#define UI_DBG_MAX_HISTORYITEMS (128)
+#define UI_DBG_MAX_HISTORYITEMS (16)                     /* must be 2^N */
+#define UI_DBG_HISTORY_MASK (UI_DBG_MAX_HISTORYITEMS-1) /* history ringbuffer index mask */
 #define UI_DBG_MAX_BREAKPOINTS (32)
 #define UI_DBG_MAX_LAYERS (16)
 #define UI_DBG_STEP_TRAPID (128)                    /* special trap id when step-mode active */
@@ -124,6 +125,7 @@ typedef struct ui_dbg_desc_t {
 /* an execution history item */
 typedef struct ui_dbg_historyitem_t {
     uint64_t pins;
+    uint32_t frame_id;
     int ticks;
     uint16_t pc;
 } ui_dbg_historyitem_t;
@@ -159,6 +161,7 @@ typedef struct ui_dbg_state_t {
     m6502_trap_t m6502_trap_cb;
     void* m6502_trap_ud;
     #endif
+    uint32_t frame_id;
     bool stopped;
     int step_mode;
     uint16_t trap_pc;
@@ -327,10 +330,64 @@ static void _ui_dbg_history_init(ui_dbg_history_t* hist, ui_dbg_desc_t* desc) {
     /* nothing to do here, since hist is already zero-initialized */
 }
 
+static void _ui_dbg_history_clear(ui_dbg_t* win) {
+    ui_dbg_history_t* h = &win->history;
+    h->head = 0;
+    h->tail = 0;
+}
+
+static void _ui_dbg_history_add(ui_dbg_t* win, uint16_t pc, int ticks, uint64_t pins) {
+    ui_dbg_history_t* h = &win->history;
+    h->items[h->head].pins = pins;
+    h->items[h->head].frame_id = win->dbg.frame_id;
+    h->items[h->head].ticks = ticks;
+    h->items[h->head].pc = pc;
+    h->head = (h->head + 1) & UI_DBG_HISTORY_MASK;
+    if (h->head == h->tail) {
+        h->tail = (h->tail + 1) & UI_DBG_HISTORY_MASK;
+    }
+}
+
+/* return number of items in history */
+static int _ui_dbg_history_num(ui_dbg_t* win) {
+    const ui_dbg_history_t* h = &win->history;
+    if (h->head >= h->tail) {
+        return h->head - h->tail;
+    }
+    else {
+        return (h->head + UI_DBG_MAX_HISTORYITEMS) - h->tail;
+    }
+}
+
+/* get history item at index */
+static ui_dbg_historyitem_t* _ui_dbg_history_item(ui_dbg_t* win, int index) {
+    CHIPS_ASSERT((index >= 0) && (index < _ui_dbg_history_num(win)));
+    ui_dbg_history_t* h = &win->history;
+    const int rb_index = (h->tail + index) & UI_DBG_HISTORY_MASK;
+    return &(h->items[rb_index]);
+}
+
+/* get instruction ticks from item in history */
+static int _ui_dbg_history_ticks(ui_dbg_t* win, int index) {
+    if ((index >= 0) && ((index + 1) < _ui_dbg_history_num(win))) {
+        const ui_dbg_historyitem_t* item0 = _ui_dbg_history_item(win, index);
+        const ui_dbg_historyitem_t* item1 = _ui_dbg_history_item(win, index + 1);
+        if (item0->frame_id == item1->frame_id) {
+            return item1->ticks - item0->ticks;
+        }
+        else {
+            return item1->ticks;
+        }
+    }
+    else {
+        return 0;
+    }
+}
+
 /*== BREAKPOINTS =============================================================*/
 
 /* breakpoint evaluation callback, this is installed as CPU trap callback when needed */
-static int _ui_dbg_bp_eval(uint16_t pc, void* user_data) {
+static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_data) {
     ui_dbg_t* win = (ui_dbg_t*) user_data;
     int trap_id = 0;
     if (win->dbg.step_mode != UI_DBG_STEPMODE_NONE) {
@@ -364,6 +421,10 @@ static int _ui_dbg_bp_eval(uint16_t pc, void* user_data) {
                 }
             }
         }
+    }
+    /* update execution history */
+    if (pc != win->dbg.trap_pc) {
+        _ui_dbg_history_add(win, pc, ticks, pins);
     }
     win->dbg.trap_pc = pc;
     return trap_id;
@@ -427,14 +488,14 @@ static bool _ui_dbg_bp_enabled(ui_dbg_t* win, int index) {
     return false;
 }
 
-/*== UI STATE ================================================================*/
+/*== UI HELPERS ==============================================================*/
 static void _ui_dbg_uistate_init(ui_dbg_uistate_t* ui, ui_dbg_desc_t* desc) {
     ui->title = desc->title;
     ui->open = desc->open;
     ui->init_x = (float) desc->x;
     ui->init_y = (float) desc->y;
     ui->init_w = (float) ((desc->w == 0) ? 460 : desc->w);
-    ui->init_h = (float) ((desc->h == 0) ? 256 : desc->h);
+    ui->init_h = (float) ((desc->h == 0) ? 460 : desc->h);
     ui->show_regs = true;
     ui->show_buttons = true;
     ui->show_bytes = true;
@@ -587,23 +648,39 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
     const float line_height = ImGui::GetTextLineHeight();
     const float glyph_width = ImGui::CalcTextSize("F").x;
     const float cell_width = 3 * glyph_width;
-    ImGuiListClipper clipper(UI_DBG_NUM_LINES, line_height);
+    const int hist_num_lines = _ui_dbg_history_num(win);
+    const int all_num_lines = hist_num_lines + UI_DBG_NUM_LINES;
+    ImGuiListClipper clipper(all_num_lines, line_height);
 
     const ImU32 bp_enabled_color = 0xFF0000FF;
     const ImU32 bp_disabled_color = 0xFF000088;
     const ImU32 pc_color = 0xFF00FFFF;
     const ImU32 brd_color = 0xFF000000;
-    uint16_t addr = _ui_dbg_get_pc(win);
-
-    /* skip hidden lines */
-    for (int line_i = 0; (line_i < clipper.DisplayStart) && (line_i < UI_DBG_NUM_LINES); line_i++) {
-        addr = _ui_dbg_disasm(win, addr);
-    }
 
     /* visible items */
-    for (int line_i = clipper.DisplayStart; line_i < clipper.DisplayEnd; line_i++) {
+    uint16_t addr = _ui_dbg_get_pc(win);
+    for (int line_i = 0; line_i < clipper.DisplayEnd; line_i++) {
+        if (line_i < hist_num_lines) {
+            /* take address from history */
+            addr = _ui_dbg_history_item(win, line_i)->pc;
+        }
         const uint16_t op_addr = addr;
         addr = _ui_dbg_disasm(win, addr);
+
+        /* check if above visible scroll area */
+        if (line_i < clipper.DisplayStart) {
+            continue;
+        }
+
+        bool in_history = (line_i + 1) < hist_num_lines;
+        if (in_history) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+        }
+        else {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_Text]);
+        }
+
+        /* inside visible scroll area */
         const int num_bytes = addr - op_addr;
 
         /* column for breakpoint and step-cursor */
@@ -628,7 +705,8 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         else if (ImGui::IsItemHovered()) {
             dl->AddCircle(mid, 6, bp_enabled_color);
         }
-        if (op_addr == _ui_dbg_get_pc(win)) {
+        /* current PC/step cursor */
+        if ((op_addr == _ui_dbg_get_pc(win)) && !in_history) {
             const ImVec2 a(pos.x + 2, pos.y);
             const ImVec2 b(pos.x + 12, pos.y + lh2);
             const ImVec2 c(pos.x + 2, pos.y + line_height);
@@ -638,7 +716,7 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         ImGui::SameLine();
 
         /* address */
-        ImGui::Text("%04X: ", op_addr);
+        ImGui::Text("%04X:   ", op_addr);
         ImGui::SameLine();
 
         /* instruction bytes (optional) */
@@ -652,8 +730,19 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         }
 
         /* disassembled instruction */
-        ImGui::SameLine(x + glyph_width*2);
+        x += glyph_width * 4;
+        ImGui::SameLine(x);
         ImGui::Text("%s", win->dasm.str_buf);
+
+        /* tick count */
+        if (in_history && win->ui.show_ticks) {
+            x += glyph_width * 20; 
+            ImGui::SameLine(x);
+            int ticks = _ui_dbg_history_ticks(win, line_i);
+            ImGui::Text("%d", ticks);
+        }
+
+        ImGui::PopStyleColor();
     }
     clipper.End();
     ImGui::PopStyleVar(2);
@@ -686,9 +775,11 @@ bool ui_dbg_before_exec(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
     /* only install trap callback if our window is actually open */
     if (!win->ui.open) {
+        _ui_dbg_history_clear(win);
         return true;
     }
     if (!win->dbg.stopped) {
+        win->dbg.frame_id++;
         #if defined(UI_DBG_USE_Z80)
             if (win->dbg.z80) {
                 win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
