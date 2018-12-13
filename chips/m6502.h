@@ -194,7 +194,7 @@ extern "C" {
 
 /* callback function typedefs */
 typedef uint64_t (*m6502_tick_t)(uint64_t pins, void* user_data);
-typedef int (*m6502_trap_t)(uint16_t pc, void* user_data);
+typedef int (*m6502_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* user_data);
 typedef void (*m6510_out_t)(uint8_t data, void* user_data);
 typedef uint8_t (*m6510_in_t)(void* user_data);
 

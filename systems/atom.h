@@ -679,7 +679,7 @@ typedef struct {
 } _atom_tap_header;
 
 /* trap the OSLOAD function (http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis) */
-static int _atom_trap_cb(uint16_t pc, void* user_data) {
+static int _atom_trap_cb(uint16_t pc, int ticks, uint64_t pins, void* user_data) {
     return (pc == 0xF96E) ? 1 : 0;
 }
 

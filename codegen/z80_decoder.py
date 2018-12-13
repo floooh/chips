@@ -184,7 +184,7 @@ def write_footer() :
     l('      r2 |= (_BIT_IFF1 | _BIT_IFF2);')
     l('    }')
     l('    if (trap) {')
-    l('      int trap_id = trap(pc,cpu->trap_user_data);')
+    l('      int trap_id = trap(pc,ticks,pins,cpu->trap_user_data);')
     l('      if (trap_id) {')
     l('        cpu->trap_id=trap_id;')
     l('        break;')

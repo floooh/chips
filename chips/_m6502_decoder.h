@@ -345,7 +345,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
       c.PC = (h<<8)|l;
     }
     if (trap) {
-      int trap_id=trap(c.PC,cpu->trap_user_data);
+      int trap_id=trap(c.PC,ticks,pins,cpu->trap_user_data);
       if (trap_id) {
         cpu->trap_id=trap_id;
         break;
