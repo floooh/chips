@@ -205,6 +205,8 @@ typedef struct ui_dbg_heatmap_t {
     bool show_ops, show_reads, show_writes;
     int scale;
     int cur_y;
+    bool popup_addr_valid;
+    uint16_t popup_addr;
     ui_dbg_heatmapitem_t items[1<<16];     /* execution counter map */
     uint32_t pixels[1<<16];    /* execution counters converted to pixel data */
 } ui_dbg_heatmap_t;
@@ -546,13 +548,17 @@ static void _ui_dbg_heatmap_clear(ui_dbg_t* win) {
 }
 
 static void _ui_dbg_heatmap_update(ui_dbg_t* win) {
+    const int frame_chunk_height = 64;
     int y0 = win->heatmap.cur_y;
-    int y1 = win->heatmap.cur_y + 32;
-    win->heatmap.cur_y = (y0 + 32) & 255;
+    int y1 = win->heatmap.cur_y + frame_chunk_height;
+    win->heatmap.cur_y = (y0 + frame_chunk_height) & 255;
     for (int y = y0; y < y1; y++) {
         for (int x = 0; x < 256; x++) {
             int i = y * 256 + x;
             uint32_t p = 0;
+            if (_ui_dbg_get_pc(win) == i) {
+                p |= 0xFF00FFFF;
+            }
             if (win->heatmap.show_ops && (win->heatmap.items[i].exec_count > 0)) {
                 uint32_t r = 0x60 + (win->heatmap.items[i].exec_count>>8);
                 if (r > 0xFF) { r = 0xFF; }
@@ -598,12 +604,11 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         ImVec2 screen_pos = ImGui::GetCursorScreenPos();
         ImVec2 mouse_pos = ImGui::GetMousePos();
         ImGui::Image(win->heatmap.texture, ImVec2(256*win->heatmap.scale, 256*win->heatmap.scale), ImVec2(0, 0), ImVec2(1, 1));
+        int x = (int)((mouse_pos.x - screen_pos.x) / win->heatmap.scale);
+        int y = (int)((mouse_pos.y - screen_pos.y) / win->heatmap.scale);
+        uint16_t addr = y * 256 + x;
         if (ImGui::IsItemHovered()) {
-            int x = (int)((mouse_pos.x - screen_pos.x) / win->heatmap.scale);
-            int y = (int)((mouse_pos.y - screen_pos.y) / win->heatmap.scale);
-            uint16_t addr = y * 256 + x;
             if (win->heatmap.items[addr].exec_count > 0) {
-                /* this is an instruction */
                 _ui_dbg_disasm(win, addr);
                 ImGui::SetTooltip("%04X: %s", addr, win->dasm.str_buf);
             }
@@ -614,6 +619,32 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
                     win->read_cb(win->dasm.cur_layer, addr + 2, win->user_data),
                     win->read_cb(win->dasm.cur_layer, addr + 3, win->user_data));
             }
+        }
+        if (ImGui::BeginPopupContextItem("##popup")) {
+            if (!win->heatmap.popup_addr_valid) {
+                win->heatmap.popup_addr_valid = true;
+                win->heatmap.popup_addr = addr;
+            }
+            ImGui::Text("Address: %04X", win->heatmap.popup_addr);
+            ImGui::Separator();
+            if (ImGui::Selectable("Add Breakpoint")) {
+                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, win->heatmap.popup_addr)) {
+                    _ui_dbg_bp_add(win, UI_DBG_BREAKTYPE_EXEC, win->heatmap.popup_addr, 0);
+                }
+            }
+            if (ImGui::Selectable("Add Memory Breakpoint (TODO)")) {
+                // FIXME
+            }
+            if (ImGui::Selectable("Open Disassembler (TODO)")) {
+                // FIXME
+            }
+            if (ImGui::Selectable("Open Memory Editor (TODO)")) {
+                // FIXME
+            }
+            ImGui::EndPopup();
+        }
+        else {
+            win->heatmap.popup_addr_valid = false;
         }
         ImGui::EndChild();
     }
