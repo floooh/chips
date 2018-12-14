@@ -544,6 +544,19 @@ static bool _ui_dbg_bp_enabled(ui_dbg_t* win, int index) {
     return false;
 }
 
+/* draw the breakpoint list window */
+static void _ui_dbg_bp_draw(ui_dbg_t* win) {
+    if (!win->ui.show_breakpoints) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(128, win->ui.init_h), ImGuiSetCond_Once);
+    if (ImGui::Begin("Breakpoints", &win->ui.show_breakpoints)) {
+        ImGui::Text("FIXME!");
+    }
+    ImGui::End();
+}
+
 /*== HEATMAP =================================================================*/
 static void _ui_dbg_heatmap_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     win->heatmap.texture = win->create_texture_cb(256, 256);
@@ -555,8 +568,15 @@ static void _ui_dbg_heatmap_discard(ui_dbg_t* win) {
     win->destroy_texture_cb(win->heatmap.texture);
 }
 
-static void _ui_dbg_heatmap_clear(ui_dbg_t* win) {
+static void _ui_dbg_heatmap_clear_all(ui_dbg_t* win) {
     memset(win->heatmap.items, 0, sizeof(win->heatmap.items));
+}
+
+static void _ui_dbg_heatmap_clear_rw(ui_dbg_t* win) {
+    for (int i = 0; i < (1<<16); i++) {
+        win->heatmap.items[i].read_count = 0;
+        win->heatmap.items[i].write_count = 0;
+    }
 }
 
 static void _ui_dbg_heatmap_update(ui_dbg_t* win) {
@@ -606,16 +626,20 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
     ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(288, 356), ImGuiSetCond_Once);
     if (ImGui::Begin("Memory Heatmap", &win->ui.show_heatmap)) {
-        if (ImGui::Button("Clear")) {
-            _ui_dbg_heatmap_clear(win);
+        if (ImGui::Button("Clear All")) {
+            _ui_dbg_heatmap_clear_all(win);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clear R/W")) {
+            _ui_dbg_heatmap_clear_rw(win);
         }
         ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, 0xFF0000FF);
-        ImGui::Checkbox("Ops", &win->heatmap.show_ops); ImGui::SameLine();
+        ImGui::Checkbox("OP", &win->heatmap.show_ops); ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, 0xFFFF0000);
-        ImGui::Checkbox("Reads", &win->heatmap.show_reads); ImGui::SameLine();
+        ImGui::Checkbox("R", &win->heatmap.show_reads); ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, 0xFF00FF00);
-        ImGui::Checkbox("Writes", &win->heatmap.show_writes);
+        ImGui::Checkbox("W", &win->heatmap.show_writes);
         ImGui::PopStyleColor(3);
         ImGui::SliderInt("Scale", &win->heatmap.scale, 1, 8);
         ImGui::BeginChild("##tex", ImVec2(0, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
@@ -982,7 +1006,7 @@ void ui_dbg_discard(ui_dbg_t* win) {
 bool ui_dbg_before_exec(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
     /* only install trap callback if our window is actually open */
-    if (!(win->ui.open || win->ui.show_heatmap)) {
+    if (!(win->ui.open || win->ui.show_heatmap || win->ui.show_breakpoints)) {
         _ui_dbg_history_clear(win);
         return true;
     }
@@ -1033,10 +1057,11 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
 
 void ui_dbg_draw(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid && win->ui.title);
-    if (!(win->ui.open || win->ui.show_heatmap)) {
+    if (!(win->ui.open || win->ui.show_heatmap || win->ui.show_breakpoints)) {
         return;
     }
     _ui_dbg_dbgwin_draw(win);
     _ui_dbg_heatmap_draw(win);
+    _ui_dbg_bp_draw(win);
 }
 #endif /* CHIPS_IMPL */
