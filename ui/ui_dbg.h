@@ -185,6 +185,7 @@ typedef struct ui_dbg_uistate_t {
     bool open;
     float init_x, init_y;
     float init_w, init_h;
+    bool show_heatmap;
     bool show_regs;
     bool show_buttons;
     bool show_breakpoints;
@@ -192,6 +193,21 @@ typedef struct ui_dbg_uistate_t {
     bool show_bytes;
     bool show_ticks;
 } ui_dbg_uistate_t;
+
+typedef struct ui_dbg_heatmapitem_t {
+    uint32_t exec_count;
+    uint32_t write_count;
+    uint32_t read_count;
+} ui_dbg_heapmap_item_t;
+
+typedef struct ui_dbg_heatmap_t {
+    void* texture;
+    bool show_ops, show_reads, show_writes;
+    int scale;
+    int cur_y;
+    ui_dbg_heatmapitem_t items[1<<16];     /* execution counter map */
+    uint32_t pixels[1<<16];    /* execution counters converted to pixel data */
+} ui_dbg_heatmap_t;
 
 typedef struct ui_dbg_t {
     bool valid;
@@ -205,9 +221,7 @@ typedef struct ui_dbg_t {
     ui_dbg_uistate_t ui;
     ui_dbg_dasm_t dasm;
     ui_dbg_history_t history;
-    void* exec_texture;
-    uint32_t exec_count[1<<16];     /* execution counter map */
-    uint32_t exec_pixels[1<<16];    /* execution counters converted to pixel data */
+    ui_dbg_heatmap_t heatmap;
 } ui_dbg_t;
 
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
@@ -235,12 +249,12 @@ void ui_dbg_after_exec(ui_dbg_t* win);
 #endif
 
 /*== DISASSEMBLER ============================================================*/
-static void _ui_dbg_dasm_init(ui_dbg_dasm_t* dasm, ui_dbg_desc_t* desc) {
+static void _ui_dbg_dasm_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     /* assuming dasm is already zero-initialized */
     for (int i = 0; i < UI_DBG_MAX_LAYERS; i++) {
         if (desc->layers[i]) {
-            dasm->num_layers++;
-            dasm->layers[i] = desc->layers[i];
+            win->dasm.num_layers++;
+            win->dasm.layers[i] = desc->layers[i];
         }
         else {
             break;
@@ -281,7 +295,8 @@ static uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
 }
 
 /*== DEBUGGER STATE ==========================================================*/
-static void _ui_dbg_dbgstate_init(ui_dbg_state_t* dbg, ui_dbg_desc_t* desc) {
+static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
+    ui_dbg_state_t* dbg = &win->dbg;
     #if defined(UI_DBG_USE_Z80) &&  defined(UI_DBG_USE_M6502)
         CHIPS_ASSERT((desc->z80 || desc->m6502) && !(desc->z80 && desc->m6502));
         dbg->z80 = desc->z80;
@@ -341,7 +356,7 @@ static void _ui_dbg_step_out(ui_dbg_t* win) {
 }
 
 /*== HISTORY =================================================================*/
-static void _ui_dbg_history_init(ui_dbg_history_t* hist, ui_dbg_desc_t* desc) {
+static void _ui_dbg_history_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     /* nothing to do here, since hist is already zero-initialized */
 }
 
@@ -437,11 +452,22 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
             }
         }
     }
-    /* update execution history */
+    /* update execution history and heatmap */
     if (pc != win->dbg.trap_pc) {
         _ui_dbg_history_add(win, pc, ticks, pins);
-        win->exec_count[pc]++;
+        win->heatmap.items[pc].exec_count++;
     }
+    #if defined(UI_DBG_USE_Z80)
+    if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_RD)) {
+        win->heatmap.items[Z80_GET_ADDR(pins)].read_count++;
+    }
+    else if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_WR)) {
+        win->heatmap.items[Z80_GET_ADDR(pins)].write_count++;
+    }
+    #endif
+    #if defined(UI_DBG_USE_M6502)
+
+    #endif
     win->dbg.trap_pc = pc;
     return trap_id;
 }
@@ -504,8 +530,99 @@ static bool _ui_dbg_bp_enabled(ui_dbg_t* win, int index) {
     return false;
 }
 
+/*== HEATMAP =================================================================*/
+static void _ui_dbg_heatmap_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
+    win->heatmap.texture = win->create_texture_cb(256, 256);
+    win->heatmap.show_ops = win->heatmap.show_reads = win->heatmap.show_writes = true;
+    win->heatmap.scale = 1;
+}
+
+static void _ui_dbg_heatmap_discard(ui_dbg_t* win) {
+    win->destroy_texture_cb(win->heatmap.texture);
+}
+
+static void _ui_dbg_heatmap_clear(ui_dbg_t* win) {
+    memset(win->heatmap.items, 0, sizeof(win->heatmap.items));
+}
+
+static void _ui_dbg_heatmap_update(ui_dbg_t* win) {
+    int y0 = win->heatmap.cur_y;
+    int y1 = win->heatmap.cur_y + 32;
+    win->heatmap.cur_y = (y0 + 32) & 255;
+    for (int y = y0; y < y1; y++) {
+        for (int x = 0; x < 256; x++) {
+            int i = y * 256 + x;
+            uint32_t p = 0;
+            if (win->heatmap.show_ops && (win->heatmap.items[i].exec_count > 0)) {
+                uint32_t r = 0x60 + (win->heatmap.items[i].exec_count>>8);
+                if (r > 0xFF) { r = 0xFF; }
+                p |= 0xFF000000 | r;
+            }
+            if (win->heatmap.show_writes && (win->heatmap.items[i].write_count > 0)) {
+                uint32_t g = 0x60 + (win->heatmap.items[i].write_count>>8);
+                if (g > 0xFF) { g = 0xFF; }
+                p |= 0xFF000000 | (g<<8);
+            }
+            if (win->heatmap.show_reads && (win->heatmap.items[i].read_count > 0)) {
+                uint32_t b = 0x60 + (win->heatmap.items[i].read_count>>8);
+                if (b > 0xFF) { b = 0xFF; }
+                p |= 0xFF000000 | (b<<16);
+            }
+            win->heatmap.pixels[i] = p;
+        }
+    }
+    win->update_texture_cb(win->heatmap.texture, win->heatmap.pixels, 256*256*4);
+}
+
+static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
+    if (!win->ui.show_heatmap) {
+        return;
+    }
+    _ui_dbg_heatmap_update(win);
+    ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(288, 356), ImGuiSetCond_Once);
+    if (ImGui::Begin("Memory Heatmap", &win->ui.show_heatmap)) {
+        if (ImGui::Button("Clear")) {
+            _ui_dbg_heatmap_clear(win);
+        }
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, 0xFF0000FF);
+        ImGui::Checkbox("Ops", &win->heatmap.show_ops); ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, 0xFFFF0000);
+        ImGui::Checkbox("Reads", &win->heatmap.show_reads); ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, 0xFF00FF00);
+        ImGui::Checkbox("Writes", &win->heatmap.show_writes);
+        ImGui::PopStyleColor(3);
+        ImGui::SliderInt("Scale", &win->heatmap.scale, 1, 8);
+        ImGui::BeginChild("##tex", ImVec2(0, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
+        ImVec2 screen_pos = ImGui::GetCursorScreenPos();
+        ImVec2 mouse_pos = ImGui::GetMousePos();
+        ImGui::Image(win->heatmap.texture, ImVec2(256*win->heatmap.scale, 256*win->heatmap.scale), ImVec2(0, 0), ImVec2(1, 1));
+        if (ImGui::IsItemHovered()) {
+            int x = (int)((mouse_pos.x - screen_pos.x) / win->heatmap.scale);
+            int y = (int)((mouse_pos.y - screen_pos.y) / win->heatmap.scale);
+            uint16_t addr = y * 256 + x;
+            if (win->heatmap.items[addr].exec_count > 0) {
+                /* this is an instruction */
+                _ui_dbg_disasm(win, addr);
+                ImGui::SetTooltip("%04X: %s", addr, win->dasm.str_buf);
+            }
+            else {
+                ImGui::SetTooltip("%04X: %02X %02X %02X %02X", addr,
+                    win->read_cb(win->dasm.cur_layer, addr, win->user_data),
+                    win->read_cb(win->dasm.cur_layer, addr + 1, win->user_data),
+                    win->read_cb(win->dasm.cur_layer, addr + 2, win->user_data),
+                    win->read_cb(win->dasm.cur_layer, addr + 3, win->user_data));
+            }
+        }
+        ImGui::EndChild();
+    }
+    ImGui::End();
+}
+
 /*== UI HELPERS ==============================================================*/
-static void _ui_dbg_uistate_init(ui_dbg_uistate_t* ui, ui_dbg_desc_t* desc) {
+static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
+    ui_dbg_uistate_t* ui = &win->ui;
     ui->title = desc->title;
     ui->open = desc->open;
     ui->init_x = (float) desc->x;
@@ -547,7 +664,8 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
             ImGui::MenuItem("Disable All Breakpoints");
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Layout")) {
+        if (ImGui::BeginMenu("Show")) {
+            ImGui::MenuItem("Memory Heatmap", 0, &win->ui.show_heatmap);
             ImGui::MenuItem("Registers", 0, &win->ui.show_regs);
             ImGui::MenuItem("Button Bar", 0, &win->ui.show_buttons);
             ImGui::MenuItem("Breakpoints", 0, &win->ui.show_breakpoints);
@@ -766,6 +884,21 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
     ImGui::EndChild();
 }
 
+static void _ui_dbg_dbgwin_draw(ui_dbg_t* win) {
+    if (!win->ui.open) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x, win->ui.init_y), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, win->ui.init_h), ImGuiSetCond_Once);
+    if (ImGui::Begin(win->ui.title, &win->ui.open, ImGuiWindowFlags_MenuBar)) {
+        _ui_dbg_draw_menu(win);
+        _ui_dbg_draw_regs(win);
+        _ui_dbg_draw_buttons(win);
+        _ui_dbg_draw_main(win);
+    }
+    ImGui::End();
+}
+
 /*== PUBLIC FUNCTIONS ========================================================*/
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
@@ -780,23 +913,23 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     win->update_texture_cb = desc->update_texture_cb;
     win->destroy_texture_cb = desc->destroy_texture_cb;
     win->user_data = desc->user_data;
-    _ui_dbg_dbgstate_init(&win->dbg, desc);
-    _ui_dbg_uistate_init(&win->ui, desc);
-    _ui_dbg_dasm_init(&win->dasm, desc);
-    _ui_dbg_history_init(&win->history, desc);
-    win->exec_texture = win->create_texture_cb(256, 256);
+    _ui_dbg_dbgstate_init(win, desc);
+    _ui_dbg_uistate_init(win, desc);
+    _ui_dbg_dasm_init(win, desc);
+    _ui_dbg_history_init(win, desc);
+    _ui_dbg_heatmap_init(win, desc);
 }
 
 void ui_dbg_discard(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
-    win->destroy_texture_cb(win->exec_texture);
+    _ui_dbg_heatmap_discard(win);
     win->valid = false;
 }
 
 bool ui_dbg_before_exec(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
     /* only install trap callback if our window is actually open */
-    if (!win->ui.open) {
+    if (!(win->ui.open || win->ui.show_heatmap)) {
         _ui_dbg_history_clear(win);
         return true;
     }
@@ -847,17 +980,10 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
 
 void ui_dbg_draw(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid && win->ui.title);
-    if (!win->ui.open) {
+    if (!(win->ui.open || win->ui.show_heatmap)) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x, win->ui.init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, win->ui.init_h), ImGuiSetCond_Once);
-    if (ImGui::Begin(win->ui.title, &win->ui.open, ImGuiWindowFlags_MenuBar)) {
-        _ui_dbg_draw_menu(win);
-        _ui_dbg_draw_regs(win);
-        _ui_dbg_draw_buttons(win);
-        _ui_dbg_draw_main(win);
-    }
-    ImGui::End();
+    _ui_dbg_dbgwin_draw(win);
+    _ui_dbg_heatmap_draw(win);
 }
 #endif /* CHIPS_IMPL */
