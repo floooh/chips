@@ -31,7 +31,7 @@
               absolute target addresses for relative jumps
     in_cb   - this function is called when the disassembler needs the next 
               instruction byte: uint8_t in_cb(void* user_data)
-    out_cb  - this function is called when the disassembler produces a single
+    out_cb  - (optional) this function is called when the disassembler produces a single
               ASCII character: void out_cb(char c, void* user_data)
     user_data   - a user-provided context pointer for the callbacks
 
@@ -106,7 +106,7 @@ uint16_t m6502dasm_op(uint16_t pc, m6502dasm_input_t in_cb, m6502dasm_output_t o
 #ifdef _CHR
 #undef _CHR
 #endif
-#define _CHR(c) out_cb(c,user_data);
+#define _CHR(c) if (out_cb) { out_cb(c,user_data); }
 /* output string */
 #ifdef _STR
 #undef _STR
@@ -193,31 +193,37 @@ static const char* _m6502dasm_hex = "0123456789ABCDEF";
 
 /* helper function to output string */
 static void _m6502dasm_str(const char* str, m6502dasm_output_t out_cb, void* user_data) {
-    char c;
-    while (0 != (c = *str++)) {
-        out_cb(c, user_data);
+    if (out_cb) {
+        char c;
+        while (0 != (c = *str++)) {
+            out_cb(c, user_data);
+        }
     }
 }
 
 /* helper function to output an unsigned 8-bit value as hex string */
 static void _m6502dasm_u8(uint8_t val, m6502dasm_output_t out_cb, void* user_data) {
-    out_cb('$', user_data);
-    for (int i = 1; i >= 0; i--) {
-        out_cb(_m6502dasm_hex[(val>>(i*4)) & 0xF], user_data);
+    if (out_cb) {
+        out_cb('$', user_data);
+        for (int i = 1; i >= 0; i--) {
+            out_cb(_m6502dasm_hex[(val>>(i*4)) & 0xF], user_data);
+        }
     }
 }
 
 /* helper function to output an unsigned 16-bit value as hex string */
 static void _m6502dasm_u16(uint16_t val, m6502dasm_output_t out_cb, void* user_data) {
-    out_cb('$', user_data);
-    for (int i = 3; i >= 0; i--) {
-        out_cb(_m6502dasm_hex[(val>>(i*4)) & 0xF], user_data);
+    if (out_cb) {
+        out_cb('$', user_data);
+        for (int i = 3; i >= 0; i--) {
+            out_cb(_m6502dasm_hex[(val>>(i*4)) & 0xF], user_data);
+        }
     }
 }
 
 /* main disassembler function */
 uint16_t m6502dasm_op(uint16_t pc, m6502dasm_input_t in_cb, m6502dasm_output_t out_cb, void* user_data) {
-    CHIPS_ASSERT(in_cb && out_cb);
+    CHIPS_ASSERT(in_cb);
     uint8_t op;
     _FETCH_U8(op);
     uint8_t cc  = op & 0x03;

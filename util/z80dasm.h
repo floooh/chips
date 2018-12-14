@@ -31,7 +31,7 @@
               absolute target addresses for relative jumps
     in_cb   - this function is called when the disassembler needs the next 
               instruction byte: uint8_t in_cb(void* user_data)
-    out_cb  - this function is called when the disassembler produces a single
+    out_cb  - (optional) this function is called when the disassembler produces a single
               ASCII character: void out_cb(char c, void* user_data)
     user_data   - a user-provided context pointer for the callbacks
 
@@ -112,7 +112,7 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
 #ifdef _CHR
 #undef _CHR
 #endif
-#define _CHR(c) out_cb(c,user_data);
+#define _CHR(c) if (out_cb) { out_cb(c,user_data); }
 /* output string */
 #ifdef _STR
 #undef _STR
@@ -191,50 +191,58 @@ static const char* _z80dasm_hex = "0123456789ABCDEF";
 
 /* output a string */
 static void _z80dasm_str(const char* str, z80dasm_output_t out_cb, void* user_data) {
-    char c;
-    while (0 != (c = *str++)) {
-        out_cb(c, user_data);
+    if (out_cb) {
+        char c;
+        while (0 != (c = *str++)) {
+            out_cb(c, user_data);
+        }
     }
 }
 
 /* output a signed 8-bit offset value as decimal string */
 static void _z80dasm_d8(int8_t val, z80dasm_output_t out_cb, void* user_data) {
-    if (val < 0) {
-        out_cb('-', user_data);
-        val = -val;
+    if (out_cb) {
+        if (val < 0) {
+            out_cb('-', user_data);
+            val = -val;
+        }
+        else {
+            out_cb('+', user_data);
+        }
+        if (val >= 100) {
+            out_cb('1', user_data);
+            val -= 100;
+        }
+        if ((val/10) != 0) {
+            out_cb(_z80dasm_dec[val/10], user_data);
+        }
+        out_cb(_z80dasm_dec[val%10], user_data);
     }
-    else {
-        out_cb('+', user_data);
-    }
-    if (val >= 100) {
-        out_cb('1', user_data);
-        val -= 100;
-    }
-    if ((val/10) != 0) {
-        out_cb(_z80dasm_dec[val/10], user_data);
-    }
-    out_cb(_z80dasm_dec[val%10], user_data);
 }
 
 /* output an unsigned 8-bit value as hex string */
 static void _z80dasm_u8(uint8_t val, z80dasm_output_t out_cb, void* user_data) {
-    for (int i = 1; i >= 0; i--) {
-        out_cb(_z80dasm_hex[(val>>(i*4)) & 0xF], user_data);
+    if (out_cb) {
+        for (int i = 1; i >= 0; i--) {
+            out_cb(_z80dasm_hex[(val>>(i*4)) & 0xF], user_data);
+        }
+        out_cb('h',user_data);
     }
-    out_cb('h',user_data);
 }
 
 /* output an unsigned 16-bit value as hex string */
 static void _z80dasm_u16(uint16_t val, z80dasm_output_t out_cb, void* user_data) {
-    for (int i = 3; i >= 0; i--) {
-        out_cb(_z80dasm_hex[(val>>(i*4)) & 0xF], user_data);
+    if (out_cb) {
+        for (int i = 3; i >= 0; i--) {
+            out_cb(_z80dasm_hex[(val>>(i*4)) & 0xF], user_data);
+        }
+        out_cb('h',user_data);
     }
-    out_cb('h',user_data);
 }
 
 /* main disassembler function */
 uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb, void* user_data) {
-    CHIPS_ASSERT(in_cb && out_cb);
+    CHIPS_ASSERT(in_cb);
     uint8_t op = 0, pre = 0, u8 = 0;
     int8_t d = 0;
     uint16_t u16 = 0;
