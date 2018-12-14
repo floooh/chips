@@ -104,6 +104,12 @@ typedef struct ui_dbg_breakpoint_t {
 typedef uint8_t (*ui_dbg_read_t)(int layer, uint16_t addr, void* user_data);
 /* callback for evaluating breakpoints, return breakpoint index, or -1 */
 typedef int (*ui_dbg_break_t)(ui_dbg_breakpoint_t* first, int num, uint16_t pc, uint64_t pins, int ticks, void* user_data);
+/* a callback to create a dynamic-update RGBA8 UI texture, needs to return an ImTextureID handle */
+typedef void* (*ui_dbg_create_texture_t)(int w, int h);
+/* callback to update a UI texture with new data */
+typedef void (*ui_dbg_update_texture_t)(void* tex_handle, void* data, int data_byte_size);
+/* callback to destroy a UI texture */
+typedef void (*ui_dbg_destroy_texture_t)(void* tex_handle);
 
 typedef struct ui_dbg_desc_t {
     const char* title;          /* window title */
@@ -115,6 +121,9 @@ typedef struct ui_dbg_desc_t {
     #endif
     ui_dbg_read_t read_cb;      /* callback to read memory */
     ui_dbg_break_t break_cb;    /* callback for evaluating breakpoints */
+    ui_dbg_create_texture_t create_texture_cb;      /* callback to create UI texture */
+    ui_dbg_update_texture_t update_texture_cb;      /* callback to update UI texture */
+    ui_dbg_destroy_texture_t destroy_texture_cb;    /* callback to destroy UI texture */
     void* user_data;            /* user data for callbacks */
     const char* layers[UI_DBG_MAX_LAYERS];   /* memory system layer names */
     int x, y;                   /* initial window pos */
@@ -188,11 +197,17 @@ typedef struct ui_dbg_t {
     bool valid;
     ui_dbg_read_t read_cb;
     ui_dbg_break_t break_cb;
+    ui_dbg_create_texture_t create_texture_cb;
+    ui_dbg_update_texture_t update_texture_cb;
+    ui_dbg_destroy_texture_t destroy_texture_cb;
     void* user_data;
     ui_dbg_state_t dbg;
     ui_dbg_uistate_t ui;
     ui_dbg_dasm_t dasm;
     ui_dbg_history_t history;
+    void* exec_texture;
+    uint32_t exec_count[1<<16];     /* execution counter map */
+    uint32_t exec_pixels[1<<16];    /* execution counters converted to pixel data */
 } ui_dbg_t;
 
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
@@ -425,6 +440,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     /* update execution history */
     if (pc != win->dbg.trap_pc) {
         _ui_dbg_history_add(win, pc, ticks, pins);
+        win->exec_count[pc]++;
     }
     win->dbg.trap_pc = pc;
     return trap_id;
@@ -755,19 +771,25 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->read_cb && desc->break_cb);
+    CHIPS_ASSERT(desc->create_texture_cb && desc->update_texture_cb && desc->destroy_texture_cb);
     memset(win, 0, sizeof(ui_dbg_t));
     win->valid = true;
     win->read_cb = desc->read_cb;
     win->break_cb = desc->break_cb;
+    win->create_texture_cb = desc->create_texture_cb;
+    win->update_texture_cb = desc->update_texture_cb;
+    win->destroy_texture_cb = desc->destroy_texture_cb;
     win->user_data = desc->user_data;
     _ui_dbg_dbgstate_init(&win->dbg, desc);
     _ui_dbg_uistate_init(&win->ui, desc);
     _ui_dbg_dasm_init(&win->dasm, desc);
     _ui_dbg_history_init(&win->history, desc);
+    win->exec_texture = win->create_texture_cb(256, 256);
 }
 
 void ui_dbg_discard(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
+    win->destroy_texture_cb(win->exec_texture);
     win->valid = false;
 }
 

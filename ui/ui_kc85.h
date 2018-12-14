@@ -66,6 +66,9 @@ typedef void (*ui_kc85_boot_t)(kc85_t* sys, kc85_type_t type);
 typedef struct {
     kc85_t* kc85;
     ui_kc85_boot_t boot_cb; /* user-provided callback to reboot to different config */
+    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
+    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
+    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
 } ui_kc85_desc_t;
 
 typedef struct {
@@ -338,12 +341,13 @@ static int _ui_kc85_break(ui_dbg_breakpoint_t* first, int num, uint16_t pc, uint
     return 0;
 }
 
-void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
-    CHIPS_ASSERT(ui && desc);
-    CHIPS_ASSERT(desc->kc85);
-    CHIPS_ASSERT(desc->boot_cb);
-    ui->kc85 = desc->kc85;
-    ui->boot_cb = desc->boot_cb;
+void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* kc85_desc) {
+    CHIPS_ASSERT(ui && kc85_desc);
+    CHIPS_ASSERT(kc85_desc->kc85);
+    CHIPS_ASSERT(kc85_desc->boot_cb);
+    CHIPS_ASSERT(kc85_desc->create_texture_cb && kc85_desc->update_texture_cb && kc85_desc->destroy_texture_cb);
+    ui->kc85 = kc85_desc->kc85;
+    ui->boot_cb = kc85_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_z80_desc_t desc = {0};
@@ -406,6 +410,9 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc) {
         desc.z80 = &ui->kc85->cpu;
         desc.read_cb = _ui_kc85_mem_read;
         desc.break_cb = _ui_kc85_break;
+        desc.create_texture_cb = kc85_desc->create_texture_cb;
+        desc.update_texture_cb = kc85_desc->update_texture_cb;
+        desc.destroy_texture_cb = kc85_desc->destroy_texture_cb;
         desc.user_data = ui->kc85;
         ui_dbg_init(&ui->dbg, &desc);
     }
