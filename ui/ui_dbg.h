@@ -65,7 +65,6 @@ extern "C" {
 #define UI_DBG_MAX_HISTORYITEMS (16)                     /* must be 2^N */
 #define UI_DBG_HISTORY_MASK (UI_DBG_MAX_HISTORYITEMS-1) /* history ringbuffer index mask */
 #define UI_DBG_MAX_BREAKPOINTS (32)
-#define UI_DBG_MAX_LAYERS (16)
 #define UI_DBG_STEP_TRAPID (128)                    /* special trap id when step-mode active */
 #define UI_DBG_BASE_TRAPID (UI_DBG_STEP_TRAPID+1)   /* first CPU trap-id used for breakpoints */
 #define UI_DBG_MAX_STRLEN (32)
@@ -125,7 +124,6 @@ typedef struct ui_dbg_desc_t {
     ui_dbg_update_texture_t update_texture_cb;      /* callback to update UI texture */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* callback to destroy UI texture */
     void* user_data;            /* user data for callbacks */
-    const char* layers[UI_DBG_MAX_LAYERS];   /* memory system layer names */
     int x, y;                   /* initial window pos */
     int w, h;                   /* initial window size, or 0 for default size */
     bool open;                  /* initial open state */
@@ -148,9 +146,6 @@ typedef struct ui_dbg_history_t {
 
 /* disassembler state */
 typedef struct ui_dbg_dasm_t {
-    int cur_layer;
-    int num_layers;
-    const char* layers[UI_DBG_MAX_LAYERS];
     uint16_t cur_addr;
     int str_pos;
     char str_buf[UI_DBG_MAX_STRLEN];
@@ -195,9 +190,10 @@ typedef struct ui_dbg_uistate_t {
 } ui_dbg_uistate_t;
 
 typedef struct ui_dbg_heatmapitem_t {
-    uint32_t exec_count;
-    uint32_t write_count;
-    uint32_t read_count;
+    uint16_t op_count;      /* set for first instruction byte */
+    uint16_t op_start;      /* set for followup instruction bytes */
+    uint16_t write_count;
+    uint16_t read_count;
 } ui_dbg_heapmap_item_t;
 
 typedef struct ui_dbg_heatmap_t {
@@ -253,21 +249,12 @@ void ui_dbg_after_exec(ui_dbg_t* win);
 /*== DISASSEMBLER ============================================================*/
 static void _ui_dbg_dasm_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     /* assuming dasm is already zero-initialized */
-    for (int i = 0; i < UI_DBG_MAX_LAYERS; i++) {
-        if (desc->layers[i]) {
-            win->dasm.num_layers++;
-            win->dasm.layers[i] = desc->layers[i];
-        }
-        else {
-            break;
-        }
-    }
 }
 
 /* disassembler callback to fetch the next instruction byte */
 static uint8_t _ui_dbg_dasm_in_cb(void* user_data) {
     ui_dbg_t* win = (ui_dbg_t*) user_data;
-    uint8_t val = win->read_cb(win->dasm.cur_layer, win->dasm.cur_addr++, win->user_data);
+    uint8_t val = win->read_cb(0, win->dasm.cur_addr++, win->user_data);
     if (win->dasm.bin_pos < UI_DBG_MAX_BINLEN) {
         win->dasm.bin_buf[win->dasm.bin_pos++] = val;
     }
@@ -294,6 +281,19 @@ static uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
     m6502dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
     #endif
     return win->dasm.cur_addr;
+}
+
+/* disassemble the an instruction, but only return the length of the instruction */
+static uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
+    win->dasm.cur_addr = pc;
+    win->dasm.str_pos = 0;
+    win->dasm.bin_pos = 0;
+    #if defined(UI_DBG_USE_Z80)
+    uint16_t next_pc = z80dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
+    #else
+    uint16_t next_pc = m6502dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
+    #endif
+    return next_pc - pc;
 }
 
 /*== DEBUGGER STATE ==========================================================*/
@@ -457,14 +457,26 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     /* update execution history and heatmap */
     if (pc != win->dbg.trap_pc) {
         _ui_dbg_history_add(win, pc, ticks, pins);
-        win->heatmap.items[pc].exec_count++;
+        if (win->heatmap.items[pc].op_count < 0xFFFF) {
+            win->heatmap.items[pc].op_count++;
+        }
+        int op_len = _ui_dbg_disasm_len(win, pc);
+        for (int i = 1; i < op_len; i++) {
+            win->heatmap.items[(pc + i) & 0xFFFF].op_start = pc;
+        }
     }
     #if defined(UI_DBG_USE_Z80)
     if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_RD)) {
-        win->heatmap.items[Z80_GET_ADDR(pins)].read_count++;
+        const uint16_t addr = Z80_GET_ADDR(pins);
+        if (win->heatmap.items[addr].read_count < 0xFFFF) {
+            win->heatmap.items[addr].read_count++;
+        }
     }
     else if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_WR)) {
-        win->heatmap.items[Z80_GET_ADDR(pins)].write_count++;
+        const uint16_t addr = Z80_GET_ADDR(pins);
+        if (win->heatmap.items[addr].write_count < 0xFFFF) {
+            win->heatmap.items[addr].write_count++;
+        }
     }
     #endif
     #if defined(UI_DBG_USE_M6502)
@@ -559,8 +571,14 @@ static void _ui_dbg_heatmap_update(ui_dbg_t* win) {
             if (_ui_dbg_get_pc(win) == i) {
                 p |= 0xFF00FFFF;
             }
-            if (win->heatmap.show_ops && (win->heatmap.items[i].exec_count > 0)) {
-                uint32_t r = 0x60 + (win->heatmap.items[i].exec_count>>8);
+            if (win->heatmap.show_ops && (win->heatmap.items[i].op_count > 0)) {
+                uint32_t r = 0x60 + (win->heatmap.items[i].op_count>>8);
+                if (r > 0xFF) { r = 0xFF; }
+                p |= 0xFF000000 | r;
+            }
+            if (win->heatmap.show_ops && (win->heatmap.items[i].op_start != 0)) {
+                /* opcode followup byte */
+                uint32_t r = 0x60 + (win->heatmap.items[win->heatmap.items[i].op_start].op_count>>8);
                 if (r > 0xFF) { r = 0xFF; }
                 p |= 0xFF000000 | r;
             }
@@ -607,17 +625,21 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         int x = (int)((mouse_pos.x - screen_pos.x) / win->heatmap.scale);
         int y = (int)((mouse_pos.y - screen_pos.y) / win->heatmap.scale);
         uint16_t addr = y * 256 + x;
+        if (win->heatmap.items[addr].op_start != 0) {
+            /* address is actually an opcode followup byte, reset to start of instruction */
+            addr = win->heatmap.items[addr].op_start;
+        }
         if (ImGui::IsItemHovered()) {
-            if (win->heatmap.items[addr].exec_count > 0) {
+            if (win->heatmap.items[addr].op_count > 0) {
                 _ui_dbg_disasm(win, addr);
-                ImGui::SetTooltip("%04X: %s", addr, win->dasm.str_buf);
+                ImGui::SetTooltip("%04X: %s\n(right-click for options)", addr, win->dasm.str_buf);
             }
             else {
-                ImGui::SetTooltip("%04X: %02X %02X %02X %02X", addr,
-                    win->read_cb(win->dasm.cur_layer, addr, win->user_data),
-                    win->read_cb(win->dasm.cur_layer, addr + 1, win->user_data),
-                    win->read_cb(win->dasm.cur_layer, addr + 2, win->user_data),
-                    win->read_cb(win->dasm.cur_layer, addr + 3, win->user_data));
+                ImGui::SetTooltip("%04X: %02X %02X %02X %02X\n(right-click for options)", addr,
+                    win->read_cb(0, addr, win->user_data),
+                    win->read_cb(0, addr + 1, win->user_data),
+                    win->read_cb(0, addr + 2, win->user_data),
+                    win->read_cb(0, addr + 3, win->user_data));
             }
         }
         if (ImGui::BeginPopupContextItem("##popup")) {
@@ -671,20 +693,20 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
 static void _ui_dbg_draw_menu(ui_dbg_t* win) {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Debug")) {
-            ImGui::MenuItem("Continue", "F5");
-            ImGui::MenuItem("Step Over", "F6");
-            ImGui::MenuItem("Step Into", "F7");
-            ImGui::MenuItem("Step Out", "F8");
-            if (ImGui::BeginMenu("Stop")) {
-                ImGui::MenuItem("Stop Now");
-                ImGui::MenuItem("Stop at IRQ");
-                ImGui::MenuItem("Stop at NMI");
-                ImGui::EndMenu();
+            if (ImGui::MenuItem("Break", 0, false, !win->dbg.stopped)) {
+                _ui_dbg_break(win);
             }
-            if (ImGui::BeginMenu("Run")) {
-                ImGui::MenuItem("Run to IRQ");
-                ImGui::MenuItem("Run to NMI");
-                ImGui::EndMenu();
+            if (ImGui::MenuItem("Continue", "F5", false, win->dbg.stopped)) {
+                _ui_dbg_continue(win);
+            }
+            if (ImGui::MenuItem("Step Over", "F6", false, win->dbg.stopped)) {
+                _ui_dbg_step_over(win);
+            }
+            if (ImGui::MenuItem("Step Into", "F7", false, win->dbg.stopped)) {
+                _ui_dbg_step_into(win);
+            }
+            if (ImGui::MenuItem("Step Out", "F8", false, win->dbg.stopped)) {
+                _ui_dbg_step_out(win);
             }
             ImGui::EndMenu();
         }

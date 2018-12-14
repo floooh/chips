@@ -404,10 +404,6 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* kc85_desc) {
         desc.title = "CPU Debugger";
         desc.x = x;
         desc.y = y;
-        desc.layers[0] = "CPU Mapped";
-        desc.layers[1] = "Motherboard";
-        desc.layers[2] = "Slot 08";
-        desc.layers[3] = "Slot 0C";
         desc.z80 = &ui->kc85->cpu;
         desc.read_cb = _ui_kc85_mem_read;
         desc.break_cb = _ui_kc85_break;
