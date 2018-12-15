@@ -635,7 +635,7 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
             ImGui::SameLine();
             bool upd_val = false;
             ImGui::PushItemWidth(84);
-            if (ImGui::Combo("##type", &bp->type, "Break at\0Byte at\0Word at\0IRQ\0NMI")) {
+            if (ImGui::Combo("##type", &bp->type, "Break at\0Byte at\0Word at\0IRQ\0NMI\0")) {
                 upd_val = true;
             }
             ImGui::PopItemWidth();
@@ -657,7 +657,7 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
                 if ((bp->type == UI_DBG_BREAKTYPE_BYTE) || (bp->type == UI_DBG_BREAKTYPE_WORD)) {
                     ImGui::SameLine();
                     ImGui::PushItemWidth(42);
-                    ImGui::Combo("##cond", &bp->cond,"==\0!=\0>\0<\0>=\0<=");
+                    ImGui::Combo("##cond", &bp->cond,"==\0!=\0>\0<\0>=\0<=\0");
                     ImGui::PopItemWidth();
                     ImGui::SameLine();
                     if (bp->type == UI_DBG_BREAKTYPE_BYTE) {
