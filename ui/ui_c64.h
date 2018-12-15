@@ -159,7 +159,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
             ImGui::MenuItem("CPU Debugger (TODO)");
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms);
+        ui_util_options_menu(time_ms, false);
         ImGui::EndMainMenuBar();
     }
 }

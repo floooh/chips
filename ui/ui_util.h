@@ -153,7 +153,7 @@ uint32_t ui_util_color(int imgui_color) {
     return ImColor(c);
 }
 
-void ui_util_options_menu(double time_ms) {
+void ui_util_options_menu(double time_ms, bool stopped) {
     if (ImGui::BeginMenu("Options")) {
         ImGui::SliderFloat("UI Alpha", &ImGui::GetStyle().Alpha, 0.1f, 1.0f);
         ImGui::SliderFloat("BG Alpha", &ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w, 0.1f, 1.0f);
@@ -170,7 +170,12 @@ void ui_util_options_menu(double time_ms) {
         ImGui::EndMenu();
     }
     ImGui::SameLine(ImGui::GetWindowWidth() - 120);
-    ImGui::Text("emu: %.2fms", time_ms);
+    if (stopped) {
+        ImGui::Text("emu: stopped");
+    }
+    else {
+        ImGui::Text("emu: %.2fms", time_ms);
+    }
 }
 
 #ifdef _MSC_VER
