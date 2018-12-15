@@ -71,16 +71,23 @@ extern "C" {
 #define UI_DBG_MAX_BINLEN (16)
 #define UI_DBG_NUM_LINES (128)
 
-/* standard breakpoint types */
+/* breakpoint types */
 enum {
-    UI_DBG_BREAKTYPE_STEP = 0,  /* single-stepping active */
-    UI_DBG_BREAKTYPE_EXEC,  /* break on executed address */
-    UI_DBG_BREAKTYPE_BYTE,  /* break on a specific 8-bit value at address */
-    UI_DBG_BREAKTYPE_WORD,  /* break on a specific 16-bit value at address */
-    UI_DBG_BREAKTYPE_IRQ,   /* break on maskable interrupt */
-    UI_DBG_BREAKTYPE_NMI,   /* break on non-maskable interrupt */
+    UI_DBG_BREAKTYPE_EXEC = 0,      /* break on executed address */
+    UI_DBG_BREAKTYPE_BYTE,          /* break on a specific 8-bit value at address */
+    UI_DBG_BREAKTYPE_WORD,          /* break on a specific 16-bit value at address */
+    UI_DBG_BREAKTYPE_IRQ,           /* break on maskable interrupt */
+    UI_DBG_BREAKTYPE_NMI,           /* break on non-maskable interrupt */
+};
 
-    UI_DBG_BREAKTYPE_USER,  /* user-defined types start here */
+/* breakpoint conditions */
+enum {
+    UI_DBG_BREAKCOND_EQUAL = 0,
+    UI_DBG_BREAKCOND_NONEQUAL,
+    UI_DBG_BREAKCOND_GREATER,
+    UI_DBG_BREAKCOND_LESS,
+    UI_DBG_BREAKCOND_GREATER_EQUAL,
+    UI_DBG_BREAKCOND_LESS_EQUAL,
 };
 
 /* current step mode */
@@ -94,6 +101,7 @@ enum {
 /* a breakpoint description */
 typedef struct ui_dbg_breakpoint_t {
     int type;           /* UI_DBG_BREAKTYPE_* */
+    int cond;           /* UI_DBG_BREAKCOND_* */
     bool enabled;
     uint16_t addr;
     int val;
@@ -170,6 +178,7 @@ typedef struct ui_dbg_state_t {
     int step_mode;
     uint16_t trap_pc;
     uint16_t stepover_pc;
+    int delete_breakpoint_index;
     int num_breakpoints;
     ui_dbg_breakpoint_t breakpoints[UI_DBG_MAX_BREAKPOINTS];
 } ui_dbg_state_t;
@@ -310,6 +319,7 @@ static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
         CHIPS_ASSERT(desc->m6502);
         dbg->m6502 = desc->m6502;
     #endif
+    win->dbg.delete_breakpoint_index = -1;
 }
 
 static uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
@@ -486,13 +496,14 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     return trap_id;
 }
 
-static bool _ui_dbg_bp_add(ui_dbg_t* win, int type, uint16_t addr, int val) {
+static bool _ui_dbg_bp_add(ui_dbg_t* win, int type, bool enabled, uint16_t addr, int val) {
     if (win->dbg.num_breakpoints < UI_DBG_MAX_BREAKPOINTS) {
         ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[win->dbg.num_breakpoints++];
         bp->type = type;
+        bp->cond = UI_DBG_BREAKCOND_EQUAL;
         bp->addr = addr;
         bp->val = val;
-        bp->enabled = true;
+        bp->enabled = enabled;
         return true;
     }
     else {
@@ -512,8 +523,8 @@ static int _ui_dbg_bp_find(ui_dbg_t* win, int type, uint16_t addr) {
     return -1;
 }
 
-/* remove breakpoint by index */
-static void _ui_dbg_bp_rem(ui_dbg_t* win, int index) {
+/* delete breakpoint by index */
+static void _ui_dbg_bp_del(ui_dbg_t* win, int index) {
     if ((win->dbg.num_breakpoints > 0) && (index >= 0) && (index < win->dbg.num_breakpoints)) {
         for (int i = index; i < (win->dbg.num_breakpoints - 1); i++) {
             win->dbg.breakpoints[i] = win->dbg.breakpoints[i+1];
@@ -527,11 +538,11 @@ static void _ui_dbg_bp_toggle(ui_dbg_t* win, int type, uint16_t addr) {
     int index = _ui_dbg_bp_find(win, type, addr);
     if (index >= 0) {
         /* breakpoint already exists, remove */
-        _ui_dbg_bp_rem(win, index);
+        _ui_dbg_bp_del(win, index);
     }
     else {
         /* breakpoint doesn't exist, add a new one */
-        _ui_dbg_bp_add(win, type, addr, 0);
+        _ui_dbg_bp_add(win, type, true, addr, 0);
     }
 }
 
@@ -544,15 +555,151 @@ static bool _ui_dbg_bp_enabled(ui_dbg_t* win, int index) {
     return false;
 }
 
+/* disable all breakpoints */
+static void _ui_dbg_bp_disable_all(ui_dbg_t* win) {
+    for (int i = 0; i < win->dbg.num_breakpoints; i++) {
+        win->dbg.breakpoints[i].enabled = false;
+    }
+}
+
+/* enable all breakpoints */
+static void _ui_dbg_bp_enable_all(ui_dbg_t* win) {
+    for (int i = 0; i < win->dbg.num_breakpoints; i++) {
+        win->dbg.breakpoints[i].enabled = true;
+    }
+}
+
+/* delete all breakpoints */
+static void _ui_dbg_bp_delete_all(ui_dbg_t* win) {
+    win->dbg.num_breakpoints = 0;
+}
+
+/* draw the "Delete all breakpoints" popup modal */
+static void _ui_dbg_bp_draw_delete_all_modal(ui_dbg_t* win, const char* title) {
+    if (ImGui::BeginPopupModal(title, 0, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Delete all breakpoints?");
+        ImGui::Separator();
+        if (ImGui::Button("Ok", ImVec2(120, 0))) {
+            _ui_dbg_bp_delete_all(win);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 /* draw the breakpoint list window */
 static void _ui_dbg_bp_draw(ui_dbg_t* win) {
     if (!win->ui.show_breakpoints) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(128, win->ui.init_h), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + 30, win->ui.init_y + 30), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(-1, 256), ImGuiSetCond_Once);
     if (ImGui::Begin("Breakpoints", &win->ui.show_breakpoints)) {
-        ImGui::Text("FIXME!");
+        bool scroll_down = false;
+        if (ImGui::Button("Add..")) {
+            _ui_dbg_bp_add(win, UI_DBG_BREAKTYPE_EXEC, false, _ui_dbg_get_pc(win), 0);
+            scroll_down = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Disable All")) {
+            _ui_dbg_bp_disable_all(win);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Enable All")) {
+            _ui_dbg_bp_enable_all(win);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Delete All")) {
+            ImGui::OpenPopup("Delete All?");
+        }
+        _ui_dbg_bp_draw_delete_all_modal(win, "Delete All?");
+        int del_bp_index = -1;
+        ImGui::Separator();
+        ImGui::BeginChild("##bp_list", ImVec2(0, 0), false);
+        for (int i = 0; i < win->dbg.num_breakpoints; i++) {
+            ImGui::PushID(i);
+            ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
+            ImGui::Checkbox("##enabled", &bp->enabled); ImGui::SameLine();
+            if (ImGui::IsItemHovered()) {
+                if (bp->enabled) {
+                    ImGui::SetTooltip("Disable");
+                }
+                else {
+                    ImGui::SetTooltip("Enable");
+                }
+            }
+            ImGui::SameLine();
+            bool upd_val = false;
+            ImGui::PushItemWidth(84);
+            if (ImGui::Combo("##type", &bp->type, "Break at\0Byte at\0Word at\0IRQ\0NMI")) {
+                upd_val = true;
+            }
+            ImGui::PopItemWidth();
+            if ((bp->type != UI_DBG_BREAKTYPE_IRQ) && (bp->type != UI_DBG_BREAKTYPE_NMI)) {
+                ImGui::SameLine();
+                uint16_t old_addr = bp->addr;
+                bp->addr = ui_util_input_u16("##addr", old_addr);
+                if (upd_val || (old_addr != bp->addr)) {
+                    /* if breakpoint type or address has changed, update the breakpoint's value from memory */
+                    if (bp->type == UI_DBG_BREAKTYPE_BYTE) {
+                        bp->val = (int) win->read_cb(0, bp->addr, win->user_data);
+                    }
+                    else {
+                        uint8_t l = win->read_cb(0, bp->addr, win->user_data);
+                        uint8_t h = win->read_cb(0, bp->addr + 1, win->user_data);
+                        bp->val = (int) (uint16_t) ((h<<8) | l);
+                    }
+                }
+                if ((bp->type == UI_DBG_BREAKTYPE_BYTE) || (bp->type == UI_DBG_BREAKTYPE_WORD)) {
+                    ImGui::SameLine();
+                    ImGui::PushItemWidth(42);
+                    ImGui::Combo("##cond", &bp->cond,"==\0!=\0>\0<\0>=\0<=");
+                    ImGui::PopItemWidth();
+                    ImGui::SameLine();
+                    if (bp->type == UI_DBG_BREAKTYPE_BYTE) {
+                        bp->val = (int) ui_util_input_u8("##byte", (uint8_t)bp->val);
+                    }
+                    else {
+                        bp->val = (int) ui_util_input_u16("##word", (uint16_t)bp->val);
+                    }
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Del")) {
+                del_bp_index = i;
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Delete");
+            }
+            ImGui::PopID();
+        }
+        if (del_bp_index != -1) {
+            ImGui::OpenPopup("Delete?");
+            win->dbg.delete_breakpoint_index = del_bp_index;
+        }
+        if ((win->dbg.delete_breakpoint_index >= 0) && ImGui::BeginPopupModal("Delete?", 0, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Delete breakpoint at %04X?", win->dbg.breakpoints[win->dbg.delete_breakpoint_index].addr);
+            ImGui::Separator();
+            if (ImGui::Button("Ok", ImVec2(120, 0))) {
+                _ui_dbg_bp_del(win, win->dbg.delete_breakpoint_index);
+                ImGui::CloseCurrentPopup();
+                win->dbg.delete_breakpoint_index = -1;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+                win->dbg.delete_breakpoint_index = -1;
+            }
+            ImGui::EndPopup();
+        }
+        if (scroll_down) {
+            ImGui::SetScrollHereY(1.0f);
+        }
+        ImGui::EndChild();
     }
     ImGui::End();
 }
@@ -623,7 +770,7 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         return;
     }
     _ui_dbg_heatmap_update(win);
-    ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + 60, win->ui.init_y + 60), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(288, 356), ImGuiSetCond_Once);
     if (ImGui::Begin("Memory Heatmap", &win->ui.show_heatmap)) {
         if (ImGui::Button("Clear All")) {
@@ -675,7 +822,7 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
             ImGui::Separator();
             if (ImGui::Selectable("Add Breakpoint")) {
                 if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, win->heatmap.popup_addr)) {
-                    _ui_dbg_bp_add(win, UI_DBG_BREAKTYPE_EXEC, win->heatmap.popup_addr, 0);
+                    _ui_dbg_bp_add(win, UI_DBG_BREAKTYPE_EXEC, true, win->heatmap.popup_addr, 0);
                 }
             }
             if (ImGui::Selectable("Add Memory Breakpoint (TODO)")) {
@@ -715,6 +862,7 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
 }
 
 static void _ui_dbg_draw_menu(ui_dbg_t* win) {
+    bool delete_all_bp = false;
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Debug")) {
             if (ImGui::MenuItem("Break", 0, false, !win->dbg.stopped)) {
@@ -736,9 +884,16 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
         }
         if (ImGui::BeginMenu("Breakpoints")) {
             ImGui::MenuItem("Toggle Breakpoint", "F9");
-            ImGui::MenuItem("Add Breakpoint...");
-            ImGui::MenuItem("Enable All Breakpoints");
-            ImGui::MenuItem("Disable All Breakpoints");
+            ImGui::MenuItem("Add Breakpoint..");
+            if (ImGui::MenuItem("Enable All")) {
+                _ui_dbg_bp_enable_all(win);
+            }
+            if (ImGui::MenuItem("Disable All")) {
+                _ui_dbg_bp_disable_all(win);
+            }
+            if (ImGui::MenuItem("Delete All")) {
+                delete_all_bp = true;
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Show")) {
@@ -753,6 +908,10 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
         }
         ImGui::EndMenuBar();
     }
+    if (delete_all_bp) {
+        ImGui::OpenPopup("Delete All?");
+    }
+    _ui_dbg_bp_draw_delete_all_modal(win, "Delete All?");
 }
 
 void _ui_dbg_draw_regs(ui_dbg_t* win) {
