@@ -1411,19 +1411,24 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
     /* uninstall our trap callback, but only if it hasn't been overwritten */
     int trap_id = 0;
     #if defined(UI_DBG_USE_Z80)
-        if (win->dbg.z80 && (win->dbg.z80->trap_cb == _ui_dbg_bp_eval)) {
-            z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
+        if (win->dbg.z80) {
+            if (win->dbg.z80->trap_cb == _ui_dbg_bp_eval) {
+                z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
+            }
+            win->dbg.z80_trap_cb = 0;
+            win->dbg.z80_trap_ud = 0;
+            trap_id = win->dbg.z80->trap_id;
         }
-        win->dbg.z80_trap_cb = 0;
-        win->dbg.z80_trap_ud = 0;
-        trap_id = win->dbg.z80->trap_id;
     #endif
     #if defined(UI_DBG_USE_M6502)
-        if (win->dbg.m6502 && (win->dbg.m6502->trap_cb == _ui_dbg_bp_eval)) {
-            m6502_trap_cb(win->dbg.m6502, win->dbg.m6502_trap_cb, win->dbg.m6502_trap_ud);
+        if (win->dbg.m6502) {
+            if (win->dbg.m6502->trap_cb == _ui_dbg_bp_eval) {
+                m6502_trap_cb(win->dbg.m6502, win->dbg.m6502_trap_cb, win->dbg.m6502_trap_ud);
+            }
+            win->dbg.m6502_trap_cb = 0;
+            win->dbg.m6502_trap_ud = 0;
+            trap_id = win->dbg.m6502->trap_id;
         }
-        win->dbg.m6502_trap_cb = 0;
-        trap_id = win->dbg.m6502->trap_id;
     #endif
     if (trap_id) {
         win->dbg.stopped = true;
