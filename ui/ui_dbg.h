@@ -94,7 +94,6 @@ enum {
     UI_DBG_STEPMODE_NONE = 0,
     UI_DBG_STEPMODE_INTO,
     UI_DBG_STEPMODE_OVER,
-    UI_DBG_STEPMODE_OUT
 };
 
 /* a breakpoint description */
@@ -123,13 +122,11 @@ typedef struct ui_dbg_keydesc_t {
     int break_keycode;
     int step_over_keycode;
     int step_into_keycode;
-    int step_out_keycode;
     int toggle_breakpoint_keycode;
     const char* continue_name;
     const char* break_name;
     const char* step_over_name;
     const char* step_into_name;
-    const char* step_out_name;
     const char* toggle_breakpoint_name;
 } ui_dbg_keydesc_t;
 
@@ -211,11 +208,11 @@ typedef struct ui_dbg_uistate_t {
 } ui_dbg_uistate_t;
 
 typedef struct ui_dbg_heatmapitem_t {
-    uint16_t op_count;      /* set for first instruction byte */
+    uint32_t op_count;      /* set for first instruction byte */
+    uint32_t write_count;
+    uint32_t read_count;
+    uint16_t ticks;         /* ticks of current instruction */
     uint16_t op_start;      /* set for followup instruction bytes */
-    uint16_t write_count;
-    uint16_t read_count;
-    uint16_t ticks;
 } ui_dbg_heapmap_item_t;
 
 typedef struct ui_dbg_heatmap_t {
@@ -237,9 +234,9 @@ typedef struct ui_dbg_t {
     ui_dbg_update_texture_t update_texture_cb;
     ui_dbg_destroy_texture_t destroy_texture_cb;
     void* user_data;
+    ui_dbg_dasm_t dasm;
     ui_dbg_state_t dbg;
     ui_dbg_uistate_t ui;
-    ui_dbg_dasm_t dasm;
     ui_dbg_heatmap_t heatmap;
 } ui_dbg_t;
 
@@ -284,7 +281,7 @@ static inline uint16_t _ui_dbg_read_word(ui_dbg_t* win, uint16_t addr) {
     return (uint16_t) (h<<8)|l;
 }
 
-static uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
+static inline uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
     #if defined(UI_DBG_USE_Z80)
     if (win->dbg.z80) {
         return z80_pc(win->dbg.z80);
@@ -318,7 +315,7 @@ static void _ui_dbg_dasm_out_cb(char c, void* user_data) {
 }
 
 /* disassemble the next instruction */
-static uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
+static inline uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
     win->dasm.cur_addr = pc;
     win->dasm.str_pos = 0;
     win->dasm.bin_pos = 0;
@@ -331,7 +328,7 @@ static uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
 }
 
 /* disassemble the an instruction, but only return the length of the instruction */
-static uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
+static inline uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
     win->dasm.cur_addr = pc;
     win->dasm.str_pos = 0;
     win->dasm.bin_pos = 0;
@@ -343,6 +340,27 @@ static uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
     return next_pc - pc;
 }
 
+/* check if the an instruction is a 'step over' op (only calls) */
+static bool _ui_dbg_is_stepover_op(uint8_t opcode) {
+    #if defined(UI_DBG_USE_Z80)
+        switch (opcode) {
+            /* CALL nnnn */
+            case 0xCD:
+            /* CALL cc,nnnn */
+            case 0xDC: case 0xFC: case 0xD4: case 0xC4:
+            case 0xF4: case 0xEC: case 0xE4: case 0xCC:
+            /* DJNZ d */
+            case 0x10:
+                return true;
+            default:
+                return false;
+        }
+    #endif
+    #if defined(UI_DBG_USE_M6502)
+        /* on 6502, only JSR qualifies */
+        return opcode == 0x20;
+    #endif
+}
 
 static void _ui_dbg_break(ui_dbg_t* win) {
     win->dbg.stopped = true;
@@ -358,25 +376,20 @@ static void _ui_dbg_continue(ui_dbg_t* win) {
 static void _ui_dbg_step_into(ui_dbg_t* win) {
     win->dbg.stopped = false;
     win->dbg.step_mode = UI_DBG_STEPMODE_INTO;
-    win->dbg.trap_pc = _ui_dbg_get_pc(win);
     win->ui.request_scroll = true;
 }
 
 static void _ui_dbg_step_over(ui_dbg_t* win) {
-    // FIXME: only set to step-over mode when the instruction at PC
-    // is a CALL or conditional jump, otherwise set to step-into!
     win->dbg.stopped = false;
-    win->dbg.step_mode = UI_DBG_STEPMODE_OVER;
-    win->dbg.trap_pc = _ui_dbg_get_pc(win);
-    win->dbg.stepover_pc = _ui_dbg_disasm(win, win->dbg.trap_pc);
     win->ui.request_scroll = true;
-}
-
-static void _ui_dbg_step_out(ui_dbg_t* win) {
-    win->dbg.stopped = false;
-    win->dbg.step_mode = UI_DBG_STEPMODE_OUT;
-    win->dbg.trap_pc = _ui_dbg_get_pc(win);
-    win->ui.request_scroll = true;
+    uint16_t next_pc = _ui_dbg_disasm(win, _ui_dbg_get_pc(win));
+    if (_ui_dbg_is_stepover_op(win->dasm.bin_buf[0])) {
+        win->dbg.step_mode = UI_DBG_STEPMODE_OVER;
+        win->dbg.stepover_pc = next_pc;
+    }
+    else {
+        win->dbg.step_mode = UI_DBG_STEPMODE_INTO;
+    }
 }
 
 /*== DEBUGGER STATE ==========================================================*/
@@ -422,6 +435,8 @@ static void _ui_dbg_dbgstate_reboot(ui_dbg_t* win) {
 static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_data) {
     ui_dbg_t* win = (ui_dbg_t*) user_data;
     int trap_id = 0;
+    
+    /* check stepping modes and breakpoint */
     if (win->dbg.step_mode != UI_DBG_STEPMODE_NONE) {
         switch (win->dbg.step_mode) {
             case UI_DBG_STEPMODE_INTO:
@@ -435,13 +450,9 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
                 break;
-            case UI_DBG_STEPMODE_OUT:
-                trap_id = UI_DBG_STEP_TRAPID;
-                break;
         }
     }
     else {
-        /* check breakpoints */
         for (int i = 0; (i < win->dbg.num_breakpoints) && (trap_id == 0); i++) {
             const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
             if (bp->enabled) {
@@ -517,11 +528,9 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
             }
         }
     }
-    /* update execution heatmap */
+    /* track execution */
     if (pc != win->dbg.trap_pc) {
-        if (win->heatmap.items[pc].op_count < 0xFFFF) {
-            win->heatmap.items[pc].op_count++;
-        }
+        win->heatmap.items[pc].op_count++;
         int op_len = _ui_dbg_disasm_len(win, pc);
         for (int i = 1; i < op_len; i++) {
             win->heatmap.items[(pc + i) & 0xFFFF].op_start = pc;
@@ -537,15 +546,11 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     #if defined(UI_DBG_USE_Z80)
     if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_RD)) {
         const uint16_t addr = Z80_GET_ADDR(pins);
-        if (win->heatmap.items[addr].read_count < 0xFFFF) {
-            win->heatmap.items[addr].read_count++;
-        }
+        win->heatmap.items[addr].read_count++;
     }
     else if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_WR)) {
         const uint16_t addr = Z80_GET_ADDR(pins);
-        if (win->heatmap.items[addr].write_count < 0xFFFF) {
-            win->heatmap.items[addr].write_count++;
-        }
+        win->heatmap.items[addr].write_count++;
     }
     #endif
     #if defined(UI_DBG_USE_M6502)
@@ -995,9 +1000,6 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
             if (ImGui::MenuItem("Step Into", win->ui.keys.step_into_name, false, win->dbg.stopped)) {
                 _ui_dbg_step_into(win);
             }
-            if (ImGui::MenuItem("Step Out", win->ui.keys.step_out_name, false, win->dbg.stopped)) {
-                _ui_dbg_step_out(win);
-            }
             ImGui::MenuItem("Install CPU Debug Hook", 0, &win->dbg.install_trap_cb);
             ImGui::EndMenu();
         }
@@ -1112,9 +1114,6 @@ static void _ui_dbg_handle_input(ui_dbg_t* win) {
         if (ImGui::IsKeyPressed(win->ui.keys.step_into_keycode)) {
             _ui_dbg_step_into(win);
         }
-        if (ImGui::IsKeyPressed(win->ui.keys.step_out_keycode)) {
-            _ui_dbg_step_out(win);
-        }
     }
     else {
         if (ImGui::IsKeyPressed(win->ui.keys.break_keycode)) {
@@ -1141,10 +1140,6 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
         ImGui::SameLine();
         if (ImGui::Button("Over")) {
             _ui_dbg_step_over(win);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Out")) {
-            _ui_dbg_step_out(win);
         }
         ImGui::SameLine();
         if (ImGui::Button(">IRQ")) {
