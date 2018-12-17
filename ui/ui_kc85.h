@@ -69,6 +69,7 @@ typedef struct {
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
+    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_kc85_desc_t;
 
 typedef struct {
@@ -411,6 +412,7 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* kc85_desc) {
         desc.create_texture_cb = kc85_desc->create_texture_cb;
         desc.update_texture_cb = kc85_desc->update_texture_cb;
         desc.destroy_texture_cb = kc85_desc->destroy_texture_cb;
+        desc.keys = kc85_desc->dbg_keys;
         desc.user_data = ui->kc85;
         ui_dbg_init(&ui->dbg, &desc);
     }

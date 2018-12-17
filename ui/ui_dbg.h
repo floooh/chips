@@ -119,6 +119,22 @@ typedef void (*ui_dbg_update_texture_t)(void* tex_handle, void* data, int data_b
 /* callback to destroy a UI texture */
 typedef void (*ui_dbg_destroy_texture_t)(void* tex_handle);
 
+/* user-defined hotkeys (all strings must be static) */
+typedef struct ui_dbg_keydesc_t {
+    int continue_keycode;
+    int break_keycode;
+    int step_over_keycode;
+    int step_into_keycode;
+    int step_out_keycode;
+    int toggle_breakpoint_keycode;
+    const char* continue_name;
+    const char* break_name;
+    const char* step_over_name;
+    const char* step_into_name;
+    const char* step_out_name;
+    const char* toggle_breakpoint_name;
+} ui_dbg_keydesc_t;
+
 typedef struct ui_dbg_desc_t {
     const char* title;          /* window title */
     #ifdef UI_DBG_USE_Z80
@@ -136,6 +152,7 @@ typedef struct ui_dbg_desc_t {
     int x, y;                   /* initial window pos */
     int w, h;                   /* initial window size, or 0 for default size */
     bool open;                  /* initial open state */
+    ui_dbg_keydesc_t keys;      /* user-defined hotkeys */
 } ui_dbg_desc_t;
 
 /* an execution history item */
@@ -206,6 +223,7 @@ typedef struct ui_dbg_uistate_t {
     bool show_bytes;
     bool show_ticks;
     bool request_scroll;
+    ui_dbg_keydesc_t keys;
     ui_dbg_line_t line_array[UI_DBG_NUM_LINES];
 } ui_dbg_uistate_t;
 
@@ -462,7 +480,70 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                             trap_id = UI_DBG_BASE_TRAPID + i;
                         }
                         break;
-                    /* FIXME: memory value, irq, nmi breakpoints */
+
+                    case UI_DBG_BREAKTYPE_BYTE:
+                        {
+                            int val = (int) win->read_cb(0, bp->addr, win->user_data);
+                            bool b = false;
+                            switch (bp->cond) {
+                                case UI_DBG_BREAKCOND_EQUAL:            b = val == bp->val; break;
+                                case UI_DBG_BREAKCOND_NONEQUAL:         b = val != bp->val; break;
+                                case UI_DBG_BREAKCOND_GREATER:          b = val > bp->val; break;
+                                case UI_DBG_BREAKCOND_LESS:             b = val < bp->val; break;
+                                case UI_DBG_BREAKCOND_GREATER_EQUAL:    b = val >= bp->val; break;
+                                case UI_DBG_BREAKCOND_LESS_EQUAL:       b = val <= bp->val; break;
+                            }
+                            if (b) {
+                                trap_id = UI_DBG_BASE_TRAPID + i;
+                            }
+                        }
+                        break;
+
+                    case UI_DBG_BREAKTYPE_WORD:
+                        {
+                            uint8_t l = win->read_cb(0, bp->addr, win->user_data);
+                            uint8_t h = win->read_cb(0, bp->addr + 1, win->user_data);
+                            uint16_t val = (int) ((h<<8) | l);
+                            bool b = false;
+                            switch (bp->cond) {
+                                case UI_DBG_BREAKCOND_EQUAL:            b = val == bp->val; break;
+                                case UI_DBG_BREAKCOND_NONEQUAL:         b = val != bp->val; break;
+                                case UI_DBG_BREAKCOND_GREATER:          b = val > bp->val; break;
+                                case UI_DBG_BREAKCOND_LESS:             b = val < bp->val; break;
+                                case UI_DBG_BREAKCOND_GREATER_EQUAL:    b = val >= bp->val; break;
+                                case UI_DBG_BREAKCOND_LESS_EQUAL:       b = val <= bp->val; break;
+                            }
+                            if (b) {
+                                trap_id = UI_DBG_BASE_TRAPID + i;
+                            }
+                        }
+                        break;
+
+                    case UI_DBG_BREAKTYPE_IRQ:
+                        #if defined UI_DBG_USE_Z80
+                        if (pins & Z80_INT) {
+                            trap_id = UI_DBG_BASE_TRAPID + i;
+                        }
+                        #endif
+                        #if defined UI_DBG_USE_M6502
+                        if (pins & M6502_INT) {
+                            trap_id = UI_DBG_BASE_TRAPID + i;
+                        }
+                        #endif
+                        break;
+
+                    case UI_DBG_BREAKTYPE_NMI:
+                        #if defined UI_DBG_USE_Z80
+                        if (pins & Z80_NMI) {
+                            trap_id = UI_DBG_BASE_TRAPID + i;
+                        }
+                        #endif
+                        #if defined UI_DBG_USE_M6502
+                        if (pins & M6502_NMI) {
+                            trap_id = UI_DBG_BASE_TRAPID + i;
+                        }
+                        #endif
+                        break;
                 }
             }
         }
@@ -872,32 +953,40 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui->show_ticks = true;
     ui->show_history = false;
     ui->show_breakpoints = false;
+    ui->keys = desc->keys;
 }
 
 static void _ui_dbg_draw_menu(ui_dbg_t* win) {
     bool delete_all_bp = false;
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Debug")) {
-            if (ImGui::MenuItem("Break", 0, false, !win->dbg.stopped)) {
+            if (ImGui::MenuItem("Break", win->ui.keys.break_name, false, !win->dbg.stopped)) {
                 _ui_dbg_break(win);
             }
-            if (ImGui::MenuItem("Continue", "F5", false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Continue", win->ui.keys.continue_name, false, win->dbg.stopped)) {
                 _ui_dbg_continue(win);
             }
-            if (ImGui::MenuItem("Step Over", "F6", false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Step Over", win->ui.keys.step_over_name, false, win->dbg.stopped)) {
                 _ui_dbg_step_over(win);
             }
-            if (ImGui::MenuItem("Step Into", "F7", false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Step Into", win->ui.keys.step_into_name, false, win->dbg.stopped)) {
                 _ui_dbg_step_into(win);
             }
-            if (ImGui::MenuItem("Step Out", "F8", false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Step Out", win->ui.keys.step_out_name, false, win->dbg.stopped)) {
                 _ui_dbg_step_out(win);
             }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Breakpoints")) {
-            ImGui::MenuItem("Toggle Breakpoint", "F9");
-            ImGui::MenuItem("Add Breakpoint..");
+            ImGui::MenuItem("Breakpoint Window", 0, &win->ui.show_breakpoints);
+            if (ImGui::MenuItem("Toggle Breakpoint", "F9")) {
+                _ui_dbg_bp_toggle(win, UI_DBG_BREAKTYPE_EXEC, _ui_dbg_get_pc(win));
+            }
+            if (ImGui::MenuItem("Add Breakpoint..")) {
+                _ui_dbg_bp_add(win, UI_DBG_BREAKTYPE_EXEC, false, _ui_dbg_get_pc(win), 0);
+                win->ui.show_breakpoints = true;
+                ImGui::SetWindowFocus("Breakpoints");
+            }
             if (ImGui::MenuItem("Enable All")) {
                 _ui_dbg_bp_enable_all(win);
             }
@@ -985,6 +1074,33 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
     }
     #endif
     ImGui::Separator();
+}
+
+/* handle keyboard input, the debug window must be focused for hotkeys to work! */
+static void _ui_dbg_handle_input(ui_dbg_t* win) {
+    /* unused hotkeys are defined as 0 and will never be triggered */
+    if (win->dbg.stopped) {
+        if (ImGui::IsKeyPressed(win->ui.keys.continue_keycode)) {
+            _ui_dbg_continue(win);
+        }
+        if (ImGui::IsKeyPressed(win->ui.keys.step_over_keycode)) {
+            _ui_dbg_step_over(win);
+        }
+        if (ImGui::IsKeyPressed(win->ui.keys.step_into_keycode)) {
+            _ui_dbg_step_into(win);
+        }
+        if (ImGui::IsKeyPressed(win->ui.keys.step_out_keycode)) {
+            _ui_dbg_step_out(win);
+        }
+    }
+    else {
+        if (ImGui::IsKeyPressed(win->ui.keys.break_keycode)) {
+            _ui_dbg_break(win);
+        }
+    }
+    if (ImGui::IsKeyPressed(win->ui.keys.toggle_breakpoint_keycode)) {
+        _ui_dbg_bp_toggle(win, UI_DBG_BREAKTYPE_EXEC, _ui_dbg_get_pc(win));
+    }
 }
 
 static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
@@ -1246,6 +1362,10 @@ static void _ui_dbg_dbgwin_draw(ui_dbg_t* win) {
     ImGui::SetNextWindowPos(ImVec2(win->ui.init_x, win->ui.init_y), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, win->ui.init_h), ImGuiSetCond_Once);
     if (ImGui::Begin(win->ui.title, &win->ui.open, ImGuiWindowFlags_MenuBar)) {
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+            ImGui::CaptureKeyboardFromApp();
+            _ui_dbg_handle_input(win);
+        }
         _ui_dbg_draw_menu(win);
         _ui_dbg_draw_regs(win);
         _ui_dbg_draw_buttons(win);
@@ -1329,6 +1449,8 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
     if (trap_id) {
         win->dbg.stopped = true;
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
+        ImGui::SetWindowFocus(win->ui.title);
+        win->ui.open = true;
     }
 }
 
