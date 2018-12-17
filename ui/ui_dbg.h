@@ -62,8 +62,6 @@
 extern "C" {
 #endif
 
-#define UI_DBG_MAX_HISTORYITEMS (16)                     /* must be 2^N */
-#define UI_DBG_HISTORY_MASK (UI_DBG_MAX_HISTORYITEMS-1) /* history ringbuffer index mask */
 #define UI_DBG_MAX_BREAKPOINTS (32)
 #define UI_DBG_STEP_TRAPID (128)                    /* special trap id when step-mode active */
 #define UI_DBG_BASE_TRAPID (UI_DBG_STEP_TRAPID+1)   /* first CPU trap-id used for breakpoints */
@@ -155,18 +153,6 @@ typedef struct ui_dbg_desc_t {
     ui_dbg_keydesc_t keys;      /* user-defined hotkeys */
 } ui_dbg_desc_t;
 
-/* an execution history item */
-typedef struct ui_dbg_historyitem_t {
-    uint16_t pc;
-} ui_dbg_historyitem_t;
-
-/* an execution history ring buffer */
-typedef struct ui_dbg_history_t {
-    int head;
-    int tail;
-    ui_dbg_historyitem_t items[UI_DBG_MAX_HISTORYITEMS];
-} ui_dbg_history_t;
-
 /* disassembler state */
 typedef struct ui_dbg_dasm_t {
     uint16_t cur_addr;
@@ -219,7 +205,6 @@ typedef struct ui_dbg_uistate_t {
     bool show_regs;
     bool show_buttons;
     bool show_breakpoints;
-    bool show_history;
     bool show_bytes;
     bool show_ticks;
     bool request_scroll;
@@ -257,7 +242,6 @@ typedef struct ui_dbg_t {
     ui_dbg_state_t dbg;
     ui_dbg_uistate_t ui;
     ui_dbg_dasm_t dasm;
-    ui_dbg_history_t history;
     ui_dbg_heatmap_t heatmap;
 } ui_dbg_t;
 
@@ -285,15 +269,35 @@ void ui_dbg_after_exec(ui_dbg_t* win);
 #error "please define UI_DBG_USE_Z80 and/or UI_DBG_USE_M6502"
 #endif
 
-/*== DISASSEMBLER ============================================================*/
-static void _ui_dbg_dasm_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
-    /* assuming dasm is already zero-initialized */
+/*== GENERAL HELPERS =========================================================*/
+static inline uint8_t _ui_dbg_read_byte(ui_dbg_t* win, uint16_t addr) {
+    return win->read_cb(0, addr, win->user_data);
+}
+
+static inline uint16_t _ui_dbg_read_word(ui_dbg_t* win, uint16_t addr) {
+    uint8_t l = win->read_cb(0, addr, win->user_data);
+    uint8_t h = win->read_cb(0, addr+1, win->user_data);
+    return (uint16_t) (h<<8)|l;
+}
+
+static uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
+    #if defined(UI_DBG_USE_Z80)
+    if (win->dbg.z80) {
+        return z80_pc(win->dbg.z80);
+    }
+    #endif
+    #if defined(UI_DBG_USE_M6502)
+    if (win->dbg.m6502) {
+        return m6502_pc(win->dbg.m6502);
+    }
+    #endif
+    return 0;
 }
 
 /* disassembler callback to fetch the next instruction byte */
 static uint8_t _ui_dbg_dasm_in_cb(void* user_data) {
     ui_dbg_t* win = (ui_dbg_t*) user_data;
-    uint8_t val = win->read_cb(0, win->dasm.cur_addr++, win->user_data);
+    uint8_t val = _ui_dbg_read_byte(win, win->dasm.cur_addr++);
     if (win->dasm.bin_pos < UI_DBG_MAX_BINLEN) {
         win->dasm.bin_buf[win->dasm.bin_pos++] = val;
     }
@@ -335,37 +339,6 @@ static uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
     return next_pc - pc;
 }
 
-/*== DEBUGGER STATE AND HELPERS ==============================================*/
-static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
-    ui_dbg_state_t* dbg = &win->dbg;
-    #if defined(UI_DBG_USE_Z80) &&  defined(UI_DBG_USE_M6502)
-        CHIPS_ASSERT((desc->z80 || desc->m6502) && !(desc->z80 && desc->m6502));
-        dbg->z80 = desc->z80;
-        dbg->m6502 = desc->m6502;
-    #elif defined(UI_DBG_USE_Z80)
-        CHIPS_ASSERT(desc->z80);
-        dbg->z80 = desc->z80;
-    #else
-        CHIPS_ASSERT(desc->m6502);
-        dbg->m6502 = desc->m6502;
-    #endif
-    win->dbg.install_trap_cb = true;
-    win->dbg.delete_breakpoint_index = -1;
-}
-
-static uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
-    #if defined(UI_DBG_USE_Z80)
-    if (win->dbg.z80) {
-        return z80_pc(win->dbg.z80);
-    }
-    #endif
-    #if defined(UI_DBG_USE_M6502)
-    if (win->dbg.m6502) {
-        return m6502_pc(win->dbg.m6502);
-    }
-    #endif
-    return 0;
-}
 
 static void _ui_dbg_break(ui_dbg_t* win) {
     win->dbg.stopped = true;
@@ -402,49 +375,24 @@ static void _ui_dbg_step_out(ui_dbg_t* win) {
     win->ui.request_scroll = true;
 }
 
-/*== HISTORY =================================================================*/
-static void _ui_dbg_history_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
-    /* nothing to do here, since hist is already zero-initialized */
+/*== DEBUGGER STATE ==========================================================*/
+static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
+    ui_dbg_state_t* dbg = &win->dbg;
+    #if defined(UI_DBG_USE_Z80) &&  defined(UI_DBG_USE_M6502)
+        CHIPS_ASSERT((desc->z80 || desc->m6502) && !(desc->z80 && desc->m6502));
+        dbg->z80 = desc->z80;
+        dbg->m6502 = desc->m6502;
+    #elif defined(UI_DBG_USE_Z80)
+        CHIPS_ASSERT(desc->z80);
+        dbg->z80 = desc->z80;
+    #else
+        CHIPS_ASSERT(desc->m6502);
+        dbg->m6502 = desc->m6502;
+    #endif
+    win->dbg.install_trap_cb = true;
+    win->dbg.delete_breakpoint_index = -1;
 }
 
-static void _ui_dbg_history_clear(ui_dbg_t* win) {
-    ui_dbg_history_t* h = &win->history;
-    h->head = 0;
-    h->tail = 0;
-}
-
-static void _ui_dbg_history_add(ui_dbg_t* win, uint16_t pc) {
-    ui_dbg_history_t* h = &win->history;
-    h->items[h->head].pc = pc;
-    h->head = (h->head + 1) & UI_DBG_HISTORY_MASK;
-    if (h->head == h->tail) {
-        h->tail = (h->tail + 1) & UI_DBG_HISTORY_MASK;
-    }
-}
-
-/* return number of items in history */
-static int _ui_dbg_history_num(ui_dbg_t* win) {
-    const ui_dbg_history_t* h = &win->history;
-    if (h->head >= h->tail) {
-        return h->head - h->tail;
-    }
-    else {
-        return (h->head + UI_DBG_MAX_HISTORYITEMS) - h->tail;
-    }
-}
-
-/* get history item at index */
-static ui_dbg_historyitem_t* _ui_dbg_history_item(ui_dbg_t* win, int index) {
-    CHIPS_ASSERT((index >= 0) && (index < _ui_dbg_history_num(win)));
-    ui_dbg_history_t* h = &win->history;
-    const int rb_index = (h->tail + index) & UI_DBG_HISTORY_MASK;
-    return &(h->items[rb_index]);
-}
-
-/* trace back from current PC with the help of the heatmap array 
-   and create an array of addresses tha either point to the start of an
-   instruction, or a unknown/data byte
-*/
 /*== BREAKPOINTS =============================================================*/
 
 /* breakpoint evaluation callback, this is installed as CPU trap callback when needed */
@@ -483,7 +431,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
 
                     case UI_DBG_BREAKTYPE_BYTE:
                         {
-                            int val = (int) win->read_cb(0, bp->addr, win->user_data);
+                            int val = (int) _ui_dbg_read_byte(win, bp->addr);
                             bool b = false;
                             switch (bp->cond) {
                                 case UI_DBG_BREAKCOND_EQUAL:            b = val == bp->val; break;
@@ -501,9 +449,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
 
                     case UI_DBG_BREAKTYPE_WORD:
                         {
-                            uint8_t l = win->read_cb(0, bp->addr, win->user_data);
-                            uint8_t h = win->read_cb(0, bp->addr + 1, win->user_data);
-                            uint16_t val = (int) ((h<<8) | l);
+                            uint16_t val = (int) _ui_dbg_read_word(win, bp->addr);
                             bool b = false;
                             switch (bp->cond) {
                                 case UI_DBG_BREAKCOND_EQUAL:            b = val == bp->val; break;
@@ -548,9 +494,8 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
             }
         }
     }
-    /* update execution history and heatmap */
+    /* update execution heatmap */
     if (pc != win->dbg.trap_pc) {
-        _ui_dbg_history_add(win, pc);
         if (win->heatmap.items[pc].op_count < 0xFFFF) {
             win->heatmap.items[pc].op_count++;
         }
@@ -581,7 +526,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     }
     #endif
     #if defined(UI_DBG_USE_M6502)
-
+    #error "FIXME: M6502"
     #endif
     win->dbg.trap_pc = pc;
     win->dbg.trap_frame_id = win->dbg.frame_id;
@@ -589,13 +534,48 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     return trap_id;
 }
 
-static bool _ui_dbg_bp_add(ui_dbg_t* win, int type, bool enabled, uint16_t addr, int val) {
+/* add an execution breakpoint */
+static bool _ui_dbg_bp_add_exec(ui_dbg_t* win, bool enabled, uint16_t addr) {
     if (win->dbg.num_breakpoints < UI_DBG_MAX_BREAKPOINTS) {
         ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[win->dbg.num_breakpoints++];
-        bp->type = type;
+        bp->type = UI_DBG_BREAKTYPE_EXEC;
         bp->cond = UI_DBG_BREAKCOND_EQUAL;
         bp->addr = addr;
-        bp->val = val;
+        bp->val = 0;
+        bp->enabled = enabled;
+        return true;
+    }
+    else {
+        /* no more breakpoint slots */
+        return false;
+    }
+}
+
+/* add a memory breakpoint (bytes) */
+static bool _ui_dbg_bp_add_byte(ui_dbg_t* win, bool enabled, uint16_t addr) {
+    if (win->dbg.num_breakpoints < UI_DBG_MAX_BREAKPOINTS) {
+        ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[win->dbg.num_breakpoints++];
+        bp->type = UI_DBG_BREAKTYPE_BYTE;
+        bp->cond = UI_DBG_BREAKCOND_EQUAL;
+        bp->addr = addr;
+        bp->val = _ui_dbg_read_byte(win, addr);
+        bp->enabled = enabled;
+        return true;
+    }
+    else {
+        /* no more breakpoint slots */
+        return false;
+    }
+}
+
+/* add a memory breakpoint (word) */
+static bool _ui_dbg_bp_add_word(ui_dbg_t* win, bool enabled, uint16_t addr) {
+    if (win->dbg.num_breakpoints < UI_DBG_MAX_BREAKPOINTS) {
+        ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[win->dbg.num_breakpoints++];
+        bp->type = UI_DBG_BREAKTYPE_WORD;
+        bp->cond = UI_DBG_BREAKCOND_EQUAL;
+        bp->addr = addr;
+        bp->val = _ui_dbg_read_word(win, addr);
         bp->enabled = enabled;
         return true;
     }
@@ -627,15 +607,15 @@ static void _ui_dbg_bp_del(ui_dbg_t* win, int index) {
 }
 
 /* add a new breakpoint, or remove existing one */
-static void _ui_dbg_bp_toggle(ui_dbg_t* win, int type, uint16_t addr) {
-    int index = _ui_dbg_bp_find(win, type, addr);
+static void _ui_dbg_bp_toggle_exec(ui_dbg_t* win, uint16_t addr) {
+    int index = _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, addr);
     if (index >= 0) {
         /* breakpoint already exists, remove */
         _ui_dbg_bp_del(win, index);
     }
     else {
         /* breakpoint doesn't exist, add a new one */
-        _ui_dbg_bp_add(win, type, true, addr, 0);
+        _ui_dbg_bp_add_exec(win, true, addr);
     }
 }
 
@@ -694,7 +674,7 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
     if (ImGui::Begin("Breakpoints", &win->ui.show_breakpoints)) {
         bool scroll_down = false;
         if (ImGui::Button("Add..")) {
-            _ui_dbg_bp_add(win, UI_DBG_BREAKTYPE_EXEC, false, _ui_dbg_get_pc(win), 0);
+            _ui_dbg_bp_add_exec(win, false, _ui_dbg_get_pc(win));
             scroll_down = true;
         }
         ImGui::SameLine();
@@ -739,12 +719,10 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
                 if (upd_val || (old_addr != bp->addr)) {
                     /* if breakpoint type or address has changed, update the breakpoint's value from memory */
                     if (bp->type == UI_DBG_BREAKTYPE_BYTE) {
-                        bp->val = (int) win->read_cb(0, bp->addr, win->user_data);
+                        bp->val = (int) _ui_dbg_read_byte(win, bp->addr);
                     }
                     else {
-                        uint8_t l = win->read_cb(0, bp->addr, win->user_data);
-                        uint8_t h = win->read_cb(0, bp->addr + 1, win->user_data);
-                        bp->val = (int) (uint16_t) ((h<<8) | l);
+                        bp->val = (int) _ui_dbg_read_word(win, bp->addr);
                     }
                 }
                 if ((bp->type == UI_DBG_BREAKTYPE_BYTE) || (bp->type == UI_DBG_BREAKTYPE_WORD)) {
@@ -901,10 +879,10 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
             }
             else {
                 ImGui::SetTooltip("%04X: %02X %02X %02X %02X\n(right-click for options)", addr,
-                    win->read_cb(0, addr, win->user_data),
-                    win->read_cb(0, addr + 1, win->user_data),
-                    win->read_cb(0, addr + 2, win->user_data),
-                    win->read_cb(0, addr + 3, win->user_data));
+                    _ui_dbg_read_byte(win, addr),
+                    _ui_dbg_read_byte(win, addr+1),
+                    _ui_dbg_read_byte(win, addr+2),
+                    _ui_dbg_read_byte(win, addr+3));
             }
         }
         if (ImGui::BeginPopupContextItem("##popup")) {
@@ -914,19 +892,24 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
             }
             ImGui::Text("Address: %04X", win->heatmap.popup_addr);
             ImGui::Separator();
-            if (ImGui::Selectable("Add Breakpoint")) {
+            if (ImGui::Selectable("Add Exec Breakpoint")) {
                 if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, win->heatmap.popup_addr)) {
-                    _ui_dbg_bp_add(win, UI_DBG_BREAKTYPE_EXEC, true, win->heatmap.popup_addr, 0);
+                    _ui_dbg_bp_add_exec(win, true, win->heatmap.popup_addr);
                 }
             }
-            if (ImGui::Selectable("Add Memory Breakpoint (TODO)")) {
-                // FIXME
+            if (ImGui::Selectable("Add Byte Breakpoint")) {
+                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_BYTE, win->heatmap.popup_addr)) {
+                    _ui_dbg_bp_add_byte(win, false, win->heatmap.popup_addr);
+                    win->ui.show_breakpoints = true;
+                    ImGui::SetWindowFocus("Breakpoints");
+                }
             }
-            if (ImGui::Selectable("Open Disassembler (TODO)")) {
-                // FIXME
-            }
-            if (ImGui::Selectable("Open Memory Editor (TODO)")) {
-                // FIXME
+            if (ImGui::Selectable("Add Word Breakpoint")) {
+                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_WORD, win->heatmap.popup_addr)) {
+                    _ui_dbg_bp_add_word(win, false, win->heatmap.popup_addr);
+                    win->ui.show_breakpoints = true;
+                    ImGui::SetWindowFocus("Breakpoints");
+                }
             }
             ImGui::EndPopup();
         }
@@ -951,7 +934,6 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui->show_buttons = true;
     ui->show_bytes = true;
     ui->show_ticks = true;
-    ui->show_history = false;
     ui->show_breakpoints = false;
     ui->keys = desc->keys;
 }
@@ -975,15 +957,16 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
             if (ImGui::MenuItem("Step Out", win->ui.keys.step_out_name, false, win->dbg.stopped)) {
                 _ui_dbg_step_out(win);
             }
+            if (ImGui::MenuItem("Install CPU Debug Hook", 0, &win->dbg.install_trap_cb));
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Breakpoints")) {
             ImGui::MenuItem("Breakpoint Window", 0, &win->ui.show_breakpoints);
             if (ImGui::MenuItem("Toggle Breakpoint", "F9")) {
-                _ui_dbg_bp_toggle(win, UI_DBG_BREAKTYPE_EXEC, _ui_dbg_get_pc(win));
+                _ui_dbg_bp_toggle_exec(win, _ui_dbg_get_pc(win));
             }
             if (ImGui::MenuItem("Add Breakpoint..")) {
-                _ui_dbg_bp_add(win, UI_DBG_BREAKTYPE_EXEC, false, _ui_dbg_get_pc(win), 0);
+                _ui_dbg_bp_add_exec(win, false, _ui_dbg_get_pc(win));
                 win->ui.show_breakpoints = true;
                 ImGui::SetWindowFocus("Breakpoints");
             }
@@ -1003,7 +986,6 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
             ImGui::MenuItem("Registers", 0, &win->ui.show_regs);
             ImGui::MenuItem("Button Bar", 0, &win->ui.show_buttons);
             ImGui::MenuItem("Breakpoints", 0, &win->ui.show_breakpoints);
-            ImGui::MenuItem("History", 0, &win->ui.show_history);
             ImGui::MenuItem("Opcode Bytes", 0, &win->ui.show_bytes);
             ImGui::MenuItem("Opcode Ticks", 0, &win->ui.show_ticks);
             ImGui::EndMenu();
@@ -1099,7 +1081,7 @@ static void _ui_dbg_handle_input(ui_dbg_t* win) {
         }
     }
     if (ImGui::IsKeyPressed(win->ui.keys.toggle_breakpoint_keycode)) {
-        _ui_dbg_bp_toggle(win, UI_DBG_BREAKTYPE_EXEC, _ui_dbg_get_pc(win));
+        _ui_dbg_bp_toggle_exec(win, _ui_dbg_get_pc(win));
     }
 }
 
@@ -1157,7 +1139,7 @@ static void _ui_dbg_update_line_array(ui_dbg_t* win, uint16_t addr) {
         }
         int bt_index = UI_DBG_NUM_BACKTRACE_LINES - i - 1;
         win->ui.line_array[bt_index].addr = bt_addr;
-        win->ui.line_array[bt_index].val = win->read_cb(0, bt_addr, win->user_data);
+        win->ui.line_array[bt_index].val = _ui_dbg_read_byte(win, bt_addr);
     }
     for (; i < UI_DBG_NUM_LINES; i++) {
         win->ui.line_array[i].addr = addr;
@@ -1190,7 +1172,7 @@ static bool _ui_dbg_line_array_needs_update(ui_dbg_t* win, uint16_t addr) {
     }
     /* if address is inside, check if the memory content is still the same */
     for (int i = 0; i < UI_DBG_NUM_LINES; i++) {
-        if (win->ui.line_array[i].val != win->read_cb(0, win->ui.line_array[i].addr, win->user_data)) {
+        if (win->ui.line_array[i].val != _ui_dbg_read_byte(win, win->ui.line_array[i].addr)) {
             return true;
         }
     }
@@ -1279,7 +1261,7 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         ImGui::PushID(line_i);
         if (ImGui::InvisibleButton("##bp", ImVec2(16, line_height))) {
             /* add or remove execution breakpoint */
-            _ui_dbg_bp_toggle(win, UI_DBG_BREAKTYPE_EXEC, start_addr);
+            _ui_dbg_bp_toggle_exec(win, start_addr);
         }
         ImGui::PopID();
         ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -1318,7 +1300,7 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
                     val = win->dasm.bin_buf[n];
                 }
                 else {
-                    val = win->read_cb(0, start_addr+n, win->user_data);
+                    val = _ui_dbg_read_byte(win, start_addr+n);
                 }
                 ImGui::Text("%02X ", val);
             }
@@ -1390,8 +1372,6 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     win->user_data = desc->user_data;
     _ui_dbg_dbgstate_init(win, desc);
     _ui_dbg_uistate_init(win, desc);
-    _ui_dbg_dasm_init(win, desc);
-    _ui_dbg_history_init(win, desc);
     _ui_dbg_heatmap_init(win, desc);
 }
 
@@ -1422,7 +1402,6 @@ bool ui_dbg_before_exec(ui_dbg_t* win) {
         return !win->dbg.stopped;
     }
     else {
-        _ui_dbg_history_clear(win);
         return true;
     }
 }
