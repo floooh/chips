@@ -89,6 +89,8 @@ typedef struct {
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc);
 void ui_kc85_discard(ui_kc85_t* ui);
 void ui_kc85_draw(ui_kc85_t* ui, double time_ms);
+bool ui_kc85_before_exec(ui_kc85_t* ui);
+void ui_kc85_after_exec(ui_kc85_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -344,18 +346,29 @@ static void _ui_kc85_mem_write(int layer, uint16_t addr, uint8_t data, void* use
     }
 }
 
-static int _ui_kc85_break(ui_dbg_breakpoint_t* first, int num, uint16_t pc, uint64_t pins, int ticks, void* user_data) {
-    return 0;
-}
-
-void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* kc85_desc) {
-    CHIPS_ASSERT(ui && kc85_desc);
-    CHIPS_ASSERT(kc85_desc->kc85);
-    CHIPS_ASSERT(kc85_desc->boot_cb);
-    CHIPS_ASSERT(kc85_desc->create_texture_cb && kc85_desc->update_texture_cb && kc85_desc->destroy_texture_cb);
-    ui->kc85 = kc85_desc->kc85;
-    ui->boot_cb = kc85_desc->boot_cb;
+void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
+    CHIPS_ASSERT(ui && ui_desc);
+    CHIPS_ASSERT(ui_desc->kc85);
+    CHIPS_ASSERT(ui_desc->boot_cb);
+    CHIPS_ASSERT(ui_desc->create_texture_cb && ui_desc->update_texture_cb && ui_desc->destroy_texture_cb);
+    ui->kc85 = ui_desc->kc85;
+    ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
+    {
+        ui_dbg_desc_t desc = {0};
+        desc.title = "CPU Debugger";
+        desc.x = x;
+        desc.y = y;
+        desc.z80 = &ui->kc85->cpu;
+        desc.read_cb = _ui_kc85_mem_read;
+        desc.create_texture_cb = ui_desc->create_texture_cb;
+        desc.update_texture_cb = ui_desc->update_texture_cb;
+        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.keys = ui_desc->dbg_keys;
+        desc.user_data = ui->kc85;
+        ui_dbg_init(&ui->dbg, &desc);
+    }
+    x += dx; y += dy;
     {
         ui_z80_desc_t desc = {0};
         desc.title = "Z80 CPU";
@@ -403,22 +416,6 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* kc85_desc) {
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->audio, &desc);
-    }
-    x += dx; y += dy;
-    {
-        ui_dbg_desc_t desc = {0};
-        desc.title = "CPU Debugger";
-        desc.x = x;
-        desc.y = y;
-        desc.z80 = &ui->kc85->cpu;
-        desc.read_cb = _ui_kc85_mem_read;
-        desc.break_cb = _ui_kc85_break;
-        desc.create_texture_cb = kc85_desc->create_texture_cb;
-        desc.update_texture_cb = kc85_desc->update_texture_cb;
-        desc.destroy_texture_cb = kc85_desc->destroy_texture_cb;
-        desc.keys = kc85_desc->dbg_keys;
-        desc.user_data = ui->kc85;
-        ui_dbg_init(&ui->dbg, &desc);
     }
     x += dx; y += dy;
     {
@@ -497,6 +494,16 @@ void ui_kc85_draw(ui_kc85_t* ui, double time_ms) {
         ui_dasm_draw(&ui->dasm[i]);
     }
     ui_dbg_draw(&ui->dbg);
+}
+
+bool ui_kc85_before_exec(ui_kc85_t* ui) {
+    CHIPS_ASSERT(ui && ui->kc85);
+    return ui_dbg_before_exec(&ui->dbg);
+}
+
+void ui_kc85_after_exec(ui_kc85_t* ui) {
+    CHIPS_ASSERT(ui && ui->kc85);
+    ui_dbg_after_exec(&ui->dbg);
 }
 
 #ifdef __clang__

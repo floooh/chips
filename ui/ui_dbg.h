@@ -139,7 +139,6 @@ typedef struct ui_dbg_desc_t {
     m6502_t* m6502;             /* 6502 CPU to track */
     #endif
     ui_dbg_read_t read_cb;      /* callback to read memory */
-    ui_dbg_break_t break_cb;    /* callback for evaluating breakpoints */
     ui_dbg_create_texture_t create_texture_cb;      /* callback to create UI texture */
     ui_dbg_update_texture_t update_texture_cb;      /* callback to update UI texture */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* callback to destroy UI texture */
@@ -230,7 +229,6 @@ typedef struct ui_dbg_heatmap_t {
 typedef struct ui_dbg_t {
     bool valid;
     ui_dbg_read_t read_cb;
-    ui_dbg_break_t break_cb;
     ui_dbg_create_texture_t create_texture_cb;
     ui_dbg_update_texture_t update_texture_cb;
     ui_dbg_destroy_texture_t destroy_texture_cb;
@@ -1515,12 +1513,11 @@ static void _ui_dbg_dbgwin_draw(ui_dbg_t* win) {
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
-    CHIPS_ASSERT(desc->read_cb && desc->break_cb);
+    CHIPS_ASSERT(desc->read_cb);
     CHIPS_ASSERT(desc->create_texture_cb && desc->update_texture_cb && desc->destroy_texture_cb);
     memset(win, 0, sizeof(ui_dbg_t));
     win->valid = true;
     win->read_cb = desc->read_cb;
-    win->break_cb = desc->break_cb;
     win->create_texture_cb = desc->create_texture_cb;
     win->update_texture_cb = desc->update_texture_cb;
     win->destroy_texture_cb = desc->destroy_texture_cb;
@@ -1554,20 +1551,22 @@ bool ui_dbg_before_exec(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
     if (win->dbg.install_trap_cb) {
         win->dbg.frame_id++;
-        #if defined(UI_DBG_USE_Z80)
-            if (win->dbg.z80) {
-                win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
-                win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
-                z80_trap_cb(win->dbg.z80, _ui_dbg_bp_eval, win);
-            }
-        #endif
-        #if defined(UI_DBG_USE_M6502)
-            if (win->dbg.m6502) {
-                win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
-                win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
-                m6502_trap_cb(win->dbg.m6502, _ui_dbg_eval, win);
-            }
-        #endif
+        if (!win->dbg.stopped) {
+            #if defined(UI_DBG_USE_Z80)
+                if (win->dbg.z80) {
+                    win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
+                    win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
+                    z80_trap_cb(win->dbg.z80, _ui_dbg_bp_eval, win);
+                }
+            #endif
+            #if defined(UI_DBG_USE_M6502)
+                if (win->dbg.m6502) {
+                    win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
+                    win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
+                    m6502_trap_cb(win->dbg.m6502, _ui_dbg_eval, win);
+                }
+            #endif
+        }
         return !win->dbg.stopped;
     }
     else {
