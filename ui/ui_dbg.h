@@ -272,6 +272,15 @@ void ui_dbg_reboot(ui_dbg_t* win);
 #endif
 
 /*== GENERAL HELPERS =========================================================*/
+static inline const char* _ui_dbg_str_or_def(const char* str, const char* def) {
+    if (str) {
+        return str;
+    }
+    else {
+        return def;
+    }
+}
+
 static inline uint8_t _ui_dbg_read_byte(ui_dbg_t* win, uint16_t addr) {
     return win->read_cb(0, addr, win->user_data);
 }
@@ -772,7 +781,7 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
     if (!win->ui.show_breakpoints) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + 30, win->ui.init_y + 30), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(-1, 256), ImGuiSetCond_Once);
     if (ImGui::Begin("Breakpoints", &win->ui.show_breakpoints)) {
         bool scroll_down = false;
@@ -963,7 +972,7 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         return;
     }
     _ui_dbg_heatmap_update(win);
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + 60, win->ui.init_y + 60), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 128), ImGuiSetCond_Once);
     ImGui::SetNextWindowSize(ImVec2(288, 356), ImGuiSetCond_Once);
     if (ImGui::Begin("Memory Heatmap", &win->ui.show_heatmap)) {
         if (ImGui::Button("Clear All")) {
@@ -1050,8 +1059,8 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui->open = desc->open;
     ui->init_x = (float) desc->x;
     ui->init_y = (float) desc->y;
-    ui->init_w = (float) ((desc->w == 0) ? 460 : desc->w);
-    ui->init_h = (float) ((desc->h == 0) ? 460 : desc->h);
+    ui->init_w = (float) ((desc->w == 0) ? 370 : desc->w);
+    ui->init_h = (float) ((desc->h == 0) ? 440 : desc->h);
     ui->show_regs = true;
     ui->show_buttons = true;
     ui->show_bytes = true;
@@ -1131,11 +1140,11 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
     }
     #if defined(UI_DBG_USE_Z80)
     if (win->dbg.z80) {
-        const float h = 3*ImGui::GetFrameHeightWithSpacing();
+        const float h = 4*ImGui::GetFrameHeightWithSpacing();
         ImGui::BeginChild("##regs", ImVec2(0, h), false);
         z80_t* c = win->dbg.z80;
-        ImGui::Columns(6, "##reg_columns", false);
-        for (int i = 0; i < 6; i++) {
+        ImGui::Columns(5, "##reg_columns", false);
+        for (int i = 0; i < 5; i++) {
             ImGui::SetColumnWidth(i, 72);
         }
         z80_set_af(c, ui_util_input_u16("AF", z80_af(c))); ImGui::NextColumn();
@@ -1143,24 +1152,25 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         z80_set_de(c, ui_util_input_u16("DE", z80_de(c))); ImGui::NextColumn();
         z80_set_hl(c, ui_util_input_u16("HL", z80_hl(c))); ImGui::NextColumn();
         z80_set_hl(c, ui_util_input_u16("WZ", z80_hl(c))); ImGui::NextColumn();
-        z80_set_im(c, ui_util_input_u8("IM", z80_im(c))); ImGui::NextColumn();
         z80_set_af_(c, ui_util_input_u16("AF'", z80_af_(c))); ImGui::NextColumn();
         z80_set_bc_(c, ui_util_input_u16("BC'", z80_bc_(c))); ImGui::NextColumn();
         z80_set_de_(c, ui_util_input_u16("DE'", z80_de_(c))); ImGui::NextColumn();
         z80_set_hl_(c, ui_util_input_u16("HL'", z80_hl_(c))); ImGui::NextColumn();
         z80_set_i(c, ui_util_input_u8("I", z80_i(c))); ImGui::NextColumn();
-        ImGui::AlignTextToFramePadding();
-        if (z80_iff1(c)) { ImGui::Text("IFF1"); }
-        else             { ImGui::TextDisabled("IFF1"); }
-        ImGui::SameLine();
-        if (z80_iff2(c)) { ImGui::Text("IFF2"); }
-        else             { ImGui::TextDisabled("IFF2"); }
-        ImGui::NextColumn();
         z80_set_ix(c, ui_util_input_u16("IX", z80_ix(c))); ImGui::NextColumn();
         z80_set_iy(c, ui_util_input_u16("IY", z80_iy(c))); ImGui::NextColumn();
         z80_set_sp(c, ui_util_input_u16("SP", z80_sp(c))); ImGui::NextColumn();
         z80_set_pc(c, ui_util_input_u16("PC", z80_pc(c))); ImGui::NextColumn();
         z80_set_r(c, ui_util_input_u8("R", z80_r(c))); ImGui::NextColumn();
+        z80_set_im(c, ui_util_input_u8("IM", z80_im(c))); ImGui::SameLine(); ImGui::NextColumn();
+        ImGui::AlignTextToFramePadding();
+        if (z80_iff1(c)) { ImGui::Text("IFF1"); }
+        else             { ImGui::TextDisabled("IFF1"); }
+        ImGui::NextColumn();
+        ImGui::AlignTextToFramePadding();
+        if (z80_iff2(c)) { ImGui::Text("IFF2"); }
+        else             { ImGui::TextDisabled("IFF2"); }
+        ImGui::NextColumn();
         const uint8_t f = z80_f(c);
         char f_str[9] = {
             (f & Z80_SF) ? 'S':'-',
@@ -1213,29 +1223,26 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
     if (!win->ui.show_buttons) {
         return;
     }
-    if (win->dbg.stopped) {
-        if (ImGui::Button("Continue")) {
+    char str[32];
+    if (win->dbg.stopped || (win->dbg.step_mode != UI_DBG_STEPMODE_NONE)) {
+        snprintf(str, sizeof(str), "Continue (%s)", _ui_dbg_str_or_def(win->ui.keys.continue_name, "-"));
+        if (ImGui::Button(str)) {
             _ui_dbg_continue(win);
         }
         ImGui::SameLine();
-        if (ImGui::Button("Step")) {
-            _ui_dbg_step_into(win);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Over")) {
+        snprintf(str, sizeof(str), "Step Over (%s)", _ui_dbg_str_or_def(win->ui.keys.step_over_name, "-"));
+        if (ImGui::Button(str)) {
             _ui_dbg_step_over(win);
         }
         ImGui::SameLine();
-        if (ImGui::Button(">IRQ")) {
-            _ui_dbg_continue(win);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(">NMI")) {
-            _ui_dbg_continue(win);
+        snprintf(str, sizeof(str), "Step Into (%s)", _ui_dbg_str_or_def(win->ui.keys.step_into_name, "-"));
+        if (ImGui::Button(str)) {
+            _ui_dbg_step_into(win);
         }
     }
     else {
-        if (ImGui::Button("Break")) {
+        snprintf(str, sizeof(str), "Break (%s)", _ui_dbg_str_or_def(win->ui.keys.break_name, "-"));
+        if (ImGui::Button(str)) {
             _ui_dbg_break(win);
         }
     }
@@ -1415,9 +1422,9 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         else if (show_dasm && _ui_dbg_is_controlflow_op(win->dasm.bin_buf[0], win->dasm.bin_buf[1])) {
             dl->AddLine(ImVec2(pos.x+16,base_y), ImVec2(pos.x+2048,base_y), ctrlflow_color);
         }
-        ImGui::SameLine();
 
         /* address */
+        ImGui::SameLine();
         ImGui::Text("%04X:   ", start_addr);
         ImGui::SameLine();
 
@@ -1445,19 +1452,22 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
             ImGui::Text("%s", win->dasm.str_buf);
         }
         else {
-            ImGui::Text("???");
+            ImGui::Text(" ");
         }
 
         /* tick count */
+        x += glyph_width * 20; 
         if (win->ui.show_ticks) {
             int ticks = win->heatmap.items[start_addr].ticks;
-            x += glyph_width * 20; 
             ImGui::SameLine(x);
             if (ticks > 0) {
                 ImGui::Text("%d", ticks);
             }
+            else if (show_dasm) {
+                ImGui::Text("?");
+            }
             else {
-                ImGui::TextDisabled("?");
+                ImGui::Text(" ");
             }
         }
         ImGui::PopStyleColor();
