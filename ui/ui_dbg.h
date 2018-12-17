@@ -178,6 +178,7 @@ typedef struct ui_dbg_state_t {
     uint32_t trap_frame_id;
     uint16_t trap_pc;           /* last PC in CPU trap callback */
     int trap_ticks;             /* last tick count in CPU trap callback */
+    int last_trap_id;           /* can be used to identify breakpoint which caused trap */
     uint16_t stepover_pc;
     int delete_breakpoint_index;
     int num_breakpoints;
@@ -498,6 +499,7 @@ static void _ui_dbg_dbgstate_reset(ui_dbg_t* win) {
     dbg->install_trap_cb = true;
     dbg->trap_pc = 0;
     dbg->trap_ticks = 0;
+    dbg->last_trap_id = 0;
 }
 
 static void _ui_dbg_dbgstate_reboot(ui_dbg_t* win) {
@@ -797,7 +799,16 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
         for (int i = 0; i < win->dbg.num_breakpoints; i++) {
             ImGui::PushID(i);
             ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
+            /* visualize the current breakpoint */
+            bool bp_active = (win->dbg.last_trap_id >= UI_DBG_BASE_TRAPID) &&
+                             ((win->dbg.last_trap_id - UI_DBG_BASE_TRAPID) == i);
+            if (bp_active) {
+                ImGui::PushStyleColor(ImGuiCol_CheckMark, 0xFF0000FF); 
+            }
             ImGui::Checkbox("##enabled", &bp->enabled); ImGui::SameLine();
+            if (bp_active) {
+                ImGui::PopStyleColor();
+            }
             if (ImGui::IsItemHovered()) {
                 if (bp->enabled) {
                     ImGui::SetTooltip("Disable");
@@ -1233,7 +1244,7 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
 
 /* this updates the line array currently visualized by the disassembler
    listing, this only happens when the PC is outside the visible
-   area 
+   area or when the memory content 'under' the line array changes
 */
 static void _ui_dbg_update_line_array(ui_dbg_t* win, uint16_t addr) {
     /* one half is backtraced from current PC, the other half is
@@ -1570,6 +1581,7 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
         ImGui::SetWindowFocus(win->ui.title);
         win->ui.open = true;
     }
+    win->dbg.last_trap_id = trap_id;
 }
 
 void ui_dbg_draw(ui_dbg_t* win) {
