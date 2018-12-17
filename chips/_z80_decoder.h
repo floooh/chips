@@ -515,18 +515,18 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
        }
     }
     map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
-    pins&=~Z80_INT;
-    /* delay-enable interrupt flags */
-    if (r2 & _BIT_EI) {
-      r2 &= ~_BIT_EI;
-      r2 |= (_BIT_IFF1 | _BIT_IFF2);
-    }
     if (trap) {
       int trap_id = trap(pc,ticks,pins,cpu->trap_user_data);
       if (trap_id) {
         cpu->trap_id=trap_id;
         break;
       }
+    }
+    pins&=~Z80_INT;
+    /* delay-enable interrupt flags */
+    if (r2 & _BIT_EI) {
+      r2 &= ~_BIT_EI;
+      r2 |= (_BIT_IFF1 | _BIT_IFF2);
     }
     pre_pins = pins;
   } while (ticks < num_ticks);
