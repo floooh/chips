@@ -340,7 +340,7 @@ static inline uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
     return next_pc - pc;
 }
 
-/* check if the an instruction is a 'step over' op (only calls) */
+/* check if the an instruction is a 'step over' op */
 static bool _ui_dbg_is_stepover_op(uint8_t opcode) {
     #if defined(UI_DBG_USE_Z80)
         switch (opcode) {
@@ -359,6 +359,79 @@ static bool _ui_dbg_is_stepover_op(uint8_t opcode) {
     #if defined(UI_DBG_USE_M6502)
         /* on 6502, only JSR qualifies */
         return opcode == 0x20;
+    #endif
+}
+
+/* check if an instruction is a control-flow op */
+static bool _ui_dbg_is_controlflow_op(uint8_t opcode0, uint8_t opcode1) {
+    #if defined(UI_DBG_USE_Z80)
+        switch (opcode0) {
+            /* CALL nnnn */
+            case 0xCD:
+            /* CALL cc,nnnn */
+            case 0xDC: case 0xFC: case 0xD4: case 0xC4:
+            case 0xF4: case 0xEC: case 0xE4: case 0xCC:
+            /* JP nnnn */
+            case 0xC3:
+            /* JP cc,nnnn */
+            case 0xDA: case 0xFA: case 0xD2: case 0xC2:
+            case 0xF2: case 0xEA: case 0xE2: case 0xCA:
+            /* DJNZ d */
+            case 0x10:
+            /* JR d */
+            case 0x18:
+            /* JR cc,d */
+            case 0x38: case 0x30: case 0x20: case 0x28:
+            /* RST */
+            case 0xC7:  case 0xCF: case 0xD7: case 0xDF:
+            case 0xE7:  case 0xEF: case 0xF7: case 0xFF:
+            /* HALT */
+            case 0x76:
+            /* RET */
+            case 0xC9: 
+            /* RET cc */
+            case 0xC0: case 0xC8: case 0xD0: case 0xD8:
+            case 0xE0: case 0xE8: case 0xF0: case 0xF8:
+            /* JP (HL) */
+            case 0xE9:
+                return true;
+            /* RETN, RETI */
+            case 0xED:
+                switch (opcode1) {
+                    case 0x45: case 0x55: case 0x65: case 0x75:
+                    case 0x4D: case 0x5D: case 0x6D: case 0x7D:
+                        return true;
+                    default:
+                        return false;
+                }
+                break;
+            /* JP (IX), JP (IY) */
+            case 0xDD: case 0xFD:
+                return opcode1 == 0xE9;
+            default:
+                return false;
+        }
+    #endif
+    #if defined(UI_DBG_USE_M6502)
+        switch (opcode0) {
+            /* BRK */
+            case 0x00:
+            /* JSR/JMP abs */
+            case 0x20: case 0x4C:
+            /* JMP ind */
+            case 0x6C:
+            /* relative branch */
+            case 0x10: case 0x30: case 0x50: case 0x70: 
+            case 0x90: case 0xB0: case 0xD0: case 0xF0:
+                return true;
+            /* RTI */
+            case 0x40:
+            /* RTS */
+            case 0x60:
+                return true;
+            default:
+                return false;
+        }
     #endif
 }
 
@@ -1229,6 +1302,7 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
     const ImU32 bp_disabled_color = 0xFF000088;
     const ImU32 pc_color = 0xFF00FFFF;
     const ImU32 brd_color = 0xFF000000;
+    const ImU32 ctrlflow_color = 0x44888888;
 
     /* update the line array if PC is outside or its content has become outdated */
     const uint16_t pc = _ui_dbg_get_pc(win);
@@ -1292,8 +1366,8 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
 
         /* column for breakpoint and step-cursor */
         ImVec2 pos = ImGui::GetCursorScreenPos();
-        pos.y += 1;
         const float lh2 = (float)(int)(line_height/2);
+        const float base_y = pos.y + line_height;
         ImGui::PushID(line_i);
         if (ImGui::InvisibleButton("##bp", ImVec2(16, line_height))) {
             /* add or remove execution breakpoint */
@@ -1319,6 +1393,16 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
             const ImVec2 c(pos.x + 2, pos.y + line_height);
             dl->AddTriangleFilled(a, b, c, pc_color);
             dl->AddTriangle(a, b, c, brd_color);
+        }
+        /* draw a separation line (for PC, breakpoint or control-flow ops) */
+        if (is_pc_line) {
+            dl->AddLine(ImVec2(pos.x+16,base_y), ImVec2(pos.x+2048,base_y), pc_color);
+        }
+        else if (bp_index >= 0) {
+            dl->AddLine(ImVec2(pos.x+16,base_y), ImVec2(pos.x+2048,base_y), bp_disabled_color);
+        }
+        else if (show_dasm && _ui_dbg_is_controlflow_op(win->dasm.bin_buf[0], win->dasm.bin_buf[1])) {
+            dl->AddLine(ImVec2(pos.x+16,base_y), ImVec2(pos.x+2048,base_y), ctrlflow_color);
         }
         ImGui::SameLine();
 
