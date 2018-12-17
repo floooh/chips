@@ -957,7 +957,7 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
             if (ImGui::MenuItem("Step Out", win->ui.keys.step_out_name, false, win->dbg.stopped)) {
                 _ui_dbg_step_out(win);
             }
-            if (ImGui::MenuItem("Install CPU Debug Hook", 0, &win->dbg.install_trap_cb));
+            ImGui::MenuItem("Install CPU Debug Hook", 0, &win->dbg.install_trap_cb);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Breakpoints")) {
