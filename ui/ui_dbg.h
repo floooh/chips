@@ -174,10 +174,8 @@ typedef struct ui_dbg_state_t {
     m6502_trap_t m6502_trap_cb;
     void* m6502_trap_ud;
     #endif
-
     bool stopped;
     int step_mode;
-
     bool install_trap_cb;       /* whether to install the trap callback */
     uint32_t frame_id;          /* used in trap callback to detect when a new frame has started */
     uint32_t trap_frame_id;
@@ -245,14 +243,20 @@ typedef struct ui_dbg_t {
     ui_dbg_heatmap_t heatmap;
 } ui_dbg_t;
 
+/* initialize a new ui_dbg_t instance */
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
+/* discard ui_dbg_t instance */
 void ui_dbg_discard(ui_dbg_t* win);
+/* render the ui_dbg_t UIs */
 void ui_dbg_draw(ui_dbg_t* win);
-
 /* call before executing system ticks, don't tick if function returns false */
 bool ui_dbg_before_exec(ui_dbg_t* win);
 /* call after executing system ticks */
 void ui_dbg_after_exec(ui_dbg_t* win);
+/* call when resetting the emulated machine (re-initializes some data structures) */
+void ui_dbg_reset(ui_dbg_t* win);
+/* call when rebooting the emulated machine (re-initializes some data structures) */
+void ui_dbg_reboot(ui_dbg_t* win);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -389,11 +393,30 @@ static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
         CHIPS_ASSERT(desc->m6502);
         dbg->m6502 = desc->m6502;
     #endif
-    win->dbg.install_trap_cb = true;
-    win->dbg.delete_breakpoint_index = -1;
+    dbg->install_trap_cb = true;
+    dbg->delete_breakpoint_index = -1;
 }
 
-/*== BREAKPOINTS =============================================================*/
+static void _ui_dbg_dbgstate_reset(ui_dbg_t* win) {
+    ui_dbg_state_t* dbg = &win->dbg;
+    #if defined(UI_DBG_USE_Z80)
+        dbg->z80_trap_cb = 0;
+        dbg->z80_trap_ud = 0;
+    #endif
+    #if defined(UI_DBG_USE_M6502)
+        dbg->m6502_trap_cb = 0;
+        dbg->m6502_trap_ud = 0;
+    #endif
+    dbg->stopped = false;
+    dbg->step_mode = UI_DBG_STEPMODE_NONE;
+    dbg->install_trap_cb = true;
+    dbg->trap_pc = 0;
+    dbg->trap_ticks = 0;
+}
+
+static void _ui_dbg_dbgstate_reboot(ui_dbg_t* win) {
+    _ui_dbg_dbgstate_reset(win);
+}
 
 /* breakpoint evaluation callback, this is installed as CPU trap callback when needed */
 static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_data) {
@@ -782,6 +805,16 @@ static void _ui_dbg_heatmap_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     win->heatmap.scale = 1;
 }
 
+static void _ui_dbg_heatmap_reset(ui_dbg_t* win) {
+    win->heatmap.popup_addr_valid = false;
+    win->heatmap.popup_addr = 0;
+    memset(win->heatmap.items, 0, sizeof(win->heatmap.items));
+}
+
+static void _ui_dbg_heatmap_reboot(ui_dbg_t* win) {
+    _ui_dbg_heatmap_reset(win);
+}
+
 static void _ui_dbg_heatmap_discard(ui_dbg_t* win) {
     win->destroy_texture_cb(win->heatmap.texture);
 }
@@ -936,6 +969,14 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui->show_ticks = true;
     ui->show_breakpoints = false;
     ui->keys = desc->keys;
+}
+
+static void _ui_dbg_uistate_reset(ui_dbg_t* win) {
+    memset(win->ui.line_array, 0, sizeof(win->ui.line_array));
+}
+
+static void _ui_dbg_uistate_reboot(ui_dbg_t* win) {
+    _ui_dbg_uistate_reset(win);
 }
 
 static void _ui_dbg_draw_menu(ui_dbg_t* win) {
@@ -1379,6 +1420,20 @@ void ui_dbg_discard(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
     _ui_dbg_heatmap_discard(win);
     win->valid = false;
+}
+
+void ui_dbg_reset(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    _ui_dbg_dbgstate_reset(win);
+    _ui_dbg_uistate_reset(win);
+    _ui_dbg_heatmap_reset(win);
+}
+
+void ui_dbg_reboot(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    _ui_dbg_dbgstate_reboot(win);
+    _ui_dbg_uistate_reboot(win);
+    _ui_dbg_heatmap_reboot(win);
 }
 
 bool ui_dbg_before_exec(ui_dbg_t* win) {

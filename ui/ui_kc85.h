@@ -115,15 +115,19 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
                 kc85_reset(ui->kc85);
+                ui_dbg_reset(&ui->dbg);
             }
             if (ImGui::MenuItem("KC85/2", 0, ui->kc85->type == KC85_TYPE_2)) {
                 ui->boot_cb(ui->kc85, KC85_TYPE_2);
+                ui_dbg_reboot(&ui->dbg);
             }
             if (ImGui::MenuItem("KC85/3", 0, ui->kc85->type == KC85_TYPE_3)) {
                 ui->boot_cb(ui->kc85, KC85_TYPE_3);
+                ui_dbg_reboot(&ui->dbg);
             }
             if (ImGui::MenuItem("KC85/4", 0, ui->kc85->type == KC85_TYPE_4)) {
                 ui->boot_cb(ui->kc85, KC85_TYPE_4);
+                ui_dbg_reboot(&ui->dbg);
             }
             ImGui::EndMenu();
         }
