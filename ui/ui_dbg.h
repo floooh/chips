@@ -643,6 +643,20 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     win->dbg.trap_pc = pc;
     win->dbg.trap_frame_id = win->dbg.frame_id;
     win->dbg.trap_ticks = ticks;
+
+    /* call original trap callback if exists */
+    if (0 == trap_id) {
+        #if defined(UI_DBG_USE_Z80)
+        if (win->dbg.z80_trap_cb) {
+            trap_id = win->dbg.z80_trap_cb(pc, ticks, pins, win->dbg.z80_trap_ud);
+        }
+        #endif
+        #if defined(UI_DBG_USE_M6502)
+        if (win->dbg.m6502_trap_cb) {
+            trap_id = win->dbg.m6502_trap_cb(pc, ticks, pins, win->dbg.m6502_trap_ud);
+        }
+        #endif
+    }
     return trap_id;
 }
 
