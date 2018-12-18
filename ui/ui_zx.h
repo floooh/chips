@@ -175,7 +175,7 @@ static void _ui_zx_draw_menu(ui_zx_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, false);
+        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
         ImGui::EndMainMenuBar();
     }
     

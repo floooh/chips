@@ -153,7 +153,7 @@ static void _ui_z1013_draw_menu(ui_z1013_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, false);
+        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
         ImGui::EndMainMenuBar();
     }
 }

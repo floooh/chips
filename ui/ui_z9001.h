@@ -159,7 +159,7 @@ static void _ui_z9001_draw_menu(ui_z9001_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, false);
+        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
         ImGui::EndMainMenuBar();
     }
 }
