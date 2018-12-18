@@ -422,10 +422,12 @@ void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = 0;
-    while (ticks_executed < ticks_to_run) {
+    int trap_id = 0;
+    while ((ticks_executed < ticks_to_run) && (0 == trap_id)) {
         ticks_executed += z80_exec(&sys->cpu, ticks_to_run);
         /* check if casread trap has been hit, and the right ROM is mapped in */
-        if (sys->cpu.trap_id == 1) {
+        trap_id = sys->cpu.trap_id;
+        if (trap_id == 1) {
             if (sys->type == CPC_TYPE_6128) {
                 if (0 == (sys->ga.config & (1<<2))) {
                     _cpc_cas_read(sys);
@@ -435,6 +437,7 @@ void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
                 /* no memory mapping on KC Compact, 464 or 664 */
                 _cpc_cas_read(sys);
             }
+            trap_id = 0;
         }
     }
     clk_ticks_executed(&sys->clk, ticks_executed);
