@@ -999,7 +999,7 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         ImGui::BeginChild("##tex", ImVec2(0, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
         ImVec2 screen_pos = ImGui::GetCursorScreenPos();
         ImVec2 mouse_pos = ImGui::GetMousePos();
-        ImGui::Image(win->heatmap.texture, ImVec2(256*win->heatmap.scale, 256*win->heatmap.scale), ImVec2(0, 0), ImVec2(1, 1));
+        ImGui::Image(win->heatmap.texture, ImVec2(256.0f*(float)win->heatmap.scale, 256.0f*(float)win->heatmap.scale), ImVec2(0, 0), ImVec2(1, 1));
         int x = (int)((mouse_pos.x - screen_pos.x) / win->heatmap.scale);
         int y = (int)((mouse_pos.y - screen_pos.y) / win->heatmap.scale);
         uint16_t addr = y * 256 + x;
