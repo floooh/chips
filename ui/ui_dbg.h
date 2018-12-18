@@ -1199,7 +1199,7 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
             ImGui::SetColumnWidth(i, 44);
         }
         ImGui::SetColumnWidth(5, 64);
-        ImGui::SetColumnWidth(6, 64);
+        ImGui::SetColumnWidth(6, 72);
         m6502_set_a(c, ui_util_input_u8("A", m6502_a(c))); ImGui::NextColumn();
         m6502_set_x(c, ui_util_input_u8("X", m6502_x(c))); ImGui::NextColumn();
         m6502_set_y(c, ui_util_input_u8("Y", m6502_y(c))); ImGui::NextColumn();
