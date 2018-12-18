@@ -216,8 +216,12 @@ typedef struct ui_dbg_heatmapitem_t {
 } ui_dbg_heapmap_item_t;
 
 typedef struct ui_dbg_heatmap_t {
+    int tex_width, tex_height;
+    int tex_width_uicombo_state;
+    int next_tex_width;
     void* texture;
     bool show_ops, show_reads, show_writes;
+    int autoclear_interval; /* 0: no autoclear */
     int scale;
     int cur_y;
     bool popup_addr_valid;
@@ -903,9 +907,28 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
 
 /*== HEATMAP =================================================================*/
 static void _ui_dbg_heatmap_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
-    win->heatmap.texture = win->create_texture_cb(256, 256);
+    win->heatmap.tex_width = 256;
+    win->heatmap.tex_height = 256;
+    win->heatmap.tex_width_uicombo_state = 4;
+    win->heatmap.next_tex_width = win->heatmap.tex_width;
+    win->heatmap.texture = win->create_texture_cb(win->heatmap.tex_width, win->heatmap.tex_height);
     win->heatmap.show_ops = win->heatmap.show_reads = win->heatmap.show_writes = true;
     win->heatmap.scale = 1;
+    win->heatmap.autoclear_interval = 0;  /* 0 means: no autoclear */
+}
+
+static void _ui_dbg_heatmap_discard(ui_dbg_t* win) {
+    win->destroy_texture_cb(win->heatmap.texture);
+}
+
+static void _ui_dbg_heatmap_update_texture_size(ui_dbg_t* win, int new_width) {
+    CHIPS_ASSERT(((1<<16) % new_width) == 0);
+    if (new_width != win->heatmap.tex_width) {
+        win->heatmap.tex_width = new_width;
+        win->heatmap.tex_height = (1<<16) / new_width;
+        win->destroy_texture_cb(win->heatmap.texture);
+        win->heatmap.texture = win->create_texture_cb(win->heatmap.tex_width, win->heatmap.tex_height);
+    }
 }
 
 static void _ui_dbg_heatmap_reset(ui_dbg_t* win) {
@@ -916,10 +939,6 @@ static void _ui_dbg_heatmap_reset(ui_dbg_t* win) {
 
 static void _ui_dbg_heatmap_reboot(ui_dbg_t* win) {
     _ui_dbg_heatmap_reset(win);
-}
-
-static void _ui_dbg_heatmap_discard(ui_dbg_t* win) {
-    win->destroy_texture_cb(win->heatmap.texture);
 }
 
 static void _ui_dbg_heatmap_clear_all(ui_dbg_t* win) {
@@ -946,23 +965,23 @@ static void _ui_dbg_heatmap_update(ui_dbg_t* win) {
                 p |= 0xFF00FFFF;
             }
             if (win->heatmap.show_ops && (win->heatmap.items[i].op_count > 0)) {
-                uint32_t r = 0x60 + (win->heatmap.items[i].op_count>>8);
+                uint32_t r = 0x80 + (win->heatmap.items[i].op_count>>8);
                 if (r > 0xFF) { r = 0xFF; }
                 p |= 0xFF000000 | r;
             }
             if (win->heatmap.show_ops && (win->heatmap.items[i].op_start != 0)) {
                 /* opcode followup byte */
-                uint32_t r = 0x60 + (win->heatmap.items[win->heatmap.items[i].op_start].op_count>>8);
+                uint32_t r = 0x80 + (win->heatmap.items[win->heatmap.items[i].op_start].op_count>>8);
                 if (r > 0xFF) { r = 0xFF; }
                 p |= 0xFF000000 | r;
             }
             if (win->heatmap.show_writes && (win->heatmap.items[i].write_count > 0)) {
-                uint32_t g = 0x60 + (win->heatmap.items[i].write_count>>8);
+                uint32_t g = 0x80 + (win->heatmap.items[i].write_count>>8);
                 if (g > 0xFF) { g = 0xFF; }
                 p |= 0xFF000000 | (g<<8);
             }
             if (win->heatmap.show_reads && (win->heatmap.items[i].read_count > 0)) {
-                uint32_t b = 0x60 + (win->heatmap.items[i].read_count>>8);
+                uint32_t b = 0x80 + (win->heatmap.items[i].read_count>>8);
                 if (b > 0xFF) { b = 0xFF; }
                 p |= 0xFF000000 | (b<<16);
             }
@@ -976,9 +995,19 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
     if (!win->ui.show_heatmap) {
         return;
     }
+    ui_dbg_heatmap_t* hm = &win->heatmap;
+
+    if (hm->next_tex_width != hm->tex_width) {
+        _ui_dbg_heatmap_update_texture_size(win, hm->next_tex_width);
+    }
+    if (hm->autoclear_interval > 0) {
+        if ((win->dbg.frame_id % hm->autoclear_interval) == 0) {
+            _ui_dbg_heatmap_clear_all(win);
+        }
+    }
     _ui_dbg_heatmap_update(win);
     ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 128), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(288, 356), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(292, 400), ImGuiSetCond_Once);
     if (ImGui::Begin("Memory Heatmap", &win->ui.show_heatmap)) {
         if (ImGui::Button("Clear All")) {
             _ui_dbg_heatmap_clear_all(win);
@@ -989,29 +1018,45 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         }
         ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, 0xFF0000FF);
-        ImGui::Checkbox("OP", &win->heatmap.show_ops); ImGui::SameLine();
+        ImGui::Checkbox("OP", &hm->show_ops); ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, 0xFFFF0000);
-        ImGui::Checkbox("R", &win->heatmap.show_reads); ImGui::SameLine();
+        ImGui::Checkbox("R", &hm->show_reads); ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, 0xFF00FF00);
-        ImGui::Checkbox("W", &win->heatmap.show_writes);
+        ImGui::Checkbox("W", &hm->show_writes);
         ImGui::PopStyleColor(3);
-        ImGui::SliderInt("Scale", &win->heatmap.scale, 1, 8);
+        if (ImGui::Combo("Size", &hm->tex_width_uicombo_state, 
+            "16 x 4096 bytes\0"
+            "32 x 2048 bytes\0" 
+            "64 x 1024 bytes\0"
+            "128 x 512 bytes\0"
+            "256 x 256 bytes\0"
+            "512 x 128 bytes\0\0"))
+        {
+            hm->next_tex_width = 1<<(hm->tex_width_uicombo_state+4);
+        }
+        ImGui::SliderInt("Scale", &hm->scale, 1, 8);
+        ImGui::SliderInt("Auto Clear", &hm->autoclear_interval, 0, 32);
+        if (ImGui::IsItemHovered() && (hm->autoclear_interval == 0)) {
+            ImGui::SetTooltip("Slide to >0 to automatically\nclear every Nth frames.");
+        }
         ImGui::BeginChild("##tex", ImVec2(0, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
         ImVec2 screen_pos = ImGui::GetCursorScreenPos();
         ImVec2 mouse_pos = ImGui::GetMousePos();
-        ImGui::Image(win->heatmap.texture, ImVec2(256.0f*(float)win->heatmap.scale, 256.0f*(float)win->heatmap.scale), ImVec2(0, 0), ImVec2(1, 1));
-        int x = (int)((mouse_pos.x - screen_pos.x) / win->heatmap.scale);
-        int y = (int)((mouse_pos.y - screen_pos.y) / win->heatmap.scale);
-        uint16_t addr = y * 256 + x;
-        if (win->heatmap.items[addr].op_start != 0) {
+        float w = (float) (hm->scale * hm->tex_width);
+        float h = (float) (hm->scale * hm->tex_height);
+        ImGui::Image(win->heatmap.texture, ImVec2(w, h), ImVec2(0, 0), ImVec2(1, 1));
+        int x = (int)((mouse_pos.x - screen_pos.x) / hm->scale);
+        int y = (int)((mouse_pos.y - screen_pos.y) / hm->scale);
+        uint16_t addr = y * hm->tex_width + x;
+        if (hm->items[addr].op_start != 0) {
             /* address is actually an opcode followup byte, reset to start of instruction */
-            addr = win->heatmap.items[addr].op_start;
+            addr = hm->items[addr].op_start;
         }
         if (ImGui::IsItemHovered()) {
-            if (win->heatmap.items[addr].op_count > 0) {
+            if (hm->items[addr].op_count > 0) {
                 _ui_dbg_disasm(win, addr);
                 ImGui::SetTooltip("%04X: %s (ticks: %d)\n(right-click for options)",
-                    addr, win->dasm.str_buf, win->heatmap.items[addr].ticks);
+                    addr, win->dasm.str_buf, hm->items[addr].ticks);
             }
             else {
                 ImGui::SetTooltip("%04X: %02X %02X %02X %02X\n(right-click for options)", addr,
@@ -1022,27 +1067,27 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
             }
         }
         if (ImGui::BeginPopupContextItem("##popup")) {
-            if (!win->heatmap.popup_addr_valid) {
-                win->heatmap.popup_addr_valid = true;
-                win->heatmap.popup_addr = addr;
+            if (!hm->popup_addr_valid) {
+                hm->popup_addr_valid = true;
+                hm->popup_addr = addr;
             }
-            ImGui::Text("Address: %04X", win->heatmap.popup_addr);
+            ImGui::Text("Address: %04X", hm->popup_addr);
             ImGui::Separator();
             if (ImGui::Selectable("Add Exec Breakpoint")) {
-                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, win->heatmap.popup_addr)) {
-                    _ui_dbg_bp_add_exec(win, true, win->heatmap.popup_addr);
+                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, hm->popup_addr)) {
+                    _ui_dbg_bp_add_exec(win, true, hm->popup_addr);
                 }
             }
             if (ImGui::Selectable("Add Byte Breakpoint")) {
-                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_BYTE, win->heatmap.popup_addr)) {
-                    _ui_dbg_bp_add_byte(win, false, win->heatmap.popup_addr);
+                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_BYTE, hm->popup_addr)) {
+                    _ui_dbg_bp_add_byte(win, false, hm->popup_addr);
                     win->ui.show_breakpoints = true;
                     ImGui::SetWindowFocus("Breakpoints");
                 }
             }
             if (ImGui::Selectable("Add Word Breakpoint")) {
-                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_WORD, win->heatmap.popup_addr)) {
-                    _ui_dbg_bp_add_word(win, false, win->heatmap.popup_addr);
+                if (-1 == _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_WORD, hm->popup_addr)) {
+                    _ui_dbg_bp_add_word(win, false, hm->popup_addr);
                     win->ui.show_breakpoints = true;
                     ImGui::SetWindowFocus("Breakpoints");
                 }
@@ -1050,7 +1095,7 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
             ImGui::EndPopup();
         }
         else {
-            win->heatmap.popup_addr_valid = false;
+            hm->popup_addr_valid = false;
         }
         ImGui::EndChild();
     }
