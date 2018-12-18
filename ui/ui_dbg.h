@@ -1305,9 +1305,16 @@ static void _ui_dbg_update_line_array(ui_dbg_t* win, uint16_t addr) {
     }
 }
 
-/* check if the address is outside the line_array (with safe area at front and back) */
+/* check if the address is outside the line_array 
+    NOTE that all backtraced lines are also considered
+    "outside the line array", this is for the case
+    where the PC jumps back into the backtraced array,
+    so that instructions after the PC are "speculatively
+    disassembled" even if those addresses haven't been
+    executed before.
+*/
 static bool _ui_dbg_addr_inside_line_array(ui_dbg_t* win, uint16_t addr) {
-    uint16_t first_addr = win->ui.line_array[16].addr;
+    uint16_t first_addr = win->ui.line_array[UI_DBG_NUM_BACKTRACE_LINES].addr;
     uint16_t last_addr = win->ui.line_array[UI_DBG_NUM_LINES-16].addr;
     if (first_addr == last_addr) {
         return false;
