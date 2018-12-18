@@ -31,6 +31,7 @@
     - ui_m6581.h
     - ui_audio.h
     - ui_dasm.h
+    - ui_dbg.h
     - ui_memedit.h
     - ui_memmap.h
     - ui_kbd.h
@@ -67,6 +68,10 @@ typedef void (*ui_c64_boot_cb)(c64_t* sys);
 typedef struct {
     c64_t* c64;             /* pointer to c64_t instance to track */
     ui_c64_boot_cb boot_cb; /* reboot callback function */
+    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
+    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
+    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
+    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_c64_desc_t;
 
 typedef struct {
@@ -81,11 +86,14 @@ typedef struct {
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
+    ui_dbg_t dbg;
 } ui_c64_t;
 
 void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc);
 void ui_c64_discard(ui_c64_t* ui);
 void ui_c64_draw(ui_c64_t* ui, double time_ms);
+bool ui_c64_before_exec(ui_c64_t* ui);
+void ui_c64_after_exec(ui_c64_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -112,9 +120,11 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
                 c64_reset(ui->c64);
+                ui_dbg_reset(&ui->dbg);
             }
             if (ImGui::MenuItem("Cold Boot")) {
                 ui->boot_cb(ui->c64);
+                ui_dbg_reboot(&ui->dbg);
             }
             if (ImGui::BeginMenu("Joystick")) {
                 if (ImGui::MenuItem("None", 0, ui->c64->joystick_type == C64_JOYSTICKTYPE_NONE)) {
@@ -142,6 +152,9 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
+            ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
+            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
@@ -156,10 +169,9 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
                 ImGui::MenuItem("Window #4", 0, &ui->dasm[3].open);
                 ImGui::EndMenu();
             }
-            ImGui::MenuItem("CPU Debugger (TODO)");
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, false);
+        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
         ImGui::EndMainMenuBar();
     }
 }
@@ -396,13 +408,28 @@ static const ui_chip_pin_t _ui_c64_vic_pins[] = {
     { "A13",    27,     M6569_A13 }
 };
 
-void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc) {
-    CHIPS_ASSERT(ui && desc);
-    CHIPS_ASSERT(desc->c64);
-    CHIPS_ASSERT(desc->boot_cb);
-    ui->c64 = desc->c64;
-    ui->boot_cb = desc->boot_cb;
+void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
+    CHIPS_ASSERT(ui && ui_desc);
+    CHIPS_ASSERT(ui_desc->c64);
+    CHIPS_ASSERT(ui_desc->boot_cb);
+    ui->c64 = ui_desc->c64;
+    ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
+    {
+        ui_dbg_desc_t desc = {0};
+        desc.title = "CPU Debugger";
+        desc.x = x;
+        desc.y = y;
+        desc.m6502 = &ui->c64->cpu;
+        desc.read_cb = _ui_c64_mem_read;
+        desc.create_texture_cb = ui_desc->create_texture_cb;
+        desc.update_texture_cb = ui_desc->update_texture_cb;
+        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.keys = ui_desc->dbg_keys;
+        desc.user_data = ui->c64;
+        ui_dbg_init(&ui->dbg, &desc);
+    }
+    x += dx; y += dy;
     {
         ui_m6502_desc_t desc = {0};
         desc.title = "MOS 6510";
@@ -529,6 +556,7 @@ void ui_c64_discard(ui_c64_t* ui) {
         ui_memedit_discard(&ui->memedit[i]);
         ui_dasm_discard(&ui->dasm[i]);
     }
+    ui_dbg_discard(&ui->dbg);
 }
 
 void ui_c64_draw(ui_c64_t* ui, double time_ms) {
@@ -549,7 +577,19 @@ void ui_c64_draw(ui_c64_t* ui, double time_ms) {
         ui_memedit_draw(&ui->memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
+    ui_dbg_draw(&ui->dbg);
 }
+
+bool ui_c64_before_exec(ui_c64_t* ui) {
+    CHIPS_ASSERT(ui && ui->c64);
+    return ui_dbg_before_exec(&ui->dbg);
+}
+
+void ui_c64_after_exec(ui_c64_t* ui) {
+    CHIPS_ASSERT(ui && ui->c64);
+    ui_dbg_after_exec(&ui->dbg);
+}
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
