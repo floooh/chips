@@ -11,8 +11,8 @@
     before you include this file in *one* C++ file to create the 
     implementation.
 
-    Select the supported CPUs with the following macros (at least
-    one must be defined):
+    Select the supported CPUs with the following macros (define one
+    or the other, but not both):
 
     UI_DBG_USE_Z80
     UI_DBG_USE_M6502
@@ -266,7 +266,10 @@ void ui_dbg_reboot(ui_dbg_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 #if !defined(UI_DBG_USE_Z80) && !defined(UI_DBG_USE_M6502)
-#error "please define UI_DBG_USE_Z80 and/or UI_DBG_USE_M6502"
+#error "please define UI_DBG_USE_Z80 or UI_DBG_USE_M6502"
+#endif
+#if defined(UI_DBG_USE_Z80) && defined(UI_DBG_USE_M6502)
+#error "only one of UI_DBG_USE_Z80 or UI_DBG_USE_M6502 can be defined"
 #endif
 
 /*== GENERAL HELPERS =========================================================*/
@@ -291,16 +294,10 @@ static inline uint16_t _ui_dbg_read_word(ui_dbg_t* win, uint16_t addr) {
 
 static inline uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
     #if defined(UI_DBG_USE_Z80)
-    if (win->dbg.z80) {
         return z80_pc(win->dbg.z80);
-    }
-    #endif
-    #if defined(UI_DBG_USE_M6502)
-    if (win->dbg.m6502) {
+    #elif defined(UI_DBG_USE_M6502)
         return m6502_pc(win->dbg.m6502);
-    }
     #endif
-    return 0;
 }
 
 /* disassembler callback to fetch the next instruction byte */
@@ -328,9 +325,9 @@ static inline uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
     win->dasm.str_pos = 0;
     win->dasm.bin_pos = 0;
     #if defined(UI_DBG_USE_Z80)
-    z80dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
-    #else
-    m6502dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
+        z80dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
+    #elif defined(UI_DBG_USE_M6502)
+        m6502dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
     #endif
     return win->dasm.cur_addr;
 }
@@ -341,9 +338,9 @@ static inline uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
     win->dasm.str_pos = 0;
     win->dasm.bin_pos = 0;
     #if defined(UI_DBG_USE_Z80)
-    uint16_t next_pc = z80dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
-    #else
-    uint16_t next_pc = m6502dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
+        uint16_t next_pc = z80dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
+    #elif defined(UI_DBG_USE_M6502)
+        uint16_t next_pc = m6502dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
     #endif
     return next_pc - pc;
 }
@@ -363,8 +360,7 @@ static bool _ui_dbg_is_stepover_op(uint8_t opcode) {
             default:
                 return false;
         }
-    #endif
-    #if defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502)
         /* on 6502, only JSR qualifies */
         return opcode == 0x20;
     #endif
@@ -419,8 +415,7 @@ static bool _ui_dbg_is_controlflow_op(uint8_t opcode0, uint8_t opcode1) {
             default:
                 return false;
         }
-    #endif
-    #if defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502)
         switch (opcode0) {
             /* BRK */
             case 0x00:
@@ -476,14 +471,10 @@ static void _ui_dbg_step_over(ui_dbg_t* win) {
 /*== DEBUGGER STATE ==========================================================*/
 static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui_dbg_state_t* dbg = &win->dbg;
-    #if defined(UI_DBG_USE_Z80) &&  defined(UI_DBG_USE_M6502)
-        CHIPS_ASSERT((desc->z80 || desc->m6502) && !(desc->z80 && desc->m6502));
-        dbg->z80 = desc->z80;
-        dbg->m6502 = desc->m6502;
-    #elif defined(UI_DBG_USE_Z80)
+    #if defined(UI_DBG_USE_Z80)
         CHIPS_ASSERT(desc->z80);
         dbg->z80 = desc->z80;
-    #else
+    #elif defined(UI_DBG_USE_M6502)
         CHIPS_ASSERT(desc->m6502);
         dbg->m6502 = desc->m6502;
     #endif
@@ -496,8 +487,7 @@ static void _ui_dbg_dbgstate_reset(ui_dbg_t* win) {
     #if defined(UI_DBG_USE_Z80)
         dbg->z80_trap_cb = 0;
         dbg->z80_trap_ud = 0;
-    #endif
-    #if defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502)
         dbg->m6502_trap_cb = 0;
         dbg->m6502_trap_ud = 0;
     #endif
@@ -582,28 +572,26 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                         break;
 
                     case UI_DBG_BREAKTYPE_IRQ:
-                        #if defined UI_DBG_USE_Z80
-                        if (pins & Z80_INT) {
+                        #if defined(UI_DBG_USE_Z80)
+                            if (pins & Z80_INT) {
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                            }
+                        #elif defined(UI_DBG_USE_M6502)
+                        if (pins & M6502_IRQ) {
                             trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                        }
-                        #endif
-                        #if defined UI_DBG_USE_M6502
-                        if (pins & M6502_INT) {
-                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                        }
+                            }
                         #endif
                         break;
 
                     case UI_DBG_BREAKTYPE_NMI:
-                        #if defined UI_DBG_USE_Z80
-                        if (pins & Z80_NMI) {
-                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                        }
-                        #endif
-                        #if defined UI_DBG_USE_M6502
-                        if (pins & M6502_NMI) {
-                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                        }
+                        #if defined(UI_DBG_USE_Z80)
+                            if (pins & Z80_NMI) {
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                            }
+                        #elif defined(UI_DBG_USE_M6502)
+                            if (pins & M6502_NMI) {
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                            }
                         #endif
                         break;
                 }
@@ -626,17 +614,23 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
         }
     }
     #if defined(UI_DBG_USE_Z80)
-    if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_RD)) {
-        const uint16_t addr = Z80_GET_ADDR(pins);
-        win->heatmap.items[addr].read_count++;
-    }
-    else if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_WR)) {
-        const uint16_t addr = Z80_GET_ADDR(pins);
-        win->heatmap.items[addr].write_count++;
-    }
-    #endif
-    #if defined(UI_DBG_USE_M6502)
-    #error "FIXME: M6502"
+        if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_RD)) {
+            const uint16_t addr = Z80_GET_ADDR(pins);
+            win->heatmap.items[addr].read_count++;
+        }
+        else if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_WR)) {
+            const uint16_t addr = Z80_GET_ADDR(pins);
+            win->heatmap.items[addr].write_count++;
+        }
+    #elif defined(UI_DBG_USE_M6502)
+        /* every tick on 6502 is either a read or a write */
+        const uint16_t addr = M6502_GET_ADDR(pins);
+        if (0 != (pins & M6502_RW)) {
+            win->heatmap.items[addr].read_count++;
+        }
+        else {
+            win->heatmap.items[addr].write_count++;
+        }
     #endif
     win->dbg.trap_pc = pc;
     win->dbg.trap_frame_id = win->dbg.frame_id;
@@ -645,14 +639,13 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     /* call original trap callback if exists */
     if (0 == trap_id) {
         #if defined(UI_DBG_USE_Z80)
-        if (win->dbg.z80_trap_cb) {
-            trap_id = win->dbg.z80_trap_cb(pc, ticks, pins, win->dbg.z80_trap_ud);
-        }
-        #endif
-        #if defined(UI_DBG_USE_M6502)
-        if (win->dbg.m6502_trap_cb) {
-            trap_id = win->dbg.m6502_trap_cb(pc, ticks, pins, win->dbg.m6502_trap_ud);
-        }
+            if (win->dbg.z80_trap_cb) {
+                trap_id = win->dbg.z80_trap_cb(pc, ticks, pins, win->dbg.z80_trap_ud);
+            }
+        #elif defined(UI_DBG_USE_M6502)
+            if (win->dbg.m6502_trap_cb) {
+                trap_id = win->dbg.m6502_trap_cb(pc, ticks, pins, win->dbg.m6502_trap_ud);
+            }
         #endif
     }
     return trap_id;
@@ -1151,7 +1144,6 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         return;
     }
     #if defined(UI_DBG_USE_Z80)
-    if (win->dbg.z80) {
         const float h = 4*ImGui::GetFrameHeightWithSpacing();
         ImGui::BeginChild("##regs", ImVec2(0, h), false);
         z80_t* c = win->dbg.z80;
@@ -1198,11 +1190,37 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         ImGui::AlignTextToFramePadding();
         ImGui::Text("%s", f_str);
         ImGui::EndChild();
-    }
-    #else
-    if (win->m6502) {
-
-    }
+    #elif defined(UI_DBG_USE_M6502)
+        const float h = 1*ImGui::GetFrameHeightWithSpacing();
+        ImGui::BeginChild("##regs", ImVec2(0, h), false);
+        m6502_t* c = win->dbg.m6502;
+        ImGui::Columns(7, "##reg_columns", false);
+        for (int i = 0; i < 5; i++) {
+            ImGui::SetColumnWidth(i, 44);
+        }
+        ImGui::SetColumnWidth(5, 64);
+        ImGui::SetColumnWidth(6, 64);
+        m6502_set_a(c, ui_util_input_u8("A", m6502_a(c))); ImGui::NextColumn();
+        m6502_set_x(c, ui_util_input_u8("X", m6502_x(c))); ImGui::NextColumn();
+        m6502_set_y(c, ui_util_input_u8("Y", m6502_y(c))); ImGui::NextColumn();
+        m6502_set_s(c, ui_util_input_u8("S", m6502_s(c))); ImGui::NextColumn();
+        m6502_set_p(c, ui_util_input_u8("P", m6502_p(c))); ImGui::NextColumn();
+        m6502_set_pc(c, ui_util_input_u16("PC", m6502_pc(c))); ImGui::NextColumn();
+        const uint8_t p = m6502_p(c);
+        char p_str[9] = {
+            (p & M6502_NF) ? 'N':'-',
+            (p & M6502_VF) ? 'V':'-',
+            (p & M6502_XF) ? 'X':'-',
+            (p & M6502_BF) ? 'B':'-',
+            (p & M6502_DF) ? 'D':'-',
+            (p & M6502_IF) ? 'I':'-',
+            (p & M6502_ZF) ? 'Z':'-',
+            (p & M6502_CF) ? 'C':'-',
+            0,
+        };
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%s", p_str);
+        ImGui::EndChild();
     #endif
     ImGui::Separator();
 }
@@ -1553,18 +1571,13 @@ bool ui_dbg_before_exec(ui_dbg_t* win) {
         win->dbg.frame_id++;
         if (!win->dbg.stopped) {
             #if defined(UI_DBG_USE_Z80)
-                if (win->dbg.z80) {
-                    win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
-                    win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
-                    z80_trap_cb(win->dbg.z80, _ui_dbg_bp_eval, win);
-                }
-            #endif
-            #if defined(UI_DBG_USE_M6502)
-                if (win->dbg.m6502) {
-                    win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
-                    win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
-                    m6502_trap_cb(win->dbg.m6502, _ui_dbg_eval, win);
-                }
+                win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
+                win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
+                z80_trap_cb(win->dbg.z80, _ui_dbg_bp_eval, win);
+            #elif defined(UI_DBG_USE_M6502)
+                win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
+                win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
+                m6502_trap_cb(win->dbg.m6502, _ui_dbg_bp_eval, win);
             #endif
         }
         return !win->dbg.stopped;
@@ -1579,24 +1592,19 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
     /* uninstall our trap callback, but only if it hasn't been overwritten */
     int trap_id = 0;
     #if defined(UI_DBG_USE_Z80)
-        if (win->dbg.z80) {
-            if (win->dbg.z80->trap_cb == _ui_dbg_bp_eval) {
-                z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
-            }
-            win->dbg.z80_trap_cb = 0;
-            win->dbg.z80_trap_ud = 0;
-            trap_id = win->dbg.z80->trap_id;
+        if (win->dbg.z80->trap_cb == _ui_dbg_bp_eval) {
+            z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
         }
-    #endif
-    #if defined(UI_DBG_USE_M6502)
-        if (win->dbg.m6502) {
-            if (win->dbg.m6502->trap_cb == _ui_dbg_bp_eval) {
-                m6502_trap_cb(win->dbg.m6502, win->dbg.m6502_trap_cb, win->dbg.m6502_trap_ud);
-            }
-            win->dbg.m6502_trap_cb = 0;
-            win->dbg.m6502_trap_ud = 0;
-            trap_id = win->dbg.m6502->trap_id;
+        win->dbg.z80_trap_cb = 0;
+        win->dbg.z80_trap_ud = 0;
+        trap_id = win->dbg.z80->trap_id;
+    #elif defined(UI_DBG_USE_M6502)
+        if (win->dbg.m6502->trap_cb == _ui_dbg_bp_eval) {
+            m6502_trap_cb(win->dbg.m6502, win->dbg.m6502_trap_cb, win->dbg.m6502_trap_ud);
         }
+        win->dbg.m6502_trap_cb = 0;
+        win->dbg.m6502_trap_ud = 0;
+        trap_id = win->dbg.m6502->trap_id;
     #endif
     if (trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
