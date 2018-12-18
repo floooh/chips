@@ -106,6 +106,14 @@
         Set a null ptr as trap callback disables the trap checking.
         To get the current trap callback, simply access m6502_t.trap_cb directly.
 
+    ~~~C
+    void m6502_set_x(m6502_t* cpu, uint8_t val)
+    void m6502_set_xx(m6502_t* cpu, uint16_t val)
+    uint8_t m6502_x(m6502_t* cpu)
+    uint16_t m6502_xx(m6502_t* cpu)
+    ~~~
+        Set and get 6502 registers and flags.
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
@@ -254,6 +262,21 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
 /* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
 uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
 
+/* register access functions */
+void m6502_set_a(m6502_t* cpu, uint8_t v);
+void m6502_set_x(m6502_t* cpu, uint8_t v);
+void m6502_set_y(m6502_t* cpu, uint8_t v);
+void m6502_set_s(m6502_t* cpu, uint8_t v);
+void m6502_set_p(m6502_t* cpu, uint8_t v);
+void m6502_set_pc(m6502_t* cpu, uint16_t v);
+
+uint8_t m6502_a(m6502_t* cpu);
+uint8_t m6502_x(m6502_t* cpu);
+uint8_t m6502_y(m6502_t* cpu);
+uint8_t m6502_s(m6502_t* cpu);
+uint8_t m6502_p(m6502_t* cpu);
+uint16_t m6502_pc(m6502_t* cpu);
+
 /* extract 16-bit address bus from 64-bit pins */
 #define M6502_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
 /* merge 16-bit address bus value into 64-bit pins */
@@ -281,6 +304,20 @@ uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
+
+/* register access functions */
+void m6502_set_a(m6502_t* cpu, uint8_t v) { cpu->state.A = v; }
+void m6502_set_x(m6502_t* cpu, uint8_t v) { cpu->state.X = v; }
+void m6502_set_y(m6502_t* cpu, uint8_t v) { cpu->state.Y = v; }
+void m6502_set_s(m6502_t* cpu, uint8_t v) { cpu->state.S = v; }
+void m6502_set_p(m6502_t* cpu, uint8_t v) { cpu->state.P = v; }
+void m6502_set_pc(m6502_t* cpu, uint16_t v) { cpu->state.PC = v; }
+uint8_t m6502_a(m6502_t* cpu) { return cpu->state.A; }
+uint8_t m6502_x(m6502_t* cpu) { return cpu->state.X; }
+uint8_t m6502_y(m6502_t* cpu) { return cpu->state.Y; }
+uint8_t m6502_s(m6502_t* cpu) { return cpu->state.S; }
+uint8_t m6502_p(m6502_t* cpu) { return cpu->state.P; }
+uint16_t m6502_pc(m6502_t* cpu) { return cpu->state.PC; }
 
 /* helper macros and functions for code-generated instruction decoder */
 #define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
