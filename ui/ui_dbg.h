@@ -64,7 +64,7 @@ extern "C" {
 
 #define UI_DBG_MAX_BREAKPOINTS (32)
 #define UI_DBG_STEP_TRAPID (128)                    /* special trap id when step-mode active */
-#define UI_DBG_BASE_TRAPID (UI_DBG_STEP_TRAPID+1)   /* first CPU trap-id used for breakpoints */
+#define UI_DBG_BP_BASE_TRAPID (UI_DBG_STEP_TRAPID+1)   /* first CPU trap-id used for breakpoints */
 #define UI_DBG_MAX_STRLEN (32)
 #define UI_DBG_MAX_BINLEN (16)
 #define UI_DBG_NUM_LINES (256)
@@ -541,7 +541,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                 switch (bp->type) {
                     case UI_DBG_BREAKTYPE_EXEC:
                         if (pc == bp->addr) {
-                            trap_id = UI_DBG_BASE_TRAPID + i;
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
                         }
                         break;
 
@@ -558,7 +558,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                                 case UI_DBG_BREAKCOND_LESS_EQUAL:       b = val <= bp->val; break;
                             }
                             if (b) {
-                                trap_id = UI_DBG_BASE_TRAPID + i;
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         }
                         break;
@@ -576,7 +576,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                                 case UI_DBG_BREAKCOND_LESS_EQUAL:       b = val <= bp->val; break;
                             }
                             if (b) {
-                                trap_id = UI_DBG_BASE_TRAPID + i;
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         }
                         break;
@@ -584,12 +584,12 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                     case UI_DBG_BREAKTYPE_IRQ:
                         #if defined UI_DBG_USE_Z80
                         if (pins & Z80_INT) {
-                            trap_id = UI_DBG_BASE_TRAPID + i;
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
                         }
                         #endif
                         #if defined UI_DBG_USE_M6502
                         if (pins & M6502_INT) {
-                            trap_id = UI_DBG_BASE_TRAPID + i;
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
                         }
                         #endif
                         break;
@@ -597,12 +597,12 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                     case UI_DBG_BREAKTYPE_NMI:
                         #if defined UI_DBG_USE_Z80
                         if (pins & Z80_NMI) {
-                            trap_id = UI_DBG_BASE_TRAPID + i;
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
                         }
                         #endif
                         #if defined UI_DBG_USE_M6502
                         if (pins & M6502_NMI) {
-                            trap_id = UI_DBG_BASE_TRAPID + i;
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
                         }
                         #endif
                         break;
@@ -821,8 +821,8 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
             ImGui::PushID(i);
             ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
             /* visualize the current breakpoint */
-            bool bp_active = (win->dbg.last_trap_id >= UI_DBG_BASE_TRAPID) &&
-                             ((win->dbg.last_trap_id - UI_DBG_BASE_TRAPID) == i);
+            bool bp_active = (win->dbg.last_trap_id >= UI_DBG_BP_BASE_TRAPID) &&
+                             ((win->dbg.last_trap_id - UI_DBG_BP_BASE_TRAPID) == i);
             if (bp_active) {
                 ImGui::PushStyleColor(ImGuiCol_CheckMark, 0xFF0000FF); 
             }
@@ -1598,7 +1598,7 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
             trap_id = win->dbg.m6502->trap_id;
         }
     #endif
-    if (trap_id) {
+    if (trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
         ImGui::SetWindowFocus(win->ui.title);
