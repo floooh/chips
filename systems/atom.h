@@ -315,7 +315,8 @@ void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     while ((ticks_executed < ticks_to_run) && (0 == trap_id)) {
         ticks_executed += m6502_exec(&sys->cpu, ticks_to_run);
         /* check if the trapped OSLoad function was hit to implement tape file loading */
-        if (1 == sys->cpu.trap_id) {
+        trap_id = sys->cpu.trap_id;
+        if (1 == trap_id) {
             _atom_osload(sys);
             trap_id = 0;
         }
