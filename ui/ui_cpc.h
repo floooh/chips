@@ -33,6 +33,7 @@
     - ui_cpc_ga.h
     - ui_audio.h
     - ui_dasm.h
+    - ui_dbg.h
     - ui_memedit.h
     - ui_memmap.h
     - ui_kbd.h
@@ -68,6 +69,10 @@ typedef void (*ui_cpc_boot_t)(cpc_t* sys, cpc_type_t type);
 typedef struct {
     cpc_t* cpc;
     ui_cpc_boot_t boot_cb; /* user-provided callback to reboot to different config */
+    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
+    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
+    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
+    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_cpc_desc_t;
 
 typedef struct {
@@ -83,11 +88,14 @@ typedef struct {
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
+    ui_dbg_t dbg;
 } ui_cpc_t;
 
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc);
 void ui_cpc_discard(ui_cpc_t* ui);
 void ui_cpc_draw(ui_cpc_t* ui, double time_ms);
+bool ui_cpc_before_exec(ui_cpc_t* ui);
+void ui_cpc_after_exec(ui_cpc_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -114,15 +122,19 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
                 cpc_reset(ui->cpc);
+                ui_dbg_reset(&ui->dbg);
             }
             if (ImGui::MenuItem("CPC 464", 0, ui->cpc->type == CPC_TYPE_464)) {
                 ui->boot_cb(ui->cpc, CPC_TYPE_464);
+                ui_dbg_reboot(&ui->dbg);
             }
             if (ImGui::MenuItem("CPC 6128", 0, ui->cpc->type == CPC_TYPE_6128)) {
                 ui->boot_cb(ui->cpc, CPC_TYPE_6128);
+                ui_dbg_reboot(&ui->dbg);
             }
             if (ImGui::MenuItem("KC Compact", 0, ui->cpc->type == CPC_TYPE_KCCOMPACT)) {
                 ui->boot_cb(ui->cpc, CPC_TYPE_KCCOMPACT);
+                ui_dbg_reboot(&ui->dbg);
             }
             if (ImGui::MenuItem("Joystick", 0, ui->cpc->joystick_type != CPC_JOYSTICK_NONE)) {
                 if (ui->cpc->joystick_type == CPC_JOYSTICK_NONE) {
@@ -147,6 +159,9 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
+            ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
+            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
@@ -161,7 +176,6 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
                 ImGui::MenuItem("Window #4", 0, &ui->dasm[3].open);
                 ImGui::EndMenu();
             }
-            ImGui::MenuItem("CPU Debugger (TODO)");
             ImGui::EndMenu();
         }
         ui_util_options_menu(time_ms, false);
@@ -462,13 +476,28 @@ static const ui_chip_pin_t _ui_cpc_ppi_pins[] = {
     { "PC7",   39,      I8255_PC7 },
 };
 
-void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
-    CHIPS_ASSERT(ui && desc);
-    CHIPS_ASSERT(desc->cpc);
-    CHIPS_ASSERT(desc->boot_cb);
-    ui->cpc = desc->cpc;
-    ui->boot_cb = desc->boot_cb;
+void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
+    CHIPS_ASSERT(ui && ui_desc);
+    CHIPS_ASSERT(ui_desc->cpc);
+    CHIPS_ASSERT(ui_desc->boot_cb);
+    ui->cpc = ui_desc->cpc;
+    ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
+    {
+        ui_dbg_desc_t desc = {0};
+        desc.title = "CPU Debugger";
+        desc.x = x;
+        desc.y = y;
+        desc.z80 = &ui->cpc->cpu;
+        desc.read_cb = _ui_cpc_mem_read;
+        desc.create_texture_cb = ui_desc->create_texture_cb;
+        desc.update_texture_cb = ui_desc->update_texture_cb;
+        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.keys = ui_desc->dbg_keys;
+        desc.user_data = ui->cpc;
+        ui_dbg_init(&ui->dbg, &desc);
+    }
+    x += dx; y += dy;
     {
         ui_z80_desc_t desc = {0};
         desc.title = "Z80 CPU";
@@ -478,6 +507,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc) {
         UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCPU", 36, _ui_cpc_cpu_pins);
         ui_z80_init(&ui->cpu, &desc);
     }
+    x += dx; y += dy;
     {
         ui_ay38910_desc_t desc = {0};
         desc.title = "AY-3-8912";
@@ -596,6 +626,7 @@ void ui_cpc_discard(ui_cpc_t* ui) {
         ui_memedit_discard(&ui->memedit[i]);
         ui_dasm_discard(&ui->dasm[i]);
     }
+    ui_dbg_discard(&ui->dbg);
 }
 
 void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
@@ -616,7 +647,19 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
         ui_memedit_draw(&ui->memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
+    ui_dbg_draw(&ui->dbg);
 }
+
+bool ui_cpc_before_exec(ui_cpc_t* ui) {
+    CHIPS_ASSERT(ui && ui->cpc);
+    return ui_dbg_before_exec(&ui->dbg);
+}
+
+void ui_cpc_after_exec(ui_cpc_t* ui) {
+    CHIPS_ASSERT(ui && ui->cpc);
+    ui_dbg_after_exec(&ui->dbg);
+}
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
