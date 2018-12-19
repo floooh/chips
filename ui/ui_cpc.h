@@ -30,6 +30,7 @@
     - ui_mc6845.h
     - ui_upd765.h
     - ui_ay38910.h
+    - ui_upd765.h
     - ui_cpc_ga.h
     - ui_audio.h
     - ui_dasm.h
@@ -82,6 +83,7 @@ typedef struct {
     ui_ay38910_t psg;
     ui_mc6845_t vdc;
     ui_i8255_t ppi;
+    ui_upd765_t upd;
     ui_audio_t audio;
     ui_cpc_ga_t ga;
     ui_kbd_t kbd;
@@ -155,7 +157,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
             ImGui::MenuItem("AY-3-8912", 0, &ui->psg.open);
             ImGui::MenuItem("MC6845", 0, &ui->vdc.open);
             ImGui::MenuItem("i8255", 0, &ui->ppi.open);
-            ImGui::MenuItem("uPD765 (TODO)");
+            ImGui::MenuItem("uPD765", 0, &ui->upd.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -476,6 +478,22 @@ static const ui_chip_pin_t _ui_cpc_ppi_pins[] = {
     { "PC7",   39,      I8255_PC7 },
 };
 
+static const ui_chip_pin_t _ui_cpc_upd_pins[] = {
+    { "A0",     0,      I8255_A0 },
+    { "CS",     2,      I8255_CS },
+    { "RD",     3,      I8255_RD },
+    { "WR",     4,      I8255_WR },
+
+    { "D0",     8,      I8255_D0 },
+    { "D1",     9,      I8255_D1 },
+    { "D2",     10,     I8255_D2 },
+    { "D3",     11,     I8255_D3 },
+    { "D4",     12,     I8255_D4 },
+    { "D5",     13,     I8255_D5 },
+    { "D6",     14,     I8255_D6 },
+    { "D7",     15,     I8255_D7 },
+};
+
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->cpc);
@@ -536,6 +554,16 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "i8255", 40, _ui_cpc_ppi_pins);
         ui_i8255_init(&ui->ppi, &desc);
+    }
+    x += dx; y += dy;
+    {
+        ui_upd765_desc_t desc = {0};
+        desc.title = "uPD765";
+        desc.upd765 = &ui->cpc->fdc;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "765", 16, _ui_cpc_upd_pins);
+        ui_upd765_init(&ui->upd, &desc);
     }
     x += dx; y += dy;
     {
@@ -616,6 +644,7 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui->cpc = 0;
     ui_z80_discard(&ui->cpu);
     ui_i8255_discard(&ui->ppi);
+    ui_upd765_discard(&ui->upd);
     ui_ay38910_discard(&ui->psg);
     ui_mc6845_discard(&ui->vdc);
     ui_kbd_discard(&ui->kbd);
@@ -642,6 +671,7 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
     ui_ay38910_draw(&ui->psg);
     ui_mc6845_draw(&ui->vdc);
     ui_i8255_draw(&ui->ppi);
+    ui_upd765_draw(&ui->upd);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);

@@ -216,6 +216,10 @@ typedef struct {
     upd765_read_cb read_cb;
     upd765_trackinfo_cb trackinfo_cb;
     void* user_data;
+
+    /* debug inspection */
+    uint64_t pins;  /* pin state at last _ui_upd765_iorq */
+    uint8_t status; /* last result of _ui_upd765_read_status */
 } upd765_t;
 
 /* initialize a new upd765 instance */
@@ -604,7 +608,9 @@ uint64_t upd765_iorq(upd765_t* upd, uint64_t pins) {
                 UPD765_SET_DATA(pins, _upd765_read_data(upd));
             }
             else {
-                UPD765_SET_DATA(pins, _upd765_read_status(upd));
+                uint8_t s = _upd765_read_status(upd);
+                UPD765_SET_DATA(pins, s);
+                upd->status = s;
             }
         }
         else if (pins & UPD765_WR) {
@@ -612,6 +618,7 @@ uint64_t upd765_iorq(upd765_t* upd, uint64_t pins) {
                 _upd765_write_data(upd, UPD765_GET_DATA(pins));
             }
         }
+        upd->pins = pins;
     }
     return pins;
 }

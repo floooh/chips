@@ -195,7 +195,7 @@ typedef struct {
     int tape_size;      /* tape_size is > 0 if a tape is inserted */
     int tape_pos;
     uint8_t tape_buf[CPC_MAX_TAPE_SIZE];
-    /* floppy disc srive */
+    /* floppy disc drive */
     fdd_t fdd;
 } cpc_t;
 
