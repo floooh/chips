@@ -77,6 +77,10 @@ enum {
     UI_DBG_BREAKTYPE_WORD,          /* break on a specific 16-bit value at address */
     UI_DBG_BREAKTYPE_IRQ,           /* break on maskable interrupt */
     UI_DBG_BREAKTYPE_NMI,           /* break on non-maskable interrupt */
+    #if defined(UI_DBG_USE_Z80)
+        UI_DBG_BREAKTYPE_OUT,           /* break on a Z80 out operation */
+        UI_DBG_BREAKTYPE_IN,            /* break on a Z80 in operation */
+    #endif
 };
 
 /* breakpoint conditions */
@@ -581,8 +585,8 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #elif defined(UI_DBG_USE_M6502)
-                        if (pins & M6502_IRQ) {
-                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                            if (pins & M6502_IRQ) {
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #endif
                         break;
@@ -598,6 +602,26 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                             }
                         #endif
                         break;
+
+                    #if defined(UI_DBG_USE_Z80)
+                    case UI_DBG_BREAKTYPE_OUT:
+                        if ((pins & Z80_CTRL_MASK) == (Z80_IORQ|Z80_WR)) {
+                            const uint16_t mask = bp->val;
+                            if ((Z80_GET_ADDR(pins) & mask) == (bp->addr & mask)) {
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                            }
+                        }
+                        break;
+
+                    case UI_DBG_BREAKTYPE_IN:
+                        if ((pins & Z80_CTRL_MASK) == (Z80_IORQ|Z80_RD)) {
+                            const uint16_t mask = bp->val;
+                            if ((Z80_GET_ADDR(pins) & mask) == (bp->addr & mask)) {
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                            }
+                        }
+                        break;
+                    #endif
                 }
             }
         }
@@ -829,18 +853,24 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
             }
             if (ImGui::IsItemHovered()) {
                 if (bp->enabled) {
-                    ImGui::SetTooltip("Disable");
+                    ImGui::SetTooltip("Disable Breakpoint");
                 }
                 else {
-                    ImGui::SetTooltip("Enable");
+                    ImGui::SetTooltip("Enable Breakpoint");
                 }
             }
             ImGui::SameLine();
             bool upd_val = false;
             ImGui::PushItemWidth(84);
-            if (ImGui::Combo("##type", &bp->type, "Break at\0Byte at\0Word at\0IRQ\0NMI\0")) {
+            #if defined(UI_DBG_USE_Z80)
+            if (ImGui::Combo("##type", &bp->type, "Break at\0Byte at\0Word at\0IRQ\0NMI\0OUT at\0IN at\0\0")) {
                 upd_val = true;
             }
+            #elif defined(UI_DBG_USE_M6502)
+            if (ImGui::Combo("##type", &bp->type, "Break at\0Byte at\0Word at\0IRQ\0NMI\0\0")) {
+                upd_val = true;
+            }
+            #endif
             ImGui::PopItemWidth();
             if ((bp->type != UI_DBG_BREAKTYPE_IRQ) && (bp->type != UI_DBG_BREAKTYPE_NMI)) {
                 ImGui::SameLine();
@@ -848,11 +878,19 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
                 bp->addr = ui_util_input_u16("##addr", old_addr);
                 if (upd_val || (old_addr != bp->addr)) {
                     /* if breakpoint type or address has changed, update the breakpoint's value from memory */
-                    if (bp->type == UI_DBG_BREAKTYPE_BYTE) {
-                        bp->val = (int) _ui_dbg_read_byte(win, bp->addr);
-                    }
-                    else {
-                        bp->val = (int) _ui_dbg_read_word(win, bp->addr);
+                    switch (bp->type) {
+                        case UI_DBG_BREAKTYPE_BYTE:
+                            bp->val = (int) _ui_dbg_read_byte(win, bp->addr);
+                            break;
+                        case UI_DBG_BREAKTYPE_WORD:
+                            bp->val = (int) _ui_dbg_read_word(win, bp->addr);
+                            break;
+                        #if defined(UI_DBG_USE_Z80)
+                        case UI_DBG_BREAKTYPE_OUT:
+                        case UI_DBG_BREAKTYPE_IN:
+                            bp->val = 0x00FF;
+                            break;
+                        #endif
                     }
                 }
                 if ((bp->type == UI_DBG_BREAKTYPE_BYTE) || (bp->type == UI_DBG_BREAKTYPE_WORD)) {
@@ -868,6 +906,14 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
                         bp->val = (int) ui_util_input_u16("##word", (uint16_t)bp->val);
                     }
                 }
+                #if defined(UI_DBG_USE_Z80)
+                else if ((bp->type == UI_DBG_BREAKTYPE_OUT) || (bp->type == UI_DBG_BREAKTYPE_IN)) {
+                    ImGui::SameLine();
+                    ImGui::Text("portmask");
+                    ImGui::SameLine();
+                    bp->val = (int) ui_util_input_u16("##word", (uint16_t)bp->val);
+                }
+                #endif
             }
             ImGui::SameLine();
             if (ImGui::Button("Del")) {
