@@ -563,6 +563,9 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
         for between 2us and 50us, for now just indicate
         that we're always ready during the command and result phase
     */
+    /* FIXME: data direction is currently always set as FDC->CPU,
+       since the emulation doesn't support write operations
+    */
     switch (upd->phase) {
         case UPD765_PHASE_IDLE:
             status |= UPD765_STATUS_RQM;
@@ -571,7 +574,7 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
             status |= UPD765_STATUS_CB|UPD765_STATUS_RQM;
             break;
         case UPD765_PHASE_EXEC:
-            status |= UPD765_STATUS_CB|UPD765_STATUS_EXM|UPD765_STATUS_RQM;
+            status |= UPD765_STATUS_CB|UPD765_STATUS_EXM|UPD765_STATUS_DIO|UPD765_STATUS_RQM;
             break;
         case UPD765_PHASE_RESULT:
             status |= UPD765_STATUS_CB|UPD765_STATUS_DIO|UPD765_STATUS_RQM;
