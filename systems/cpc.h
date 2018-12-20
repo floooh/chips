@@ -1532,7 +1532,7 @@ static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void*
         const uint8_t n = inout_info->n;
         int res = fdd_seek_sector(&sys->fdd, c, h, r, n);
         if (res == UPD765_RESULT_SUCCESS) {
-            const fdd_sector_t* sector = &sys->fdd.disc.tracks[h][sys->fdd.cur_track_index].sectors[0];
+            const fdd_sector_t* sector = &sys->fdd.disc.tracks[h][sys->fdd.cur_track_index].sectors[sys->fdd.cur_sector_index];
             inout_info->c = sector->info.upd765.c;
             inout_info->h = sector->info.upd765.h;
             inout_info->r = sector->info.upd765.r;
