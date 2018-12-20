@@ -22,9 +22,9 @@
     *            +-----------+           *
     *     M1 --->|           |---> SYNC  *
     *   MREQ --->|           |---> INT   *
-    *   IORQ --->|           |---> ROMEN *
-    *     RD --->|           |---> RAMRD *
-    *            |           |---> READY *
+    *   IORQ --->|           |---> READY *
+    *     RD --->|           |           *
+    *            |           |           *
     *  HSYNC --->|           |           *
     *  VSYNC --->|           |           *
     * DISPEN --->|   40010   |           *
@@ -145,8 +145,6 @@ extern "C" {
 /* AM40010 specific pins (starting at pin 40) */
 #define AM40010_READY   (1ULL<<40)
 #define AM40010_SYNC    (1ULL<<41)
-#define AM40010_ROMEN   (1ULL<<42)
-#define AM40010_RAMRD   (1ULL<<43)
 
 /* memory configuration callback */
 typedef void (*am40010_bank_t)(uint8_t ram_config, uint8_t rom_select, void* user_data);
@@ -169,10 +167,35 @@ typedef struct am40010_desc_t {
     void* user_data;                /* optional userdata for callbacks */
 } am40010_desc_t;
 
+/* registers */
+typedef struct am40010_registers_t {
+    uint8_t inksel;     /* 5 bits */
+    uint8_t mode;       /* 2 bits, not the currently displayed mode, see mode_is! */
+    uint8_t irq_reset;  /* 1 bit */
+    uint8_t border;     /* 6 bits, see also border_rgba8 */
+    uint8_t ink[16];    /* 5 bits, see also ink_rgba8 */
+} am40010_registers_t;
+
+/* decoded RGBA8 colors */
+typedef struct am40010_colors_t {
+    uint32_t ink_rgba8[16];         /* the current ink colors as RGBA8 */
+    uint32_t border_rgba8;          /* the current border color as RGBA8 */
+    uint32_t hw_rgba8[32];          /* the hardware color RGBA8 values */
+} am40010_colors_t;
+
+/* vsync/video unit */
+typedef struct am40010_video_t {
+    uint8_t mode_is;    /* currently active mode updated at hsync */
+    uint8_t hcnt;       /* 5-bit counter */
+    uint8_t intcnt;     /* 6-bit counter */
+} am40010_video_t;
+
 /* AM40010 state */
 typedef struct am40010_t {
     am40010_cpc_type_t cpc_type;
-
+    am40010_registers_t regs;
+    am40010_video_t video;
+    am40010_colors_t colors;
     am40010_bank_t bank_cb;
     const uint8_t* ram;
     uint32_t* rgba8_buffer;
@@ -198,21 +221,113 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t cpu_pins, uint64_t crtc_pins);
 
 #define _AM40010_MAX_FB_SIZE (AM40010_DBG_DISPLAY_WIDTH*AM40010_DBG_DISPLAY_HEIGHT*4)
 
+/* the first 32 bytes of the KC Compact color ROM */
+static uint8_t _am40010_kcc_color_rom[32] = {
+    0x15, 0x15, 0x31, 0x3d, 0x01, 0x0d, 0x11, 0x1d,
+    0x0d, 0x3d, 0x3c, 0x3f, 0x0c, 0x0f, 0x1c, 0x1f,
+    0x01, 0x31, 0x30, 0x33, 0x00, 0x03, 0x10, 0x13,
+    0x05, 0x35, 0x34, 0x37, 0x04, 0x07, 0x14, 0x17
+};
+
+/*
+  hardware color RGBA8 values for CPC 6128 and 464
+
+  http://www.cpcwiki.eu/index.php/CPC_Palette
+  http://www.grimware.org/doku.php/documentations/devices/gatearray
+*/
+static uint32_t _am40010_cpc_colors[32] = {
+    0xff6B7D6E,         // #40 white
+    0xff6D7D6E,         // #41 white
+    0xff6BF300,         // #42 sea green
+    0xff6DF3F3,         // #43 pastel yellow
+    0xff6B0200,         // #44 blue
+    0xff6802F0,         // #45 purple
+    0xff687800,         // #46 cyan
+    0xff6B7DF3,         // #47 pink
+    0xff6802F3,         // #48 purple
+    0xff6BF3F3,         // #49 pastel yellow
+    0xff0DF3F3,         // #4A bright yellow
+    0xffF9F3FF,         // #4B bright white
+    0xff0605F3,         // #4C bright red
+    0xffF402F3,         // #4D bright magenta
+    0xff0D7DF3,         // #4E orange
+    0xffF980FA,         // #4F pastel magenta
+    0xff680200,         // #50 blue
+    0xff6BF302,         // #51 sea green
+    0xff01F002,         // #52 bright green
+    0xffF2F30F,         // #53 bright cyan
+    0xff010200,         // #54 black
+    0xffF4020C,         // #55 bright blue
+    0xff017802,         // #56 green
+    0xffF47B0C,         // #57 sky blue
+    0xff680269,         // #58 magenta
+    0xff6BF371,         // #59 pastel green
+    0xff04F571,         // #5A lime
+    0xffF4F371,         // #5B pastel cyan
+    0xff01026C,         // #5C red
+    0xffF2026C,         // #5D mauve
+    0xff017B6E,         // #5E yellow
+    0xffF67B6E,         // #5F pastel blue
+};
+
+/* initialize registers for poweron and reset */
+static void _am40010_init_regs(am40010_t* ga) {
+    memset(&ga->regs, 0, sizeof(ga->regs));
+}
+
+/* initialize video/vsync unit for poweron and reset */
+static void _am40010_init_video(am40010_t* ga) {
+    memset(&ga->video, 0, sizeof(ga->video));
+}
+
+/* initialize the RGBA8 color caches, assumes already zero-initialized */
+static void _am40010_init_colors(am40010_t* ga) {
+    if (ga->cpc_type != AM40010_CPC_TYPE_KCCOMPACT) {
+        /* Amstrad CPC colors */
+        for (int i = 0; i < 32; i++) {
+            ga->colors.hw_rgba8[i] = _am40010_cpc_colors[i];
+        }
+    }
+    else {
+        /* KC Compact colors */
+        for (int i = 0; i < 32; i++) {
+            uint32_t c = 0xFF000000;
+            const uint8_t val = _am40010_kcc_color_rom[i];
+            /* color bits: xx|gg|rr|bb */
+            const uint8_t b = val & 0x03;
+            const uint8_t r = (val>>2) & 0x03;
+            const uint8_t g = (val>>4) & 0x03;
+            if (b == 0x03)     c |= 0x00FF0000;    /* full blue */
+            else if (b != 0)   c |= 0x007F0000;    /* half blue */
+            if (g == 0x03)     c |= 0x0000FF00;    /* full green */
+            else if (g != 0)   c |= 0x00007F00;    /* half green */
+            if (r == 0x03)     c |= 0x000000FF;    /* full red */
+            else if (r != 0)   c |= 0x0000007F;    /* half red */
+            ga->colors.hw_rgba8[i] = c;
+        }
+    }
+}
+
+/* initialize am40010_t instance */
 void am40010_init(am40010_t* ga, am40010_desc_t* desc) {
     CHIPS_ASSERT(ga && desc);
     CHIPS_ASSERT(desc->bank_cb);
     CHIPS_ASSERT(desc->rgba8_buffer && (desc->rgba8_buffer_size >= _AM40010_MAX_FB_SIZE));
-    CHIPS_ASSERT(desc->ram && (desc->ram_size == (128*1024));
+    CHIPS_ASSERT(desc->ram && (desc->ram_size == (128*1024)));
     memset(ga, 0, sizeof(am40010_t));
     ga->cpc_type = desc->cpc_type;
     ga->bank_cb = desc->bank_cb;
     ga->rgba8_buffer = desc->rgba8_buffer;
     ga->user_data = desc->user_data;
+    _am40010_init_regs(ga);
+    _am40010_init_video(ga);
+    _am40010_init_colors(ga);
 }
 
 void am40010_reset(am40010_t* ga) {
     CHIPS_ASSERT(ga);
-    // FIXME!
+    _am40010_init_regs(ga);
+    _am40010_init_video(ga);
 }
 
 uint64_t am40010_iorq(am40010_t* ga, uint64_t cpu_pins) {

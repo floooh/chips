@@ -24,6 +24,7 @@
     - chips/ay38910.h
     - chips/i8255.h
     - chips/mc6845.h
+    - chips/am40010.h
     - chips/upd765.h
     - chips/crt.h
     - chips/mem.h
@@ -174,8 +175,8 @@ typedef struct {
     uint32_t tick_count;
     uint16_t casread_trap;
     uint16_t casread_ret;
-    cpc_gatearray_t ga;
 
+    cpc_gatearray_t ga;
     crt_t crt;
     clk_t clk;
     kbd_t kbd;
