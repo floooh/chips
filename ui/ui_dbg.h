@@ -628,7 +628,9 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     }
     /* track execution */
     if (pc != win->dbg.trap_pc) {
+        /* first byte of an instruction */
         win->heatmap.items[pc].op_count++;
+        win->heatmap.items[pc].op_start = 0;
         int op_len = _ui_dbg_disasm_len(win, pc);
         for (int i = 1; i < op_len; i++) {
             win->heatmap.items[(pc + i) & 0xFFFF].op_start = pc;
