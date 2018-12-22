@@ -577,6 +577,9 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     if (hs_fall) {
         /* increment 5-bit HCOUNT and clamp at 28 (bits 4,3 and 2 set) */
         uint8_t hcount = ga->video.hcount;
+        if (hcount < 0x1C) {
+            hcount = hcount + 1;
+        }
 
         /* increment 6-bit INTCNT on hsync falling edge */
         uint8_t intcnt = (ga->video.intcnt + 1) & 0x3F;
@@ -595,11 +598,6 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
         /* whenever bit 5 of INTCNT flipped from 1 to 0, set the interrupt flipflop */
         if ((0 != (ga->video.intcnt & (1<<5))) && (0 == (intcnt & (1<<5)))) {
             ga->video.intr = true;
-        }
-
-        /* bump HCOUNT, and clamp at 0x1C */
-        if (hcount < 0x1C) {
-            hcount = hcount + 1;
         }
 
         /* write back counters */
