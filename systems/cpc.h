@@ -26,7 +26,6 @@
     - chips/mc6845.h
     - chips/am40010.h
     - chips/upd765.h
-    - chips/crt.h
     - chips/mem.h
     - chips/kbd.h
     - chips/clk.h
@@ -139,33 +138,14 @@ typedef struct {
     int rom_kcc_basic_size;
 } cpc_desc_t;
 
-/* CPC gate array state */
-typedef struct {
-    uint8_t config;                 /* out to port 0x7Fxx func 0x80 */
-    uint8_t next_video_mode;
-    uint8_t video_mode;
-    uint8_t ram_config;             /* out to port 0x7Fxx func 0xC0 */
-    uint8_t pen;                    /* currently selected pen (or border) */
-    uint32_t colors[32];            /* CPC and KC Compact have slightly different colors */
-    uint32_t palette[16];           /* the current pen colors */
-    uint32_t border_color;          /* the current border color */
-    int hsync_irq_counter;          /* incremented each scanline, reset at 52 */
-    int hsync_after_vsync_counter;   /* for 2-hsync-delay after vsync */
-    int hsync_delay_counter;        /* hsync to monitor is delayed 2 ticks */
-    int hsync_counter;              /* countdown until hsync to monitor is deactivated */
-    bool sync;                      /* gate-array generated video sync (modified HSYNC) */
-    bool intr;                      /* GA interrupt pin active */
-    uint64_t crtc_pins;             /* store CRTC pins to detect rising/falling bits */
-} cpc_gatearray_t;
-
 /* CPC emulator state */
 typedef struct {
+    uint32_t tick_count;
+    uint64_t crtc_pins;
     z80_t cpu;
     ay38910_t psg;
-    mc6845_t vdg;
-    uint64_t crtc_pins;
-    uint32_t ga_tick_count;
-    am40010_t gate_array;
+    mc6845_t crtc;
+    am40010_t ga;
     i8255_t ppi;
     upd765_t fdc;
 
@@ -174,23 +154,17 @@ typedef struct {
     cpc_joystick_type_t joystick_type;
     uint8_t kbd_joymask;
     uint8_t joy_joymask;
-    uint8_t upper_rom_select;
-    uint32_t tick_count;
     uint16_t casread_trap;
     uint16_t casread_ret;
 
-    cpc_gatearray_t ga;
-    crt_t crt;
     clk_t clk;
     kbd_t kbd;
     mem_t mem;
-    uint32_t* pixel_buffer;
     void* user_data;
     cpc_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
     float sample_buffer[CPC_MAX_AUDIO_SAMPLES];
-    bool video_debug_enabled;
     uint8_t ram[8][0x4000];
     uint8_t rom_os[0x4000];
     uint8_t rom_basic[0x4000];
@@ -257,10 +231,6 @@ bool cpc_video_debugging_enabled(cpc_t* cpc);
 #endif
 
 #define _CPC_FREQUENCY (4000000)
-#define _CPC_STD_DISPLAY_WIDTH (768)
-#define _CPC_STD_DISPLAY_HEIGHT (272)
-#define _CPC_DBG_DISPLAY_WIDTH (1024)
-#define _CPC_DBG_DISPLAY_HEIGHT (312)
 
 static uint64_t _cpc_tick(int num, uint64_t pins, void* user_data);
 static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins);
@@ -268,10 +238,6 @@ static uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* use
 static uint8_t _cpc_ppi_in(int port_id, void* user_data);
 static void _cpc_psg_out(int port_id, uint8_t data, void* user_data);
 static uint8_t _cpc_psg_in(int port_id, void* user_data);
-static void _cpc_ga_init(cpc_t* sys);
-static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t pins);
-static void _cpc_ga_int_ack(cpc_t* sys);
-static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins);
 static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_select, void* user_data);
 static void _cpc_cas_read(cpc_t* sys);
@@ -311,7 +277,6 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         memcpy(sys->rom_os, desc->rom_kcc_os, 0x4000);
         memcpy(sys->rom_basic, desc->rom_kcc_basic, 0x4000);
     }
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     sys->user_data = desc->user_data;
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _CPC_DEFAULT(desc->audio_num_samples, CPC_DEFAULT_AUDIO_SAMPLES);
@@ -345,8 +310,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     psg_desc.user_data = sys;
     ay38910_init(&sys->psg, &psg_desc);
 
-    mc6845_init(&sys->vdg, MC6845_TYPE_UM6845R);
-    crt_init(&sys->crt, CRT_PAL, 6, 32, cpc_std_display_width()/16, cpc_std_display_height());
+    mc6845_init(&sys->crtc, MC6845_TYPE_UM6845R);
 
     am40010_desc_t ga_desc;
     _CPC_CLEAR(ga_desc);
@@ -357,7 +321,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     ga_desc.rgba8_buffer = desc->pixel_buffer;
     ga_desc.rgba8_buffer_size = desc->pixel_buffer_size;
     ga_desc.user_data = sys;
-    am40010_init(&sys->gate_array, &ga_desc);
+    am40010_init(&sys->ga, &ga_desc);
 
     upd765_desc_t fdc_desc;
     _CPC_CLEAR(fdc_desc);
@@ -369,7 +333,6 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     upd765_init(&sys->fdc, &fdc_desc);
     fdd_init(&sys->fdd);
 
-    _cpc_ga_init(sys);
     _cpc_init_keymap(sys);
 
     /* cassette tape loading
@@ -393,43 +356,40 @@ void cpc_discard(cpc_t* sys) {
 }
 
 int cpc_std_display_width(void) {
-    return _CPC_STD_DISPLAY_WIDTH;
+    return AM40010_DISPLAY_WIDTH;
 }
 
 int cpc_std_display_height(void) {
-    return _CPC_STD_DISPLAY_HEIGHT;
+    return AM40010_DISPLAY_HEIGHT;
 }
 
 int cpc_max_display_size(void) {
     /* take debugging visualization into account */
-    return _CPC_DBG_DISPLAY_WIDTH * _CPC_DBG_DISPLAY_HEIGHT * 4;
+    return AM40010_DBG_DISPLAY_WIDTH * AM40010_DBG_DISPLAY_HEIGHT * 4;
 }
 
 int cpc_display_width(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    return sys->video_debug_enabled ? _CPC_DBG_DISPLAY_WIDTH : _CPC_STD_DISPLAY_WIDTH;
+    return sys->ga.dbg_vis ? AM40010_DBG_DISPLAY_WIDTH : AM40010_DISPLAY_WIDTH;
 }
 
 int cpc_display_height(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    return sys->video_debug_enabled ? _CPC_DBG_DISPLAY_HEIGHT : _CPC_STD_DISPLAY_HEIGHT;
+    return sys->ga.dbg_vis ? AM40010_DBG_DISPLAY_HEIGHT : AM40010_DISPLAY_HEIGHT;
 }
 
 void cpc_reset(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    mc6845_reset(&sys->vdg);
-    crt_reset(&sys->crt);
+    mem_unmap_all(&sys->mem);
+    mc6845_reset(&sys->crtc);
     ay38910_reset(&sys->psg);
     i8255_reset(&sys->ppi);
-    am40010_reset(&sys->gate_array);
+    am40010_reset(&sys->ga);
     z80_reset(&sys->cpu);
     z80_set_pc(&sys->cpu, 0x0000);
     sys->kbd_joymask = 0;
     sys->joy_joymask = 0;
     sys->tick_count = 0;
-    sys->upper_rom_select = 0;
-    _cpc_ga_init(sys);
-    mem_unmap_all(&sys->mem);
 }
 
 void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
@@ -443,7 +403,7 @@ void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
         trap_id = sys->cpu.trap_id;
         if (trap_id == 1) {
             if (sys->type == CPC_TYPE_6128) {
-                if (0 == (sys->ga.config & (1<<2))) {
+                if (0 == (sys->ga.regs.config & (1<<2))) {
                     _cpc_cas_read(sys);
                 }
             }
@@ -509,12 +469,12 @@ void cpc_joystick(cpc_t* sys, uint8_t mask) {
 
 void cpc_enable_video_debugging(cpc_t* sys, bool enabled) {
     CHIPS_ASSERT(sys && sys->valid);
-    sys->video_debug_enabled = enabled;
+    sys->ga.dbg_vis = enabled;
 }
 
 bool cpc_video_debugging_enabled(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    return sys->video_debug_enabled;
+    return sys->ga.dbg_vis;
 }
 
 /* called when a new sample is ready from the sound chip */
@@ -532,11 +492,6 @@ static inline void _cpc_sample_ready(cpc_t* sys) {
 /* the CPU tick callback */
 static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
-
-    /* gate array snoops for interrupt acknowledge */
-    if ((pins & (Z80_M1|Z80_IORQ)) == (Z80_M1|Z80_IORQ)) {
-        _cpc_ga_int_ack(sys);
-    }
 
     /* memory and IO requests */
     if (pins & Z80_MREQ) {
@@ -586,13 +541,13 @@ static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     bool wait = false;
     for (int i = 0; i < num_ticks; i++) {
         do {
-            if (0 == (sys->ga_tick_count++ & 3)) {
-                crtc_pins = mc6845_tick(&sys->vdg);
+            if (0 == (sys->tick_count++ & 3)) {
+                crtc_pins = mc6845_tick(&sys->crtc);
                 if (ay38910_tick(&sys->psg)) {
                     _cpc_sample_ready(sys);
                 }
             }
-            pins = am40010_tick(&sys->gate_array, pins & Z80_PIN_MASK, crtc_pins);
+            pins = am40010_tick(&sys->ga, pins & Z80_PIN_MASK, crtc_pins);
             /* need to add a wait cycle? */
             wait = ((pins & AM40010_READY) && (wait || (wait_scan_tick == i)));
             if (wait) {
@@ -604,62 +559,6 @@ static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     }
     sys->crtc_pins = crtc_pins;
     Z80_SET_WAIT(pins, wait_cycles);
-
-    /*
-        tick the gate array and audio chip at 1 MHz, and decide how many wait
-        states must be injected, the CPC signals the wait line in 3 out of 4
-        cycles:
-    
-         0: wait inactive
-         1: wait active
-         2: wait active
-         3: wait active
-    
-        the CPU samples the wait line only on specific clock ticks
-        during memory or IO operations, wait states are only injected
-        if the 'wait active' happens on the same clock tick as the
-        CPU would sample the wait line
-    */
-/*
-    int wait_scan_tick = -1;
-    if (pins & Z80_MREQ) {
-        // a memory request or opcode fetch, wait is sampled on second clock tick
-        wait_scan_tick = 1;
-    }
-    else if (pins & Z80_IORQ) {
-        if (pins & Z80_M1) {
-            // an interrupt acknowledge cycle, wait is sampled on fourth clock tick
-            wait_scan_tick = 3;
-        }
-        else {
-            // an IO cycle, wait is sampled on third clock tick
-            wait_scan_tick = 2;
-        }
-    }
-    bool wait = false;
-    uint32_t wait_cycles = 0;
-    for (int i = 0; i<num_ticks; i++) {
-        do {
-            // CPC gate array sets the wait pin for 3 out of 4 clock ticks
-            bool wait_pin = (sys->tick_count++ & 3) != 0;
-            wait = (wait_pin && (wait || (i == wait_scan_tick)));
-            if (wait) {
-                wait_cycles++;
-            }
-            // on every 4th clock cycle, tick the system
-            if (!wait_pin) {
-                // tick the sound generator 
-                if (ay38910_tick(&sys->psg)) {
-                    _cpc_sample_ready(sys);
-                }
-                // tick the gate array 
-                pins = _cpc_ga_tick(sys, pins);
-            }
-        }
-        while (wait);
-    }
-    Z80_SET_WAIT(pins, wait_cycles);
-*/
     return pins;
 }
 
@@ -669,7 +568,21 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
 
         For address decoding, see the main board schematics!
         also: http://cpcwiki.eu/index.php/Default_I/O_Port_Summary
+    */
 
+    /*
+        Gate Array Function and upper rom select 
+        (only writing to the gate array
+        is possible, but the gate array doesn't check the
+        CPU R/W pins, so each access is a write).
+
+        This is used by the Arnold Acid test "OnlyInc", which
+        access the PPI and gate array in the same IO operation
+        to move data directly from the PPI into the gate array.
+    */
+    am40010_iorq(&sys->ga, pins);
+
+    /*
         Z80 to i8255 PPI pin connections:
             ~A11 -> CS (CS is active-low)
                 A8 -> A0
@@ -697,78 +610,11 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
     */
     if ((pins & Z80_A14) == 0) {
         /* 6845 in/out */
-        uint64_t vdg_pins = (pins & Z80_PIN_MASK)|MC6845_CS;
-        if (pins & Z80_A9) { vdg_pins |= MC6845_RW; }
-        if (pins & Z80_A8) { vdg_pins |= MC6845_RS; }
-        pins = mc6845_iorq(&sys->vdg, vdg_pins) & Z80_PIN_MASK;
+        uint64_t crtc_pins = (pins & Z80_PIN_MASK)|MC6845_CS;
+        if (pins & Z80_A9) { crtc_pins |= MC6845_RW; }
+        if (pins & Z80_A8) { crtc_pins |= MC6845_RS; }
+        pins = mc6845_iorq(&sys->crtc, crtc_pins) & Z80_PIN_MASK;
     }
-    /*
-        Gate Array Function and upper rom select 
-        (only writing to the gate array
-        is possible, but the gate array doesn't check the
-        CPU R/W pins, so each access is a write).
-
-        This is used by the Arnold Acid test "OnlyInc", which
-        access the PPI and gate array in the same IO operation
-        to move data directly from the PPI into the gate array.
-    */
-    am40010_iorq(&sys->gate_array, pins);
-
-    /*
-    if ((pins & (Z80_A15|Z80_A14)) == Z80_A14) {
-        // D6 and D7 select the gate array operation 
-        const uint8_t data = Z80_GET_DATA(pins);
-        switch (data & ((1<<7)|(1<<6))) {
-            case 0:
-                // select pen:
-                //  bit 4 set means 'select border', otherwise
-                //  bits 0..3 contain the pen number
-                sys->ga.pen = data & 0x1F;
-                break;
-            case (1<<6):
-                // select color for border or selected pen:
-                if (sys->ga.pen & (1<<4)) {
-                    sys->ga.border_color = sys->ga.colors[data & 0x1F];
-                }
-                else {
-                    sys->ga.palette[sys->ga.pen & 0x0F] = sys->ga.colors[data & 0x1F];
-                }
-                break;
-            case (1<<7):
-                // select screen mode, ROM config and interrupt control
-                //  - bits 0 and 1 select the screen mode
-                //      00: Mode 0 (160x200 @ 16 colors)
-                //      01: Mode 1 (320x200 @ 4 colors)
-                //      02: Mode 2 (640x200 @ 2 colors)
-                //      11: Mode 3 (160x200 @ 2 colors, undocumented)
-                //  - bit 2: disable/enable lower ROM
-                //  - bit 3: disable/enable upper ROM
-                //  - bit 4: interrupt generation control
-                sys->ga.config = data;
-                sys->ga.next_video_mode = data & 3;
-                if (data & (1<<4)) {
-                    sys->ga.hsync_irq_counter = 0;
-                    sys->ga.intr = false;
-                }
-                _cpc_update_memory_mapping(sys);
-                break;
-            case (1<<7)|(1<<6):
-                // RAM memory management (only CPC6128)
-                if (CPC_TYPE_6128 == sys->type) {
-                    sys->ga.ram_config = data;
-                    _cpc_update_memory_mapping(sys);
-                }
-                break;
-        }
-    }
-    //    Upper ROM Bank number
-    //    This is used to select a ROM in the 0xC000..0xFFFF region, without expansions,
-    //    this is just the BASIC and AMSDOS ROM.
-    if ((pins & Z80_A13) == 0) {
-        sys->upper_rom_select = Z80_GET_DATA(pins);
-        _cpc_update_memory_mapping(sys);
-    }
-    */
     /*
         Floppy Disk Interface
     */
@@ -856,7 +702,7 @@ static uint8_t _cpc_ppi_in(int port_id, void* user_data) {
         */
         uint8_t val = (1<<4) | (7<<1);    // 50Hz refresh rate, Amstrad
         /* PPI Port B Bit 0 is directly wired to the 6845 VSYNC pin (see schematics) */
-        if (sys->vdg.vs) {
+        if (sys->crtc.vs) {
             val |= (1<<0);
         }
         return val;
@@ -897,347 +743,6 @@ static uint8_t _cpc_psg_in(int port_id, void* user_data) {
     else {
         /* this shouldn't happen since the AY-3-8912 only has one IO port */
         return 0xFF;
-    }
-}
-
-/*=== GATE ARRAY STUFF =======================================================*/
-
-/* the first 32 bytes of the KC Compact color ROM */
-static uint8_t _cpc_kcc_color_rom[32] = {
-    0x15, 0x15, 0x31, 0x3d, 0x01, 0x0d, 0x11, 0x1d,
-    0x0d, 0x3d, 0x3c, 0x3f, 0x0c, 0x0f, 0x1c, 0x1f,
-    0x01, 0x31, 0x30, 0x33, 0x00, 0x03, 0x10, 0x13,
-    0x05, 0x35, 0x34, 0x37, 0x04, 0x07, 0x14, 0x17
-};
-
-/*
-  the fixed hardware color palette
-
-  http://www.cpcwiki.eu/index.php/CPC_Palette
-  http://www.grimware.org/doku.php/documentations/devices/gatearray
-
-  index into this palette is the 'hardware color number' & 0x1F
-  order is ABGR
-*/
-static uint32_t _cpc_colors[32] = {
-    0xff6B7D6E,         // #40 white
-    0xff6D7D6E,         // #41 white
-    0xff6BF300,         // #42 sea green
-    0xff6DF3F3,         // #43 pastel yellow
-    0xff6B0200,         // #44 blue
-    0xff6802F0,         // #45 purple
-    0xff687800,         // #46 cyan
-    0xff6B7DF3,         // #47 pink
-    0xff6802F3,         // #48 purple
-    0xff6BF3F3,         // #49 pastel yellow
-    0xff0DF3F3,         // #4A bright yellow
-    0xffF9F3FF,         // #4B bright white
-    0xff0605F3,         // #4C bright red
-    0xffF402F3,         // #4D bright magenta
-    0xff0D7DF3,         // #4E orange
-    0xffF980FA,         // #4F pastel magenta
-    0xff680200,         // #50 blue
-    0xff6BF302,         // #51 sea green
-    0xff01F002,         // #52 bright green
-    0xffF2F30F,         // #53 bright cyan
-    0xff010200,         // #54 black
-    0xffF4020C,         // #55 bright blue
-    0xff017802,         // #56 green
-    0xffF47B0C,         // #57 sky blue
-    0xff680269,         // #58 magenta
-    0xff6BF371,         // #59 pastel green
-    0xff04F571,         // #5A lime
-    0xffF4F371,         // #5B pastel cyan
-    0xff01026C,         // #5C red
-    0xffF2026C,         // #5D mauve
-    0xff017B6E,         // #5E yellow
-    0xffF67B6E,         // #5F pastel blue
-};
-
-/* initialize the gate array */
-static void _cpc_ga_init(cpc_t* sys) {
-    memset(&sys->ga, 0, sizeof(sys->ga));
-    sys->ga.next_video_mode = 1;
-    sys->ga.video_mode = 1;
-    sys->ga.hsync_delay_counter = 2;
-
-    /* setup the hardware colors, these are different between KC Compact and CPC */
-    if (CPC_TYPE_KCCOMPACT == sys->type) {
-        /* setup from the KC Compact color ROM */
-        for (int i = 0; i < 32; i++) {
-            uint32_t rgba8 = 0xFF000000;
-            const uint8_t val = _cpc_kcc_color_rom[i];
-            /* color bits: xx|gg|rr|bb */
-            const uint8_t b = val & 0x03;
-            const uint8_t r = (val>>2) & 0x03;
-            const uint8_t g = (val>>4) & 0x03;
-            if (b == 0x03)     rgba8 |= 0x00FF0000;    /* full blue */
-            else if (b != 0)   rgba8 |= 0x007F0000;    /* half blue */
-            if (g == 0x03)     rgba8 |= 0x0000FF00;    /* full green */
-            else if (g != 0)   rgba8 |= 0x00007F00;    /* half green */
-            if (r == 0x03)     rgba8 |= 0x000000FF;    /* full red */
-            else if (r != 0)   rgba8 |= 0x0000007F;    /* half red */
-            sys->ga.colors[i] = rgba8;
-        }
-    }
-    else {
-        /* the original-CPC hardware colors */
-        for (int i = 0; i < 32; i++) {
-            sys->ga.colors[i] = _cpc_colors[i];
-        }
-    }
-}
-
-/* snoop interrupt acknowledge cycle from CPU */
-static void _cpc_ga_int_ack(cpc_t* sys) {
-    /* on interrupt acknowledge from the CPU, clear the top bit from the
-        hsync counter, so the next interrupt can't occur closer then 
-        32 HSYNC, and clear the gate array interrupt pin state
-    */
-    sys->ga.hsync_irq_counter &= 0x1F;
-    sys->ga.intr = false;
-}
-
-static bool _cpc_falling_edge(uint64_t new_pins, uint64_t old_pins, uint64_t mask) {
-    return 0 != (mask & (~new_pins & (new_pins ^ old_pins)));
-}
-
-static bool _cpc_rising_edge(uint64_t new_pins, uint64_t old_pins, uint64_t mask) {
-    return 0 != (mask & (new_pins & (new_pins ^ old_pins)));
-}
-
-/* the main tick function of the gate array */
-static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t cpu_pins) {
-    /*
-        http://cpctech.cpc-live.com/docs/ints.html
-        http://www.cpcwiki.eu/forum/programming/frame-flyback-and-interrupts/msg25106/#msg25106
-        https://web.archive.org/web/20170612081209/http://www.grimware.org/doku.php/documentations/devices/gatearray
-    */
-    uint64_t crtc_pins = mc6845_tick(&sys->vdg);
-
-    /*
-        INTERRUPT GENERATION:
-
-        From: https://web.archive.org/web/20170612081209/http://www.grimware.org/doku.php/documentations/devices/gatearray
-
-        - On every falling edge of the HSYNC signal (from the 6845),
-          the gate array will increment the counter by one. When the
-          counter reaches 52, the gate array will raise the INT signal
-          and reset the counter.
-        - When the CPU acknowledges the interrupt, the gate array will
-          reset bit5 of the counter, so the next interrupt can't occur
-          closer than 32 HSync.
-        - When a VSync occurs, the gate array will wait for 2 HSync and:
-            - if the counter>=32 (bit5=1) then no interrupt request is issued
-              and counter is reset to 0
-            - if the counter<32 (bit5=0) then an interrupt request is issued
-              and counter is reset to 0
-        - This 2 HSync delay after a VSync is used to let the main program,
-          executed by the CPU, enough time to sense the VSync...
-
-        From: http://www.cpcwiki.eu/index.php?title=CRTC
-        
-        - The HSYNC is modified before being sent to the monitor. It happens
-          2us after the HSYNC from the CRTC and lasts 4us when HSYNC length
-          is greater or equal to 6.
-        - The VSYNC is also modified before being sent to the monitor, it happens
-          two lines after the VSYNC from the CRTC and stay 2 lines (same cut
-          rule if VSYNC is lower than 4).
-
-        NOTES:
-            - the interrupt acknowledge is handled once per machine 
-              cycle in cpu_tick()
-            - the video mode will take effect *after the next HSYNC*
-    */
-    if (_cpc_rising_edge(crtc_pins, sys->ga.crtc_pins, MC6845_VS)) {
-        sys->ga.hsync_after_vsync_counter = 2;
-    }
-    if (_cpc_falling_edge(crtc_pins, sys->ga.crtc_pins, MC6845_HS)) {
-        sys->ga.video_mode = sys->ga.next_video_mode;
-        sys->ga.hsync_irq_counter = (sys->ga.hsync_irq_counter + 1) & 0x3F;
-
-        /* 2 HSync delay? */
-        if (sys->ga.hsync_after_vsync_counter > 0) {
-            sys->ga.hsync_after_vsync_counter--;
-            if (sys->ga.hsync_after_vsync_counter == 0) {
-                if (sys->ga.hsync_irq_counter >= 32) {
-                    sys->ga.intr = true;
-                }
-                sys->ga.hsync_irq_counter = 0;
-            }
-        }
-        /* normal behaviour, request interrupt each 52 scanlines */
-        if (sys->ga.hsync_irq_counter == 52) {
-            sys->ga.hsync_irq_counter = 0;
-            sys->ga.intr = true;
-        }
-    }
-
-    /* generate HSYNC signal to monitor:
-        - starts 2 ticks after HSYNC rising edge from CRTC
-        - stays active for 4 ticks or less if CRTC HSYNC goes inactive earlier
-    */
-    if (_cpc_rising_edge(crtc_pins, sys->ga.crtc_pins, MC6845_HS)) {
-        sys->ga.hsync_delay_counter = 3;
-    }
-    if (_cpc_falling_edge(crtc_pins, sys->ga.crtc_pins, MC6845_HS)) {
-        sys->ga.hsync_delay_counter = 0;
-        sys->ga.hsync_counter = 0;
-        sys->ga.sync = false;
-    }
-    if (sys->ga.hsync_delay_counter > 0) {
-        sys->ga.hsync_delay_counter--;
-        if (sys->ga.hsync_delay_counter == 0) {
-            sys->ga.sync = true;
-            sys->ga.hsync_counter = 5;
-        }
-    }
-    if (sys->ga.hsync_counter > 0) {
-        sys->ga.hsync_counter--;
-        if (sys->ga.hsync_counter == 0) {
-            sys->ga.sync = false;
-        }
-    }
-
-    // FIXME delayed VSYNC to monitor
-
-    const bool vsync = 0 != (crtc_pins & MC6845_VS);
-    crt_tick(&sys->crt, sys->ga.sync, vsync);
-    _cpc_ga_decode_video(sys, crtc_pins);
-
-    sys->ga.crtc_pins = crtc_pins;
-
-    if (sys->ga.intr) {
-        cpu_pins |= Z80_INT;
-    }
-    return cpu_pins;
-}
-
-/* gate array pixel decoding for the 3 video modes */
-static void _cpc_ga_decode_pixels(cpc_t* sys, uint32_t* dst, uint64_t crtc_pins) {
-    /*
-        compute the source address from current CRTC ma (memory address)
-        and ra (raster address) like this:
-    
-        |ma12|ma11|ra2|ra1|ra0|ma9|ma8|...|ma2|ma1|ma0|0|
-    
-       Bits ma12 and m11 point to the 16 KByte page, and all
-       other bits are the index into that page.
-    */
-    const uint16_t ma = MC6845_GET_ADDR(crtc_pins);
-    const uint8_t ra = MC6845_GET_RA(crtc_pins);
-    const uint32_t page_index  = (ma>>12) & 3;
-    const uint32_t page_offset = ((ma & 0x03FF)<<1) | ((ra & 7)<<11);
-    const uint8_t* src = &(sys->ram[page_index][page_offset]);
-    uint8_t c;
-    uint32_t p;
-    if (0 == sys->ga.video_mode) {
-        /* 160x200 @ 16 colors
-           pixel    bit mask
-           0:       |3|7|
-           1:       |2|6|
-           2:       |1|5|
-           3:       |0|4|
-        */
-        for (int i = 0; i < 2; i++) {
-            c = *src++;
-            p = sys->ga.palette[((c>>7)&0x1)|((c>>2)&0x2)|((c>>3)&0x4)|((c<<2)&0x8)];
-            *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
-            p = sys->ga.palette[((c>>6)&0x1)|((c>>1)&0x2)|((c>>2)&0x4)|((c<<3)&0x8)];
-            *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
-        }
-    }
-    else if (1 == sys->ga.video_mode) {
-        /* 320x200 @ 4 colors
-           pixel    bit mask
-           0:       |3|7|
-           1:       |2|6|
-           2:       |1|5|
-           3:       |0|4|
-        */
-        for (int i = 0; i < 2; i++) {
-            c = *src++;
-            p = sys->ga.palette[((c>>2)&2)|((c>>7)&1)];
-            *dst++ = p; *dst++ = p;
-            p = sys->ga.palette[((c>>1)&2)|((c>>6)&1)];
-            *dst++ = p; *dst++ = p;
-            p = sys->ga.palette[((c>>0)&2)|((c>>5)&1)];
-            *dst++ = p; *dst++ = p;
-            p = sys->ga.palette[((c<<1)&2)|((c>>4)&1)];
-            *dst++ = p; *dst++ = p;
-        }
-    }
-    else if (2 == sys->ga.video_mode) {
-        /* 640x200 @ 2 colors */
-        for (int i = 0; i < 2; i++) {
-            c = *src++;
-            for (int j = 7; j >= 0; j--) {
-                *dst++ = sys->ga.palette[(c>>j)&1];
-            }
-        }
-    }
-}
-
-/* video decode for current tick (pixels, border, blank) */
-static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins) {
-    if (sys->video_debug_enabled) {
-        int dst_x = sys->crt.h_pos * 16;
-        int dst_y = sys->crt.v_pos;
-        if ((dst_x <= (_CPC_DBG_DISPLAY_WIDTH-16)) && (dst_y < _CPC_DBG_DISPLAY_HEIGHT)) {
-            uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * _CPC_DBG_DISPLAY_WIDTH]);
-            if (!(crtc_pins & MC6845_DE)) {
-                uint8_t r = 0x3F;
-                uint8_t g = 0x3F;
-                uint8_t b = 0x3F;
-                if (crtc_pins & MC6845_HS) {
-                    r = 0x7F; g = 0; b = 0;
-                }
-                if (sys->ga.sync) {
-                    r = 0xFF; g = 0; b = 0;
-                }
-                if (crtc_pins & MC6845_VS) {
-                    g = 0x7F;
-                }
-                if (sys->ga.intr) {
-                    b = 0xFF;
-                }
-                else if (0 == sys->vdg.scanline_ctr) {
-                    r = g = b = 0x00;
-                }
-                for (int i = 0; i < 16; i++) {
-                    if (i == 0) {
-                        *dst++ = 0xFF000000;
-                    }
-                    else {
-                        *dst++ = 0xFF<<24 | b<<16 | g<<8 | r;
-                    }
-                }
-            }
-            else {
-                _cpc_ga_decode_pixels(sys, dst, crtc_pins);
-            }
-        }
-    }
-    else if (sys->crt.visible) {
-        int dst_x = sys->crt.pos_x * 16;
-        int dst_y = sys->crt.pos_y;
-        uint32_t* dst = &(sys->pixel_buffer[dst_x + dst_y * _CPC_STD_DISPLAY_WIDTH]);
-        if (crtc_pins & MC6845_DE) {
-            /* decode visible pixels */
-            _cpc_ga_decode_pixels(sys, dst, crtc_pins);
-        }
-        else if (crtc_pins & (MC6845_HS|MC6845_VS)) {
-            /* during horizontal/vertical sync: blacker than black */
-            for (int i = 0; i < 16; i++) {
-                dst[i] = 0xFF000000;
-            }
-        }
-        else {
-            /* border color */
-            for (int i = 0; i < 16; i++) {
-                dst[i] = sys->ga.border_color;
-            }
-        }
     }
 }
 
