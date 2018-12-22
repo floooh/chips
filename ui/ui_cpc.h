@@ -31,7 +31,7 @@
     - ui_upd765.h
     - ui_ay38910.h
     - ui_upd765.h
-    - ui_cpc_ga.h
+    - ui_am40010.h
     - ui_fdd.h
     - ui_audio.h
     - ui_dasm.h
@@ -83,6 +83,7 @@ typedef struct {
     ui_z80_t cpu;
     ui_ay38910_t psg;
     ui_mc6845_t vdc;
+    ui_am40010_t gate_array;
     ui_i8255_t ppi;
     ui_upd765_t upd;
     ui_audio_t audio;
@@ -158,6 +159,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
             ImGui::MenuItem("Z80 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("AY-3-8912 (PSG)", 0, &ui->psg.open);
             ImGui::MenuItem("MC6845 (CRTC)", 0, &ui->vdc.open);
+            ImGui::MenuItem("AM40010 (Gate Array)", 0, &ui->gate_array.open);
             ImGui::MenuItem("i8255 (PPI)", 0, &ui->ppi.open);
             ImGui::MenuItem("uPD765 (FDC)", 0, &ui->upd.open);
             ImGui::MenuItem("Floppy Drive", 0, &ui->fdd.open);
@@ -227,10 +229,11 @@ static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
     CHIPS_ASSERT(ui && ui->cpc);
     const cpc_t* cpc = ui->cpc;
     ui_memmap_reset(&ui->memmap);
+    const uint8_t rom_enable = cpc->gate_array.regs.config;
     if ((cpc->type == CPC_TYPE_464) || (cpc->type == CPC_TYPE_KCCOMPACT)) {
         ui_memmap_layer(&ui->memmap, "ROM");
-            ui_memmap_region(&ui->memmap, "Lower ROM (OS)", 0x0000, 0x4000, !(cpc->ga.config & (1<<2)));
-            ui_memmap_region(&ui->memmap, "Upper ROM (BASIC)", 0xC000, 0x4000, !(cpc->ga.config & (1<<3)));
+            ui_memmap_region(&ui->memmap, "Lower ROM (OS)", 0x0000, 0x4000, !(rom_enable & AM40010_CONFIG_LROMEN));
+            ui_memmap_region(&ui->memmap, "Upper ROM (BASIC)", 0xC000, 0x4000, !(rom_enable & AM40010_CONFIG_HROMEN));
         ui_memmap_layer(&ui->memmap, "RAM");
             ui_memmap_region(&ui->memmap, "RAM 0", 0x0000, 0x4000, true);
             ui_memmap_region(&ui->memmap, "RAM 1", 0x4000, 0x4000, true);
@@ -238,12 +241,13 @@ static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
             ui_memmap_region(&ui->memmap, "RAM 3 (Screen)", 0xC000, 0x4000, true);
     }
     else {
-        const int ram_config_index = cpc->ga.ram_config & 7;
+        const uint8_t ram_config_index = cpc->gate_array.ram_config & 7;
+        const uint8_t rom_select = cpc->gate_array.rom_select;
         ui_memmap_layer(&ui->memmap, "ROM Layer 0");
-            ui_memmap_region(&ui->memmap, "OS ROM", 0x0000, 0x4000, true);
-            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x4000, !(cpc->ga.config & (1<<3)) && (cpc->upper_rom_select != 7));
+            ui_memmap_region(&ui->memmap, "OS ROM", 0x0000, 0x4000, !(rom_enable & AM40010_CONFIG_LROMEN));
+            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x4000, !(rom_enable & AM40010_CONFIG_HROMEN) && (rom_select != 7));
         ui_memmap_layer(&ui->memmap, "ROM Layer 1");
-            ui_memmap_region(&ui->memmap, "AMSDOS ROM", 0xC000, 0x4000, !(cpc->ga.config & (1<<3)) && (cpc->upper_rom_select == 7));
+            ui_memmap_region(&ui->memmap, "AMSDOS ROM", 0xC000, 0x4000, !(rom_enable & AM40010_CONFIG_HROMEN)  && (rom_select == 7));
         for (int bank = 0; bank < 8; bank++) {
             ui_memmap_layer(&ui->memmap, _ui_cpc_ram_banks[bank]);
             bool bank_active = false;
@@ -497,6 +501,34 @@ static const ui_chip_pin_t _ui_cpc_upd_pins[] = {
     { "D7",     15,     I8255_D7 },
 };
 
+static const ui_chip_pin_t _ui_cpc_ga_pins[] = {
+    { "D0",     0,      AM40010_D0 },
+    { "D1",     1,      AM40010_D1 },
+    { "D2",     2,      AM40010_D2 },
+    { "D3",     3,      AM40010_D3 },
+    { "D4",     4,      AM40010_D4 },
+    { "D5",     5,      AM40010_D5 },
+    { "D6",     6,      AM40010_D6 },
+    { "D7",     7,      AM40010_D7 },
+
+    { "M1",     9,      AM40010_M1 },
+    { "MREQ",   10,     AM40010_MREQ },
+    { "IORQ",   11,     AM40010_IORQ },
+    { "RD",     12,     AM40010_RD },
+
+    { "A13",    13,     AM40010_A13 },
+    { "A14",    14,     AM40010_A14 },
+    { "A15",    15,     AM40010_A15 },
+
+    { "DE",     17,     AM40010_VS },
+    { "HS",     18,     AM40010_HS },
+    { "VS",     19,     AM40010_VS },
+
+    { "INT",    21,     AM40010_INT },
+    { "READY",  22,     AM40010_READY },
+    { "SYNC",   23,     AM40010_SYNC }
+};
+
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->cpc);
@@ -547,6 +579,16 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6845", 40, _ui_cpc_vdc_pins);
         ui_mc6845_init(&ui->vdc, &desc);
+    }
+    x += dx, y += dy;
+    {
+        ui_am40010_desc_t desc = {0};
+        desc.title = "AM40010";
+        desc.am40010 = &ui->cpc->gate_array;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "40010", 26, _ui_cpc_ga_pins);
+        ui_am40010_init(&ui->gate_array, &desc);
     }
     x += dx; y += dy;
     {
@@ -659,6 +701,7 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui_upd765_discard(&ui->upd);
     ui_ay38910_discard(&ui->psg);
     ui_mc6845_discard(&ui->vdc);
+    ui_am40010_discard(&ui->gate_array);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
     ui_fdd_discard(&ui->fdd);
@@ -684,6 +727,7 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
     ui_z80_draw(&ui->cpu);
     ui_ay38910_draw(&ui->psg);
     ui_mc6845_draw(&ui->vdc);
+    ui_am40010_draw(&ui->gate_array);
     ui_i8255_draw(&ui->ppi);
     ui_upd765_draw(&ui->upd);
     ui_memmap_draw(&ui->memmap);

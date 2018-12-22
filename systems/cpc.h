@@ -163,6 +163,9 @@ typedef struct {
     z80_t cpu;
     ay38910_t psg;
     mc6845_t vdg;
+    uint64_t crtc_pins;
+    uint32_t ga_tick_count;
+    am40010_t gate_array;
     i8255_t ppi;
     upd765_t fdc;
 
@@ -270,7 +273,7 @@ static uint64_t _cpc_ga_tick(cpc_t* sys, uint64_t pins);
 static void _cpc_ga_int_ack(cpc_t* sys);
 static void _cpc_ga_decode_video(cpc_t* sys, uint64_t crtc_pins);
 static void _cpc_init_keymap(cpc_t* sys);
-static void _cpc_update_memory_mapping(cpc_t* sys);
+static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_select, void* user_data);
 static void _cpc_cas_read(cpc_t* sys);
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data);
 static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void* user_data);
@@ -316,6 +319,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
 
     /* initialize the hardware */
     clk_init(&sys->clk, _CPC_FREQUENCY);
+    mem_init(&sys->mem);
 
     z80_desc_t cpu_desc;
     _CPC_CLEAR(cpu_desc);
@@ -344,6 +348,17 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     mc6845_init(&sys->vdg, MC6845_TYPE_UM6845R);
     crt_init(&sys->crt, CRT_PAL, 6, 32, cpc_std_display_width()/16, cpc_std_display_height());
 
+    am40010_desc_t ga_desc;
+    _CPC_CLEAR(ga_desc);
+    ga_desc.cpc_type = (am40010_cpc_type_t) sys->type;
+    ga_desc.bankswitch_cb = _cpc_bankswitch;
+    ga_desc.ram = &sys->ram[0][0];
+    ga_desc.ram_size = sizeof(sys->ram);
+    ga_desc.rgba8_buffer = desc->pixel_buffer;
+    ga_desc.rgba8_buffer_size = desc->pixel_buffer_size;
+    ga_desc.user_data = sys;
+    am40010_init(&sys->gate_array, &ga_desc);
+
     upd765_desc_t fdc_desc;
     _CPC_CLEAR(fdc_desc);
     fdc_desc.seektrack_cb = _cpc_fdc_seektrack;
@@ -356,8 +371,6 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
 
     _cpc_ga_init(sys);
     _cpc_init_keymap(sys);
-    mem_init(&sys->mem);
-    _cpc_update_memory_mapping(sys);
 
     /* cassette tape loading
         (http://www.cpcwiki.eu/index.php/Format:TAP_tape_image_file_format)
@@ -408,6 +421,7 @@ void cpc_reset(cpc_t* sys) {
     crt_reset(&sys->crt);
     ay38910_reset(&sys->psg);
     i8255_reset(&sys->ppi);
+    am40010_reset(&sys->gate_array);
     z80_reset(&sys->cpu);
     z80_set_pc(&sys->cpu, 0x0000);
     sys->kbd_joymask = 0;
@@ -416,7 +430,6 @@ void cpc_reset(cpc_t* sys) {
     sys->upper_rom_select = 0;
     _cpc_ga_init(sys);
     mem_unmap_all(&sys->mem);
-    _cpc_update_memory_mapping(sys);
 }
 
 void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
@@ -504,6 +517,18 @@ bool cpc_video_debugging_enabled(cpc_t* sys) {
     return sys->video_debug_enabled;
 }
 
+/* called when a new sample is ready from the sound chip */
+static inline void _cpc_sample_ready(cpc_t* sys) {
+    sys->sample_buffer[sys->sample_pos++] = sys->psg.sample;
+    if (sys->sample_pos == sys->num_samples) {
+        if (sys->audio_cb) {
+            /* new sample packet is ready */
+            sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+        }
+        sys->sample_pos = 0;
+    }
+}
+
 /* the CPU tick callback */
 static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
@@ -528,21 +553,18 @@ static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
         /* CPU IO REQUEST */
         pins = _cpc_cpu_iorq(sys, pins);
     }
-    
-    /*
-        tick the gate array and audio chip at 1 MHz, and decide how many wait
-        states must be injected, the CPC signals the wait line in 3 out of 4
-        cycles:
-    
-         0: wait inactive
-         1: wait active
-         2: wait active
-         3: wait active
-    
-        the CPU samples the wait line only on specific clock ticks
-        during memory or IO operations, wait states are only injected
-        if the 'wait active' happens on the same clock tick as the
-        CPU would sample the wait line
+
+    /* Tick the CRTC and PSG at 1 MHz, and the gate array
+       at 4 MHz, and keep track of wait states.
+
+        The CPU samples the wait pin only on a specific tick
+        in the current machine cycle. If both this wait sampling
+        tick and the gate array's READY pin 'align', a wait cycle
+        must be injected.
+
+        http://cpctech.cpc-live.com/docs/ints.html
+        http://www.cpcwiki.eu/forum/programming/frame-flyback-and-interrupts/msg25106/#msg25106
+        https://web.archive.org/web/20170612081209/http://www.grimware.org/doku.php/documentations/devices/gatearray
     */
     int wait_scan_tick = -1;
     if (pins & Z80_MREQ) {
@@ -559,37 +581,85 @@ static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
             wait_scan_tick = 2;
         }
     }
+    uint64_t crtc_pins = sys->crtc_pins;
+    uint32_t wait_cycles = 0;
+    bool wait = false;
+    for (int i = 0; i < num_ticks; i++) {
+        do {
+            if (0 == (sys->ga_tick_count++ & 3)) {
+                crtc_pins = mc6845_tick(&sys->vdg);
+                if (ay38910_tick(&sys->psg)) {
+                    _cpc_sample_ready(sys);
+                }
+            }
+            pins = am40010_tick(&sys->gate_array, pins & Z80_PIN_MASK, crtc_pins);
+            /* need to add a wait cycle? */
+            wait = ((pins & AM40010_READY) && (wait || (wait_scan_tick == i)));
+            if (wait) {
+                wait_cycles++;
+            }
+            pins &= Z80_PIN_MASK;
+        }
+        while (wait);
+    }
+    sys->crtc_pins = crtc_pins;
+    Z80_SET_WAIT(pins, wait_cycles);
+
+    /*
+        tick the gate array and audio chip at 1 MHz, and decide how many wait
+        states must be injected, the CPC signals the wait line in 3 out of 4
+        cycles:
+    
+         0: wait inactive
+         1: wait active
+         2: wait active
+         3: wait active
+    
+        the CPU samples the wait line only on specific clock ticks
+        during memory or IO operations, wait states are only injected
+        if the 'wait active' happens on the same clock tick as the
+        CPU would sample the wait line
+    */
+/*
+    int wait_scan_tick = -1;
+    if (pins & Z80_MREQ) {
+        // a memory request or opcode fetch, wait is sampled on second clock tick
+        wait_scan_tick = 1;
+    }
+    else if (pins & Z80_IORQ) {
+        if (pins & Z80_M1) {
+            // an interrupt acknowledge cycle, wait is sampled on fourth clock tick
+            wait_scan_tick = 3;
+        }
+        else {
+            // an IO cycle, wait is sampled on third clock tick
+            wait_scan_tick = 2;
+        }
+    }
     bool wait = false;
     uint32_t wait_cycles = 0;
     for (int i = 0; i<num_ticks; i++) {
         do {
-            /* CPC gate array sets the wait pin for 3 out of 4 clock ticks */
+            // CPC gate array sets the wait pin for 3 out of 4 clock ticks
             bool wait_pin = (sys->tick_count++ & 3) != 0;
             wait = (wait_pin && (wait || (i == wait_scan_tick)));
             if (wait) {
                 wait_cycles++;
             }
-            /* on every 4th clock cycle, tick the system */
+            // on every 4th clock cycle, tick the system
             if (!wait_pin) {
-                /* tick the sound generator */
+                // tick the sound generator 
                 if (ay38910_tick(&sys->psg)) {
-                    /* new sample is ready */
-                    sys->sample_buffer[sys->sample_pos++] = sys->psg.sample;
-                    if (sys->sample_pos == sys->num_samples) {
-                        if (sys->audio_cb) {
-                            /* new sample packet is ready */
-                            sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
-                        }
-                        sys->sample_pos = 0;
-                    }
+                    _cpc_sample_ready(sys);
                 }
-                /* tick the gate array */
+                // tick the gate array 
                 pins = _cpc_ga_tick(sys, pins);
             }
         }
         while (wait);
     }
     Z80_SET_WAIT(pins, wait_cycles);
+*/
     return pins;
 }
 
@@ -633,7 +703,8 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
         pins = mc6845_iorq(&sys->vdg, vdg_pins) & Z80_PIN_MASK;
     }
     /*
-        Gate Array Function (only writing to the gate array
+        Gate Array Function and upper rom select 
+        (only writing to the gate array
         is possible, but the gate array doesn't check the
         CPU R/W pins, so each access is a write).
 
@@ -641,21 +712,22 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
         access the PPI and gate array in the same IO operation
         to move data directly from the PPI into the gate array.
     */
+    am40010_iorq(&sys->gate_array, pins);
+
+    /*
     if ((pins & (Z80_A15|Z80_A14)) == Z80_A14) {
-        /* D6 and D7 select the gate array operation */
+        // D6 and D7 select the gate array operation 
         const uint8_t data = Z80_GET_DATA(pins);
         switch (data & ((1<<7)|(1<<6))) {
             case 0:
-                /* select pen:
-                    bit 4 set means 'select border', otherwise
-                    bits 0..3 contain the pen number
-                */
+                // select pen:
+                //  bit 4 set means 'select border', otherwise
+                //  bits 0..3 contain the pen number
                 sys->ga.pen = data & 0x1F;
                 break;
             case (1<<6):
-                /* select color for border or selected pen: */
+                // select color for border or selected pen:
                 if (sys->ga.pen & (1<<4)) {
-                    /* border color */
                     sys->ga.border_color = sys->ga.colors[data & 0x1F];
                 }
                 else {
@@ -663,18 +735,15 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
                 }
                 break;
             case (1<<7):
-                /* select screen mode, ROM config and interrupt control
-                    - bits 0 and 1 select the screen mode
-                        00: Mode 0 (160x200 @ 16 colors)
-                        01: Mode 1 (320x200 @ 4 colors)
-                        02: Mode 2 (640x200 @ 2 colors)
-                        11: Mode 3 (160x200 @ 2 colors, undocumented)
-                  
-                    - bit 2: disable/enable lower ROM
-                    - bit 3: disable/enable upper ROM
-                  
-                    - bit 4: interrupt generation control
-                */
+                // select screen mode, ROM config and interrupt control
+                //  - bits 0 and 1 select the screen mode
+                //      00: Mode 0 (160x200 @ 16 colors)
+                //      01: Mode 1 (320x200 @ 4 colors)
+                //      02: Mode 2 (640x200 @ 2 colors)
+                //      11: Mode 3 (160x200 @ 2 colors, undocumented)
+                //  - bit 2: disable/enable lower ROM
+                //  - bit 3: disable/enable upper ROM
+                //  - bit 4: interrupt generation control
                 sys->ga.config = data;
                 sys->ga.next_video_mode = data & 3;
                 if (data & (1<<4)) {
@@ -684,7 +753,7 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
                 _cpc_update_memory_mapping(sys);
                 break;
             case (1<<7)|(1<<6):
-                /* RAM memory management (only CPC6128) */
+                // RAM memory management (only CPC6128)
                 if (CPC_TYPE_6128 == sys->type) {
                     sys->ga.ram_config = data;
                     _cpc_update_memory_mapping(sys);
@@ -692,16 +761,14 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
                 break;
         }
     }
-    /*
-        Upper ROM Bank number
-
-        This is used to select a ROM in the 0xC000..0xFFFF region, without expansions,
-        this is just the BASIC and AMSDOS ROM.
-    */
+    //    Upper ROM Bank number
+    //    This is used to select a ROM in the 0xC000..0xFFFF region, without expansions,
+    //    this is just the BASIC and AMSDOS ROM.
     if ((pins & Z80_A13) == 0) {
         sys->upper_rom_select = Z80_GET_DATA(pins);
         _cpc_update_memory_mapping(sys);
     }
+    */
     /*
         Floppy Disk Interface
     */
@@ -1245,16 +1312,16 @@ static int _cpc_ram_config[8][4] = {
     { 0, 7, 2, 3 }
 };
 
-/* memory banking */
-static void _cpc_update_memory_mapping(cpc_t* sys) {
-    /* select RAM config and ROMs */
+/* memory bankswitch callback, invoked by gate array (am40010) */
+static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_select, void* user_data) {
+    cpc_t* sys = (cpc_t*) user_data;
     int ram_config_index;
     const uint8_t* rom0_ptr;
     const uint8_t* rom1_ptr;
     if (CPC_TYPE_6128 == sys->type) {
-        ram_config_index = sys->ga.ram_config & 7;
+        ram_config_index = ram_config & 7;
         rom0_ptr = sys->rom_os;
-        rom1_ptr = (sys->upper_rom_select == 7) ? sys->rom_amsdos : sys->rom_basic;
+        rom1_ptr = (rom_select == 7) ? sys->rom_amsdos : sys->rom_basic;
     }
     else {
         ram_config_index = 0;
@@ -1267,7 +1334,7 @@ static void _cpc_update_memory_mapping(cpc_t* sys) {
     const int i3 = _cpc_ram_config[ram_config_index][3];
 
     /* 0x0000 .. 0x3FFF */
-    if (sys->ga.config & (1<<2)) {
+    if (rom_enable & AM40010_CONFIG_LROMEN) {
         /* read/write RAM */
         mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[i0]);
     }
@@ -1280,7 +1347,7 @@ static void _cpc_update_memory_mapping(cpc_t* sys) {
     /* 0x8000 .. 0xBFFF */
     mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[i2]);
     /* 0xC000 .. 0xFFFF */
-    if (sys->ga.config & (1<<3)) {
+    if (rom_enable & AM40010_CONFIG_HROMEN) {
         /* read/write RAM */
         mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->ram[i3]);
     }
@@ -1339,10 +1406,11 @@ static bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
 }
 
 static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+/* FIXME
     const _cpc_sna_header* hdr = (const _cpc_sna_header*) ptr;
     ptr += sizeof(_cpc_sna_header);
     
-    /* copy 64 or 128 KByte memory dump */
+    // copy 64 or 128 KByte memory dump
     const uint16_t dump_size = hdr->dump_size_h<<8 | hdr->dump_size_l;
     const uint32_t dump_num_bytes = (dump_size == 64) ? 0x10000 : 0x20000;
     if (num_bytes > (int) (sizeof(_cpc_sna_header) + dump_num_bytes)) {
@@ -1397,6 +1465,7 @@ static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
         ay38910_iorq(&sys->psg, AY38910_BDIR|(hdr->psg_regs[i]<<16));
     }
     ay38910_iorq(&sys->psg, AY38910_BDIR|AY38910_BC1|(hdr->psg_selected<<16));
+*/
     return true;
 }
 
