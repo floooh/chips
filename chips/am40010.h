@@ -529,12 +529,15 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
     }
 }
 
-/* helper functions to detect falling/rising edge on a pin */
-static inline bool _am40010_falling_edge(uint64_t new_pins, uint64_t old_pins, uint64_t mask) {
-    return 0 != (mask & (~new_pins & (new_pins ^ old_pins)));
+/* helper functions to detect falling/rising edge on a bit */
+static inline bool _am40010_falling_u8(uint8_t new_val, uint8_t old_val, uint8_t mask) {
+    return 0 != (mask & (~new_val & (new_val ^ old_val)));
 }
-static inline bool _am40010_rising_edge(uint64_t new_pins, uint64_t old_pins, uint64_t mask) {
-    return 0 != (mask & (new_pins & (new_pins ^ old_pins)));
+static inline bool _am40010_falling_u64(uint64_t new_val, uint64_t old_val, uint64_t mask) {
+    return 0 != (mask & (~new_val & (new_val ^ old_val)));
+}
+static inline bool _am40010_rising_u64(uint64_t new_val, uint64_t old_val, uint64_t mask) {
+    return 0 != (mask & (new_val & (new_val ^ old_val)));
 }
 
 /* SYNC and IRQ generation, call this at 1 MHz frequency (CCLK signal),
@@ -543,9 +546,9 @@ static inline bool _am40010_rising_edge(uint64_t new_pins, uint64_t old_pins, ui
    function in am40010_tick
 */
 static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
-    bool hs_fall = _am40010_falling_edge(crtc_pins, ga->video.crtc_pins, AM40010_HS);
-    bool hs_rise = _am40010_rising_edge(crtc_pins, ga->video.crtc_pins, AM40010_HS);
-    bool vs_rise = _am40010_rising_edge(crtc_pins, ga->video.crtc_pins, AM40010_VS);
+    bool hs_fall = _am40010_falling_u64(crtc_pins, ga->video.crtc_pins, AM40010_HS);
+    bool hs_rise = _am40010_rising_u64(crtc_pins, ga->video.crtc_pins, AM40010_HS);
+    bool vs_rise = _am40010_rising_u64(crtc_pins, ga->video.crtc_pins, AM40010_VS);
 
     /* HCOUNT is reset by rising VSYNC, and counts up at falling HSYNC
        until clamped at 28 (0x1C) or reset by VSYNC again
@@ -595,8 +598,8 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
             intcnt = 0;
         }
 
-        /* whenever bit 5 of INTCNT flipped from 1 to 0, set the interrupt flipflop */
-        if ((0 != (ga->video.intcnt & (1<<5))) && (0 == (intcnt & (1<<5)))) {
+        /* on falling edge of bit5 of INTCNT, set the interrupt flipflop */
+        if (_am40010_falling_u8(intcnt, ga->video.intcnt, (1<<5))) {
             ga->video.intr = true;
         }
 
