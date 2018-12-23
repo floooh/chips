@@ -41,30 +41,7 @@
     **************************************
 
     ## Notes
-
-    - both am40010_init() and am40010_reset() will call the bankswitching
-      callback to put the memory system into the initial state
-    - the am40010_tick() function must be called with 4 MHz frequency
-    - the pins M1, MREQ, IORQ, RD, INT pins are directly 
-      mapped to the Z80 pins of the same names both for the
-      am40010_iorq() and am40010_tick() functions.
-    - the pins D0..D7 and A14..15 are directly mapped to the
-      corresponding Z80 pins in the am40010_iorq() function
-    - the HSYNC, VSYNC and DISPEN pins are mapped to the
-      mc6845_t pins HS, VS and DE for the am40010_tick() function
-    - unlike the hardware, the am40010_t performs its own
-      memory accesses during am40010_tick(), and for this reason
-      the tick function takes two pin masks (the usual CPU pins,
-      and the pin mask returned from mc6845_tick())
-    - the am40010_tick() function will set the READY pin when the
-      Z80 needs to inject a wait state
-    - the A13 input pin doesn't exist on the real gate array 
-      chip, it's used because the memory bank switching has
-      been integrated to select the upper ROM bank
-    - memory bank switching is implemented through a custom callback
-      which is called whenever the memory configuration needs to change
-    - the PAL checks IORQ and WR (will only respond to write requests),
-      while the gate array will respond to both read and write requests
+    (TODO)
 
     ## Links
     
@@ -120,6 +97,11 @@ extern "C" {
 #define AM40010_RD      (1ULL<<27)
 #define AM40010_WR      (1ULL<<28)
 #define AM40010_INT     (1ULL<<30)
+#define AM40010_WAIT_SHIFT (34)
+#define AM40010_WAIT_MASK ((1ULL<<34)|(1ULL<<35)|(1ULL<<36))
+
+/* set up to 7 wait states in Z80 CPU pin mask */
+#define AM40010_SET_WAIT(p,w) {p=((p&~AM40010_WAIT_MASK)|((((uint64_t)w)<<AM40010_WAIT_SHIFT)&AM40010_WAIT_MASK));}
 
 /* MC6845 compatible pins */
 #define AM40010_MA0     (1ULL<<0)
@@ -159,6 +141,11 @@ extern "C" {
 
 /* memory configuration callback */
 typedef void (*am40010_bankswitch_t)(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_select, void* user_data);
+/* CCLK callback, this will be called at 1 MHz frequency and must
+   return the CRTC pin mask. Use this callback to tick the MC6845
+   and AY-3-8910 chips.
+*/
+typedef uint64_t (*am40010_cclk_t)(void* user_data);
 
 /* host system type (same as cpc_type_t) */
 typedef enum am40010_cpc_type_t {
@@ -171,6 +158,7 @@ typedef enum am40010_cpc_type_t {
 typedef struct am40010_desc_t {
     am40010_cpc_type_t cpc_type;        /* host system type (mainly for bank switching) */
     am40010_bankswitch_t bankswitch_cb; /* memory bank-switching callback */
+    am40010_cclk_t cclk_cb;             /* the 1 MHz CCLK callback */
     const uint8_t* ram;                 /* direct pointer to 8*16 KByte RAM banks */
     uint32_t ram_size;                  /* must be 128 KBytes */
     uint32_t* rgba8_buffer;             /* pointer the RGBA8 output framebuffer */
@@ -196,7 +184,6 @@ typedef struct am40010_colors_t {
 
 /* vsync/video/irq generation */
 typedef struct am40010_video_t {
-    uint64_t crtc_pins; /* previous crtc pins */
     uint8_t mode;       /* currently active mode updated at hsync */
     uint8_t hcount;     /* 5-bit counter updated at HSYNC falling edge */
     uint8_t intcnt;     /* 6-bit counter updated at HSYNC falling egde */
@@ -223,7 +210,8 @@ typedef struct am40010_crt_t {
 typedef struct am40010_t {
     bool dbg_vis;               /* debug visualization currently enabled? */
     am40010_cpc_type_t cpc_type;
-    uint32_t tick_count;
+    uint32_t seq_tick_count;    /* gate array sequencer ticks */
+    uint64_t crtc_pins;         /* previous crtc pins */
     uint8_t rom_select;         /* select upper ROM (AMSDOS or BASIC) */
     uint8_t ram_config;         /* 3 bits, CPC 6128 RAM configuration */
     am40010_registers_t regs;
@@ -231,6 +219,7 @@ typedef struct am40010_t {
     am40010_crt_t crt;
     am40010_colors_t colors;
     am40010_bankswitch_t bankswitch_cb;
+    am40010_cclk_t cclk_cb;
     const uint8_t* ram;
     uint32_t* rgba8_buffer;
     void* user_data;
@@ -239,8 +228,25 @@ typedef struct am40010_t {
 
 void am40010_init(am40010_t* ga, const am40010_desc_t* desc);
 void am40010_reset(am40010_t* ga);
+/*
+    Call the iorq function once per Z80 machine cycle when the
+    IORQ and either RD or WR pins are set. This may call the
+    bankswitch callback if the memory configuration needs to be changed.
+*/
 void am40010_iorq(am40010_t* ga, uint64_t cpu_pins);
-uint64_t am40010_tick(am40010_t* ga, uint64_t cpu_pins, uint64_t crtc_pins);
+/* 
+    Call the tick function once per Z80 machine cycle
+    with the machine cycle tick length and CPU pins. The am40010_tick
+    function will call the CCLK callback as needed (at 1 MHz frequency),
+    tick the MC6845 and AY-3-8910 from this callback.
+
+    am40010_tick() will return a new Z80 CPU pin mask with the following
+    pins updated:
+
+        Z80_WAIT0..2    - the right number of wait states for this machine cycle
+        Z80_INT         - interrupt request from the gate array was triggered
+*/
+uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t cpu_pins);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -351,12 +357,13 @@ static void _am40010_init_colors(am40010_t* ga) {
 /* initialize am40010_t instance */
 void am40010_init(am40010_t* ga, const am40010_desc_t* desc) {
     CHIPS_ASSERT(ga && desc);
-    CHIPS_ASSERT(desc->bankswitch_cb);
+    CHIPS_ASSERT(desc->bankswitch_cb && desc->cclk_cb);
     CHIPS_ASSERT(desc->rgba8_buffer && (desc->rgba8_buffer_size >= _AM40010_MAX_FB_SIZE));
     CHIPS_ASSERT(desc->ram && (desc->ram_size == (128*1024)));
     memset(ga, 0, sizeof(am40010_t));
     ga->cpc_type = desc->cpc_type;
     ga->bankswitch_cb = desc->bankswitch_cb;
+    ga->cclk_cb = desc->cclk_cb;
     ga->ram = desc->ram;
     ga->rgba8_buffer = desc->rgba8_buffer;
     ga->user_data = desc->user_data;
@@ -369,6 +376,7 @@ void am40010_init(am40010_t* ga, const am40010_desc_t* desc) {
 
 void am40010_reset(am40010_t* ga) {
     CHIPS_ASSERT(ga);
+    ga->seq_tick_count = 0;
     _am40010_init_regs(ga);
     _am40010_init_video(ga);
     ga->bankswitch_cb(ga->ram_config, ga->regs.config, ga->rom_select, ga->user_data);
@@ -383,6 +391,7 @@ void am40010_reset(am40010_t* ga) {
    (that's why iorq has no return value).
 */
 void am40010_iorq(am40010_t* ga, uint64_t pins) {
+    /* check that this is called during an IORQ machine cycle */
     CHIPS_ASSERT(((pins & (AM40010_M1|AM40010_IORQ)) == (AM40010_IORQ)) && ((pins & (AM40010_RD|AM40010_WR)) != 0));
     /* a gate array register write */
     if ((pins & (AM40010_A14|AM40010_A15)) == AM40010_A14) {
@@ -540,15 +549,15 @@ static inline bool _am40010_rising_u64(uint64_t new_val, uint64_t old_val, uint6
     return 0 != (mask & (new_val & (new_val ^ old_val)));
 }
 
-/* SYNC and IRQ generation, call this at 1 MHz frequency (CCLK signal),
+/* SYNC and IRQ generation, called at the CCLK frequency (1 MHz)
    returns the state of the sync pin (used as input for the CRT tick function).
    NOTE that the interrupt counter is also modified outside this
    function in am40010_tick
 */
 static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
-    bool hs_fall = _am40010_falling_u64(crtc_pins, ga->video.crtc_pins, AM40010_HS);
-    bool hs_rise = _am40010_rising_u64(crtc_pins, ga->video.crtc_pins, AM40010_HS);
-    bool vs_rise = _am40010_rising_u64(crtc_pins, ga->video.crtc_pins, AM40010_VS);
+    bool hs_fall = _am40010_falling_u64(crtc_pins, ga->crtc_pins, AM40010_HS);
+    bool hs_rise = _am40010_rising_u64(crtc_pins, ga->crtc_pins, AM40010_HS);
+    bool vs_rise = _am40010_rising_u64(crtc_pins, ga->crtc_pins, AM40010_VS);
 
     /* HCOUNT is reset by rising VSYNC, and counts up at falling HSYNC
        until clamped at 28 (0x1C) or reset by VSYNC again
@@ -640,8 +649,6 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     }
     /* write back clkcnt */
     ga->video.clkcnt = clkcnt;
-    /* write back crtc pins */
-    ga->video.crtc_pins = crtc_pins;
 
     return ga->video.sync;
 }
@@ -763,61 +770,122 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
     }
 }
 
-/* the tick function must be called at 4 MHz */
-uint64_t am40010_tick(am40010_t* ga, uint64_t pins, uint64_t crtc_pins) {
-    /* The hardware has a 'main sequencer' with a rotating bit
-       pattern which defines when the different actions happen in
-       the 16 MHz ticks.
-       Since the software emu is only ticked at 4 MHz, we'll replace
-       the sequencer with a counter updated at the 4 MHz tick rate.
-
-       The tick count is bumped at the end of the tick function!
-    */
-
-    /* update the colors from color registers every 4 ticks (see 40010-simplified.pdf: "Registers") */
-    /* FIXME: tweak the update position? */
-    if (ga->colors.dirty && (0 == (ga->tick_count & 3))) {
+/* make the selected colors visible by updating the color cache */
+static inline void _am40010_update_colors(am40010_t* ga) {
+    if (ga->colors.dirty) {
         ga->colors.dirty = false;
         ga->colors.border_rgba8 = ga->colors.hw_rgba8[ga->regs.border];
         for (int i = 0; i < 16; i++) {
             ga->colors.ink_rgba8[i] = ga->colors.hw_rgba8[ga->regs.ink[i]];
         }
     }
+}
 
-    /* SYNC/IRQ and video signal generation.
-        This is all ticked with the 1 MHz CCLK signal
-    */
-    if (1 == (ga->tick_count & 3)) {
-        bool sync = _am40010_sync_irq(ga, crtc_pins);
-        _am40010_crt_tick(ga, sync);
-        _am40010_decode_video(ga, crtc_pins);
-    }
+/* the actions which need to happen on CCLK (1 MHz frequency) */
+static inline void _am40010_do_cclk(am40010_t* ga, uint64_t crtc_pins) {
+    _am40010_update_colors(ga);
+    bool sync = _am40010_sync_irq(ga, crtc_pins);
+    _am40010_crt_tick(ga, sync);
+    _am40010_decode_video(ga, crtc_pins);
+}
 
+/* perform the 4 MHz tick actions of the gate array */
+static inline uint64_t _am40010_do_tick(am40010_t* ga, bool int_ack, uint64_t pins) {
     /* when the IRQ_RESET bit is set, reset the interrupt counter and clear the interrupt flipflop */
     if ((ga->regs.config & AM40010_CONFIG_IRQRESET) != 0) {
         ga->regs.config &= ~AM40010_CONFIG_IRQRESET;
         ga->video.intcnt = 0;
         ga->video.intr = false;
     }
-    /* set the READY pin in 3 out of 4 ticks */
-    if (0 != (ga->tick_count & 3)) {
-        pins |= AM40010_READY;
-    }
-    /* on interrupt acknowledge, reset the sequence counter, otherwise increment it */
-    if ((pins & (AM40010_M1|AM40010_IORQ)) == (AM40010_M1|AM40010_IORQ)) {
-        /* also on interrupt acknowledge, clear the interrupt flip-flop,
-           and clear bit 5 of the interrupt counter
-        */
+    /* on interrupt acknowledge, clear the interrupt flip-flop, and bit 5 of the interrupt counter */
+    if (int_ack) {
        ga->video.intcnt &= 0x1F;
        ga->video.intr = false;
     }
-    ga->tick_count++;
-
-    /* set CPU interrupt pin */
-    if (ga->video.intr) {
-        pins |= Z80_INT;
+    /* set the READY pin in 3 out of 4 ticks */
+    if (0 != (ga->seq_tick_count & 3)) {
+        pins |= AM40010_READY;
     }
     return pins;
 }
 
+/* determine at which cycle of the current machine cycle the
+    CPU samples the wait pin, if the AM40010 READY pin coincides 
+    with a clock cycle where the CPU samples the WAIT pin, the
+    CPU will be stopped until the READY pin goes inactive again.
+*/
+static inline int _am40010_wait_scan_tick(am40010_t* ga, int num_ticks, uint64_t pins) {
+    int wait_scan_tick = -1;
+    if (pins & Z80_MREQ) {
+        /* a memory request, wait pin is sampled in 2nd tick */
+        wait_scan_tick = 1;
+    }
+    else if (pins & Z80_IORQ) {
+        if (pins & Z80_M1) {
+            /* an interrupt acknowledge tick, wait pin is sampled in 4th tick */
+            wait_scan_tick = 3;
+        }
+        else {
+            /* an IO request, wait pin is sampled in 3rd tick */
+            wait_scan_tick = 2;
+        }
+    }
+    return wait_scan_tick;
+}
+
+/* the tick function must be called at 4 MHz */
+uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t pins) {
+    /* determine at what clock cycle the CPU samples the WAIT pin */
+    int wait_scan_tick = _am40010_wait_scan_tick(ga, num_ticks, pins);
+
+    /* for each 4 MHz tick... */
+    uint32_t wait_cycles = 0;
+    for (int mc_tick = 0; mc_tick < num_ticks; mc_tick++) {
+        bool wait = false;
+        do {
+            /* The hardware has a 'main sequencer' with a rotating bit
+                pattern which defines when the different actions happen in
+                the 16 MHz ticks.
+                Since the software emu is only ticked at 4 MHz, we'll replace
+                the sequencer with a counter updated at the 4 MHz tick rate.
+            */
+            ga->seq_tick_count++;
+
+            /* the sequencer is reset on the 3rd clock tick of an
+               interrupt acknowledge machine cycle from the CPU
+            */
+            bool int_ack = (((Z80_M1|Z80_IORQ) == (pins & (Z80_M1|Z80_IORQ))) && (mc_tick == 3));
+            if (int_ack) {
+                ga->seq_tick_count = 0;
+            }
+            /* derive the 1 MHz CCLK signal from the sequencer, and perform
+                the actions that need to happen at the CCLK tick
+            */
+            bool cclk = (2 == (ga->seq_tick_count & 3));
+            if (cclk) {
+                uint64_t crtc_pins = ga->cclk_cb(ga->user_data);
+                _am40010_do_cclk(ga, crtc_pins);
+                ga->crtc_pins = crtc_pins;
+            }
+            /* perform the per-4Mhz-tick actions */
+            pins = _am40010_do_tick(ga, int_ack, (pins & ~AM40010_READY));
+            /* need to add a wait cycle? */
+            wait = ((pins & AM40010_READY) && (wait || (wait_scan_tick == mc_tick)));
+            if (wait) {
+                wait_cycles++;
+            }
+        }
+        while (wait);
+    }
+    /* update the return pin mask */
+    AM40010_SET_WAIT(pins, wait_cycles);
+    if (ga->video.intr) {
+        pins |= AM40010_INT;
+    }
+    if (ga->video.sync) {
+        pins |= AM40010_SYNC;
+    }
+    ga->pins = pins | ((AM40010_DE|AM40010_HS|AM40010_VS) & ga->crtc_pins);
+    return pins;
+}
 #endif /* CHIPS_IMPL */

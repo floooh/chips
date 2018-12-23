@@ -513,18 +513,19 @@ static const ui_chip_pin_t _ui_cpc_ga_pins[] = {
     { "MREQ",   10,     AM40010_MREQ },
     { "IORQ",   11,     AM40010_IORQ },
     { "RD",     12,     AM40010_RD },
+    { "WR",     13,     AM40010_WR },
 
-    { "A13",    13,     AM40010_A13 },
-    { "A14",    14,     AM40010_A14 },
-    { "A15",    15,     AM40010_A15 },
+    { "A13",    14,     AM40010_A13 },
+    { "A14",    15,     AM40010_A14 },
+    { "A15",    16,     AM40010_A15 },
 
-    { "DE",     17,     AM40010_VS },
-    { "HS",     18,     AM40010_HS },
-    { "VS",     19,     AM40010_VS },
+    { "DE",     18,     AM40010_VS },
+    { "HS",     19,     AM40010_HS },
+    { "VS",     20,     AM40010_VS },
 
-    { "INT",    21,     AM40010_INT },
-    { "READY",  22,     AM40010_READY },
-    { "SYNC",   23,     AM40010_SYNC }
+    { "INT",    22,     AM40010_INT },
+    { "READY",  23,     AM40010_READY },
+    { "SYNC",   24,     AM40010_SYNC }
 };
 
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
@@ -585,7 +586,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         desc.am40010 = &ui->cpc->ga;
         desc.x = x;
         desc.y = y;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "40010", 26, _ui_cpc_ga_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "40010", 28, _ui_cpc_ga_pins);
         ui_am40010_init(&ui->ga, &desc);
     }
     x += dx; y += dy;
