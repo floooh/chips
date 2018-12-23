@@ -407,19 +407,19 @@ uint64_t mc6845_tick(mc6845_t* c) {
             /* this is a normal row */
             max_scan_line = c->max_scanline_addr;
         }
-        if ((c->scanline_ctr == max_scan_line) && ((!need_adj && (c->row_ctr == c->v_total)) || c->in_adj)) {
+        if ((c->scanline_ctr >= max_scan_line) && ((!need_adj && (c->row_ctr >= c->v_total)) || c->in_adj)) {
             /* new frame */
             c->scanline_ctr = 0;
             c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
             c->row_ctr = 0;
             c->in_adj = false;
         }
-        else if (!c->in_adj && (c->scanline_ctr == max_scan_line)) {
+        else if (!c->in_adj && (c->scanline_ctr >= max_scan_line)) {
             /* new character row */
             c->scanline_ctr = 0;
             c->ma_row_start += c->h_displayed;
             c->row_ctr = (c->row_ctr + 1) & 0x7F;
-            if ((c->row_ctr == c->v_total) && need_adj) {
+            if ((c->row_ctr >= c->v_total) && need_adj) {
                 c->in_adj = true;
             }
         }
@@ -444,9 +444,6 @@ uint64_t mc6845_tick(mc6845_t* c) {
             c->vs = true;
             c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
         }
-        else {
-            c->vsync_ctr = 0;
-        }
         uint8_t v_sync_width;
         if ((c->type == MC6845_TYPE_UM6845R)||(c->type == MC6845_TYPE_MC6845)) {
             /* on these models, VSYNC width is fixed to 0 (== 16 lines) */
@@ -457,6 +454,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
         }
         if ((c->vsync_ctr == v_sync_width) && c->vs) {
             c->vs = false;
+            c->vsync_ctr = 0;
         }
     }
 
