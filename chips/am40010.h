@@ -474,6 +474,8 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
 static void _am40010_crt_tick(am40010_t* ga, bool sync) {
     am40010_crt_t* crt = &ga->crt;
     bool sync_raise = sync && !crt->sync;
+    bool new_line = false;
+    bool new_frame = false;
     crt->sync = sync;
 
     /*
@@ -507,24 +509,38 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
     if (crt->h_pos == _AM40010_CRT_H_DISPLAY_START) {
         crt->h_blank = false;
     }
+    else if (crt->h_pos == 64) {
+        // no hsync on this line?
+        new_line = true;
+    }
     if (crt->h_retrace > 0) {
         crt->h_retrace--;
         if (crt->h_retrace == 0) {
-            // new scanline 
-            crt->h_pos = 0;
-            crt->v_pos++;
-            if (crt->v_pos == _AM40010_CRT_V_DISPLAY_START) {
-                crt->v_blank = false;
-            }
-            if (crt->v_retrace > 0) {
-                crt->v_retrace--;
-                if (crt->v_retrace == 0) {
-                    // new frame 
-                    crt->v_pos = 0;
-                }
+            new_line = true;
+        }
+    }
+    if (new_line) {
+        // new scanline 
+        crt->h_pos = 0;
+        crt->v_pos++;
+        if (crt->v_pos == _AM40010_CRT_V_DISPLAY_START) {
+            crt->v_blank = false;
+        }
+        else if (crt->v_pos == 312) {
+            // no vsync on this frame
+            new_frame = true;
+        }
+        if (crt->v_retrace > 0) {
+            crt->v_retrace--;
+            if (crt->v_retrace == 0) {
+                new_frame = true;
             }
         }
     }
+    if (new_frame) {
+        crt->v_pos = 0;
+    }
+
     // compute visible beam state 
     if ((crt->h_pos >= _AM40010_CRT_VIS_X0) && (crt->h_pos < _AM40010_CRT_VIS_X1) &&
         (crt->v_pos >= _AM40010_CRT_VIS_Y0) && (crt->v_pos < _AM40010_CRT_VIS_Y1))
@@ -556,7 +572,6 @@ static inline bool _am40010_rising_u64(uint64_t new_val, uint64_t old_val, uint6
 */
 static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     bool hs_fall = _am40010_falling_u64(crtc_pins, ga->crtc_pins, AM40010_HS);
-    bool hs_rise = _am40010_rising_u64(crtc_pins, ga->crtc_pins, AM40010_HS);
     bool vs_rise = _am40010_rising_u64(crtc_pins, ga->crtc_pins, AM40010_VS);
 
     /* HCOUNT is reset by rising VSYNC, and counts up at falling HSYNC
@@ -582,7 +597,7 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
         reset HCOUNT at the start of VSYNC
     */
     if (vs_rise) {
-        ga->video.hcount &= 1;
+        ga->video.hcount = 0;
     }
 
     /* ...on falling HSYNC */
@@ -638,15 +653,18 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
         /* MODESYNC triggers when clkcnt goes from 7 to 8 */
         ga->video.mode = ga->regs.config & AM40010_CONFIG_MODE;
     }
-    bool h_sync = (clkcnt >= 1) && (clkcnt < 5);
-    bool v_sync = (0 == (ga->video.hcount & 0x1C));
-    ga->video.sync = h_sync || v_sync;
-    if (hs_rise) {
+    /* if HSYNC is OFF, clkcnt bits 0..2 are forced to 0, deactivating the counter */
+    if (0 == (crtc_pins & AM40010_HS)) {
         clkcnt = 0;
     }
     else if (clkcnt < 8) {
         clkcnt++;
     }
+    /* h_sync is taken from bit 2 of clkcnt */
+    bool h_sync = (clkcnt > 2) && (clkcnt < 7);
+    /* v_sync is on as long as hcount is < 4 */
+    bool v_sync = (0 == (ga->video.hcount & 0x1C));
+    ga->video.sync = h_sync || v_sync;
     /* write back clkcnt */
     ga->video.clkcnt = clkcnt;
 
@@ -728,6 +746,9 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
             uint8_t r = 0x22, g = 0x22, b = 0x22;
             if (crtc_pins & AM40010_HS) {
                 r = 0x55;
+            }
+            if (crtc_pins & AM40010_VS) {
+                g = 0x55;
             }
             if (ga->video.sync) {
                 r = 0xFF;
