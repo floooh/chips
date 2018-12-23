@@ -543,18 +543,6 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
     */
 
     /*
-        Gate Array Function and upper rom select 
-        (only writing to the gate array
-        is possible, but the gate array doesn't check the
-        CPU R/W pins, so each access is a write).
-
-        This is used by the Arnold Acid test "OnlyInc", which
-        access the PPI and gate array in the same IO operation
-        to move data directly from the PPI into the gate array.
-    */
-    am40010_iorq(&sys->ga, pins);
-
-    /*
         Z80 to i8255 PPI pin connections:
             ~A11 -> CS (CS is active-low)
                 A8 -> A0
@@ -572,6 +560,20 @@ static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
         if (pins & Z80_WR) { ppi_pins |= I8255_WR; }
         pins = i8255_iorq(&sys->ppi, ppi_pins) & Z80_PIN_MASK;
     }
+    /*
+        Gate Array Function and upper rom select 
+        (only writing to the gate array
+        is possible, but the gate array doesn't check the
+        CPU R/W pins, so each access is a write).
+
+        This is used by the Arnold Acid test "OnlyInc", which
+        access the PPI and gate array in the same IO operation
+        to move data directly from the PPI into the gate array.
+        
+        Because of this the gate array must be ticker *after* the PPI
+        and use the returned pins from the PPI as input.
+    */
+    am40010_iorq(&sys->ga, pins);
     /*
         Z80 to MC6845 pin connections:
 

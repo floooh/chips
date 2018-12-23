@@ -582,7 +582,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     x += dx, y += dy;
     {
         ui_am40010_desc_t desc = {0};
-        desc.title = "AM40010";
+        desc.title = "AM40010 + PAL";
         desc.am40010 = &ui->cpc->ga;
         desc.x = x;
         desc.y = y;
