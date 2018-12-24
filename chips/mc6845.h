@@ -429,7 +429,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
         }
 
         /* reload the memory address counter per scanline */
-        c->ma = c->ma_row_start;
+        c->ma = (c->ma_row_start & 0x3FFF);
 
         /* handle vertical display enabled */
         if (c->row_ctr == 0) {
