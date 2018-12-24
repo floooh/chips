@@ -189,17 +189,18 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
 }
 
 #define _UI_CPC_MEMLAYER_CPU      (0)
-#define _UI_CPC_MEMLAYER_ROMS     (1)
-#define _UI_CPC_MEMLAYER_AMSDOS   (2)
-#define _UI_CPC_MEMLAYER_RAM0     (3)
-#define _UI_CPC_MEMLAYER_RAM1     (4)
-#define _UI_CPC_MEMLAYER_RAM2     (5)
-#define _UI_CPC_MEMLAYER_RAM3     (6)
-#define _UI_CPC_MEMLAYER_RAM4     (7)
-#define _UI_CPC_MEMLAYER_RAM5     (8)
-#define _UI_CPC_MEMLAYER_RAM6     (9)
-#define _UI_CPC_MEMLAYER_RAM7     (10)
-#define _UI_CPC_MEMLAYER_NUM      (11)
+#define _UI_CPC_MEMLAYER_GA       (1)
+#define _UI_CPC_MEMLAYER_ROMS     (2)
+#define _UI_CPC_MEMLAYER_AMSDOS   (3)
+#define _UI_CPC_MEMLAYER_RAM0     (4)
+#define _UI_CPC_MEMLAYER_RAM1     (5)
+#define _UI_CPC_MEMLAYER_RAM2     (6)
+#define _UI_CPC_MEMLAYER_RAM3     (7)
+#define _UI_CPC_MEMLAYER_RAM4     (8)
+#define _UI_CPC_MEMLAYER_RAM5     (9)
+#define _UI_CPC_MEMLAYER_RAM6     (10)
+#define _UI_CPC_MEMLAYER_RAM7     (11)
+#define _UI_CPC_MEMLAYER_NUM      (12)
 
 static int _ui_cpc_ram_config[8][4] = {
     { 0, 1, 2, 3 },
@@ -220,7 +221,7 @@ static const char* _ui_cpc_ram_banks[8] = {
 };
 
 static const char* _ui_cpc_memlayer_names[_UI_CPC_MEMLAYER_NUM] = {
-    "CPU Mapped", "OS ROMS", "AMSDOS ROM", "RAM 0", "RAM 1", "RAM 2", "RAM 3", "RAM 4", "RAM 5", "RAM 6", "RAM 7"
+    "CPU Mapped", "Gate Array", "OS ROMS", "AMSDOS ROM", "RAM 0", "RAM 1", "RAM 2", "RAM 3", "RAM 4", "RAM 5", "RAM 6", "RAM 7"
 };
 
 static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
@@ -263,8 +264,12 @@ static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
 }
 
 static uint8_t* _ui_cpc_memptr(cpc_t* cpc, int layer, uint16_t addr) {
-    CHIPS_ASSERT((layer >= _UI_CPC_MEMLAYER_ROMS) && (layer < _UI_CPC_MEMLAYER_NUM));
-    if (layer == _UI_CPC_MEMLAYER_ROMS) {
+    CHIPS_ASSERT((layer >= _UI_CPC_MEMLAYER_GA) && (layer < _UI_CPC_MEMLAYER_NUM));
+    if (layer == _UI_CPC_MEMLAYER_GA) {
+        uint8_t* ram = &cpc->ram[0][0];
+        return ram + addr;
+    }
+    else if (layer == _UI_CPC_MEMLAYER_ROMS) {
         if (addr < 0x4000) {
             return &cpc->rom_os[addr];
         }
@@ -275,7 +280,7 @@ static uint8_t* _ui_cpc_memptr(cpc_t* cpc, int layer, uint16_t addr) {
             return 0;
         }
     }
-    if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
+    else if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
         if ((CPC_TYPE_6128 == cpc->type) && (addr >= 0xC000)) {
             return &cpc->rom_amsdos[addr - 0xC000];
         }

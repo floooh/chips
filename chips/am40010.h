@@ -676,16 +676,15 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
     //  compute the source address from current CRTC ma (memory address)
     //  and ra (raster address) like this:
     //
-    //  |ma12|ma11|ra2|ra1|ra0|ma9|ma8|ma7|ma6|ma5|ma4|ma3|ma2|ma1|ma0|0|
+    //  |ma13|ma12|ra2|ra1|ra0|ma9|ma8|ma7|ma6|ma5|ma4|ma3|ma2|ma1|ma0|0|
     //
-    // Bits ma12 and m11 point to the 16 KByte page, and all
+    // Bits ma13 and m12 point to the 16 KByte page, and all
     // other bits are the index into that page.
     //
-    const uint16_t ma = MC6845_GET_ADDR(crtc_pins);
-    const uint8_t ra = MC6845_GET_RA(crtc_pins);
-    const uint32_t page_index  = (ma>>12) & 3;
-    const uint32_t page_offset = ((ma & 0x03FF)<<1) | ((ra & 7)<<11);
-    const uint8_t* src = &(ga->ram[page_index*16*1024 + page_offset]);
+    const uint16_t addr = ((crtc_pins & 0x3000) << 2) |     /* MA13,MA12 */
+                          ((crtc_pins & 0x3FF) << 1) |      /* MA9..MA0 */
+                          (((crtc_pins>>48) & 7) << 11);    /* RA0..RA2 */
+    const uint8_t* src = &(ga->ram[addr]);
     uint8_t c;
     uint32_t p;
     const uint32_t* ink = ga->colors.ink_rgba8;

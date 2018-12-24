@@ -184,6 +184,17 @@ static void _ui_am40010_draw_sync_irq(ui_am40010_t* win) {
     ImGui::Text("INT     %s", v->intr ? "ON":"OFF");
 }
 
+static void _ui_am40010_draw_video(ui_am40010_t* win) {
+    am40010_crt_t* crt = &win->am40010->crt;
+    uint64_t crtc_pins = win->am40010->crtc_pins;
+    ImGui::Text("h_pos %d", crt->h_pos);
+    ImGui::Text("v_pos %d", crt->v_pos);
+    const uint16_t addr = ((crtc_pins & 0x3000) << 2) |     /* MA13,MA12 */
+                          ((crtc_pins & 0x3FF) << 1) |      /* MA9..MA0 */
+                          (((crtc_pins>>48) & 7) << 11);    /* RA0..RA2 */
+    ImGui::Text("addr  %04X", addr);
+}
+
 static void _ui_am40010_draw_state(ui_am40010_t* win) {
     ImGui::Checkbox("Debug Visualization", &win->am40010->dbg_vis);
     if (ImGui::CollapsingHeader("Colors", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -196,6 +207,9 @@ static void _ui_am40010_draw_state(ui_am40010_t* win) {
     }
     if (ImGui::CollapsingHeader("Sync & IRQ", ImGuiTreeNodeFlags_DefaultOpen)) {
         _ui_am40010_draw_sync_irq(win);
+    }
+    if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
+        _ui_am40010_draw_video(win);
     }
 }
 
