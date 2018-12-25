@@ -164,9 +164,9 @@ extern "C" {
 
 /* chip subtypes */
 typedef enum {
-    MC6845_TYPE_UM6845 = 0,
-    MC6845_TYPE_UM6845R,    
-    MC6845_TYPE_MC6845,
+    MC6845_TYPE_UM6845 = 0,     /* CRTC type 0 */
+    MC6845_TYPE_UM6845R,        /* CRTC type 1 */
+    MC6845_TYPE_MC6845,         /* CRTC type 2 */
     MC6845_NUM_TYPES,
 } mc6845_type_t;
 
@@ -355,67 +355,109 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
 
 uint64_t mc6845_tick(mc6845_t* c) {
 
-    /* handle horizontal counter */
-    if (c->h_ctr == c->h_total) {
-        c->h_ctr = 0;           /* reset horizontal counter */
-    }
-    else {
-        c->h_ctr++;     /* no masking needed since h_ctr is 8 bits */
-        c->ma = (c->ma + 1) & 0x3FFF;
-    }
-
-    /* handle horizontal display-enabled */
-    if (c->h_ctr == 0) {
+    /* horizontal update */
+    // FIXME: mc6845 syncwidth 0 -> 16 
+    bool co_htotal = c->h_ctr == c->h_total;
+    if (co_htotal) {
+        // new scanline
+        c->h_ctr = 0;
         c->h_de = true;
-    }
-    if (c->h_ctr == c->h_displayed) {
-        c->h_de = false;    /* end of horizontal display-enable range */
-    }
+        
+        bool co_vtotal = c->row_ctr == c->v_total;
+        uint8_t max_scanline;
+//        if (co_vtotal) {
+//            max_scanline = c->v_total_adjust;
+//        }
+//        else {
+            max_scanline = c->max_scanline_addr;
+//        }
+        bool co_scanline = c->scanline_ctr >= max_scanline;
+        if (co_scanline) {
+            c->scanline_ctr = 0;
+            if (co_vtotal) {
+                // new frame
+                c->row_ctr = 0;
+                c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
+                c->v_de = true;
+            }
+            else {
+                // new chracter row
+                c->ma_row_start += c->h_displayed;
+                c->row_ctr = (c->row_ctr + 1) & 0x7F;
+            }
+            bool co_vdisp = c->row_ctr == c->v_displayed;
+            bool co_vsync = c->row_ctr == c->v_sync_pos;
+            if (co_vdisp) {
+                c->v_de = false;
+            }
+            if (co_vsync) {
+                c->vsync_ctr = 0;
+                c->vs = true;
+            }
+        }
+        else {
+            c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
+        }
 
-    /* handle HSYNC on/off */
-    if (c->h_ctr == c->h_sync_pos) {
-        c->hs = true;       /* start of HSYNC range */
-        c->hsync_ctr = 0;
-    }
-    else if (c->hs) {
-        c->hsync_ctr = (c->hsync_ctr + 1) & 0xF;
-        /* FIXME: on UM6845 and UM6845R, if 0 is programmed, no HSYNC is generated
-           (see: http://www.cpcwiki.eu/index.php/CRTC#CRTC_Differences)
-
-           since hsync_ctr will wrap-around at 16, a h_sync_width of 0
-           will actually be treated as h_sync_width = 16
-        */
-        uint8_t h_sync_width = c->sync_widths & 0xF;
-        if (c->hsync_ctr == h_sync_width) {
-            c->hs = false;
+        c->ma = c->ma_row_start & 0x3FFF;
+        c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
+        uint8_t vsync_width;
+        if (c->type == MC6845_TYPE_UM6845) {
+            vsync_width = (c->sync_widths >> 4) & 0x0F;
+        }
+        else {
+            // vsync width is fixed as 0x10
+            vsync_width = 0;
+        }
+        bool co_vsend = c->vsync_ctr == vsync_width;
+        if (co_vsend) {
+            c->vs = false;
         }
     }
+    else {
+        c->h_ctr++;
+        c->ma = (c->ma + 1) & 0x3FFF;
+        c->hsync_ctr = (c->hsync_ctr + 1) & 0x0F;
+    }
+    bool co_hdisp = c->h_ctr == c->h_displayed;
+    bool co_hsync = c->h_ctr == c->h_sync_pos;
+    bool co_hsend = c->hsync_ctr == (c->sync_widths & 0x0F);
+    if (co_hdisp) {
+        c->h_de = false;
+    }
+    if (co_hsync) {
+        c->hsync_ctr = 0;
+        c->hs = true;
+    }
+    if (co_hsend) {
+        c->hs = false;
+    }
 
-    /* NEW SCANLINE? */
     /* FIXME: on UM6845R, R12/R13 (start_addr_hi/lo) is read into
        ma_row_start at the start of each scanline during character
        row 0.
     */
-    if (c->h_ctr == 0) {
+        /*
+    if (co_htotal) {
         bool need_adj = c->v_total_adjust != 0;
         uint8_t max_scan_line;
         if (c->in_adj) {
-            /* this is an adjust row */
+            // this is an adjust row
             max_scan_line = (c->v_total_adjust - 1) & 0x1F;
         }
         else {
-            /* this is a normal row */
+            // this is a normal row
             max_scan_line = c->max_scanline_addr;
         }
         if ((c->scanline_ctr >= max_scan_line) && ((!need_adj && (c->row_ctr >= c->v_total)) || c->in_adj)) {
-            /* new frame */
+            // new frame
             c->scanline_ctr = 0;
             c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
             c->row_ctr = 0;
             c->in_adj = false;
         }
         else if (!c->in_adj && (c->scanline_ctr >= max_scan_line)) {
-            /* new character row */
+            // new character row 
             c->scanline_ctr = 0;
             c->ma_row_start += c->h_displayed;
             c->row_ctr = (c->row_ctr + 1) & 0x7F;
@@ -424,14 +466,11 @@ uint64_t mc6845_tick(mc6845_t* c) {
             }
         }
         else {
-            /* new scanline */
+            // new scanline
             c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
         }
 
-        /* reload the memory address counter per scanline */
-        c->ma = (c->ma_row_start & 0x3FFF);
-
-        /* handle vertical display enabled */
+        // handle vertical display enabled 
         if (c->row_ctr == 0) {
             c->v_de = true;
         }
@@ -439,14 +478,14 @@ uint64_t mc6845_tick(mc6845_t* c) {
             c->v_de = false;
         }
 
-        /* handle VSYNC on/off */
+        // handle VSYNC on/off 
         if ((c->row_ctr == c->v_sync_pos) || c->vs) {
             c->vs = true;
             c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
         }
         uint8_t v_sync_width;
         if ((c->type == MC6845_TYPE_UM6845R)||(c->type == MC6845_TYPE_MC6845)) {
-            /* on these models, VSYNC width is fixed to 0 (== 16 lines) */
+            // on these models, VSYNC width is fixed to 0 (== 16 lines) 
             v_sync_width = 0;
         }
         else {
@@ -457,6 +496,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
             c->vsync_ctr = 0;
         }
     }
+        */
 
     /* build the return pin mask */
     uint64_t new_pins = ((c->scanline_ctr & 0x1F) * MC6845_RA0)| c->ma;
