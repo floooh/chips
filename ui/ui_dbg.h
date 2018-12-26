@@ -194,6 +194,7 @@ typedef struct ui_dbg_state_t {
     bool stopped;
     int step_mode;
     bool install_trap_cb;       /* whether to install the trap callback */
+    uint64_t cpu_pins;          /* last state of CPU pins */
     uint32_t frame_id;          /* used in trap callback to detect when a new frame has started */
     uint32_t trap_frame_id;
     uint16_t trap_pc;           /* last PC in CPU trap callback */
@@ -554,6 +555,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
         }
     }
     else {
+        uint64_t rising_pins = pins & (pins ^ win->dbg.cpu_pins);
         for (int i = 0; (i < win->dbg.num_breakpoints) && (trap_id == 0); i++) {
             const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
             if (bp->enabled) {
@@ -602,11 +604,11 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
 
                     case UI_DBG_BREAKTYPE_IRQ:
                         #if defined(UI_DBG_USE_Z80)
-                            if (pins & Z80_INT) {
+                            if (Z80_INT & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #elif defined(UI_DBG_USE_M6502)
-                            if (pins & M6502_IRQ) {
+                            if (M6502_IRQ & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #endif
@@ -614,11 +616,11 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
 
                     case UI_DBG_BREAKTYPE_NMI:
                         #if defined(UI_DBG_USE_Z80)
-                            if (pins & Z80_NMI) {
+                            if (Z80_NMI & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #elif defined(UI_DBG_USE_M6502)
-                            if (pins & M6502_NMI) {
+                            if (M6502_NMI & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #endif
@@ -690,6 +692,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     win->dbg.trap_pc = pc;
     win->dbg.trap_frame_id = win->dbg.frame_id;
     win->dbg.trap_ticks = ticks;
+    win->dbg.cpu_pins = pins;
 
     /* call original trap callback if exists */
     if (0 == trap_id) {
