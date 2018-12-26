@@ -176,19 +176,19 @@ static void _ui_am40010_draw_registers(ui_am40010_t* win) {
 
 static void _ui_am40010_draw_sync_irq(ui_am40010_t* win) {
     am40010_video_t* v = &win->am40010->video;
-    ImGui::Text("MODE    %d", v->mode);
-    ImGui::Text("INTCNT  %02X", v->intcnt);
-    ImGui::Text("HCOUNT  %02X", v->hcount);
-    ImGui::Text("CLKCNT  %02X", v->clkcnt);
-    ImGui::Text("SYNC    %s", v->sync ? "ON":"OFF");
-    ImGui::Text("INT     %s", v->intr ? "ON":"OFF");
+    ImGui::Text("Mode    %d", v->mode);
+    ImGui::Text("IntCnt  %02X", v->intcnt);
+    ImGui::Text("HCount  %02X", v->hcount);
+    ImGui::Text("ClkCnt  %02X", v->clkcnt);
+    ImGui::Text("Sync    %s", v->sync ? "ON":"OFF");
+    ImGui::Text("IRQ     %s", v->intr ? "ON":"OFF");
 }
 
 static void _ui_am40010_draw_video(ui_am40010_t* win) {
     am40010_crt_t* crt = &win->am40010->crt;
     uint64_t crtc_pins = win->am40010->crtc_pins;
-    ImGui::Text("h_pos %d", crt->h_pos);
-    ImGui::Text("v_pos %d", crt->v_pos);
+    ImGui::Text("h_pos %X", crt->h_pos);
+    ImGui::Text("v_pos %X", crt->v_pos);
     const uint16_t addr = ((crtc_pins & 0x3000) << 2) |     /* MA13,MA12 */
                           ((crtc_pins & 0x3FF) << 1) |      /* MA9..MA0 */
                           (((crtc_pins>>48) & 7) << 11);    /* RA0..RA2 */
