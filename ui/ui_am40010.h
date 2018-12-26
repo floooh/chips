@@ -195,8 +195,19 @@ static void _ui_am40010_draw_video(ui_am40010_t* win) {
     ImGui::Text("addr  %04X", addr);
 }
 
+static void _ui_am40010_tint_framebuffer(ui_am40010_t* win) {
+    const int num = AM40010_DBG_DISPLAY_WIDTH * AM40010_DBG_DISPLAY_HEIGHT;
+    uint32_t* ptr = win->am40010->rgba8_buffer;
+    for (int i = 0; i < num; i++) {
+        ptr[i] = ~ptr[i] | 0xFF0000F0;
+    }
+}
+
 static void _ui_am40010_draw_state(ui_am40010_t* win) {
     ImGui::Checkbox("Debug Visualization", &win->am40010->dbg_vis);
+    if (ImGui::Button("Tint Framebuffer")) {
+        _ui_am40010_tint_framebuffer(win);
+    }
     if (ImGui::CollapsingHeader("Colors", ImGuiTreeNodeFlags_DefaultOpen)) {
         _ui_am40010_draw_hw_colors(win);
         _ui_am40010_draw_ink_colors(win);
