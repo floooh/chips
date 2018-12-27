@@ -31,7 +31,7 @@
     - ui_upd765.h
     - ui_ay38910.h
     - ui_upd765.h
-    - ui_cpc_ga.h
+    - ui_am40010.h
     - ui_fdd.h
     - ui_audio.h
     - ui_dasm.h
@@ -79,15 +79,17 @@ typedef struct {
 
 typedef struct {
     cpc_t* cpc;
+    int dbg_scanline;
+    bool dbg_vsync;
     ui_cpc_boot_t boot_cb;
     ui_z80_t cpu;
     ui_ay38910_t psg;
     ui_mc6845_t vdc;
+    ui_am40010_t ga;
     ui_i8255_t ppi;
     ui_upd765_t upd;
     ui_audio_t audio;
     ui_fdd_t fdd;
-    ui_cpc_ga_t ga;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
@@ -154,10 +156,10 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
-            ImGui::MenuItem("Gate Array", 0, &ui->ga.open);
             ImGui::MenuItem("Z80 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("AY-3-8912 (PSG)", 0, &ui->psg.open);
             ImGui::MenuItem("MC6845 (CRTC)", 0, &ui->vdc.open);
+            ImGui::MenuItem("AM40010 (Gate Array)", 0, &ui->ga.open);
             ImGui::MenuItem("i8255 (PPI)", 0, &ui->ppi.open);
             ImGui::MenuItem("uPD765 (FDC)", 0, &ui->upd.open);
             ImGui::MenuItem("Floppy Drive", 0, &ui->fdd.open);
@@ -189,17 +191,18 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
 }
 
 #define _UI_CPC_MEMLAYER_CPU      (0)
-#define _UI_CPC_MEMLAYER_ROMS     (1)
-#define _UI_CPC_MEMLAYER_AMSDOS   (2)
-#define _UI_CPC_MEMLAYER_RAM0     (3)
-#define _UI_CPC_MEMLAYER_RAM1     (4)
-#define _UI_CPC_MEMLAYER_RAM2     (5)
-#define _UI_CPC_MEMLAYER_RAM3     (6)
-#define _UI_CPC_MEMLAYER_RAM4     (7)
-#define _UI_CPC_MEMLAYER_RAM5     (8)
-#define _UI_CPC_MEMLAYER_RAM6     (9)
-#define _UI_CPC_MEMLAYER_RAM7     (10)
-#define _UI_CPC_MEMLAYER_NUM      (11)
+#define _UI_CPC_MEMLAYER_GA       (1)
+#define _UI_CPC_MEMLAYER_ROMS     (2)
+#define _UI_CPC_MEMLAYER_AMSDOS   (3)
+#define _UI_CPC_MEMLAYER_RAM0     (4)
+#define _UI_CPC_MEMLAYER_RAM1     (5)
+#define _UI_CPC_MEMLAYER_RAM2     (6)
+#define _UI_CPC_MEMLAYER_RAM3     (7)
+#define _UI_CPC_MEMLAYER_RAM4     (8)
+#define _UI_CPC_MEMLAYER_RAM5     (9)
+#define _UI_CPC_MEMLAYER_RAM6     (10)
+#define _UI_CPC_MEMLAYER_RAM7     (11)
+#define _UI_CPC_MEMLAYER_NUM      (12)
 
 static int _ui_cpc_ram_config[8][4] = {
     { 0, 1, 2, 3 },
@@ -220,17 +223,18 @@ static const char* _ui_cpc_ram_banks[8] = {
 };
 
 static const char* _ui_cpc_memlayer_names[_UI_CPC_MEMLAYER_NUM] = {
-    "CPU Mapped", "OS ROMS", "AMSDOS ROM", "RAM 0", "RAM 1", "RAM 2", "RAM 3", "RAM 4", "RAM 5", "RAM 6", "RAM 7"
+    "CPU Mapped", "Gate Array", "OS ROMS", "AMSDOS ROM", "RAM 0", "RAM 1", "RAM 2", "RAM 3", "RAM 4", "RAM 5", "RAM 6", "RAM 7"
 };
 
 static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
     CHIPS_ASSERT(ui && ui->cpc);
     const cpc_t* cpc = ui->cpc;
     ui_memmap_reset(&ui->memmap);
+    const uint8_t rom_enable = cpc->ga.regs.config;
     if ((cpc->type == CPC_TYPE_464) || (cpc->type == CPC_TYPE_KCCOMPACT)) {
         ui_memmap_layer(&ui->memmap, "ROM");
-            ui_memmap_region(&ui->memmap, "Lower ROM (OS)", 0x0000, 0x4000, !(cpc->ga.config & (1<<2)));
-            ui_memmap_region(&ui->memmap, "Upper ROM (BASIC)", 0xC000, 0x4000, !(cpc->ga.config & (1<<3)));
+            ui_memmap_region(&ui->memmap, "Lower ROM (OS)", 0x0000, 0x4000, !(rom_enable & AM40010_CONFIG_LROMEN));
+            ui_memmap_region(&ui->memmap, "Upper ROM (BASIC)", 0xC000, 0x4000, !(rom_enable & AM40010_CONFIG_HROMEN));
         ui_memmap_layer(&ui->memmap, "RAM");
             ui_memmap_region(&ui->memmap, "RAM 0", 0x0000, 0x4000, true);
             ui_memmap_region(&ui->memmap, "RAM 1", 0x4000, 0x4000, true);
@@ -238,12 +242,13 @@ static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
             ui_memmap_region(&ui->memmap, "RAM 3 (Screen)", 0xC000, 0x4000, true);
     }
     else {
-        const int ram_config_index = cpc->ga.ram_config & 7;
+        const uint8_t ram_config_index = cpc->ga.ram_config & 7;
+        const uint8_t rom_select = cpc->ga.rom_select;
         ui_memmap_layer(&ui->memmap, "ROM Layer 0");
-            ui_memmap_region(&ui->memmap, "OS ROM", 0x0000, 0x4000, true);
-            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x4000, !(cpc->ga.config & (1<<3)) && (cpc->upper_rom_select != 7));
+            ui_memmap_region(&ui->memmap, "OS ROM", 0x0000, 0x4000, !(rom_enable & AM40010_CONFIG_LROMEN));
+            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x4000, !(rom_enable & AM40010_CONFIG_HROMEN) && (rom_select != 7));
         ui_memmap_layer(&ui->memmap, "ROM Layer 1");
-            ui_memmap_region(&ui->memmap, "AMSDOS ROM", 0xC000, 0x4000, !(cpc->ga.config & (1<<3)) && (cpc->upper_rom_select == 7));
+            ui_memmap_region(&ui->memmap, "AMSDOS ROM", 0xC000, 0x4000, !(rom_enable & AM40010_CONFIG_HROMEN)  && (rom_select == 7));
         for (int bank = 0; bank < 8; bank++) {
             ui_memmap_layer(&ui->memmap, _ui_cpc_ram_banks[bank]);
             bool bank_active = false;
@@ -261,8 +266,12 @@ static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
 }
 
 static uint8_t* _ui_cpc_memptr(cpc_t* cpc, int layer, uint16_t addr) {
-    CHIPS_ASSERT((layer >= _UI_CPC_MEMLAYER_ROMS) && (layer < _UI_CPC_MEMLAYER_NUM));
-    if (layer == _UI_CPC_MEMLAYER_ROMS) {
+    CHIPS_ASSERT((layer >= _UI_CPC_MEMLAYER_GA) && (layer < _UI_CPC_MEMLAYER_NUM));
+    if (layer == _UI_CPC_MEMLAYER_GA) {
+        uint8_t* ram = &cpc->ram[0][0];
+        return ram + addr;
+    }
+    else if (layer == _UI_CPC_MEMLAYER_ROMS) {
         if (addr < 0x4000) {
             return &cpc->rom_os[addr];
         }
@@ -273,7 +282,7 @@ static uint8_t* _ui_cpc_memptr(cpc_t* cpc, int layer, uint16_t addr) {
             return 0;
         }
     }
-    if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
+    else if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
         if ((CPC_TYPE_6128 == cpc->type) && (addr >= 0xC000)) {
             return &cpc->rom_amsdos[addr - 0xC000];
         }
@@ -313,7 +322,8 @@ static uint8_t* _ui_cpc_memptr(cpc_t* cpc, int layer, uint16_t addr) {
 
 static uint8_t _ui_cpc_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
-    cpc_t* cpc = (cpc_t*) user_data;
+    ui_cpc_t* ui_cpc = (ui_cpc_t*) user_data;
+    cpc_t* cpc = ui_cpc->cpc;
     if (layer == _UI_CPC_MEMLAYER_CPU) {
         /* CPU mapped RAM layer */
         return mem_rd(&cpc->mem, addr);
@@ -331,7 +341,8 @@ static uint8_t _ui_cpc_mem_read(int layer, uint16_t addr, void* user_data) {
 
 static void _ui_cpc_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
     CHIPS_ASSERT(user_data);
-    cpc_t* cpc = (cpc_t*) user_data;
+    ui_cpc_t* ui_cpc = (ui_cpc_t*) user_data;
+    cpc_t* cpc = ui_cpc->cpc;
     if (layer == _UI_CPC_MEMLAYER_CPU) {
         mem_wr(&cpc->mem, addr, data);
     }
@@ -341,6 +352,49 @@ static void _ui_cpc_mem_write(int layer, uint16_t addr, uint8_t data, void* user
             *ptr = data;
         }
     }
+}
+
+static int _ui_cpc_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
+    CHIPS_ASSERT(user_data);
+    ui_cpc_t* ui_cpc = (ui_cpc_t*) user_data;
+    cpc_t* cpc = ui_cpc->cpc;
+    int scanline = cpc->ga.crt.v_pos;
+    bool vsync = cpc->crtc.vs;
+    int trap_id = 0;
+    for (int i = 0; (i < dbg_win->dbg.num_breakpoints) && (trap_id == 0); i++) {
+        const ui_dbg_breakpoint_t* bp = &dbg_win->dbg.breakpoints[i];
+        if (bp->enabled) {
+            switch (bp->type) {
+                /* scanline number */
+                case UI_DBG_BREAKTYPE_USER+0:
+                    if ((ui_cpc->dbg_scanline != scanline) && (scanline == bp->val)) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* new scanline */
+                case UI_DBG_BREAKTYPE_USER+1:
+                    if (ui_cpc->dbg_scanline != scanline) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* new frame */
+                case UI_DBG_BREAKTYPE_USER+2:
+                    if ((ui_cpc->dbg_scanline != scanline) && (scanline == 0)) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* VSYNC */
+                case UI_DBG_BREAKTYPE_USER+3:
+                    if (vsync && !ui_cpc->dbg_vsync) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+            }
+        }
+    }
+    ui_cpc->dbg_scanline = scanline;
+    ui_cpc->dbg_vsync = vsync;
+    return trap_id;
 }
 
 static const ui_chip_pin_t _ui_cpc_cpu_pins[] = {
@@ -497,6 +551,35 @@ static const ui_chip_pin_t _ui_cpc_upd_pins[] = {
     { "D7",     15,     I8255_D7 },
 };
 
+static const ui_chip_pin_t _ui_cpc_ga_pins[] = {
+    { "D0",     0,      AM40010_D0 },
+    { "D1",     1,      AM40010_D1 },
+    { "D2",     2,      AM40010_D2 },
+    { "D3",     3,      AM40010_D3 },
+    { "D4",     4,      AM40010_D4 },
+    { "D5",     5,      AM40010_D5 },
+    { "D6",     6,      AM40010_D6 },
+    { "D7",     7,      AM40010_D7 },
+
+    { "M1",     9,      AM40010_M1 },
+    { "MREQ",   10,     AM40010_MREQ },
+    { "IORQ",   11,     AM40010_IORQ },
+    { "RD",     12,     AM40010_RD },
+    { "WR",     13,     AM40010_WR },
+
+    { "A13",    14,     AM40010_A13 },
+    { "A14",    15,     AM40010_A14 },
+    { "A15",    16,     AM40010_A15 },
+
+    { "DE",     18,     AM40010_VS },
+    { "HS",     19,     AM40010_HS },
+    { "VS",     20,     AM40010_VS },
+
+    { "INT",    22,     AM40010_INT },
+    { "READY",  23,     AM40010_READY },
+    { "SYNC",   24,     AM40010_SYNC }
+};
+
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->cpc);
@@ -511,11 +594,18 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         desc.y = y;
         desc.z80 = &ui->cpc->cpu;
         desc.read_cb = _ui_cpc_mem_read;
+        desc.break_cb = _ui_cpc_eval_bp;
         desc.create_texture_cb = ui_desc->create_texture_cb;
         desc.update_texture_cb = ui_desc->update_texture_cb;
         desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
         desc.keys = ui_desc->dbg_keys;
-        desc.user_data = ui->cpc;
+        desc.user_data = ui;
+        /* custom breakpoint types */
+        desc.user_breaktypes[0].label = "Scanline at";
+        desc.user_breaktypes[0].show_val16 = true;
+        desc.user_breaktypes[1].label = "New Scanline";
+        desc.user_breaktypes[2].label = "New Frame";
+        desc.user_breaktypes[3].label = "VSYNC";
         ui_dbg_init(&ui->dbg, &desc);
     }
     x += dx; y += dy;
@@ -542,11 +632,21 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     {
         ui_mc6845_desc_t desc = {0};
         desc.title = "MC6845";
-        desc.mc6845 = &ui->cpc->vdg;
+        desc.mc6845 = &ui->cpc->crtc;
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6845", 40, _ui_cpc_vdc_pins);
         ui_mc6845_init(&ui->vdc, &desc);
+    }
+    x += dx, y += dy;
+    {
+        ui_am40010_desc_t desc = {0};
+        desc.title = "AM40010 + PAL";
+        desc.am40010 = &ui->cpc->ga;
+        desc.x = x;
+        desc.y = y;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "40010", 28, _ui_cpc_ga_pins);
+        ui_am40010_init(&ui->ga, &desc);
     }
     x += dx; y += dy;
     {
@@ -567,15 +667,6 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "765", 16, _ui_cpc_upd_pins);
         ui_upd765_init(&ui->upd, &desc);
-    }
-    x += dx; y += dy;
-    {
-        ui_cpc_ga_desc_t desc = {0};
-        desc.title = "CPC Gate Array";
-        desc.cpc = ui->cpc;
-        desc.x = x;
-        desc.y = y;
-        ui_cpc_ga_init(&ui->ga, &desc);
     }
     x += dx; y += dy;
     {
@@ -616,7 +707,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         }
         desc.read_cb = _ui_cpc_mem_read;
         desc.write_cb = _ui_cpc_mem_write;
-        desc.user_data = ui->cpc;
+        desc.user_data = ui;
         static const char* titles[] = { "Memory Editor #1", "Memory Editor #2", "Memory Editor #3", "Memory Editor #4" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
@@ -641,7 +732,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         desc.cpu_type = UI_DASM_CPUTYPE_Z80;
         desc.start_addr = 0x0000;
         desc.read_cb = _ui_cpc_mem_read;
-        desc.user_data = ui->cpc;
+        desc.user_data = ui;
         static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
@@ -659,10 +750,10 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui_upd765_discard(&ui->upd);
     ui_ay38910_discard(&ui->psg);
     ui_mc6845_discard(&ui->vdc);
+    ui_am40010_discard(&ui->ga);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
     ui_fdd_discard(&ui->fdd);
-    ui_cpc_ga_discard(&ui->ga);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
@@ -677,13 +768,13 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
     if (ui->memmap.open) {
         _ui_cpc_update_memmap(ui);
     }
-    ui_cpc_ga_draw(&ui->ga);
     ui_audio_draw(&ui->audio, ui->cpc->sample_pos);
     ui_fdd_draw(&ui->fdd);
     ui_kbd_draw(&ui->kbd);
     ui_z80_draw(&ui->cpu);
     ui_ay38910_draw(&ui->psg);
     ui_mc6845_draw(&ui->vdc);
+    ui_am40010_draw(&ui->ga);
     ui_i8255_draw(&ui->ppi);
     ui_upd765_draw(&ui->upd);
     ui_memmap_draw(&ui->memmap);

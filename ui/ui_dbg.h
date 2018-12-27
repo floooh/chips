@@ -63,6 +63,7 @@ extern "C" {
 #endif
 
 #define UI_DBG_MAX_BREAKPOINTS (32)
+#define UI_DBG_MAX_USER_BREAKTYPES (8)              /* max number of user breakpoint types */
 #define UI_DBG_STEP_TRAPID (128)                    /* special trap id when step-mode active */
 #define UI_DBG_BP_BASE_TRAPID (UI_DBG_STEP_TRAPID+1)   /* first CPU trap-id used for breakpoints */
 #define UI_DBG_MAX_STRLEN (32)
@@ -72,16 +73,18 @@ extern "C" {
 
 /* breakpoint types */
 enum {
-    UI_DBG_BREAKTYPE_EXEC = 0,      /* break on executed address */
-    UI_DBG_BREAKTYPE_BYTE,          /* break on a specific 8-bit value at address */
-    UI_DBG_BREAKTYPE_WORD,          /* break on a specific 16-bit value at address */
-    UI_DBG_BREAKTYPE_IRQ,           /* break on maskable interrupt */
-    UI_DBG_BREAKTYPE_NMI,           /* break on non-maskable interrupt */
+    UI_DBG_BREAKTYPE_EXEC,      /* break on executed address */
+    UI_DBG_BREAKTYPE_BYTE,      /* break on a specific 8-bit value at address */
+    UI_DBG_BREAKTYPE_WORD,      /* break on a specific 16-bit value at address */
+    UI_DBG_BREAKTYPE_IRQ,       /* break on maskable interrupt */
+    UI_DBG_BREAKTYPE_NMI,       /* break on non-maskable interrupt */
     #if defined(UI_DBG_USE_Z80)
-        UI_DBG_BREAKTYPE_OUT,           /* break on a Z80 out operation */
-        UI_DBG_BREAKTYPE_IN,            /* break on a Z80 in operation */
+        UI_DBG_BREAKTYPE_OUT,   /* break on a Z80 out operation */
+        UI_DBG_BREAKTYPE_IN,    /* break on a Z80 in operation */
     #endif
+    UI_DBG_BREAKTYPE_USER,      /* user breakpoint types start here */
 };
+#define UI_DBG_MAX_BREAKTYPES (UI_DBG_BREAKTYPE_USER + UI_DBG_MAX_USER_BREAKTYPES)
 
 /* breakpoint conditions */
 enum {
@@ -109,10 +112,22 @@ typedef struct ui_dbg_breakpoint_t {
     int val;
 } ui_dbg_breakpoint_t;
 
+/* breakpoint type description */
+typedef struct ui_dbg_user_breaktype_t {
+    const char* label;          /* human readable name */
+    const char* val_label;      /* value field label or 0 for no label */
+    bool show_addr;             /* show the address field ? */
+    bool show_cmp;              /* show the comparision dropdown? */
+    bool show_val8;             /* show the value field as byte? */
+    bool show_val16;            /* show the value field as word? */
+} ui_dbg_breaktype_t;
+
+/* forward decl */
+struct ui_dbg_t;
 /* callback for reading a byte from memory */
 typedef uint8_t (*ui_dbg_read_t)(int layer, uint16_t addr, void* user_data);
-/* callback for evaluating breakpoints, return breakpoint index, or -1 */
-typedef int (*ui_dbg_break_t)(ui_dbg_breakpoint_t* first, int num, uint16_t pc, uint64_t pins, int ticks, void* user_data);
+/* callback for evaluating uer breakpoints, return breakpoint index, or -1 */
+typedef int (*ui_dbg_user_break_t)(ui_dbg_t* win, uint16_t pc, int ticks, uint64_t pins, void* user_data);
 /* a callback to create a dynamic-update RGBA8 UI texture, needs to return an ImTextureID handle */
 typedef void* (*ui_dbg_create_texture_t)(int w, int h);
 /* callback to update a UI texture with new data */
@@ -142,7 +157,8 @@ typedef struct ui_dbg_desc_t {
     #ifdef UI_DBG_USE_M6502
     m6502_t* m6502;             /* 6502 CPU to track */
     #endif
-    ui_dbg_read_t read_cb;      /* callback to read memory */
+    ui_dbg_read_t read_cb;          /* callback to read memory */
+    ui_dbg_user_break_t break_cb;   /* optional user-breakpoint evaluation callback */
     ui_dbg_create_texture_t create_texture_cb;      /* callback to create UI texture */
     ui_dbg_update_texture_t update_texture_cb;      /* callback to update UI texture */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* callback to destroy UI texture */
@@ -151,6 +167,7 @@ typedef struct ui_dbg_desc_t {
     int w, h;                   /* initial window size, or 0 for default size */
     bool open;                  /* initial open state */
     ui_dbg_keydesc_t keys;      /* user-defined hotkeys */
+    ui_dbg_breaktype_t user_breaktypes[UI_DBG_MAX_USER_BREAKTYPES];  /* user-defined breakpoint types */
 } ui_dbg_desc_t;
 
 /* disassembler state */
@@ -177,6 +194,7 @@ typedef struct ui_dbg_state_t {
     bool stopped;
     int step_mode;
     bool install_trap_cb;       /* whether to install the trap callback */
+    uint64_t cpu_pins;          /* last state of CPU pins */
     uint32_t frame_id;          /* used in trap callback to detect when a new frame has started */
     uint32_t trap_frame_id;
     uint16_t trap_pc;           /* last PC in CPU trap callback */
@@ -209,6 +227,9 @@ typedef struct ui_dbg_uistate_t {
     bool request_scroll;
     ui_dbg_keydesc_t keys;
     ui_dbg_line_t line_array[UI_DBG_NUM_LINES];
+    int num_breaktypes;
+    ui_dbg_breaktype_t breaktypes[UI_DBG_MAX_BREAKTYPES];
+    const char* breaktype_combo_labels[UI_DBG_MAX_BREAKTYPES];
 } ui_dbg_uistate_t;
 
 typedef struct ui_dbg_heatmapitem_t {
@@ -237,6 +258,7 @@ typedef struct ui_dbg_heatmap_t {
 typedef struct ui_dbg_t {
     bool valid;
     ui_dbg_read_t read_cb;
+    ui_dbg_user_break_t break_cb;
     ui_dbg_create_texture_t create_texture_cb;
     ui_dbg_update_texture_t update_texture_cb;
     ui_dbg_destroy_texture_t destroy_texture_cb;
@@ -533,6 +555,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
         }
     }
     else {
+        uint64_t rising_pins = pins & (pins ^ win->dbg.cpu_pins);
         for (int i = 0; (i < win->dbg.num_breakpoints) && (trap_id == 0); i++) {
             const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
             if (bp->enabled) {
@@ -581,11 +604,11 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
 
                     case UI_DBG_BREAKTYPE_IRQ:
                         #if defined(UI_DBG_USE_Z80)
-                            if (pins & Z80_INT) {
+                            if (Z80_INT & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #elif defined(UI_DBG_USE_M6502)
-                            if (pins & M6502_IRQ) {
+                            if (M6502_IRQ & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #endif
@@ -593,11 +616,11 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
 
                     case UI_DBG_BREAKTYPE_NMI:
                         #if defined(UI_DBG_USE_Z80)
-                            if (pins & Z80_NMI) {
+                            if (Z80_NMI & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #elif defined(UI_DBG_USE_M6502)
-                            if (pins & M6502_NMI) {
+                            if (M6502_NMI & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #endif
@@ -625,6 +648,10 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                 }
             }
         }
+    }
+    /* call optional user-breakpoint evaluation callback */
+    if ((0 == trap_id) && win->break_cb) {
+        trap_id = win->break_cb(win, pc, ticks, pins, win->user_data);
     }
     /* track execution */
     if (pc != win->dbg.trap_pc) {
@@ -665,6 +692,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     win->dbg.trap_pc = pc;
     win->dbg.trap_frame_id = win->dbg.frame_id;
     win->dbg.trap_ticks = ticks;
+    win->dbg.cpu_pins = pins;
 
     /* call original trap callback if exists */
     if (0 == trap_id) {
@@ -843,6 +871,7 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
         for (int i = 0; i < win->dbg.num_breakpoints; i++) {
             ImGui::PushID(i);
             ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
+            CHIPS_ASSERT((bp->type >= 0) && (bp->type < UI_DBG_MAX_BREAKTYPES));
             /* visualize the current breakpoint */
             bool bp_active = (win->dbg.last_trap_id >= UI_DBG_BP_BASE_TRAPID) &&
                              ((win->dbg.last_trap_id - UI_DBG_BP_BASE_TRAPID) == i);
@@ -863,18 +892,14 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
             }
             ImGui::SameLine();
             bool upd_val = false;
-            ImGui::PushItemWidth(84);
-            #if defined(UI_DBG_USE_Z80)
-            if (ImGui::Combo("##type", &bp->type, "Break at\0Byte at\0Word at\0IRQ\0NMI\0OUT at\0IN at\0\0")) {
+            ImGui::PushItemWidth(112);
+            if (ImGui::Combo("##type", &bp->type, win->ui.breaktype_combo_labels, win->ui.num_breaktypes)) {
                 upd_val = true;
             }
-            #elif defined(UI_DBG_USE_M6502)
-            if (ImGui::Combo("##type", &bp->type, "Break at\0Byte at\0Word at\0IRQ\0NMI\0\0")) {
-                upd_val = true;
-            }
-            #endif
+            ui_dbg_breaktype_t* bt = &win->ui.breaktypes[bp->type];
+            CHIPS_ASSERT(bt->label);
             ImGui::PopItemWidth();
-            if ((bp->type != UI_DBG_BREAKTYPE_IRQ) && (bp->type != UI_DBG_BREAKTYPE_NMI)) {
+            if (bt->show_addr) {
                 ImGui::SameLine();
                 uint16_t old_addr = bp->addr;
                 bp->addr = ui_util_input_u16("##addr", old_addr);
@@ -893,29 +918,31 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
                             bp->val = 0x00FF;
                             break;
                         #endif
+                        default:
+                            bp->val = 0;
+                            break;
                     }
                 }
-                if ((bp->type == UI_DBG_BREAKTYPE_BYTE) || (bp->type == UI_DBG_BREAKTYPE_WORD)) {
+            }
+            if (bt->show_cmp) {
+                ImGui::SameLine();
+                ImGui::PushItemWidth(42);
+                ImGui::Combo("##cond", &bp->cond,"==\0!=\0>\0<\0>=\0<=\0");
+                ImGui::PopItemWidth();
+            }
+            if (bt->show_val8 || bt->show_val16) {
+                if (bt->val_label) {
                     ImGui::SameLine();
-                    ImGui::PushItemWidth(42);
-                    ImGui::Combo("##cond", &bp->cond,"==\0!=\0>\0<\0>=\0<=\0");
-                    ImGui::PopItemWidth();
-                    ImGui::SameLine();
-                    if (bp->type == UI_DBG_BREAKTYPE_BYTE) {
-                        bp->val = (int) ui_util_input_u8("##byte", (uint8_t)bp->val);
-                    }
-                    else {
-                        bp->val = (int) ui_util_input_u16("##word", (uint16_t)bp->val);
-                    }
+                    ImGui::Text("%s", bt->val_label);
                 }
-                #if defined(UI_DBG_USE_Z80)
-                else if ((bp->type == UI_DBG_BREAKTYPE_OUT) || (bp->type == UI_DBG_BREAKTYPE_IN)) {
+                if (bt->show_val8) {
                     ImGui::SameLine();
-                    ImGui::Text("portmask");
+                    bp->val = (int) ui_util_input_u8("##byte", (uint8_t)bp->val);
+                }
+                else {
                     ImGui::SameLine();
                     bp->val = (int) ui_util_input_u16("##word", (uint16_t)bp->val);
                 }
-                #endif
             }
             ImGui::SameLine();
             if (ImGui::Button("Del")) {
@@ -1165,6 +1192,54 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui->show_ticks = true;
     ui->show_breakpoints = false;
     ui->keys = desc->keys;
+    int i = 0;
+    for (; i < UI_DBG_BREAKTYPE_USER; i++) {
+        ui_dbg_breaktype_t* bt = &(ui->breaktypes[i]);
+        switch (i) {
+            case UI_DBG_BREAKTYPE_EXEC:
+                bt->label = "Break at";
+                bt->show_addr = true;
+                break;
+            case UI_DBG_BREAKTYPE_BYTE:
+                bt->label = "Byte at";
+                bt->show_addr = bt->show_cmp = bt->show_val8 = true;
+                break;
+            case UI_DBG_BREAKTYPE_WORD:
+                bt->label = "Word at";
+                bt->show_addr = bt->show_cmp = bt->show_val16 = true;
+                break;
+            case UI_DBG_BREAKTYPE_IRQ:
+                bt->label = "IRQ";
+                break;
+            case UI_DBG_BREAKTYPE_NMI:
+                bt->label = "NMI";
+                break;
+            #if defined(UI_DBG_USE_Z80)
+            case UI_DBG_BREAKTYPE_OUT:
+                bt->label = "OUT at";
+                bt->show_addr = bt->show_val16 = true;
+                bt->val_label = "portmask";
+                break;
+            case UI_DBG_BREAKTYPE_IN:
+                bt->label = "IN at";
+                bt->show_addr = bt->show_val16 = true;
+                bt->val_label = "portmask";
+                break;
+            #endif
+        }
+        ui->breaktype_combo_labels[i] = bt->label;
+    }
+    int j = 0;
+    for (; j < UI_DBG_MAX_USER_BREAKTYPES; j++, i++) {
+        if (desc->user_breaktypes[j].label) {
+            ui->breaktypes[i] = desc->user_breaktypes[j];
+            ui->breaktype_combo_labels[i] = ui->breaktypes[i].label;
+        }
+        else {
+            break;
+        }
+    }
+    ui->num_breaktypes = i;
 }
 
 static void _ui_dbg_uistate_reset(ui_dbg_t* win) {
@@ -1636,6 +1711,7 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     memset(win, 0, sizeof(ui_dbg_t));
     win->valid = true;
     win->read_cb = desc->read_cb;
+    win->break_cb = desc->break_cb;
     win->create_texture_cb = desc->create_texture_cb;
     win->update_texture_cb = desc->update_texture_cb;
     win->destroy_texture_cb = desc->destroy_texture_cb;
