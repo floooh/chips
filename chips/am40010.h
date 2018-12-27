@@ -599,7 +599,6 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     if (vs_rise) {
         ga->video.hcount = 0;
     }
-
     /* ...on falling HSYNC */
     if (hs_fall) {
         /* increment 5-bit HCOUNT and clamp at 28 (bits 4,3 and 2 set) */
@@ -617,8 +616,9 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
         }
         /* reset interrupt counter when HCOUNT passes from 3 to 4, 
             this forces INTCNT to count from end of VSYNC
+            (NOTE: the exact hcount value is critical!)
         */
-        if (hcount == 4) {
+        if (hcount == 3) {
             intcnt = 0;
         }
 
@@ -660,10 +660,10 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     else if (clkcnt < 8) {
         clkcnt++;
     }
-    /* h_sync is taken from bit 2 of clkcnt */
-    bool h_sync = (clkcnt > 2) && (clkcnt < 7);
     /* v_sync is on as long as hcount is < 4 */
     bool v_sync = (0 == (ga->video.hcount & 0x1C));
+    /* h_sync is taken from bit 2 of clkcnt */
+    bool h_sync = (clkcnt > 2) && (clkcnt < 7);
     ga->video.sync = h_sync || v_sync;
     /* write back clkcnt */
     ga->video.clkcnt = clkcnt;
@@ -672,15 +672,15 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
 }
 
 static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_pins) {
-    //
-    //  compute the source address from current CRTC ma (memory address)
-    //  and ra (raster address) like this:
-    //
-    //  |ma13|ma12|ra2|ra1|ra0|ma9|ma8|ma7|ma6|ma5|ma4|ma3|ma2|ma1|ma0|0|
-    //
-    // Bits ma13 and m12 point to the 16 KByte page, and all
-    // other bits are the index into that page.
-    //
+    /*
+         compute the source address from current CRTC ma (memory address)
+         and ra (raster address) like this:
+    
+         |ma13|ma12|ra2|ra1|ra0|ma9|ma8|ma7|ma6|ma5|ma4|ma3|ma2|ma1|ma0|0|
+    
+        Bits ma13 and m12 point to the 16 KByte page, and all
+        other bits are the index into that page.
+    */
     const uint16_t addr = ((crtc_pins & 0x3000) << 2) |     /* MA13,MA12 */
                           ((crtc_pins & 0x3FF) << 1) |      /* MA9..MA0 */
                           (((crtc_pins>>48) & 7) << 11);    /* RA0..RA2 */
@@ -690,12 +690,14 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
     const uint32_t* ink = ga->colors.ink_rgba8;
     switch (ga->video.mode) {
         case 0:
-            // 160x200 @ 16 colors
-            // pixel    bit mask
-            // 0:       |3|7|
-            // 1:       |2|6|
-            // 2:       |1|5|
-            // 3:       |0|4|
+            /*
+                160x200 @ 16 colors
+                pixel    bit mask
+                0:       |3|7|
+                1:       |2|6|
+                2:       |1|5|
+                3:       |0|4|
+            */
             for (int i = 0; i < 2; i++) {
                 c = *src++;
                 p = ink[((c>>7)&0x1)|((c>>2)&0x2)|((c>>3)&0x4)|((c<<2)&0x8)];
@@ -705,12 +707,14 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
             }
             break;
         case 1:
-            // 320x200 @ 4 colors
-            // pixel    bit mask
-            // 0:       |3|7|
-            // 1:       |2|6|
-            // 2:       |1|5|
-            // 3:       |0|4|
+            /*
+                320x200 @ 4 colors
+                pixel    bit mask
+                0:       |3|7|
+                1:       |2|6|
+                2:       |1|5|
+                3:       |0|4|
+            */
             for (int i = 0; i < 2; i++) {
                 c = *src++;
                 p = ink[((c>>2)&2)|((c>>7)&1)];
@@ -724,7 +728,7 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
             }
             break;
         case 2:
-            /// 640x200 @ 2 colors
+            /* 640x200 @ 2 colors */
             for (int i = 0; i < 2; i++) {
                 c = *src++;
                 for (int j = 7; j >= 0; j--) {
