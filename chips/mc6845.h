@@ -368,12 +368,12 @@ uint64_t mc6845_tick(mc6845_t* c) {
         
         bool co_vtotal = c->row_ctr == c->v_total;
         uint8_t max_scanline;
-//        if (co_vtotal) {
-//            max_scanline = c->v_total_adjust;
-//        }
-//        else {
+        if (co_vtotal) {
+            max_scanline = c->v_total_adjust + c->max_scanline_addr;
+        }
+        else {
             max_scanline = c->max_scanline_addr;
-//        }
+        }
         bool co_scanline = c->scanline_ctr >= max_scanline;
         if (co_scanline) {
             c->scanline_ctr = 0;
