@@ -152,7 +152,7 @@ extern "C" {
 #define MC6845_VDISPLAYED       (6)
 #define MC6845_VSYNCPOS         (7)
 #define MC6845_INTERLACEMODE    (8)
-#define MC6845_MAXSCALINEADDR   (9)
+#define MC6845_MAXSCANLINEADDR  (9)
 #define MC6845_CURSORSTART      (10)
 #define MC6845_CURSOREND        (11)
 #define MC6845_STARTADDRHI      (12)
@@ -177,7 +177,7 @@ typedef struct {
     uint8_t sel;
     /* register bank */
     union {
-        uint8_t reg[0x1F];              /* only 17 registers exist */
+        uint8_t reg[0x20];              /* only 17 registers exist */
         struct {
             uint8_t h_total;            /* horizontal total (minus 1) */
             uint8_t h_displayed;        /* horizontal displayed */
@@ -271,13 +271,13 @@ static uint8_t _mc6845_mask[0x20] = {
     0xFF,       /* CURSORLO */
     0x3F,       /* LIGHTPENHI */
     0xFF,       /* LIGHTPENLO */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF     /* register 31 reads as 0xFF on UM6845R (CPC CRTC type 1) */
 };
 
 /* readable/writable per chip type and register (1: writable, 2: readable, 3: read/write) */
 static uint8_t _mc6845_rw[MC6845_NUM_TYPES][0x20] = {
     { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-    { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 },
     { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
@@ -285,6 +285,7 @@ void mc6845_init(mc6845_t* c, mc6845_type_t type) {
     CHIPS_ASSERT(c);
     memset(c, 0, sizeof(mc6845_t));
     c->type = type;
+    c->reg[0x1F] = 0xFF;    /* register 31 reads as 0xFF on UM6845R (type 1) */
 }
 
 void mc6845_reset(mc6845_t* c) {
@@ -336,11 +337,14 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
         else {
             /* register address selected */
             if (pins & MC6845_RW) {
-                /* on UM6845R, read status register
+                /* on UM6845R and UM6845 read status register
                    bit 6: LPEN (not implemented)
                    bit 5: currently in vertical blanking
                 */
-                uint8_t val = c->v_de ? 0: (1<<5);
+                uint8_t val = 0;
+                if (c->type != MC6845_TYPE_MC6845) {
+                    val |= c->v_de ? 0: (1<<5);
+                }
                 MC6845_SET_DATA(pins, val);
             }
             else {
@@ -356,7 +360,6 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
 uint64_t mc6845_tick(mc6845_t* c) {
 
     /* horizontal update */
-    // FIXME: mc6845 syncwidth 0 -> 16 
     bool co_htotal = c->h_ctr == c->h_total;
     if (co_htotal) {
         // new scanline
@@ -382,7 +385,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
             }
             else {
                 // new chracter row
-                c->ma_row_start += c->h_displayed;
+                c->ma_row_start = c->ma;
                 c->row_ctr = (c->row_ctr + 1) & 0x7F;
             }
             bool co_vdisp = c->row_ctr == c->v_displayed;
@@ -398,7 +401,9 @@ uint64_t mc6845_tick(mc6845_t* c) {
         else {
             c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
         }
-
+        if ((c->type == MC6845_TYPE_UM6845R) && (c->row_ctr == 0)) {
+            c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
+        }
         c->ma = c->ma_row_start & 0x3FFF;
         c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
         uint8_t vsync_width;
@@ -416,7 +421,9 @@ uint64_t mc6845_tick(mc6845_t* c) {
     }
     else {
         c->h_ctr++;
-        c->ma = (c->ma + 1) & 0x3FFF;
+        if (c->h_de) {
+            c->ma = (c->ma + 1) & 0x3FFF;
+        }
         c->hsync_ctr = (c->hsync_ctr + 1) & 0x0F;
     }
     bool co_hdisp = c->h_ctr == c->h_displayed;
@@ -432,71 +439,6 @@ uint64_t mc6845_tick(mc6845_t* c) {
     if (co_hsend) {
         c->hs = false;
     }
-
-    /* FIXME: on UM6845R, R12/R13 (start_addr_hi/lo) is read into
-       ma_row_start at the start of each scanline during character
-       row 0.
-    */
-        /*
-    if (co_htotal) {
-        bool need_adj = c->v_total_adjust != 0;
-        uint8_t max_scan_line;
-        if (c->in_adj) {
-            // this is an adjust row
-            max_scan_line = (c->v_total_adjust - 1) & 0x1F;
-        }
-        else {
-            // this is a normal row
-            max_scan_line = c->max_scanline_addr;
-        }
-        if ((c->scanline_ctr >= max_scan_line) && ((!need_adj && (c->row_ctr >= c->v_total)) || c->in_adj)) {
-            // new frame
-            c->scanline_ctr = 0;
-            c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
-            c->row_ctr = 0;
-            c->in_adj = false;
-        }
-        else if (!c->in_adj && (c->scanline_ctr >= max_scan_line)) {
-            // new character row 
-            c->scanline_ctr = 0;
-            c->ma_row_start += c->h_displayed;
-            c->row_ctr = (c->row_ctr + 1) & 0x7F;
-            if ((c->row_ctr >= c->v_total) && need_adj) {
-                c->in_adj = true;
-            }
-        }
-        else {
-            // new scanline
-            c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
-        }
-
-        // handle vertical display enabled 
-        if (c->row_ctr == 0) {
-            c->v_de = true;
-        }
-        if (c->row_ctr == c->v_displayed) {
-            c->v_de = false;
-        }
-
-        // handle VSYNC on/off 
-        if ((c->row_ctr == c->v_sync_pos) || c->vs) {
-            c->vs = true;
-            c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
-        }
-        uint8_t v_sync_width;
-        if ((c->type == MC6845_TYPE_UM6845R)||(c->type == MC6845_TYPE_MC6845)) {
-            // on these models, VSYNC width is fixed to 0 (== 16 lines) 
-            v_sync_width = 0;
-        }
-        else {
-            v_sync_width = (c->sync_widths >> 4) & 0x0F;
-        }
-        if ((c->vsync_ctr == v_sync_width) && c->vs) {
-            c->vs = false;
-            c->vsync_ctr = 0;
-        }
-    }
-        */
 
     /* build the return pin mask */
     uint64_t new_pins = ((c->scanline_ctr & 0x1F) * MC6845_RA0)| c->ma;
