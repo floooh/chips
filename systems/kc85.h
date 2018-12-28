@@ -1502,7 +1502,7 @@ static bool _kc85_load_kcc(kc85_t* sys, const uint8_t* ptr, int num_bytes) {
     if (hdr->num_addr > 2) {
         _kc85_load_start(sys, hdr->exec_addr_h<<8 | hdr->exec_addr_l);
     }
-    return false;
+    return true;
 }
 
 /* KC TAP file format support */
