@@ -362,10 +362,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
     /* horizontal update */
     bool co_htotal = c->h_ctr == c->h_total;
     if (co_htotal) {
-        // new scanline
-        c->h_ctr = 0;
-        c->h_de = true;
-        
+        /* new scanline */
         bool co_vtotal = c->row_ctr == c->v_total;
         uint8_t max_scanline;
         if (co_vtotal) {
@@ -378,14 +375,19 @@ uint64_t mc6845_tick(mc6845_t* c) {
         if (co_scanline) {
             c->scanline_ctr = 0;
             if (co_vtotal) {
-                // new frame
+                /* new frame */
                 c->row_ctr = 0;
                 c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
                 c->v_de = true;
             }
             else {
-                // new chracter row
-                c->ma_row_start = c->ma;
+                /* new chracter row, a new ma_row_start address was only
+                   captured when display-enable is switched off (so if h_disp < h_total),
+                   this speciality is used in the "backtro" demo
+                */
+                if (!c->h_de) {
+                    c->ma_row_start = c->ma;
+                }
                 c->row_ctr = (c->row_ctr + 1) & 0x7F;
             }
             bool co_vdisp = c->row_ctr == c->v_displayed;
@@ -404,6 +406,8 @@ uint64_t mc6845_tick(mc6845_t* c) {
         if ((c->type == MC6845_TYPE_UM6845R) && (c->row_ctr == 0)) {
             c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
         }
+        c->h_ctr = 0;
+        c->h_de = true;
         c->ma = c->ma_row_start & 0x3FFF;
         c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
         uint8_t vsync_width;
@@ -411,7 +415,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
             vsync_width = (c->sync_widths >> 4) & 0x0F;
         }
         else {
-            // vsync width is fixed as 0x10
+            /* vsync width is fixed as 0x10 */
             vsync_width = 0;
         }
         bool co_vsend = c->vsync_ctr == vsync_width;
@@ -421,6 +425,7 @@ uint64_t mc6845_tick(mc6845_t* c) {
     }
     else {
         c->h_ctr++;
+        /* only increment MA during display-enable! */
         if (c->h_de) {
             c->ma = (c->ma + 1) & 0x3FFF;
         }
