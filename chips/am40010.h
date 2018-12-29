@@ -841,18 +841,19 @@ static inline uint64_t _am40010_do_tick(am40010_t* ga, bool int_ack, uint64_t pi
 */
 static inline int _am40010_wait_scan_tick(am40010_t* ga, int num_ticks, uint64_t pins) {
     int wait_scan_tick = -1;
+    /* NOTE: these offsets are important for proper computation of the CCLK clock */
     if (pins & Z80_MREQ) {
         /* a memory request, wait pin is sampled in 2nd tick */
-        wait_scan_tick = 1;
+        wait_scan_tick = 2;
     }
     else if (pins & Z80_IORQ) {
         if (pins & Z80_M1) {
             /* an interrupt acknowledge tick, wait pin is sampled in 4th tick */
-            wait_scan_tick = 3;
+            wait_scan_tick = 4;
         }
         else {
             /* an IO request, wait pin is sampled in 3rd tick */
-            wait_scan_tick = 2;
+            wait_scan_tick = 3;
         }
     }
     return wait_scan_tick;
@@ -885,8 +886,9 @@ uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t pins) {
             }
             /* derive the 1 MHz CCLK signal from the sequencer, and perform
                 the actions that need to happen at the CCLK tick
+                NOTE: the actual position where CCLK happens is important!
             */
-            bool cclk = (2 == (ga->seq_tick_count & 3));
+            bool cclk = (0 == (ga->seq_tick_count & 3));
             if (cclk) {
                 uint64_t crtc_pins = ga->cclk_cb(ga->user_data);
                 _am40010_do_cclk(ga, crtc_pins);
