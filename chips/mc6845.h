@@ -453,8 +453,16 @@ uint64_t mc6845_tick(mc6845_t* c) {
     if (c->vs) {
         new_pins |= MC6845_VS;
     }
-    if (c->h_de && c->v_de) {
-        new_pins |= MC6845_DE;
+    /* disabling DE via R8 (Skew) only on Type 0 */
+    if (c->type == MC6845_TYPE_UM6845) {
+        if (c->h_de && c->v_de && ((c->interlace_mode & 0x30) != 0x30)) {
+            new_pins |= MC6845_DE;
+        }
+    }
+    else {
+        if (c->h_de && c->v_de) {
+            new_pins |= MC6845_DE;
+        }
     }
     c->pins = (c->pins & MC6845_IORQ_PINS) | new_pins;
     return new_pins;
