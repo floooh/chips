@@ -202,6 +202,7 @@ typedef struct {
     /* counters and latches */
     uint16_t ma;                    /* the memory address */
     uint16_t ma_row_start;          /* memory address reset latch */
+    uint16_t next_row_start;
     uint8_t h_ctr;                  /* horizontal counter (mod 256) */
     uint8_t hsync_ctr;              /* horizontal sync-width counter (mod 16) */
     uint8_t vsync_ctr;              /* vertical sync-height counter */
@@ -377,19 +378,17 @@ uint64_t mc6845_tick(mc6845_t* c) {
             if (co_vtotal) {
                 /* new frame */
                 c->row_ctr = 0;
-                c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
                 c->v_de = true;
+                c->next_row_start = (c->start_addr_hi<<8) | c->start_addr_lo;
             }
             else {
                 /* new chracter row, a new ma_row_start address was only
                    captured when display-enable is switched off (so if h_disp < h_total),
                    this speciality is used in the "backtro" demo
                 */
-                if (!c->h_de) {
-                    c->ma_row_start = c->ma;
-                }
                 c->row_ctr = (c->row_ctr + 1) & 0x7F;
             }
+            c->ma_row_start = c->next_row_start;
             bool co_vdisp = c->row_ctr == c->v_displayed;
             bool co_vsync = c->row_ctr == c->v_sync_pos;
             if (co_vdisp) {
@@ -403,8 +402,10 @@ uint64_t mc6845_tick(mc6845_t* c) {
         else {
             c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
         }
+        /* special case TYPE 0, reload ma_row_start at each scanline of row 0 */
         if ((c->type == MC6845_TYPE_UM6845R) && (c->row_ctr == 0)) {
-            c->ma_row_start = (c->start_addr_hi<<8)|(c->start_addr_lo);
+            c->next_row_start = (c->start_addr_hi<<8) | c->start_addr_lo;
+            c->ma_row_start = c->next_row_start; 
         }
         c->h_ctr = 0;
         c->h_de = true;
@@ -436,6 +437,8 @@ uint64_t mc6845_tick(mc6845_t* c) {
     bool co_hsend = c->hsync_ctr == (c->sync_widths & 0x0F);
     if (co_hdisp) {
         c->h_de = false;
+        /* capture next ma_row_start candidates */
+        c->next_row_start = c->ma;
     }
     if (co_hsync) {
         c->hsync_ctr = 0;
