@@ -130,39 +130,34 @@ static void _ui_mc6845_draw_state(ui_mc6845_t* win) {
     }
     ImGui::Separator();
 
-    mc->h_total = ui_util_input_u8("H Total", mc->h_total); ImGui::SameLine(128);
-    mc->h_displayed = ui_util_input_u8("H Displayed", mc->h_displayed);
-
-    mc->h_sync_pos = ui_util_input_u8("H Sync Pos", mc->h_sync_pos); ImGui::SameLine(128);
-    mc->sync_widths = ui_util_input_u8("Sync Widths", mc->sync_widths);
-
-    mc->v_total = ui_util_input_u8("V Total", mc->v_total); ImGui::SameLine(128);
-    mc->v_total_adjust = ui_util_input_u8("V Total Adj", mc->v_total_adjust);
-
-    mc->v_displayed = ui_util_input_u8("V Displayed", mc->v_displayed); ImGui::SameLine(128);
-    mc->v_sync_pos = ui_util_input_u8("V Sync Pos", mc->v_sync_pos);
-
-    mc->interlace_mode = ui_util_input_u8("Interlace", mc->interlace_mode); ImGui::SameLine(128);
-    mc->max_scanline_addr = ui_util_input_u8("Max Scanline", mc->max_scanline_addr);
-
-    mc->cursor_start = ui_util_input_u8("Cursor Start", mc->cursor_start); ImGui::SameLine(128);
-    mc->cursor_end = ui_util_input_u8("Cursor End", mc->cursor_end);
-
-    mc->start_addr_hi = ui_util_input_u8("Start Addr Hi", mc->start_addr_hi); ImGui::SameLine(128);
-    mc->start_addr_lo = ui_util_input_u8("Start Addr Lo", mc->start_addr_lo);
-
-    mc->cursor_hi = ui_util_input_u8("Cursor Hi", mc->cursor_hi); ImGui::SameLine(128);
-    mc->cursor_lo = ui_util_input_u8("Cursor Lo", mc->cursor_lo);
-
-    mc->lightpen_hi = ui_util_input_u8("Lightpen Hi", mc->lightpen_hi); ImGui::SameLine(128);
-    mc->lightpen_lo = ui_util_input_u8("Lightpen Lo", mc->lightpen_lo);
-
+    ImGui::Columns(2, "##regs", false);
+    ImGui::SetColumnWidth(0, 124);
+    ImGui::SetColumnWidth(1, 124);
+    mc->h_total = ui_util_input_u8("R0 HTotal", mc->h_total); ImGui::NextColumn();
+    mc->h_displayed = ui_util_input_u8("R1 HDisp", mc->h_displayed); ImGui::NextColumn();
+    mc->h_sync_pos = ui_util_input_u8("R2 HSyncPos", mc->h_sync_pos); ImGui::NextColumn();
+    mc->sync_widths = ui_util_input_u8("R3 SyncWidth", mc->sync_widths); ImGui::NextColumn();
+    mc->v_total = ui_util_input_u8("R4 VTotal", mc->v_total); ImGui::NextColumn();
+    mc->v_total_adjust = ui_util_input_u8("R5 VTotalAdj", mc->v_total_adjust); ImGui::NextColumn();
+    mc->v_displayed = ui_util_input_u8("R6 VDisp", mc->v_displayed); ImGui::NextColumn();
+    mc->v_sync_pos = ui_util_input_u8("R7 VSyncPos", mc->v_sync_pos); ImGui::NextColumn();
+    mc->interlace_mode = ui_util_input_u8("R8 Interl", mc->interlace_mode); ImGui::NextColumn();
+    mc->max_scanline_addr = ui_util_input_u8("R9 MaxScanl", mc->max_scanline_addr); ImGui::NextColumn();
+    mc->cursor_start = ui_util_input_u8("R10 CursStart", mc->cursor_start); ImGui::NextColumn();
+    mc->cursor_end = ui_util_input_u8("R11 CursEnd", mc->cursor_end); ImGui::NextColumn();
+    mc->start_addr_hi = ui_util_input_u8("R12 AddrHi", mc->start_addr_hi); ImGui::NextColumn();
+    mc->start_addr_lo = ui_util_input_u8("R13 AddrLo", mc->start_addr_lo); ImGui::NextColumn();
+    mc->cursor_hi = ui_util_input_u8("R14 CursHi", mc->cursor_hi); ImGui::NextColumn();
+    mc->cursor_lo = ui_util_input_u8("R15 CursLo", mc->cursor_lo); ImGui::NextColumn();
+    mc->lightpen_hi = ui_util_input_u8("R16 LPenHi", mc->lightpen_hi); ImGui::NextColumn();
+    mc->lightpen_lo = ui_util_input_u8("R17 LPenLo", mc->lightpen_lo); ImGui::NextColumn();
+    ImGui::Columns();
     ImGui::Separator();
-
-    ImGui::Text("Memory Addr:  %04X  Row Start: %04X", mc->ma, mc->ma_row_start);
-    ImGui::Text("Hori Ctr:     %02X    Row Ctr:   %02X", mc->h_ctr, mc->row_ctr);
-    ImGui::Text("HSync Ctr:    %02X    VSync Ctr: %02X", mc->hsync_ctr, mc->vsync_ctr);
-    ImGui::Text("Scanline Ctr: %02X", mc->scanline_ctr);
+    ImGui::Text("Memory Addr: %04X  Row Start: %04X", mc->ma, mc->ma_row_start);
+    ImGui::Text("Row Ctr:     %02X    Scanline Ctr: %02X", mc->row_ctr, mc->scanline_ctr);
+    ImGui::Text("Hori Ctr:    %02X", mc->h_ctr);
+    ImGui::Text("HSync Ctr:   %02X    VSync Ctr: %02X", mc->hsync_ctr, mc->vsync_ctr);
+    ImGui::Text("Reg Sel:     R%d", mc->sel);
 }
 
 void ui_mc6845_draw(ui_mc6845_t* win) {
