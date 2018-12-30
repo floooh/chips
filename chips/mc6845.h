@@ -433,6 +433,13 @@ uint64_t mc6845_tick(mc6845_t* c) {
         if (c->h_de) {
             c->ma = (c->ma + 1) & 0x3FFF;
         }
+        /* FIXME: this "misses a beat" when the end of HSYNC is 
+        identical with VTOTAL, and the HSYNC "spills" into the
+        next scanline, but without this, the Byte'98 demo doesn't
+        work since the new MA StartAddr is loaded into ma_row_start
+        before CPU has finished writing the new address (only
+        one half of the address arrives)
+        */
         c->hsync_ctr = (c->hsync_ctr + 1) & 0x0F;
     }
     bool co_hdisp = c->h_ctr == c->h_displayed;
