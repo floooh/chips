@@ -4,6 +4,9 @@
 
     Header-only emulator for the Motorola MC6845 CRT controller.
 
+    FIXME: the whole HSYNC/VSYNC generation needs work for
+    "edge situations"...
+
     Do this:
     ~~~C
     #define CHIPS_IMPL
