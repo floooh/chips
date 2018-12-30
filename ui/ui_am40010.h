@@ -178,7 +178,7 @@ static void _ui_am40010_draw_sync_irq(ui_am40010_t* win) {
     am40010_video_t* v = &win->am40010->video;
     ImGui::Text("Mode    %d", v->mode);
     ImGui::Text("IntCnt  %02X", v->intcnt);
-    ImGui::Text("HCount  %02X", v->hcount);
+    ImGui::Text("HSCount %02X", v->hscount);
     ImGui::Text("ClkCnt  %02X", v->clkcnt);
     ImGui::Text("Sync    %s", v->sync ? "ON":"OFF");
     ImGui::Text("IRQ     %s", v->intr ? "ON":"OFF");

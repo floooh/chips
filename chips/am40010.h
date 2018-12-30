@@ -184,10 +184,10 @@ typedef struct am40010_colors_t {
 
 /* vsync/video/irq generation */
 typedef struct am40010_video_t {
+    int hscount;        /* 5-bit counter updated at HSYNC falling edge */
+    int intcnt;         /* 6-bit counter updated at HSYNC falling egde */
+    int clkcnt;         /* 4-bit counter updated at 1 MHz */
     uint8_t mode;       /* currently active mode updated at hsync */
-    uint8_t hcount;     /* 5-bit counter updated at HSYNC falling edge */
-    uint8_t intcnt;     /* 6-bit counter updated at HSYNC falling egde */
-    uint8_t clkcnt;     /* 4-bit counter updated at 1 MHz */
     bool sync;          /* state of the sync output pin */
     bool intr;          /* interrupt flip-flop */
 } am40010_video_t;
@@ -574,62 +574,30 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     bool hs_fall = _am40010_falling_u64(crtc_pins, ga->crtc_pins, AM40010_HS);
     bool vs_rise = _am40010_rising_u64(crtc_pins, ga->crtc_pins, AM40010_VS);
 
-    /* HCOUNT is reset by rising VSYNC, and counts up at falling HSYNC
-       until clamped at 28 (0x1C) or reset by VSYNC again
-
-       When HCOUNT passes from 3 to 4 (end of VSYNC), it will reset the INTCNT,
-       forcing the INTCNT to count from end of VSYNC
-
-       INTCNT counts up at falling HSYNC. It resets when reaching 52 (0x34),
-       or when HCOUNT passes from 3 to 4, or when the IRQRESET bit
-       is set from code. On interrupt acknowledge from the CPU, the
-       topmost bit will be cleared. 
-
-       When the topmost bit of the IRQCNT flips from 1 to 0 (for whatever
-       reason), it will switch on the IRQ bit. This happens if:
-        - the interrupt counter wraps around at 52 (0x34)
-        - the IRQRESET bit was set manually while IRQCNT is >= 32
-        - the INTCNT is cleared by HCOUNT passing from 3 to 4, and if 
-          INTCNT was >= 32
-        - an interrupt was acknowledged while IRQCNT is >= 32
-    */
-    /* clear HCOUNT bits 1..4 on VSYNC rising edge, this basically 
-        reset HCOUNT at the start of VSYNC
-    */
+    /* on VSYNC rise, clear the HSYNC counter */
     if (vs_rise) {
-        ga->video.hcount = 0;
+        ga->video.hscount = 0;
     }
     /* ...on falling HSYNC */
     if (hs_fall) {
-        /* increment 5-bit HCOUNT and clamp at 28 (bits 4,3 and 2 set) */
-        uint8_t hcount = ga->video.hcount;
-        if (hcount < 0x1C) {
-            hcount = hcount + 1;
-        }
-
         /* increment 6-bit INTCNT on hsync falling edge */
-        uint8_t intcnt = (ga->video.intcnt + 1) & 0x3F;
+        ga->video.intcnt = (ga->video.intcnt + 1) & 0x3F;
 
-        /* if interrupt count reaches 52 (bits 5,4 and 2 set), it is reset to 0 */
-        if ((intcnt & 0x34) == 0x34) {
-            intcnt = 0;
+        /* 2 HSYNCs after start of VSYNC */
+        if (ga->video.hscount == 2) {
+            if (ga->video.intcnt >= 32) {
+                ga->video.intr = true;
+            }
+            ga->video.intcnt = 0;
         }
-        /* reset interrupt counter when HCOUNT passes from 3 to 4, 
-            this forces INTCNT to count from end of VSYNC
-            (NOTE: the exact hcount value is critical!)
-        */
-        if (hcount == 3) {
-            intcnt = 0;
-        }
-
-        /* on falling edge of bit5 of INTCNT, set the interrupt flipflop */
-        if (_am40010_falling_u8(intcnt, ga->video.intcnt, (1<<5))) {
+        
+        /* if interrupt count reaches 52, it is reset to 0 and an interrupt is requested */
+        if (ga->video.intcnt == 52) {
             ga->video.intr = true;
+            ga->video.intcnt = 0;
         }
 
-        /* write back counters */
-        ga->video.intcnt = intcnt;
-        ga->video.hcount = hcount;
+        ga->video.hscount++;
     }
     
     /* SYNC and MODESYNC via 1 MHz 4-bit CLKCNT
@@ -653,15 +621,15 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
         /* MODESYNC triggers when clkcnt goes from 7 to 8 */
         ga->video.mode = ga->regs.config & AM40010_CONFIG_MODE;
     }
-    /* if HSYNC is OFF, clkcnt bits 0..2 are forced to 0, deactivating the counter */
+    /* if HSYNC is off, force the clkcnt counter to 0 */
     if (0 == (crtc_pins & AM40010_HS)) {
         clkcnt = 0;
     }
     else if (clkcnt < 8) {
         clkcnt++;
     }
-    /* v_sync is on as long as hcount is < 4 */
-    bool v_sync = (0 == (ga->video.hcount & 0x1C));
+    /* v_sync is on as long as hscount is < 4 */
+    bool v_sync = ga->video.hscount < 4;
     /* h_sync is taken from bit 2 of clkcnt */
     bool h_sync = (clkcnt > 2) && (clkcnt < 7);
     ga->video.sync = h_sync || v_sync;
@@ -669,6 +637,26 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     ga->video.clkcnt = clkcnt;
 
     return ga->video.sync;
+}
+
+/* perform the 4 MHz tick actions of the gate array */
+static inline uint64_t _am40010_do_tick(am40010_t* ga, bool int_ack, uint64_t pins) {
+    /* when the IRQ_RESET bit is set, reset the interrupt counter and clear the interrupt flipflop */
+    if ((ga->regs.config & AM40010_CONFIG_IRQRESET) != 0) {
+        ga->regs.config &= ~AM40010_CONFIG_IRQRESET;
+        ga->video.intcnt = 0;
+        ga->video.intr = false;
+    }
+    /* on interrupt acknowledge, clear the interrupt flip-flop, and bit 5 of the interrupt counter */
+    if (int_ack) {
+       ga->video.intcnt &= 0x1F;
+       ga->video.intr = false;
+    }
+    /* set the READY pin in 3 out of 4 ticks */
+    if (0 != (ga->seq_tick_count & 3)) {
+        pins |= AM40010_READY;
+    }
+    return pins;
 }
 
 static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_pins) {
@@ -776,7 +764,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
     else if (ga->crt.visible) {
         int dst_x = ga->crt.pos_x * 16;
         int dst_y = ga->crt.pos_y;
-        bool black = (crtc_pins & AM40010_HS) || (0 == (ga->video.hcount & 0x1C));
+        bool black = ga->video.sync;
         uint32_t* dst = &ga->rgba8_buffer[dst_x + dst_y * AM40010_DISPLAY_WIDTH];
         if (crtc_pins & AM40010_DE) {
             _am40010_decode_pixels(ga, dst, crtc_pins);
@@ -812,26 +800,6 @@ static inline void _am40010_do_cclk(am40010_t* ga, uint64_t crtc_pins) {
     bool sync = _am40010_sync_irq(ga, crtc_pins);
     _am40010_crt_tick(ga, sync);
     _am40010_decode_video(ga, crtc_pins);
-}
-
-/* perform the 4 MHz tick actions of the gate array */
-static inline uint64_t _am40010_do_tick(am40010_t* ga, bool int_ack, uint64_t pins) {
-    /* when the IRQ_RESET bit is set, reset the interrupt counter and clear the interrupt flipflop */
-    if ((ga->regs.config & AM40010_CONFIG_IRQRESET) != 0) {
-        ga->regs.config &= ~AM40010_CONFIG_IRQRESET;
-        ga->video.intcnt = 0;
-        ga->video.intr = false;
-    }
-    /* on interrupt acknowledge, clear the interrupt flip-flop, and bit 5 of the interrupt counter */
-    if (int_ack) {
-       ga->video.intcnt &= 0x1F;
-       ga->video.intr = false;
-    }
-    /* set the READY pin in 3 out of 4 ticks */
-    if (0 != (ga->seq_tick_count & 3)) {
-        pins |= AM40010_READY;
-    }
-    return pins;
 }
 
 /* determine at which cycle of the current machine cycle the
@@ -880,7 +848,7 @@ uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t pins) {
             /* the sequencer is reset on the 3rd clock tick of an
                interrupt acknowledge machine cycle from the CPU
             */
-            bool int_ack = (((Z80_M1|Z80_IORQ) == (pins & (Z80_M1|Z80_IORQ))) && (mc_tick == 3));
+            bool int_ack = (((Z80_M1|Z80_IORQ) == (pins & (Z80_M1|Z80_IORQ))) && (mc_tick == 0));
             if (int_ack) {
                 ga->seq_tick_count = 0;
             }
