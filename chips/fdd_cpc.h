@@ -122,7 +122,7 @@ static bool _fdd_cpc_parse_dsk(fdd_t* fdd, bool ext, const uint8_t* data, int da
             }
             if (track_size > 0) {
                 const _fdd_cpc_dsk_track_info* track_info = (const _fdd_cpc_dsk_track_info*) &fdd->data[data_offset];
-                if (0 != memcmp("Track-Info\r\n", track_info->magic, sizeof(track_info->magic))) {
+                if (0 != memcmp("Track-Info", track_info->magic, 10)) {
                     return false;
                 }
                 if ((data_offset + track_size) > data_size) {
