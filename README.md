@@ -17,6 +17,31 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 
 ## What's New
 
+* **31-Dec-2018**: 
+
+- A complete set of debugging UI headers using Dear ImGui
+has been added, each chip emulator has a window which visualizes the
+pin- and internal-state, and there are helper windows which implement
+a memory editor, memory "heatmap" (visualize read/write/execute operations),
+disassembler and CPU step debugger. Finally there are 'integration headers'
+which implement an entire UI for an emulated system. Note that the implementation
+part of the UI headers needs to be compiled as C++, the 'public API' of
+the headers are callable from C though.
+
+- The CPU emulators (z80.h and m6502.h) have new trap handling. Instead
+of predefined "slots", a trap evaluation callback is now installed, which
+is called at the end of each CPU instruction. This is used extensively
+by the new debugging UIs to keep track of CPU operations and breakpoint support.
+
+- The Amstrad CPC emulation has gained floppy disc loading support, and
+the video system precision has been improved (many modern graphics demos at least
+work now instead of having completely broken rendering, but there's still more
+to be done).
+
+- Loading local files via drag'n'drop has been improved in the WebAssembly
+version, all emulators can now properly detect and load all supported
+file formats via drag'n'drop.
+
 * **23-Jul-2018**: all chip emulators with callbacks now have an extra
 ```user_data``` argument in the callbacks which is provided in the init
 function, this makes the chip emulators a bit more flexible when more than
@@ -98,8 +123,8 @@ The Zilog Z80 CPU.
   while the chips Z80 emulator doesn't incrmenent the PC, this shouldn't make
   any difference though
 - properly handles sequences of DD/FD prefix bytes
+- flexible trap callback for hooking in debuggers and "native code" handlers
 - NOT IMPLEMENTED/TODO:
-    - ~~NMI (non-maskable interrupts)~~
     - interrupt mode 0
     - refresh cycle in second half of opcode fetch machine cycle
     - bus request/acknowledge (BUSRQ/BUSAK pins)
@@ -132,6 +157,7 @@ The MOS Technology 6502 CPU.
 - emulates all(?) quirks (like redundant and 'junk' read/write cycles, variable cycle counts in some addressing modes, page boundary wrap-around in indirect jump, etc...), mostly verified via visual6502.org
 - emulates the known and useful 'documented-undocumented' opcodes (like LAX, SAX, DCP, ...)
 - decimal mode implemented, can be disabled
+- same powerful trap callback as the Z80 emulator
 - test coverage:
     - **NESTEST**: completely working (this runs through all documented, and most 'common'
       undocumented instructions but doesn't test decimal mode)
@@ -191,6 +217,8 @@ Motorola 6845 video address generator and variants.
     - interlace mode
     - the cursor pin
     - the light-pen functionality
+- NOTE: emulation quality is "ok" for most Amstrad graphics demos, but more
+improvements are needed
 
 ### MC6847 (chips/mc6847.h)
 
@@ -246,9 +274,21 @@ MOS Technology 6526 Complex Interface Adapter
 
 ### MOS 6569 VIC-II for PAL-B (chips/m6569.h)
 
-MOS Technology 6569 Video Interface Chip VIC-II
+MOS Technology 6569 Video Interface Chip VIC-II (FIXME: needs more info)
 
-(Work In Progress)
+### MOS 6581 SID (chips/m6581.h)
+
+The C64 sound chip (FIXME: needs more info)
+
+### AM40010 Amstrad CPC Gate Array Emulation (chips/am40010.h)
+
+This emulated the Amstrad CPC gate array chip, and also integrates the PAL
+chip for bankswitching in the 6128. 
+
+### UPD765 Floppy Disc Controller (chips/upd765.h)
+
+This is a basic emulation of the UPD765 floppy controller. Currently only
+features required by the Amstrad CPC are implemented.
 
 ## Helper Code
 
@@ -280,5 +320,17 @@ A square-wave beeper found in many simple home computers.
 
 ### Clock (chips/clk.h)
 
-Clock/timer helper functions. This currently only has a single function to
-convert a duration in microseconds into a number of CPU ticks.
+Helper function to convert a clock frequency in Hz to a number of ticks,
+and to keep track of the 'left over' ticks from one frame to the next.
+
+### Floppy Disc Drive (chips/fdd.h)
+
+A basic floppy disc drive emulator, currently only basic functionality
+as needed by the Amstrad CPC emulation.
+
+### Amstrad CPC Disk Image Loader (chips/fdd_cpc.h)
+
+This is an extension-header for fdd.h which adds support to read
+an Amstrad CPC .DSK disk image file and "insert" it into the Floppy Disc Drive
+(fdd.h).
+
