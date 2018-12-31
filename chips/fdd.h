@@ -97,6 +97,7 @@ typedef struct {
 
 /* a floppy disc drive description */
 typedef struct {
+    int cur_side;
     int cur_track_index;
     int cur_sector_index;
     int cur_sector_pos;
@@ -146,6 +147,7 @@ void fdd_motor(fdd_t* fdd, bool on) {
 
 void fdd_eject_disc(fdd_t* fdd) {
     CHIPS_ASSERT(fdd);
+    fdd->cur_side = 0;
     fdd->cur_track_index = 0;
     fdd->cur_sector_index = 0;
     fdd->cur_sector_pos = 0;
@@ -240,6 +242,7 @@ int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
     CHIPS_ASSERT(fdd);
     CHIPS_ASSERT(h < FDD_MAX_SIDES);
     if (fdd->has_disc && fdd->motor_on) {
+        fdd->cur_side = h;
         const fdd_track_t* track = &fdd->disc.tracks[h][fdd->cur_track_index];
         for (int si = 0; si < track->num_sectors; si++) {
             const fdd_sector_t* sector = &track->sectors[si];
@@ -259,6 +262,7 @@ int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
 int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data) {
     CHIPS_ASSERT(fdd && (h < FDD_MAX_SIDES) && out_data);
     if (fdd->has_disc & fdd->motor_on) {
+        fdd->cur_side = h;
         const fdd_sector_t* sector = &fdd->disc.tracks[h][fdd->cur_track_index].sectors[fdd->cur_sector_index];
         if (fdd->cur_sector_pos < sector->data_size) {
             const int data_offset = sector->data_offset + fdd->cur_sector_pos;

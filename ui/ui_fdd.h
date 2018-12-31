@@ -127,6 +127,7 @@ void ui_fdd_draw(ui_fdd_t* win) {
             fdd_t* fdd = win->fdd;
             ImGui::Text("Motor: %s", fdd->motor_on ? "ON":"OFF");
             ImGui::Text("Disc:  %s", fdd->has_disc ? "YES":"NO");
+            ImGui::Text("Current Side:   %d", fdd->cur_side);
             ImGui::Text("Current Track:  %d", fdd->cur_track_index);
             ImGui::Text("Current Sector: %d", fdd->cur_sector_index);
             ImGui::Text("Pos in Sector:  %d", fdd->cur_sector_pos);

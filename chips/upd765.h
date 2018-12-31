@@ -173,6 +173,16 @@ typedef struct {
     uint8_t st2;            /* return status 2 */
 } upd765_sectorinfo_t;
 
+/* drive info struct filled out by the upd765_driveinfo_cb callback */
+typedef struct {
+    int physical_track;     /* current track index */
+    int sides;              /* number of sides (1 or 2) */
+    int head;               /* current side (0 or 1) */
+    bool ready;             /* status of the drive's ready signal */
+    bool write_protected;   /* status of the drive's write protected signal */
+    bool fault;             /* status of the drive's fault signal */
+} upd765_driveinfo_t;
+
 /* callback result bits (compatible with FDD_RESULT_*) */
 #define UPD765_RESULT_SUCCESS (0)
 #define UPD765_RESULT_NOT_READY (1<<0)
@@ -187,6 +197,8 @@ typedef int (*upd765_seeksector_cb)(int drive, upd765_sectorinfo_t* inout_info, 
 typedef int (*upd765_read_cb)(int drive, uint8_t h, void* user_data, uint8_t* out_data);
 /* callback to read info about first sector on current reack */
 typedef int (*upd765_trackinfo_cb)(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info);
+/* callback to get info about disk drive (called on SENSE_DRIVE_STATUS command) */
+typedef void (*upd765_driveinfo_cb)(int drive, void* user_data, upd765_driveinfo_t* out_info);
 
 /* upd765 initialization parameters */
 typedef struct {
@@ -194,6 +206,7 @@ typedef struct {
     upd765_seeksector_cb seeksector_cb;
     upd765_read_cb read_cb;
     upd765_trackinfo_cb trackinfo_cb;
+    upd765_driveinfo_cb driveinfo_cb;
     void* user_data;
 } upd765_desc_t;
 
@@ -208,6 +221,7 @@ typedef struct {
 
     /* current status */
     upd765_sectorinfo_t sector_info;
+    upd765_driveinfo_t drive_info;      /* only valid after SENSE_DRIVE_CMD */
     uint8_t st[4];
 
     /* callback functions */
@@ -215,6 +229,7 @@ typedef struct {
     upd765_seeksector_cb seeksector_cb;
     upd765_read_cb read_cb;
     upd765_trackinfo_cb trackinfo_cb;
+    upd765_driveinfo_cb driveinfo_cb;
     void* user_data;
 
     /* debug inspection */
@@ -439,6 +454,33 @@ static void _upd765_cmd(upd765_t* upd) {
             _upd765_to_phase_result(upd);
             break;
 
+        case UPD765_CMD_SENSE_DRIVE_STATUS:
+            {
+                const int fdd_index = upd->st[0] & 3;
+                upd->driveinfo_cb(fdd_index, upd->user_data, &upd->drive_info);
+                upd->st[3] = fdd_index;
+                if (upd->drive_info.head > 0) {
+                    upd->st[3] |= UPD765_ST3_HD;
+                }
+                if (upd->drive_info.sides > 1) {
+                    upd->st[3] |= UPD765_ST3_TS;
+                }
+                if (upd->drive_info.physical_track == 0) {
+                    upd->st[3] |= UPD765_ST3_T0;
+                }
+                if (upd->drive_info.ready) {
+                    upd->st[3] |= UPD765_ST3_RY;
+                }
+                if (upd->drive_info.write_protected) {
+                    upd->st[3] |= UPD765_ST3_WP;
+                }
+                if (upd->drive_info.fault) {
+                    upd->st[3] |= UPD765_ST3_FT;
+                }
+                _upd765_to_phase_result(upd);
+            }
+            break;
+
         case UPD765_CMD_SPECIFY:
             /* nothing useful to do in specify, this just configures some
                timing and DMA-mode params that are not relevant for
@@ -473,7 +515,6 @@ static void _upd765_cmd(upd765_t* upd) {
         case UPD765_CMD_SCAN_EQUAL:
         case UPD765_CMD_SCAN_LOW_OR_EQUAL:
         case UPD765_CMD_SCAN_HIGH_OR_EQUAL:
-        case UPD765_CMD_SENSE_DRIVE_STATUS:
             /* NOT IMPLEMENTED */
             CHIPS_ASSERT(false);
             break;
@@ -589,11 +630,13 @@ void upd765_init(upd765_t* upd, const upd765_desc_t* desc) {
     CHIPS_ASSERT(desc->seeksector_cb);
     CHIPS_ASSERT(desc->read_cb);
     CHIPS_ASSERT(desc->trackinfo_cb);
+    CHIPS_ASSERT(desc->driveinfo_cb);
     memset(upd, 0, sizeof(upd765_t));
     upd->seektrack_cb = desc->seektrack_cb;
     upd->seeksector_cb = desc->seeksector_cb;
     upd->read_cb = desc->read_cb;
     upd->trackinfo_cb = desc->trackinfo_cb;
+    upd->driveinfo_cb = desc->driveinfo_cb;
     upd->user_data = desc->user_data;
     upd765_reset(upd);
 }

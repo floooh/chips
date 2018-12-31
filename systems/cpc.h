@@ -244,6 +244,7 @@ static int _cpc_fdc_seektrack(int drive, int track, void* user_data);
 static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void* user_data);
 static int _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_data);
 static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info);
+static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* out_info);
 
 #define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 #define _CPC_CLEAR(val) memset(&val, 0, sizeof(val))
@@ -329,6 +330,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     fdc_desc.seeksector_cb = _cpc_fdc_seeksector;
     fdc_desc.read_cb = _cpc_fdc_read;
     fdc_desc.trackinfo_cb = _cpc_fdc_trackinfo;
+    fdc_desc.driveinfo_cb = _cpc_fdc_driveinfo;
     fdc_desc.user_data = sys;
     upd765_init(&sys->fdc, &fdc_desc);
     fdd_init(&sys->fdd);
@@ -1122,6 +1124,26 @@ static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_secto
         }
     }
     return FDD_RESULT_NOT_READY;
+}
+
+static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* out_info) {
+    cpc_t* sys = (cpc_t*) user_data;
+    if ((0 == drive) && sys->fdd.has_disc) {
+        out_info->physical_track = sys->fdd.cur_track_index;
+        out_info->sides = sys->fdd.disc.num_sides;
+        out_info->head = sys->fdd.cur_side;
+        out_info->ready = sys->fdd.motor_on;
+        out_info->write_protected = sys->fdd.disc.write_protected;
+        out_info->fault = false;
+    }
+    else {
+        out_info->physical_track = 0;
+        out_info->sides = 1;
+        out_info->head = 0;
+        out_info->ready = false;
+        out_info->write_protected = true;
+        out_info->fault = false;
+    }
 }
 
 bool cpc_insert_disc(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
