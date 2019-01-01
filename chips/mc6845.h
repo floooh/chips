@@ -316,55 +316,6 @@ static inline void _mc6845_co_clear(mc6845_t* c) {
     c->co_raster = false;
 }
 
-/* perform the coincidence circuit comparisons */
-static inline void _mc6845_co_cmp(mc6845_t* c) {
-    if (c->h_ctr == (c->h_total + 1)) {
-        c->co_htotal = true;
-    }
-    if (c->h_ctr == c->h_displayed) {
-        c->co_hdisp = true;
-    }
-    uint8_t hs_width = c->sync_widths & 0x0F;
-    if (c->type == MC6845_TYPE_MC6845) {
-        if (hs_width == 0) {
-            hs_width = 0x10;
-        }
-    }
-    if (c->h_ctr == c->h_sync_pos) {
-        if (hs_width != 0) {
-            c->co_hspos = true;
-        }
-    }
-    if (c->hsync_ctr == hs_width) {
-        c->co_hswidth = true;
-    }
-    if (c->v_ctr == (c->v_total + 1)) {
-        c->co_vtotal = true;
-    }
-    if (c->v_ctr == c->v_displayed) {
-        c->co_vdisp = true;
-    }
-    if (c->v_ctr == c->v_sync_pos) {
-        c->co_vspos = true;
-    }
-    uint8_t vs_width;
-    if (c->type == MC6845_TYPE_UM6845) {
-        vs_width = (c->sync_widths >> 4) & 0x0F;
-        if (0 == vs_width) {
-            vs_width = 0x10;
-        }
-    }
-    else {
-        vs_width = 0x10;
-    }
-    if (c->vsync_ctr == vs_width) {
-        c->co_vswidth = true;
-    }
-    if (c->r_ctr == (c->max_scanline_addr + 1)) {
-        c->co_raster = true;
-    } 
-}
-
 /* compute pin state */
 static inline uint64_t _mc6845_pins(mc6845_t* c) {
     uint64_t pins = ((c->r_ctr & 0x1F) * MC6845_RA0) | c->ma;
@@ -414,6 +365,97 @@ void mc6845_reset(mc6845_t* c) {
     _mc6845_co_clear(c);
 }
 
+/* coincidence circuits comparison */
+static inline uint8_t _mc6845_hswidth(mc6845_t* c) {
+    uint8_t hs_width = c->sync_widths & 0x0F;
+    if (c->type == MC6845_TYPE_MC6845) {
+        if (hs_width == 0) {
+            hs_width = 0x10;
+        }
+    }
+    return hs_width;
+}
+
+static inline uint8_t _mc6845_vswidth(mc6845_t* c) {
+    uint8_t vs_width;
+    if (c->type == MC6845_TYPE_UM6845) {
+        vs_width = (c->sync_widths >> 4) & 0x0F;
+        if (0 == vs_width) {
+            vs_width = 0x10;
+        }
+    }
+    else {
+        vs_width = 0x10;
+    }
+    return vs_width;
+}
+
+static inline void _mc6845_co_cmp_htotal(mc6845_t* c) {
+    if (c->h_ctr == (c->h_total + 1)) {
+        c->co_htotal = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_hdisp(mc6845_t* c) {
+    if (c->h_ctr == c->h_displayed) {
+        c->co_hdisp = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_hspos(mc6845_t* c) {
+    if (c->h_ctr == c->h_sync_pos) {
+        c->co_hspos = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_hswidth(mc6845_t* c) {
+    if (c->hsync_ctr == _mc6845_hswidth(c)) {
+        c->co_hswidth = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_vtotal(mc6845_t* c) {
+    if (c->v_ctr == (c->v_total + 1)) {
+        c->co_vtotal = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_vdisp(mc6845_t* c) {
+    if (c->v_ctr == c->v_displayed) {
+        c->co_vdisp = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_vspos(mc6845_t* c) {
+    if (c->v_ctr == c->v_sync_pos) {
+        c->co_vspos = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_hctr(mc6845_t* c) {
+    _mc6845_co_cmp_htotal(c);
+    _mc6845_co_cmp_hdisp(c);
+    _mc6845_co_cmp_hspos(c);
+}
+
+static inline void _mc6845_co_cmp_vctr(mc6845_t* c) {
+    _mc6845_co_cmp_vtotal(c);
+    _mc6845_co_cmp_vdisp(c);
+    _mc6845_co_cmp_vspos(c);
+}
+
+static inline void _mc6845_co_cmp_vswidth(mc6845_t* c) {
+    if (c->vsync_ctr == _mc6845_vswidth(c)) {
+        c->co_vswidth = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_raster(mc6845_t* c) {
+    if (c->r_ctr == (c->max_scanline_addr + 1)) {
+        c->co_raster = true;
+    } 
+}
+
 uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
     if (pins & MC6845_CS) {
         if (pins & MC6845_RS) {
@@ -432,6 +474,49 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
                 /* write register value (only if register is writable) */
                 if (_mc6845_rw[c->type][i] & (1<<0)) {
                     c->reg[i] = MC6845_GET_DATA(pins) & _mc6845_mask[i];
+                    /* update the coincidence circuit state */
+                    switch (i) {
+                        case MC6845_HTOTAL:
+                            _mc6845_co_cmp_htotal(c);
+                            break;
+                        case MC6845_HDISPLAYED:
+                            _mc6845_co_cmp_hdisp(c);
+                            break;
+                        case MC6845_HSYNCPOS:
+                            _mc6845_co_cmp_hspos(c);
+                            break;
+                        case MC6845_SYNCWIDTHS:
+                            _mc6845_co_cmp_hswidth(c);
+                            _mc6845_co_cmp_vswidth(c);
+                            break;
+                        case MC6845_VTOTAL:
+                            _mc6845_co_cmp_vtotal(c);
+                            break;
+                        case MC6845_VTOTALADJ:
+                            /* FIXME! */
+                            break;
+                        case MC6845_VDISPLAYED:
+                            _mc6845_co_cmp_vdisp(c);
+                            break;
+                        case MC6845_VSYNCPOS:
+                            _mc6845_co_cmp_vspos(c);
+                            break;
+                        case MC6845_INTERLACEMODE:
+                            /* FIXME? */
+                            break;
+                        case MC6845_MAXSCANLINEADDR:
+                            _mc6845_co_cmp_raster(c);
+                            break;
+                        case MC6845_CURSORSTART:
+                        case MC6845_CURSOREND:
+                        case MC6845_STARTADDRHI:
+                        case MC6845_STARTADDRLO:
+                        case MC6845_CURSORHI:
+                        case MC6845_CURSORLO:
+                        case MC6845_LIGHTPENHI:
+                        case MC6845_LIGHTPENLO:
+                            break;
+                    }
                 }
             }
         }
@@ -461,32 +546,34 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
 /* per scanline updates */
 static inline void _mc6845_scanline(mc6845_t* c) {
     /* FIXME: vertical adjust! */
+//    _mc6845_co_cmp_raster(c);
     c->r_ctr = (c->r_ctr + 1) & 0x1F;
-    if (c->vs) {
-        c->vsync_ctr++;
-    }
-    _mc6845_co_cmp(c);
-    if (c->co_vswidth) {
-        c->vs = false;
-    }
+    _mc6845_co_cmp_raster(c);
     if (c->co_raster) {
-        /* new character row */
-        c->r_ctr = 0 ;
+        c->co_raster = false;
+        c->r_ctr = 0;
+        _mc6845_co_cmp_raster(c);
+//        _mc6845_co_cmp_vctr(c);
         c->v_ctr = (c->v_ctr + 1) & 0x7F;
-        _mc6845_co_cmp(c);
+        _mc6845_co_cmp_vctr(c);
         if (c->co_vtotal) {
+            c->co_vtotal = false;
             /* new frame */
             c->v_ctr = 0;
+            _mc6845_co_cmp_vctr(c);
             c->v_de = true;
             c->ma_store = (c->start_addr_hi<<8) | c->start_addr_lo;
-            _mc6845_co_cmp(c);
         }
         if (c->co_vdisp) {
+            c->co_vdisp = false;
             c->v_de = false;
         }
-        if (c->co_vspos && !c->vs) {
-            c->vs = true;
-            c->vsync_ctr = 0;
+        if (c->co_vspos) {
+            c->co_vspos = false;
+            if (!c->vs) {
+                c->vs = true;
+                c->vsync_ctr = 0;
+            }
         }
         c->ma_row_start = c->ma_store;
     }
@@ -495,45 +582,49 @@ static inline void _mc6845_scanline(mc6845_t* c) {
         c->ma_store = (c->start_addr_hi<<8) | c->start_addr_lo;
         c->ma_row_start = c->ma_store; 
     }
+    _mc6845_co_cmp_vswidth(c);
+    if (c->co_vswidth) {
+        c->co_vswidth = false;
+        c->vs = false;
+    }
+    if (c->vs) {
+        c->vsync_ctr++;
+    }
 }
 
 uint64_t mc6845_tick(mc6845_t* c) {
-
-    /* pre-update of coincidence circuits, this catches any register-write changes */
-    _mc6845_co_cmp(c);
-
-    /* per-clock updates */
-    c->h_ctr = c->h_ctr + 1;
-    _mc6845_co_cmp(c);
-    if (c->hs) {
-        c->hsync_ctr++;
-        _mc6845_co_cmp(c);
-    }
+//    _mc6845_co_cmp_hctr(c);
     if (c->h_de) {
         c->ma = (c->ma + 1) & 0x3FFF;
     }
+    c->h_ctr = c->h_ctr + 1;
+    _mc6845_co_cmp_hctr(c);
+    if (c->co_htotal) {
+        c->co_htotal = false;
+        _mc6845_scanline(c);
+        c->h_de = true;         /* FIXME: skew control */
+        c->h_ctr = 0;
+        _mc6845_co_cmp_hctr(c);
+        c->ma = c->ma_row_start;
+    }
     if (c->co_hdisp) {
+        c->co_hdisp = false;
         c->h_de = false;
         c->ma_store = c->ma;
     }
     if (c->co_hspos) {
+        c->co_hspos = false;
         c->hs = true;
         c->hsync_ctr = 0;
     }
+    _mc6845_co_cmp_hswidth(c);
     if (c->co_hswidth) {
+        c->co_hswidth = false;
         c->hs = false;
     }
-    if (c->co_htotal) {
-        _mc6845_scanline(c);
-        c->h_de = true;         /* FIXME: skew control */
-        c->h_ctr = 0;
-        c->ma = c->ma_row_start;
+    if (c->hs) {
+        c->hsync_ctr++;
     }
-
-    /* post-update of coincidence circuirs */
-    _mc6845_co_clear(c);
-    _mc6845_co_cmp(c);
-
     return _mc6845_pins(c);
 }
 
