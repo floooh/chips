@@ -466,6 +466,9 @@ static inline void _mc6845_scanline(mc6845_t* c) {
         c->vsync_ctr++;
     }
     _mc6845_co_cmp(c);
+    if (c->co_vswidth) {
+        c->vs = false;
+    }
     if (c->co_raster) {
         /* new character row */
         c->r_ctr = 0 ;
@@ -481,7 +484,7 @@ static inline void _mc6845_scanline(mc6845_t* c) {
         if (c->co_vdisp) {
             c->v_de = false;
         }
-        if (c->co_vspos) {
+        if (c->co_vspos && !c->vs) {
             c->vs = true;
             c->vsync_ctr = 0;
         }
@@ -491,9 +494,6 @@ static inline void _mc6845_scanline(mc6845_t* c) {
     if ((c->type == MC6845_TYPE_UM6845R) && (c->v_ctr == 0)) {
         c->ma_store = (c->start_addr_hi<<8) | c->start_addr_lo;
         c->ma_row_start = c->ma_store; 
-    }
-    if (c->co_vswidth) {
-        c->vs = false;
     }
 }
 
@@ -512,13 +512,6 @@ uint64_t mc6845_tick(mc6845_t* c) {
     if (c->h_de) {
         c->ma = (c->ma + 1) & 0x3FFF;
     }
-    if (c->co_htotal) {
-        _mc6845_scanline(c);
-        c->h_de = true;         /* FIXME: skew control */
-        c->h_ctr = 0;
-        c->ma = c->ma_row_start;
-        _mc6845_co_cmp(c);
-    }
     if (c->co_hdisp) {
         c->h_de = false;
         c->ma_store = c->ma;
@@ -526,10 +519,15 @@ uint64_t mc6845_tick(mc6845_t* c) {
     if (c->co_hspos) {
         c->hs = true;
         c->hsync_ctr = 0;
-        _mc6845_co_cmp(c);
     }
     if (c->co_hswidth) {
         c->hs = false;
+    }
+    if (c->co_htotal) {
+        _mc6845_scanline(c);
+        c->h_de = true;         /* FIXME: skew control */
+        c->h_ctr = 0;
+        c->ma = c->ma_row_start;
     }
 
     /* post-update of coincidence circuirs */
