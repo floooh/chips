@@ -546,16 +546,19 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
 /* per scanline updates */
 static inline void _mc6845_scanline(mc6845_t* c) {
     /* FIXME: vertical adjust! */
-//    _mc6845_co_cmp_raster(c);
     c->r_ctr = (c->r_ctr + 1) & 0x1F;
     _mc6845_co_cmp_raster(c);
     if (c->co_raster) {
         c->co_raster = false;
         c->r_ctr = 0;
         _mc6845_co_cmp_raster(c);
-//        _mc6845_co_cmp_vctr(c);
         c->v_ctr = (c->v_ctr + 1) & 0x7F;
         _mc6845_co_cmp_vctr(c);
+        /* if co_vdisp and co_vtotal happen at the same time, display must be enabled */
+        if (c->co_vdisp) {
+            c->co_vdisp = false;
+            c->v_de = false;
+        }
         if (c->co_vtotal) {
             c->co_vtotal = false;
             /* new frame */
@@ -564,16 +567,10 @@ static inline void _mc6845_scanline(mc6845_t* c) {
             c->v_de = true;
             c->ma_store = (c->start_addr_hi<<8) | c->start_addr_lo;
         }
-        if (c->co_vdisp) {
-            c->co_vdisp = false;
-            c->v_de = false;
-        }
         if (c->co_vspos) {
             c->co_vspos = false;
-            if (!c->vs) {
-                c->vs = true;
-                c->vsync_ctr = 0;
-            }
+            c->vs = true;
+            c->vsync_ctr = 0;
         }
         c->ma_row_start = c->ma_store;
     }
@@ -582,23 +579,25 @@ static inline void _mc6845_scanline(mc6845_t* c) {
         c->ma_store = (c->start_addr_hi<<8) | c->start_addr_lo;
         c->ma_row_start = c->ma_store; 
     }
-    _mc6845_co_cmp_vswidth(c);
-    if (c->co_vswidth) {
-        c->co_vswidth = false;
-        c->vs = false;
-    }
     if (c->vs) {
+        _mc6845_co_cmp_vswidth(c);
         c->vsync_ctr++;
+        if (c->co_vswidth) {
+            c->co_vswidth = false;
+            c->vs = false;
+        }
     }
 }
 
 uint64_t mc6845_tick(mc6845_t* c) {
-//    _mc6845_co_cmp_hctr(c);
-    if (c->h_de) {
-        c->ma = (c->ma + 1) & 0x3FFF;
-    }
+    c->ma = (c->ma + 1) & 0x3FFF;
     c->h_ctr = c->h_ctr + 1;
     _mc6845_co_cmp_hctr(c);
+    if (c->co_hdisp) {
+        c->co_hdisp = false;
+        c->h_de = false;
+        c->ma_store = c->ma;
+    }
     if (c->co_htotal) {
         c->co_htotal = false;
         _mc6845_scanline(c);
@@ -607,23 +606,18 @@ uint64_t mc6845_tick(mc6845_t* c) {
         _mc6845_co_cmp_hctr(c);
         c->ma = c->ma_row_start;
     }
-    if (c->co_hdisp) {
-        c->co_hdisp = false;
-        c->h_de = false;
-        c->ma_store = c->ma;
-    }
     if (c->co_hspos) {
         c->co_hspos = false;
         c->hs = true;
         c->hsync_ctr = 0;
     }
-    _mc6845_co_cmp_hswidth(c);
-    if (c->co_hswidth) {
-        c->co_hswidth = false;
-        c->hs = false;
-    }
     if (c->hs) {
+        _mc6845_co_cmp_hswidth(c);
         c->hsync_ctr++;
+        if (c->co_hswidth) {
+            c->co_hswidth = false;
+            c->hs = false;
+        }
     }
     return _mc6845_pins(c);
 }
