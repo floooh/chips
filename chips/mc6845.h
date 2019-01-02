@@ -451,7 +451,8 @@ static inline void _mc6845_co_cmp_vswidth(mc6845_t* c) {
 }
 
 static inline void _mc6845_co_cmp_raster(mc6845_t* c) {
-    if (c->r_ctr == (c->max_scanline_addr + 1)) {
+    /* why >= ??? */
+    if (c->r_ctr >= (c->max_scanline_addr + 1)) {
         c->co_raster = true;
     } 
 }
