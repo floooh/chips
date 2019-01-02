@@ -415,7 +415,8 @@ static inline void _mc6845_co_cmp_hswidth(mc6845_t* c) {
 }
 
 static inline void _mc6845_co_cmp_vtotal(mc6845_t* c) {
-    if (c->v_ctr == (c->v_total + 1)) {
+    /* why >= ??? */
+    if (c->v_ctr >= (c->v_total + 1)) {
         c->co_vtotal = true;
     }
 }

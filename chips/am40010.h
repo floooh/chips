@@ -576,6 +576,7 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     if (hs_fall) {
         /* increment 6-bit INTCNT on hsync falling edge */
         ga->video.intcnt = (ga->video.intcnt + 1) & 0x3F;
+        ga->video.hscount++;
 
         /* 2 HSYNCs after start of VSYNC, reset the interrupt counter */
         if (ga->video.hscount == 2) {
@@ -590,8 +591,6 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
             ga->video.intr = true;
             ga->video.intcnt = 0;
         }
-
-        ga->video.hscount++;
     }
     
     /* SYNC and MODESYNC via 1 MHz 4-bit CLKCNT */
