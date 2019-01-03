@@ -120,10 +120,10 @@ void ui_m6581_discard(ui_m6581_t* win) {
 
 static void _ui_m6581_draw_state(ui_m6581_t* win) {
     m6581_t* sid = win->sid;
-    const int c0w = 96;
-    const int cw = 64;
+    const float cw0 = 96.0f;
+    const float cw = 64.0f;
     ImGui::Columns(4, "##sid_channels", false);
-    ImGui::SetColumnWidth(0, c0w);
+    ImGui::SetColumnWidth(0, cw0);
     ImGui::SetColumnWidth(1, cw);
     ImGui::SetColumnWidth(2, cw);
     ImGui::SetColumnWidth(3, cw);
