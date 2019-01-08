@@ -6,41 +6,33 @@ compiles on gcc, clang and cl.exe).
 
 Tests and example code is in a separate repo: https://github.com/floooh/chips-test
 
-This is the meaty stuff from the YAKC emulator, rewritten from
-C++ in C, moved into its own project.
-
-The YAKC emulator is here:
-- github repo: https://github.com/floooh/yakc
-- asm.js/wasm demo: http://floooh.github.io/virtualkc/
+The example emulators, compiled to WebAssembly: https://floooh.github.io/tiny8bit/
 
 For schematics, manuals and research material, see: https://github.com/floooh/emu-info
 
 ## What's New
 
 * **31-Dec-2018**: 
-
-- A complete set of debugging UI headers using Dear ImGui
-has been added, each chip emulator has a window which visualizes the
-pin- and internal-state, and there are helper windows which implement
-a memory editor, memory "heatmap" (visualize read/write/execute operations),
-disassembler and CPU step debugger. Finally there are 'integration headers'
-which implement an entire UI for an emulated system. Note that the implementation
-part of the UI headers needs to be compiled as C++, the 'public API' of
-the headers are callable from C though.
-
-- The CPU emulators (z80.h and m6502.h) have new trap handling. Instead
-of predefined "slots", a trap evaluation callback is now installed, which
-is called at the end of each CPU instruction. This is used extensively
-by the new debugging UIs to keep track of CPU operations and breakpoint support.
-
-- The Amstrad CPC emulation has gained floppy disc loading support, and
-the video system precision has been improved (many modern graphics demos at least
-work now instead of having completely broken rendering, but there's still more
-to be done).
-
-- Loading local files via drag'n'drop has been improved in the WebAssembly
-version, all emulators can now properly detect and load all supported
-file formats via drag'n'drop.
+    - A complete set of debugging UI headers using Dear ImGui has been added,
+    each chip emulator has a window which visualizes the pin- and
+    internal-state, and there are helper windows which implement a memory
+    editor, memory "heatmap" (visualize read/write/execute operations),
+    disassembler and CPU step debugger. Finally there are 'integration
+    headers' which implement an entire UI for an emulated system. Note that
+    the implementation part of the UI headers needs to be compiled as C++,
+    the 'public API' of the headers are callable from C though.
+    - The CPU emulators (z80.h and m6502.h) have new trap handling. Instead
+    of predefined "slots", a trap evaluation callback is now installed, which
+    is called at the end of each CPU instruction. This is used extensively by
+    the new debugging UIs to keep track of CPU operations and breakpoint
+    support.
+    - The Amstrad CPC emulation has gained floppy disc loading support, and
+    the video system precision has been improved (many modern graphics demos
+    at least work now instead of having completely broken rendering, but
+    there's still more to be done).
+    - Loading local files via drag'n'drop has been improved in the
+    WebAssembly version, all emulators can now properly detect and load all
+    supported file formats via drag'n'drop.
 
 * **23-Jul-2018**: all chip emulators with callbacks now have an extra
 ```user_data``` argument in the callbacks which is provided in the init
