@@ -770,15 +770,25 @@ static void _cpc_init_keymap(cpc_t* sys) {
     }
 
     /* special keys */
-    kbd_register_key(&sys->kbd, 0x20, 5, 7, 0);    /* space */
-    kbd_register_key(&sys->kbd, 0x08, 1, 0, 0);    /* cursor left */
-    kbd_register_key(&sys->kbd, 0x09, 0, 1, 0);    /* cursor right */
-    kbd_register_key(&sys->kbd, 0x0A, 0, 2, 0);    /* cursor down */
-    kbd_register_key(&sys->kbd, 0x0B, 0, 0, 0);    /* cursor up */
-    kbd_register_key(&sys->kbd, 0x01, 9, 7, 0);    /* delete */
-    kbd_register_key(&sys->kbd, 0x0C, 2, 0, 0);    /* clr */
-    kbd_register_key(&sys->kbd, 0x0D, 2, 2, 0);    /* return */
-    kbd_register_key(&sys->kbd, 0x03, 8, 2, 0);    /* escape */
+    kbd_register_key(&sys->kbd, 0x20, 5, 7, 0); /* space */
+    kbd_register_key(&sys->kbd, 0x08, 1, 0, 0); /* cursor left */
+    kbd_register_key(&sys->kbd, 0x09, 0, 1, 0); /* cursor right */
+    kbd_register_key(&sys->kbd, 0x0A, 0, 2, 0); /* cursor down */
+    kbd_register_key(&sys->kbd, 0x0B, 0, 0, 0); /* cursor up */
+    kbd_register_key(&sys->kbd, 0x01, 9, 7, 0); /* delete */
+    kbd_register_key(&sys->kbd, 0x0C, 2, 0, 0); /* clr */
+    kbd_register_key(&sys->kbd, 0x0D, 2, 2, 0); /* return */
+    kbd_register_key(&sys->kbd, 0x03, 8, 2, 0); /* escape */
+    kbd_register_key(&sys->kbd, 0xF1, 1, 5, 0); /* F1...*/
+    kbd_register_key(&sys->kbd, 0xF2, 1, 6, 0);
+    kbd_register_key(&sys->kbd, 0xF3, 0, 5, 0);
+    kbd_register_key(&sys->kbd, 0xF4, 4, 2, 0);
+    kbd_register_key(&sys->kbd, 0xF5, 4, 1, 0);
+    kbd_register_key(&sys->kbd, 0xF6, 4, 0, 0);
+    kbd_register_key(&sys->kbd, 0xF7, 2, 1, 0);
+    kbd_register_key(&sys->kbd, 0xF8, 3, 1, 0);
+    kbd_register_key(&sys->kbd, 0xF9, 3, 0, 0);
+    kbd_register_key(&sys->kbd, 0xFA, 7, 1, 0); /* F0 -> F10 */
 }
 
 /* CPC6128 RAM block indices */
