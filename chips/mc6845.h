@@ -391,7 +391,7 @@ static inline uint8_t _mc6845_vswidth(mc6845_t* c) {
 }
 
 static inline void _mc6845_co_cmp_htotal(mc6845_t* c) {
-    if (c->h_ctr == (c->h_total + 1)) {
+    if (c->h_ctr >= (c->h_total + 1)) {
         c->co_htotal = true;
     }
 }
@@ -595,11 +595,6 @@ uint64_t mc6845_tick(mc6845_t* c) {
     c->ma = (c->ma + 1) & 0x3FFF;
     c->h_ctr = c->h_ctr + 1;
     _mc6845_co_cmp_hctr(c);
-    if (c->co_hdisp) {
-        c->co_hdisp = false;
-        c->h_de = false;
-        c->ma_store = c->ma;
-    }
     if (c->co_htotal) {
         c->co_htotal = false;
         _mc6845_scanline(c);
@@ -607,6 +602,11 @@ uint64_t mc6845_tick(mc6845_t* c) {
         c->h_ctr = 0;
         _mc6845_co_cmp_hctr(c);
         c->ma = c->ma_row_start;
+    }
+    if (c->co_hdisp) {
+        c->co_hdisp = false;
+        c->h_de = false;
+        c->ma_store = c->ma;
     }
     if (c->co_hspos) {
         c->co_hspos = false;
