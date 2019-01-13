@@ -154,7 +154,7 @@ static void _ui_mc6845_draw_state(ui_mc6845_t* win) {
     ImGui::Columns();
     ImGui::Separator();
     ImGui::Text("Memory Addr: %04X  Row Start: %04X", mc->ma, mc->ma_row_start);
-    ImGui::Text("Row Ctr:     %02X    Scanline Ctr: %02X", mc->row_ctr, mc->scanline_ctr);
+    ImGui::Text("Row Ctr:     %02X    Scanline Ctr: %02X", mc->v_ctr, mc->r_ctr);
     ImGui::Text("Hori Ctr:    %02X", mc->h_ctr);
     ImGui::Text("HSync Ctr:   %02X    VSync Ctr: %02X", mc->hsync_ctr, mc->vsync_ctr);
     ImGui::Text("Reg Sel:     R%d", mc->sel);

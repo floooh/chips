@@ -202,16 +202,27 @@ typedef struct {
             uint8_t lightpen_lo;
         };
     };
-    /* counters and latches */
+    /* coincidence circuit comparison flags */
+    bool co_htotal;                 /* h_ctr == (h_total + 1) */
+    bool co_hdisp;                  /* h_ctr == h_disp */
+    bool co_hspos;                  /* h_ctr == h_sync_pos */
+    bool co_hswidth;                /* hsync_ctr == h_sync_width */
+    bool co_vtotal;                 /* v_ctr == (v_total + 1) */
+    bool co_vdisp;                  /* v_ctr == v_disp */
+    bool co_vspos;                  /* v_ctr == v_sync_pos */
+    bool co_vswidth;                /* v_ctr == v_sync_width */
+    bool co_raster;                 /* r_ctr == max_scanline_addr */
+    
+    /* internal counters */
+    uint8_t h_ctr;                  /* 8-bit horizontal counter */
+    uint8_t hsync_ctr;              /* 4-bit horizontal sync-width counter */
     uint16_t ma;                    /* the memory address */
     uint16_t ma_row_start;          /* memory address reset latch */
-    uint16_t next_row_start;
-    uint8_t h_ctr;                  /* horizontal counter (mod 256) */
-    uint8_t hsync_ctr;              /* horizontal sync-width counter (mod 16) */
-    uint8_t vsync_ctr;              /* vertical sync-height counter */
-    uint8_t row_ctr;                /* character row counter (mod 128) */
-    uint8_t scanline_ctr;           /* scanline counter (mod 32) */
-    bool in_adj;                    /* true if inside scanline adjust range */
+    uint16_t ma_store;              /* internal latch for storing intermediate MA values */
+    uint8_t v_ctr;                  /* 7-bit vertical counter */
+    uint8_t r_ctr;                  /* 5-bit raster-line counter */
+    uint8_t vsync_ctr;              /* vertical sync counter */
+
     bool hs;                        /* current HSYNC state */
     bool vs;                        /* current VSYNC state */
     bool h_de;                      /* horizontal display enable */
@@ -292,6 +303,43 @@ void mc6845_init(mc6845_t* c, mc6845_type_t type) {
     c->reg[0x1F] = 0xFF;    /* register 31 reads as 0xFF on UM6845R (type 1) */
 }
 
+/* clear the coincidence circuit flags */
+static inline void _mc6845_co_clear(mc6845_t* c) {
+    c->co_htotal = false;
+    c->co_hdisp = false;
+    c->co_hspos = false;
+    c->co_hswidth = false;
+    c->co_vtotal = false;
+    c->co_vdisp = false;
+    c->co_vspos = false;
+    c->co_vswidth = false;
+    c->co_raster = false;
+}
+
+/* compute pin state */
+static inline uint64_t _mc6845_pins(mc6845_t* c) {
+    uint64_t pins = ((c->r_ctr & 0x1F) * MC6845_RA0) | c->ma;
+    if (c->hs) {
+        pins |= MC6845_HS;
+    }
+    if (c->vs) {
+        pins |= MC6845_VS;
+    }
+    /* disabling DE via R8 (Skew) only on Type 0 */
+    if (c->type == MC6845_TYPE_UM6845) {
+        if (c->h_de && c->v_de && ((c->interlace_mode & 0x30) != 0x30)) {
+            pins |= MC6845_DE;
+        }
+    }
+    else {
+        if (c->h_de && c->v_de) {
+            pins |= MC6845_DE;
+        }
+    }
+    c->pins = (c->pins & MC6845_IORQ_PINS) | pins;
+    return pins;
+}
+
 void mc6845_reset(mc6845_t* c) {
     /* reset behaviour:
         - all counters in the CRTC are cleared and the device stops 
@@ -308,13 +356,109 @@ void mc6845_reset(mc6845_t* c) {
     c->h_ctr = 0;
     c->hsync_ctr = 0;
     c->vsync_ctr = 0;
-    c->row_ctr = 0;
-    c->scanline_ctr = 0;
-    c->in_adj = false;
+    c->v_ctr = 0;
+    c->r_ctr = 0;
     c->hs = false;
     c->vs = false;
     c->h_de = false;
     c->v_de = false;
+    _mc6845_co_clear(c);
+}
+
+/* coincidence circuits comparison */
+static inline uint8_t _mc6845_hswidth(mc6845_t* c) {
+    uint8_t hs_width = c->sync_widths & 0x0F;
+    if (c->type == MC6845_TYPE_MC6845) {
+        if (hs_width == 0) {
+            hs_width = 0x10;
+        }
+    }
+    return hs_width;
+}
+
+static inline uint8_t _mc6845_vswidth(mc6845_t* c) {
+    uint8_t vs_width;
+    if (c->type == MC6845_TYPE_UM6845) {
+        vs_width = (c->sync_widths >> 4) & 0x0F;
+        if (0 == vs_width) {
+            vs_width = 0x10;
+        }
+    }
+    else {
+        vs_width = 0x10;
+    }
+    return vs_width;
+}
+
+static inline void _mc6845_co_cmp_htotal(mc6845_t* c) {
+    if (c->h_ctr >= (c->h_total + 1)) {
+        c->co_htotal = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_hdisp(mc6845_t* c) {
+    if (c->h_ctr == c->h_displayed) {
+        c->co_hdisp = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_hspos(mc6845_t* c) {
+    if (c->h_ctr == c->h_sync_pos) {
+        c->co_hspos = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_hswidth(mc6845_t* c) {
+    if (c->hsync_ctr == _mc6845_hswidth(c)) {
+        c->co_hswidth = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_vtotal(mc6845_t* c) {
+    /* why >= ??? */
+    if (c->v_ctr >= (c->v_total + 1)) {
+        c->co_vtotal = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_vdisp(mc6845_t* c) {
+    if (c->v_ctr == c->v_displayed) {
+        c->co_vdisp = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_vspos(mc6845_t* c) {
+    if (c->v_ctr == c->v_sync_pos) {
+        c->co_vspos = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_hctr(mc6845_t* c) {
+    _mc6845_co_cmp_htotal(c);
+    _mc6845_co_cmp_hdisp(c);
+    _mc6845_co_cmp_hspos(c);
+}
+
+static inline void _mc6845_co_cmp_vctr(mc6845_t* c) {
+    _mc6845_co_cmp_vtotal(c);
+    _mc6845_co_cmp_vdisp(c);
+    _mc6845_co_cmp_vspos(c);
+}
+
+static inline void _mc6845_co_cmp_vswidth(mc6845_t* c) {
+    if (c->vsync_ctr == _mc6845_vswidth(c)) {
+        c->co_vswidth = true;
+    }
+}
+
+static inline void _mc6845_co_cmp_raster(mc6845_t* c) {
+    uint8_t max_scanline = c->max_scanline_addr;
+    if (c->v_ctr == c->v_total) {
+        max_scanline += c->v_total_adjust;
+    }
+    if (c->r_ctr >= (max_scanline + 1)) {
+        c->co_raster = true;
+    } 
 }
 
 uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
@@ -335,6 +479,49 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
                 /* write register value (only if register is writable) */
                 if (_mc6845_rw[c->type][i] & (1<<0)) {
                     c->reg[i] = MC6845_GET_DATA(pins) & _mc6845_mask[i];
+                    /* update the coincidence circuit state */
+                    switch (i) {
+                        case MC6845_HTOTAL:
+                            _mc6845_co_cmp_htotal(c);
+                            break;
+                        case MC6845_HDISPLAYED:
+                            _mc6845_co_cmp_hdisp(c);
+                            break;
+                        case MC6845_HSYNCPOS:
+                            _mc6845_co_cmp_hspos(c);
+                            break;
+                        case MC6845_SYNCWIDTHS:
+                            _mc6845_co_cmp_hswidth(c);
+                            _mc6845_co_cmp_vswidth(c);
+                            break;
+                        case MC6845_VTOTAL:
+                            _mc6845_co_cmp_vtotal(c);
+                            break;
+                        case MC6845_VTOTALADJ:
+                            /* FIXME! */
+                            break;
+                        case MC6845_VDISPLAYED:
+                            _mc6845_co_cmp_vdisp(c);
+                            break;
+                        case MC6845_VSYNCPOS:
+                            _mc6845_co_cmp_vspos(c);
+                            break;
+                        case MC6845_INTERLACEMODE:
+                            /* FIXME? */
+                            break;
+                        case MC6845_MAXSCANLINEADDR:
+                            _mc6845_co_cmp_raster(c);
+                            break;
+                        case MC6845_CURSORSTART:
+                        case MC6845_CURSOREND:
+                        case MC6845_STARTADDRHI:
+                        case MC6845_STARTADDRLO:
+                        case MC6845_CURSORHI:
+                        case MC6845_CURSORLO:
+                        case MC6845_LIGHTPENHI:
+                        case MC6845_LIGHTPENLO:
+                            break;
+                    }
                 }
             }
         }
@@ -361,124 +548,83 @@ uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
     return pins;
 }
 
-uint64_t mc6845_tick(mc6845_t* c) {
-
-    /* horizontal update */
-    bool co_htotal = c->h_ctr == c->h_total;
-    if (co_htotal) {
-        /* new scanline */
-        bool co_vtotal = c->row_ctr == c->v_total;
-        uint8_t max_scanline;
-        if (co_vtotal) {
-            max_scanline = c->v_total_adjust + c->max_scanline_addr;
+/* per scanline updates */
+static inline void _mc6845_scanline(mc6845_t* c) {
+    /* FIXME: vertical adjust! */
+    c->r_ctr = (c->r_ctr + 1) & 0x1F;
+    _mc6845_co_cmp_raster(c);
+    if (c->co_raster) {
+        c->co_raster = false;
+        c->r_ctr = 0;
+        _mc6845_co_cmp_raster(c);
+        c->v_ctr = (c->v_ctr + 1) & 0x7F;
+        _mc6845_co_cmp_vctr(c);
+        /* if co_vdisp and co_vtotal happen at the same time, display must be enabled */
+        if (c->co_vdisp) {
+            c->co_vdisp = false;
+            c->v_de = false;
         }
-        else {
-            max_scanline = c->max_scanline_addr;
+        if (c->co_vtotal) {
+            c->co_vtotal = false;
+            /* new frame */
+            c->v_ctr = 0;
+            _mc6845_co_cmp_vctr(c);
+            c->v_de = true;
+            c->ma_store = (c->start_addr_hi<<8) | c->start_addr_lo;
         }
-        bool co_scanline = c->scanline_ctr >= max_scanline;
-        if (co_scanline) {
-            c->scanline_ctr = 0;
-            if (co_vtotal) {
-                /* new frame */
-                c->row_ctr = 0;
-                c->v_de = true;
-                c->next_row_start = (c->start_addr_hi<<8) | c->start_addr_lo;
-            }
-            else {
-                /* new chracter row, a new ma_row_start address was only
-                   captured when display-enable is switched off (so if h_disp < h_total),
-                   this speciality is used in the "backtro" demo
-                */
-                c->row_ctr = (c->row_ctr + 1) & 0x7F;
-            }
-            c->ma_row_start = c->next_row_start;
-            bool co_vdisp = c->row_ctr == c->v_displayed;
-            bool co_vsync = c->row_ctr == c->v_sync_pos;
-            if (co_vdisp) {
-                c->v_de = false;
-            }
-            if (co_vsync) {
-                c->vsync_ctr = 0;
-                c->vs = true;
-            }
+        if (c->co_vspos) {
+            c->co_vspos = false;
+            c->vs = true;
+            c->vsync_ctr = 0;
         }
-        else {
-            c->scanline_ctr = (c->scanline_ctr + 1) & 0x1F;
-        }
-        /* special case TYPE 0, reload ma_row_start at each scanline of row 0 */
-        if ((c->type == MC6845_TYPE_UM6845R) && (c->row_ctr == 0)) {
-            c->next_row_start = (c->start_addr_hi<<8) | c->start_addr_lo;
-            c->ma_row_start = c->next_row_start; 
-        }
-        c->h_ctr = 0;
-        c->h_de = true;
-        c->ma = c->ma_row_start & 0x3FFF;
-        c->vsync_ctr = (c->vsync_ctr + 1) & 0x0F;
-        uint8_t vsync_width;
-        if (c->type == MC6845_TYPE_UM6845) {
-            vsync_width = (c->sync_widths >> 4) & 0x0F;
-        }
-        else {
-            /* vsync width is fixed as 0x10 */
-            vsync_width = 0;
-        }
-        bool co_vsend = c->vsync_ctr == vsync_width;
-        if (co_vsend) {
+        c->ma_row_start = c->ma_store;
+    }
+    /* special case TYPE 0, reload ma_row_start at each scanline of row 0 */
+    if ((c->type == MC6845_TYPE_UM6845R) && (c->v_ctr == 0)) {
+        c->ma_store = (c->start_addr_hi<<8) | c->start_addr_lo;
+        c->ma_row_start = c->ma_store; 
+    }
+    if (c->vs) {
+        _mc6845_co_cmp_vswidth(c);
+        c->vsync_ctr++;
+        if (c->co_vswidth) {
+            c->co_vswidth = false;
             c->vs = false;
         }
     }
-    else {
-        c->h_ctr++;
-        /* only increment MA during display-enable! */
-        if (c->h_de) {
-            c->ma = (c->ma + 1) & 0x3FFF;
-        }
-        /* FIXME: this "misses a beat" when the end of HSYNC is 
-        identical with VTOTAL, and the HSYNC "spills" into the
-        next scanline, but without this, the Byte'98 demo doesn't
-        work since the new MA StartAddr is loaded into ma_row_start
-        before CPU has finished writing the new address (only
-        one half of the address arrives)
-        */
-        c->hsync_ctr = (c->hsync_ctr + 1) & 0x0F;
-    }
-    bool co_hdisp = c->h_ctr == c->h_displayed;
-    bool co_hsync = c->h_ctr == c->h_sync_pos;
-    bool co_hsend = c->hsync_ctr == (c->sync_widths & 0x0F);
-    if (co_hdisp) {
-        c->h_de = false;
-        /* capture next ma_row_start candidates */
-        c->next_row_start = c->ma;
-    }
-    if (co_hsync) {
-        c->hsync_ctr = 0;
-        c->hs = true;
-    }
-    if (co_hsend) {
-        c->hs = false;
-    }
+}
 
-    /* build the return pin mask */
-    uint64_t new_pins = ((c->scanline_ctr & 0x1F) * MC6845_RA0)| c->ma;
+uint64_t mc6845_tick(mc6845_t* c) {
+    c->ma = (c->ma + 1) & 0x3FFF;
+    c->h_ctr = c->h_ctr + 1;
+    _mc6845_co_cmp_hctr(c);
+    if (c->co_htotal) {
+        c->co_htotal = false;
+        _mc6845_scanline(c);
+        c->h_de = true;         /* FIXME: skew control */
+        c->h_ctr = 0;
+        _mc6845_co_cmp_hctr(c);
+        c->ma = c->ma_row_start;
+    }
+    if (c->co_hdisp) {
+        c->co_hdisp = false;
+        c->h_de = false;
+        c->ma_store = c->ma;
+    }
+    if (c->co_hspos) {
+        c->co_hspos = false;
+        c->hs = true;
+        c->hsync_ctr = 0;
+    }
     if (c->hs) {
-        new_pins |= MC6845_HS;
-    }
-    if (c->vs) {
-        new_pins |= MC6845_VS;
-    }
-    /* disabling DE via R8 (Skew) only on Type 0 */
-    if (c->type == MC6845_TYPE_UM6845) {
-        if (c->h_de && c->v_de && ((c->interlace_mode & 0x30) != 0x30)) {
-            new_pins |= MC6845_DE;
+        _mc6845_co_cmp_hswidth(c);
+        c->hsync_ctr++;
+        if (c->co_hswidth) {
+            c->co_hswidth = false;
+            c->hs = false;
         }
     }
-    else {
-        if (c->h_de && c->v_de) {
-            new_pins |= MC6845_DE;
-        }
-    }
-    c->pins = (c->pins & MC6845_IORQ_PINS) | new_pins;
-    return new_pins;
+    return _mc6845_pins(c);
 }
 
 #endif /* CHIPS_IMPL */
