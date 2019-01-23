@@ -319,7 +319,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     ga_desc.cclk_cb = _cpc_cclk;
     ga_desc.ram = &sys->ram[0][0];
     ga_desc.ram_size = sizeof(sys->ram);
-    ga_desc.rgba8_buffer = desc->pixel_buffer;
+    ga_desc.rgba8_buffer = (uint32_t*) desc->pixel_buffer;
     ga_desc.rgba8_buffer_size = desc->pixel_buffer_size;
     ga_desc.user_data = sys;
     am40010_init(&sys->ga, &ga_desc);
