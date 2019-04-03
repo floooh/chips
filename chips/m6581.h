@@ -495,7 +495,7 @@ static inline void _m6581_voice_tick(m6581_t* sid, int voice_index) {
             v->noise_shift = ((s<<1)|new_bit) & 0x007FFFFF;
         }
         /* sync state */
-        v->sync = (v->wav_accum & 0x00800000) &  !(prev_accum & 0x00800000);
+        v->sync = (v->wav_accum & 0x00800000) && !(prev_accum & 0x00800000);
     }
     m6581_voice_t* v_sync = &sid->voice[(voice_index+2)%3];
     uint32_t sm;
@@ -559,7 +559,7 @@ static inline void _m6581_voice_sync(m6581_t* sid, int voice_index) {
     m6581_voice_t* v = &sid->voice[voice_index];
     m6581_voice_t* v_sync = &sid->voice[(voice_index+2)%3];
     if (v->sync && (v_sync->ctrl & M6581_CTRL_SYNC)) {
-        v->wav_accum = 0;
+        v_sync->wav_accum = 0;
     }
 }
 
