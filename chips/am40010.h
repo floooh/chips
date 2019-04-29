@@ -262,6 +262,9 @@ uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t cpu_pins);
 
 #define _AM40010_MAX_FB_SIZE (AM40010_DBG_DISPLAY_WIDTH*AM40010_DBG_DISPLAY_HEIGHT*4)
 
+/* extract 8-bit data bus from 64-bit pin mask */
+#define _AM40010_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+
 /* the first 32 bytes of the KC Compact color ROM */
 static uint8_t _am40010_kcc_color_rom[32] = {
     0x15, 0x15, 0x31, 0x3d, 0x01, 0x0d, 0x11, 0x1d,
@@ -395,7 +398,7 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
     CHIPS_ASSERT(((pins & (AM40010_M1|AM40010_IORQ)) == (AM40010_IORQ)) && ((pins & (AM40010_RD|AM40010_WR)) != 0));
     /* a gate array register write */
     if ((pins & (AM40010_A14|AM40010_A15)) == AM40010_A14) {
-        const uint8_t data = Z80_GET_DATA(pins);
+        const uint8_t data = _AM40010_GET_DATA(pins);
         /* data bits 6 and 7 select the register type */
         switch (data & ((1<<7)|(1<<6))) {
             /* select color pen:
@@ -454,7 +457,7 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
 
     /* upper ROM bank select */
     if ((pins & (AM40010_A13|AM40010_WR)) == AM40010_WR) {
-        const uint8_t data = Z80_GET_DATA(pins);
+        const uint8_t data = _AM40010_GET_DATA(pins);
         bool rom_select_dirty = ga->rom_select != data;
         ga->rom_select = data;
         if (rom_select_dirty) {
