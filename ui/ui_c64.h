@@ -206,7 +206,7 @@ static uint8_t _ui_c64_mem_read(int layer, uint16_t addr, void* user_data) {
                 /* Character ROM */
                 return c64->rom_char[addr - 0xD000];
             }
-            else if ((addr >= 0xE000) && (addr <= 0xFFFF)) {
+            else if (addr >= 0xE000) {
                 /* Kernal ROM */
                 return c64->rom_kernal[addr - 0xE000];
             }
@@ -248,7 +248,7 @@ static void _ui_c64_mem_write(int layer, uint16_t addr, uint8_t data, void* user
                 /* Character ROM */
                 c64->rom_char[addr - 0xD000] = data;
             }
-            else if ((addr >= 0xE000) && (addr <= 0xFFFF)) {
+            else if (addr >= 0xE000) {
                 /* Kernal ROM */
                 c64->rom_kernal[addr - 0xE000] = data;
             }

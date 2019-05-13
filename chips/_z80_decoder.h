@@ -11,8 +11,8 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
   const z80_trap_t trap = cpu->trap_cb;
   void* ud = cpu->user_data;
   uint32_t ticks = 0;
-  uint8_t op, d8;
-  uint16_t addr, d16;
+  uint8_t op = 0, d8 = 0;
+  uint16_t addr = 0, d16 = 0;
   uint16_t pc = _G_PC();
   uint64_t pre_pins = pins;
   do {
