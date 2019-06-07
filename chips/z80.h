@@ -381,20 +381,38 @@ typedef struct {
     void* user_data;
 } z80_desc_t;
 
+/* state bits (z80_reg_t.bits) */
+#define Z80_BIT_IX      (1<<0)      /* IX prefix active */
+#define Z80_BIT_IY      (1<<1)      /* IY prefix active */
+#define Z80_BIT_IFF1    (1<<2)      /* interrupt-enabled bit 1 */
+#define Z80_BIT_IFF2    (1<<3)      /* interrupt-enabled bit 2 */
+#define Z80_BIT_EI      (1<<4)      /* enable interrupts in next instruction */
+
+/* Z80 register bank */
+typedef struct {
+    uint16_t pc;
+    uint8_t a, f;
+    uint8_t l, h;
+    uint8_t e, d;
+    uint8_t c, b;
+    uint16_t wz;        /* internal memptr register */
+    uint16_t sp;
+    uint16_t ix;
+    uint16_t iy;
+    uint8_t i, r;
+    uint16_t fa_;       /* shadow registers (AF', HL', ...) */
+    uint16_t hl_;
+    uint16_t de_;
+    uint16_t bc_;
+    uint8_t im;         /* interrupt mode (0, 1, 2) */
+    uint8_t bits;       /* state bits (Z80_BIT_*) */
+} z80_reg_t;
+
 /* Z80 CPU state */
 typedef struct {
-    /* tick callback */
-    z80_tick_t tick_cb;
-    /* main register bank (BC, DE, HL, FA) */
-    uint64_t bc_de_hl_fa;   /* B:63..56 C:55..48 D:47..40 E:39..32 H:31..24 L:23..16: F:15..8, A:7..0 */
-    /* shadow register bank (BC', DE', HL', FA') */
-    uint64_t bc_de_hl_fa_;
-    /* IR,WZ,SP,PC */
-    uint64_t wz_ix_iy_sp;
-    /* control bits,IM,IY,IX */
-    uint64_t im_ir_pc_bits;
-    /* last pin state (only for debug inspection) */
-    uint64_t pins;
+    z80_tick_t tick_cb;     /* tick callback */
+    z80_reg_t reg;          /* register bank */
+    uint64_t pins;          /* last pin state (for debug inspection) */
     void* user_data;
     z80_trap_t trap_cb;
     void* trap_user_data;
@@ -505,50 +523,6 @@ bool z80_ei_pending(z80_t* cpu);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-/* register locations in register banks */
-#define _A (0)
-#define _F (8)
-#define _L (16)
-#define _H (24)
-#define _E (32)
-#define _D (40)
-#define _C (48)
-#define _B (56)
-#define _FA (0)
-#define _HL (16)
-#define _DE (32)
-#define _BC (48)
-#define _SP (0)
-#define _IY (16)
-#define _IX (32)
-#define _WZ (48)
-#define _PC (16)
-#define _IR (32)
-#define _R  (32)
-#define _I  (40)
-#define _IM (48)
-#define _USE_IX (0)
-#define _USE_IY (1)
-#define _IFF1 (2)
-#define _IFF2 (3)
-#define _EI   (4)
-#define _BIT_USE_IX (1ULL<<_USE_IX)
-#define _BIT_USE_IY (1ULL<<_USE_IY)
-#define _BIT_IFF1   (1ULL<<_IFF1)
-#define _BIT_IFF2   (1ULL<<_IFF2)
-#define _BIT_EI     (1ULL<<_EI)
-#define _BITS_MAP_REGS (_BIT_USE_IX|_BIT_USE_IY)
-
-/* set 8-bit immediate value in 64-bit register bank */
-#define _S8(bank,shift,val) bank=(((bank)&~(0xFFULL<<(shift)))|(((val)&0xFFULL)<<(shift)))
-/* extract 8-bit value from 64-bit register bank */
-#define _G8(bank,shift) (((bank)>>(shift))&0xFFULL)
-/* set 16-bit immediate value in 64-bit register bank */
-#define _S16(bank,shift,val) bank=((bank&~(0xFFFFULL<<(shift)))|(((val)&0xFFFFULL)<<(shift)))
-/* extract 16-bit value from 64-bit register bank */
-#define _G16(bank,shift) (((bank)>>(shift))&0xFFFFULL)
-/* set a single bit value in 64-bit register mask */
-#define _S1(bank,shift,val) bank=(((bank)&~(1ULL<<(shift)))|(((val)&1ULL)<<(shift)))
 /* set 16-bit address bus pins */
 #define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
 /* set 16-bit address bus and 8-bit data bus pins */
@@ -596,111 +570,67 @@ bool z80_ei_pending(z80_t* cpu);
 /* evaluate flags for LD A,I and LD A,R */
 #define _SZIFF2_FLAGS(val) ((_G_F()&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((r2&_BIT_IFF2)?Z80_PF:0))
 
-#define _S_A(val)  _S8(ws,_A,val)
-#define _S_F(val)  _S8(ws,_F,val)
-#define _S_L(val)  _S8(ws,_L,val)
-#define _S_H(val)  _S8(ws,_H,val)
-#define _S_E(val)  _S8(ws,_E,val)
-#define _S_D(val)  _S8(ws,_D,val)
-#define _S_C(val)  _S8(ws,_C,val)
-#define _S_B(val)  _S8(ws,_B,val)
-#define _S_FA(val) _S16(ws,_FA,val)
-#define _S_HL(val) _S16(ws,_HL,val)
-#define _S_DE(val) _S16(ws,_DE,val)
-#define _S_BC(val) _S16(ws,_BC,val)
-#define _S_WZ(val) _S16(r1,_WZ,val)
-#define _S_IX(val) _S16(r1,_IX,val)
-#define _S_IY(val) _S16(r1,_IY,val)
-#define _S_SP(val) _S16(r1,_SP,val)
-#define _S_IM(val) _S8(r2,_IM,val)
-#define _S_I(val)  _S8(r2,_I,val)
-#define _S_R(val)  _S8(r2,_R,val)
-#define _S_IR(val) _S16(r2,_IR,val)
-#define _S_PC(val) _S16(r2,_PC,val)
-
-#define _G_A()  _G8(ws,_A)
-#define _G_F()  _G8(ws,_F)
-#define _G_L()  _G8(ws,_L)
-#define _G_H()  _G8(ws,_H)
-#define _G_E()  _G8(ws,_E)
-#define _G_D()  _G8(ws,_D)
-#define _G_C()  _G8(ws,_C)
-#define _G_B()  _G8(ws,_B)
-#define _G_FA() _G16(ws,_FA)
-#define _G_HL() _G16(ws,_HL)
-#define _G_DE() _G16(ws,_DE)
-#define _G_BC() _G16(ws,_BC)
-#define _G_WZ() _G16(r1,_WZ)
-#define _G_IX() _G16(r1,_IX)
-#define _G_IY() _G16(r1,_IY)
-#define _G_SP() _G16(r1,_SP)
-#define _G_IM() _G8(r2,_IM)
-#define _G_I()  _G8(r2,_I)
-#define _G_R()  _G8(r2,_R)
-#define _G_IR() _G16(r2,_IR)
-#define _G_PC() _G16(r2,_PC)
-
 /* register access functions */
-void z80_set_a(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_A,v); }
-void z80_set_f(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_F,v); }
-void z80_set_l(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_L,v); }
-void z80_set_h(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_H,v); }
-void z80_set_e(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_E,v); }
-void z80_set_d(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_D,v); }
-void z80_set_c(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_C,v); }
-void z80_set_b(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_B,v); }
-void z80_set_af(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_FA,((v<<8)&0xFF00)|((v>>8)&0x00FF)); }
-void z80_set_fa(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_FA,v); }
-void z80_set_hl(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_HL,v); }
-void z80_set_de(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_DE,v); }
-void z80_set_bc(z80_t* cpu, uint16_t v)       { _S16(cpu->bc_de_hl_fa,_BC,v); }
-void z80_set_fa_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_FA,v); }
-void z80_set_af_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_FA,((v<<8)&0xFF00)|((v>>8)&0x00FF)); }
-void z80_set_hl_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_HL,v); }
-void z80_set_de_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_DE,v); }
-void z80_set_bc_(z80_t* cpu, uint16_t v)      { _S16(cpu->bc_de_hl_fa_,_BC,v); }
-void z80_set_sp(z80_t* cpu, uint16_t v)       { _S16(cpu->wz_ix_iy_sp,_SP,v); }
-void z80_set_iy(z80_t* cpu, uint16_t v)       { _S16(cpu->wz_ix_iy_sp,_IY,v); }
-void z80_set_ix(z80_t* cpu, uint16_t v)       { _S16(cpu->wz_ix_iy_sp,_IX,v); }
-void z80_set_wz(z80_t* cpu, uint16_t v)       { _S16(cpu->wz_ix_iy_sp,_WZ,v); }
-void z80_set_pc(z80_t* cpu, uint16_t v)       { _S16(cpu->im_ir_pc_bits,_PC,v); }
-void z80_set_ir(z80_t* cpu, uint16_t v)       { _S16(cpu->im_ir_pc_bits,_IR,v); }
-void z80_set_i(z80_t* cpu, uint8_t v)         { _S8(cpu->im_ir_pc_bits,_I,v); }
-void z80_set_r(z80_t* cpu, uint8_t v)         { _S8(cpu->im_ir_pc_bits,_R,v); }
-void z80_set_im(z80_t* cpu, uint8_t v)        { _S8(cpu->im_ir_pc_bits,_IM,v); }
-void z80_set_iff1(z80_t* cpu, bool b)         { _S1(cpu->im_ir_pc_bits,_IFF1,(b?1:0)); }
-void z80_set_iff2(z80_t* cpu, bool b)         { _S1(cpu->im_ir_pc_bits,_IFF2,(b?1:0)); }
-void z80_set_ei_pending(z80_t* cpu, bool b)   { _S1(cpu->im_ir_pc_bits,_EI,(b?1:0)); }
-uint8_t z80_a(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_A); }
-uint8_t z80_f(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_F); }
-uint8_t z80_l(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_L); }
-uint8_t z80_h(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_H); }
-uint8_t z80_e(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_E); }
-uint8_t z80_d(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_D); }
-uint8_t z80_c(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_C); }
-uint8_t z80_b(z80_t* cpu)         { return _G8(cpu->bc_de_hl_fa,_B); }
-uint16_t z80_fa(z80_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_FA); }
-uint16_t z80_af(z80_t* cpu)       { uint16_t d16=_G16(cpu->bc_de_hl_fa,_FA); return (d16<<8)|(d16>>8); }
-uint16_t z80_hl(z80_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_HL); }
-uint16_t z80_de(z80_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_DE); }
-uint16_t z80_bc(z80_t* cpu)       { return _G16(cpu->bc_de_hl_fa,_BC); }
-uint16_t z80_fa_(z80_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_FA); }
-uint16_t z80_af_(z80_t* cpu)      { uint16_t d16=_G16(cpu->bc_de_hl_fa_,_FA); return (d16<<8)|(d16>>8); }
-uint16_t z80_hl_(z80_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_HL); }
-uint16_t z80_de_(z80_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_DE); }
-uint16_t z80_bc_(z80_t* cpu)      { return _G16(cpu->bc_de_hl_fa_,_BC); }
-uint16_t z80_sp(z80_t* cpu)       { return _G16(cpu->wz_ix_iy_sp,_SP); }
-uint16_t z80_iy(z80_t* cpu)       { return _G16(cpu->wz_ix_iy_sp,_IY); }
-uint16_t z80_ix(z80_t* cpu)       { return _G16(cpu->wz_ix_iy_sp,_IX); }
-uint16_t z80_wz(z80_t* cpu)       { return _G16(cpu->wz_ix_iy_sp,_WZ); }
-uint16_t z80_pc(z80_t* cpu)       { return _G16(cpu->im_ir_pc_bits,_PC); }
-uint16_t z80_ir(z80_t* cpu)       { return _G16(cpu->im_ir_pc_bits,_IR); }
-uint8_t z80_i(z80_t* cpu)         { return _G8(cpu->im_ir_pc_bits,_I); }
-uint8_t z80_r(z80_t* cpu)         { return _G8(cpu->im_ir_pc_bits,_R); }
-uint8_t z80_im(z80_t* cpu)        { return _G8(cpu->im_ir_pc_bits,_IM); }
-bool z80_iff1(z80_t* cpu)         { return 0 != (cpu->im_ir_pc_bits & _BIT_IFF1); }
-bool z80_iff2(z80_t* cpu)         { return 0 != (cpu->im_ir_pc_bits & _BIT_IFF2); }
-bool z80_ei_pending(z80_t* cpu)   { return 0 != (cpu->im_ir_pc_bits & _BIT_EI); }
+void z80_set_a(z80_t* cpu, uint8_t v)         { cpu.reg.a = v; }
+void z80_set_f(z80_t* cpu, uint8_t v)         { cpu.reg.f = v; }
+void z80_set_l(z80_t* cpu, uint8_t v)         { cpu.reg.l = v; }
+void z80_set_h(z80_t* cpu, uint8_t v)         { cpu.reg.h = v; }
+void z80_set_e(z80_t* cpu, uint8_t v)         { cpu.reg.e = v; }
+void z80_set_d(z80_t* cpu, uint8_t v)         { cpu->reg.d = v; }
+void z80_set_c(z80_t* cpu, uint8_t v)         { cpu->reg.c = v; }
+void z80_set_b(z80_t* cpu, uint8_t v)         { cpu->reg.b = v; }
+void z80_set_af(z80_t* cpu, uint16_t v)       { cpu->reg.a = v; cpu->reg.f = v>>8; }
+void z80_set_fa(z80_t* cpu, uint16_t v)       { cpu->reg.a = v>>8; cpu->reg.a = v; }
+void z80_set_hl(z80_t* cpu, uint16_t v)       { cpu->reg.l = v; cpu->reg.h = v>>8; }
+void z80_set_de(z80_t* cpu, uint16_t v)       { cpu->reg.e = v; cpu->reg.d = v>>8; }
+void z80_set_bc(z80_t* cpu, uint16_t v)       { cpu->reg.c = v; cpu->reg.b = v>>8; }
+void z80_set_fa_(z80_t* cpu, uint16_t v)      { cpu->reg.fa_ = v; };
+void z80_set_af_(z80_t* cpu, uint16_t v)      { cpu->reg.fa_ = (v<<8)|(v>>8); }
+void z80_set_hl_(z80_t* cpu, uint16_t v)      { cpu->reg.hl_ = v; }
+void z80_set_de_(z80_t* cpu, uint16_t v)      { cpu->reg.de_ = v; }
+void z80_set_bc_(z80_t* cpu, uint16_t v)      { cpu->reg.bc_ = v; }
+void z80_set_sp(z80_t* cpu, uint16_t v)       { cpu->reg.sp = v; }
+void z80_set_iy(z80_t* cpu, uint16_t v)       { cpu->reg.iy = v; }
+void z80_set_ix(z80_t* cpu, uint16_t v)       { cpu->reg.ix = v; }
+void z80_set_wz(z80_t* cpu, uint16_t v)       { cpu->reg.wz = v; }
+void z80_set_pc(z80_t* cpu, uint16_t v)       { cpu->reg.pc = v; }
+void z80_set_ir(z80_t* cpu, uint16_t v)       { cpu->reg.i = v>>8; cpu->reg.r = v; }
+void z80_set_i(z80_t* cpu, uint8_t v)         { cpu->reg.i = v; }
+void z80_set_r(z80_t* cpu, uint8_t v)         { cpu->reg.r = v; }
+void z80_set_im(z80_t* cpu, uint8_t v)        { cpu->reg.im = v; }
+void z80_set_iff1(z80_t* cpu, bool b)         { if (b) { cpu->reg.bits |= Z80_BIT_IFF1; } else { cpu->reg.bits &= ~Z80_BIT_IFF1; } }
+void z80_set_iff2(z80_t* cpu, bool b)         { if (b) { cpu->reg.bits |= Z80_BIT_IFF2; } else { cpu->reg.bits &= ~Z80_BIT_IFF2; } }
+void z80_set_ei_pending(z80_t* cpu, bool b)   { if (b) { cpu->reg.bits |= Z80_BIT_EI; } else { cpu->reg.bits &= ~Z80_BIT_EI; } }
+uint8_t z80_a(z80_t* cpu)         { return cpu->reg.a; }
+uint8_t z80_f(z80_t* cpu)         { return cpu->reg.f; }
+uint8_t z80_l(z80_t* cpu)         { return cpu->reg.l; }
+uint8_t z80_h(z80_t* cpu)         { return cpu->reg.h; }
+uint8_t z80_e(z80_t* cpu)         { return cpu->reg.e; }
+uint8_t z80_d(z80_t* cpu)         { return cpu->reg.d; }
+uint8_t z80_c(z80_t* cpu)         { return cpu->reg.c; }
+uint8_t z80_b(z80_t* cpu)         { return cpu->reg.b; }
+uint16_t z80_fa(z80_t* cpu)       { return (cpu->reg.f<<8)|cpu->reg.a; }
+uint16_t z80_af(z80_t* cpu)       { return (cpu->reg.a<<8)|cpu->reg.f; }
+uint16_t z80_hl(z80_t* cpu)       { return (cpu->reg.h<<8)|cpu->reg.l; }
+uint16_t z80_de(z80_t* cpu)       { return (cpu->reg.d<<8)|cpu->reg.e; }
+uint16_t z80_bc(z80_t* cpu)       { return (cpu->reg.b<<8)|cpu->reg.c; }
+uint16_t z80_fa_(z80_t* cpu)      { return cpu->reg.fa_; }
+uint16_t z80_af_(z80_t* cpu)      { return (cpu->reg.fa_<<8)|(cpu->reg.fa_>>8); }
+uint16_t z80_hl_(z80_t* cpu)      { return cpu->reg.hl_; }
+uint16_t z80_de_(z80_t* cpu)      { return cpu->reg.de_; }
+uint16_t z80_bc_(z80_t* cpu)      { return cpu->reg.bc_; }
+uint16_t z80_sp(z80_t* cpu)       { return cpu->reg.sp_; }
+uint16_t z80_iy(z80_t* cpu)       { return cpu->reg.iy; }
+uint16_t z80_ix(z80_t* cpu)       { return cpu->reg.ix; }
+uint16_t z80_wz(z80_t* cpu)       { return cpu->reg.wz; }
+uint16_t z80_pc(z80_t* cpu)       { return cpu->reg.pc; }
+uint16_t z80_ir(z80_t* cpu)       { return (cpu->reg.i<<8)|cpu->reg.r; }
+uint8_t z80_i(z80_t* cpu)         { return cpu->reg.i; }
+uint8_t z80_r(z80_t* cpu)         { return cpu->reg.r; }
+uint8_t z80_im(z80_t* cpu)        { return cpu->reg.im; }
+bool z80_iff1(z80_t* cpu)         { return 0 != (cpu->reg.bits & Z80_BIT_IFF1); }
+bool z80_iff2(z80_t* cpu)         { return 0 != (cpu->reg.bits & Z80_BIT_IFF2); }
+bool z80_ei_pending(z80_t* cpu)   { return 0 != (cpu->reg.bits & Z80_BIT_EI); }
 
 void z80_init(z80_t* cpu, const z80_desc_t* desc) {
     CHIPS_ASSERT(_FA == 0);
