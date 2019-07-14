@@ -158,6 +158,7 @@ typedef struct ui_dbg_desc_t {
     m6502_t* m6502;             /* 6502 CPU to track */
     #endif
     ui_dbg_read_t read_cb;          /* callback to read memory */
+    int read_layer;                 /* layer argument for read_cb */
     ui_dbg_user_break_t break_cb;   /* optional user-breakpoint evaluation callback */
     ui_dbg_create_texture_t create_texture_cb;      /* callback to create UI texture */
     ui_dbg_update_texture_t update_texture_cb;      /* callback to update UI texture */
@@ -258,6 +259,7 @@ typedef struct ui_dbg_heatmap_t {
 typedef struct ui_dbg_t {
     bool valid;
     ui_dbg_read_t read_cb;
+    int read_layer;
     ui_dbg_user_break_t break_cb;
     ui_dbg_create_texture_t create_texture_cb;
     ui_dbg_update_texture_t update_texture_cb;
@@ -313,12 +315,12 @@ static inline const char* _ui_dbg_str_or_def(const char* str, const char* def) {
 }
 
 static inline uint8_t _ui_dbg_read_byte(ui_dbg_t* win, uint16_t addr) {
-    return win->read_cb(0, addr, win->user_data);
+    return win->read_cb(win->read_layer, addr, win->user_data);
 }
 
 static inline uint16_t _ui_dbg_read_word(ui_dbg_t* win, uint16_t addr) {
-    uint8_t l = win->read_cb(0, addr, win->user_data);
-    uint8_t h = win->read_cb(0, addr+1, win->user_data);
+    uint8_t l = win->read_cb(win->read_layer, addr, win->user_data);
+    uint8_t h = win->read_cb(win->read_layer, addr+1, win->user_data);
     return (uint16_t) (h<<8)|l;
 }
 
@@ -1711,6 +1713,7 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     memset(win, 0, sizeof(ui_dbg_t));
     win->valid = true;
     win->read_cb = desc->read_cb;
+    win->read_layer = desc->read_layer;
     win->break_cb = desc->break_cb;
     win->create_texture_cb = desc->create_texture_cb;
     win->update_texture_cb = desc->update_texture_cb;
