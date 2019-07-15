@@ -18,7 +18,7 @@
     ~~~
         your own assert macro (default: assert(c))
 
-    You need to include the following headers before including cpc.h:
+    You need to include the following headers before including c64.h:
 
     - chips/m6502.h
     - chips/m6526.h
