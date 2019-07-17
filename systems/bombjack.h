@@ -4,8 +4,6 @@
 
     Bomb Jack arcade machine emulator in a C header.
 
-    FIXME: WIP!
-
     Do this:
     ~~~C
     #define CHIPS_IMPL
@@ -86,7 +84,7 @@ extern "C" {
 #define BOMBJACK_DSW1_P2_1COIN_1PLAY    (0)
 #define BOMBJACK_DSW1_P2_1COIN_2PLAY    (1<<2)
 #define BOMBJACK_DSW1_P2_1COIN_3PLAY    (2<<2)
-#define BOMBJACK_DSW2_P2_1COIN_5PLAY    (3<<2)
+#define BOMBJACK_DSW1_P2_1COIN_5PLAY    (3<<2)
 
 #define BOMBJACK_DSW1_JACKS_MASK        (3<<4)
 #define BOMBJACK_DSW1_JACKS_3           (0)
@@ -237,8 +235,8 @@ int bombjack_display_height(bombjack_t* sys);
 void bombjack_reset(bombjack_t* sys);
 /* run bombjack instance for given amount of microseconds */
 void bombjack_exec(bombjack_t* sys, uint32_t micro_seconds);
-/* set joystick mask (combination of BOMJACK_JOYSTICK_* flags) */
-void bombjack_joystick(bombjack_t* sys, int player, uint8_t mask);
+/* decode video to pixel buffer, must be called once per frame */
+void bombjack_decode_video(bombjack_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -263,7 +261,6 @@ void bombjack_joystick(bombjack_t* sys, int player, uint8_t mask);
 
 static uint64_t _bombjack_tick_mainboard(int num, uint64_t pins, void* user_data);
 static uint64_t _bombjack_tick_soundboard(int num, uint64_t pins, void* user_data);
-static void _bombjack_decode_video(bombjack_t* sys);
 
 #define _bombjack_def(val, def) (val == 0 ? def : val)
 
@@ -394,7 +391,7 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     sys->audio_volume = _bombjack_def(desc->audio_volume, 1.0f); 
     sys->user_data = desc->user_data;
     CHIPS_ASSERT((0 == desc->pixel_buffer) || (desc->pixel_buffer && (desc->pixel_buffer_size >= _BOMBJACK_DISPLAY_SIZE)));
-    sys->pixel_buffer = desc->pixel_buffer;
+    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
 }
 
 void bombjack_discard(bombjack_t* sys) {
@@ -816,8 +813,8 @@ static void _bombjack_decode_background(bombjack_t* sys) {
         for (int x = 0; x < 16; x++) {
             int addr = img_base_addr + (y * 16 + x);
             /* 256 tiles */
-            uint8_t tile_code = img_valid ? sys->rom_maps[addr] : 0;
-            uint8_t attr = sys->rom_maps[addr + 0x0100];
+            uint8_t tile_code = img_valid ? sys->rom_maps[0][addr] : 0;
+            uint8_t attr = sys->rom_maps[0][addr + 0x0100];
             uint8_t color_block = (attr & 0x0F)<<3;
             bool flip_y = (attr & 0x80) != 0;
             if (flip_y) {
@@ -1018,7 +1015,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
     }
 }
 
-static void _bombjack_decode_video(bombjack_t* sys) {
+void bombjack_decode_video(bombjack_t* sys) {
     if (sys->pixel_buffer) {
         _bombjack_decode_background(sys);
         _bombjack_decode_foreground(sys);
