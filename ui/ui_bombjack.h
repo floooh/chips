@@ -67,6 +67,18 @@ typedef struct {
 } ui_bombjack_desc_t;
 
 typedef struct {
+    int x, y;
+    int w, h;
+    bool open;
+    ui_dbg_create_texture_t create_texture;
+    ui_dbg_update_texture_t update_texture;
+    ui_dbg_destroy_texture_t destroy_texture;
+    void* tex_16x16[24];
+    void* tex_32x32[24];
+    uint32_t pixel_buffer[1024];
+} ui_bombjack_video_t;
+
+typedef struct {
     bombjack_t* bj;
     struct {
         ui_z80_t cpu;
@@ -81,6 +93,7 @@ typedef struct {
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
+    ui_bombjack_video_t video;
 } ui_bombjack_t;
 
 void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* desc);
@@ -297,8 +310,8 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->bj->sample_buffer;
-        desc.num_samples = ui->bj->num_samples,
+        desc.sample_buffer = ui->bj->audio.sample_buffer;
+        desc.num_samples = ui->bj->audio.num_samples,
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->sound.audio, &desc);
@@ -372,10 +385,30 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
             x += dx; y += dy;
         }
     }
+    x += dx; y += dy;
+    {
+        ui->video.create_texture = ui_desc->create_texture_cb;
+        ui->video.update_texture = ui_desc->update_texture_cb;
+        ui->video.destroy_texture = ui_desc->destroy_texture_cb;
+        ui->video.x = 10;
+        ui->video.y = y;
+        ui->video.w = 440;
+        ui->video.h = 326;
+        for (int i = 0; i < 24; i++) {
+            ui->video.tex_16x16[i] = ui->video.create_texture(16, 16);
+        }
+        for (int i = 0; i < 24; i++) {
+            ui->video.tex_32x32[i] = ui->video.create_texture(32, 32);
+        }
+    }
 }
 
 void ui_bombjack_discard(ui_bombjack_t* ui) {
     CHIPS_ASSERT(ui && ui->bj);
+    for (int i = 0; i < 24; i++) {
+        ui->video.destroy_texture(ui->video.tex_16x16[i]);
+        ui->video.destroy_texture(ui->video.tex_32x32[i]);
+    }
     ui_dbg_discard(&ui->main.dbg);
     ui_dbg_discard(&ui->sound.dbg);
     ui_memmap_discard(&ui->memmap);
@@ -550,6 +583,7 @@ static void _ui_bombjack_draw_menu(ui_bombjack_t* ui, double exec_time) {
         }
         if (ImGui::BeginMenu("Hardware")) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
+            ImGui::MenuItem("Video Hardware", 0, &ui->video.open);
             ImGui::MenuItem("Z80 (Main Board)", 0, &ui->main.cpu.open);
             ImGui::MenuItem("Z80 (Sound Board)", 0, &ui->sound.cpu.open);
             ImGui::MenuItem("AY-3-8912 #1", 0, &ui->sound.psg[0].open);
@@ -592,10 +626,111 @@ static void _ui_bombjack_draw_menu(ui_bombjack_t* ui, double exec_time) {
     }
 }
 
+static void _ui_bombjack_draw_video(ui_bombjack_t* ui) {
+    if (!ui->video.open) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2(ui->video.x, ui->video.y), ImGuiSetCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(ui->video.w, ui->video.h), ImGuiSetCond_Once);
+    if (ImGui::Begin("Video Hardware", &ui->video.open)) {
+        if (ImGui::CollapsingHeader("Layers")) {
+            ImGui::Checkbox("Clear Background Layer", &ui->bj->dbg.clear_background_layer);
+            ImGui::Checkbox("Draw Background Layer", &ui->bj->dbg.draw_background_layer);
+            ImGui::Checkbox("Draw Foreground Layer", &ui->bj->dbg.draw_foreground_layer);
+            ImGui::Checkbox("Draw Sprite Layer", &ui->bj->dbg.draw_sprite_layer);
+        }
+        if (ImGui::CollapsingHeader("Palette", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const ImVec2 size(18, 18);
+            const ImVec2& pad = ImGui::GetStyle().FramePadding;
+            const ImVec2 p = ImGui::GetCursorPos();
+            for (int col = 0; col < 16; col++) {
+                ImGui::SetCursorPos(ImVec2(p.x + col * (size.x + pad.x * 2.0f), p.y));
+                ImGui::Text("%d", col * 8);
+            }
+            for (int row = 0; row < 8; row++) {
+                for (int col = 0; col < 16; col++) {
+                    int pal_index = col * 8 + row;
+                    ImGui::PushID(pal_index);
+                    ImGui::ColorButton("##hw_color", ImColor(ui->bj->mainboard.palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if (col != 15) {
+                        ImGui::SameLine();
+                    }
+                }
+            }
+        }
+        if (ImGui::CollapsingHeader("Sprites", ImGuiTreeNodeFlags_DefaultOpen)) {
+            /*
+                Each sprite is described by 4 bytes in the 'sprite RAM'
+                (0x9820..0x987F => 96 bytes => 24 sprites):
+
+                ABBBBBBB CDEFGGGG XXXXXXXX YYYYYYYY
+
+                A:  sprite size (16x16 or 32x32)
+                B:  sprite index
+                C:  X flip
+                D:  Y flip
+                E:  ?
+                F:  ?
+                G:  color
+                X:  x pos
+                Y:  y pos
+            */
+            for (int sprite_nr = 0; sprite_nr < 24; sprite_nr++) {
+                int addr = (0x9820 - 0x8000) + sprite_nr*4;
+                uint8_t b0 = ui->bj->main_ram[addr + 0];
+                uint8_t b1 = ui->bj->main_ram[addr + 1];
+                uint8_t b2 = ui->bj->main_ram[addr + 2];
+                uint8_t b3 = ui->bj->main_ram[addr + 3];
+                uint8_t color_block = (b1 & 0x0F)<<3;
+                char title[32];
+                snprintf(title, sizeof(title), "Sprite %d", sprite_nr);
+                if (ImGui::CollapsingHeader(title, ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if (b0 & 0x80) {
+                        for (int y = 0; y < 32; y++) {
+                            for (int x = 0; x < 32; x++) {
+                                uint32_t px = (b3 + x) & 255;
+                                uint32_t py = ((225 - b2) + y) & 255;
+                                ui->video.pixel_buffer[x * 32 + (31 - y)] = ui->bj->pixel_buffer[py * 256 + px];
+                            }
+                        }
+                        ui->video.update_texture(ui->video.tex_32x32[sprite_nr], ui->video.pixel_buffer, 32*32*sizeof(uint32_t));
+                        ImGui::Image(ui->video.tex_32x32[sprite_nr], ImVec2(64,64));
+                    }
+                    else {
+                        for (int y = 0; y < 16; y++) {
+                            for (int x = 0; x < 16; x++) {
+                                uint32_t px = (b3 + x) & 255;
+                                uint32_t py = ((241 - b2) + y) & 255;
+                                ui->video.pixel_buffer[x * 16 + (15 - y)] = ui->bj->pixel_buffer[py * 256 + px];
+                            }
+                        }
+                        ui->video.update_texture(ui->video.tex_16x16[sprite_nr], ui->video.pixel_buffer, 16*16*sizeof(uint32_t));
+                        ImGui::Image(ui->video.tex_16x16[sprite_nr], ImVec2(64,64));
+                    }
+                    ImGui::SameLine();
+                    ImGui::Text("Size:   %s\n"
+                                "Index:  %d\n"
+                                "X-pos:  %-3d  Y-pos:  %-3d\n"
+                                "X-flip: %s  Y-flip: %s\n"
+                                "Color:  %d (palette: %d)",
+                                (b0 & 0x80) ? "32x32" : "16x16",
+                                b0 & 0x7F,
+                                b2, b3,
+                                (b1 & 0x80)?"YES":"NO ", (b1 & 0x40)?"YES":"NO ",
+                                b1 & 0xF, color_block);
+                }
+            }
+        }
+    }
+    ImGui::End();
+}
+
 void ui_bombjack_draw(ui_bombjack_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->bj);
     ui->bj->mainboard.sys = 0;   // FIXME?
     _ui_bombjack_draw_menu(ui, time_ms);
+    _ui_bombjack_draw_video(ui);
     ui_memmap_draw(&ui->memmap);
     ui_dbg_draw(&ui->main.dbg);
     ui_dbg_draw(&ui->sound.dbg);
@@ -608,7 +743,7 @@ void ui_bombjack_draw(ui_bombjack_t* ui, double time_ms) {
         ui_memedit_draw(&ui->memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
-    ui_audio_draw(&ui->sound.audio, ui->bj->sample_pos);
+    ui_audio_draw(&ui->sound.audio, ui->bj->audio.sample_pos);
 }
 
 bool ui_bombjack_before_mainboard_exec(ui_bombjack_t* ui) {
