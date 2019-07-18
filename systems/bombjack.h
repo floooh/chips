@@ -174,6 +174,7 @@ typedef struct {
     int rom_maps_0000_0FFF_size;
 } bombjack_desc_t;
 
+/* the whole Bomb Jack arcade machine state */
 typedef struct {
     bool valid;
     struct {
@@ -189,6 +190,7 @@ typedef struct {
         int vsync_count;
         int vblank_count;
         mem_t mem;
+        uint32_t palette[128];
     } mainboard;
     struct {
         z80_t cpu;
@@ -207,16 +209,22 @@ typedef struct {
     uint8_t rom_tiles[3][0x2000];
     uint8_t rom_sprites[3][0x2000];
     uint8_t rom_maps[1][0x1000];
-    /* 32-bit RGBA color palette cache */
-    uint32_t palette_cache[128];
-    /* audio and video 'rendering' */
-    bombjack_audio_callback_t audio_cb;
-    int num_samples;
-    int sample_pos;
-    float audio_volume;
-    float sample_buffer[BOMBJACK_MAX_AUDIO_SAMPLES];
-    uint32_t* pixel_buffer;
     void* user_data;
+    /* audio and video 'rendering' */
+    struct {
+        bombjack_audio_callback_t callback;
+        int num_samples;
+        int sample_pos;
+        float volume;
+        float sample_buffer[BOMBJACK_MAX_AUDIO_SAMPLES];
+    } audio;
+    uint32_t* pixel_buffer;
+    struct {
+        bool draw_background_layer;
+        bool draw_foreground_layer;
+        bool draw_sprite_layer;
+        bool clear_background_layer;
+    } dbg;
 } bombjack_t;
 
 /* initialize a new bombjack instance */
@@ -269,6 +277,10 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     
     memset(sys, 0, sizeof(bombjack_t));
     sys->valid = true;
+    sys->dbg.draw_background_layer = true;
+    sys->dbg.draw_foreground_layer = true;
+    sys->dbg.draw_sprite_layer = true;
+    sys->dbg.clear_background_layer = true;
 
     /* copy over ROM images */
     CHIPS_ASSERT(desc->rom_main_0000_1FFF && (desc->rom_main_0000_1FFF_size == sizeof(sys->rom_main[0])));
@@ -386,9 +398,9 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
 
     /* move over audio- and video config parameters */
     CHIPS_ASSERT(desc->audio_num_samples <= BOMBJACK_MAX_AUDIO_SAMPLES);
-    sys->audio_cb = desc->audio_cb;
-    sys->num_samples = _bombjack_def(desc->audio_num_samples, BOMBJACK_DEFAULT_AUDIO_SAMPLES);
-    sys->audio_volume = _bombjack_def(desc->audio_volume, 1.0f); 
+    sys->audio.callback = desc->audio_cb;
+    sys->audio.num_samples = _bombjack_def(desc->audio_num_samples, BOMBJACK_DEFAULT_AUDIO_SAMPLES);
+    sys->audio.volume = _bombjack_def(desc->audio_volume, 1.0f);
     sys->user_data = desc->user_data;
     CHIPS_ASSERT((0 == desc->pixel_buffer) || (desc->pixel_buffer && (desc->pixel_buffer_size >= _BOMBJACK_DISPLAY_SIZE)));
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
@@ -476,7 +488,7 @@ void bombjack_exec(bombjack_t* sys, uint32_t micro_seconds) {
 static inline void _bombjack_update_palette_cache(bombjack_t* sys, uint16_t addr, uint8_t data) {
     assert((addr >= 0x9C00) && (addr < 0x9D00));
     int pal_index = (addr - 0x9C00) / 2;
-    uint32_t c = sys->palette_cache[pal_index];
+    uint32_t c = sys->mainboard.palette[pal_index];
     if (addr & 1) {
         /* uneven addresses are the xxxxBBBB part */
         uint8_t b = (data & 0x0F) | ((data<<4)&0xF0);
@@ -488,7 +500,7 @@ static inline void _bombjack_update_palette_cache(bombjack_t* sys, uint16_t addr
         uint8_t r = (data & 0x0F) | ((data<<4)&0xF0);
         c = 0xFF000000 | (c & 0x00FF0000) | (g<<8) | r;
     }
-    sys->palette_cache[pal_index] = c;
+    sys->mainboard.palette[pal_index] = c;
 }
 
 /* main board tick callback
@@ -685,10 +697,10 @@ static uint64_t _bombjack_tick_soundboard(int num_ticks, uint64_t pins, void* us
                 float s = sys->soundboard.psg[0].sample +
                           sys->soundboard.psg[1].sample + 
                           sys->soundboard.psg[2].sample;
-                sys->sample_buffer[sys->sample_pos++] = s * sys->audio_volume;
-                if (sys->sample_pos == sys->num_samples) {
-                    saudio_push(sys->sample_buffer, sys->num_samples);
-                    sys->sample_pos = 0;
+                sys->audio.sample_buffer[sys->audio.sample_pos++] = s * sys->audio.volume;
+                if (sys->audio.sample_pos == sys->audio.num_samples) {
+                    saudio_push(sys->audio.sample_buffer, sys->audio.num_samples);
+                    sys->audio.sample_pos = 0;
                 }
             }
         }
@@ -832,7 +844,7 @@ static void _bombjack_decode_background(bombjack_t* sys) {
                 }
                 for (int xx = 15; xx >= 0; xx--) {
                     uint8_t pen = ((bm2>>xx)&1) | (((bm1>>xx)&1)<<1) | (((bm0>>xx)&1)<<2);
-                    *ptr++ = sys->palette_cache[color_block | pen];
+                    *ptr++ = sys->mainboard.palette[color_block | pen];
                 }
                 ptr += flip_y ? -272 : 240;
             }
@@ -893,7 +905,7 @@ static void _bombjack_decode_foreground(bombjack_t* sys) {
                 for (int xx = 7; xx >= 0; xx--) {
                     uint8_t pen = ((bm2>>xx)&1) | (((bm1>>xx)&1)<<1) | (((bm0>>xx)&1)<<2);
                     if (pen) {
-                        *ptr = sys->palette_cache[color_block | pen];
+                        *ptr = sys->mainboard.palette[color_block | pen];
                     }
                     ptr++;
                 }
@@ -965,7 +977,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
                 for (int x = 31; x >= 0; x--) {
                     uint8_t pen = ((bm2>>x)&1) | (((bm1>>x)&1)<<1) | (((bm0>>x)&1)<<2);
                     if (0 != pen) {
-                        *ptr = sys->palette_cache[color_block | pen];
+                        *ptr = sys->mainboard.palette[color_block | pen];
                     }
                     ptr++;
                 }
@@ -995,7 +1007,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
                     for (int x=0; x<=15; x++) {
                         uint8_t pen = ((bm2>>x)&1) | (((bm1>>x)&1)<<1) | (((bm0>>x)&1)<<2);
                         if (0 != pen) {
-                            *ptr = sys->palette_cache[color_block | pen];
+                            *ptr = sys->mainboard.palette[color_block | pen];
                         }
                         ptr++;
                     }
@@ -1004,7 +1016,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
                     for (int x=15; x>=0; x--) {
                         uint8_t pen = ((bm2>>x)&1) | (((bm1>>x)&1)<<1) | (((bm0>>x)&1)<<2);
                         if (0 != pen) {
-                            *ptr = sys->palette_cache[color_block | pen];
+                            *ptr = sys->mainboard.palette[color_block | pen];
                         }
                         ptr++;
                     }
@@ -1017,9 +1029,22 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
 
 void bombjack_decode_video(bombjack_t* sys) {
     if (sys->pixel_buffer) {
-        _bombjack_decode_background(sys);
-        _bombjack_decode_foreground(sys);
-        _bombjack_decode_sprites(sys);
+        if (sys->dbg.draw_background_layer) {
+            _bombjack_decode_background(sys);
+        }
+        else {
+            if (sys->dbg.clear_background_layer) {
+                for (int i = 0; i < _BOMBJACK_DISPLAY_WIDTH*_BOMBJACK_DISPLAY_HEIGHT; i++) {
+                    sys->pixel_buffer[i] = 0xFF000000;
+                }
+            }
+        }
+        if (sys->dbg.draw_foreground_layer) {
+            _bombjack_decode_foreground(sys);
+        }
+        if (sys->dbg.draw_sprite_layer) {
+            _bombjack_decode_sprites(sys);
+        }
     }
 }
 
