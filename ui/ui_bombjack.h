@@ -70,6 +70,7 @@ typedef struct {
     int x, y;
     int w, h;
     bool open;
+    int hovered_palette_column;
     ui_dbg_create_texture_t create_texture;
     ui_dbg_update_texture_t update_texture;
     ui_dbg_destroy_texture_t destroy_texture;
@@ -391,9 +392,10 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
         ui->video.update_texture = ui_desc->update_texture_cb;
         ui->video.destroy_texture = ui_desc->destroy_texture_cb;
         ui->video.x = 10;
-        ui->video.y = y;
-        ui->video.w = 440;
-        ui->video.h = 326;
+        ui->video.y = 20;
+        ui->video.w = 450;
+        ui->video.h = 568;
+        ui->video.hovered_palette_column = -1;
         for (int i = 0; i < 24; i++) {
             ui->video.tex_16x16[i] = ui->video.create_texture(16, 16);
         }
@@ -434,7 +436,7 @@ static uint8_t _ui_bombjack_set_bits(uint8_t val, uint8_t mask, uint8_t bits) {
 }
 
 static uint8_t _ui_bombjack_toggle_bits(uint8_t val, uint8_t mask, uint8_t bits) {
-    return (val & ~mask) ^ bits;
+    return val ^ bits;
 }
 
 static bool _ui_bombjack_test_dsw1(const ui_bombjack_t* ui, uint8_t mask, uint8_t bits) {
@@ -626,6 +628,90 @@ static void _ui_bombjack_draw_menu(ui_bombjack_t* ui, double exec_time) {
     }
 }
 
+#define _UI_BOMBJACK_GATHER32(rom,off) \
+    ((uint32_t)rom[0+off]<<24)|\
+    ((uint32_t)rom[8+off]<<16)|\
+    ((uint32_t)rom[32+off]<<8)|\
+    ((uint32_t)rom[40+off])
+
+static void _ui_bombjack_decode_sprite_32x32(ui_bombjack_t* ui, uint8_t b0, uint8_t b1) {
+    int sprite_code = b0 & 0x7F;
+    int offset = sprite_code * 128;
+    uint8_t color_block = (b1 & 0x0F)<<3;
+    uint32_t* dst = ui->video.pixel_buffer;
+    uint8_t flip_y = (b1 & 0x80) ? 0 : 0x1F;
+    uint8_t flip_x = (b1 & 0x40) ? 0 : 0x1F;
+    for (uint8_t y = 0; y < 32; y++) {
+        uint32_t bm0 = _UI_BOMBJACK_GATHER32(ui->bj->rom_sprites[0], offset);
+        uint32_t bm1 = _UI_BOMBJACK_GATHER32(ui->bj->rom_sprites[1], offset);
+        uint32_t bm2 = _UI_BOMBJACK_GATHER32(ui->bj->rom_sprites[2], offset);
+        offset++;
+        if ((y & 7) == 7) {
+            offset += 8;
+        }
+        if ((y & 15) == 15) {
+            offset += 32;
+        }
+        for (uint8_t x = 0; x < 32; x++) {
+            uint16_t dst_offset = ((x ^ flip_x) * 32) + (y ^ flip_y);
+            uint8_t pen = ((bm2>>x)&1) | (((bm1>>x)&1)<<1) | (((bm0>>x)&1)<<2);
+            if (0 != pen) {
+                dst[dst_offset] = ui->bj->mainboard.palette[color_block | pen];
+            }
+            else {
+                // backgound pixel as debug color
+                dst[dst_offset] = ((x + y) & 1) ? 0xFF4F004F : 0xFF3F003F;
+            }
+        }
+    }
+}
+
+#define _UI_BOMBJACK_GATHER16(rom,off) ((uint16_t)rom[0+off]<<8)|((uint16_t)rom[8+off])
+
+static void _ui_bombjack_decode_sprite_16x16(ui_bombjack_t* ui, uint8_t b0, uint8_t b1) {
+    int sprite_code = b0 & 0x7F;
+    int offset = sprite_code * 32;
+    uint8_t color_block = (b1 & 0x0F)<<3;
+    uint32_t* dst = ui->video.pixel_buffer;
+    uint8_t flip_y = (b1 & 0x80) ? 0 : 0x0F;
+    uint8_t flip_x = (b1 & 0x40) ? 0 : 0x0F;
+    for (uint8_t y = 0; y < 16; y++) {
+        uint16_t bm0 = _UI_BOMBJACK_GATHER16(ui->bj->rom_sprites[0], offset);
+        uint16_t bm1 = _UI_BOMBJACK_GATHER16(ui->bj->rom_sprites[1], offset);
+        uint16_t bm2 = _UI_BOMBJACK_GATHER16(ui->bj->rom_sprites[2], offset);
+        offset++;
+        if (y == 7) {
+            offset += 8;
+        }
+        for (uint8_t x=0; x<16; x++) {
+            uint8_t dst_offset = ((x ^ flip_x) * 16) + (y ^ flip_y);
+            uint8_t pen = ((bm2>>x)&1) | (((bm1>>x)&1)<<1) | (((bm0>>x)&1)<<2);
+            if (0 != pen) {
+                dst[dst_offset] = ui->bj->mainboard.palette[color_block | pen];
+            }
+            else {
+                dst[dst_offset] = ((x + y) & 1) ? 0xFF4F004F : 0xFF3F003F;
+            }
+        }
+    }
+}
+
+static void _ui_bombjack_decode_sprites(ui_bombjack_t* ui) {
+    for (int sprite_nr = 0; sprite_nr < 24; sprite_nr++) {
+        int addr = (0x9820 - 0x8000) + sprite_nr*4;
+        uint8_t b0 = ui->bj->main_ram[addr + 0];
+        uint8_t b1 = ui->bj->main_ram[addr + 1];
+        if (b0 & 0x80) {
+            _ui_bombjack_decode_sprite_32x32(ui, b0, b1);
+            ui->video.update_texture(ui->video.tex_32x32[sprite_nr], ui->video.pixel_buffer, 32*32*sizeof(uint32_t));
+        }
+        else {
+            _ui_bombjack_decode_sprite_16x16(ui, b0, b1);
+            ui->video.update_texture(ui->video.tex_16x16[sprite_nr], ui->video.pixel_buffer, 16*16*sizeof(uint32_t));
+        }
+    }
+}
+
 static void _ui_bombjack_draw_video(ui_bombjack_t* ui) {
     if (!ui->video.open) {
         return;
@@ -651,7 +737,15 @@ static void _ui_bombjack_draw_video(ui_bombjack_t* ui) {
                 for (int col = 0; col < 16; col++) {
                     int pal_index = col * 8 + row;
                     ImGui::PushID(pal_index);
+                    if (col == ui->video.hovered_palette_column) {
+                        ImGui::PushStyleColor(ImGuiCol_Border, 0xFFFF00FF);
+                        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.0f);
+                    }
                     ImGui::ColorButton("##hw_color", ImColor(ui->bj->mainboard.palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    if (col == ui->video.hovered_palette_column) {
+                        ImGui::PopStyleVar();
+                        ImGui::PopStyleColor();
+                    }
                     ImGui::PopID();
                     if (col != 15) {
                         ImGui::SameLine();
@@ -676,49 +770,41 @@ static void _ui_bombjack_draw_video(ui_bombjack_t* ui) {
                 X:  x pos
                 Y:  y pos
             */
+            _ui_bombjack_decode_sprites(ui);
+            ui->video.hovered_palette_column = -1;
             for (int sprite_nr = 0; sprite_nr < 24; sprite_nr++) {
                 int addr = (0x9820 - 0x8000) + sprite_nr*4;
                 uint8_t b0 = ui->bj->main_ram[addr + 0];
                 uint8_t b1 = ui->bj->main_ram[addr + 1];
                 uint8_t b2 = ui->bj->main_ram[addr + 2];
                 uint8_t b3 = ui->bj->main_ram[addr + 3];
-                uint8_t color_block = (b1 & 0x0F)<<3;
-                char title[32];
-                snprintf(title, sizeof(title), "Sprite %d", sprite_nr);
-                if (ImGui::CollapsingHeader(title, ImGuiTreeNodeFlags_DefaultOpen)) {
-                    if (b0 & 0x80) {
-                        for (int y = 0; y < 32; y++) {
-                            for (int x = 0; x < 32; x++) {
-                                uint32_t px = (b3 + x) & 255;
-                                uint32_t py = ((225 - b2) + y) & 255;
-                                ui->video.pixel_buffer[x * 32 + (31 - y)] = ui->bj->pixel_buffer[py * 256 + px];
-                            }
-                        }
-                        ui->video.update_texture(ui->video.tex_32x32[sprite_nr], ui->video.pixel_buffer, 32*32*sizeof(uint32_t));
-                        ImGui::Image(ui->video.tex_32x32[sprite_nr], ImVec2(64,64));
-                    }
-                    else {
-                        for (int y = 0; y < 16; y++) {
-                            for (int x = 0; x < 16; x++) {
-                                uint32_t px = (b3 + x) & 255;
-                                uint32_t py = ((241 - b2) + y) & 255;
-                                ui->video.pixel_buffer[x * 16 + (15 - y)] = ui->bj->pixel_buffer[py * 256 + px];
-                            }
-                        }
-                        ui->video.update_texture(ui->video.tex_16x16[sprite_nr], ui->video.pixel_buffer, 16*16*sizeof(uint32_t));
-                        ImGui::Image(ui->video.tex_16x16[sprite_nr], ImVec2(64,64));
-                    }
-                    ImGui::SameLine();
-                    ImGui::Text("Size:   %s\n"
+                if (b0 & 0x80) {
+                    // 32x32 sprite
+                    ImGui::Image(ui->video.tex_32x32[sprite_nr], ImVec2(64,64));
+                }
+                else {
+                    // 16x16 sprite
+                    ImGui::Image(ui->video.tex_16x16[sprite_nr], ImVec2(64,64));
+                }
+                if (ImGui::IsItemHovered()) {
+
+                    ImGui::SetTooltip(
+                                "Sprite: %d\n"
+                                "Size:   %s\n"
                                 "Index:  %d\n"
-                                "X-pos:  %-3d  Y-pos:  %-3d\n"
-                                "X-flip: %s  Y-flip: %s\n"
+                                "Pos:    %-3d,%-3d\n"
+                                "Flip:   %s,%s\n"
                                 "Color:  %d (palette: %d)",
+                                sprite_nr,
                                 (b0 & 0x80) ? "32x32" : "16x16",
                                 b0 & 0x7F,
                                 b2, b3,
                                 (b1 & 0x80)?"YES":"NO ", (b1 & 0x40)?"YES":"NO ",
-                                b1 & 0xF, color_block);
+                                b1 & 0xF, (b1 & 0x0F)<<3);
+                    ui->video.hovered_palette_column = (b1 & 0x0F);
+                }
+                if (((sprite_nr+1) % 6) != 0) {
+                    ImGui::SameLine();
                 }
             }
         }
