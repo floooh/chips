@@ -846,8 +846,8 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
     if (!win->ui.show_breakpoints) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(-1, 256), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(-1, 256), ImGuiCond_Once);
     if (ImGui::Begin("Breakpoints", &win->ui.show_breakpoints)) {
         bool scroll_down = false;
         if (ImGui::Button("Add..")) {
@@ -1083,8 +1083,8 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         }
     }
     _ui_dbg_heatmap_update(win);
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 128), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(292, 400), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 128), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(292, 400), ImGuiCond_Once);
     if (ImGui::Begin("Memory Heatmap", &win->ui.show_heatmap)) {
         if (ImGui::Button("Clear All")) {
             _ui_dbg_heatmap_clear_all(win);
@@ -1689,8 +1689,8 @@ static void _ui_dbg_dbgwin_draw(ui_dbg_t* win) {
     if (!win->ui.open) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x, win->ui.init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, win->ui.init_h), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x, win->ui.init_y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, win->ui.init_h), ImGuiCond_Once);
     if (ImGui::Begin(win->ui.title, &win->ui.open, ImGuiWindowFlags_MenuBar)) {
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
             ImGui::CaptureKeyboardFromApp();

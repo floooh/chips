@@ -716,8 +716,8 @@ static void _ui_bombjack_draw_video(ui_bombjack_t* ui) {
     if (!ui->video.open) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2((float)ui->video.x, (float)ui->video.y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2((float)ui->video.w, (float)ui->video.h), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2((float)ui->video.x, (float)ui->video.y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2((float)ui->video.w, (float)ui->video.h), ImGuiCond_Once);
     if (ImGui::Begin("Video Hardware", &ui->video.open)) {
         if (ImGui::CollapsingHeader("Layers")) {
             ImGui::Checkbox("Clear Background Layer", &ui->bj->dbg.clear_background_layer);
