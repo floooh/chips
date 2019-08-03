@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-#   z80_decoder.py
+#   z80_gen.py
 #   Generate huge switch/case Z80 instruction decoder.
 #   See: 
 #       http://www.z80.info/decoding.htm
@@ -8,19 +8,21 @@
 #       https://www.omnimaga.org/asm-language/bit-n-(hl)-flags/5/?wap2
 #-------------------------------------------------------------------------------
 import sys
+from string import Template
 
-# tab-width for generated code
-TabWidth = 2
+TabWidth = 4
+InpPath = 'z80.template.h'
+OutPath = '../chips/z80.h'
 
-# the output path
-OutPath = '../chips/_z80_decoder.h'
-
-# the target file handle
-Out = None
-
-# 8-bit register table, the 'HL' entry is for instructions that use
+# 8-bit register table, the 'mem' entry is for instructions that use
 # (HL), (IX+d) and (IY+d)
-r = [ 'B', 'C', 'D', 'E', 'H', 'L', 'HL', 'A' ]
+r = [ 'c.b', 'c.c', 'c.d', 'c.e', 'c.ih', 'c.il', 'memptr', 'c.a' ]
+
+# the same for instructions that are hardwired to H,L
+_r = [ 'c.b', 'c.c', 'c.d', 'c.e', 'c.h', 'c.l', 'memptr', 'c.a' ]
+
+# the same as human-readable regs
+r_cmt = [ 'B', 'C', 'D', 'E', 'H', 'L', '(HL/IX+d/IY+d)', 'A' ]
 
 # 16-bit register table, with SP
 rp = [ 'BC', 'DE', 'HL', 'SP' ]
@@ -30,14 +32,14 @@ rp2 = [ 'BC', 'DE', 'HL', 'FA' ]
 
 # condition-code table (for conditional jumps etc)
 cond = [
-    '!(_G_F()&Z80_ZF)',  # NZ
-    '(_G_F()&Z80_ZF)',   # Z
-    '!(_G_F()&Z80_CF)',   # NC
-    '(_G_F()&Z80_CF)',    # C
-    '!(_G_F()&Z80_PF)',   # PO
-    '(_G_F()&Z80_PF)',    # PE
-    '!(_G_F()&Z80_SF)',   # P
-    '(_G_F()&Z80_SF)'     # M
+    '!(c.f&Z80_ZF)',  # NZ
+    '(c.f&Z80_ZF)',   # Z
+    '!(c.f&Z80_CF)',   # NC
+    '(c.f&Z80_CF)',    # C
+    '!(c.f&Z80_PF)',   # PO
+    '(c.f&Z80_PF)',    # PE
+    '!(c.f&Z80_SF)',   # P
+    '(c.f&Z80_SF)'     # M
 ]
 
 # the same as 'human readable' flags for comments
@@ -58,245 +60,22 @@ class opcode :
         self.src = None
 
 indent = 0
+out_lines = ''
 
-#-------------------------------------------------------------------------------
-#   output a src line
-#
+def inc_indent():
+    global indent
+    indent += 1
+
+def dec_indent():
+    global indent
+    indent -= 1
+
+def tab() :
+    return ' '*TabWidth*indent
+
 def l(s) :
-    Out.write(tab()+s+'\n')
-
-#-------------------------------------------------------------------------------
-# instruction fetch machine cycle (M1):
-#              T1   T2   T3   T4
-#    --------+----+----+----+----+
-#    CLK     |--**|--**|--**|--**|
-#    A15-A0  |   PC    | REFRESH |
-#    MREQ    |   *|****|  **|**  |
-#    RD      |   *|****|    |    |
-#    WAIT    |    | -- |    |    |
-#    M1      |****|****|    |    |
-#    D7-D0   |    |   X|    |    |
-#    RFSH    |    |    |****|****|
-#
-# memory-read machine cycle:
-#              T1   T2   T3
-#    --------+----+----+----+
-#    CLK     |--**|--**|--**|
-#    A15-A0  |   MEM ADDR   |
-#    MREQ    |   *|****|**  |
-#    RD      |   *|****|**  |
-#    WR      |    |    |    |
-#    D7-D0   |    |    | X  |
-#    WAIT    |    | -- |    |
-#
-# memory-write machine cycle:
-#              T1   T2   T3
-#    --------+----+----+----+
-#    CLK     |--**|--**|--**|
-#    A15-A0  |   MEM ADDR   |
-#    MREQ    |   *|****|**  |
-#    RD      |    |    |    |
-#    WR      |    |  **|**  |
-#    D7-D0   |   X|XXXX|XXXX|
-#    WAIT    |    | -- |    |
-#
-# input machine cycle:
-#              T1   T2   TW   T3
-#    --------+----+----+----+----+
-#    CLK     |--**|--**|--**|--**|
-#    A15-A0  |     PORT ADDR     |
-#    IORQ    |    |****|****|**  |
-#    RD      |    |****|****|**  |
-#    WR      |    |    |    |    |
-#    D7-D0   |    |    |    | X  |
-#    WAIT    |    |    | -- |    |
-#
-#   NOTE: the implementation moves the activation of the IORQ|RD
-#   pins from T2 to TW, so that the pins will only be active 
-#   for one tick (assuming no wait states)
-#
-# output machine cycle:
-#              T1   T2   TW   T3
-#    --------+----+----+----+----+
-#    CLK     |--**|--**|--**|--**|
-#    A15-A0  |     PORT ADDR     |
-#    IORQ    |    |****|****|**  |
-#    RD      |    |    |    |    |
-#    WR      |    |****|****|**  |
-#    D7-D0   |  XX|XXXX|XXXX|XXXX|
-#    WAIT    |    |    | -- |    |
-#
-#    NOTE: the IORQ|WR pins will already be switched off at the beginning
-#    of TW, so that IO devices don't need to do double work.
-#
-
-#-------------------------------------------------------------------------------
-# write source header
-#
-def write_header() :
-    l('uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {')
-    l('  cpu->trap_id = 0;')
-    l('  uint64_t r0 = cpu->bc_de_hl_fa;')
-    l('  uint64_t r1 = cpu->wz_ix_iy_sp;')
-    l('  uint64_t r2 = cpu->im_ir_pc_bits;')
-    l('  uint64_t r3 = cpu->bc_de_hl_fa_;')
-    l('  uint64_t ws = _z80_map_regs(r0, r1, r2);')
-    l('  uint64_t map_bits = r2 & _BITS_MAP_REGS;')
-    l('  uint64_t pins = cpu->pins;')
-    l('  const z80_tick_t tick = cpu->tick_cb;')
-    l('  const z80_trap_t trap = cpu->trap_cb;')
-    l('  void* ud = cpu->user_data;')
-    l('  uint32_t ticks = 0;')
-    l('  uint8_t op = 0, d8 = 0;')
-    l('  uint16_t addr = 0, d16 = 0;')
-    l('  uint16_t pc = _G_PC();')
-    l('  uint64_t pre_pins = pins;')
-    l('  do {')
-    l('    _FETCH(op)')
-    l('    if (op == 0xED) {')
-    l('      map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
-    l('    }')
-    l('    if (map_bits != (r2 & _BITS_MAP_REGS)) {')
-    l('      const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;')
-    l('      r0 = _z80_flush_r0(ws, r0, old_map_bits);')
-    l('      r1 = _z80_flush_r1(ws, r1, old_map_bits);')
-    l('      r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
-    l('      ws = _z80_map_regs(r0, r1, r2);')
-    l('    }')
-    l('    switch (op) {')
-
-#-------------------------------------------------------------------------------
-# write the end of the main switch-case
-#
-def write_op_post():
-    l('      default: break;')
-    l('    }')
-
-#-------------------------------------------------------------------------------
-# write source footer
-#
-def write_footer() :
-    l('    map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);')
-    l('    if (trap) {')
-    l('      int trap_id = trap(pc,ticks,pins,cpu->trap_user_data);')
-    l('      if (trap_id) {')
-    l('        cpu->trap_id=trap_id;')
-    l('        break;')
-    l('      }')
-    l('    }')
-    l('    pins&=~Z80_INT;')
-    l('    /* delay-enable interrupt flags */')
-    l('    if (r2 & _BIT_EI) {')
-    l('      r2 &= ~_BIT_EI;')
-    l('      r2 |= (_BIT_IFF1 | _BIT_IFF2);')
-    l('    }')
-    l('    pre_pins = pins;')
-    l('  } while (ticks < num_ticks);')
-    l('  _S_PC(pc);')
-    l('  r0 = _z80_flush_r0(ws, r0, r2);')
-    l('  r1 = _z80_flush_r1(ws, r1, r2);')
-    l('  r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;')
-    l('  cpu->bc_de_hl_fa = r0;')
-    l('  cpu->wz_ix_iy_sp = r1;')
-    l('  cpu->im_ir_pc_bits = r2;')
-    l('  cpu->bc_de_hl_fa_ = r3;')
-    l('  cpu->pins = pins;')
-    l('  return ticks;')
-    l('}')
-
-#-------------------------------------------------------------------------------
-#   Generate code for checking and handling an interrupt request at
-#   the end of an instruction:
-#
-#   An interrupt response cycle looks a lot like an opcode fetch machine cycle.
-#
-#   NOTE: The INT pint is normally checked at the start of the last time-cycle
-#   of an instruction. The emulator moves this check to the start
-#   of the next time cycle (so it will check right *after* the last instruction
-#   time-cycle.
-#
-#              T1   T2   TW   TW   T3   T4
-#    --------+----+----+----+----+----+----+
-#    CLK     |--**|--**|--**|--**|--**|--**|
-#    INT    *|*   |    |    |    |    |    |
-#    A15-A0  |        PC         |  RFRSH  |
-#    M1      |****|****|****|****|    |    |
-#    MREG    |    |    |    |    |  **|**  |
-#    IORQ    |    |    |  **|****|    |    |
-#    RD      |    |    |    |    |    |    |
-#    WR      |    |    |    |    |    |    |
-#    D7-D0   |    |    |    |  XX|XX..|    |
-#    WAIT    |    |    |    | -- |    |    |
-#    RFSH    |    |    |    |    |****|****|
-#
-#   Interrupt controllers must check for the M1|IORQ pin combination 
-#   being set (with neither the RD nor WR being set, and the highest 
-#   priority interrupt controller must place the interrupt vector on the
-#   data bus.
-#
-#   INT MODE 1: 13 cycles
-#   INT MODE 2: 19 cycles
-#
-#   Updated:
-#       - 05-Sep-2018: don't handle interrupt when _BIT_EI is set, this prevents
-#                      interrupt handling during sequences of EI
-#
-def write_interrupt_handling():
-    l('    bool nmi = 0 != ((pins & (pre_pins ^ pins)) & Z80_NMI);')
-    l('    if (nmi || (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1))) {')
-    l('      r2 &= ~_BIT_IFF1;');
-    l('      if (pins & Z80_INT) {');
-    l('        r2 &= ~_BIT_IFF2;');
-    l('      }')
-    l('      if (pins & Z80_HALT) {')
-    l('        pins &= ~Z80_HALT;')
-    l('        pc++;')
-    l('      }')
-    l('      _SA(pc);')
-    l('      if (nmi) {')
-    l('        _TWM(5,Z80_M1|Z80_MREQ|Z80_RD);_BUMPR();')
-    l('        uint16_t sp = _G_SP();')
-    l('        _MW(--sp,pc>>8);')
-    l('        _MW(--sp,pc);')
-    l('        _S_SP(sp);')
-    l('        pc = 0x0066;')
-    l('        _S_WZ(pc);')
-    l('      }')
-    l('      else {')
-    l('        _TWM(4,Z80_M1|Z80_IORQ);')
-    l('        const uint8_t int_vec = _GD();')
-    l('        _BUMPR();')
-    l('        _T(2);')
-    l('        switch (_G_IM()) {')
-    l('          case 0:')
-    l('            break;')
-    l('          case 1:')
-    l('            {')
-    l('              uint16_t sp = _G_SP();')
-    l('              _MW(--sp,pc>>8);')
-    l('              _MW(--sp,pc);')
-    l('              _S_SP(sp);')
-    l('              pc = 0x0038;')
-    l('              _S_WZ(pc);')
-    l('            }')
-    l('            break;')
-    l('          case 2:')
-    l('            {')
-    l('              uint16_t sp = _G_SP();')
-    l('              _MW(--sp,pc>>8);')
-    l('              _MW(--sp,pc);')
-    l('              _S_SP(sp);')
-    l('              addr = (_G_I()<<8) | (int_vec & 0xFE);')
-    l('              uint8_t z,w;')
-    l('              _MR(addr++,z);')
-    l('              _MR(addr,w);')
-    l('              pc = (w<<8)|z;')
-    l('              _S_WZ(pc);')
-    l('            }')
-    l('            break;')
-    l('        }')
-    l('       }')
-    l('    }')
+    global out_lines
+    out_lines += tab() + s + '\n'
 
 #-------------------------------------------------------------------------------
 # Write the ED extended instruction block.
@@ -309,7 +88,7 @@ def write_ed_ops():
     inc_indent()
     for i in range(0, 256):
         write_op(enc_ed_op(i))
-    l('default: break;');
+    l('default: break;')
     dec_indent()
     l('}')
     dec_indent()
@@ -1090,13 +869,13 @@ def rld():
 #   Undocumented Z80 Documented)
 #
 def halt():
-    return 'pins|=Z80_HALT;pc--;'
+    return 'pins|=Z80_HALT;c.pc--;'
 
 def di():
-    return 'r2&=~(_BIT_IFF1|_BIT_IFF2);'
+    return 'c.bits&=~(_BIT_IFF1|_BIT_IFF2);'
 
 def ei():
-    return 'r2=(r2&~(_BIT_IFF1|_BIT_IFF2))|_BIT_EI;'
+    return 'c.bits=(r2&~(_BIT_IFF1|_BIT_IFF2))|_BIT_EI;'
 
 #-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
@@ -1128,25 +907,24 @@ def enc_op(op) :
                 o.src = halt()
             else:
                 # LD (HL),r; LD (IX+d),r; LD (IX+d),r
-                o.cmt = 'LD (HL/IX+d/IY+d),'+r[z]
+                o.cmt = 'LD '+r_cmt[6]+','+r_cmt[z]
                 # special case LD (IX+d),L LD (IX+d),H
                 if z in [4,5]:
-                    o.src = 'd8=_IDX()?_G8(r0,_'+r[z]+'):_G_'+r[z]+'();'
+                    o.src = addr(5)+'_MW(addr,'+_r[z]+');'
                 else:
-                    o.src = 'd8=_G_'+r[z]+'();'
-                o.src += addr(5)+'_MW(addr,d8);'
+                    o.src = addr(5)+'_MW(addr,'+r[z]+');'
         elif z == 6:
             # LD r,(HL); LD r,(IX+d); LD r,(IY+d)
-            o.cmt = 'LD '+r[y]+',(HL/IX+d/IY+d)'
+            o.cmt = 'LD '+r_cmt[y]+','+r_cmt[6]
             o.src = addr(5)+'_MR(addr,d8);'
             if y in [4,5]:
-                o.src += 'if(_IDX()){_S8(r0,_'+r[y]+',d8);}else{_S_'+r[y]+'(d8);}'
+                o.src = addr(5)+'_MR(addr,'+_r[y]+');'
             else:
-                o.src += '_S_'+r[y]+'(d8);'
+                o.src = addr(5)+'_MR(addr,'+r[y]+');'
         else:
             # LD r,s
-            o.cmt = 'LD '+r[y]+','+r[z]
-            o.src = '_S_'+r[y]+'(_G_'+r[z]+'());'
+            o.cmt = 'LD '+r_cmt[y]+','+r_cmt[z]
+            o.src = r[y]+'='+r[z]+';'
 
     #---- block 2: 8-bit ALU instructions (ADD, ADC, SUB, SBC, AND, XOR, OR, CP)
     elif x == 2:
@@ -1231,8 +1009,8 @@ def enc_op(op) :
                 o.src = addr(2) + '_IMM8(d8);_MW(addr,d8);'
             else:
                 # LD r,n
-                o.cmt = 'LD '+r[y]+',n'
-                o.src = '_IMM8(d8);_S_'+r[y]+'(d8);'
+                o.cmt = 'LD '+r_cmt[y]+',n'
+                o.src = '_IMM8('+r[y]+');'
         elif z == 7:
             # misc ops on A and F
             op_tbl = [
@@ -1434,20 +1212,6 @@ def enc_cb_op(op) :
     return o
 
 #-------------------------------------------------------------------------------
-# indent and tab stuff
-#
-def inc_indent():
-    global indent
-    indent += 1
-
-def dec_indent():
-    global indent
-    indent -= 1
-
-def tab() :
-    return ' '*TabWidth*indent
-
-#-------------------------------------------------------------------------------
 # write a single (writes a case inside the current switch)
 #
 def write_op(op) :
@@ -1460,10 +1224,6 @@ def write_op(op) :
 # main encoder function, this populates all the opcode tables and
 # generates the C++ source code into the file f
 #
-Out = open(OutPath, 'w')
-write_header()
-
-# loop over all instruction bytes
 indent = 3
 for i in range(0, 256):
     # ED prefix instructions
@@ -1476,7 +1236,9 @@ for i in range(0, 256):
     else:
         write_op(enc_op(i))
 indent = 0
-write_op_post()
-write_interrupt_handling()
-write_footer()
-Out.close()
+
+with open(InpPath, 'r') as inf:
+    templ = Template(inf.read())
+    c_src = templ.safe_substitute(decode_block=out_lines)
+    with open(OutPath, 'w') as outf:
+        outf.write(c_src)
