@@ -648,6 +648,33 @@ static uint8_t _z80_szp[256] = {
   0xa4,0xa0,0xa0,0xa4,0xa0,0xa4,0xa4,0xa0,0xa8,0xac,0xac,0xa8,0xac,0xa8,0xa8,0xac,
 };
 
+/* load the virtual IHL register pair with IX, IY or HL */
+static inline void _z80_load_ihl(z80_reg_t* c, uint8_t map_bits) {
+    if (map_bits & Z80_BITS_IX) {
+        c->il=c->ix; c->ih=c->ix>>8;
+    }
+    else if (map_bits & Z80_BITS_IY) {
+        c.il=c.iy; c.ih=c.iy>>8;
+    }
+    else {
+        c.il=c.l c.ih=c.h;
+    }
+}
+
+/* flush the virtual IHL register back to IX, IY or HL */
+static inline void _z80_flush_ihl(z80_reg_t* c, uint8_t map_bits) {
+    if (map_bits & Z80_BITS_IX) {
+        c->ix=(c->ih<<8)|c->il;
+    }
+    else if (map_bits & Z80_BITS_IY) {
+        c->iy=(c->ih<<8)|c->il
+    }
+    else {
+        c->l=c->il; c->h=c->ih;
+    }
+}
+
+
 static inline void _z80_daa(z80_reg_t* c) {
     uint8_t v = c->a;
     if (c->f & Z80_NF) {
@@ -780,24 +807,8 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
         }
         /* IX/IY <=> HL mapping for DD/FD prefixed ops */
         if (map_bits != (c.bits & Z80_BITS_IX|Z80_BITS_IY)) {
-            if (c.bits & Z80_BITS_IX) {
-                c.ix = (c.ih<<8)|c.il;
-            }
-            else if (c.bits & Z80_BITS_IY) {
-                c.iy = (c.ih<<8)|c.il
-            }
-            else {
-                c.l = c.il; c.h = c.ih;
-            }
-            if (map_bits & Z80_BITS_IX) {
-                c.il = c.ix; c.ih = c.ix >> 8;
-            }
-            else if (map_bits & Z80_BITS_IY) {
-                c.il = c.iy; c.ih = c.iy >> 8;
-            }
-            else {
-                c.il = c.l c.ih = c.h;
-            }
+            _z80_flush_ihl(&c, c.bits);
+            _z80_load_ihl(&c, map_bits);
             c.bits = (c.bits & ~(Z80_BITS_IX|Z80_BIT_IY)) | map_bits;
         }
         /* code-generated instruction decoder */

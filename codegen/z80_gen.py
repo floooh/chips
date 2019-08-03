@@ -236,12 +236,10 @@ def in_n_a():
 #
 def ex_af():
     src ='{'
-    src+='r0=_z80_flush_r0(ws,r0,r2);'
-    src+='uint16_t fa=_G16(r0,_FA);'
-    src+='uint16_t fa_=_G16(r3,_FA);'
-    src+='_S16(r0,_FA,fa_);'
-    src+='_S16(r3,_FA,fa);'
-    src+='ws=_z80_map_regs(r0,r1,r2);'
+    src+='uint16_t fa=(c.f<<8)|c.a;'
+    src+='c.f=c.fa_>>8;'
+    src+='c.a=c.fa_;'
+    src+='c.fa_=fa;'
     src+='}'
     return src
 
@@ -252,12 +250,14 @@ def ex_af():
 #
 def ex_de_hl():
     src ='{'
-    src+='r0=_z80_flush_r0(ws,r0,r2);'
-    src+='uint16_t de=_G16(r0,_DE);'
-    src+='uint16_t hl=_G16(r0,_HL);'
-    src+='_S16(r0,_DE,hl);'
-    src+='_S16(r0,_HL,de);'
-    src+='ws=_z80_map_regs(r0,r1,r2);'
+    src+='_z80_flush_ihl(&c,c.bits);'
+    src+='uint16_t de=(c.d<<8)|c.e;'
+    src+='uint16_t hl=(c.h<<8)|c.l;'
+    src+='c.d=c.de_>>8;c.e=c.de_;'
+    src+='c.h=c.hl_>>8;c.l=c.hl_;'
+    src+='c.de_=de;'
+    src+='c.hl_=hl;'
+    src+='_z80_load_ihl(&c,c.bits);'
     src+='}'
     return src
 
@@ -269,16 +269,13 @@ def ex_de_hl():
 def ex_sp_dd():
     src ='{'
     src+='_T(3);'
-    src+='addr=_G_SP();'
-    src+='d16=_G_HL();'
+    src+='addr=c.sp;'
     src+='uint8_t l,h;'
     src+='_MR(addr,l);'
     src+='_MR(addr+1,h);'
-    src+='_MW(addr,d16);'
-    src+='_MW(addr+1,d16>>8);'
-    src+='d16=(h<<8)|l;'
-    src+='_S_HL(d16);'
-    src+='_S_WZ(d16);'
+    src+='_MW(addr,c.il);'
+    src+='_MW(addr+1,c.ih);'
+    src+='c.ih=h;c.il=l;c.wz=(h<<8)|l;'
     src+='}'
     return src
 
@@ -289,11 +286,15 @@ def ex_sp_dd():
 #
 def exx():
     src ='{'
-    src+='r0=_z80_flush_r0(ws,r0,r2);'
-    src+='const uint64_t rx=r3;'
-    src+='r3=(r3&0xffff)|(r0&0xffffffffffff0000);'
-    src+='r0=(r0&0xffff)|(rx&0xffffffffffff0000);'
-    src+='ws=_z80_map_regs(r0, r1, r2);'
+    src+='_z80_flush_ihl(&c,c.bits);'
+    src+='uint16_t bc=(c.b<<8)|c.c;'
+    src+='uint16_t de=(c.d<<8)|c.e;'
+    src+='uint16_t hl=(c.h<<8)|c.l;'
+    src+='c.b=c.bc_>>8;c.c=c.bc_;'
+    src+='c.d=c.de_>>8;c.e=c.de_;'
+    src+='c.h=c.hl_>>8;c.l=c.hl_;'
+    src+='c.bc_=bc;c.de_=de;c.hl_=hl;'
+    src+='_z80_load_ihl(&c,c.bits);'
     src+='}'
     return src
 
