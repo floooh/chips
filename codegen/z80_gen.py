@@ -78,6 +78,14 @@ def l(s) :
     out_lines += tab() + s + '\n'
 
 #-------------------------------------------------------------------------------
+# Return code to setup an address variable 'a' with the address of HL
+# or (IX+d), (IY+d). For the index instructions also update WZ with
+# IX+d or IY+d
+#
+def addr(ext_ticks) :
+    return '_ADDR(addr,'+str(ext_ticks)+');'
+
+#-------------------------------------------------------------------------------
 # Write the ED extended instruction block.
 #
 def write_ed_ops():
@@ -189,14 +197,6 @@ def write_cb_ops():
     dec_indent()
     l('}')
     l('break;')
-
-#-------------------------------------------------------------------------------
-# Return code to setup an address variable 'a' with the address of HL
-# or (IX+d), (IY+d). For the index instructions also update WZ with
-# IX+d or IY+d
-#
-def addr(ext_ticks) :
-    return '_ADDR(addr,'+str(ext_ticks)+');'
 
 #-------------------------------------------------------------------------------
 #   out_n_a
@@ -660,96 +660,88 @@ def out_r_ic(y):
 #-------------------------------------------------------------------------------
 #   ALU functions.
 #
-def add8():
+def add8(val):
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='uint32_t res=acc+d8;'
-    src+='_S_F(_ADD_FLAGS(acc,d8,res));'
-    src+='_S_A(res);'
+    src+='uint32_t res=c.a+'+val+';'
+    src+='c.f=_ADD_FLAGS(c.a,'+val+',res);'
+    src+='c.a=res;'
     src+='}'
     return src
 
-def adc8():
+def adc8(val):
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='uint32_t res=acc+d8+(_G_F()&Z80_CF);'
-    src+='_S_F(_ADD_FLAGS(acc,d8,res));'
-    src+='_S_A(res);'
+    src+='uint32_t res=c.a+'+val+'+(c.f&Z80_CF);'
+    src+='c.f=_ADD_FLAGS(c.a,'+val+',res);'
+    src+='c.a=res;'
     src+='}'
     return src
 
-def sub8():
+def sub8(val):
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='uint32_t res=(uint32_t)((int)acc-(int)d8);'
-    src+='_S_F(_SUB_FLAGS(acc,d8,res));'
-    src+='_S_A(res);'
+    src+='uint32_t res=(uint32_t)((int)c.a-(int)'+val+');'
+    src+='c.f=_SUB_FLAGS(c.a,'+val+',res);'
+    src+='c.a=res;'
     src+='}'
     return src
 
-def sbc8():
+def sbc8(val):
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='uint32_t res=(uint32_t)((int)acc-(int)d8-(_G_F()&Z80_CF));'
-    src+='_S_F(_SUB_FLAGS(acc,d8,res));'
-    src+='_S_A(res);'
+    src+='uint32_t res=(uint32_t)((int)c.a-(int)'+val+'-(c.f&Z80_CF));'
+    src+='c.f=_SUB_FLAGS(c.a,'+val+',res);'
+    src+='c.a=res;'
     src+='}'
     return src
 
-def and8():
+def and8(val):
     src ='{'
-    src+='d8&=_G_A();'
-    src+='_S_F(_z80_szp[d8]|Z80_HF);'
-    src+='_S_A(d8);'
+    src+='c.a&='+val+';'
+    src+='c.f=_z80_szp[c.a]|Z80_HF;'
     src+='}'
     return src
 
-def xor8():
+def xor8(val):
     src ='{'
-    src+='d8^=_G_A();'
-    src+='_S_F(_z80_szp[d8]);'
-    src+='_S_A(d8);'
+    src+='c.a^='+val+';'
+    src+='c.f=_z80_szp[c.a];'
     src+='}'
     return src
 
-def or8():
+def or8(val):
     src ='{'
-    src+='d8|=_G_A();'
-    src+='_S_F(_z80_szp[d8]);'
-    src+='_S_A(d8);'
+    src+='c.a|='+val+';'
+    src+='c.f=_z80_szp[c.a]);'
     src+='}'
     return src
 
-def cp8():
+def cp8(val):
     src ='{'
-    src+='uint8_t acc=_G_A();'
-    src+='int32_t res=(uint32_t)((int)acc-(int)d8);'
-    src+='_S_F(_CP_FLAGS(acc,d8,res));'
+    src+='int32_t res=(uint32_t)((int)c.a-(int)'+val+');'
+    src+='c.f=_CP_FLAGS(c.a,'+val+',res);'
     src+='}'
     return src
 
-def alu8(y):
+def alu8(y, val):
     if (y==0):
-        return add8()
+        return add8(val)
     elif (y==1):
-        return adc8()
+        return adc8(val)
     elif (y==2):
-        return sub8()
+        return sub8(val)
     elif (y==3):
-        return sbc8()
+        return sbc8(val)
     elif (y==4):
-        return and8()
+        return and8(val)
     elif (y==5):
-        return xor8()
+        return xor8(val)
     elif (y==6):
-        return or8()
+        return or8(val)
     elif (y==7):
-        return cp8()
+        return cp8(val)
 
 def neg8():
-    src ='d8=_G_A();'
-    src+='_S_A(0);'
-    src+=sub8();
+    src ='d8=c.a;'
+    src+='c.a=0;'
+    src+=sub8('d8')
     return src
 
 def inc8():
@@ -916,7 +908,6 @@ def enc_op(op) :
         elif z == 6:
             # LD r,(HL); LD r,(IX+d); LD r,(IY+d)
             o.cmt = 'LD '+r_cmt[y]+','+r_cmt[6]
-            o.src = addr(5)+'_MR(addr,d8);'
             if y in [4,5]:
                 o.src = addr(5)+'_MR(addr,'+_r[y]+');'
             else:
@@ -930,12 +921,12 @@ def enc_op(op) :
     elif x == 2:
         if z == 6:
             # ALU (HL); ALU (IX+d); ALU (IY+d)
-            o.cmt = alu_cmt[y]+',(HL/IX+d/IY+d)'
-            o.src = addr(5) + '_MR(addr,d8);'+alu8(y)
+            o.cmt = alu_cmt[y]+','+r_cmt[6]
+            o.src = addr(5) + '_MR(addr,d8);'+alu8(y,'d8')
         else:
             # ALU r
-            o.cmt = alu_cmt[y]+' '+r[z]
-            o.src = 'd8=_G_'+r[z]+'();'+alu8(y)
+            o.cmt = alu_cmt[y]+' '+r_cmt[z]
+            o.src = alu8(y,r[z])
 
     #---- block 0: misc ops
     elif x == 0:
@@ -1086,7 +1077,7 @@ def enc_op(op) :
         if z == 6:
             # ALU n
             o.cmt = '{} n'.format(alu_cmt[y])
-            o.src = '_IMM8(d8);'+alu8(y)
+            o.src = '_IMM8(d8);'+alu8(y,'d8')
         if z == 7:
             # RST
             o.cmt = 'RST {}'.format(hex(y*8))

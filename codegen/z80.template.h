@@ -526,53 +526,6 @@ bool z80_ei_pending(z80_t* cpu);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-/* set 16-bit address bus pins */
-#define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
-/* set 16-bit address bus and 8-bit data bus pins */
-#define _SAD(addr,data) pins=(pins&~0xFFFFFFULL)|((((data)&0xFFULL)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
-/* get 8-bit data bus value from pins */
-#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
-/* invoke 'filler tick' without control pins set */
-#define _T(num) pins=tick(num,(pins&~Z80_CTRL_MASK),ud);ticks+=num
-/* invoke tick callback with pins mask */
-#define _TM(num,mask) pins=tick(num,(pins&~(Z80_CTRL_MASK))|(mask),ud);ticks+=num
-/* invoke tick callback (with wait state detecion) */
-#define _TWM(num,mask) pins=tick(num,(pins&~(Z80_WAIT_MASK|Z80_CTRL_MASK))|(mask),ud);ticks+=num+Z80_GET_WAIT(pins)
-/* memory read machine cycle */
-#define _MR(addr,data) _SA(addr);_TWM(3,Z80_MREQ|Z80_RD);data=_GD()
-/* memory write machine cycle */
-#define _MW(addr,data) _SAD(addr,data);_TWM(3,Z80_MREQ|Z80_WR)
-/* input machine cycle */
-#define _IN(addr,data) _SA(addr);_TWM(4,Z80_IORQ|Z80_RD);data=_GD()
-/* output machine cycle */
-#define _OUT(addr,data) _SAD(addr,data);_TWM(4,Z80_IORQ|Z80_WR);
-/* read 8-bit immediate value */
-#define _IMM8(data) _MR(c.pc++,data);
-/* read 16-bit immediate value (also update WZ register) */
-#define _IMM16(data) {uint8_t w,z;_MR(c.pc++,z);_MR(c.pc++,w);c.wz=(w<<8)|z;} 
-/* true if current op is an indexed op */
-#define _IDX() FIXME // (0!=(r2&(_BIT_USE_IX|_BIT_USE_IY)))
-/* generate effective address for (HL), (IX+d), (IY+d) */
-#define _ADDR(addr,ext_ticks) FIXME //{addr=_G16(ws,_HL);if(_IDX()){int8_t d;_MR(pc++,d);addr+=d;_S_WZ(addr);_T(ext_ticks);}}
-/* helper macro to bump R register */
-#define _BUMPR() c.r=(c.r&0x80)|((c.r+1)&0x7F);
-/* a normal opcode fetch, bump R */
-#define _FETCH(op) {_SA(c.pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_BUMPR();}
-/* special opcode fetch for CB prefix, only bump R if not a DD/FD+CB 'double prefix' op */
-#define _FETCH_CB(op) {_SA(c.pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();if(!_IDX()){_BUMPR();}}
-/* evaluate S+Z flags */
-#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
-/* evaluate SZYXCH flags */
-#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
-/* evaluate flags for 8-bit adds */
-#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
-/* evaluate flags for 8-bit subs */
-#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
-/* evaluate flags for 8-bit compare */
-#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
-/* evaluate flags for LD A,I and LD A,R */
-#define _SZIFF2_FLAGS(val) ((_G_F()&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((r2&_BIT_IFF2)?Z80_PF:0))
-
 /* register access functions */
 void z80_set_a(z80_t* cpu, uint8_t v)         { cpu.reg.a = v; }
 void z80_set_f(z80_t* cpu, uint8_t v)         { cpu.reg.f = v; }
@@ -758,6 +711,53 @@ static inline void _z80_rra(z80_reg_t* c) {
     return ws;
 }
 
+/* set 16-bit address bus pins */
+#define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
+/* set 16-bit address bus and 8-bit data bus pins */
+#define _SAD(addr,data) pins=(pins&~0xFFFFFFULL)|((((data)&0xFFULL)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
+/* get 8-bit data bus value from pins */
+#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
+/* invoke 'filler tick' without control pins set */
+#define _T(num) pins=tick(num,(pins&~Z80_CTRL_MASK),ud);ticks+=num
+/* invoke tick callback with pins mask */
+#define _TM(num,mask) pins=tick(num,(pins&~(Z80_CTRL_MASK))|(mask),ud);ticks+=num
+/* invoke tick callback (with wait state detecion) */
+#define _TWM(num,mask) pins=tick(num,(pins&~(Z80_WAIT_MASK|Z80_CTRL_MASK))|(mask),ud);ticks+=num+Z80_GET_WAIT(pins)
+/* memory read machine cycle */
+#define _MR(addr,data) _SA(addr);_TWM(3,Z80_MREQ|Z80_RD);data=_GD()
+/* memory write machine cycle */
+#define _MW(addr,data) _SAD(addr,data);_TWM(3,Z80_MREQ|Z80_WR)
+/* input machine cycle */
+#define _IN(addr,data) _SA(addr);_TWM(4,Z80_IORQ|Z80_RD);data=_GD()
+/* output machine cycle */
+#define _OUT(addr,data) _SAD(addr,data);_TWM(4,Z80_IORQ|Z80_WR);
+/* read 8-bit immediate value */
+#define _IMM8(data) _MR(c.pc++,data);
+/* read 16-bit immediate value (also update WZ register) */
+#define _IMM16(data) {uint8_t w,z;_MR(c.pc++,z);_MR(c.pc++,w);c.wz=(w<<8)|z;} 
+/* true if current op is an indexed op */
+#define _IDX() FIXME // (0!=(r2&(_BIT_USE_IX|_BIT_USE_IY)))
+/* generate effective address for (HL), (IX+d), (IY+d) */
+#define _ADDR(addr,ext_ticks) {addr=(c.ih<<8)|c.il;if(_IDX()){int8_t d;_MR(c.pc++,d);addr+=d;c.wz=addr;_T(ext_ticks);}}
+/* helper macro to bump R register */
+#define _BUMPR() c.r=(c.r&0x80)|((c.r+1)&0x7F);
+/* a normal opcode fetch, bump R */
+#define _FETCH(op) {_SA(c.pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_BUMPR();}
+/* special opcode fetch for CB prefix, only bump R if not a DD/FD+CB 'double prefix' op */
+#define _FETCH_CB(op) {_SA(c.pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();if(!_IDX()){_BUMPR();}}
+/* evaluate S+Z flags */
+#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
+/* evaluate SZYXCH flags */
+#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
+/* evaluate flags for 8-bit adds */
+#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
+/* evaluate flags for 8-bit subs */
+#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
+/* evaluate flags for 8-bit compare */
+#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
+/* evaluate flags for LD A,I and LD A,R */
+#define _SZIFF2_FLAGS(val) ((_G_F()&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((r2&_BIT_IFF2)?Z80_PF:0))
+
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     cpu->trap_id = 0;
     z80_reg_t c = cpu->reg;
@@ -768,7 +768,10 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     const z80_trap_t trap = cpu->trap_cb;
     void* ud = cpu->user_data;
     uint32_t ticks = 0;
-    uint8_t op;
+    uint16_t addr = 0;
+    uint16_t d16 = 0;
+    uint8_t d8 = 0;
+    uint8_t op = 0;
     do {
         _FETCH(op);
         /* ED prefix cancels DD and FD prefix */
