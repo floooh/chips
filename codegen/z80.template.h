@@ -527,16 +527,16 @@ bool z80_ei_pending(z80_t* cpu);
 #endif
 
 /* register access functions */
-void z80_set_a(z80_t* cpu, uint8_t v)         { cpu.reg.a = v; }
-void z80_set_f(z80_t* cpu, uint8_t v)         { cpu.reg.f = v; }
-void z80_set_l(z80_t* cpu, uint8_t v)         { cpu.reg.l = v; }
-void z80_set_h(z80_t* cpu, uint8_t v)         { cpu.reg.h = v; }
-void z80_set_e(z80_t* cpu, uint8_t v)         { cpu.reg.e = v; }
+void z80_set_a(z80_t* cpu, uint8_t v)         { cpu->reg.a = v; }
+void z80_set_f(z80_t* cpu, uint8_t v)         { cpu->reg.f = v; }
+void z80_set_l(z80_t* cpu, uint8_t v)         { cpu->reg.l = v; }
+void z80_set_h(z80_t* cpu, uint8_t v)         { cpu->reg.h = v; }
+void z80_set_e(z80_t* cpu, uint8_t v)         { cpu->reg.e = v; }
 void z80_set_d(z80_t* cpu, uint8_t v)         { cpu->reg.d = v; }
 void z80_set_c(z80_t* cpu, uint8_t v)         { cpu->reg.c = v; }
 void z80_set_b(z80_t* cpu, uint8_t v)         { cpu->reg.b = v; }
-void z80_set_af(z80_t* cpu, uint16_t v)       { cpu->reg.a = v; cpu->reg.f = v>>8; }
-void z80_set_fa(z80_t* cpu, uint16_t v)       { cpu->reg.a = v>>8; cpu->reg.a = v; }
+void z80_set_af(z80_t* cpu, uint16_t v)       { cpu->reg.f = v; cpu->reg.a = v>>8; }
+void z80_set_fa(z80_t* cpu, uint16_t v)       { cpu->reg.f = v>>8; cpu->reg.a = v; }
 void z80_set_hl(z80_t* cpu, uint16_t v)       { cpu->reg.l = v; cpu->reg.h = v>>8; }
 void z80_set_de(z80_t* cpu, uint16_t v)       { cpu->reg.e = v; cpu->reg.d = v>>8; }
 void z80_set_bc(z80_t* cpu, uint16_t v)       { cpu->reg.c = v; cpu->reg.b = v>>8; }
@@ -575,7 +575,7 @@ uint16_t z80_af_(z80_t* cpu)      { return (cpu->reg.fa_<<8)|(cpu->reg.fa_>>8); 
 uint16_t z80_hl_(z80_t* cpu)      { return cpu->reg.hl_; }
 uint16_t z80_de_(z80_t* cpu)      { return cpu->reg.de_; }
 uint16_t z80_bc_(z80_t* cpu)      { return cpu->reg.bc_; }
-uint16_t z80_sp(z80_t* cpu)       { return cpu->reg.sp_; }
+uint16_t z80_sp(z80_t* cpu)       { return cpu->reg.sp; }
 uint16_t z80_iy(z80_t* cpu)       { return cpu->reg.iy; }
 uint16_t z80_ix(z80_t* cpu)       { return cpu->reg.ix; }
 uint16_t z80_wz(z80_t* cpu)       { return cpu->reg.wz; }
@@ -589,7 +589,6 @@ bool z80_iff2(z80_t* cpu)         { return 0 != (cpu->reg.bits & Z80_BIT_IFF2); 
 bool z80_ei_pending(z80_t* cpu)   { return 0 != (cpu->reg.bits & Z80_BIT_EI); }
 
 void z80_init(z80_t* cpu, const z80_desc_t* desc) {
-    CHIPS_ASSERT(_FA == 0);
     CHIPS_ASSERT(cpu && desc);
     CHIPS_ASSERT(desc->tick_cb);
     memset(cpu, 0, sizeof(*cpu));
@@ -601,7 +600,10 @@ void z80_init(z80_t* cpu, const z80_desc_t* desc) {
 void z80_reset(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
     /* set AF to 0xFFFF, all other regs are undefined, set to 0xFFFF to */
-    cpu->bc_de_hl_fa = cpu->bc_de_hl_fa_ = 0xFFFFFFFFFFFFFFFFULL;
+    z80_set_bc(cpu, 0xFFFF); z80_set_bc_(cpu, 0xFFFF);
+    z80_set_de(cpu, 0xFFFF); z80_set_de_(cpu, 0xFFFF);
+    z80_set_hl(cpu, 0xFFFF); z80_set_hl_(cpu, 0xFFFF);
+    z80_set_af(cpu, 0xFFFF); z80_set_af_(cpu, 0xFFFF);
     z80_set_ix(cpu, 0xFFFF);
     z80_set_iy(cpu, 0xFFFF);
     z80_set_wz(cpu, 0xFFFF);
@@ -615,7 +617,7 @@ void z80_reset(z80_t* cpu) {
     z80_set_im(cpu, 0);
     /* after power-on or reset, R is set to 0 (see z80-documented.pdf) */
     z80_set_ir(cpu, 0x0000);
-    cpu->im_ir_pc_bits &= ~(_BIT_EI|_BIT_USE_IX|_BIT_USE_IY);
+    cpu->reg.bits &= ~(Z80_BIT_EI|Z80_BIT_IX|Z80_BIT_IY);
 }
 
 void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb, void* trap_user_data) {
@@ -625,7 +627,7 @@ void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb, void* trap_user_data) {
 }
 
 bool z80_opdone(z80_t* cpu) {
-    return 0 == (cpu->im_ir_pc_bits & (_BIT_USE_IX|_BIT_USE_IY));
+    return 0 == (cpu->reg.bits & (Z80_BIT_IX|Z80_BIT_IY));
 }
 
 /* sign+zero+parity lookup table */
@@ -650,30 +652,29 @@ static uint8_t _z80_szp[256] = {
 
 /* load the virtual IHL register pair with IX, IY or HL */
 static inline void _z80_load_ihl(z80_reg_t* c, uint8_t map_bits) {
-    if (map_bits & Z80_BITS_IX) {
+    if (map_bits & Z80_BIT_IX) {
         c->il=c->ix; c->ih=c->ix>>8;
     }
-    else if (map_bits & Z80_BITS_IY) {
-        c.il=c.iy; c.ih=c.iy>>8;
+    else if (map_bits & Z80_BIT_IY) {
+        c->il=c->iy; c->ih=c->iy>>8;
     }
     else {
-        c.il=c.l c.ih=c.h;
+        c->il=c->l; c->ih=c->h;
     }
 }
 
 /* flush the virtual IHL register back to IX, IY or HL */
 static inline void _z80_flush_ihl(z80_reg_t* c, uint8_t map_bits) {
-    if (map_bits & Z80_BITS_IX) {
+    if (map_bits & Z80_BIT_IX) {
         c->ix=(c->ih<<8)|c->il;
     }
-    else if (map_bits & Z80_BITS_IY) {
-        c->iy=(c->ih<<8)|c->il
+    else if (map_bits & Z80_BIT_IY) {
+        c->iy=(c->ih<<8)|c->il;
     }
     else {
         c->l=c->il; c->h=c->ih;
     }
 }
-
 
 static inline void _z80_daa(z80_reg_t* c) {
     uint8_t v = c->a;
@@ -735,7 +736,6 @@ static inline void _z80_rra(z80_reg_t* c) {
     uint8_t r = (c->a>>1) | ((c->f & Z80_CF)<<7);
     c->f = (c->a & Z80_CF) | (c->f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
     c->a = r;
-    return ws;
 }
 
 /* set 16-bit address bus pins */
@@ -761,9 +761,9 @@ static inline void _z80_rra(z80_reg_t* c) {
 /* read 8-bit immediate value */
 #define _IMM8(data) _MR(c.pc++,data);
 /* read 16-bit immediate value (also update WZ register) */
-#define _IMM16(data) {uint8_t w,z;_MR(c.pc++,z);_MR(c.pc++,w);c.wz=(w<<8)|z;} 
+#define _IMM16(data) {uint8_t w,z;_MR(c.pc++,z);_MR(c.pc++,w);data=c.wz=(w<<8)|z;} 
 /* true if current op is an indexed op */
-#define _IDX() FIXME // (0!=(r2&(_BIT_USE_IX|_BIT_USE_IY)))
+#define _IDX() (0!=(c.bits&(Z80_BIT_IX|Z80_BIT_IY)))
 /* generate effective address for (HL), (IX+d), (IY+d) */
 #define _ADDR(addr,ext_ticks) {addr=(c.ih<<8)|c.il;if(_IDX()){int8_t d;_MR(c.pc++,d);addr+=d;c.wz=addr;_T(ext_ticks);}}
 /* helper macro to bump R register */
@@ -788,7 +788,8 @@ static inline void _z80_rra(z80_reg_t* c) {
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     cpu->trap_id = 0;
     z80_reg_t c = cpu->reg;
-    uint8_t map_bits = c.bits & (Z80_BITS_IX|Z80_BITS_IY);
+    _z80_load_ihl(&c, c.bits);
+    uint8_t map_bits = c.bits & (Z80_BIT_IX|Z80_BIT_IY);
     uint64_t pins = cpu->pins;
     uint64_t pre_pins = pins;
     const z80_tick_t tick = cpu->tick_cb;
@@ -806,10 +807,10 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             map_bits &= ~(Z80_BIT_IX|Z80_BIT_IY);
         }
         /* IX/IY <=> HL mapping for DD/FD prefixed ops */
-        if (map_bits != (c.bits & Z80_BITS_IX|Z80_BITS_IY)) {
+        if (map_bits != (c.bits & (Z80_BIT_IX|Z80_BIT_IY))) {
             _z80_flush_ihl(&c, c.bits);
             _z80_load_ihl(&c, map_bits);
-            c.bits = (c.bits & ~(Z80_BITS_IX|Z80_BIT_IY)) | map_bits;
+            c.bits = (c.bits & ~(Z80_BIT_IX|Z80_BIT_IY)) | map_bits;
         }
         /* code-generated instruction decoder */
         switch (op) {
@@ -831,7 +832,7 @@ $decode_block
                 c.pc++;
             }
             /* put PC on address bus */
-            _SA(pc);
+            _SA(c.pc);
             if (nmi) {
                 /* non-maskable interrupt:
                     - fetch and discard the next instruction byte
@@ -839,9 +840,9 @@ $decode_block
                     - load PC and WZ with 0x0066
                 */
                 _TWM(5,Z80_M1|Z80_MREQ|Z80_RD); _BUMPR();
-                _MW(--c->sp,c->pc>>8);
-                _MW(--c->sp,c->pc);
-                c->pc = c->wz = 0x0066;
+                _MW(--c.sp,c.pc>>8);
+                _MW(--c.sp,c.pc);
+                c.pc = c.wz = 0x0066;
             }
             else {
                 /* maskable interrupt: load interrupt vector from peripheral (even if not used) */
@@ -850,24 +851,24 @@ $decode_block
                 _T(2);
                 uint16_t addr;
                 uint8_t w, z;
-                switch (c->im) {
+                switch (c.im) {
                     /* interrupt mode 0: not supported */
                     case 0:
                         break;
                     /* interrupt mode 1: put PC on stack, load PC and WZ with 0x0038 */
                     case 1:
-                        _MW(--c->sp,c->pc>>8);
-                        _MW(--c->sp,c->pc);
-                        c->pc = = c->wz = 0x0038;
+                        _MW(--c.sp,c.pc>>8);
+                        _MW(--c.sp,c.pc);
+                        c.pc = c.wz = 0x0038;
                         break;
                     /* interrupt mode 2: put PC on stack, load PC and WZ from interrupt-vector-table */
                     case 2:
-                        _MW(--c->sp,c->pc>>8);
-                        _MW(--c->sp,c->pc);
-                        addr = (_G_I()<<8) | (int_vec & 0xFE);
+                        _MW(--c.sp,c.pc>>8);
+                        _MW(--c.sp,c.pc);
+                        addr = (c.i<<8) | (int_vec & 0xFE);
                         _MR(addr++,z);
                         _MR(addr,w);
-                        c->pc = c->wz = (w<<8)|z;
+                        c.pc = c.wz = (w<<8)|z;
                         break;
                 }
             }
@@ -875,7 +876,7 @@ $decode_block
         /* if we arrive here we are at the end of a DD/FD prefixed instruction,
            clear the prefix bits for the next instruction
         */
-        map_bits &= ~(Z80_USE_IX|Z80_USE_IY);
+        map_bits &= ~(Z80_BIT_IX|Z80_BIT_IY);
 
         /* invoke optional user-trap callback */
         if (trap) {
@@ -896,6 +897,7 @@ $decode_block
         }
         pre_pins = pins;
     } while (ticks < num_ticks);
+    _z80_flush_ihl(&c, c.bits);
     c.bits = (c.bits & ~(Z80_BIT_IX|Z80_BIT_IY)) | map_bits;
     cpu->reg = c;
     cpu->pins = pins;
