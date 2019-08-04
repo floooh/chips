@@ -783,7 +783,7 @@ static inline void _z80_rra(z80_reg_t* c) {
 /* evaluate flags for 8-bit compare */
 #define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
 /* evaluate flags for LD A,I and LD A,R */
-#define _SZIFF2_FLAGS(val) ((_G_F()&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((r2&_BIT_IFF2)?Z80_PF:0))
+#define _SZIFF2_FLAGS(val) ((c.f&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((c.bits&Z80_BIT_IFF2)?Z80_PF:0))
 
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     cpu->trap_id = 0;
