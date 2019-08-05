@@ -210,8 +210,8 @@ void ui_memmap_draw(ui_memmap_t* win) {
         return;
     }
     const float min_height = 40.0f + ((win->num_layers + 1.0f) * win->layer_height);
-    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
     ImGui::SetNextWindowSizeConstraints(ImVec2(120.0f, min_height), ImVec2(FLT_MAX,FLT_MAX));
     if (ImGui::Begin(win->title, &win->open)) {
         const ImVec2 canvas_pos = ImGui::GetCursorScreenPos();

@@ -118,8 +118,8 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
     if (!win->open) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiSetCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiSetCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         if (ImGui::CollapsingHeader("Port 88h (PIO A)", ImGuiTreeNodeFlags_DefaultOpen)) {
             const uint8_t v = win->kc85->pio_a;
