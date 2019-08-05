@@ -4,7 +4,10 @@
 
     Header-only Z80 CPU emulator written in C.
 
-    DON'T EDIT: This file is machine-generated from codegen/z80.template.h
+    Project repo: https://github.com/floooh/chips/
+
+    NOTE: this file is code-generated from z80.template.h and z80_gen.py
+    in the 'codegen' directory.
 
     Do this:
     ~~~C
@@ -270,11 +273,9 @@
       to detect RETI instructions.
 
     The CPU tick callback is the heart of emulation, for complete
-    tick callback examples check the emulators and tests here:
+    tick callback examples check the system emulators:
     
-    http://github.com/floooh/chips-test
-
-    http://github.com/floooh/yakc
+    https://github.com/floooh/chips/tree/master/systems
 
     ## zlib/libpng license
 
@@ -375,8 +376,6 @@ typedef int (*z80_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* trap_user
 #define Z80_ZF (1<<6)           /* zero */
 #define Z80_SF (1<<7)           /* sign */
 
-#define Z80_MAX_NUM_TRAPS (4)
-
 /* initialization attributes */
 typedef struct {
     z80_tick_t tick_cb;
@@ -402,7 +401,7 @@ typedef struct {
     uint16_t sp;
     uint16_t ix;
     uint16_t iy;
-    uint8_t i, r;
+    uint8_t i, r;       /* interrupt vector base and refresh register */
     uint16_t fa_;       /* shadow registers (AF', HL', ...) */
     uint16_t hl_;
     uint16_t de_;
@@ -416,10 +415,10 @@ typedef struct {
     z80_tick_t tick_cb;     /* tick callback */
     z80_reg_t reg;          /* register bank */
     uint64_t pins;          /* last pin state (for debug inspection) */
-    void* user_data;
-    z80_trap_t trap_cb;
-    void* trap_user_data;
-    int trap_id;
+    void* user_data;        /* userdata for tick callback */
+    z80_trap_t trap_cb;     /* trap evaluation callback */
+    void* trap_user_data;   /* userdata for trap callback */
+    int trap_id;            /* != 0 if last z80_exec() hit a trap */
 } z80_t;
 
 /* initialize a new z80 instance */
@@ -676,6 +675,7 @@ static inline void _z80_flush_ihl(z80_reg_t* c, uint8_t map_bits) {
     }
 }
 
+/* implementation for the DAA instruction */
 static inline void _z80_daa(z80_reg_t* c) {
     uint8_t v = c->a;
     if (c->f & Z80_NF) {
@@ -699,43 +699,6 @@ static inline void _z80_daa(z80_reg_t* c) {
     c->f |= (c->a ^ v) & Z80_HF;
     c->f |= _z80_szp[v];
     c->a = v;
-}
-
-static inline void _z80_cpl(z80_reg_t* c) {
-    c->a ^= 0xFF;
-    c->f = (c->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | Z80_HF | Z80_NF | (c->a & (Z80_YF|Z80_XF));
-}
-
-static inline void _z80_scf(z80_reg_t* c) {
-    c->f = (c->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | Z80_CF | (c->a & (Z80_YF|Z80_XF));
-}
-
-static inline void _z80_ccf(z80_reg_t* c) {
-    c->f = ((c->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | ((c->f & Z80_CF)<<4) | (c->a & (Z80_YF|Z80_XF))) ^ Z80_CF;
-}
-
-static inline void _z80_rlca(z80_reg_t* c) {
-    uint8_t r = (c->a<<1) | (c->a>>7);
-    c->f = ((c->a>>7) & Z80_CF) | (c->f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
-    c->a = r;
-}
-
-static inline void _z80_rrca(z80_reg_t* c) {
-    uint8_t r = (c->a>>1) | (c->a<<7);
-    c->f = (c->a & Z80_CF) | (c->f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
-    c->a = r;
-}
-
-static inline void _z80_rla(z80_reg_t* c) {
-    uint8_t r = (c->a<<1) | (c->f & Z80_CF);
-    c->f = ((c->a>>7) & Z80_CF) | (c->f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
-    c->a = r;
-}
-
-static inline void _z80_rra(z80_reg_t* c) {
-    uint8_t r = (c->a>>1) | ((c->f & Z80_CF)<<7);
-    c->f = (c->a & Z80_CF) | (c->f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
-    c->a = r;
 }
 
 /* set 16-bit address bus pins */
@@ -765,7 +728,7 @@ static inline void _z80_rra(z80_reg_t* c) {
 /* true if current op is an indexed op */
 #define _IDX() (0!=(c.bits&(Z80_BIT_IX|Z80_BIT_IY)))
 /* generate effective address for (HL), (IX+d), (IY+d) */
-#define _ADDR(addr,ext_ticks) {addr=(c.ih<<8)|c.il;if(_IDX()){int8_t d;_MR(c.pc++,d);addr+=d;c.wz=addr;_T(ext_ticks);}}
+#define _ADDR(ext_ticks) {addr=(c.ih<<8)|c.il;if(_IDX()){int8_t d;_MR(c.pc++,d);addr+=d;c.wz=addr;_T(ext_ticks);}}
 /* helper macro to bump R register */
 #define _BUMPR() c.r=(c.r&0x80)|((c.r+1)&0x7F);
 /* a normal opcode fetch, bump R */
