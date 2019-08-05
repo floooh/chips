@@ -1,10 +1,10 @@
 This directory contains code-generation python scripts which will generate the
-CPU instruction decoder source code.
+z80.h and m6502.h headers.
 
 Run:
 
-> python z80_decoder.py
-> python m6502_decoder.py
+> python z80_gen.py
+> python m6502_gen.py
 
 To generate the respective decoder source files in the '../chips' directory.
 
