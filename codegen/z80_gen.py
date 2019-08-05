@@ -855,6 +855,50 @@ def rld():
     src+='}'
     return src
 
+def rlca():
+    src ='{'
+    src+='uint8_t a=_G_A();'
+    src+='uint8_t f=_G_F();'
+    src+='uint8_t r=(a<<1)|(a>>7);'
+    src+='f=((a>>7)&Z80_CF)|(f&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+    src+='_S_A(r);'
+    src+='_S_F(f);'
+    src+='}'
+    return src
+
+def rrca():
+    src ='{'
+    src+='uint8_t a=_G_A();'
+    src+='uint8_t f=_G_F();'
+    src+='uint8_t r=(a>>1)|(a<<7);'
+    src+='f=(a&Z80_CF)|(f&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+    src+='_S_A(r);'
+    src+='_S_F(f);'
+    src+='}'
+    return src
+
+def rla():
+    src ='{'
+    src+='uint8_t a=_G_A();'
+    src+='uint8_t f=_G_F();'
+    src+='uint8_t r=(a<<1)|(f&Z80_CF);'
+    src+='f=((a>>7)&Z80_CF)|(f&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+    src+='_S_A(r);'
+    src+='_S_F(f);'
+    src+='}'
+    return src
+
+def rra():
+    src ='{'
+    src+='uint8_t a=_G_A();'
+    src+='uint8_t f=_G_F();'
+    src+='uint8_t r=(a>>1)|((f&Z80_CF)<<7);'
+    src+='f=(a&Z80_CF)|(f&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));'
+    src+='_S_A(r);'
+    src+='_S_F(f);'
+    src+='}'
+    return src
+
 #-------------------------------------------------------------------------------
 #   misc ops
 #
@@ -870,6 +914,34 @@ def di():
 
 def ei():
     return 'r2=(r2&~(_BIT_IFF1|_BIT_IFF2))|_BIT_EI;'
+
+def cpl():
+    src ='{'
+    src+='uint8_t a=_G_A()^0xFF;'
+    src+='_S_A(a);'
+    src+='uint8_t f=_G_F();'
+    src+='f=(f&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|Z80_HF|Z80_NF|(a&(Z80_YF|Z80_XF));'
+    src+='_S_F(f);'
+    src+='}'
+    return src
+
+def scf():
+    src ='{'
+    src+='uint8_t a=_G_A();'
+    src+='uint8_t f=_G_F();'
+    src+='f=(f&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|Z80_CF|(a&(Z80_YF|Z80_XF));'
+    src+='_S_F(f);'
+    src+='}'
+    return src
+
+def ccf():
+    src ='{'
+    src+='uint8_t a=_G_A();'
+    src+='uint8_t f=_G_F();'
+    src+='f=((f&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|((f&Z80_CF)<<4)|(a&(Z80_YF|Z80_XF)))^Z80_CF;'
+    src+='_S_F(f);'
+    src+='}'
+    return src
 
 #-------------------------------------------------------------------------------
 # Encode a main instruction, or an DD or FD prefix instruction.
@@ -1009,14 +1081,14 @@ def enc_op(op) :
         elif z == 7:
             # misc ops on A and F
             op_tbl = [
-                [ 'RLCA', 'ws=_z80_rlca(ws);' ],
-                [ 'RRCA', 'ws=_z80_rrca(ws);' ],
-                [ 'RLA',  'ws=_z80_rla(ws);' ],
-                [ 'RRA',  'ws=_z80_rra(ws);' ],
+                [ 'RLCA', rlca() ],
+                [ 'RRCA', rrca() ],
+                [ 'RLA',  rla() ],
+                [ 'RRA',  rra() ],
                 [ 'DAA',  'ws=_z80_daa(ws);' ],
-                [ 'CPL',  'ws=_z80_cpl(ws);' ],
-                [ 'SCF',  'ws=_z80_scf(ws);' ],
-                [ 'CCF',  'ws=_z80_ccf(ws);' ]
+                [ 'CPL',  cpl() ],
+                [ 'SCF',  scf() ],
+                [ 'CCF',  ccf() ]
             ]
             o.cmt = op_tbl[y][0]
             o.src = op_tbl[y][1]

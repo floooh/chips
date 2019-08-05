@@ -794,71 +794,6 @@ static inline uint64_t _z80_daa(uint64_t ws) {
     return ws;
 }
 
-static inline uint64_t _z80_cpl(uint64_t ws) {
-    uint8_t a = _G8(ws,_A) ^ 0xFF;
-    _S8(ws,_A,a);
-    uint8_t f = _G8(ws,_F);
-    f = (f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | Z80_HF | Z80_NF | (a & (Z80_YF|Z80_XF));
-    _S8(ws,_F,f);
-    return ws;
-}
-
-static inline uint64_t _z80_scf(uint64_t ws) {
-    uint8_t a = _G8(ws,_A);
-    uint8_t f = _G8(ws,_F);
-    f = (f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | Z80_CF | (a & (Z80_YF|Z80_XF));
-    _S8(ws,_F,f);
-    return ws;
-}
-
-static inline uint64_t _z80_ccf(uint64_t ws) {
-    uint8_t a = _G8(ws,_A);
-    uint8_t f = _G8(ws,_F);
-    f = ((f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | ((f & Z80_CF)<<4) | (a & (Z80_YF|Z80_XF))) ^ Z80_CF;
-    _S8(ws,_F,f);
-    return ws;
-}
-
-static inline uint64_t _z80_rlca(uint64_t ws) {
-    uint8_t a = _G8(ws,_A);
-    uint8_t f = _G8(ws,_F);
-    uint8_t r = (a<<1) | (a>>7);
-    f = ((a>>7) & Z80_CF) | (f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
-    _S8(ws,_A,r);
-    _S8(ws,_F,f);
-    return ws;
-}
-
-static inline uint64_t _z80_rrca(uint64_t ws) {
-    uint8_t a = _G8(ws,_A);
-    uint8_t f = _G8(ws,_F);
-    uint8_t r = (a>>1) | (a<<7);
-    f = (a & Z80_CF) | (f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
-    _S8(ws,_A,r);
-    _S8(ws,_F,f);
-    return ws;
-}
-
-static inline uint64_t _z80_rla(uint64_t ws) {
-    uint8_t a = _G8(ws,_A);
-    uint8_t f = _G8(ws,_F);
-    uint8_t r = (a<<1) | (f & Z80_CF);
-    f = ((a>>7) & Z80_CF) | (f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
-    _S8(ws,_A,r);
-    _S8(ws,_F,f);
-    return ws;
-}
-
-static inline uint64_t _z80_rra(uint64_t ws) {
-    uint8_t a = _G8(ws,_A);
-    uint8_t f = _G8(ws,_F);
-    uint8_t r = (a>>1) | ((f & Z80_CF)<<7);
-    f = (a & Z80_CF) | (f & (Z80_SF|Z80_ZF|Z80_PF)) | (r & (Z80_YF|Z80_XF));
-    _S8(ws,_A,r);
-    _S8(ws,_F,f);
-    return ws;
-}
-
 /* manage the virtual 'working set' register bank */
 static inline uint64_t _z80_map_regs(uint64_t r0, uint64_t r1, uint64_t r2) {
     uint64_t ws = r0;
@@ -929,7 +864,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             case 0x4:/*INC B*/d8=_G_B();{uint8_t r=d8+1;uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x80){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_B(d8);break;
             case 0x5:/*DEC B*/d8=_G_B();{uint8_t r=d8-1;uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x7F){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_B(d8);break;
             case 0x6:/*LD B,n*/_IMM8(d8);_S_B(d8);break;
-            case 0x7:/*RLCA*/ws=_z80_rlca(ws);break;
+            case 0x7:/*RLCA*/{uint8_t a=_G_A();uint8_t f=_G_F();uint8_t r=(a<<1)|(a>>7);f=((a>>7)&Z80_CF)|(f&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));_S_A(r);_S_F(f);}break;
             case 0x8:/*EX AF,AF'*/{r0=_z80_flush_r0(ws,r0,r2);uint16_t fa=_G16(r0,_FA);uint16_t fa_=_G16(r3,_FA);_S16(r0,_FA,fa_);_S16(r3,_FA,fa);ws=_z80_map_regs(r0,r1,r2);}break;
             case 0x9:/*ADD HL,BC*/{uint16_t acc=_G_HL();_S_WZ(acc+1);d16=_G_BC();uint32_t r=acc+d16;_S_HL(r);uint8_t f=_G_F()&(Z80_SF|Z80_ZF|Z80_VF);f|=((acc^r^d16)>>8)&Z80_HF;f|=((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));_S_F(f);_T(7);}break;
             case 0xa:/*LD A,(BC)*/addr=_G_BC();_MR(addr++,d8);_S_A(d8);_S_WZ(addr);break;
@@ -937,7 +872,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             case 0xc:/*INC C*/d8=_G_C();{uint8_t r=d8+1;uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x80){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_C(d8);break;
             case 0xd:/*DEC C*/d8=_G_C();{uint8_t r=d8-1;uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x7F){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_C(d8);break;
             case 0xe:/*LD C,n*/_IMM8(d8);_S_C(d8);break;
-            case 0xf:/*RRCA*/ws=_z80_rrca(ws);break;
+            case 0xf:/*RRCA*/{uint8_t a=_G_A();uint8_t f=_G_F();uint8_t r=(a>>1)|(a<<7);f=(a&Z80_CF)|(f&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));_S_A(r);_S_F(f);}break;
             case 0x10:/*DJNZ*/{_T(1);int8_t d;_IMM8(d);d8=_G_B()-1;_S_B(d8);if(d8>0){pc+=d;_S_WZ(pc);_T(5);}}break;
             case 0x11:/*LD DE,nn*/_IMM16(d16);_S_DE(d16);break;
             case 0x12:/*LD (DE),A*/addr=_G_DE();d8=_G_A();_MW(addr++,d8);_S_WZ((d8<<8)|(addr&0x00FF));break;
@@ -945,7 +880,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             case 0x14:/*INC D*/d8=_G_D();{uint8_t r=d8+1;uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x80){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_D(d8);break;
             case 0x15:/*DEC D*/d8=_G_D();{uint8_t r=d8-1;uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x7F){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_D(d8);break;
             case 0x16:/*LD D,n*/_IMM8(d8);_S_D(d8);break;
-            case 0x17:/*RLA*/ws=_z80_rla(ws);break;
+            case 0x17:/*RLA*/{uint8_t a=_G_A();uint8_t f=_G_F();uint8_t r=(a<<1)|(f&Z80_CF);f=((a>>7)&Z80_CF)|(f&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));_S_A(r);_S_F(f);}break;
             case 0x18:/*JR d*/{int8_t d;_IMM8(d);pc+=d;_S_WZ(pc);_T(5);}break;
             case 0x19:/*ADD HL,DE*/{uint16_t acc=_G_HL();_S_WZ(acc+1);d16=_G_DE();uint32_t r=acc+d16;_S_HL(r);uint8_t f=_G_F()&(Z80_SF|Z80_ZF|Z80_VF);f|=((acc^r^d16)>>8)&Z80_HF;f|=((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));_S_F(f);_T(7);}break;
             case 0x1a:/*LD A,(DE)*/addr=_G_DE();_MR(addr++,d8);_S_A(d8);_S_WZ(addr);break;
@@ -953,7 +888,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             case 0x1c:/*INC E*/d8=_G_E();{uint8_t r=d8+1;uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x80){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_E(d8);break;
             case 0x1d:/*DEC E*/d8=_G_E();{uint8_t r=d8-1;uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x7F){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_E(d8);break;
             case 0x1e:/*LD E,n*/_IMM8(d8);_S_E(d8);break;
-            case 0x1f:/*RRA*/ws=_z80_rra(ws);break;
+            case 0x1f:/*RRA*/{uint8_t a=_G_A();uint8_t f=_G_F();uint8_t r=(a>>1)|((f&Z80_CF)<<7);f=(a&Z80_CF)|(f&(Z80_SF|Z80_ZF|Z80_PF))|(r&(Z80_YF|Z80_XF));_S_A(r);_S_F(f);}break;
             case 0x20:/*JR NZ,d*/{int8_t d;_IMM8(d);if(!(_G_F()&Z80_ZF)){pc+=d;_S_WZ(pc);_T(5);}}break;
             case 0x21:/*LD HL,nn*/_IMM16(d16);_S_HL(d16);break;
             case 0x22:/*LD (nn),HL*/_IMM16(addr);_MW(addr++,_G_L());_MW(addr,_G_H());_S_WZ(addr);break;
@@ -969,7 +904,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             case 0x2c:/*INC L*/d8=_G_L();{uint8_t r=d8+1;uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x80){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_L(d8);break;
             case 0x2d:/*DEC L*/d8=_G_L();{uint8_t r=d8-1;uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x7F){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_L(d8);break;
             case 0x2e:/*LD L,n*/_IMM8(d8);_S_L(d8);break;
-            case 0x2f:/*CPL*/ws=_z80_cpl(ws);break;
+            case 0x2f:/*CPL*/{uint8_t a=_G_A()^0xFF;_S_A(a);uint8_t f=_G_F();f=(f&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|Z80_HF|Z80_NF|(a&(Z80_YF|Z80_XF));_S_F(f);}break;
             case 0x30:/*JR NC,d*/{int8_t d;_IMM8(d);if(!(_G_F()&Z80_CF)){pc+=d;_S_WZ(pc);_T(5);}}break;
             case 0x31:/*LD SP,nn*/_IMM16(d16);_S_SP(d16);break;
             case 0x32:/*LD (nn),A*/_IMM16(addr);d8=_G_A();_MW(addr++,d8);_S_WZ((d8<<8)|(addr&0x00FF));break;
@@ -977,7 +912,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             case 0x34:/*INC (HL/IX+d/IY+d)*/_ADDR(addr,5);_T(1);_MR(addr,d8);{uint8_t r=d8+1;uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x80){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_MW(addr,d8);break;
             case 0x35:/*DEC (HL/IX+d/IY+d)*/_ADDR(addr,5);_T(1);_MR(addr,d8);{uint8_t r=d8-1;uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x7F){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_MW(addr,d8);break;
             case 0x36:/*LD (HL/IX+d/IY+d),n*/_ADDR(addr,2);_IMM8(d8);_MW(addr,d8);break;
-            case 0x37:/*SCF*/ws=_z80_scf(ws);break;
+            case 0x37:/*SCF*/{uint8_t a=_G_A();uint8_t f=_G_F();f=(f&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|Z80_CF|(a&(Z80_YF|Z80_XF));_S_F(f);}break;
             case 0x38:/*JR C,d*/{int8_t d;_IMM8(d);if((_G_F()&Z80_CF)){pc+=d;_S_WZ(pc);_T(5);}}break;
             case 0x39:/*ADD HL,SP*/{uint16_t acc=_G_HL();_S_WZ(acc+1);d16=_G_SP();uint32_t r=acc+d16;_S_HL(r);uint8_t f=_G_F()&(Z80_SF|Z80_ZF|Z80_VF);f|=((acc^r^d16)>>8)&Z80_HF;f|=((r>>16)&Z80_CF)|((r>>8)&(Z80_YF|Z80_XF));_S_F(f);_T(7);}break;
             case 0x3a:/*LD A,(nn)*/_IMM16(addr);_MR(addr++,d8);_S_A(d8);_S_WZ(addr);break;
@@ -985,7 +920,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             case 0x3c:/*INC A*/d8=_G_A();{uint8_t r=d8+1;uint8_t f=_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x80){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_A(d8);break;
             case 0x3d:/*DEC A*/d8=_G_A();{uint8_t r=d8-1;uint8_t f=Z80_NF|_SZ(r)|(r&(Z80_XF|Z80_YF))|((r^d8)&Z80_HF);if(r==0x7F){f|=Z80_VF;}_S_F(f|(_G_F()&Z80_CF));d8=r;}_S_A(d8);break;
             case 0x3e:/*LD A,n*/_IMM8(d8);_S_A(d8);break;
-            case 0x3f:/*CCF*/ws=_z80_ccf(ws);break;
+            case 0x3f:/*CCF*/{uint8_t a=_G_A();uint8_t f=_G_F();f=((f&(Z80_SF|Z80_ZF|Z80_PF|Z80_CF))|((f&Z80_CF)<<4)|(a&(Z80_YF|Z80_XF)))^Z80_CF;_S_F(f);}break;
             case 0x40:/*LD B,B*/_S_B(_G_B());break;
             case 0x41:/*LD B,C*/_S_B(_G_C());break;
             case 0x42:/*LD B,D*/_S_B(_G_D());break;
