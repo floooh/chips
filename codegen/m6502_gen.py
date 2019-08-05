@@ -3,12 +3,10 @@
 #   Generate instruction decoder for m6502.h emulator.
 #-------------------------------------------------------------------------------
 import sys
+from string import Template
 
-# the output path
-OutPath = '../chips/_m6502_decoder.h'
-
-# the output file handle
-Out = None
+InpPath = 'm6502.template.h'
+OutPath = '../chips/m6502.h'
 
 # flag bits
 CF = (1<<0)
@@ -124,162 +122,16 @@ class opcode:
 #-------------------------------------------------------------------------------
 #   output a src line
 #
+out_lines = ''
 def l(s) :
-    Out.write(s+'\n')
-
-#-------------------------------------------------------------------------------
-def write_defines():
-    l('/* set 16-bit address in 64-bit pin mask*/')
-    l('#define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)')
-    l('/* set 16-bit address and 8-bit data in 64-bit pin mask */')
-    l('#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)')
-    l('/* set 8-bit data in 64-bit pin mask */')
-    l('#define _SD(data) pins=((pins&~0xFF0000ULL)|(((data&0xFF)<<16)&0xFF0000ULL))')
-    l('/* extract 8-bit data from 64-bit pin mask */')
-    l('#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))')
-    l('/* enable control pins */')
-    l('#define _ON(m) pins|=(m)')
-    l('/* disable control pins */')
-    l('#define _OFF(m) pins&=~(m)')
-    l('/* execute a tick */')
-    l('#define _T() pins=tick(pins,ud);ticks++;')
-    l('/* a memory read tick */')
-    l('#define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);')
-    l('/* a memory write tick */')
-    l('#define _WR() _OFF(M6502_RW);_T()')
-    l('/* implied addressing mode, this still puts the PC on the address bus */')
-    l('#define _A_IMP() _SA(c.PC)')
-    l('/* immediate addressing mode */')
-    l('#define _A_IMM() _SA(c.PC++)')
-    l('/* zero-page addressing mode */')
-    l('#define _A_ZER() _SA(c.PC++);_RD();a=_GD();_SA(a)')
-    l('/* zero page + X addressing mode */')
-    l('#define _A_ZPX() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.X)&0x00FF;_SA(a)')
-    l('/* zero page + Y addressing mode */')
-    l('#define _A_ZPY() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.Y)&0x00FF;_SA(a)')
-    l('/* absolute addressing mode */')
-    l('#define _A_ABS() _SA(c.PC++);_RD();l=_GD();_SA(c.PC++);_RD();h=_GD();a=(h<<8)|l;_SA(a)')
-    l('/* absolute+X addressing mode for read-only instructions, early out if no page boundary is crossed */')
-    l('#define _A_ABX_R() _SA(c.PC++);_RD();t=_GD()+c.X;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}')
-    l('/* absolute+X addressing mode for read/write instructions */')
-    l('#define _A_ABX_W() _SA(c.PC++);_RD();t=_GD()+c.X;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)')
-    l('/* absolute+Y addressing mode for read-only instructions, early out if no page boundary is crossed */')
-    l('#define _A_ABY_R() _SA(c.PC++);_RD();t=_GD()+c.Y;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}')
-    l('/* absolute+Y addressing mode for read/write instructions */')
-    l('#define _A_ABY_W() _SA(c.PC++);_RD();t=_GD()+c.Y;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)')
-    l('/* (zp,X) indexed indirect addressing mode */')
-    l('#define _A_IDX() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.X)&0xFF;_SA(a);_RD();t=_GD();a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|t;_SA(a);')
-    l('/* (zp),Y indirect indexed addressing mode for read-only instructions, early out if no page boundary crossed */')
-    l('#define _A_IDY_R() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();t=_GD()+c.Y;a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}')
-    l('/* (zp),Y indirect indexed addressing mode for read/write instructions */')
-    l('#define _A_IDY_W() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();t=_GD()+c.Y;a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)')
-    l('/* set N and Z flags depending on value */')
-    l('#define _NZ(v) c.P=((c.P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))')
-    l('')
-
-#-------------------------------------------------------------------------------
-def write_undefines():
-    l('#undef _SA')
-    l('#undef _SAD')
-    l('#undef _GD')
-    l('#undef _ON')
-    l('#undef _OFF')
-    l('#undef _T')
-    l('#undef _RD')
-    l('#undef _WR')
-    l('#undef _A_IMP')
-    l('#undef _A_IMM')
-    l('#undef _A_ZER')
-    l('#undef _A_ZPX')
-    l('#undef _A_ZPY')
-    l('#undef _A_ABS')
-    l('#undef _A_ABX_R')
-    l('#undef _A_ABX_W')
-    l('#undef _A_ABY_R')
-    l('#undef _A_ABY_W')
-    l('#undef _A_IDX')
-    l('#undef _A_IDY_R')
-    l('#undef _A_IDY_W')
-    l('#undef _NZ')
-
-#-------------------------------------------------------------------------------
-def write_header():
-    l("/* machine generated, don't edit! */")
-    write_defines()
-    l('uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {')
-    l('  cpu->trap_id = 0;')
-    l('  m6502_state_t c = cpu->state;')
-    l('  uint8_t l, h;')
-    l('  uint16_t a, t;')
-    l('  uint32_t ticks = 0;')
-    l('  uint64_t pins = c.PINS;')
-    l('  const m6502_tick_t tick = cpu->tick_cb;')
-    l('  const m6502_trap_t trap = cpu->trap_cb;')
-    l('  void* ud = cpu->user_data;')
-    l('  do {')
-    l('    uint64_t pre_pins = pins;')
-    l('    _OFF(M6502_IRQ|M6502_NMI);')
-    l('    /* fetch opcode */')
-    l('    _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);')
-    l("    /* store 'delayed IRQ response' flag state */")
-    l('    c.pi = c.P;')
-    l('    const uint8_t opcode = _GD();')
-    l('    switch (opcode) {')
-
-#-------------------------------------------------------------------------------
-def write_interrupt_handling():
-    l('    /* edge detection for NMI pin */')
-    l('    bool nmi = 0 != ((pins & (pre_pins ^ pins)) & M6502_NMI);')
-    l('    /* check for interrupt request */')
-    l('    if (nmi || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {')
-    l('      /* execute a slightly modified BRK instruction, do NOT increment PC! */')
-    l('      _SA(c.PC);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);')
-    l('      _SA(c.PC); _RD();')
-    l('      _SAD(0x0100|c.S--, c.PC>>8); _WR();')
-    l('      _SAD(0x0100|c.S--, c.PC); _WR();')
-    l('      _SAD(0x0100|c.S--, c.P&~M6502_BF); _WR();')
-    l('      if (pins & M6502_NMI) {')
-    l('        _SA(0xFFFA); _RD(); l=_GD();')
-    l('        c.P |= M6502_IF;')
-    l('        _SA(0xFFFB); _RD(); h=_GD();')
-    l('      }')
-    l('      else {')
-    l('        _SA(0xFFFE); _RD(); l=_GD();')
-    l('        c.P |= M6502_IF;')
-    l('        _SA(0xFFFF); _RD(); h=_GD();')
-    l('      }')
-    l('      c.PC = (h<<8)|l;')
-    l('    }')
-
-#-------------------------------------------------------------------------------
-def write_trap_handling():
-    l('    if (trap) {')
-    l('      int trap_id=trap(c.PC,ticks,pins,cpu->trap_user_data);')
-    l('      if (trap_id) {')
-    l('        cpu->trap_id=trap_id;')
-    l('        break;')
-    l('      }')
-    l('    }')
-
-
-#-------------------------------------------------------------------------------
-def write_footer():
-    l('    }')
-    write_interrupt_handling()
-    write_trap_handling();
-    l('  } while (ticks < num_ticks);')
-    l('  M6510_SET_PORT(pins, cpu->io_pins);')
-    l('  c.PINS = pins;')
-    l('  cpu->state = c;')
-    l('  return ticks;')
-    l('}')
-    write_undefines()
+    global out_lines
+    out_lines += s + '\n'
 
 #-------------------------------------------------------------------------------
 def write_op(op):
     if not op.cmt:
         op.cmt = '???'
-    l('      case '+hex(op.byte)+':/*'+op.cmt+'*/'+op.src+'break;')
+    l('            case '+hex(op.byte)+':/*'+op.cmt+'*/'+op.src+'break;')
 
 #-------------------------------------------------------------------------------
 def cmt(o,cmd):
@@ -1120,11 +972,11 @@ def enc_op(op):
 #-------------------------------------------------------------------------------
 #   execution starts here
 #
-Out = open(OutPath, 'w')
-write_header()
-
-# loop over all instruction bytes
 for i in range(0, 256):
     write_op(enc_op(i))
-write_footer()
-Out.close()
+
+with open(InpPath, 'r') as inf:
+    templ = Template(inf.read())
+    c_src = templ.safe_substitute(decode_block=out_lines)
+    with open(OutPath, 'w') as outf:
+        outf.write(c_src)
