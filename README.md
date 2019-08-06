@@ -19,7 +19,7 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
     No functional changes (I tried a variation of the Z80 emulator which goes
     back to separate byte registers in a struct instead of merging the
     registers into 64-bit integers, this saved a couple KBytes code size in
-    WASM but was about 10% slower so I discard that experiment)
+    WASM but was about 10% slower so I discarded that experiment)
 
 * **31-Dec-2018**: 
     - A complete set of debugging UI headers using Dear ImGui has been added,
