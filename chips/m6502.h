@@ -202,9 +202,6 @@ extern "C" {
 #define M6502_VF (1<<6)   /* overflow */
 #define M6502_NF (1<<7)   /* negative */
 
-/* max number of trap points */
-#define M6502_MAX_NUM_TRAPS (8)
-
 /* callback function typedefs */
 typedef uint64_t (*m6502_tick_t)(uint64_t pins, void* user_data);
 typedef int (*m6502_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* user_data);
