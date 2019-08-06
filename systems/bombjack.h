@@ -231,6 +231,12 @@ typedef struct {
 void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc);
 /* discard a bombjack instance */
 void bombjack_discard(bombjack_t* sys);
+/* reset a bombjack instance */
+void bombjack_reset(bombjack_t* sys);
+/* run bombjack instance for given amount of microseconds */
+void bombjack_exec(bombjack_t* sys, uint32_t micro_seconds);
+/* decode video to pixel buffer, must be called once per frame */
+void bombjack_decode_video(bombjack_t* sys);
 /* get the standard framebuffer width and height in pixels */
 int bombjack_std_display_width(void);
 int bombjack_std_display_height(void);
@@ -239,12 +245,6 @@ int bombjack_max_display_size(void);
 /* get the current framebuffer width and height in pixels */
 int bombjack_display_width(bombjack_t* sys);
 int bombjack_display_height(bombjack_t* sys);
-/* reset a bombjack instance */
-void bombjack_reset(bombjack_t* sys);
-/* run bombjack instance for given amount of microseconds */
-void bombjack_exec(bombjack_t* sys, uint32_t micro_seconds);
-/* decode video to pixel buffer, must be called once per frame */
-void bombjack_decode_video(bombjack_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
