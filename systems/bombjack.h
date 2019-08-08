@@ -334,7 +334,7 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     sys->soundboard.vsync_count = _BOMBJACK_VSYNC_PERIOD_3MHZ;
 
     /* setup the main board (4 MHz Z80) */
-    clk_init(&sys->mainboard.clk, 4000000);
+    clk_init(&sys->mainboard.clk, _BOMBJACK_MAINBOARD_FREQUENCY);
     z80_desc_t cpu_desc;
     memset(&cpu_desc, 0, sizeof(cpu_desc));
     cpu_desc.tick_cb = _bombjack_tick_mainboard;
@@ -342,7 +342,7 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     z80_init(&sys->mainboard.cpu, &cpu_desc);
 
     /* setup the sound board (3 MHz Z80 and 3x 1.5 MHz AY-38910) */
-    clk_init(&sys->soundboard.clk, 3000000);
+    clk_init(&sys->soundboard.clk, _BOMBJACK_SOUNDBOARD_FREQUENCY);
     memset(&cpu_desc, 0, sizeof(cpu_desc));
     cpu_desc.tick_cb = _bombjack_tick_soundboard;
     cpu_desc.user_data = sys;
@@ -460,19 +460,13 @@ void bombjack_exec(bombjack_t* sys, uint32_t micro_seconds) {
         /* tick the main board */
         {
             uint32_t ticks_to_run = clk_ticks_to_run(&sys->mainboard.clk, slice_us);
-            uint32_t ticks_executed = 0;
-            while (ticks_executed < ticks_to_run) {
-                ticks_executed += z80_exec(&sys->mainboard.cpu, ticks_to_run);
-            }
+            uint32_t ticks_executed = z80_exec(&sys->mainboard.cpu, ticks_to_run);
             clk_ticks_executed(&sys->mainboard.clk, ticks_executed);
         }
         /* tick the sound board */
         {
             uint32_t ticks_to_run = clk_ticks_to_run(&sys->soundboard.clk, slice_us);
-            uint32_t ticks_executed = 0;
-            while (ticks_executed < ticks_to_run) {
-                ticks_executed += z80_exec(&sys->soundboard.cpu, ticks_to_run);
-            }
+            uint32_t ticks_executed = z80_exec(&sys->soundboard.cpu, ticks_to_run);
             clk_ticks_executed(&sys->soundboard.clk, ticks_executed);
         }
     }
