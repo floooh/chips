@@ -39,7 +39,7 @@
 
     ## zlib/libpng license
 
-    Copyright (c) 2018 Andre Weissflog
+    Copyright (c) 2019 Andre Weissflog
     This software is provided 'as-is', without any express or implied warranty.
     In no event will the authors be held liable for any damages arising from the
     use of this software.
@@ -138,13 +138,22 @@ typedef struct {
     uint8_t in1;
     uint8_t dsw1;
     int vsync_count;
-    int vblank_count;
+    uint8_t int_vector;
+    uint8_t int_enable;
+    uint8_t sound_enable;
+    uint8_t flip_screen;
+    uint8_t p1_start_light;
+    uint8_t p2_start_light;
+    uint8_t coin_lockout;
     mem_t mem;
+    uint8_t video_ram[0x0400];
+    uint8_t color_ram[0x0400];
+    uint8_t main_ram[0x0800];
     uint8_t rom_cpu[8][0x1000];
     uint8_t rom_gfx[4][0x1000];
     uint8_t rom_prom[0x0420];
     uint8_t rom_sound[2][0x0100];
-    /* audio and video 'rendering' */
+    void* user_data;
     struct {
         namco_audio_callback_t callback;
         int num_samples;
@@ -207,20 +216,30 @@ int namco_display_height(namco_t* sys);
 
 #if defined NAMCO_PACMAN
 #define NAMCO_NUM_SPRITES       (8)
+#define NAMCO_DEFAULT_DIP_SWITCHES  (0)
+#define NAMCO_ADDR_MASK         (0x7FFF)    /* Pacman has only 15 addr pins wired */
+#define NAMCO_IOMAP_BASE        (0x5000)
 /* memory mapped IO: read locations*/
 #define NAMCO_ADDR_IN0          (0x5000)
 #define NAMCO_ADDR_IN1          (0x5040)
 #define NAMCO_ADDR_DSW1         (0x5080)
 /* memory mapped IO: write locations */
-#define NAMCO_ADDR_SPRITES_ATTR (0x4FF0)
-#define NAMCO_ADDR_INT_ENABLE   (0x5000)
-#define NAMCO_ADDR_SOUND_ENABLE (0x5001)
-#define NAMCO_ADDR_FLIP_SCREEN  (0x5003)
+#define NAMCO_ADDR_SPRITES_ATTR     (0x4FF0)
+#define NAMCO_ADDR_INT_ENABLE       (0x5000)
+#define NAMCO_ADDR_SOUND_ENABLE     (0x5001)
+#define NAMCO_ADDR_FLIP_SCREEN      (0x5003)
+#define NAMCO_ADDR_P1_START_LIGHT   (0x5004)
+#define NAMCO_ADDR_P2_START_LIGHT   (0x5005)
+#define NAMCO_ADDR_COIN_LOCKOUT     (0x5006)
+#define NAMCO_ADDR_COIN_COUNTER     (0x5007)
 #define NAMCO_ADDR_SOUND        (0x5040)
 #define NAMCO_ADDR_SPRITES_POS  (0x5060)
 #define NAMCO_ADDR_WATCHDOG     (0x50C0)
 #else /* PENGO */
 #define NAMCO_NUM_SPRITES       (6)
+#define NAMCO_DEFAULT_DIP_SWITCHES  (0)
+#define NAMCO_ADDR_MASK         (0xFFFF)
+#define NAMCO_IOMAP_BASE        (0x9000)
 /* memory mapped IO: read locations*/
 #define NAMCO_ADDR_IN0          (0x90C0)
 #define NAMCO_ADDR_IN1          (0x9080)
@@ -241,12 +260,12 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_MASTER_CLOCK      (18432000)
 #define NAMCO_CPU_CLOCK         (NAMCO_MASTER_CLOCK / 6)
 #define NAMCO_SOUND_CLOCK       (NAMCO_MASTER_CLOCK / 128)
-#define NAMCO_VBLANK_DURATION   (2500)
-#define NAMCO_DISPLAY_WIDTH     (256)
+#define NAMCO_VSYNC_PERIOD      (NAMCO_CPU_CLOCK / 60)
+#define NAMCO_DISPLAY_WIDTH     (288)
 #define NAMCO_DISPLAY_HEIGHT    (224)
 #define NAMCO_DISPLAY_SIZE      (NAMCO_DISPLAY_WIDTH*NAMCO_DISPLAY_HEIGHT*4)
 
-//static uint64_t _namco_tick(int num, uint64_t pins, void* user_data);
+static uint64_t _namco_tick(int num, uint64_t pins, void* user_data);
 
 #define _namco_def(val, def) (val == 0 ? def : val)
 
@@ -255,6 +274,15 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
 
     memset(sys, 0, sizeof(namco_t));
     sys->valid = true;
+
+    /* audio and video output */
+    CHIPS_ASSERT(desc->audio_num_samples <= NAMCO_MAX_AUDIO_SAMPLES);
+    sys->audio.callback = desc->audio_cb;
+    sys->audio.num_samples = _namco_def(desc->audio_num_samples, NAMCO_DEFAULT_AUDIO_SAMPLES);
+    sys->audio.volume = _namco_def(desc->audio_volume, 1.0f);
+    sys->user_data = desc->user_data;
+    CHIPS_ASSERT((0 == desc->pixel_buffer) || (desc->pixel_buffer && (desc->pixel_buffer_size >= NAMCO_DISPLAY_SIZE)));
+    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     
     /* copy over ROM images */
     CHIPS_ASSERT(desc->rom_cpu_0000_0FFF && (desc->rom_cpu_0000_0FFF_size == 0x1000));
@@ -304,14 +332,228 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
     memcpy(&sys->rom_prom[0x0020], desc->rom_prom_0020_041F, 0x0400);
     #endif
     memcpy(sys->rom_sound[0], desc->rom_sound_0000_00FF, 0x0100);
-    memcpy(sys->rom_sound[1], desc->rom_sound_0100_01FF, 0x0100);    
+    memcpy(sys->rom_sound[1], desc->rom_sound_0100_01FF, 0x0100);
+
+    /* vsync/vblank counters */
+    sys->vsync_count = NAMCO_VSYNC_PERIOD;
+
+    /* system clock and CPU */
+    clk_init(&sys->clk, NAMCO_CPU_CLOCK);
+    z80_desc_t cpu_desc;
+    memset(&cpu_desc, 0, sizeof(cpu_desc));
+    cpu_desc.tick_cb = _namco_tick;
+    cpu_desc.user_data = sys;
+    z80_init(&sys->cpu, &cpu_desc);
+
+    /* FIXME: setup WSG */
+
+    /* dip switches */
+    sys->dsw1 = NAMCO_DEFAULT_DIP_SWITCHES;
+
+    /* memory map:
+
+        Pacman: only 15 address bits used, mirroring will happen in tick callback
+
+        0000..3FFF:     16KB ROM
+        4000..43FF:     1KB video RAM
+        4400..47FF:     1KB color RAM
+        4800..4C00:     unmapped?
+        4C00..4FEF:     <1KB main RAM
+        4FF0..4FFF:     sprite RAM
+        5000+           memory mapped registers
+
+        Pengo: full 64KB address space
+
+        0000..7FFF:     32KB ROM
+        8000..83FF:     1KB video RAM
+        8400..87FF:     1KB color RAM
+        8800..8FEF:     2KB main RAM
+        9000+           memory mapped registers
+
+    */
+    mem_init(&sys->mem);
+    mem_map_rom(&sys->mem, 0, 0x0000, 0x1000, sys->rom_cpu[0]);
+    mem_map_rom(&sys->mem, 0, 0x1000, 0x1000, sys->rom_cpu[1]);
+    mem_map_rom(&sys->mem, 0, 0x2000, 0x1000, sys->rom_cpu[2]);
+    mem_map_rom(&sys->mem, 0, 0x3000, 0x1000, sys->rom_cpu[3]);
+    #if defined(NAMCO_PACMAN)
+        mem_map_ram(&sys->mem, 0, 0x4000, 0x0400, sys->video_ram);
+        mem_map_ram(&sys->mem, 0, 0x4400, 0x0400, sys->color_ram);
+        mem_map_ram(&sys->mem, 0, 0x4C00, 0x0400, sys->main_ram);
+    #endif
+    #if defined(NAMCO_PENGO)
+        mem_map_rom(&sys->mem, 0, 0x4000, 0x1000, sys->rom_cpu[4]);
+        mem_map_rom(&sys->mem, 0, 0x5000, 0x1000, sys->rom_cpu[5]);
+        mem_map_rom(&sys->mem, 0, 0x6000, 0x1000, sys->rom_cpu[6]);
+        mem_map_rom(&sys->mem, 0, 0x7000, 0x1000, sys->rom_cpu[7]);
+        mem_map_ram(&sys->mem, 0, 0x8000, 0x0400, sys->video_ram);
+        mem_map_ram(&sys->mem, 0, 0x8400, 0x0400, sys->color_ram);
+        mem_map_ram(&sys->mem, 0, 0x8800, 0x0800, sys->main_ram);
+    #endif
+}
+
+void namco_discard(namco_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->valid = false;
+}
+
+void namco_reset(namco_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    z80_reset(&sys->cpu);
+    //nwsg_reset(&sys->wsg);
+}
+
+void namco_exec(namco_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
+    uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
+    clk_ticks_executed(&sys->clk, ticks_executed);
+}
+
+static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
+    namco_t* sys = (namco_t*) user_data;
+
+    /* update the vsync counter and trigger VSYNC interrupt*/
+    sys->vsync_count -= num_ticks;
+    if (sys->vsync_count < 0) {
+        sys->vsync_count += NAMCO_VSYNC_PERIOD;
+        if (sys->int_enable) {
+            pins |= Z80_INT;
+        }
+    }
+
+    /* memory requests */
+    uint16_t addr = Z80_GET_ADDR(pins) & NAMCO_ADDR_MASK;
+    if (pins & Z80_MREQ) {
+        if (pins & Z80_WR) {
+            /* memory write access */
+            uint8_t data = Z80_GET_DATA(pins);
+            if (addr < NAMCO_IOMAP_BASE) {
+                mem_wr(&sys->mem, addr, data);
+            }
+            else {
+                /* memory-mapped IO */
+                switch (addr) {
+                    case NAMCO_ADDR_INT_ENABLE:
+                        sys->int_enable = data;
+                        break;
+                    case NAMCO_ADDR_SOUND_ENABLE:
+                        sys->sound_enable = data;
+                        break;
+                    case NAMCO_ADDR_FLIP_SCREEN:
+                        sys->flip_screen = data;
+                        break;
+                    case NAMCO_ADDR_P1_START_LIGHT:
+                        sys->p1_start_light = data;
+                        break;
+                    case NAMCO_ADDR_P2_START_LIGHT:
+                        sys->p2_start_light = data;break;
+                    case NAMCO_ADDR_COIN_LOCKOUT:
+                        sys->coin_lockout = data;
+                        break;
+                    case NAMCO_ADDR_COIN_COUNTER:
+                        /*???*/
+                        break;
+                    case NAMCO_ADDR_WATCHDOG:
+                        /*???*/
+                        break;
+                }
+                printf("WRITE: %02X -> %04X\n", data, addr);
+            }
+        }
+        else if (pins & Z80_RD) {
+            /* memory read access */
+            if (addr < NAMCO_IOMAP_BASE) {
+                Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
+            }
+            else {
+                /* memory-mapped IO */
+                // FIXME
+                printf("READ: %04X\n", addr);
+                Z80_SET_DATA(pins, 0xFF);
+            }
+        }
+    }
+    else if (pins & Z80_IORQ) {
+        if (pins & Z80_WR) {
+            uint8_t data = Z80_GET_DATA(pins);
+            if ((addr & 0xFF) == 0) {
+                /* OUT to port 0: set interrupt vector */
+                sys->int_vector = data;
+            }
+        }
+        else if (pins & Z80_RD) {
+            printf("IN: %04X\n", addr);
+        }
+        else if (pins & Z80_M1) {
+            /* set interrupt vector on data bus */
+            Z80_SET_DATA(pins, sys->int_vector);
+        }
+    }
+    return pins & Z80_PIN_MASK;
+}
+
+/* https://www.walkofmind.com/programming/pie/video_memory.htm */
+static uint16_t _namco_video_offset(int x, int y) {
+    uint16_t addr = 0;
+    if (x < 2) {
+    }
+    else if (x > 33) {
+
+    }
+    else {
+        addr = ((y+2)<<5) | (x-2);
+    }
+    return addr & 0x03FF;
+}
+
+static void _namco_decode_chars(namco_t* sys) {
+    uint32_t* ptr = sys->pixel_buffer;
+    for (int y = 0; y < 28; y++) {
+        for (int x = 0; x < 36; x++) {
+            uint16_t offset = _namco_video_offset(x, y);
+            uint8_t chr = sys->video_ram[offset];
+            uint8_t clr = sys->color_ram[offset];
+            for (int yy = 0; yy < 8; yy++) {
+                for (int xx = 0; xx < 8; xx++) {
+                    ptr[(y*8+yy)*288 + (x*8+xx)] = 0xFF000000 | (chr<<8) | clr;
+                }
+            }
+        }
+    }
+}
+
+static void _namco_decode_sprites(namco_t* sys) {
+    // FIXME
+}
+
+void namco_decode_video(namco_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (sys->pixel_buffer) {
+        _namco_decode_chars(sys);
+        _namco_decode_sprites(sys);
+    }
 }
 
 int namco_std_display_width(void) {
     return NAMCO_DISPLAY_WIDTH;
 }
 
+int namco_display_size(void) {
+    return NAMCO_DISPLAY_SIZE;
+}
+
 int namco_std_display_height(void) {
     return NAMCO_DISPLAY_HEIGHT;
 }
+
+int namco_display_width(namco_t* sys) {
+    return NAMCO_DISPLAY_WIDTH;
+}
+
+int namco_display_height(namco_t* sys) {
+    return NAMCO_DISPLAY_HEIGHT;
+}
+
+
 #endif /* CHIPS_IMPL */
