@@ -494,30 +494,67 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
 }
 
 /* https://www.walkofmind.com/programming/pie/video_memory.htm */
-static uint16_t _namco_video_offset(int x, int y) {
-    uint16_t addr = 0;
-    if (x < 2) {
-    }
-    else if (x > 33) {
-
+static uint16_t _namco_video_offset(uint32_t x, uint32_t y) {
+    uint16_t offset = 0;
+    x -= 2;
+    y += 2;
+    if (x & 0x20) {
+        offset = y + ((x & 0x1F)<<5);
     }
     else {
-        addr = ((y+2)<<5) | (x-2);
+        offset = x + (y<<5);
     }
-    return addr & 0x03FF;
+    return offset;
 }
 
 static void _namco_decode_chars(namco_t* sys) {
     uint32_t* ptr = sys->pixel_buffer;
-    for (int y = 0; y < 28; y++) {
-        for (int x = 0; x < 36; x++) {
+    uint8_t* tile_base = &sys->rom_gfx[0][0];
+    for (uint32_t y = 0; y < 28; y++) {
+        for (uint32_t x = 0; x < 36; x++) {
             uint16_t offset = _namco_video_offset(x, y);
-            uint8_t chr = sys->video_ram[offset];
-            uint8_t clr = sys->color_ram[offset];
-            for (int yy = 0; yy < 8; yy++) {
-                for (int xx = 0; xx < 8; xx++) {
-                    ptr[(y*8+yy)*288 + (x*8+xx)] = 0xFF000000 | (chr<<8) | clr;
-                }
+            uint8_t char_code = sys->video_ram[offset];
+            //uint8_t colr_code = sys->color_ram[offset];
+
+            /* TODO: explain tile layout */
+            for (uint32_t yy = 0; yy < 8; yy++) {
+                /* unpack 8 horizontal bits at a time */
+                int tile_index = char_code*16 + yy;
+                uint8_t p3_hi = (tile_base[tile_index+8]>>4) & 1;
+                uint8_t p3_lo = (tile_base[tile_index+8]>>0) & 1;
+                uint8_t p2_hi = (tile_base[tile_index+8]>>5) & 1;
+                uint8_t p2_lo = (tile_base[tile_index+8]>>1) & 1;
+                uint8_t p1_hi = (tile_base[tile_index+8]>>6) & 1;
+                uint8_t p1_lo = (tile_base[tile_index+8]>>2) & 1;
+                uint8_t p0_hi = (tile_base[tile_index+8]>>7) & 1;
+                uint8_t p0_lo = (tile_base[tile_index+8]>>3) & 1;
+                uint8_t p7_hi = (tile_base[tile_index]>>4) & 1;
+                uint8_t p7_lo = (tile_base[tile_index]>>0) & 1;
+                uint8_t p6_hi = (tile_base[tile_index]>>5) & 1;
+                uint8_t p6_lo = (tile_base[tile_index]>>1) & 1;
+                uint8_t p5_hi = (tile_base[tile_index]>>6) & 1;
+                uint8_t p5_lo = (tile_base[tile_index]>>2) & 1;
+                uint8_t p4_hi = (tile_base[tile_index]>>7) & 1;
+                uint8_t p4_lo = (tile_base[tile_index]>>3) & 1;
+
+                uint8_t p0 = (p0_hi<<1)|p0_lo;
+                uint8_t p1 = (p1_hi<<1)|p1_lo;
+                uint8_t p2 = (p2_hi<<1)|p2_lo;
+                uint8_t p3 = (p3_hi<<1)|p3_lo;
+                uint8_t p4 = (p4_hi<<1)|p4_lo;
+                uint8_t p5 = (p5_hi<<1)|p5_lo;
+                uint8_t p6 = (p6_hi<<1)|p6_lo;
+                uint8_t p7 = (p7_hi<<1)|p7_lo;
+
+                int dst_index = (y*8+yy)*288 + (x*8);
+                ptr[dst_index+0] = 0xFF000000 | (p0<<22) | (p0<<14) | (p0<<6);
+                ptr[dst_index+1] = 0xFF000000 | (p1<<22) | (p1<<14) | (p1<<6);
+                ptr[dst_index+2] = 0xFF000000 | (p2<<22) | (p2<<14) | (p2<<6);
+                ptr[dst_index+3] = 0xFF000000 | (p3<<22) | (p3<<14) | (p3<<6);
+                ptr[dst_index+4] = 0xFF000000 | (p4<<22) | (p4<<14) | (p4<<6);
+                ptr[dst_index+5] = 0xFF000000 | (p5<<22) | (p5<<14) | (p5<<6);
+                ptr[dst_index+6] = 0xFF000000 | (p6<<22) | (p6<<14) | (p6<<6);
+                ptr[dst_index+7] = 0xFF000000 | (p7<<22) | (p7<<14) | (p7<<6);
             }
         }
     }
