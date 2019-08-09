@@ -146,6 +146,7 @@ typedef struct {
     uint8_t p2_start_light;
     uint8_t coin_lockout;
     mem_t mem;
+    uint32_t palette_cache[256];
     uint8_t video_ram[0x0400];
     uint8_t color_ram[0x0400];
     uint8_t main_ram[0x0800];
@@ -390,6 +391,30 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
         mem_map_ram(&sys->mem, 0, 0x8400, 0x0400, sys->color_ram);
         mem_map_ram(&sys->mem, 0, 0x8800, 0x0800, sys->main_ram);
     #endif
+
+    /* RGB color values */
+    uint32_t hw_colors[32];
+    for (int i = 0; i < 32; i++) {
+        /*
+           Each color ROM entry describes an RGB color in 1 byte:
+
+           | 7| 6| 5| 4| 3| 2| 1| 0|
+           |B1|B0|G2|G1|G0|R2|R1|R0|
+
+           Intensities are: 0x97 + 0x47 + 0x21
+        */
+        uint8_t rgb = sys->rom_prom[i];
+        uint8_t r = ((rgb>>0)&1) * 0x21 + ((rgb>>1)&1) * 0x47 + ((rgb>>2)&1) * 0x97;
+        uint8_t g = ((rgb>>3)&1) * 0x21 + ((rgb>>4)&1) * 0x47 + ((rgb>>5)&1) * 0x97;
+        uint8_t b = ((rgb>>6)&1) * 0x47 + ((rgb>>7)&1) * 0x97;
+        hw_colors[i] = 0xFF000000 | (b<<16) | (g<<8) | r;
+    }
+
+    /* fixed palette cache of 64x4 color blocks */
+    for (int i = 0; i < 256; i++) {
+        uint8_t pal_index = sys->rom_prom[i + 0x20] & 0xF;
+        sys->palette_cache[i] = hw_colors[pal_index];
+    }
 }
 
 void namco_discard(namco_t* sys) {
@@ -458,7 +483,7 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                         /*???*/
                         break;
                 }
-                printf("WRITE: %02X -> %04X\n", data, addr);
+                //printf("WRITE: %02X -> %04X\n", data, addr);
             }
         }
         else if (pins & Z80_RD) {
@@ -469,7 +494,7 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
             else {
                 /* memory-mapped IO */
                 // FIXME
-                printf("READ: %04X\n", addr);
+                //printf("READ: %04X\n", addr);
                 Z80_SET_DATA(pins, 0xFF);
             }
         }
@@ -483,7 +508,7 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
             }
         }
         else if (pins & Z80_RD) {
-            printf("IN: %04X\n", addr);
+            //printf("IN: %04X\n", addr);
         }
         else if (pins & Z80_M1) {
             /* set interrupt vector on data bus */
@@ -508,53 +533,29 @@ static uint16_t _namco_video_offset(uint32_t x, uint32_t y) {
 }
 
 static void _namco_decode_chars(namco_t* sys) {
-    uint32_t* ptr = sys->pixel_buffer;
+    uint32_t* pixel_base_ptr = sys->pixel_buffer;
     uint8_t* tile_base = &sys->rom_gfx[0][0];
     for (uint32_t y = 0; y < 28; y++) {
         for (uint32_t x = 0; x < 36; x++) {
             uint16_t offset = _namco_video_offset(x, y);
             uint8_t char_code = sys->video_ram[offset];
-            //uint8_t colr_code = sys->color_ram[offset];
+            uint8_t color_code = sys->color_ram[offset] & 0x3F;
 
-            /* TODO: explain tile layout */
             for (uint32_t yy = 0; yy < 8; yy++) {
-                /* unpack 8 horizontal bits at a time */
                 int tile_index = char_code*16 + yy;
-                uint8_t p3_hi = (tile_base[tile_index+8]>>4) & 1;
-                uint8_t p3_lo = (tile_base[tile_index+8]>>0) & 1;
-                uint8_t p2_hi = (tile_base[tile_index+8]>>5) & 1;
-                uint8_t p2_lo = (tile_base[tile_index+8]>>1) & 1;
-                uint8_t p1_hi = (tile_base[tile_index+8]>>6) & 1;
-                uint8_t p1_lo = (tile_base[tile_index+8]>>2) & 1;
-                uint8_t p0_hi = (tile_base[tile_index+8]>>7) & 1;
-                uint8_t p0_lo = (tile_base[tile_index+8]>>3) & 1;
-                uint8_t p7_hi = (tile_base[tile_index]>>4) & 1;
-                uint8_t p7_lo = (tile_base[tile_index]>>0) & 1;
-                uint8_t p6_hi = (tile_base[tile_index]>>5) & 1;
-                uint8_t p6_lo = (tile_base[tile_index]>>1) & 1;
-                uint8_t p5_hi = (tile_base[tile_index]>>6) & 1;
-                uint8_t p5_lo = (tile_base[tile_index]>>2) & 1;
-                uint8_t p4_hi = (tile_base[tile_index]>>7) & 1;
-                uint8_t p4_lo = (tile_base[tile_index]>>3) & 1;
-
-                uint8_t p0 = (p0_hi<<1)|p0_lo;
-                uint8_t p1 = (p1_hi<<1)|p1_lo;
-                uint8_t p2 = (p2_hi<<1)|p2_lo;
-                uint8_t p3 = (p3_hi<<1)|p3_lo;
-                uint8_t p4 = (p4_hi<<1)|p4_lo;
-                uint8_t p5 = (p5_hi<<1)|p5_lo;
-                uint8_t p6 = (p6_hi<<1)|p6_lo;
-                uint8_t p7 = (p7_hi<<1)|p7_lo;
-
-                int dst_index = (y*8+yy)*288 + (x*8);
-                ptr[dst_index+0] = 0xFF000000 | (p0<<22) | (p0<<14) | (p0<<6);
-                ptr[dst_index+1] = 0xFF000000 | (p1<<22) | (p1<<14) | (p1<<6);
-                ptr[dst_index+2] = 0xFF000000 | (p2<<22) | (p2<<14) | (p2<<6);
-                ptr[dst_index+3] = 0xFF000000 | (p3<<22) | (p3<<14) | (p3<<6);
-                ptr[dst_index+4] = 0xFF000000 | (p4<<22) | (p4<<14) | (p4<<6);
-                ptr[dst_index+5] = 0xFF000000 | (p5<<22) | (p5<<14) | (p5<<6);
-                ptr[dst_index+6] = 0xFF000000 | (p6<<22) | (p6<<14) | (p6<<6);
-                ptr[dst_index+7] = 0xFF000000 | (p7<<22) | (p7<<14) | (p7<<6);
+                uint32_t* dst = &pixel_base_ptr[(y*8+yy)*288 + (x*8)];
+                for (uint32_t xx = 0; xx < 4; xx++) {
+                    uint8_t p2_hi = (tile_base[tile_index+8]>>(7-xx)) & 1;
+                    uint8_t p2_lo = (tile_base[tile_index+8]>>(3-xx)) & 1;
+                    uint8_t p2 = (p2_hi<<1)|p2_lo;
+                    *dst++ = sys->palette_cache[(color_code<<2)|p2];
+                }
+                for (uint32_t xx = 0; xx < 4; xx++) {
+                    uint8_t p2_hi = (tile_base[tile_index]>>(7-xx)) & 1;
+                    uint8_t p2_lo = (tile_base[tile_index]>>(3-xx)) & 1;
+                    uint8_t p2 = (p2_hi<<1)|p2_lo;
+                    *dst++ = sys->palette_cache[(color_code<<2)|p2];
+                }
             }
         }
     }
