@@ -142,9 +142,7 @@ typedef struct {
     uint8_t int_enable;
     uint8_t sound_enable;
     uint8_t flip_screen;
-    uint8_t p1_start_light;
-    uint8_t p2_start_light;
-    uint8_t coin_lockout;
+    uint8_t sprite_coords[16];
     mem_t mem;
     uint32_t palette_cache[256];
     uint8_t video_ram[0x0400];
@@ -216,7 +214,6 @@ int namco_display_height(namco_t* sys);
 #endif
 
 #if defined NAMCO_PACMAN
-#define NAMCO_NUM_SPRITES       (8)
 #define NAMCO_DEFAULT_DIP_SWITCHES  (0)
 #define NAMCO_ADDR_MASK         (0x7FFF)    /* Pacman has only 15 addr pins wired */
 #define NAMCO_IOMAP_BASE        (0x5000)
@@ -229,15 +226,9 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_ADDR_INT_ENABLE       (0x5000)
 #define NAMCO_ADDR_SOUND_ENABLE     (0x5001)
 #define NAMCO_ADDR_FLIP_SCREEN      (0x5003)
-#define NAMCO_ADDR_P1_START_LIGHT   (0x5004)
-#define NAMCO_ADDR_P2_START_LIGHT   (0x5005)
-#define NAMCO_ADDR_COIN_LOCKOUT     (0x5006)
-#define NAMCO_ADDR_COIN_COUNTER     (0x5007)
 #define NAMCO_ADDR_SOUND        (0x5040)
 #define NAMCO_ADDR_SPRITES_POS  (0x5060)
-#define NAMCO_ADDR_WATCHDOG     (0x50C0)
 #else /* PENGO */
-#define NAMCO_NUM_SPRITES       (6)
 #define NAMCO_DEFAULT_DIP_SWITCHES  (0)
 #define NAMCO_ADDR_MASK         (0xFFFF)
 #define NAMCO_IOMAP_BASE        (0x9000)
@@ -360,8 +351,21 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
         4400..47FF:     1KB color RAM
         4800..4C00:     unmapped?
         4C00..4FEF:     <1KB main RAM
-        4FF0..4FFF:     sprite RAM
-        5000+           memory mapped registers
+        4FF0..4FFF:     sprite attributes (write only?)
+
+        5000            write:  interrupt enable/disable
+                        read:   IN0 (joystick + coin slot)
+        5001            write:  sound enable
+        5002            ???
+        5003            write:  flip screen
+        5004            write:  player 1 start light (ignored)
+        5005            write:  player 2 start light (ignored)
+        5006            write:  coin lockout (ignored)
+        5007            write:  coin counter (ignored)
+        5040..505F      write:  sound registers
+        5040            read:   IN1 (joystick + coin slot)
+        5060..506F      write:  sprite coordinates
+        5080            read:   DIP switched
 
         Pengo: full 64KB address space
 
@@ -392,7 +396,7 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
         mem_map_ram(&sys->mem, 0, 0x8800, 0x0800, sys->main_ram);
     #endif
 
-    /* RGB color values */
+    /* setup an RGBA palette from the 8-bit RGB values in PROM */
     uint32_t hw_colors[32];
     for (int i = 0; i < 32; i++) {
         /*
@@ -409,8 +413,6 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
         uint8_t b = ((rgb>>6)&1) * 0x47 + ((rgb>>7)&1) * 0x97;
         hw_colors[i] = 0xFF000000 | (b<<16) | (g<<8) | r;
     }
-
-    /* fixed palette cache of 64x4 color blocks */
     for (int i = 0; i < 256; i++) {
         uint8_t pal_index = sys->rom_prom[i + 0x20] & 0xF;
         sys->palette_cache[i] = hw_colors[pal_index];
@@ -458,32 +460,31 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
             }
             else {
                 /* memory-mapped IO */
-                switch (addr) {
-                    case NAMCO_ADDR_INT_ENABLE:
-                        sys->int_enable = data;
+                switch (addr & 0x00F0) {
+                    case 0x0000:
+                        switch (addr) {
+                            case NAMCO_ADDR_INT_ENABLE:
+                                sys->int_enable = data;
+                                break;
+                            case NAMCO_ADDR_SOUND_ENABLE:
+                                sys->sound_enable = data;
+                                break;
+                            case NAMCO_ADDR_FLIP_SCREEN:
+                                sys->flip_screen = data;
+                                break;
+                            /* start light, coint lockout, coin counter, watchdog all ignored */
+                        }
                         break;
-                    case NAMCO_ADDR_SOUND_ENABLE:
-                        sys->sound_enable = data;
+                    case 0x0040:
+                    case 0x0050:
+                        /* sound registers */
+                        // FIXME
                         break;
-                    case NAMCO_ADDR_FLIP_SCREEN:
-                        sys->flip_screen = data;
-                        break;
-                    case NAMCO_ADDR_P1_START_LIGHT:
-                        sys->p1_start_light = data;
-                        break;
-                    case NAMCO_ADDR_P2_START_LIGHT:
-                        sys->p2_start_light = data;break;
-                    case NAMCO_ADDR_COIN_LOCKOUT:
-                        sys->coin_lockout = data;
-                        break;
-                    case NAMCO_ADDR_COIN_COUNTER:
-                        /*???*/
-                        break;
-                    case NAMCO_ADDR_WATCHDOG:
-                        /*???*/
+                    case 0x0060:
+                        /* sprite coords */
+                        sys->sprite_coords[addr & 0x000F] = data;
                         break;
                 }
-                //printf("WRITE: %02X -> %04X\n", data, addr);
             }
         }
         else if (pins & Z80_RD) {
@@ -493,8 +494,6 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
             }
             else {
                 /* memory-mapped IO */
-                // FIXME
-                //printf("READ: %04X\n", addr);
                 Z80_SET_DATA(pins, 0xFF);
             }
         }
@@ -507,11 +506,8 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                 sys->int_vector = data;
             }
         }
-        else if (pins & Z80_RD) {
-            //printf("IN: %04X\n", addr);
-        }
         else if (pins & Z80_M1) {
-            /* set interrupt vector on data bus */
+            /* an interrupt handling machine cycle, set interrupt vector on data bus */
             Z80_SET_DATA(pins, sys->int_vector);
         }
     }
@@ -532,37 +528,77 @@ static uint16_t _namco_video_offset(uint32_t x, uint32_t y) {
     return offset;
 }
 
+/* 8x4 tile decoder */
+static inline void _namco_8x4(
+    uint32_t* pixel_base,
+    uint8_t* tile_base,
+    uint32_t* palette_base,
+    uint32_t tile_stride,
+    uint32_t tile_offset,
+    uint32_t px,
+    uint32_t py,
+    uint8_t char_code,
+    uint8_t color_code,
+    bool opaque)
+{
+    int tile_index = char_code*tile_stride + tile_offset;
+    for (uint32_t yy = 0; yy < 8; yy++, tile_index++) {
+        uint32_t y = py + yy;
+        if (y >= NAMCO_DISPLAY_HEIGHT) {
+            break;
+        }
+        int tile_index = char_code*tile_stride + tile_offset + yy;
+        for (uint32_t xx = 0; xx < 4; xx++) {
+            uint32_t x = px + xx;
+            if (x >= NAMCO_DISPLAY_WIDTH) {
+                break;
+            }
+            uint8_t p2_hi = (tile_base[tile_index]>>(7-xx)) & 1;
+            uint8_t p2_lo = (tile_base[tile_index]>>(3-xx)) & 1;
+            uint8_t p2 = (p2_hi<<1)|p2_lo;
+            uint32_t rgba = palette_base[(color_code<<2)|p2];
+            if (opaque || (rgba != 0xFF000000)) {
+                uint32_t* dst = &pixel_base[y*NAMCO_DISPLAY_WIDTH + x];
+                *dst = rgba;
+            }
+        }
+    }
+}
+
 static void _namco_decode_chars(namco_t* sys) {
-    uint32_t* pixel_base_ptr = sys->pixel_buffer;
+    uint32_t* pixel_base = sys->pixel_buffer;
+    uint32_t* pal_base = sys->palette_cache;
     uint8_t* tile_base = &sys->rom_gfx[0][0];
     for (uint32_t y = 0; y < 28; y++) {
         for (uint32_t x = 0; x < 36; x++) {
             uint16_t offset = _namco_video_offset(x, y);
             uint8_t char_code = sys->video_ram[offset];
             uint8_t color_code = sys->color_ram[offset] & 0x3F;
-
-            for (uint32_t yy = 0; yy < 8; yy++) {
-                int tile_index = char_code*16 + yy;
-                uint32_t* dst = &pixel_base_ptr[(y*8+yy)*288 + (x*8)];
-                for (uint32_t xx = 0; xx < 4; xx++) {
-                    uint8_t p2_hi = (tile_base[tile_index+8]>>(7-xx)) & 1;
-                    uint8_t p2_lo = (tile_base[tile_index+8]>>(3-xx)) & 1;
-                    uint8_t p2 = (p2_hi<<1)|p2_lo;
-                    *dst++ = sys->palette_cache[(color_code<<2)|p2];
-                }
-                for (uint32_t xx = 0; xx < 4; xx++) {
-                    uint8_t p2_hi = (tile_base[tile_index]>>(7-xx)) & 1;
-                    uint8_t p2_lo = (tile_base[tile_index]>>(3-xx)) & 1;
-                    uint8_t p2 = (p2_hi<<1)|p2_lo;
-                    *dst++ = sys->palette_cache[(color_code<<2)|p2];
-                }
-            }
+            _namco_8x4(pixel_base, tile_base, pal_base, 16, 8, x*8, y*8, char_code, color_code, true);
+            _namco_8x4(pixel_base, tile_base, pal_base, 16, 0, x*8+4, y*8, char_code, color_code, true);
         }
     }
 }
 
 static void _namco_decode_sprites(namco_t* sys) {
-    // FIXME
+    uint32_t* pixel_base = sys->pixel_buffer;
+    uint32_t* pal_base = sys->palette_cache;
+    uint8_t* tile_base = &sys->rom_gfx[1][0];
+    for (int sprite_index = 6; sprite_index >= 1; --sprite_index) {
+        uint32_t py = sys->sprite_coords[sprite_index*2 + 0] - 31;
+        uint32_t px = 272 - sys->sprite_coords[sprite_index*2 + 1];
+        uint8_t shape = sys->main_ram[0x03F0 + sprite_index*2 + 0];
+        uint8_t char_code = shape>>2;
+        uint8_t color_code = sys->main_ram[0x03F0 + sprite_index*2 + 1];
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 8,  px,    py,   char_code, color_code, false);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 16, px+4,  py,   char_code, color_code, false);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 24, px+8,  py,   char_code, color_code, false);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 0,  px+12, py,   char_code, color_code, false);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 40, px,    py+8, char_code, color_code, false);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 48, px+4,  py+8, char_code, color_code, false);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 56, px+8,  py+8, char_code, color_code, false);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 32, px+12, py+8, char_code, color_code, false);
+    }
 }
 
 void namco_decode_video(namco_t* sys) {
