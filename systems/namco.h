@@ -33,7 +33,6 @@
     You need to include the following headers before including bombjack.h:
 
     - chips/z80.h
-    - chips/namco_wsg.h
     - chips/clk.h
     - chips/mem.h
 
@@ -139,7 +138,6 @@ typedef struct {
     bool valid;
     z80_t cpu;
     clk_t clk;
-    // nwsg_t wsg;
     uint8_t in0;
     uint8_t in1;
     uint8_t dsw1;
@@ -150,23 +148,33 @@ typedef struct {
     uint8_t flip_screen;
     uint8_t sprite_coords[16];
     mem_t mem;
+    uint32_t* pixel_buffer;
     uint32_t palette_cache[256];
+    void* user_data;
+    struct {
+        int tick_counter;
+        int sample_period;
+        int sample_counter;
+        float volume;
+        struct {
+            uint32_t frequency; /* 20-bit frequency */
+            uint32_t counter;   /* 20-bit counter */
+            uint8_t waveform;   /* 3-bit waveform */
+            uint8_t volume;     /* 4-bit volume */
+            uint8_t val;        /* 4-bit current value */
+        } voice[3];
+        int num_samples;
+        int sample_pos;
+        namco_audio_callback_t callback;
+        uint8_t rom[2][0x0100];
+        float sample_buffer[NAMCO_MAX_AUDIO_SAMPLES];
+    } sound;
     uint8_t video_ram[0x0400];
     uint8_t color_ram[0x0400];
     uint8_t main_ram[0x0800];
     uint8_t rom_cpu[8][0x1000];
     uint8_t rom_gfx[4][0x1000];
     uint8_t rom_prom[0x0420];
-    uint8_t rom_sound[2][0x0100];
-    void* user_data;
-    struct {
-        namco_audio_callback_t callback;
-        int num_samples;
-        int sample_pos;
-        float volume;
-        float sample_buffer[NAMCO_MAX_AUDIO_SAMPLES];
-    } audio;
-    uint32_t* pixel_buffer;
 } namco_t;
 
 /* initialize a new namco_t instance */
@@ -228,7 +236,6 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_IN1_P1_START      (1<<5)
 #define NAMCO_IN1_P2_START      (1<<6)
 /* DSW1 bits (active low) */
-#define NAMCO_DSW1_DEFAULT      (NAMCO_DSW1_COINS_1C1G|NAMCO_DSW1_LIVES_3|NAMCO_DSW1_EXTRALIFE_15K|NAMCO_DSW1_DIFFICULTY_NORM)
 #define NAMCO_DSW1_COINS_MASK       (3<<0)
 #define NAMCO_DSW1_COINS_FREE       (0)     /* free play */
 #define NAMCO_DSW1_COINS_1C1G       (1<<0)  /* 1 coin 1 game */
@@ -250,6 +257,7 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_DSW1_GHOSTNAMES_MASK  (1<<7)
 #define NAMCO_DSW1_GHOSTNAMES_ALT   (0<<7)
 #define NAMCO_DSW1_GHOSTNAMES_NORM  (1<<7)
+#define NAMCO_DSW1_DEFAULT (NAMCO_DSW1_COINS_1C1G|NAMCO_DSW1_LIVES_3|NAMCO_DSW1_EXTRALIFE_15K|NAMCO_DSW1_DIFFICULTY_NORM|NAMCO_DSW1_GHOSTNAMES_NORM)
 /* memory mapped IO: read locations*/
 #define NAMCO_ADDR_IN0          (0x5000)
 #define NAMCO_ADDR_IN1          (0x5040)
@@ -259,7 +267,44 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_ADDR_INT_ENABLE       (0x5000)
 #define NAMCO_ADDR_SOUND_ENABLE     (0x5001)
 #define NAMCO_ADDR_FLIP_SCREEN      (0x5003)
-#define NAMCO_ADDR_SOUND        (0x5040)
+#define NAMCO_ADDR_SOUND_V1_FC0     (0x5040)    /* voice1 frequency counter nibble 0 */
+#define NAMCO_ADDR_SOUND_V1_FC1     (0x5041)    /*                          nibble 1 */
+#define NAMCO_ADDR_SOUND_V1_FC2     (0x5042)    /*                          nibble 2 */
+#define NAMCO_ADDR_SOUND_V1_FC3     (0x5043)    /*                          nibble 3 */
+#define NAMCO_ADDR_SOUND_V1_FC4     (0x5044)    /*                          nibble 4 */
+#define NAMCO_ADDR_SOUND_V1_WAVE    (0x5045)    /* voice1 wave form */
+#define NAMCO_ADDR_SOUND_V2_FC1     (0x5046)    /* voice2 frequency counter nibble 1 */
+#define NAMCO_ADDR_SOUND_V2_FC2     (0x5047)    /*                          nibble 2 */
+#define NAMCO_ADDR_SOUND_V2_FC3     (0x5048)    /*                          nibble 3 */
+#define NAMCO_ADDR_SOUND_V2_FC4     (0x5049)    /*                          nibble 4 */
+#define NAMCO_ADDR_SOUND_V2_WAVE    (0x504A)    /* voice2 wave form */
+#define NAMCO_ADDR_SOUND_V3_FC1     (0x504B)    /* voice3 frequency counter nibble 1 */
+#define NAMCO_ADDR_SOUND_V3_FC2     (0x504C)    /*                          nibble 2 */
+#define NAMCO_ADDR_SOUND_V3_FC3     (0x504D)    /*                          nibble 3 */
+#define NAMCO_ADDR_SOUND_V3_FC4     (0x504E)    /*                          nibble 4 */
+#define NAMCO_ADDR_SOUND_V3_WAVE    (0x504F)    /* voice3 wave form */
+#define NAMCO_ADDR_SOUND_V1_FQ0     (0x5050)    /* voice1 frequency nibble 0 */
+#define NAMCO_ADDR_SOUND_V1_FQ1     (0x5051)    /*                  nibble 1 */
+#define NAMCO_ADDR_SOUND_V1_FQ2     (0x5052)    /*                  nibble 2 */
+#define NAMCO_ADDR_SOUND_V1_FQ3     (0x5053)    /*                  nibble 3 */
+#define NAMCO_ADDR_SOUND_V1_FQ4     (0x5054)    /*                  nibble 4 */
+#define NAMCO_ADDR_SOUND_V1_VOLUME  (0x5055)    /* voice1 volume */
+#define NAMCO_ADDR_SOUND_V2_FQ1     (0x5056)    /* voice2 frequency nibble 1 */
+#define NAMCO_ADDR_SOUND_V2_FQ2     (0x5057)    /*                  nibble 2 */
+#define NAMCO_ADDR_SOUND_V2_FQ3     (0x5058)    /*                  nibble 3 */
+#define NAMCO_ADDR_SOUND_V2_FQ4     (0x5059)    /*                  nibble 4 */
+#define NAMCO_ADDR_SOUND_V2_VOLUME  (0x505A)    /* voice2 volume */
+#define NAMCO_ADDR_SOUND_V2_FQ1     (0x5056)    /* voice2 frequency nibble 1 */
+#define NAMCO_ADDR_SOUND_V2_FQ2     (0x5057)    /*                  nibble 2 */
+#define NAMCO_ADDR_SOUND_V2_FQ3     (0x5058)    /*                  nibble 3 */
+#define NAMCO_ADDR_SOUND_V2_FQ4     (0x5059)    /*                  nibble 4 */
+#define NAMCO_ADDR_SOUND_V2_VOLUME  (0x505A)    /* voice2 volume */
+#define NAMCO_ADDR_SOUND_V3_FQ1     (0x505B)    /* voice3 frequency nibble 1 */
+#define NAMCO_ADDR_SOUND_V3_FQ2     (0x505C)    /*                  nibble 2 */
+#define NAMCO_ADDR_SOUND_V3_FQ3     (0x505D)    /*                  nibble 3 */
+#define NAMCO_ADDR_SOUND_V3_FQ4     (0x505E)    /*                  nibble 4 */
+#define NAMCO_ADDR_SOUND_V3_VOLUME  (0x505F)    /* voice3 volume */
+
 #define NAMCO_ADDR_SPRITES_POS  (0x5060)
 #else /* PENGO */
 #define NAMCO_DEFAULT_DIP_SWITCHES  (0)
@@ -284,28 +329,29 @@ int namco_display_height(namco_t* sys);
 #endif
 #define NAMCO_MASTER_CLOCK      (18432000)
 #define NAMCO_CPU_CLOCK         (NAMCO_MASTER_CLOCK / 6)
-#define NAMCO_SOUND_CLOCK       (NAMCO_MASTER_CLOCK / 128)
+#define NAMCO_SOUND_PERIOD      (32)    /* sound is ticked every 32 CPU ticks */
+#define NAMCO_SAMPLE_SCALE      (16)
 #define NAMCO_VSYNC_PERIOD      (NAMCO_CPU_CLOCK / 60)
 #define NAMCO_DISPLAY_WIDTH     (288)
 #define NAMCO_DISPLAY_HEIGHT    (224)
 #define NAMCO_DISPLAY_SIZE      (NAMCO_DISPLAY_WIDTH*NAMCO_DISPLAY_HEIGHT*4)
 
 static uint64_t _namco_tick(int num, uint64_t pins, void* user_data);
+static void _namco_init_sound(namco_t* sys, const namco_desc_t* desc);
+static void _namco_tick_sound(namco_t* sys, int num_ticks);
 
 #define _namco_def(val, def) (val == 0 ? def : val)
 
 void namco_init(namco_t* sys, const namco_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
+    CHIPS_ASSERT(desc->audio_sample_rate > 0);
 
     memset(sys, 0, sizeof(namco_t));
     sys->valid = true;
 
     /* audio and video output */
-    CHIPS_ASSERT(desc->audio_num_samples <= NAMCO_MAX_AUDIO_SAMPLES);
-    sys->audio.callback = desc->audio_cb;
-    sys->audio.num_samples = _namco_def(desc->audio_num_samples, NAMCO_DEFAULT_AUDIO_SAMPLES);
-    sys->audio.volume = _namco_def(desc->audio_volume, 1.0f);
     sys->user_data = desc->user_data;
+    _namco_init_sound(sys, desc);
     CHIPS_ASSERT((0 == desc->pixel_buffer) || (desc->pixel_buffer && (desc->pixel_buffer_size >= NAMCO_DISPLAY_SIZE)));
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     
@@ -356,8 +402,8 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
     #else
     memcpy(&sys->rom_prom[0x0020], desc->rom_prom_0020_041F, 0x0400);
     #endif
-    memcpy(sys->rom_sound[0], desc->rom_sound_0000_00FF, 0x0100);
-    memcpy(sys->rom_sound[1], desc->rom_sound_0100_01FF, 0x0100);
+    memcpy(sys->sound.rom[0], desc->rom_sound_0000_00FF, 0x0100);
+    memcpy(sys->sound.rom[1], desc->rom_sound_0100_01FF, 0x0100);
 
     /* vsync/vblank counters */
     sys->vsync_count = NAMCO_VSYNC_PERIOD;
@@ -770,4 +816,59 @@ int namco_display_height(namco_t* sys) {
     return NAMCO_DISPLAY_HEIGHT;
 }
 
+void _namco_init_sound(namco_t* sys, const namco_desc_t* desc) {
+    CHIPS_ASSERT(desc->audio_num_samples <= NAMCO_MAX_AUDIO_SAMPLES);
+    sys->sound.tick_counter = NAMCO_SOUND_PERIOD;
+    sys->sound.sample_period = (NAMCO_CPU_CLOCK * NAMCO_SAMPLE_SCALE) / _namco_def(desc->audio_sample_rate, 44100);
+    sys->sound.sample_counter = sys->sound.sample_period;
+    sys->sound.volume = _namco_def(desc->audio_volume, 1.0f);
+    sys->sound.num_samples = _namco_def(desc->audio_num_samples, NAMCO_DEFAULT_AUDIO_SAMPLES);
+    sys->sound.callback = desc->audio_cb;
+}
+
+/* FIXME adhoc volume table */
+static const float _namco_volumes[16] = {
+    -1.0f,
+    -0.875f,
+    -0.75f,
+    -0.625f,
+    -0.5f,
+    -0.375f,
+    -0.25f,
+    -0.125f,
+    -0.0f,
+    +0.125f,
+    +0.375f,
+    +0.5f,
+    +0.625f,
+    +0.75f,
+    +0.875f,
+    +1.0f,
+};
+
+void _namco_tick_sound(namco_t* sys, int num_ticks) {
+    /* tick the sound chip? */
+    sys->sound.tick_counter -= num_ticks;
+    if (sys->sound.tick_counter < 0) {
+        sys->sound.tick_counter += NAMCO_SOUND_PERIOD;
+    }
+
+    /* generate a new sample? */
+    sys->sound.sample_counter -= num_ticks;
+    if (sys->sound.sample_counter < 0) {
+        sys->sound.sample_counter += sys->sound.sample_period;
+        float sm = 0.0f;
+        for (int i = 0; i < 3; i++) {
+            sm += sys->sound.voice[i].val & 0xF;
+        }
+        sm = sm * sys->sound.volume * 0.33333f;
+        sys->sound.sample_buffer[sys->sound.sample_pos++] = sm;
+        if (sys->sound.sample_pos == sys->sound.num_samples) {
+            if (sys->sound.callback) {
+                sys->sound.callback(sys->sound.sample_buffer, sys->sound.num_samples, sys->user_data);
+            }
+            sys->sound.sample_pos = 0;
+        }
+    }
+}
 #endif /* CHIPS_IMPL */
