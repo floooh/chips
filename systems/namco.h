@@ -65,13 +65,19 @@ extern "C" {
 #define NAMCO_MAX_AUDIO_SAMPLES (1024)
 #define NAMCO_DEFAULT_AUDIO_SAMPLES (128)
 
-/* joystick mask bits */
-#define NAMCO_JOYSTICK_UP       (1<<0)
-#define NAMCO_JOYSTICK_LEFT     (1<<1)
-#define NAMCO_JOYSTICK_RIGHT    (1<<2)
-#define NAMCO_JOYSTICK_DOWN     (1<<3)
-
-/* FIXME: dip switches */
+/* input bits (use with namco_input_set() and namco_input_clear()) */
+#define NAMCO_P1_JOYSTICK_UP    (1<<0)
+#define NAMCO_P1_JOYSTICK_LEFT  (1<<1)
+#define NAMCO_P1_JOYSTICK_RIGHT (1<<2)
+#define NAMCO_P1_JOYSTICK_DOWN  (1<<3)
+#define NAMCO_P1_COIN           (1<<4)
+#define NAMCO_P1_START          (1<<5)
+#define NAMCO_P2_JOYSTICK_UP    (1<<6)
+#define NAMCO_P2_JOYSTICK_LEFT  (1<<7)
+#define NAMCO_P2_JOYSTICK_RIGHT (1<<8)
+#define NAMCO_P2_JOYSTICK_DOWN  (1<<9)
+#define NAMCO_P2_COIN           (1<<10)
+#define NAMCO_P2_START          (1<<11)
 
 /* audio sample-data callback */
 typedef void (*namco_audio_callback_t)(const float* samples, int num_samples, void* user_data);
@@ -173,22 +179,10 @@ void namco_reset(namco_t* sys);
 void namco_exec(namco_t* sys, uint32_t micro_seconds);
 /* decode video to pixel buffer, must be called once per frame */
 void namco_decode_video(namco_t* sys);
-/* insert a coin for player */
-void namco_p1_insert_coin(void);
-/* insert a coin for player 1 */
-void namco_p2_insert_coin(void);
-/* set player1 joystick bits */
-void namco_p1_joystick_set(uint8_t mask);
-/* clear player1 joystick bits */
-void namco_p1_joystick_clr(uint8_t mask);
-/* set player2 joystick bits */
-void namco_p2_joystick_set(uint8_t mask);
-/* clear player2 joystick bits */
-void namco_p2_joystick_clr(uint8_t mask);
-/* set dip switches bits */
-void namco_dsw1_set(uint8_t mask);
-/* clear dip switches bits */
-void namco_dsw1_clr(uint8_t mask);
+/* set input bits */
+void namco_input_set(namco_t* sys, uint32_t mask);
+/* clear input bits */
+void namco_input_clear(namco_t* sys, uint32_t mask);
 /* get the standard framebuffer width and height in pixels */
 int namco_std_display_width(void);
 int namco_std_display_height(void);
@@ -214,9 +208,48 @@ int namco_display_height(namco_t* sys);
 #endif
 
 #if defined NAMCO_PACMAN
-#define NAMCO_DEFAULT_DIP_SWITCHES  (0)
 #define NAMCO_ADDR_MASK         (0x7FFF)    /* Pacman has only 15 addr pins wired */
 #define NAMCO_IOMAP_BASE        (0x5000)
+/* IN0 bits (active low) */
+#define NAMCO_IN0_UP            (1<<0)
+#define NAMCO_IN0_LEFT          (1<<1)
+#define NAMCO_IN0_RIGHT         (1<<2)
+#define NAMCO_IN0_DOWN          (1<<3)
+#define NAMCO_IN0_RACK_ADVANCE  (1<<4)
+#define NAMCO_IN0_COIN1         (1<<5)
+#define NAMCO_IN0_COIN2         (1<<6)
+#define NAMCO_IN0_CREDIT        (1<<7)
+/* IN1 bits (active low) */
+#define NAMCO_IN1_UP            (1<<0)
+#define NAMCO_IN1_LEFT          (1<<1)
+#define NAMCO_IN1_RIGHT         (1<<2)
+#define NAMCO_IN1_DOWN          (1<<3)
+#define NAMCO_IN1_BOARD_TEST    (1<<4)
+#define NAMCO_IN1_P1_START      (1<<5)
+#define NAMCO_IN1_P2_START      (1<<6)
+/* DSW1 bits (active low) */
+#define NAMCO_DSW1_DEFAULT      (NAMCO_DSW1_COINS_1C1G|NAMCO_DSW1_LIVES_3|NAMCO_DSW1_EXTRALIFE_15K|NAMCO_DSW1_DIFFICULTY_NORM)
+#define NAMCO_DSW1_COINS_MASK       (3<<0)
+#define NAMCO_DSW1_COINS_FREE       (0)     /* free play */
+#define NAMCO_DSW1_COINS_1C1G       (1<<0)  /* 1 coin 1 game */
+#define NAMCO_DSW1_COINS_1C2G       (2<<0)  /* 1 coin 2 games */
+#define NAMCO_DSW1_COINS_2C1G       (3<<0)  /* 2 coins 1 game */
+#define NAMCO_DSW1_LIVES_MASK       (3<<2)
+#define NAMCO_DSW1_LIVES_1          (0<<2)
+#define NAMCO_DSW1_LIVES_2          (1<<2)
+#define NAMCO_DSW1_LIVES_3          (2<<2)
+#define NAMCO_DSW1_LIVES_5          (3<<2)
+#define NAMCO_DSW1_EXTRALIFE_MASK   (3<<4)
+#define NAMCO_DSW1_EXTRALIFE_10K    (0<<4)
+#define NAMCO_DSW1_EXTRALIFE_15K    (1<<4)
+#define NAMCO_DSW1_EXTRALIFE_20K    (2<<4)
+#define NAMCO_DSW1_EXTRALIFE_NONE   (3<<4)
+#define NAMCO_DSW1_DIFFICULTY_MASK  (1<<6)
+#define NAMCO_DSW1_DIFFICULTY_HARD  (0<<6)
+#define NAMCO_DSW1_DIFFICULTY_NORM  (1<<6)
+#define NAMCO_DSW1_GHOSTNAMES_MASK  (1<<7)
+#define NAMCO_DSW1_GHOSTNAMES_ALT   (0<<7)
+#define NAMCO_DSW1_GHOSTNAMES_NORM  (1<<7)
 /* memory mapped IO: read locations*/
 #define NAMCO_ADDR_IN0          (0x5000)
 #define NAMCO_ADDR_IN1          (0x5040)
@@ -339,8 +372,10 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
 
     /* FIXME: setup WSG */
 
-    /* dip switches */
-    sys->dsw1 = NAMCO_DEFAULT_DIP_SWITCHES;
+    /* memory mapped IO config */
+    sys->in0 = 0xFF;
+    sys->in1 = 0xFF;
+    sys->dsw1 = NAMCO_DSW1_DEFAULT;
 
     /* memory map:
 
@@ -493,8 +528,21 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                 Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
             }
             else {
+                uint8_t data = 0xFF;
                 /* memory-mapped IO */
-                Z80_SET_DATA(pins, 0xFF);
+                switch (addr) {
+                    /* FIXME: IN0, IN1, DSW1 are mirrored for 0x40 bytes */
+                    case NAMCO_ADDR_IN0:
+                        data = sys->in0;
+                        break;
+                    case NAMCO_ADDR_IN1:
+                        data = sys->in1;
+                        break;
+                    case NAMCO_ADDR_DSW1:
+                        data = sys->dsw1;
+                        break;
+                }
+                Z80_SET_DATA(pins, data);
             }
         }
     }
@@ -539,17 +587,21 @@ static inline void _namco_8x4(
     uint32_t py,
     uint8_t char_code,
     uint8_t color_code,
-    bool opaque)
+    bool opaque,
+    bool flip_x,
+    bool flip_y)
 {
+    uint32_t xor_x = flip_x ? 3 : 0;
+    uint32_t xor_y = flip_y ? 7 : 0;
     int tile_index = char_code*tile_stride + tile_offset;
     for (uint32_t yy = 0; yy < 8; yy++, tile_index++) {
-        uint32_t y = py + yy;
+        uint32_t y = py + (yy ^ xor_y);
         if (y >= NAMCO_DISPLAY_HEIGHT) {
             break;
         }
         int tile_index = char_code*tile_stride + tile_offset + yy;
         for (uint32_t xx = 0; xx < 4; xx++) {
-            uint32_t x = px + xx;
+            uint32_t x = px + (xx ^ xor_x);
             if (x >= NAMCO_DISPLAY_WIDTH) {
                 break;
             }
@@ -574,8 +626,8 @@ static void _namco_decode_chars(namco_t* sys) {
             uint16_t offset = _namco_video_offset(x, y);
             uint8_t char_code = sys->video_ram[offset];
             uint8_t color_code = sys->color_ram[offset] & 0x3F;
-            _namco_8x4(pixel_base, tile_base, pal_base, 16, 8, x*8, y*8, char_code, color_code, true);
-            _namco_8x4(pixel_base, tile_base, pal_base, 16, 0, x*8+4, y*8, char_code, color_code, true);
+            _namco_8x4(pixel_base, tile_base, pal_base, 16, 8, x*8, y*8, char_code, color_code, true, false, false);
+            _namco_8x4(pixel_base, tile_base, pal_base, 16, 0, x*8+4, y*8, char_code, color_code, true, false, false);
         }
     }
 }
@@ -590,22 +642,111 @@ static void _namco_decode_sprites(namco_t* sys) {
         uint8_t shape = sys->main_ram[0x03F0 + sprite_index*2 + 0];
         uint8_t char_code = shape>>2;
         uint8_t color_code = sys->main_ram[0x03F0 + sprite_index*2 + 1];
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 8,  px,    py,   char_code, color_code, false);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 16, px+4,  py,   char_code, color_code, false);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 24, px+8,  py,   char_code, color_code, false);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 0,  px+12, py,   char_code, color_code, false);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 40, px,    py+8, char_code, color_code, false);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 48, px+4,  py+8, char_code, color_code, false);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 56, px+8,  py+8, char_code, color_code, false);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 32, px+12, py+8, char_code, color_code, false);
+        bool flip_x = shape & 1;
+        bool flip_y = shape & 2;
+        uint32_t fy0 = flip_y ? 8 : 0;
+        uint32_t fy1 = flip_y ? 0 : 8;
+        uint32_t fx0 = flip_x ? 12: 0;
+        uint32_t fx1 = flip_x ? 8 : 4;
+        uint32_t fx2 = flip_x ? 4 : 8;
+        uint32_t fx3 = flip_x ? 0 :12;
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 8,  px+fx0, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 16, px+fx1, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 24, px+fx2, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 0,  px+fx3, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 40, px+fx0, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 48, px+fx1, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 56, px+fx2, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(pixel_base, tile_base, pal_base, 64, 32, px+fx3, py+fy1, char_code, color_code, false, flip_x, flip_y);
     }
 }
+
 
 void namco_decode_video(namco_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->pixel_buffer) {
         _namco_decode_chars(sys);
         _namco_decode_sprites(sys);
+    }
+}
+
+void namco_input_set(namco_t* sys, uint32_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (mask & NAMCO_P1_JOYSTICK_UP) {
+        sys->in0 &= ~NAMCO_IN0_UP;
+    }
+    if (mask & NAMCO_P1_JOYSTICK_LEFT) {
+        sys->in0 &= ~NAMCO_IN0_LEFT;
+    }
+    if (mask & NAMCO_P1_JOYSTICK_RIGHT) {
+        sys->in0 &= ~NAMCO_IN0_RIGHT;
+    }
+    if (mask & NAMCO_P1_JOYSTICK_DOWN) {
+        sys->in0 &= ~NAMCO_IN0_DOWN;
+    }
+    if (mask & NAMCO_P1_COIN) {
+        sys->in0 &= ~NAMCO_IN0_COIN1;
+    }
+    if (mask & NAMCO_P1_START) {
+        sys->in1 &= ~NAMCO_IN1_P1_START;
+    }
+    if (mask & NAMCO_P2_JOYSTICK_UP) {
+        sys->in1 &= ~NAMCO_IN1_UP;
+    }
+    if (mask & NAMCO_P2_JOYSTICK_LEFT) {
+        sys->in1 &= ~NAMCO_IN1_LEFT;
+    }
+    if (mask & NAMCO_P2_JOYSTICK_RIGHT) {
+        sys->in1 &= ~NAMCO_IN1_RIGHT;
+    }
+    if (mask & NAMCO_P2_JOYSTICK_DOWN) {
+        sys->in1 &= ~NAMCO_IN1_DOWN;
+    }
+    if (mask & NAMCO_P2_COIN) {
+        sys->in0 &= ~NAMCO_IN0_COIN2;
+    }
+    if (mask & NAMCO_P2_START) {
+        sys->in1 &= ~NAMCO_IN1_P2_START;
+    }
+}
+
+void namco_input_clear(namco_t* sys, uint32_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (mask & NAMCO_P1_JOYSTICK_UP) {
+        sys->in0 |= NAMCO_IN0_UP;
+    }
+    if (mask & NAMCO_P1_JOYSTICK_LEFT) {
+        sys->in0 |= NAMCO_IN0_LEFT;
+    }
+    if (mask & NAMCO_P1_JOYSTICK_RIGHT) {
+        sys->in0 |= NAMCO_IN0_RIGHT;
+    }
+    if (mask & NAMCO_P1_JOYSTICK_DOWN) {
+        sys->in0 |= NAMCO_IN0_DOWN;
+    }
+    if (mask & NAMCO_P1_COIN) {
+        sys->in0 |= NAMCO_IN0_COIN1;
+    }
+    if (mask & NAMCO_P1_START) {
+        sys->in0 |= NAMCO_IN1_P1_START;
+    }
+    if (mask & NAMCO_P2_JOYSTICK_UP) {
+        sys->in1 |= NAMCO_IN1_UP;
+    }
+    if (mask & NAMCO_P2_JOYSTICK_LEFT) {
+        sys->in1 |= NAMCO_IN1_LEFT;
+    }
+    if (mask & NAMCO_P2_JOYSTICK_RIGHT) {
+        sys->in1 |= NAMCO_IN1_RIGHT;
+    }
+    if (mask & NAMCO_P2_JOYSTICK_DOWN) {
+        sys->in1 |= NAMCO_IN1_DOWN;
+    }
+    if (mask & NAMCO_P2_COIN) {
+        sys->in0 |= NAMCO_IN0_COIN2;
+    }
+    if (mask & NAMCO_P2_START) {
+        sys->in1 |= NAMCO_IN1_P2_START;
     }
 }
 
@@ -628,6 +769,5 @@ int namco_display_width(namco_t* sys) {
 int namco_display_height(namco_t* sys) {
     return NAMCO_DISPLAY_HEIGHT;
 }
-
 
 #endif /* CHIPS_IMPL */
