@@ -29,7 +29,6 @@
     - ui_chip.h
     - ui_util.h
     - ui_z80.h
-    - ui_namco_wsg.h
     - ui_audio.h
     - ui_dasm.h
     - ui_dbg.h
@@ -73,6 +72,7 @@ typedef struct {
     namco_t* sys;
     ui_z80_t cpu;
     ui_dbg_t dbg;
+    ui_audio_t audio;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
@@ -228,6 +228,16 @@ void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_audio_desc_t desc = {0};
+        desc.title = "Audio Output";
+        desc.sample_buffer = ui->sys->sound.sample_buffer;
+        desc.num_samples = ui->sys->sound.num_samples;
+        desc.x = x;
+        desc.y = y;
+        ui_audio_init(&ui->audio, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_memedit_desc_t desc = {0};
         for (int i = 0; i < _UI_NAMCO_NUM_MEMLAYERS; i++) {
             desc.layers[i] = _ui_namco_memlayer_names[i];
@@ -295,6 +305,7 @@ static void _ui_namco_draw_menu(ui_namco_t* ui, double exec_time) {
         }
         if (ImGui::BeginMenu("Hardware")) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
+            ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("Z80", 0, &ui->cpu.open);
             ImGui::EndMenu();
         }
@@ -327,6 +338,7 @@ void ui_namco_draw(ui_namco_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->sys);
     _ui_namco_draw_menu(ui, time_ms);
     ui_memmap_draw(&ui->memmap);
+    ui_audio_draw(&ui->audio, ui->sys->sound.sample_pos);
     ui_dbg_draw(&ui->dbg);
     ui_z80_draw(&ui->cpu);
     for (int i = 0; i < 4; i++) {
