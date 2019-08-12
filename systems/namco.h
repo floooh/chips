@@ -133,6 +133,26 @@ typedef struct {
     int rom_sound_0100_01FF_size;
 } namco_desc_t;
 
+typedef struct {
+    int tick_counter;
+    int sample_period;
+    int sample_counter;
+    float volume;
+    struct {
+        uint32_t frequency; /* 20-bit frequency */
+        uint32_t counter;   /* 20-bit counter */
+        uint8_t waveform;   /* 3-bit waveform */
+        uint8_t volume;     /* 4-bit volume */
+        float sample;       /* accumulated sample value */
+        float sample_div  ; /* oversampling divider */
+    } voice[3];
+    int num_samples;
+    int sample_pos;
+    namco_audio_callback_t callback;
+    uint8_t rom[2][0x0100];
+    float sample_buffer[NAMCO_MAX_AUDIO_SAMPLES];
+} namco_sound_t;
+
 /* the Namco arcade machine state */
 typedef struct {
     bool valid;
@@ -151,24 +171,7 @@ typedef struct {
     uint32_t* pixel_buffer;
     uint32_t palette_cache[256];
     void* user_data;
-    struct {
-        int tick_counter;
-        int sample_period;
-        int sample_counter;
-        float volume;
-        struct {
-            uint32_t frequency; /* 20-bit frequency */
-            uint32_t counter;   /* 20-bit counter */
-            uint8_t waveform;   /* 3-bit waveform */
-            uint8_t volume;     /* 4-bit volume */
-            uint8_t val;        /* 4-bit current value */
-        } voice[3];
-        int num_samples;
-        int sample_pos;
-        namco_audio_callback_t callback;
-        uint8_t rom[2][0x0100];
-        float sample_buffer[NAMCO_MAX_AUDIO_SAMPLES];
-    } sound;
+    namco_sound_t sound;
     uint8_t video_ram[0x0400];
     uint8_t color_ram[0x0400];
     uint8_t main_ram[0x0800];
@@ -330,6 +333,7 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_MASTER_CLOCK      (18432000)
 #define NAMCO_CPU_CLOCK         (NAMCO_MASTER_CLOCK / 6)
 #define NAMCO_SOUND_PERIOD      (32)    /* sound is ticked every 32 CPU ticks */
+#define NAMCO_SOUND_OVERSAMPLE  (2)
 #define NAMCO_SAMPLE_SCALE      (16)
 #define NAMCO_VSYNC_PERIOD      (NAMCO_CPU_CLOCK / 60)
 #define NAMCO_DISPLAY_WIDTH     (288)
@@ -337,8 +341,9 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_DISPLAY_SIZE      (NAMCO_DISPLAY_WIDTH*NAMCO_DISPLAY_HEIGHT*4)
 
 static uint64_t _namco_tick(int num, uint64_t pins, void* user_data);
-static void _namco_init_sound(namco_t* sys, const namco_desc_t* desc);
-static void _namco_tick_sound(namco_t* sys, int num_ticks);
+static void _namco_sound_init(namco_t* sys, const namco_desc_t* desc);
+static void _namco_sound_wr(namco_t* sys, uint16_t addr, uint8_t data);
+static void _namco_sound_tick(namco_t* sys, int num_ticks);
 
 #define _namco_def(val, def) (val == 0 ? def : val)
 
@@ -351,7 +356,7 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
 
     /* audio and video output */
     sys->user_data = desc->user_data;
-    _namco_init_sound(sys, desc);
+    _namco_sound_init(sys, desc);
     CHIPS_ASSERT((0 == desc->pixel_buffer) || (desc->pixel_buffer && (desc->pixel_buffer_size >= NAMCO_DISPLAY_SIZE)));
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
     
@@ -530,6 +535,9 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
         }
     }
 
+    /* tick the sound chip */
+    _namco_sound_tick(sys, num_ticks);
+
     /* memory requests */
     uint16_t addr = Z80_GET_ADDR(pins) & NAMCO_ADDR_MASK;
     if (pins & Z80_MREQ) {
@@ -559,7 +567,8 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                     case 0x0040:
                     case 0x0050:
                         /* sound registers */
-                        // FIXME
+                        _namco_sound_wr(sys, addr, data);
+                        break;
                         break;
                     case 0x0060:
                         /* sprite coords */
@@ -586,6 +595,8 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                         break;
                     case NAMCO_ADDR_DSW1:
                         data = sys->dsw1;
+                        break;
+                    default:
                         break;
                 }
                 Z80_SET_DATA(pins, data);
@@ -816,58 +827,103 @@ int namco_display_height(namco_t* sys) {
     return NAMCO_DISPLAY_HEIGHT;
 }
 
-void _namco_init_sound(namco_t* sys, const namco_desc_t* desc) {
+static void _namco_sound_init(namco_t* sys, const namco_desc_t* desc) {
     CHIPS_ASSERT(desc->audio_num_samples <= NAMCO_MAX_AUDIO_SAMPLES);
-    sys->sound.tick_counter = NAMCO_SOUND_PERIOD;
-    sys->sound.sample_period = (NAMCO_CPU_CLOCK * NAMCO_SAMPLE_SCALE) / _namco_def(desc->audio_sample_rate, 44100);
-    sys->sound.sample_counter = sys->sound.sample_period;
-    sys->sound.volume = _namco_def(desc->audio_volume, 1.0f);
-    sys->sound.num_samples = _namco_def(desc->audio_num_samples, NAMCO_DEFAULT_AUDIO_SAMPLES);
-    sys->sound.callback = desc->audio_cb;
+    /* assume zero-initialized */
+    namco_sound_t* snd = &sys->sound;
+    snd->tick_counter = NAMCO_SOUND_PERIOD;
+    snd->sample_period = (NAMCO_CPU_CLOCK * NAMCO_SAMPLE_SCALE) / _namco_def(desc->audio_sample_rate, 44100);
+    snd->sample_counter = sys->sound.sample_period;
+    snd->volume = _namco_def(desc->audio_volume, 1.0f);
+    snd->num_samples = _namco_def(desc->audio_num_samples, NAMCO_DEFAULT_AUDIO_SAMPLES);
+    snd->callback = desc->audio_cb;
 }
 
-/* FIXME adhoc volume table */
-static const float _namco_volumes[16] = {
-    -1.0f,
-    -0.875f,
-    -0.75f,
-    -0.625f,
-    -0.5f,
-    -0.375f,
-    -0.25f,
-    -0.125f,
-    -0.0f,
-    +0.125f,
-    +0.375f,
-    +0.5f,
-    +0.625f,
-    +0.75f,
-    +0.875f,
-    +1.0f,
-};
+#define _NAMCO_SET_NIBBLE_0(val, data) (val=(val&~0x0000F)|((data&0xF)<<0))
+#define _NAMCO_SET_NIBBLE_1(val, data) (val=(val&~0x000F0)|((data&0xF)<<4))
+#define _NAMCO_SET_NIBBLE_2(val, data) (val=(val&~0x00F00)|((data&0xF)<<8))
+#define _NAMCO_SET_NIBBLE_3(val, data) (val=(val&~0x0F000)|((data&0xF)<<12))
+#define _NAMCO_SET_NIBBLE_4(val, data) (val=(val&~0xF0000)|((data&0xF)<<16))
 
-void _namco_tick_sound(namco_t* sys, int num_ticks) {
+static void _namco_sound_wr(namco_t* sys, uint16_t addr, uint8_t data) {
+    namco_sound_t* snd = &sys->sound;
+    switch (addr) {
+        case NAMCO_ADDR_SOUND_V1_FC0:       _NAMCO_SET_NIBBLE_0(snd->voice[0].counter, data); break;
+        case NAMCO_ADDR_SOUND_V1_FC1:       _NAMCO_SET_NIBBLE_1(snd->voice[0].counter, data); break;
+        case NAMCO_ADDR_SOUND_V1_FC2:       _NAMCO_SET_NIBBLE_2(snd->voice[0].counter, data); break;
+        case NAMCO_ADDR_SOUND_V1_FC3:       _NAMCO_SET_NIBBLE_3(snd->voice[0].counter, data); break;
+        case NAMCO_ADDR_SOUND_V1_FC4:       _NAMCO_SET_NIBBLE_4(snd->voice[0].counter, data); break;
+        case NAMCO_ADDR_SOUND_V1_WAVE:      snd->voice[0].waveform = data & 7; break;
+        case NAMCO_ADDR_SOUND_V2_FC1:       _NAMCO_SET_NIBBLE_1(snd->voice[1].counter, data); break;
+        case NAMCO_ADDR_SOUND_V2_FC2:       _NAMCO_SET_NIBBLE_2(snd->voice[1].counter, data); break;
+        case NAMCO_ADDR_SOUND_V2_FC3:       _NAMCO_SET_NIBBLE_3(snd->voice[1].counter, data); break;
+        case NAMCO_ADDR_SOUND_V2_FC4:       _NAMCO_SET_NIBBLE_4(snd->voice[1].counter, data); break;
+        case NAMCO_ADDR_SOUND_V2_WAVE:      snd->voice[1].waveform = data & 7; break;
+        case NAMCO_ADDR_SOUND_V3_FC1:       _NAMCO_SET_NIBBLE_1(snd->voice[2].counter, data); break;
+        case NAMCO_ADDR_SOUND_V3_FC2:       _NAMCO_SET_NIBBLE_2(snd->voice[2].counter, data); break;
+        case NAMCO_ADDR_SOUND_V3_FC3:       _NAMCO_SET_NIBBLE_3(snd->voice[2].counter, data); break;
+        case NAMCO_ADDR_SOUND_V3_FC4:       _NAMCO_SET_NIBBLE_4(snd->voice[2].counter, data); break;
+        case NAMCO_ADDR_SOUND_V3_WAVE:      snd->voice[2].waveform = data & 7; break;
+        case NAMCO_ADDR_SOUND_V1_FQ0:       _NAMCO_SET_NIBBLE_0(snd->voice[0].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V1_FQ1:       _NAMCO_SET_NIBBLE_1(snd->voice[0].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V1_FQ2:       _NAMCO_SET_NIBBLE_2(snd->voice[0].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V1_FQ3:       _NAMCO_SET_NIBBLE_3(snd->voice[0].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V1_FQ4:       _NAMCO_SET_NIBBLE_4(snd->voice[0].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V1_VOLUME:    snd->voice[0].volume = data & 0xF; break;
+        case NAMCO_ADDR_SOUND_V2_FQ1:       _NAMCO_SET_NIBBLE_1(snd->voice[1].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V2_FQ2:       _NAMCO_SET_NIBBLE_2(snd->voice[1].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V2_FQ3:       _NAMCO_SET_NIBBLE_3(snd->voice[1].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V2_FQ4:       _NAMCO_SET_NIBBLE_4(snd->voice[1].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V2_VOLUME:    snd->voice[1].volume = data & 0xF; break;
+        case NAMCO_ADDR_SOUND_V3_FQ1:       _NAMCO_SET_NIBBLE_1(snd->voice[2].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V3_FQ2:       _NAMCO_SET_NIBBLE_2(snd->voice[2].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V3_FQ3:       _NAMCO_SET_NIBBLE_3(snd->voice[2].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V3_FQ4:       _NAMCO_SET_NIBBLE_4(snd->voice[2].frequency, data); break;
+        case NAMCO_ADDR_SOUND_V3_VOLUME:    snd->voice[2].volume = data & 0xF; break;
+    }
+}
+
+static void _namco_sound_tick(namco_t* sys, int num_ticks) {
+    namco_sound_t* snd = &sys->sound;
     /* tick the sound chip? */
-    sys->sound.tick_counter -= num_ticks;
-    if (sys->sound.tick_counter < 0) {
-        sys->sound.tick_counter += NAMCO_SOUND_PERIOD;
+    snd->tick_counter -= num_ticks;
+    if (snd->tick_counter < 0) {
+        /* handle 96KHz tick */
+        snd->tick_counter += NAMCO_SOUND_PERIOD / NAMCO_SOUND_OVERSAMPLE;
+        for (int i = 0; i < 3; i++) {
+            if ((snd->voice[i].frequency > 0) && (sys->sound_enable & 1)) {
+                snd->voice[i].counter += (snd->voice[i].frequency / NAMCO_SOUND_OVERSAMPLE);
+                /* lookup current 4-bit sample from waveform number and the topmost 5
+                   bits of the 20-bit sample counter, multiple with 4-bit volume
+                */
+                uint32_t smp_index = ((snd->voice[i].waveform<<5) | ((snd->voice[i].counter>>15) & 0x1F)) & 0xFF;
+                /* integer sample value now 7-bits plus sign bit */
+                int val = (((int)(snd->rom[0][smp_index] & 0xF)) - 8) * snd->voice[i].volume;
+                snd->voice[i].sample += (float)val;
+            }
+            snd->voice[i].sample_div += 128.0f;
+        }
     }
 
     /* generate a new sample? */
-    sys->sound.sample_counter -= num_ticks;
-    if (sys->sound.sample_counter < 0) {
-        sys->sound.sample_counter += sys->sound.sample_period;
+    snd->sample_counter -= (num_ticks * NAMCO_SAMPLE_SCALE);
+    if (snd->sample_counter < 0) {
+        snd->sample_counter += snd->sample_period;
         float sm = 0.0f;
         for (int i = 0; i < 3; i++) {
-            sm += sys->sound.voice[i].val & 0xF;
-        }
-        sm = sm * sys->sound.volume * 0.33333f;
-        sys->sound.sample_buffer[sys->sound.sample_pos++] = sm;
-        if (sys->sound.sample_pos == sys->sound.num_samples) {
-            if (sys->sound.callback) {
-                sys->sound.callback(sys->sound.sample_buffer, sys->sound.num_samples, sys->user_data);
+            if (snd->voice[i].sample_div > 0.0f) {
+                snd->voice[i].sample /= snd->voice[i].sample_div;
+                snd->voice[i].sample_div = 128.0f;
+                sm += snd->voice[i].sample;
             }
-            sys->sound.sample_pos = 0;
+        }
+        sm *= snd->volume;// * 0.33333f;
+        snd->sample_buffer[snd->sample_pos++] = sm;
+        if (snd->sample_pos == snd->num_samples) {
+            if (snd->callback) {
+                snd->callback(snd->sample_buffer, snd->num_samples, sys->user_data);
+            }
+            snd->sample_pos = 0;
         }
     }
 }
