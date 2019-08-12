@@ -260,7 +260,12 @@ void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* ui_desc) {
         desc.y = y;
         ui_memmap_init(&ui->memmap, &desc);
         ui_memmap_layer(&ui->memmap, "Main");
-            ui_memmap_region(&ui->memmap, "FIXME", 0x0000, 0x2000, true);
+            #if defined(NAMCO_PACMAN)
+                ui_memmap_region(&ui->memmap, "ROM", 0x0000, 0x4000, true);
+                ui_memmap_region(&ui->memmap, "Video RAM", 0x4000, 0x0400, true);
+                ui_memmap_region(&ui->memmap, "Color RAM", 0x4400, 0x0400, true);
+                ui_memmap_region(&ui->memmap, "RAM", 0x4C00, 0x0400, true);
+            #endif
     }
     x += dx; y += dy;
     {

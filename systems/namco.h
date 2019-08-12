@@ -65,18 +65,18 @@ extern "C" {
 #define NAMCO_DEFAULT_AUDIO_SAMPLES (128)
 
 /* input bits (use with namco_input_set() and namco_input_clear()) */
-#define NAMCO_P1_JOYSTICK_UP    (1<<0)
-#define NAMCO_P1_JOYSTICK_LEFT  (1<<1)
-#define NAMCO_P1_JOYSTICK_RIGHT (1<<2)
-#define NAMCO_P1_JOYSTICK_DOWN  (1<<3)
-#define NAMCO_P1_COIN           (1<<4)
-#define NAMCO_P1_START          (1<<5)
-#define NAMCO_P2_JOYSTICK_UP    (1<<6)
-#define NAMCO_P2_JOYSTICK_LEFT  (1<<7)
-#define NAMCO_P2_JOYSTICK_RIGHT (1<<8)
-#define NAMCO_P2_JOYSTICK_DOWN  (1<<9)
-#define NAMCO_P2_COIN           (1<<10)
-#define NAMCO_P2_START          (1<<11)
+#define NAMCO_INPUT_P1_JOYSTICK_UP    (1<<0)
+#define NAMCO_INPUT_P1_JOYSTICK_LEFT  (1<<1)
+#define NAMCO_INPUT_P1_JOYSTICK_RIGHT (1<<2)
+#define NAMCO_INPUT_P1_JOYSTICK_DOWN  (1<<3)
+#define NAMCO_INPUT_P1_COIN           (1<<4)
+#define NAMCO_INPUT_P1_START          (1<<5)
+#define NAMCO_INPUT_P2_JOYSTICK_UP    (1<<6)
+#define NAMCO_INPUT_P2_JOYSTICK_LEFT  (1<<7)
+#define NAMCO_INPUT_P2_JOYSTICK_RIGHT (1<<8)
+#define NAMCO_INPUT_P2_JOYSTICK_DOWN  (1<<9)
+#define NAMCO_INPUT_P2_COIN           (1<<10)
+#define NAMCO_INPUT_P2_START          (1<<11)
 
 /* audio sample-data callback */
 typedef void (*namco_audio_callback_t)(const float* samples, int num_samples, void* user_data);
@@ -133,6 +133,7 @@ typedef struct {
     int rom_sound_0100_01FF_size;
 } namco_desc_t;
 
+/* audio state */
 typedef struct {
     int tick_counter;
     int sample_period;
@@ -619,7 +620,9 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
     return pins & Z80_PIN_MASK;
 }
 
-/* https://www.walkofmind.com/programming/pie/video_memory.htm */
+/* get video memory offset from x/y coords:
+    https://www.walkofmind.com/programming/pie/video_memory.htm
+*/
 static uint16_t _namco_video_offset(uint32_t x, uint32_t y) {
     uint16_t offset = 0;
     x -= 2;
@@ -633,7 +636,7 @@ static uint16_t _namco_video_offset(uint32_t x, uint32_t y) {
     return offset;
 }
 
-/* 8x4 tile decoder */
+/* 8x4 video tile decoder (used both for background tiles and sprites) */
 static inline void _namco_8x4(
     uint32_t* pixel_base,
     uint8_t* tile_base,
@@ -674,6 +677,7 @@ static inline void _namco_8x4(
     }
 }
 
+/* decode background tiles */
 static void _namco_decode_chars(namco_t* sys) {
     uint32_t* pixel_base = sys->pixel_buffer;
     uint32_t* pal_base = sys->palette_cache;
@@ -689,6 +693,11 @@ static void _namco_decode_chars(namco_t* sys) {
     }
 }
 
+/* decode sprites:
+    FIXME:
+        - on Pacman hardware, only six sprites are functional (0 and 6 are broken)
+        - on Pacman hardware, the first two sprites have a 1 pixel offset
+*/
 static void _namco_decode_sprites(namco_t* sys) {
     uint32_t* pixel_base = sys->pixel_buffer;
     uint32_t* pal_base = sys->palette_cache;
@@ -718,7 +727,6 @@ static void _namco_decode_sprites(namco_t* sys) {
     }
 }
 
-
 void namco_decode_video(namco_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->pixel_buffer) {
@@ -729,80 +737,80 @@ void namco_decode_video(namco_t* sys) {
 
 void namco_input_set(namco_t* sys, uint32_t mask) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (mask & NAMCO_P1_JOYSTICK_UP) {
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_UP) {
         sys->in0 &= ~NAMCO_IN0_UP;
     }
-    if (mask & NAMCO_P1_JOYSTICK_LEFT) {
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_LEFT) {
         sys->in0 &= ~NAMCO_IN0_LEFT;
     }
-    if (mask & NAMCO_P1_JOYSTICK_RIGHT) {
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_RIGHT) {
         sys->in0 &= ~NAMCO_IN0_RIGHT;
     }
-    if (mask & NAMCO_P1_JOYSTICK_DOWN) {
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_DOWN) {
         sys->in0 &= ~NAMCO_IN0_DOWN;
     }
-    if (mask & NAMCO_P1_COIN) {
+    if (mask & NAMCO_INPUT_P1_COIN) {
         sys->in0 &= ~NAMCO_IN0_COIN1;
     }
-    if (mask & NAMCO_P1_START) {
+    if (mask & NAMCO_INPUT_P1_START) {
         sys->in1 &= ~NAMCO_IN1_P1_START;
     }
-    if (mask & NAMCO_P2_JOYSTICK_UP) {
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_UP) {
         sys->in1 &= ~NAMCO_IN1_UP;
     }
-    if (mask & NAMCO_P2_JOYSTICK_LEFT) {
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_LEFT) {
         sys->in1 &= ~NAMCO_IN1_LEFT;
     }
-    if (mask & NAMCO_P2_JOYSTICK_RIGHT) {
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_RIGHT) {
         sys->in1 &= ~NAMCO_IN1_RIGHT;
     }
-    if (mask & NAMCO_P2_JOYSTICK_DOWN) {
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_DOWN) {
         sys->in1 &= ~NAMCO_IN1_DOWN;
     }
-    if (mask & NAMCO_P2_COIN) {
+    if (mask & NAMCO_INPUT_P2_COIN) {
         sys->in0 &= ~NAMCO_IN0_COIN2;
     }
-    if (mask & NAMCO_P2_START) {
+    if (mask & NAMCO_INPUT_P2_START) {
         sys->in1 &= ~NAMCO_IN1_P2_START;
     }
 }
 
 void namco_input_clear(namco_t* sys, uint32_t mask) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (mask & NAMCO_P1_JOYSTICK_UP) {
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_UP) {
         sys->in0 |= NAMCO_IN0_UP;
     }
-    if (mask & NAMCO_P1_JOYSTICK_LEFT) {
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_LEFT) {
         sys->in0 |= NAMCO_IN0_LEFT;
     }
-    if (mask & NAMCO_P1_JOYSTICK_RIGHT) {
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_RIGHT) {
         sys->in0 |= NAMCO_IN0_RIGHT;
     }
-    if (mask & NAMCO_P1_JOYSTICK_DOWN) {
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_DOWN) {
         sys->in0 |= NAMCO_IN0_DOWN;
     }
-    if (mask & NAMCO_P1_COIN) {
+    if (mask & NAMCO_INPUT_P1_COIN) {
         sys->in0 |= NAMCO_IN0_COIN1;
     }
-    if (mask & NAMCO_P1_START) {
+    if (mask & NAMCO_INPUT_P1_START) {
         sys->in0 |= NAMCO_IN1_P1_START;
     }
-    if (mask & NAMCO_P2_JOYSTICK_UP) {
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_UP) {
         sys->in1 |= NAMCO_IN1_UP;
     }
-    if (mask & NAMCO_P2_JOYSTICK_LEFT) {
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_LEFT) {
         sys->in1 |= NAMCO_IN1_LEFT;
     }
-    if (mask & NAMCO_P2_JOYSTICK_RIGHT) {
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_RIGHT) {
         sys->in1 |= NAMCO_IN1_RIGHT;
     }
-    if (mask & NAMCO_P2_JOYSTICK_DOWN) {
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_DOWN) {
         sys->in1 |= NAMCO_IN1_DOWN;
     }
-    if (mask & NAMCO_P2_COIN) {
+    if (mask & NAMCO_INPUT_P2_COIN) {
         sys->in0 |= NAMCO_IN0_COIN2;
     }
-    if (mask & NAMCO_P2_START) {
+    if (mask & NAMCO_INPUT_P2_START) {
         sys->in1 |= NAMCO_IN1_P2_START;
     }
 }
