@@ -159,9 +159,9 @@ typedef struct {
     bool valid;
     z80_t cpu;
     clk_t clk;
-    uint8_t in0;
-    uint8_t in1;
-    uint8_t dsw1;
+    uint8_t in0;    /* inverted bits (active-low) */
+    uint8_t in1;    /* inverted bits (active-low) */
+    uint8_t dsw1;   /* dip-switches as-is (active-high) */
     int vsync_count;
     uint8_t int_vector;
     uint8_t int_enable;
@@ -239,7 +239,7 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_IN1_BOARD_TEST    (1<<4)
 #define NAMCO_IN1_P1_START      (1<<5)
 #define NAMCO_IN1_P2_START      (1<<6)
-/* DSW1 bits (active low) */
+/* DSW1 bits (active high) */
 #define NAMCO_DSW1_COINS_MASK       (3<<0)
 #define NAMCO_DSW1_COINS_FREE       (0)     /* free play */
 #define NAMCO_DSW1_COINS_1C1G       (1<<0)  /* 1 coin 1 game */
@@ -425,8 +425,8 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
     /* FIXME: setup WSG */
 
     /* memory mapped IO config */
-    sys->in0 = 0xFF;
-    sys->in1 = 0xFF;
+    sys->in0 = 0x00;
+    sys->in1 = 0x00;
     sys->dsw1 = NAMCO_DSW1_DEFAULT;
 
     /* memory map:
@@ -589,10 +589,10 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                 switch (addr) {
                     /* FIXME: IN0, IN1, DSW1 are mirrored for 0x40 bytes */
                     case NAMCO_ADDR_IN0:
-                        data = sys->in0;
+                        data = ~sys->in0;
                         break;
                     case NAMCO_ADDR_IN1:
-                        data = sys->in1;
+                        data = ~sys->in1;
                         break;
                     case NAMCO_ADDR_DSW1:
                         data = sys->dsw1;
@@ -600,6 +600,7 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                     default:
                         break;
                 }
+printf("RD: %04X: %02X\n", addr, data);
                 Z80_SET_DATA(pins, data);
             }
         }
@@ -738,6 +739,46 @@ void namco_decode_video(namco_t* sys) {
 void namco_input_set(namco_t* sys, uint32_t mask) {
     CHIPS_ASSERT(sys && sys->valid);
     if (mask & NAMCO_INPUT_P1_JOYSTICK_UP) {
+        sys->in0 |= NAMCO_IN0_UP;
+    }
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_LEFT) {
+        sys->in0 |= NAMCO_IN0_LEFT;
+    }
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_RIGHT) {
+        sys->in0 |= NAMCO_IN0_RIGHT;
+    }
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_DOWN) {
+        sys->in0 |= NAMCO_IN0_DOWN;
+    }
+    if (mask & NAMCO_INPUT_P1_COIN) {
+        sys->in0 |= NAMCO_IN0_COIN1;
+    }
+    if (mask & NAMCO_INPUT_P1_START) {
+        sys->in1 |= NAMCO_IN1_P1_START;
+    }
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_UP) {
+        sys->in1 |= NAMCO_IN1_UP;
+    }
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_LEFT) {
+        sys->in1 |= NAMCO_IN1_LEFT;
+    }
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_RIGHT) {
+        sys->in1 |= NAMCO_IN1_RIGHT;
+    }
+    if (mask & NAMCO_INPUT_P2_JOYSTICK_DOWN) {
+        sys->in1 |= NAMCO_IN1_DOWN;
+    }
+    if (mask & NAMCO_INPUT_P2_COIN) {
+        sys->in0 |= NAMCO_IN0_COIN2;
+    }
+    if (mask & NAMCO_INPUT_P2_START) {
+        sys->in1 |= NAMCO_IN1_P2_START;
+    }
+}
+
+void namco_input_clear(namco_t* sys, uint32_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (mask & NAMCO_INPUT_P1_JOYSTICK_UP) {
         sys->in0 &= ~NAMCO_IN0_UP;
     }
     if (mask & NAMCO_INPUT_P1_JOYSTICK_LEFT) {
@@ -772,46 +813,6 @@ void namco_input_set(namco_t* sys, uint32_t mask) {
     }
     if (mask & NAMCO_INPUT_P2_START) {
         sys->in1 &= ~NAMCO_IN1_P2_START;
-    }
-}
-
-void namco_input_clear(namco_t* sys, uint32_t mask) {
-    CHIPS_ASSERT(sys && sys->valid);
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_UP) {
-        sys->in0 |= NAMCO_IN0_UP;
-    }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_LEFT) {
-        sys->in0 |= NAMCO_IN0_LEFT;
-    }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_RIGHT) {
-        sys->in0 |= NAMCO_IN0_RIGHT;
-    }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_DOWN) {
-        sys->in0 |= NAMCO_IN0_DOWN;
-    }
-    if (mask & NAMCO_INPUT_P1_COIN) {
-        sys->in0 |= NAMCO_IN0_COIN1;
-    }
-    if (mask & NAMCO_INPUT_P1_START) {
-        sys->in0 |= NAMCO_IN1_P1_START;
-    }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_UP) {
-        sys->in1 |= NAMCO_IN1_UP;
-    }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_LEFT) {
-        sys->in1 |= NAMCO_IN1_LEFT;
-    }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_RIGHT) {
-        sys->in1 |= NAMCO_IN1_RIGHT;
-    }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_DOWN) {
-        sys->in1 |= NAMCO_IN1_DOWN;
-    }
-    if (mask & NAMCO_INPUT_P2_COIN) {
-        sys->in0 |= NAMCO_IN0_COIN2;
-    }
-    if (mask & NAMCO_INPUT_P2_START) {
-        sys->in1 |= NAMCO_IN1_P2_START;
     }
 }
 
