@@ -600,7 +600,6 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                     default:
                         break;
                 }
-printf("RD: %04X: %02X\n", addr, data);
                 Z80_SET_DATA(pins, data);
             }
         }
