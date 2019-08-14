@@ -2,8 +2,6 @@
 /*#
     # namco.h
 
-    WIP!
-
     Pacman / Pengo arcade machine emulator in a C header.
 
     MAME used as reference.
