@@ -28,7 +28,7 @@
     NAMCO_PACMAN    - configure the emulator as Pacman arcade machine
     NAMCO_PENGO     - configure the emulator as Pengo arcade machine
 
-    You need to include the following headers before including bombjack.h:
+    You need to include the following headers before including namco.h:
 
     - chips/z80.h
     - chips/clk.h
