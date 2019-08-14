@@ -36,6 +36,11 @@
     - chips/clk.h
     - chips/mem.h
 
+    For an example implementation, see:
+
+    https://github.com/floooh/chips-test/blob/master/examples/sokol/pacman.c
+    https://github.com/floooh/chips-test/blob/master/examples/sokol/pengo.c
+
     ## zlib/libpng license
 
     Copyright (c) 2019 Andre Weissflog
@@ -65,18 +70,20 @@ extern "C" {
 #define NAMCO_DEFAULT_AUDIO_SAMPLES (128)
 
 /* input bits (use with namco_input_set() and namco_input_clear()) */
-#define NAMCO_INPUT_P1_JOYSTICK_UP    (1<<0)
-#define NAMCO_INPUT_P1_JOYSTICK_LEFT  (1<<1)
-#define NAMCO_INPUT_P1_JOYSTICK_RIGHT (1<<2)
-#define NAMCO_INPUT_P1_JOYSTICK_DOWN  (1<<3)
-#define NAMCO_INPUT_P1_COIN           (1<<4)
-#define NAMCO_INPUT_P1_START          (1<<5)
-#define NAMCO_INPUT_P2_JOYSTICK_UP    (1<<6)
-#define NAMCO_INPUT_P2_JOYSTICK_LEFT  (1<<7)
-#define NAMCO_INPUT_P2_JOYSTICK_RIGHT (1<<8)
-#define NAMCO_INPUT_P2_JOYSTICK_DOWN  (1<<9)
-#define NAMCO_INPUT_P2_COIN           (1<<10)
-#define NAMCO_INPUT_P2_START          (1<<11)
+#define NAMCO_INPUT_P1_UP       (1<<0)
+#define NAMCO_INPUT_P1_LEFT     (1<<1)
+#define NAMCO_INPUT_P1_RIGHT    (1<<2)
+#define NAMCO_INPUT_P1_DOWN     (1<<3)
+#define NAMCO_INPUT_P1_BUTTON   (1<<4)
+#define NAMCO_INPUT_P1_COIN     (1<<5)
+#define NAMCO_INPUT_P1_START    (1<<6)
+#define NAMCO_INPUT_P2_UP       (1<<7)
+#define NAMCO_INPUT_P2_LEFT     (1<<8)
+#define NAMCO_INPUT_P2_RIGHT    (1<<9)
+#define NAMCO_INPUT_P2_DOWN     (1<<10)
+#define NAMCO_INPUT_P2_BUTTON   (1<<11)
+#define NAMCO_INPUT_P2_COIN     (1<<12)
+#define NAMCO_INPUT_P2_START    (1<<13)
 
 /* audio sample-data callback */
 typedef void (*namco_audio_callback_t)(const float* samples, int num_samples, void* user_data);
@@ -105,10 +112,10 @@ typedef struct {
     const void* rom_cpu_5000_5FFF;          /* Pengo only */
     const void* rom_cpu_6000_6FFF;          /* Pengo only */
     const void* rom_cpu_7000_7FFF;          /* Pengo only */
-    const void* rom_gfx_0000_0FFF;          /* Pacman+Pengo */
-    const void* rom_gfx_1000_1FFF;          /* Pacman+Pengo */
-    const void* rom_gfx_2000_2FFF;          /* Pengo only */
-    const void* rom_gfx_3000_3FFF;          /* Pengo only */
+    const void* rom_gfx_0000_0FFF;          /* Pacman only */
+    const void* rom_gfx_1000_1FFF;          /* Pacman only */
+    const void* rom_gfx_0000_1FFF;          /* Pengo only */
+    const void* rom_gfx_2000_3FFF;          /* Pengo only */
     const void* rom_prom_0000_001F;         /* Pacman+Pengo */
     const void* rom_prom_0020_011F;         /* Pacman only */
     const void* rom_prom_0020_041F;         /* Pengo only */
@@ -124,8 +131,8 @@ typedef struct {
     int rom_cpu_7000_7FFF_size;
     int rom_gfx_0000_0FFF_size;
     int rom_gfx_1000_1FFF_size;
-    int rom_gfx_2000_2FFF_size;
-    int rom_gfx_3000_3FFF_size;
+    int rom_gfx_0000_1FFF_size;
+    int rom_gfx_2000_3FFF_size;
     int rom_prom_0000_001F_size;
     int rom_prom_0020_011F_size;
     int rom_prom_0020_041F_size;
@@ -141,16 +148,16 @@ typedef struct {
     float volume;
     struct {
         uint32_t frequency; /* 20-bit frequency */
-        uint32_t counter;   /* 20-bit counter */
+        uint32_t counter;   /* 20-bit counter (top 5 bits are index into 32-byte wave table) */
         uint8_t waveform;   /* 3-bit waveform */
         uint8_t volume;     /* 4-bit volume */
         float sample;       /* accumulated sample value */
         float sample_div  ; /* oversampling divider */
     } voice[3];
+    uint8_t rom[2][0x0100]; /* wave table ROM */
     int num_samples;
     int sample_pos;
     namco_audio_callback_t callback;
-    uint8_t rom[2][0x0100];
     float sample_buffer[NAMCO_MAX_AUDIO_SAMPLES];
 } namco_sound_t;
 
@@ -162,23 +169,27 @@ typedef struct {
     uint8_t in0;    /* inverted bits (active-low) */
     uint8_t in1;    /* inverted bits (active-low) */
     uint8_t dsw1;   /* dip-switches as-is (active-high) */
+    uint8_t dsw2;   /* Pengo only */
     int vsync_count;
-    uint8_t int_vector;
+    uint8_t int_vector;     /* IM2 interrupt vector set with OUT on port 0 */
     uint8_t int_enable;
     uint8_t sound_enable;
-    uint8_t flip_screen;
-    uint8_t sprite_coords[16];
+    uint8_t flip_screen;    /* screen-flip (for cocktail-cabinet) is not implemented */
+    uint8_t pal_select;     /* Pengo only */
+    uint8_t clut_select;    /* Pengo only */
+    uint8_t tile_select;    /* Pengo only */
+    uint8_t sprite_coords[16];      /* 8 sprites, uint8_t x, uint8_t y */
     mem_t mem;
     uint32_t* pixel_buffer;
-    uint32_t palette_cache[256];
+    uint32_t palette_cache[512];    /* precomputed RGBA values, Pacman: 256 entries , Pengo: 512 entries*/
     void* user_data;
     namco_sound_t sound;
     uint8_t video_ram[0x0400];
     uint8_t color_ram[0x0400];
-    uint8_t main_ram[0x0800];
-    uint8_t rom_cpu[8][0x1000];
-    uint8_t rom_gfx[4][0x1000];
-    uint8_t rom_prom[0x0420];
+    uint8_t main_ram[0x0800];       /* Pacman: 1 KB, Pengo: 2 KB */
+    uint8_t rom_cpu[0x8000];        /* program ROM: Pacman: 16 KB, Pengo: 32 KB */
+    uint8_t rom_gfx[0x4000];        /* tile ROM: Pacman: 8 KB, Pengo: 16 KB*/
+    uint8_t rom_prom[0x0420];       /* palette and color lookup ROM */
 } namco_t;
 
 /* initialize a new namco_t instance */
@@ -220,117 +231,162 @@ int namco_display_height(namco_t* sys);
 #endif
 
 #if defined NAMCO_PACMAN
-#define NAMCO_ADDR_MASK         (0x7FFF)    /* Pacman has only 15 addr pins wired */
-#define NAMCO_IOMAP_BASE        (0x5000)
-/* IN0 bits (active low) */
-#define NAMCO_IN0_UP            (1<<0)
-#define NAMCO_IN0_LEFT          (1<<1)
-#define NAMCO_IN0_RIGHT         (1<<2)
-#define NAMCO_IN0_DOWN          (1<<3)
-#define NAMCO_IN0_RACK_ADVANCE  (1<<4)
-#define NAMCO_IN0_COIN1         (1<<5)
-#define NAMCO_IN0_COIN2         (1<<6)
-#define NAMCO_IN0_CREDIT        (1<<7)
-/* IN1 bits (active low) */
-#define NAMCO_IN1_UP            (1<<0)
-#define NAMCO_IN1_LEFT          (1<<1)
-#define NAMCO_IN1_RIGHT         (1<<2)
-#define NAMCO_IN1_DOWN          (1<<3)
-#define NAMCO_IN1_BOARD_TEST    (1<<4)
-#define NAMCO_IN1_P1_START      (1<<5)
-#define NAMCO_IN1_P2_START      (1<<6)
-/* DSW1 bits (active high) */
-#define NAMCO_DSW1_COINS_MASK       (3<<0)
-#define NAMCO_DSW1_COINS_FREE       (0)     /* free play */
-#define NAMCO_DSW1_COINS_1C1G       (1<<0)  /* 1 coin 1 game */
-#define NAMCO_DSW1_COINS_1C2G       (2<<0)  /* 1 coin 2 games */
-#define NAMCO_DSW1_COINS_2C1G       (3<<0)  /* 2 coins 1 game */
-#define NAMCO_DSW1_LIVES_MASK       (3<<2)
-#define NAMCO_DSW1_LIVES_1          (0<<2)
-#define NAMCO_DSW1_LIVES_2          (1<<2)
-#define NAMCO_DSW1_LIVES_3          (2<<2)
-#define NAMCO_DSW1_LIVES_5          (3<<2)
-#define NAMCO_DSW1_EXTRALIFE_MASK   (3<<4)
-#define NAMCO_DSW1_EXTRALIFE_10K    (0<<4)
-#define NAMCO_DSW1_EXTRALIFE_15K    (1<<4)
-#define NAMCO_DSW1_EXTRALIFE_20K    (2<<4)
-#define NAMCO_DSW1_EXTRALIFE_NONE   (3<<4)
-#define NAMCO_DSW1_DIFFICULTY_MASK  (1<<6)
-#define NAMCO_DSW1_DIFFICULTY_HARD  (0<<6)
-#define NAMCO_DSW1_DIFFICULTY_NORM  (1<<6)
-#define NAMCO_DSW1_GHOSTNAMES_MASK  (1<<7)
-#define NAMCO_DSW1_GHOSTNAMES_ALT   (0<<7)
-#define NAMCO_DSW1_GHOSTNAMES_NORM  (1<<7)
-#define NAMCO_DSW1_DEFAULT (NAMCO_DSW1_COINS_1C1G|NAMCO_DSW1_LIVES_3|NAMCO_DSW1_EXTRALIFE_15K|NAMCO_DSW1_DIFFICULTY_NORM|NAMCO_DSW1_GHOSTNAMES_NORM)
-/* memory mapped IO: read locations*/
-#define NAMCO_ADDR_IN0          (0x5000)
-#define NAMCO_ADDR_IN1          (0x5040)
-#define NAMCO_ADDR_DSW1         (0x5080)
-/* memory mapped IO: write locations */
-#define NAMCO_ADDR_SPRITES_ATTR     (0x4FF0)
-#define NAMCO_ADDR_INT_ENABLE       (0x5000)
-#define NAMCO_ADDR_SOUND_ENABLE     (0x5001)
-#define NAMCO_ADDR_FLIP_SCREEN      (0x5003)
-#define NAMCO_ADDR_SOUND_V1_FC0     (0x5040)    /* voice1 frequency counter nibble 0 */
-#define NAMCO_ADDR_SOUND_V1_FC1     (0x5041)    /*                          nibble 1 */
-#define NAMCO_ADDR_SOUND_V1_FC2     (0x5042)    /*                          nibble 2 */
-#define NAMCO_ADDR_SOUND_V1_FC3     (0x5043)    /*                          nibble 3 */
-#define NAMCO_ADDR_SOUND_V1_FC4     (0x5044)    /*                          nibble 4 */
-#define NAMCO_ADDR_SOUND_V1_WAVE    (0x5045)    /* voice1 wave form */
-#define NAMCO_ADDR_SOUND_V2_FC1     (0x5046)    /* voice2 frequency counter nibble 1 */
-#define NAMCO_ADDR_SOUND_V2_FC2     (0x5047)    /*                          nibble 2 */
-#define NAMCO_ADDR_SOUND_V2_FC3     (0x5048)    /*                          nibble 3 */
-#define NAMCO_ADDR_SOUND_V2_FC4     (0x5049)    /*                          nibble 4 */
-#define NAMCO_ADDR_SOUND_V2_WAVE    (0x504A)    /* voice2 wave form */
-#define NAMCO_ADDR_SOUND_V3_FC1     (0x504B)    /* voice3 frequency counter nibble 1 */
-#define NAMCO_ADDR_SOUND_V3_FC2     (0x504C)    /*                          nibble 2 */
-#define NAMCO_ADDR_SOUND_V3_FC3     (0x504D)    /*                          nibble 3 */
-#define NAMCO_ADDR_SOUND_V3_FC4     (0x504E)    /*                          nibble 4 */
-#define NAMCO_ADDR_SOUND_V3_WAVE    (0x504F)    /* voice3 wave form */
-#define NAMCO_ADDR_SOUND_V1_FQ0     (0x5050)    /* voice1 frequency nibble 0 */
-#define NAMCO_ADDR_SOUND_V1_FQ1     (0x5051)    /*                  nibble 1 */
-#define NAMCO_ADDR_SOUND_V1_FQ2     (0x5052)    /*                  nibble 2 */
-#define NAMCO_ADDR_SOUND_V1_FQ3     (0x5053)    /*                  nibble 3 */
-#define NAMCO_ADDR_SOUND_V1_FQ4     (0x5054)    /*                  nibble 4 */
-#define NAMCO_ADDR_SOUND_V1_VOLUME  (0x5055)    /* voice1 volume */
-#define NAMCO_ADDR_SOUND_V2_FQ1     (0x5056)    /* voice2 frequency nibble 1 */
-#define NAMCO_ADDR_SOUND_V2_FQ2     (0x5057)    /*                  nibble 2 */
-#define NAMCO_ADDR_SOUND_V2_FQ3     (0x5058)    /*                  nibble 3 */
-#define NAMCO_ADDR_SOUND_V2_FQ4     (0x5059)    /*                  nibble 4 */
-#define NAMCO_ADDR_SOUND_V2_VOLUME  (0x505A)    /* voice2 volume */
-#define NAMCO_ADDR_SOUND_V2_FQ1     (0x5056)    /* voice2 frequency nibble 1 */
-#define NAMCO_ADDR_SOUND_V2_FQ2     (0x5057)    /*                  nibble 2 */
-#define NAMCO_ADDR_SOUND_V2_FQ3     (0x5058)    /*                  nibble 3 */
-#define NAMCO_ADDR_SOUND_V2_FQ4     (0x5059)    /*                  nibble 4 */
-#define NAMCO_ADDR_SOUND_V2_VOLUME  (0x505A)    /* voice2 volume */
-#define NAMCO_ADDR_SOUND_V3_FQ1     (0x505B)    /* voice3 frequency nibble 1 */
-#define NAMCO_ADDR_SOUND_V3_FQ2     (0x505C)    /*                  nibble 2 */
-#define NAMCO_ADDR_SOUND_V3_FQ3     (0x505D)    /*                  nibble 3 */
-#define NAMCO_ADDR_SOUND_V3_FQ4     (0x505E)    /*                  nibble 4 */
-#define NAMCO_ADDR_SOUND_V3_VOLUME  (0x505F)    /* voice3 volume */
-
-#define NAMCO_ADDR_SPRITES_POS  (0x5060)
+    #define NAMCO_ADDR_MASK         (0x7FFF)    /* Pacman has only 15 addr pins wired */
+    #define NAMCO_IOMAP_BASE        (0x5000)
+    #define NAMCO_ADDR_SPRITES_ATTR (0x03F0)    /* offset in main_ram */
+    /* IN0 bits (active low) */
+    #define NAMCO_IN0_UP            (1<<0)
+    #define NAMCO_IN0_LEFT          (1<<1)
+    #define NAMCO_IN0_RIGHT         (1<<2)
+    #define NAMCO_IN0_DOWN          (1<<3)
+    #define NAMCO_IN0_RACK_ADVANCE  (1<<4)
+    #define NAMCO_IN0_COIN1         (1<<5)
+    #define NAMCO_IN0_COIN2         (1<<6)
+    #define NAMCO_IN0_CREDIT        (1<<7)
+    /* IN1 bits (active low) */
+    #define NAMCO_IN1_UP            (1<<0)
+    #define NAMCO_IN1_LEFT          (1<<1)
+    #define NAMCO_IN1_RIGHT         (1<<2)
+    #define NAMCO_IN1_DOWN          (1<<3)
+    #define NAMCO_IN1_BOARD_TEST    (1<<4)
+    #define NAMCO_IN1_P1_START      (1<<5)
+    #define NAMCO_IN1_P2_START      (1<<6)
+    /* DSW1 bits (active high) */
+    #define NAMCO_DSW1_COINS_MASK       (3<<0)
+    #define NAMCO_DSW1_COINS_FREE       (0)     /* free play */
+    #define NAMCO_DSW1_COINS_1C1G       (1<<0)  /* 1 coin 1 game */
+    #define NAMCO_DSW1_COINS_1C2G       (2<<0)  /* 1 coin 2 games */
+    #define NAMCO_DSW1_COINS_2C1G       (3<<0)  /* 2 coins 1 game */
+    #define NAMCO_DSW1_LIVES_MASK       (3<<2)
+    #define NAMCO_DSW1_LIVES_1          (0<<2)
+    #define NAMCO_DSW1_LIVES_2          (1<<2)
+    #define NAMCO_DSW1_LIVES_3          (2<<2)
+    #define NAMCO_DSW1_LIVES_5          (3<<2)
+    #define NAMCO_DSW1_EXTRALIFE_MASK   (3<<4)
+    #define NAMCO_DSW1_EXTRALIFE_10K    (0<<4)
+    #define NAMCO_DSW1_EXTRALIFE_15K    (1<<4)
+    #define NAMCO_DSW1_EXTRALIFE_20K    (2<<4)
+    #define NAMCO_DSW1_EXTRALIFE_NONE   (3<<4)
+    #define NAMCO_DSW1_DIFFICULTY_MASK  (1<<6)
+    #define NAMCO_DSW1_DIFFICULTY_HARD  (0<<6)
+    #define NAMCO_DSW1_DIFFICULTY_NORM  (1<<6)
+    #define NAMCO_DSW1_GHOSTNAMES_MASK  (1<<7)
+    #define NAMCO_DSW1_GHOSTNAMES_ALT   (0<<7)
+    #define NAMCO_DSW1_GHOSTNAMES_NORM  (1<<7)
+    #define NAMCO_DSW1_DEFAULT (NAMCO_DSW1_COINS_1C1G|NAMCO_DSW1_LIVES_3|NAMCO_DSW1_EXTRALIFE_15K|NAMCO_DSW1_DIFFICULTY_NORM|NAMCO_DSW1_GHOSTNAMES_NORM)
+    /* memory mapped IO: read locations*/
+    #define NAMCO_ADDR_IN0          (0x5000)
+    #define NAMCO_ADDR_IN1          (0x5040)
+    #define NAMCO_ADDR_DSW1         (0x5080)
+    /* memory mapped IO: write locations */
+    #define NAMCO_ADDR_INT_ENABLE       (0x5000)
+    #define NAMCO_ADDR_SOUND_ENABLE     (0x5001)
+    #define NAMCO_ADDR_FLIP_SCREEN      (0x5003)
+    #define NAMCO_ADDR_SOUND_BASE       (0x5040)
+    #define NAMCO_ADDR_SPRITES_COORD    (0x5060)
 #else /* PENGO */
-#define NAMCO_DEFAULT_DIP_SWITCHES  (0)
-#define NAMCO_ADDR_MASK         (0xFFFF)
-#define NAMCO_IOMAP_BASE        (0x9000)
-/* memory mapped IO: read locations*/
-#define NAMCO_ADDR_IN0          (0x90C0)
-#define NAMCO_ADDR_IN1          (0x9080)
-#define NAMCO_ADDR_DSW1         (0x9000)
-#define NAMCO_ADDR_DSW0         (0x9040)
-/* memory mapped IO: write locations */
-#define NAMCO_ADDR_SPRITES_ATTR (0x8FF2)
-#define NAMCO_ADDR_SOUND        (0x9005)
-#define NAMCO_ADDR_SPRITE_POS   (0x9022)
-#define NAMCO_ADDR_INT_ENABLE   (0x9040)
-#define NAMCO_ADDR_SOUND_ENABLE (0x9041)
-#define NAMCO_ADDR_PAL_SELECT   (0x9042)
-#define NAMCO_ADDR_FLIP_SCREEN  (0x9043)
-#define NAMCO_ADDR_CLUT_SELECT  (0x9046)
-#define NAMCO_ADDR_TILE_SELECT  (0x9047)
-#define NAMCO_ADDR_WATCHDOG     (0x9070)
+    #define NAMCO_ADDR_MASK         (0xFFFF)        /* Pengo has 16 address lines */
+    #define NAMCO_IOMAP_BASE        (0x9000)
+    #define NAMCO_ADDR_SPRITES_ATTR (0x07F0)        /* offset in main_ram */
+    /* IN0 bits (active low) */
+    #define NAMCO_IN0_UP            (1<<0)
+    #define NAMCO_IN0_DOWN          (1<<1)
+    #define NAMCO_IN0_LEFT          (1<<2)
+    #define NAMCO_IN0_RIGHT         (1<<3)
+    #define NAMCO_IN0_COIN1         (1<<4)
+    #define NAMCO_IN0_COIN2         (1<<5)
+    #define NAMCO_IN0_COIN3         (1<<6)          /* aka coin-aux, not supported */
+    #define NAMCO_IN0_BUTTON        (1<<7)
+    /* IN1 bits (active low) */
+    #define NAMCO_IN1_UP            (1<<0)
+    #define NAMCO_IN1_DOWN          (1<<1)
+    #define NAMCO_IN1_LEFT          (1<<2)
+    #define NAMCO_IN1_RIGHT         (1<<3)
+    #define NAMCO_IN1_BOARD_TEST    (1<<4)
+    #define NAMCO_IN1_P1_START      (1<<5)
+    #define NAMCO_IN1_P2_START      (1<<6)
+    #define NAMCO_IN1_BUTTON        (1<<7)
+    /* DSW1 bits (active high) */
+    #define NAMCO_DSW1_EXTRALIFE_MASK       (1<<0)
+    #define NAMCO_DSW1_EXTRALIFE_30K        (0<<0)
+    #define NAMCO_DSW1_EXTRALIFE_50K        (1<<0)
+    #define NAMCO_DSW1_DEMOSOUND_MASK       (1<<1)
+    #define NAMCO_DSW1_DEMOSOUND_ON         (0<<1)
+    #define NAMCO_DSW1_DEMOSOUND_OFF        (1<<1)
+    #define NAMCO_DSW1_CABINET_MASK         (1<<2)
+    #define NAMCO_DSW1_CABINET_UPRIGHT      (0<<2)
+    #define NAMCO_DSW1_CABINET_COCKTAIL     (1<<2)
+    #define NAMCO_DSW1_LIVES_MASK           (3<<3)
+    #define NAMCO_DSW1_LIVES_2              (0<<3)
+    #define NAMCO_DSW1_LIVES_3              (1<<3)
+    #define NAMCO_DSW1_LIVES_4              (2<<3)
+    #define NAMCO_DSW1_LIVES_5              (3<<3)
+    #define NAMCO_DSW1_RACKTEST_MASK        (1<<5)
+    #define NAMCO_DSW1_RACKTEST_ON          (0<<5)
+    #define NAMCO_DSW1_RACKTEST_OFF         (1<<5)
+    #define NAMCO_DSW1_DIFFICULTY_MASK      (3<<6)
+    #define NAMCO_DSW1_DIFFICULTY_EASY      (0<<6)
+    #define NAMCO_DSW1_DIFFICULTY_MEDIUM    (1<<6)
+    #define NAMCO_DSW1_DIFFICULTY_HARD      (2<<6)
+    #define NAMCO_DSW1_DIFFICULTY_HARDEST   (3<<6)
+    /* DSW2 bits (active high) */
+    #define NAMCO_DSW2_COINA_MASK           (0xF<<0)    /* 16 combinations of N coins -> M games */
+    #define NAMCO_DSW2_COINA_1C1G           (0xC<<0)
+    #define NAMCO_DSW2_COINB_MASK           (0xF<<4)
+    #define NAMCO_DSW2_COINB_1C1G           (0xC<<4)
+    #define NAMCO_DSW1_DEFAULT (NAMCO_DSW1_EXTRALIFE_30K|NAMCO_DSW1_DEMOSOUND_ON|NAMCO_DSW1_CABINET_UPRIGHT|NAMCO_DSW1_LIVES_3|NAMCO_DSW1_RACKTEST_OFF|NAMCO_DSW1_DIFFICULTY_MEDIUM)
+    #define NAMCO_DSW2_DEFAULT (NAMCO_DSW2_COINA_1C1G|NAMCO_DSW2_COINB_1C1G)
+    /* memory mapped IO: read locations*/
+    #define NAMCO_ADDR_IN0              (0x90C0)
+    #define NAMCO_ADDR_IN1              (0x9080)
+    #define NAMCO_ADDR_DSW1             (0x9040)
+    #define NAMCO_ADDR_DSW2             (0x9000)
+    /* memory mapped IO: write locations */
+    #define NAMCO_ADDR_SPRITES_COORD    (0x9020)
+    #define NAMCO_ADDR_INT_ENABLE       (0x9040)
+    #define NAMCO_ADDR_SOUND_ENABLE     (0x9041)
+    #define NAMCO_ADDR_PAL_SELECT       (0x9042)
+    #define NAMCO_ADDR_FLIP_SCREEN      (0x9043)
+    #define NAMCO_ADDR_CLUT_SELECT      (0x9046)
+    #define NAMCO_ADDR_TILE_SELECT      (0x9047)
+    #define NAMCO_ADDR_SOUND_BASE       (0x9000)
+    #define NAMCO_ADDR_WATCHDOG         (0x9070)
 #endif
+
+/* sound registers */
+#define NAMCO_ADDR_SOUND_V1_FC0     (NAMCO_ADDR_SOUND_BASE+0x00)    /* voice1 frequency counter nibble 0 */
+#define NAMCO_ADDR_SOUND_V1_FC1     (NAMCO_ADDR_SOUND_BASE+0x01)    /*                          nibble 1 */
+#define NAMCO_ADDR_SOUND_V1_FC2     (NAMCO_ADDR_SOUND_BASE+0x02)    /*                          nibble 2 */
+#define NAMCO_ADDR_SOUND_V1_FC3     (NAMCO_ADDR_SOUND_BASE+0x03)    /*                          nibble 3 */
+#define NAMCO_ADDR_SOUND_V1_FC4     (NAMCO_ADDR_SOUND_BASE+0x04)    /*                          nibble 4 */
+#define NAMCO_ADDR_SOUND_V1_WAVE    (NAMCO_ADDR_SOUND_BASE+0x05)    /* voice1 wave form */
+#define NAMCO_ADDR_SOUND_V2_FC1     (NAMCO_ADDR_SOUND_BASE+0x06)    /* voice2 frequency counter nibble 1 */
+#define NAMCO_ADDR_SOUND_V2_FC2     (NAMCO_ADDR_SOUND_BASE+0x07)    /*                          nibble 2 */
+#define NAMCO_ADDR_SOUND_V2_FC3     (NAMCO_ADDR_SOUND_BASE+0x08)    /*                          nibble 3 */
+#define NAMCO_ADDR_SOUND_V2_FC4     (NAMCO_ADDR_SOUND_BASE+0x09)    /*                          nibble 4 */
+#define NAMCO_ADDR_SOUND_V2_WAVE    (NAMCO_ADDR_SOUND_BASE+0x0A)    /* voice2 wave form */
+#define NAMCO_ADDR_SOUND_V3_FC1     (NAMCO_ADDR_SOUND_BASE+0x0B)    /* voice3 frequency counter nibble 1 */
+#define NAMCO_ADDR_SOUND_V3_FC2     (NAMCO_ADDR_SOUND_BASE+0x0C)    /*                          nibble 2 */
+#define NAMCO_ADDR_SOUND_V3_FC3     (NAMCO_ADDR_SOUND_BASE+0x0D)    /*                          nibble 3 */
+#define NAMCO_ADDR_SOUND_V3_FC4     (NAMCO_ADDR_SOUND_BASE+0x0E)    /*                          nibble 4 */
+#define NAMCO_ADDR_SOUND_V3_WAVE    (NAMCO_ADDR_SOUND_BASE+0x0F)    /* voice3 wave form */
+#define NAMCO_ADDR_SOUND_V1_FQ0     (NAMCO_ADDR_SOUND_BASE+0x10)    /* voice1 frequency nibble 0 */
+#define NAMCO_ADDR_SOUND_V1_FQ1     (NAMCO_ADDR_SOUND_BASE+0x11)    /*                  nibble 1 */
+#define NAMCO_ADDR_SOUND_V1_FQ2     (NAMCO_ADDR_SOUND_BASE+0x12)    /*                  nibble 2 */
+#define NAMCO_ADDR_SOUND_V1_FQ3     (NAMCO_ADDR_SOUND_BASE+0x13)    /*                  nibble 3 */
+#define NAMCO_ADDR_SOUND_V1_FQ4     (NAMCO_ADDR_SOUND_BASE+0x14)    /*                  nibble 4 */
+#define NAMCO_ADDR_SOUND_V1_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x15)    /* voice1 volume */
+#define NAMCO_ADDR_SOUND_V2_FQ1     (NAMCO_ADDR_SOUND_BASE+0x16)    /* voice2 frequency nibble 1 */
+#define NAMCO_ADDR_SOUND_V2_FQ2     (NAMCO_ADDR_SOUND_BASE+0x17)    /*                  nibble 2 */
+#define NAMCO_ADDR_SOUND_V2_FQ3     (NAMCO_ADDR_SOUND_BASE+0x18)    /*                  nibble 3 */
+#define NAMCO_ADDR_SOUND_V2_FQ4     (NAMCO_ADDR_SOUND_BASE+0x19)    /*                  nibble 4 */
+#define NAMCO_ADDR_SOUND_V2_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x1A)    /* voice2 volume */
+#define NAMCO_ADDR_SOUND_V3_FQ1     (NAMCO_ADDR_SOUND_BASE+0x1B)    /* voice3 frequency nibble 1 */
+#define NAMCO_ADDR_SOUND_V3_FQ2     (NAMCO_ADDR_SOUND_BASE+0x1C)    /*                  nibble 2 */
+#define NAMCO_ADDR_SOUND_V3_FQ3     (NAMCO_ADDR_SOUND_BASE+0x1D)    /*                  nibble 3 */
+#define NAMCO_ADDR_SOUND_V3_FQ4     (NAMCO_ADDR_SOUND_BASE+0x1E)    /*                  nibble 4 */
+#define NAMCO_ADDR_SOUND_V3_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x1F)    /* voice3 volume */
+
 #define NAMCO_MASTER_CLOCK      (18432000)
 #define NAMCO_CPU_CLOCK         (NAMCO_MASTER_CLOCK / 6)
 #define NAMCO_SOUND_PERIOD      (32)    /* sound is ticked every 32 CPU ticks */
@@ -372,11 +428,12 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
     CHIPS_ASSERT(desc->rom_cpu_6000_6FFF && (desc->rom_cpu_6000_6FFF_size == 0x1000));
     CHIPS_ASSERT(desc->rom_cpu_7000_7FFF && (desc->rom_cpu_7000_7FFF_size == 0x1000));
     #endif
+    #if defined(NAMCO_PACMAN)
     CHIPS_ASSERT(desc->rom_gfx_0000_0FFF && (desc->rom_gfx_0000_0FFF_size == 0x1000));
     CHIPS_ASSERT(desc->rom_gfx_1000_1FFF && (desc->rom_gfx_1000_1FFF_size == 0x1000));
-    #if defined(NAMCO_PENGO)
-    CHIPS_ASSERT(desc->rom_gfx_2000_2FFF && (desc->rom_gfx_2000_2FFF_size == 0x1000));
-    CHIPS_ASSERT(desc->rom_gfx_3000_3FFF && (desc->rom_gfx_3000_3FFF_size == 0x1000));
+    #else
+    CHIPS_ASSERT(desc->rom_gfx_0000_1FFF && (desc->rom_gfx_0000_1FFF_size == 0x2000));
+    CHIPS_ASSERT(desc->rom_gfx_2000_3FFF && (desc->rom_gfx_2000_3FFF_size == 0x2000));
     #endif
     CHIPS_ASSERT(desc->rom_prom_0000_001F && (desc->rom_prom_0000_001F_size == 0x0020));
     #if defined(NAMCO_PACMAN)
@@ -386,21 +443,22 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
     #endif
     CHIPS_ASSERT(desc->rom_sound_0000_00FF && (desc->rom_sound_0000_00FF_size == 0x0100));
     CHIPS_ASSERT(desc->rom_sound_0100_01FF && (desc->rom_sound_0100_01FF_size == 0x0100));
-    memcpy(sys->rom_cpu[0], desc->rom_cpu_0000_0FFF, 0x1000);
-    memcpy(sys->rom_cpu[1], desc->rom_cpu_1000_1FFF, 0x1000);
-    memcpy(sys->rom_cpu[2], desc->rom_cpu_2000_2FFF, 0x1000);
-    memcpy(sys->rom_cpu[3], desc->rom_cpu_3000_3FFF, 0x1000);
+    memcpy(&sys->rom_cpu[0x0000], desc->rom_cpu_0000_0FFF, 0x1000);
+    memcpy(&sys->rom_cpu[0x1000], desc->rom_cpu_1000_1FFF, 0x1000);
+    memcpy(&sys->rom_cpu[0x2000], desc->rom_cpu_2000_2FFF, 0x1000);
+    memcpy(&sys->rom_cpu[0x3000], desc->rom_cpu_3000_3FFF, 0x1000);
     #if defined(NAMCO_PENGO)
-    memcpy(sys->rom_cpu[4], desc->rom_cpu_4000_4FFF, 0x1000);
-    memcpy(sys->rom_cpu[5], desc->rom_cpu_5000_5FFF, 0x1000);
-    memcpy(sys->rom_cpu[6], desc->rom_cpu_6000_6FFF, 0x1000);
-    memcpy(sys->rom_cpu[7], desc->rom_cpu_7000_7FFF, 0x1000);
+    memcpy(&sys->rom_cpu[0x4000], desc->rom_cpu_4000_4FFF, 0x1000);
+    memcpy(&sys->rom_cpu[0x5000], desc->rom_cpu_5000_5FFF, 0x1000);
+    memcpy(&sys->rom_cpu[0x6000], desc->rom_cpu_6000_6FFF, 0x1000);
+    memcpy(&sys->rom_cpu[0x7000], desc->rom_cpu_7000_7FFF, 0x1000);
     #endif
-    memcpy(sys->rom_gfx[0], desc->rom_gfx_0000_0FFF, 0x1000);
-    memcpy(sys->rom_gfx[1], desc->rom_gfx_1000_1FFF, 0x1000);
-    #if defined(NAMCO_PENGO)
-    memcpy(sys->rom_gfx[2], desc->rom_gfx_2000_2FFF, 0x1000);
-    memcpy(sys->rom_gfx[3], desc->rom_gfx_3000_3FFF, 0x1000);
+    #if defined(NAMCO_PACMAN)
+    memcpy(&sys->rom_gfx[0x0000], desc->rom_gfx_0000_0FFF, 0x1000);
+    memcpy(&sys->rom_gfx[0x1000], desc->rom_gfx_1000_1FFF, 0x1000);
+    #else
+    memcpy(&sys->rom_gfx[0x0000], desc->rom_gfx_0000_1FFF, 0x2000);
+    memcpy(&sys->rom_gfx[0x2000], desc->rom_gfx_2000_3FFF, 0x2000);
     #endif
     memcpy(&sys->rom_prom[0], desc->rom_prom_0000_001F, 0x0020);
     #if defined(NAMCO_PACMAN)
@@ -422,12 +480,13 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
     cpu_desc.user_data = sys;
     z80_init(&sys->cpu, &cpu_desc);
 
-    /* FIXME: setup WSG */
-
     /* memory mapped IO config */
     sys->in0 = 0x00;
     sys->in1 = 0x00;
     sys->dsw1 = NAMCO_DSW1_DEFAULT;
+    #if defined(NAMCO_PENGO)
+    sys->dsw2 = NAMCO_DSW2_DEFAULT;
+    #endif
 
     /* memory map:
 
@@ -464,20 +523,20 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
 
     */
     mem_init(&sys->mem);
-    mem_map_rom(&sys->mem, 0, 0x0000, 0x1000, sys->rom_cpu[0]);
-    mem_map_rom(&sys->mem, 0, 0x1000, 0x1000, sys->rom_cpu[1]);
-    mem_map_rom(&sys->mem, 0, 0x2000, 0x1000, sys->rom_cpu[2]);
-    mem_map_rom(&sys->mem, 0, 0x3000, 0x1000, sys->rom_cpu[3]);
+    mem_map_rom(&sys->mem, 0, 0x0000, 0x1000, &sys->rom_cpu[0x0000]);
+    mem_map_rom(&sys->mem, 0, 0x1000, 0x1000, &sys->rom_cpu[0x1000]);
+    mem_map_rom(&sys->mem, 0, 0x2000, 0x1000, &sys->rom_cpu[0x2000]);
+    mem_map_rom(&sys->mem, 0, 0x3000, 0x1000, &sys->rom_cpu[0x3000]);
     #if defined(NAMCO_PACMAN)
         mem_map_ram(&sys->mem, 0, 0x4000, 0x0400, sys->video_ram);
         mem_map_ram(&sys->mem, 0, 0x4400, 0x0400, sys->color_ram);
         mem_map_ram(&sys->mem, 0, 0x4C00, 0x0400, sys->main_ram);
     #endif
     #if defined(NAMCO_PENGO)
-        mem_map_rom(&sys->mem, 0, 0x4000, 0x1000, sys->rom_cpu[4]);
-        mem_map_rom(&sys->mem, 0, 0x5000, 0x1000, sys->rom_cpu[5]);
-        mem_map_rom(&sys->mem, 0, 0x6000, 0x1000, sys->rom_cpu[6]);
-        mem_map_rom(&sys->mem, 0, 0x7000, 0x1000, sys->rom_cpu[7]);
+        mem_map_rom(&sys->mem, 0, 0x4000, 0x1000, &sys->rom_cpu[0x4000]);
+        mem_map_rom(&sys->mem, 0, 0x5000, 0x1000, &sys->rom_cpu[0x5000]);
+        mem_map_rom(&sys->mem, 0, 0x6000, 0x1000, &sys->rom_cpu[0x6000]);
+        mem_map_rom(&sys->mem, 0, 0x7000, 0x1000, &sys->rom_cpu[0x7000]);
         mem_map_ram(&sys->mem, 0, 0x8000, 0x0400, sys->video_ram);
         mem_map_ram(&sys->mem, 0, 0x8400, 0x0400, sys->color_ram);
         mem_map_ram(&sys->mem, 0, 0x8800, 0x0800, sys->main_ram);
@@ -503,6 +562,7 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
     for (int i = 0; i < 256; i++) {
         uint8_t pal_index = sys->rom_prom[i + 0x20] & 0xF;
         sys->palette_cache[i] = hw_colors[pal_index];
+        sys->palette_cache[256 + i] = hw_colors[0x10 | pal_index];
     }
 }
 
@@ -514,7 +574,6 @@ void namco_discard(namco_t* sys) {
 void namco_reset(namco_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     z80_reset(&sys->cpu);
-    //nwsg_reset(&sys->wsg);
 }
 
 void namco_exec(namco_t* sys, uint32_t micro_seconds) {
@@ -550,31 +609,31 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
             }
             else {
                 /* memory-mapped IO */
-                switch (addr & 0x00F0) {
-                    case 0x0000:
-                        switch (addr) {
-                            case NAMCO_ADDR_INT_ENABLE:
-                                sys->int_enable = data;
-                                break;
-                            case NAMCO_ADDR_SOUND_ENABLE:
-                                sys->sound_enable = data;
-                                break;
-                            case NAMCO_ADDR_FLIP_SCREEN:
-                                sys->flip_screen = data;
-                                break;
-                            /* start light, coint lockout, coin counter, watchdog all ignored */
-                        }
-                        break;
-                    case 0x0040:
-                    case 0x0050:
-                        /* sound registers */
-                        _namco_sound_wr(sys, addr, data);
-                        break;
-                        break;
-                    case 0x0060:
-                        /* sprite coords */
-                        sys->sprite_coords[addr & 0x000F] = data;
-                        break;
+                if (addr == NAMCO_ADDR_INT_ENABLE) {
+                    sys->int_enable = data & 1;
+                }
+                else if (addr == NAMCO_ADDR_SOUND_ENABLE) {
+                    sys->sound_enable = data & 1;
+                }
+                else if (addr == NAMCO_ADDR_FLIP_SCREEN) {
+                    sys->flip_screen = data & 1;
+                }
+                #if defined(NAMCO_PENGO)
+                else if (addr == NAMCO_ADDR_PAL_SELECT) {
+                    sys->pal_select = data & 1;
+                }
+                else if (addr == NAMCO_ADDR_CLUT_SELECT) {
+                    sys->clut_select = data & 1;
+                }
+                else if (addr == NAMCO_ADDR_TILE_SELECT) {
+                    sys->tile_select = data & 1;
+                }
+                #endif
+                else if ((addr >= NAMCO_ADDR_SOUND_BASE) && (addr < (NAMCO_ADDR_SOUND_BASE+0x20))) {
+                    _namco_sound_wr(sys, addr, data);
+                }
+                else if ((addr >= NAMCO_ADDR_SPRITES_COORD) && (addr < (NAMCO_ADDR_SPRITES_COORD+0x10))) {
+                    sys->sprite_coords[addr & 0xF] = data;
                 }
             }
         }
@@ -597,6 +656,11 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                     case NAMCO_ADDR_DSW1:
                         data = sys->dsw1;
                         break;
+                    #if defined(NAMCO_PENGO)
+                    case NAMCO_ADDR_DSW2:   /* Pengo only */
+                        data = sys->dsw2;
+                        break;
+                    #endif
                     default:
                         break;
                 }
@@ -680,34 +744,36 @@ static inline void _namco_8x4(
 /* decode background tiles */
 static void _namco_decode_chars(namco_t* sys) {
     uint32_t* pixel_base = sys->pixel_buffer;
-    uint32_t* pal_base = sys->palette_cache;
-    uint8_t* tile_base = &sys->rom_gfx[0][0];
+    uint32_t* pal_base = &sys->palette_cache[(sys->pal_select<<8)|(sys->clut_select<<7)];
+    uint8_t* tile_base = &sys->rom_gfx[0x0000] + (sys->tile_select * 0x2000);
     for (uint32_t y = 0; y < 28; y++) {
         for (uint32_t x = 0; x < 36; x++) {
             uint16_t offset = _namco_video_offset(x, y);
             uint8_t char_code = sys->video_ram[offset];
-            uint8_t color_code = sys->color_ram[offset] & 0x3F;
+            uint8_t color_code = sys->color_ram[offset] & 0x1F;
             _namco_8x4(pixel_base, tile_base, pal_base, 16, 8, x*8, y*8, char_code, color_code, true, false, false);
             _namco_8x4(pixel_base, tile_base, pal_base, 16, 0, x*8+4, y*8, char_code, color_code, true, false, false);
         }
     }
 }
 
-/* decode sprites:
-    FIXME:
-        - on Pacman hardware, only six sprites are functional (0 and 6 are broken)
-        - on Pacman hardware, the first two sprites have a 1 pixel offset
-*/
 static void _namco_decode_sprites(namco_t* sys) {
     uint32_t* pixel_base = sys->pixel_buffer;
-    uint32_t* pal_base = sys->palette_cache;
-    uint8_t* tile_base = &sys->rom_gfx[1][0];
-    for (int sprite_index = 6; sprite_index >= 1; --sprite_index) {
+    uint32_t* pal_base = &sys->palette_cache[(sys->pal_select<<8)|(sys->clut_select<<7)];
+    uint8_t* tile_base = &sys->rom_gfx[0x1000] + (sys->tile_select * 0x2000);
+    #if defined(NAMCO_PACMAN)
+    const int max_sprite = 6;
+    const int min_sprite = 1;
+    #else
+    const int max_sprite = 7;
+    const int min_sprite = 0;
+    #endif
+    for (int sprite_index = max_sprite; sprite_index >= min_sprite; --sprite_index) {
         uint32_t py = sys->sprite_coords[sprite_index*2 + 0] - 31;
         uint32_t px = 272 - sys->sprite_coords[sprite_index*2 + 1];
-        uint8_t shape = sys->main_ram[0x03F0 + sprite_index*2 + 0];
+        uint8_t shape = sys->main_ram[NAMCO_ADDR_SPRITES_ATTR + sprite_index*2 + 0];
         uint8_t char_code = shape>>2;
-        uint8_t color_code = sys->main_ram[0x03F0 + sprite_index*2 + 1];
+        uint8_t color_code = sys->main_ram[NAMCO_ADDR_SPRITES_ATTR + sprite_index*2 + 1];
         bool flip_x = shape & 1;
         bool flip_y = shape & 2;
         uint32_t fy0 = flip_y ? 8 : 0;
@@ -737,17 +803,20 @@ void namco_decode_video(namco_t* sys) {
 
 void namco_input_set(namco_t* sys, uint32_t mask) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_UP) {
+    if (mask & NAMCO_INPUT_P1_UP) {
         sys->in0 |= NAMCO_IN0_UP;
     }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_LEFT) {
+    if (mask & NAMCO_INPUT_P1_LEFT) {
         sys->in0 |= NAMCO_IN0_LEFT;
     }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_RIGHT) {
+    if (mask & NAMCO_INPUT_P1_RIGHT) {
         sys->in0 |= NAMCO_IN0_RIGHT;
     }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_DOWN) {
+    if (mask & NAMCO_INPUT_P1_DOWN) {
         sys->in0 |= NAMCO_IN0_DOWN;
+    }
+    if (mask & NAMCO_INPUT_P1_BUTTON) {
+        sys->in0 |= NAMCO_IN0_BUTTON;
     }
     if (mask & NAMCO_INPUT_P1_COIN) {
         sys->in0 |= NAMCO_IN0_COIN1;
@@ -755,17 +824,20 @@ void namco_input_set(namco_t* sys, uint32_t mask) {
     if (mask & NAMCO_INPUT_P1_START) {
         sys->in1 |= NAMCO_IN1_P1_START;
     }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_UP) {
+    if (mask & NAMCO_INPUT_P2_UP) {
         sys->in1 |= NAMCO_IN1_UP;
     }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_LEFT) {
+    if (mask & NAMCO_INPUT_P2_LEFT) {
         sys->in1 |= NAMCO_IN1_LEFT;
     }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_RIGHT) {
+    if (mask & NAMCO_INPUT_P2_RIGHT) {
         sys->in1 |= NAMCO_IN1_RIGHT;
     }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_DOWN) {
+    if (mask & NAMCO_INPUT_P2_DOWN) {
         sys->in1 |= NAMCO_IN1_DOWN;
+    }
+    if (mask & NAMCO_INPUT_P2_BUTTON) {
+        sys->in1 |= NAMCO_IN1_BUTTON;
     }
     if (mask & NAMCO_INPUT_P2_COIN) {
         sys->in0 |= NAMCO_IN0_COIN2;
@@ -777,17 +849,20 @@ void namco_input_set(namco_t* sys, uint32_t mask) {
 
 void namco_input_clear(namco_t* sys, uint32_t mask) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_UP) {
+    if (mask & NAMCO_INPUT_P1_UP) {
         sys->in0 &= ~NAMCO_IN0_UP;
     }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_LEFT) {
+    if (mask & NAMCO_INPUT_P1_LEFT) {
         sys->in0 &= ~NAMCO_IN0_LEFT;
     }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_RIGHT) {
+    if (mask & NAMCO_INPUT_P1_RIGHT) {
         sys->in0 &= ~NAMCO_IN0_RIGHT;
     }
-    if (mask & NAMCO_INPUT_P1_JOYSTICK_DOWN) {
+    if (mask & NAMCO_INPUT_P1_DOWN) {
         sys->in0 &= ~NAMCO_IN0_DOWN;
+    }
+    if (mask & NAMCO_INPUT_P1_BUTTON){
+        sys->in0 &= ~NAMCO_IN0_BUTTON;
     }
     if (mask & NAMCO_INPUT_P1_COIN) {
         sys->in0 &= ~NAMCO_IN0_COIN1;
@@ -795,17 +870,20 @@ void namco_input_clear(namco_t* sys, uint32_t mask) {
     if (mask & NAMCO_INPUT_P1_START) {
         sys->in1 &= ~NAMCO_IN1_P1_START;
     }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_UP) {
+    if (mask & NAMCO_INPUT_P2_UP) {
         sys->in1 &= ~NAMCO_IN1_UP;
     }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_LEFT) {
+    if (mask & NAMCO_INPUT_P2_LEFT) {
         sys->in1 &= ~NAMCO_IN1_LEFT;
     }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_RIGHT) {
+    if (mask & NAMCO_INPUT_P2_RIGHT) {
         sys->in1 &= ~NAMCO_IN1_RIGHT;
     }
-    if (mask & NAMCO_INPUT_P2_JOYSTICK_DOWN) {
+    if (mask & NAMCO_INPUT_P2_DOWN) {
         sys->in1 &= ~NAMCO_IN1_DOWN;
+    }
+    if (mask & NAMCO_INPUT_P2_BUTTON) {
+        sys->in1 &= ~NAMCO_IN1_BUTTON;
     }
     if (mask & NAMCO_INPUT_P2_COIN) {
         sys->in0 &= ~NAMCO_IN0_COIN2;
