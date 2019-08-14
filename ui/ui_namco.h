@@ -158,7 +158,7 @@ static uint8_t _ui_namco_mem_read(int layer, uint16_t addr, void* user_data) {
         case _UI_NAMCO_MEMLAYER_MAIN:
             return mem_rd(&ui->sys->mem, addr);
         case _UI_NAMCO_MEMLAYER_GFX:
-            return (addr < sizeof(ui->sys->rom_gfx)) ? ui->sys->rom_gfx[addr/0x1000][addr&0x0FFF] : 0xFF;
+            return (addr < sizeof(ui->sys->rom_gfx)) ? ui->sys->rom_gfx[addr] : 0xFF;
         case _UI_NAMCO_MEMLAYER_PROM:
             return (addr < sizeof(ui->sys->rom_prom)) ? ui->sys->rom_prom[addr] : 0xFF;
         case _UI_NAMCO_MEMLAYER_SOUND:
@@ -177,7 +177,7 @@ static void _ui_namco_mem_write(int layer, uint16_t addr, uint8_t data, void* us
             break;
         case _UI_NAMCO_MEMLAYER_GFX:
             if (addr < sizeof(ui->sys->rom_gfx)) {
-                ui->sys->rom_gfx[addr/0x1000][addr&0x0FFF] = data;
+                ui->sys->rom_gfx[addr] = data;
             }
             break;
         case _UI_NAMCO_MEMLAYER_PROM:
