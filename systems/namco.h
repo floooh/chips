@@ -813,9 +813,11 @@ void namco_input_set(namco_t* sys, uint32_t mask) {
     if (mask & NAMCO_INPUT_P1_DOWN) {
         sys->in0 |= NAMCO_IN0_DOWN;
     }
+    #if defined(NAMCO_PENGO)
     if (mask & NAMCO_INPUT_P1_BUTTON) {
         sys->in0 |= NAMCO_IN0_BUTTON;
     }
+    #endif
     if (mask & NAMCO_INPUT_P1_COIN) {
         sys->in0 |= NAMCO_IN0_COIN1;
     }
@@ -834,9 +836,11 @@ void namco_input_set(namco_t* sys, uint32_t mask) {
     if (mask & NAMCO_INPUT_P2_DOWN) {
         sys->in1 |= NAMCO_IN1_DOWN;
     }
+    #if defined(NAMCO_PENGO)
     if (mask & NAMCO_INPUT_P2_BUTTON) {
         sys->in1 |= NAMCO_IN1_BUTTON;
     }
+    #endif
     if (mask & NAMCO_INPUT_P2_COIN) {
         sys->in0 |= NAMCO_IN0_COIN2;
     }
@@ -859,9 +863,11 @@ void namco_input_clear(namco_t* sys, uint32_t mask) {
     if (mask & NAMCO_INPUT_P1_DOWN) {
         sys->in0 &= ~NAMCO_IN0_DOWN;
     }
+    #if defined(NAMCO_PENGO)
     if (mask & NAMCO_INPUT_P1_BUTTON){
         sys->in0 &= ~NAMCO_IN0_BUTTON;
     }
+    #endif
     if (mask & NAMCO_INPUT_P1_COIN) {
         sys->in0 &= ~NAMCO_IN0_COIN1;
     }
@@ -880,9 +886,11 @@ void namco_input_clear(namco_t* sys, uint32_t mask) {
     if (mask & NAMCO_INPUT_P2_DOWN) {
         sys->in1 &= ~NAMCO_IN1_DOWN;
     }
+    #if defined(NAMCO_PENGO)
     if (mask & NAMCO_INPUT_P2_BUTTON) {
         sys->in1 &= ~NAMCO_IN1_BUTTON;
     }
+    #endif
     if (mask & NAMCO_INPUT_P2_COIN) {
         sys->in0 &= ~NAMCO_IN0_COIN2;
     }
