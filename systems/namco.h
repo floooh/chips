@@ -719,13 +719,13 @@ static inline void _namco_8x4(
     for (uint32_t yy = 0; yy < 8; yy++, tile_index++) {
         uint32_t y = py + (yy ^ xor_y);
         if (y >= NAMCO_DISPLAY_HEIGHT) {
-            break;
+            continue;
         }
         int tile_index = char_code*tile_stride + tile_offset + yy;
         for (uint32_t xx = 0; xx < 4; xx++) {
             uint32_t x = px + (xx ^ xor_x);
             if (x >= NAMCO_DISPLAY_WIDTH) {
-                break;
+                continue;
             }
             uint8_t p2_hi = (tile_base[tile_index]>>(7-xx)) & 1;
             uint8_t p2_lo = (tile_base[tile_index]>>(3-xx)) & 1;
