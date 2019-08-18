@@ -169,9 +169,9 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
             }
         }
         if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("Current Scanline: %d", win->kc85->cur_scanline);
-            ImGui::Text("Scanline Period:  %d", win->kc85->scanline_period);
-            ImGui::Text("Scanline Tick:    %d", win->kc85->scanline_counter);
+            ImGui::Text("Vert Count:    %d", win->kc85->v_count);
+            ImGui::Text("Hori Tick:     %d", win->kc85->h_tick);
+            ImGui::Text("Hori Period:   %d", win->kc85->h_period);
         }
     }
     ImGui::End();
