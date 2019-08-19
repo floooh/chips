@@ -171,7 +171,6 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
         if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Vert Count:    %d", win->kc85->v_count);
             ImGui::Text("Hori Tick:     %d", win->kc85->h_tick);
-            ImGui::Text("Hori Period:   %d", win->kc85->h_period);
         }
     }
     ImGui::End();

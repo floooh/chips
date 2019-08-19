@@ -391,7 +391,6 @@ typedef struct {
     bool blink_flag;        /* foreground color blinking flag toggled by CTC */
 
     uint32_t h_tick;        /* video timing generator counter */
-    uint32_t h_period;
     uint32_t v_count;
 
     clk_t clk;
@@ -579,8 +578,6 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     beeper_init(&sys->beeper_1, freq_hz, audio_hz, audio_vol);
     beeper_init(&sys->beeper_2, freq_hz, audio_hz, audio_vol);
 
-    sys->h_period = (sys->type == KC85_TYPE_4) ? 113 : 112;
-
     /* expansion module system */
     _kc85_exp_init(sys);
 
@@ -695,6 +692,14 @@ static uint32_t _kc85_bg_pal[8] = {
     0xFFA0A0A0,      /* gray */
 };
 
+/* the KC85/4 HICOLOR palette */
+static uint32_t _kc85_hicolor[4] = {
+    0xFF000000,     /* black */
+    0xFF0000FF,     /* red */
+    0xFFFFFF00,     /* cyan */
+    0xFFFFFFFF,     /* white */
+};
+
 static inline void _kc85_decode_8pixels(uint32_t* ptr, uint8_t pixels, uint8_t colors, bool force_bg) {
     /*
         select foreground- and background color:
@@ -718,7 +723,7 @@ static inline void _kc85_decode_8pixels(uint32_t* ptr, uint8_t pixels, uint8_t c
     ptr[7] = pixels & 0x01 ? fg : bg;   
 }
 
-static uint64_t _kc85_tick_video(kc85_t* sys, int num_cpu_ticks, uint64_t cpu_pins) {
+static uint64_t _kc85_video_kc85_2_3(kc85_t* sys, int num_cpu_ticks, uint64_t cpu_pins) {
     /* emulate display needing on KC85/2 and /3, this happens when the
        CPU accesses video memory, which will force the background color
        a short duration
@@ -732,50 +737,38 @@ static uint64_t _kc85_tick_video(kc85_t* sys, int num_cpu_ticks, uint64_t cpu_pi
             cpu_access = true;
         }
     }
+    bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
     for (int i = 0; i < num_cpu_ticks; i++) {
         /* every 2 CPU ticks, 8 pixels are decoded */
         if (sys->h_tick & 1) {
             /* decode visible 8-pixel group */
             uint32_t x = sys->h_tick>>1;
             uint32_t y = sys->v_count;
-            bool force_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
             if (sys->pixel_buffer && (y < 256) && (x < 40)) {
                 uint32_t* dst_ptr = &(sys->pixel_buffer[y*_KC85_DISPLAY_WIDTH + x*8]);
-                uint8_t pixel_bits, color_bits;
-                if (KC85_TYPE_4 == sys->type) {
-                    uint32_t irm_index = (sys->io84 & 1) * 2;
-                    const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
-                    const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE + irm_index + 1];
-                    uint32_t offset = (x<<8) | y;
-                    pixel_bits = pixel_ram[offset];
-                    color_bits = color_ram[offset];
-                    force_bg = force_bg && (color_bits & 0x80);
+                uint32_t pixel_offset, color_offset;
+                if (x < 0x20) {
+                    /* left 256x256 area */
+                    pixel_offset = x | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>4)&0xF)<<9);
+                    color_offset = x | (((y>>2)&0x3f)<<5);
                 }
                 else {
-                    uint32_t pixel_offset, color_offset;
-                    if (x < 0x20) {
-                        /* left 256x256 area */
-                        pixel_offset = x | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>4)&0xF)<<9);
-                        color_offset = x | (((y>>2)&0x3f)<<5);
-                    }
-                    else {
-                        /* right 64x256 area */
-                        pixel_offset = 0x2000 + ((x&0x7) | (((y>>4)&0x3)<<3) | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>6)&0x3)<<9));
-                        color_offset = 0x0800 + ((x&0x7) | (((y>>4)&0x3)<<3) | (((y>>2)&0x3)<<5) | (((y>>6)&0x3)<<7));
-                    }
-                    const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE];
-                    const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE] + 0x2800;
-                    pixel_bits = pixel_ram[pixel_offset];
-                    color_bits = color_ram[color_offset];
-                    force_bg = (force_bg && (color_bits & 0x80)) | cpu_access;
+                    /* right 64x256 area */
+                    pixel_offset = 0x2000 + ((x&0x7) | (((y>>4)&0x3)<<3) | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>6)&0x3)<<9));
+                    color_offset = 0x0800 + ((x&0x7) | (((y>>4)&0x3)<<3) | (((y>>2)&0x3)<<5) | (((y>>6)&0x3)<<7));
                 }
+                const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE];
+                const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE] + 0x2800;
+                uint8_t pixel_bits = pixel_ram[pixel_offset];
+                uint8_t color_bits = color_ram[color_offset];
+                bool force_bg = (blink_bg && (color_bits & 0x80)) | cpu_access;
                 _kc85_decode_8pixels(dst_ptr, pixel_bits, color_bits, force_bg);
                 cpu_access = false;
             }
         }
         /* scanline and frame update */
         sys->h_tick++;
-        if (sys->h_tick >= sys->h_period) {
+        if (sys->h_tick >= 112) {
             sys->h_tick = 0;
             sys->v_count++;
             if (sys->v_count == 312) {
@@ -786,6 +779,92 @@ static uint64_t _kc85_tick_video(kc85_t* sys, int num_cpu_ticks, uint64_t cpu_pi
         }
     }
     return cpu_pins;
+}
+
+static uint64_t _kc85_video_kc85_4_hicolor(kc85_t* sys, int num_cpu_ticks, uint64_t cpu_pins) {
+    for (int i = 0; i < num_cpu_ticks; i++) {
+        if (sys->h_tick & 1) {
+            uint32_t x = sys->h_tick>>1;
+            uint32_t y = sys->v_count;
+            if (sys->pixel_buffer && (y < 256) && (x < 40)) {
+                uint32_t* dst = &(sys->pixel_buffer[y*_KC85_DISPLAY_WIDTH + x*8]);
+                uint32_t irm_index = (sys->io84 & 1) * 2;
+                const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
+                const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE + irm_index + 1];
+                uint32_t offset = (x<<8) | y;
+                uint8_t p0 = pixel_ram[offset];
+                uint8_t p1 = color_ram[offset];
+                /*
+                    Decode 8 pixels for the "HICOLOR" mode with 2-bits per-pixel color.
+                    p0 and p1 are the two bitplanes (taken from the pixel and color RAM
+                    bank). The color palette is hardwired.
+                */
+                dst[0] = _kc85_hicolor[((p0>>7)&1)|((p1>>6)&2)];
+                dst[1] = _kc85_hicolor[((p0>>6)&1)|((p1>>5)&2)];
+                dst[2] = _kc85_hicolor[((p0>>5)&1)|((p1>>4)&2)];
+                dst[3] = _kc85_hicolor[((p0>>4)&1)|((p1>>3)&2)];
+                dst[4] = _kc85_hicolor[((p0>>3)&1)|((p1>>2)&2)];
+                dst[5] = _kc85_hicolor[((p0>>2)&1)|((p1>>1)&2)];
+                dst[6] = _kc85_hicolor[((p0>>1)&1)|((p1>>0)&2)];
+                dst[7] = _kc85_hicolor[((p0>>0)&1)|((p1<<1)&2)];
+            }
+        }
+        sys->h_tick++;
+        if (sys->h_tick >= 113) {
+            sys->h_tick = 0;
+            sys->v_count++;
+            if (sys->v_count == 312) {
+                sys->v_count = 0;
+                cpu_pins |= Z80CTC_CLKTRG2;
+            }
+        }
+    }
+    return cpu_pins;
+}
+
+static uint64_t _kc85_video_kc85_4_std(kc85_t* sys, int num_cpu_ticks, uint64_t cpu_pins) {
+    bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
+    for (int i = 0; i < num_cpu_ticks; i++) {
+        if (sys->h_tick & 1) {
+            uint32_t x = sys->h_tick>>1;
+            uint32_t y = sys->v_count;
+            if (sys->pixel_buffer && (y < 256) && (x < 40)) {
+                uint32_t* dst_ptr = &(sys->pixel_buffer[y*_KC85_DISPLAY_WIDTH + x*8]);
+                uint32_t irm_index = (sys->io84 & 1) * 2;
+                const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
+                const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE + irm_index + 1];
+                uint32_t offset = (x<<8) | y;
+                uint8_t pixel_bits = pixel_ram[offset];
+                uint8_t color_bits = color_ram[offset];
+                bool force_bg = blink_bg && (color_bits & 0x80); /* no bus contention on KC85/4 */
+                _kc85_decode_8pixels(dst_ptr, pixel_bits, color_bits, force_bg);
+            }
+        }
+        sys->h_tick++;
+        if (sys->h_tick >= 113) {
+            sys->h_tick = 0;
+            sys->v_count++;
+            if (sys->v_count == 312) {
+                sys->v_count = 0;
+                cpu_pins |= Z80CTC_CLKTRG2;
+            }
+        }
+    }
+    return cpu_pins;
+}
+
+static uint64_t _kc85_tick_video(kc85_t* sys, int num_cpu_ticks, uint64_t cpu_pins) {
+    if (sys->type == KC85_TYPE_4) {
+        if (sys->io84 & KC85_IO84_HICOLOR) {
+            return _kc85_video_kc85_4_std(sys, num_cpu_ticks, cpu_pins);
+        }
+        else {
+            return _kc85_video_kc85_4_hicolor(sys, num_cpu_ticks, cpu_pins);
+        }
+    }
+    else {
+        return _kc85_video_kc85_2_3(sys, num_cpu_ticks, cpu_pins);
+    }
 }
 
 static uint64_t _kc85_tick(int num_ticks, uint64_t pins, void* user_data) {
