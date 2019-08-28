@@ -424,7 +424,6 @@ void ui_bombjack_discard(ui_bombjack_t* ui) {
     }
     ui_z80_discard(&ui->main.cpu);
     ui_z80_discard(&ui->sound.cpu);
-    ui_discard();
 }
 
 static bool _ui_bombjack_test_bits(uint8_t val, uint8_t mask, uint8_t bits) {

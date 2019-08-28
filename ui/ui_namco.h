@@ -295,7 +295,6 @@ void ui_namco_discard(ui_namco_t* ui) {
         ui_dasm_discard(&ui->dasm[i]);
     }
     ui_z80_discard(&ui->cpu);
-    ui_discard();
 }
 
 
