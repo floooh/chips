@@ -315,7 +315,7 @@ typedef struct {
 
     /* audio output config (if you don't want audio, set audio_cb to zero) */
     kc85_audio_callback_t audio_cb;     /* called when audio_num_samples are ready */
-    int audio_num_samples;              /* default is KC85_AUDIO_NUM_SAMPLES */
+    int audio_num_samples;              /* default is KC85_DEFAULT_AUDIO_SAMPLES */
     int audio_sample_rate;              /* playback sample rate, default is 44100 */
     float audio_volume;                 /* audio volume (0.0 .. 1.0), default is 0.4 */
     
