@@ -1,5 +1,7 @@
 # chips
 
+[![Build Status](https://github.com/floooh/chips/workflows/build_and_test/badge.svg)](https://github.com/floooh/chips/actions)
+
 A toolbox of 8-bit chip-emulators, helper code and complete embeddable 
 system emulators in dependency-free C headers (a subset of C99 that
 compiles on gcc, clang and cl.exe).
