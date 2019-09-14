@@ -52,7 +52,7 @@
         
     ## zlib/libpng license
 
-    Copyright (c) 2018 Andre Weissflog
+    Copyright (c) 2019 Andre Weissflog
     This software is provided 'as-is', without any express or implied warranty.
     In no event will the authors be held liable for any damages arising from the
     use of this software.
@@ -74,12 +74,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* audio output callback */
-typedef void (*lc80_audio_callback)(const float* samples, int num_samples, void* user_data);
-
-#define LC80_MAX_AUDIO_SAMPLES (1024)
-#define LC80_DEFAULT_AUDIO_SAMPLES (128)
 
 /* U505D ROM chip pins */
 #define LC80_U505_A0     (1<<0)
@@ -157,6 +151,10 @@ typedef void (*lc80_audio_callback)(const float* samples, int num_samples, void*
 #define VQE23_K1    (1<<16)
 #define VQE23_K2    (1<<17)
 
+typedef void (*lc80_audio_callback_t)(const float* samples, int num_samples, void* user_data);
+#define LC80_MAX_AUDIO_SAMPLES (1024)
+#define LC80_DEFAULT_AUDIO_SAMPLES (128)
+
 /* config parameters for lc80_init() */
 typedef struct {
     /* optional userdata pointer for callbacks */
@@ -192,7 +190,7 @@ typedef struct {
     mem_t mem;
     
     void* user_data;
-    lc80_audio_callback audio_cb;
+    lc80_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
     float sample_buffer[LC80_MAX_AUDIO_SAMPLES];
@@ -205,8 +203,8 @@ void lc80_init(lc80_t* sys, const lc80_desc_t* desc);
 void lc80_discard(lc80_t* sys);
 void lc80_reset(lc80_t* sys);
 void lc80_exec(lc80_t* sys, uint32_t micro_seconds);
-void lc80_keydown(lc80_t* sys, int key_code);
-void lc80_keyup(lc80_t* sys, int key_code);
+void lc80_key_down(lc80_t* sys, int key_code);
+void lc80_key_up(lc80_t* sys, int key_code);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -219,5 +217,119 @@ void lc80_keyup(lc80_t* sys, int key_code);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
+
+#define _LC80_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+
+static uint64_t _lc80_tick(int num, uint64_t pins, void* user_data);
+static uint8_t _lc80_pio_sys_in(int port_id, void* user_data);
+static void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data);
+static uint8_t _lc80_pio_usr_in(int port_id, void* user_data);
+static void _lc80_pio_usr_out(int port_id, uint8_t data, void* user_data);
+
+void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
+    CHIPS_ASSERT(sys && desc);
+    
+    memset(sys, 0, sizeof(lc80_t));
+    sys->valid = true;
+    sys->user_data = desc->user_data;
+    
+    CHIPS_ASSERT(desc->rom_ptr && (desc->rom_size == sizeof(sys->rom)));
+    memcpy(sys->rom, desc->rom_ptr, sizeof(sys->rom));
+
+    /* 900 kHz */
+    const uint32_t freq_hz = 900000;
+    clk_init(&sys->clk, freq_hz);
+    z80ctc_init(&sys->ctc);
+
+    z80_desc_t cpu_desc;
+    memset(&cpu_desc, 0, sizeof(cpu_desc));
+    cpu_desc.tick_cb = _lc80_tick;
+    cpu_desc.user_data = sys;
+    z80_init(&sys->cpu, &cpu_desc);
+
+    z80pio_desc_t pio_desc;
+    memset(&pio_desc, 0, sizeof(pio_desc));
+    pio_desc.in_cb = _lc80_pio_sys_in;
+    pio_desc.out_cb = _lc80_pio_sys_out;
+    pio_desc.user_data = sys;
+    z80pio_init(&sys->pio_sys, &pio_desc);
+    pio_desc.in_cb = _lc80_pio_usr_in;
+    pio_desc.out_cb = _lc80_pio_usr_out;
+    z80pio_init(&sys->pio_usr, &pio_desc);
+
+    sys->audio_cb = desc->audio_cb;
+    sys->num_samples = _LC80_DEFAULT(desc->audio_num_samples, LC80_DEFAULT_AUDIO_SAMPLES);
+    const int audio_hz = _LC80_DEFAULT(desc->audio_sample_rate, 44100);
+    const float audio_vol = _LC80_DEFAULT(desc->audio_volume, 0.8f);
+    beeper_init(&sys->beeper, freq_hz, audio_hz, audio_vol);
+
+    kbd_init(&sys->kbd ,1);
+    // FIXME: keyboard matrix
+
+    mem_init(&sys->mem);
+    mem_map_rom(&sys->mem, 0, 0x0000, sizeof(sys->rom), sys->rom);
+    mem_map_ram(&sys->mem, 0, 0x2000, sizeof(sys->ram), sys->ram);
+
+    z80_set_pc(&sys->cpu, 0x0000);
+}
+
+void lc80_discard(lc80_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->valid = false;
+}
+
+void lc80_reset(lc80_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    z80_reset(&sys->cpu);
+    z80ctc_reset(&sys->ctc);
+    z80pio_reset(&sys->pio_sys);
+    z80pio_reset(&sys->pio_usr);
+    beeper_reset(&sys->beeper);
+    z80_set_pc(&sys->cpu, 0x0000);
+}
+
+void lc80_exec(lc80_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
+    uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
+    clk_ticks_executed(&sys->clk, ticks_executed);
+    kbd_update(&sys->kbd);
+}
+
+void lc80_key_down(lc80_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_down(&sys->kbd, key_code);
+}
+
+void lc80_key_up(lc80_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_up(&sys->kbd, key_code);
+}
+
+uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
+//    lc80_t* sys = (lc80_t*) user_data;
+
+    // FIXME do "proper" address decoding etc...
+
+    return pins;
+}
+
+uint8_t _lc80_pio_sys_in(int port_id, void* user_data) {
+    // FIXME
+    return 0xFF;
+}
+
+void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data) {
+    // FIXME
+}
+
+uint8_t _lc80_pio_usr_in(int port_id, void* user_data) {
+    // FIXME
+    return 0xFF;
+}
+
+void _lc80_pio_usr_out(int port_id, uint8_t data, void* user_data) {
+    // FIXME
+}
 
 #endif /* CHIPS_IMPL */
