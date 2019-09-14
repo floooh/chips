@@ -232,7 +232,7 @@ static void _ui_kbd_draw_matrix(ui_kbd_t* win, const ImVec2& canvas_pos, const I
     const float tdx = -10.0f;
     const ImU32 grid_color = ui_util_color(ImGuiCol_Text);
     const ImU32 down_color = ImColor(1.0f, 0.0f, 0.0f, ImGui::GetStyle().Alpha);
-    char buf[8];
+    char buf[32];
     float y = y0;
     for (int l=0; l<win->num_lines; l++, y+=dy) {
         snprintf(buf, sizeof(buf), "%d", l);
