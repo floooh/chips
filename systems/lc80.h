@@ -444,11 +444,6 @@ uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
     return (pins & Z80_PIN_MASK);
 }
 
-uint8_t _lc80_pio_sys_in(int port_id, void* user_data) {
-    // FIXME
-    return 0xFF;
-}
-
 /* update a VQE23 2-digit LED display element */
 static uint32_t _lc80_vqe23_write(uint32_t vqe23, int digit, uint8_t data) {
     if (0 == digit) {
@@ -476,13 +471,23 @@ static uint32_t _lc80_vqe23_write(uint32_t vqe23, int digit, uint8_t data) {
     return vqe23;
 }
 
+uint8_t _lc80_pio_sys_in(int port_id, void* user_data) {
+    // FIXME: TAPE IN
+    return 0xFF;
+}
+
 void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data) {
     lc80_t* sys = (lc80_t*) user_data;
     if (port_id == 1) {
         /* TAPE OUT */
         beeper_set(&sys->beeper, 0 == (data & (1<<1)));
 
-        /* LED update */
+        /* LED display update
+
+            Bits 2..7 of System PIO Port B select the digit,
+            and all 8 bits of System PIO Port A select
+            the 7 segments and decimal point.
+        */
         const uint8_t outp = sys->pio_sys.port[Z80PIO_PORT_A].output;
         if (0 == (data & (1<<2))) {
             sys->led[0] = _lc80_vqe23_write(sys->led[0], 0, outp);

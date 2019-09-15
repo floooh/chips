@@ -110,6 +110,62 @@ void ui_lc80_after_exec(ui_lc80_t* ui);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
+/*
+    Draw a 7+1 segment digit
+
+     ---
+    |   |
+     ---
+    |   |
+     --- x
+*/
+/*
+static void _ui_lc80_draw_seg_hori(ImDrawList* l, float x, float y, ImU32 color) {
+    const float wh = 8.0f;
+    const float hh = 2.0f;
+    ImVec2 p[6] = {
+        ImVec2((x - wh),      y),
+        ImVec2((x - wh) + hh, y - hh),
+        ImVec2((x + wh) - hh, y - hh),
+        ImVec2((x + wh),      y),
+        ImVec2((x + wh) - hh, y + hh),
+        ImVec2((x - wh) + hh, y + hh)
+    };
+    l->AddConvexPolyFilled(p, 6, color);
+}
+
+static void _ui_lc80_draw_seg_vert(ImDrawList* l, float x, float y, ImU32 color) {
+    const float wh = 2.0f;
+    const float hh = 8.0f;
+    ImVec2 p[6] = {
+        ImVec2(x,      (y - hh)),
+        ImVec2(x + wh, (y - hh) + wh),
+        ImVec2(x + wh, (y + hh) - wh),
+        ImVec2(x,      (y + hh)),
+        ImVec2(x - wh, (y + hh) - wh),
+        ImVec2(x - wh, (y - hh) + wh)
+    };
+    l->AddConvexPolyFilled(p, 6, color);
+}
+
+
+static void _ui_lc80_draw_vqe23_segments(ui_lc80_t* ui, uint8_t mask) {
+    ImDrawList* l = ImGui::GetWindowDrawList();
+    const uint32_t color = 0xFFFFFFFF;
+    _ui_lc80_draw_seg_hori(l, 0.0f, 0.0f, color);
+    _ui_lc80_draw_seg_hori(l, 0.0f, 16.0f, color);
+    _ui_lc80_draw_seg_hori(l, 0.0f, 32.0f, color);
+}
+
+static void _ui_lc80_draw_vqe23(ui_lc80_t* ui, int vqe23_index) {
+
+}
+
+static void _ui_lc80_draw_display(ui_lc80_t* ui) {
+
+}
+*/
+
 static void _ui_lc80_draw_menu(ui_lc80_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->sys && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
