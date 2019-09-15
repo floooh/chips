@@ -118,6 +118,9 @@ static void _ui_lc80_draw_menu(ui_lc80_t* ui, double time_ms) {
                 lc80_reset(ui->sys);
                 ui_dbg_reset(&ui->dbg);
             }
+            if (ImGui::MenuItem("Cold Boot")) {
+                ui->boot_cb(ui->sys);
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Hardware")) {
@@ -256,13 +259,26 @@ static const ui_chip_pin_t _ui_lc80_ctc_pins[] = {
 static uint8_t _ui_lc80_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
     lc80_t* sys = (lc80_t*) user_data;
-    return mem_rd(&sys->mem, addr);
+    if (addr < 0x0800) {
+        return sys->rom[addr & 0x07FF];
+    }
+    else if ((addr >= 0x2000) && (addr < 0x2400)) {
+        return sys->ram[addr & 0x3FF];
+    }
+    else {
+        return 0xFF;
+    }
 }
 
 void _ui_lc80_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
     CHIPS_ASSERT(user_data);
     lc80_t* sys = (lc80_t*) user_data;
-    mem_wr(&sys->mem, addr, data);
+    if (addr < 0x0800) {
+        sys->rom[addr & 0x07FF] = data;
+    }
+    else if ((addr >= 0x2000) && (addr < 0x2400)) {
+        sys->ram[addr & 0x3FF] = data;
+    }
 }
 
 void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
@@ -359,7 +375,6 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         ui_dasm_desc_t desc = {0};
         desc.layers[0] = "System";
         desc.cpu_type = UI_DASM_CPUTYPE_Z80;
-        desc.start_addr = 0xF000;
         desc.read_cb = _ui_lc80_mem_read;
         desc.user_data = ui->sys;
         static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };

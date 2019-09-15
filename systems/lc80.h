@@ -25,7 +25,6 @@
     - chips/z80pio.h
     - chips/beeper.h
     - chips/kbd.h
-    - chips/mem.h
     - chips/clk.h
 
     ## The LC80
@@ -42,7 +41,7 @@
     - 1x U880 CPU @ 900 kHz (equiv Z80)
     - 2x U855 (equiv Z80-PIO)
     - 1x U857 (equiv Z80-CTC)
-    - 2x U505D (8kBit / 1kByte ROM == 2 KByte ROM)
+    - 1x U505D (16kBit / 2kByte ROM == 2 KByte ROM)
     - 2..8x U214D (1024 x 4 bit SRAM, only default config of 1KB RAM emulated)
     - 0..3x K573RF2 (Soviet 2KByte EPROM, equiv Intel 2716, not emulated)
     - 2x DS8205 3-to-8 decoder used for address decoding (equiv LS138)
@@ -97,7 +96,7 @@ extern "C" {
 #define LC80_U505_D7     (1<<23)
 #define LC80_U505_CS     (1<<24)
 
-/* U214 ROM chip pins */
+/* U214 RAM chip pins */
 #define LC80_U214_A0     (1<<0)
 #define LC80_U214_A1     (1<<1)
 #define LC80_U214_A2     (1<<2)
@@ -130,26 +129,29 @@ extern "C" {
 #define LC80_DS8205_G1   (1<<11)     /* enable inputs */
 #define LC80_DS8205_G2A  (1<<12)
 #define LC80_DS8205_G2B  (1<<13)
+#define LC80_DS8205_SELECT  (LC80_DS8205_A|LC80_DS8205_B|LC80_DS8205_C)
+#define LC80_DS8205_INPUTS  (LC80_DS8205_A|LC80_DS8205_B|LC80_DS8205_C|LC80_DS8205_G1|LC80_DS8205_G2A|LC80_DS8205_G2B)
+#define LC80_DS8205_OUTPUTS (0xFF)
 
 /* VQE23 2-digit LED state */
-#define VQE23_A1    (1<<0)
-#define VQE23_B1    (1<<1)
-#define VQE23_C1    (1<<2)
-#define VQE23_D1    (1<<3)
-#define VQE23_E1    (1<<4)
-#define VQE23_F1    (1<<5)
-#define VQE23_G1    (1<<6)
-#define VQE23_dP1   (1<<7)
-#define VQE23_A2    (1<<8)
-#define VQE23_B2    (1<<9)
-#define VQE23_C2    (1<<10)
-#define VQE23_D2    (1<<11)
-#define VQE23_E2    (1<<12)
-#define VQE23_F2    (1<<13)
-#define VQE23_G2    (1<<14)
-#define VQE23_dP2   (1<<15)
-#define VQE23_K1    (1<<16)
-#define VQE23_K2    (1<<17)
+#define LC80_VQE23_A1    (1<<0)
+#define LC80_VQE23_B1    (1<<1)
+#define LC80_VQE23_C1    (1<<2)
+#define LC80_VQE23_D1    (1<<3)
+#define LC80_VQE23_E1    (1<<4)
+#define LC80_VQE23_F1    (1<<5)
+#define LC80_VQE23_G1    (1<<6)
+#define LC80_VQE23_P1    (1<<7)
+#define LC80_VQE23_A2    (1<<8)
+#define LC80_VQE23_B2    (1<<9)
+#define LC80_VQE23_C2    (1<<10)
+#define LC80_VQE23_D2    (1<<11)
+#define LC80_VQE23_E2    (1<<12)
+#define LC80_VQE23_F2    (1<<13)
+#define LC80_VQE23_G2    (1<<14)
+#define LC80_VQE23_P2    (1<<15)
+#define LC80_VQE23_K1    (1<<16)
+#define LC80_VQE23_K2    (1<<17)
 
 typedef void (*lc80_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 #define LC80_MAX_AUDIO_SAMPLES (1024)
@@ -180,15 +182,14 @@ typedef struct {
     z80pio_t pio_sys;
     z80pio_t pio_usr;
     uint32_t led[3];            /* state of the 2-digit LED modules */
-    uint32_t u505[2];           /* pin state of the 2 U505D ROM chips */
+    uint32_t u505;              /* pin state of the 2 U505D ROM chips */
     uint32_t u214[2];           /* pin state of the 2 U214D RAM chips */
     uint32_t ds8205[2];         /* pin state of the 2 DS8205 3-to-8 decoders (equiv LS138) */
 
     beeper_t beeper;
     clk_t clk;
     kbd_t kbd;
-    mem_t mem;
-    
+
     void* user_data;
     lc80_audio_callback_t audio_cb;
     int num_samples;
@@ -266,10 +267,6 @@ void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
     kbd_init(&sys->kbd ,1);
     // FIXME: keyboard matrix
 
-    mem_init(&sys->mem);
-    mem_map_rom(&sys->mem, 0, 0x0000, sizeof(sys->rom), sys->rom);
-    mem_map_ram(&sys->mem, 0, 0x2000, sizeof(sys->ram), sys->ram);
-
     z80_set_pc(&sys->cpu, 0x0000);
 }
 
@@ -306,12 +303,145 @@ void lc80_key_up(lc80_t* sys, int key_code) {
     kbd_key_up(&sys->kbd, key_code);
 }
 
+#define _LC80_HI(pins,mask) (0!=(pins&mask))
+#define _LC80_LO(pins,mask) (0==(pins&mask))
+
+/* DS8205 (LS138) 3-to-8 decoder */
+static inline uint32_t _lc80_ds8205_tick(uint32_t inp) {
+    /*
+        enable = G1 && !G2A && !G2B
+
+        Select pins are active high.
+
+        Output pins are active high (real hardware active-low)
+    */
+    uint32_t outp = inp & LC80_DS8205_INPUTS;
+    if ((inp & (LC80_DS8205_G1|LC80_DS8205_G2A|LC80_DS8205_G2B)) == LC80_DS8205_G1) {
+        /* outputs enabled */
+        uint8_t data = (1 << ((inp & LC80_DS8205_SELECT)>>8));
+        outp |= data;
+    }
+    return outp;
+}
+
+/* LC80 CPU tick callback */
 uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
-//    lc80_t* sys = (lc80_t*) user_data;
+    lc80_t* sys = (lc80_t*) user_data;
 
-    // FIXME do "proper" address decoding etc...
+    /* Address decoding via the two DS8205 3-to-8 decoders (LS138 clones)
 
-    return pins;
+        This is a bit of an "active-hi/lo" mess, all chip emulator
+        pin masks are "active means bit is set" regardless of
+        active-hi/lo in the real hardware.
+
+        On the LC-80, all CPU control pins are inverted, so they
+        actually look like active-high to the system.
+
+        We'll treat the DS8205 Enable pins like the real hardware,
+        but the Select and Output both as "bit set if active".
+    */
+    uint32_t d209 = LC80_DS8205_C;  /* C input is always high, but connected to
+                                       a switch to optionally switch to a user-
+                                       provided set of EEPROMS
+                                    */
+    if (_LC80_HI(pins, Z80_A11))    { d209 |= LC80_DS8205_A; }
+    if (_LC80_HI(pins, Z80_A12))    { d209 |= LC80_DS8205_B; }
+    if (_LC80_LO(pins, Z80_A13))    { d209 |= LC80_DS8205_G1; }
+    if (_LC80_LO(pins, Z80_MREQ))   { d209 |= LC80_DS8205_G2A; }
+    d209 = _lc80_ds8205_tick(d209);
+    sys->ds8205[0] = d209;
+
+    uint32_t d210 = LC80_DS8205_C|LC80_DS8205_G1;
+    if (_LC80_HI(pins, Z80_A10))    { d210 |= LC80_DS8205_A; }
+    if (_LC80_HI(pins, Z80_A11))    { d210 |= LC80_DS8205_B; }
+    if (_LC80_LO(pins, Z80_MREQ))   { d210 |= LC80_DS8205_G2A; }
+    if (_LC80_LO(pins, Z80_A13))    { d210 |= LC80_DS8205_G2B; }
+    d210 = _lc80_ds8205_tick(d210);
+    sys->ds8205[1] = d210;
+
+    /* ROM access? */
+    if (d209 & LC80_DS8205_Y4) {
+        /* Y4 output of D209 selects D202 (ROM1) */
+        uint16_t addr = pins & 0x7FF;
+        uint8_t data = sys->rom[addr];
+        Z80_SET_DATA(pins, data);
+        sys->u505 = LC80_U505_CS | (data << 16) | addr;
+    }
+    /* RAM access?
+
+        D210 output Y4 selected RAM bank 0
+             outputs Y5..Y7 select the RAM banks 1..3, bit those
+             are not socketed in a standard LC80
+    */
+    if (d210 & LC80_DS8205_Y4) {
+        /* Y4 output of D209 selects RAM bank 0 (D204 and D205, each 4 bit of data) */
+        uint16_t addr = pins & 0x3FF;
+        uint8_t data;
+        if (pins & Z80_WR) {
+            /* RAM write access */
+            data = Z80_GET_DATA(pins);
+            sys->ram[addr] = data;
+        }
+        else {
+            /* RAM read access */
+            data = sys->ram[addr];
+            Z80_SET_DATA(pins, data);
+        }
+        sys->u214[0] = LC80_U214_CS | (pins & Z80_WR) | addr | (((data>>0) & 0x0F)<<16);
+        sys->u214[1] = LC80_U214_CS | (pins & Z80_WR) | addr | (((data>>4) & 0x0F)<<16);
+    }
+
+    /* IO requests */
+    if (pins & Z80_IORQ) {
+        /* System PIO */
+        if (0 == (pins & Z80_A3)) {
+            pins |= Z80PIO_CE;
+            if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+            if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
+            pins = z80pio_iorq(&sys->pio_sys, pins) & Z80_PIN_MASK;
+        }
+
+        /* User PIO */
+        if (0 == (pins & Z80_A2)) {
+            pins |= Z80PIO_CE;
+            if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+            if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
+            pins = z80pio_iorq(&sys->pio_usr, pins) & Z80_PIN_MASK;
+        }
+
+        /* CTC */
+        if (0 == (pins & Z80_A4)) {
+            pins |= Z80CTC_CE;
+            if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
+            if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
+            pins = z80ctc_iorq(&sys->ctc, pins) & Z80_PIN_MASK;
+        }
+    }
+
+    /* tick CTC and handle beeper */
+    for (int i = 0; i < num_ticks; i++) {
+        pins = z80ctc_tick(&sys->ctc, pins);
+        if (beeper_tick(&sys->beeper)) {
+            /* new audio sample ready */
+            sys->sample_buffer[sys->sample_pos++] = sys->beeper.sample;
+            if (sys->sample_pos == sys->num_samples) {
+                if (sys->audio_cb) {
+                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+                }
+                sys->sample_pos = 0;
+            }
+        }
+    }
+
+    /* interrupt daisychain priority is: CTC => User PIO => System PIO */
+    Z80_DAISYCHAIN_BEGIN(pins)
+    {
+        pins = z80ctc_int(&sys->ctc, pins);
+        pins = z80pio_int(&sys->pio_usr, pins);
+        pins = z80pio_int(&sys->pio_sys, pins);
+    }
+    Z80_DAISYCHAIN_END(pins);
+    return (pins & Z80_PIN_MASK);
 }
 
 uint8_t _lc80_pio_sys_in(int port_id, void* user_data) {
@@ -319,8 +449,84 @@ uint8_t _lc80_pio_sys_in(int port_id, void* user_data) {
     return 0xFF;
 }
 
+/* update a VQE23 2-digit LED display element */
+static uint32_t _lc80_vqe23_write(uint32_t vqe23, int digit, uint8_t data) {
+    if (0 == digit) {
+        vqe23 &= ~0xFF;
+        if (data & (1<<2)) { vqe23 |= LC80_VQE23_A1; }
+        if (data & (1<<0)) { vqe23 |= LC80_VQE23_B1; }
+        if (data & (1<<5)) { vqe23 |= LC80_VQE23_C1; }
+        if (data & (1<<7)) { vqe23 |= LC80_VQE23_D1; }
+        if (data & (1<<6)) { vqe23 |= LC80_VQE23_E1; }
+        if (data & (1<<1)) { vqe23 |= LC80_VQE23_F1; }
+        if (data & (1<<3)) { vqe23 |= LC80_VQE23_G1; }
+        if (data & (1<<4)) { vqe23 |= LC80_VQE23_P1; }
+    }
+    else {
+        vqe23 &= ~0xFF00;
+        if (data & (1<<2)) { vqe23 |= LC80_VQE23_A2; }
+        if (data & (1<<0)) { vqe23 |= LC80_VQE23_B2; }
+        if (data & (1<<5)) { vqe23 |= LC80_VQE23_C2; }
+        if (data & (1<<7)) { vqe23 |= LC80_VQE23_D2; }
+        if (data & (1<<6)) { vqe23 |= LC80_VQE23_E2; }
+        if (data & (1<<1)) { vqe23 |= LC80_VQE23_F2; }
+        if (data & (1<<3)) { vqe23 |= LC80_VQE23_G2; }
+        if (data & (1<<4)) { vqe23 |= LC80_VQE23_P2; }
+    }
+    return vqe23;
+}
+
 void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data) {
-    // FIXME
+    lc80_t* sys = (lc80_t*) user_data;
+    if (port_id == 1) {
+        /* TAPE OUT */
+        beeper_set(&sys->beeper, 0 == (data & (1<<1)));
+
+        /* LED update */
+        const uint8_t outp = sys->pio_sys.port[Z80PIO_PORT_A].output;
+        if (0 == (data & (1<<2))) {
+            sys->led[0] = _lc80_vqe23_write(sys->led[0], 0, outp);
+            sys->led[0] |= LC80_VQE23_K1;
+        }
+        else {
+            sys->led[0] &= ~LC80_VQE23_K1;
+        }
+        if (0 == (data & (1<<3))) {
+            sys->led[0] = _lc80_vqe23_write(sys->led[0], 1, outp);
+            sys->led[0] |= LC80_VQE23_K2;
+        }
+        else {
+            sys->led[0] &= ~LC80_VQE23_K2;
+        }
+        if (0 == (data & (1<<4))) {
+            sys->led[1] = _lc80_vqe23_write(sys->led[1], 0, outp);
+            sys->led[1] |= LC80_VQE23_K1;
+        }
+        else {
+            sys->led[1] &= ~LC80_VQE23_K1;
+        }
+        if (0 == (data & (1<<5))) {
+            sys->led[1] = _lc80_vqe23_write(sys->led[1], 1, outp);
+            sys->led[1] |= LC80_VQE23_K2;
+        }
+        else {
+            sys->led[1] &= ~LC80_VQE23_K2;
+        }
+        if (0 == (data & (1<<6))) {
+            sys->led[2] = _lc80_vqe23_write(sys->led[2], 0, outp);
+            sys->led[2] |= LC80_VQE23_K1;
+        }
+        else {
+            sys->led[2] &= ~LC80_VQE23_K1;
+        }
+        if (0 == (data & (1<<7))) {
+            sys->led[2] = _lc80_vqe23_write(sys->led[2], 1, outp);
+            sys->led[2] |= LC80_VQE23_K2;
+        }
+        else {
+            sys->led[2] &= ~LC80_VQE23_K2;
+        }
+    }
 }
 
 uint8_t _lc80_pio_usr_in(int port_id, void* user_data) {
