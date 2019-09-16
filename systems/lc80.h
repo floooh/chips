@@ -237,7 +237,7 @@ void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
     CHIPS_ASSERT(desc->rom_ptr && (desc->rom_size == sizeof(sys->rom)));
     memcpy(sys->rom, desc->rom_ptr, sizeof(sys->rom));
 
-    /* 900 kHz */
+    /* system clock is 900 kHz */
     const uint32_t freq_hz = 900000;
     clk_init(&sys->clk, freq_hz);
     z80ctc_init(&sys->ctc);
@@ -257,6 +257,10 @@ void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
     pio_desc.in_cb = _lc80_pio_usr_in;
     pio_desc.out_cb = _lc80_pio_usr_out;
     z80pio_init(&sys->pio_usr, &pio_desc);
+
+    for (int i = 0; i < 3; i++) {
+        sys->led[i] = 0x0000FFFF;
+    }
 
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _LC80_DEFAULT(desc->audio_num_samples, LC80_DEFAULT_AUDIO_SAMPLES);

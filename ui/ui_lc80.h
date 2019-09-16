@@ -119,52 +119,105 @@ void ui_lc80_after_exec(ui_lc80_t* ui);
     |   |
      --- x
 */
-/*
-static void _ui_lc80_draw_seg_hori(ImDrawList* l, float x, float y, ImU32 color) {
-    const float wh = 8.0f;
-    const float hh = 2.0f;
-    ImVec2 p[6] = {
-        ImVec2((x - wh),      y),
-        ImVec2((x - wh) + hh, y - hh),
-        ImVec2((x + wh) - hh, y - hh),
-        ImVec2((x + wh),      y),
-        ImVec2((x + wh) - hh, y + hh),
-        ImVec2((x - wh) + hh, y + hh)
+struct _ui_lc80_display_config {
+    float digit_padding = 14.0f;
+    float segment_length = 24.0f;
+    float segment_thickness = 8.0f;
+    float dot_offset_x = 22.0f;
+    float dot_offset_y = 24.0f;
+    float dot_radius = 5.0f;
+    float led_radius = 10.0f;
+    ImU32 color_on = 0xFF00FF00;
+    ImU32 color_off = 0xFF004400;
+    ImU32 color_outline = 0xFF002200;
+    ImU32 color_background = 0xFF002200;
+};
+
+static void _ui_lc80_draw_seg_hori(ImDrawList* l, const ImVec2& p, bool on, const _ui_lc80_display_config& conf) {
+    const float dx = conf.segment_length * 0.5f;
+    const float dy = conf.segment_thickness * 0.5f;
+    ImVec2 points[6] = {
+        ImVec2((p.x - dx),      p.y),
+        ImVec2((p.x - dx) + dy, p.y - dy),
+        ImVec2((p.x + dx) - dy, p.y - dy),
+        ImVec2((p.x + dx),      p.y),
+        ImVec2((p.x + dx) - dy, p.y + dy),
+        ImVec2((p.x - dx) + dy, p.y + dy)
     };
-    l->AddConvexPolyFilled(p, 6, color);
+    l->AddConvexPolyFilled(points, 6, on ? conf.color_on : conf.color_off);
+    l->AddPolyline(points, 6, conf.color_outline, true, 1.0f);
 }
 
-static void _ui_lc80_draw_seg_vert(ImDrawList* l, float x, float y, ImU32 color) {
-    const float wh = 2.0f;
-    const float hh = 8.0f;
-    ImVec2 p[6] = {
-        ImVec2(x,      (y - hh)),
-        ImVec2(x + wh, (y - hh) + wh),
-        ImVec2(x + wh, (y + hh) - wh),
-        ImVec2(x,      (y + hh)),
-        ImVec2(x - wh, (y + hh) - wh),
-        ImVec2(x - wh, (y - hh) + wh)
+static void _ui_lc80_draw_seg_vert(ImDrawList* l, const ImVec2& p, bool on, const _ui_lc80_display_config& conf) {
+    const float dx = conf.segment_thickness * 0.5f;
+    const float dy = conf.segment_length * 0.5f;
+    ImVec2 points[6] = {
+        ImVec2(p.x,      (p.y - dy)),
+        ImVec2(p.x + dx, (p.y - dy) + dx),
+        ImVec2(p.x + dx, (p.y + dy) - dx),
+        ImVec2(p.x,      (p.y + dy)),
+        ImVec2(p.x - dx, (p.y + dy) - dx),
+        ImVec2(p.x - dx, (p.y - dy) + dx)
     };
-    l->AddConvexPolyFilled(p, 6, color);
+    l->AddConvexPolyFilled(points, 6, on ? conf.color_on : conf.color_off);
+    l->AddPolyline(points, 6, conf.color_outline, true, 1.0f);
 }
 
-
-static void _ui_lc80_draw_vqe23_segments(ui_lc80_t* ui, uint8_t mask) {
-    ImDrawList* l = ImGui::GetWindowDrawList();
-    const uint32_t color = 0xFFFFFFFF;
-    _ui_lc80_draw_seg_hori(l, 0.0f, 0.0f, color);
-    _ui_lc80_draw_seg_hori(l, 0.0f, 16.0f, color);
-    _ui_lc80_draw_seg_hori(l, 0.0f, 32.0f, color);
+static void _ui_lc80_draw_vqe23_segments(ImDrawList* l, const ImVec2& p, uint8_t segs, const _ui_lc80_display_config& conf) {
+    const float seg_l = conf.segment_length;
+    const float seg_lh = seg_l * 0.5f;
+    const float dot_x = conf.dot_offset_x;
+    const float dot_y = conf.dot_offset_y;
+    const float dot_r = conf.dot_radius;
+    const ImU32 dot_color = (0 == (segs & 0x80)) ? conf.color_on : conf.color_off;
+    _ui_lc80_draw_seg_hori(l, ImVec2(p.x, p.y-seg_l), 0==(segs&0x01), conf);
+    _ui_lc80_draw_seg_hori(l, p, 0==(segs&0x40), conf);
+    _ui_lc80_draw_seg_hori(l, ImVec2(p.x, p.y+seg_l), 0==(segs&0x08), conf);
+    _ui_lc80_draw_seg_vert(l, ImVec2(p.x - seg_lh, p.y - seg_lh), 0==(segs&0x20), conf);
+    _ui_lc80_draw_seg_vert(l, ImVec2(p.x + seg_lh, p.y - seg_lh), 0==(segs&0x02), conf);
+    _ui_lc80_draw_seg_vert(l, ImVec2(p.x - seg_lh, p.y + seg_lh), 0==(segs&0x10), conf);
+    _ui_lc80_draw_seg_vert(l, ImVec2(p.x + seg_lh, p.y + seg_lh), 0==(segs&0x04), conf);
+    l->AddCircleFilled(ImVec2(p.x + dot_x, p.y + dot_y), dot_r, dot_color);
+    l->AddCircle(ImVec2(p.x + dot_x, p.y + dot_y), dot_r, conf.color_outline);
+    l->AddCircleFilled(ImVec2(p.x - dot_x, p.y - dot_y), dot_r, conf.color_off);
+    l->AddCircle(ImVec2(p.x - dot_x, p.y - dot_y), dot_r, conf.color_outline);
 }
 
-static void _ui_lc80_draw_vqe23(ui_lc80_t* ui, int vqe23_index) {
+static ImVec2 _ui_lc80_draw_vqe23(ImDrawList* l, ImVec2 pos, uint16_t segs, const _ui_lc80_display_config& conf) {
+    const float dx = conf.segment_length * 0.5 + conf.digit_padding;
+    const float w = 2 * conf.segment_length + 4 * conf.digit_padding;
+    const float h = 2 * conf.segment_length + 2 * conf.digit_padding;
+    ImVec2 p0(pos.x - w * 0.5f, pos.y - h * 0.5f);
+    ImVec2 p1(pos.x + w * 0.5f, pos.y + h * 0.5f);
+    l->AddRectFilled(p0, p1, conf.color_background);
+    _ui_lc80_draw_vqe23_segments(l, ImVec2(pos.x - dx, pos.y), segs>>8, conf);
+    _ui_lc80_draw_vqe23_segments(l, ImVec2(pos.x + dx, pos.y), segs&0xFF, conf);
+    return ImVec2(pos.x + w, pos.y);
+}
 
+static ImVec2 _ui_lc80_draw_tape_led(ImDrawList* l, ImVec2 pos, bool on, const _ui_lc80_display_config& conf) {
+    l->AddCircleFilled(pos, conf.led_radius, on ? conf.color_on : conf.color_off);
+    l->AddCircle(pos, conf.led_radius, conf.color_outline);
+    return ImVec2(pos.x + 2 * conf.led_radius, pos.y);
 }
 
 static void _ui_lc80_draw_display(ui_lc80_t* ui) {
-
+    CHIPS_ASSERT(ui);
+    const _ui_lc80_display_config conf;
+    ImGui::SetNextWindowSize(ImVec2(380, 128), ImGuiCond_Once);
+    if (ImGui::Begin("LC-80 Display Test")) {
+        ImDrawList* l = ImGui::GetWindowDrawList();
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        const ImVec2 led_pos(p.x + 10.0f, p.y + 24.0f);
+        _ui_lc80_draw_tape_led(l, ImVec2(p.x+16.0f, p.y+16.0f), 0==(ui->sys->pio_sys.port[Z80PIO_PORT_B].output&2), conf);
+        ImVec2 disp_pos(p.x + 84.0f, p.y + 48.0f);
+        disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[2], conf);
+        disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[1], conf);
+        disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[0], conf);
+        ImGui::SetCursorScreenPos(p);
+    }
+    ImGui::End();
 }
-*/
 
 static void _ui_lc80_draw_menu(ui_lc80_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->sys && ui->boot_cb);
@@ -461,6 +514,7 @@ void ui_lc80_discard(ui_lc80_t* ui) {
 void ui_lc80_draw(ui_lc80_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->sys);
     _ui_lc80_draw_menu(ui, time_ms);
+    _ui_lc80_draw_display(ui);
     ui_audio_draw(&ui->audio, ui->sys->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_z80_draw(&ui->cpu);
