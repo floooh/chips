@@ -72,6 +72,7 @@ typedef struct {
 } ui_lc80_desc_t;
 
 typedef struct {
+    void* imgui_font;
     lc80_t* sys;
     ui_lc80_boot_t boot_cb;
     ui_z80_t cpu;
@@ -204,6 +205,7 @@ static ImVec2 _ui_lc80_draw_tape_led(ImDrawList* l, ImVec2 pos, bool on, const _
 static void _ui_lc80_draw_display(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui);
     const _ui_lc80_display_config conf;
+    ImGui::SetNextWindowPos(ImVec2(600, 172), ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(380, 128), ImGuiCond_Once);
     if (ImGui::Begin("LC-80 Display Test")) {
         ImDrawList* l = ImGui::GetWindowDrawList();
@@ -215,6 +217,131 @@ static void _ui_lc80_draw_display(ui_lc80_t* ui) {
         disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[1], conf);
         disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[0], conf);
         ImGui::SetCursorScreenPos(p);
+    }
+    ImGui::End();
+}
+
+static bool _ui_lc80_btn(const char* text, ImU32 fg_color, ImU32 bg_color) {
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, bg_color);
+    ImGui::PushStyleColor(ImGuiCol_Text, fg_color);
+    bool res = ImGui::Button(text, ImVec2(48.0f, 32.0f));
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+    return res;
+}
+
+static void _ui_lc80_draw_keyboard(ui_lc80_t* ui) {
+    CHIPS_ASSERT(ui);
+    ImGui::SetNextWindowPos(ImVec2(600, 300), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(380, 400), ImGuiCond_Once);
+    if (ImGui::Begin("LC-80 Keyboard Test")) {
+        const ImU32 bg_red = 0xFF0000AA;
+        const ImU32 bg_black = 0xFF444444;
+        const ImU32 bg_white = 0xFFBBBBBB;
+        const ImU32 black = 0xFF000000;
+        const ImU32 white = 0xFFFFFFFF;
+        /* Row 1 */
+        if (_ui_lc80_btn("RES", white, bg_red)) {
+            lc80_key(ui->sys, 0x01);    /* BACKSPACE */
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("ADR", white, bg_black)) {
+            lc80_key(ui->sys, 0x0B);    /* UP */
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("DAT", white, bg_black)) {
+            lc80_key(ui->sys, 0x0A);    /* DOWN */
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("+", white, bg_black)) {
+            lc80_key(ui->sys, 0x09);    /* RIGHT */
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("-", white, bg_black)) {
+            lc80_key(ui->sys, 0x08);    /* LEFT */
+        }
+        /* Row 2 */
+        if (_ui_lc80_btn("NMI", white, bg_red)) {
+            lc80_key(ui->sys, 0x0D);    /* ENTER */
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("C", black, bg_white)) {
+            lc80_key(ui->sys, 'c');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("D", black, bg_white)) {
+            lc80_key(ui->sys, 'd');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("E", black, bg_white)) {
+            lc80_key(ui->sys, 'e');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("F", black, bg_white)) {
+            lc80_key(ui->sys, 'f');
+        }
+        /* Row 3 */
+        if (_ui_lc80_btn("ST", white, bg_black)) {
+            /* FIXME */
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("8", black, bg_white)) {
+            lc80_key(ui->sys, '8');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("9", black, bg_white)) {
+            lc80_key(ui->sys, '9');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("A", black, bg_white)) {
+            lc80_key(ui->sys, 'a');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("B", black, bg_white)) {
+            lc80_key(ui->sys, 'b');
+        }
+        /* Row 4 */
+        if (_ui_lc80_btn("LD", white, bg_black)) {
+            /* FIXME */
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("4", black, bg_white)) {
+            lc80_key(ui->sys, '4');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("5", black, bg_white)) {
+            lc80_key(ui->sys, '5');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("6", black, bg_white)) {
+            lc80_key(ui->sys, '6');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("7", black, bg_white)) {
+            lc80_key(ui->sys, '7');
+        }
+        /* Row 5 */
+        if (_ui_lc80_btn("EX", white, bg_black)) {
+            lc80_key(ui->sys, 0x20);    /* SPACE */
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("0", black, bg_white)) {
+            lc80_key(ui->sys, '0');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("1", black, bg_white)) {
+            lc80_key(ui->sys, '1');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("2", black, bg_white)) {
+            lc80_key(ui->sys, '2');
+        }
+        ImGui::SameLine();
+        if (_ui_lc80_btn("3", black, bg_white)) {
+            lc80_key(ui->sys, '3');
+        }
     }
     ImGui::End();
 }
@@ -394,6 +521,7 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->sys);
     CHIPS_ASSERT(ui_desc->boot_cb);
+
     ui->sys = ui_desc->sys;
     ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
@@ -515,6 +643,7 @@ void ui_lc80_draw(ui_lc80_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->sys);
     _ui_lc80_draw_menu(ui, time_ms);
     _ui_lc80_draw_display(ui);
+    _ui_lc80_draw_keyboard(ui);
     ui_audio_draw(&ui->audio, ui->sys->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_z80_draw(&ui->cpu);

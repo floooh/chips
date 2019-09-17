@@ -206,6 +206,7 @@ void lc80_reset(lc80_t* sys);
 void lc80_exec(lc80_t* sys, uint32_t micro_seconds);
 void lc80_key_down(lc80_t* sys, int key_code);
 void lc80_key_up(lc80_t* sys, int key_code);
+void lc80_key(lc80_t* sys, int key_code);       /* down + up */
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -304,6 +305,12 @@ void lc80_key_down(lc80_t* sys, int key_code) {
 
 void lc80_key_up(lc80_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_up(&sys->kbd, key_code);
+}
+
+void lc80_key(lc80_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_down(&sys->kbd, key_code);
     kbd_key_up(&sys->kbd, key_code);
 }
 
