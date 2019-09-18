@@ -244,103 +244,103 @@ static void _ui_lc80_draw_keyboard(ui_lc80_t* ui) {
         const ImU32 white = 0xFFFFFFFF;
         /* Row 1 */
         if (_ui_lc80_btn("RES", white, bg_red)) {
-            lc80_key(ui->sys, 0x01);    /* BACKSPACE */
+            lc80_key(ui->sys, LC80_KEY_RES);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("ADR", white, bg_black)) {
-            lc80_key(ui->sys, 0x0B);    /* UP */
+            lc80_key(ui->sys, LC80_KEY_ADR);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("DAT", white, bg_black)) {
-            lc80_key(ui->sys, 0x0A);    /* DOWN */
+            lc80_key(ui->sys, LC80_KEY_DAT);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("+", white, bg_black)) {
-            lc80_key(ui->sys, 0x09);    /* RIGHT */
+            lc80_key(ui->sys, LC80_KEY_PLUS);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("-", white, bg_black)) {
-            lc80_key(ui->sys, 0x08);    /* LEFT */
+            lc80_key(ui->sys, LC80_KEY_MINUS);
         }
         /* Row 2 */
         if (_ui_lc80_btn("NMI", white, bg_red)) {
-            lc80_key(ui->sys, 0x0D);    /* ENTER */
+            lc80_key(ui->sys, LC80_KEY_NMI);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("C", black, bg_white)) {
-            lc80_key(ui->sys, 'c');
+            lc80_key(ui->sys, LC80_KEY_C);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("D", black, bg_white)) {
-            lc80_key(ui->sys, 'd');
+            lc80_key(ui->sys, LC80_KEY_D);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("E", black, bg_white)) {
-            lc80_key(ui->sys, 'e');
+            lc80_key(ui->sys, LC80_KEY_E);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("F", black, bg_white)) {
-            lc80_key(ui->sys, 'f');
+            lc80_key(ui->sys, LC80_KEY_F);
         }
         /* Row 3 */
         if (_ui_lc80_btn("ST", white, bg_black)) {
-            /* FIXME */
+            lc80_key(ui->sys, LC80_KEY_ST);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("8", black, bg_white)) {
-            lc80_key(ui->sys, '8');
+            lc80_key(ui->sys, LC80_KEY_8);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("9", black, bg_white)) {
-            lc80_key(ui->sys, '9');
+            lc80_key(ui->sys, LC80_KEY_9);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("A", black, bg_white)) {
-            lc80_key(ui->sys, 'a');
+            lc80_key(ui->sys, LC80_KEY_A);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("B", black, bg_white)) {
-            lc80_key(ui->sys, 'b');
+            lc80_key(ui->sys, LC80_KEY_B);
         }
         /* Row 4 */
         if (_ui_lc80_btn("LD", white, bg_black)) {
-            /* FIXME */
+            lc80_key(ui->sys, LC80_KEY_LD);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("4", black, bg_white)) {
-            lc80_key(ui->sys, '4');
+            lc80_key(ui->sys, LC80_KEY_4);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("5", black, bg_white)) {
-            lc80_key(ui->sys, '5');
+            lc80_key(ui->sys, LC80_KEY_5);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("6", black, bg_white)) {
-            lc80_key(ui->sys, '6');
+            lc80_key(ui->sys, LC80_KEY_6);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("7", black, bg_white)) {
-            lc80_key(ui->sys, '7');
+            lc80_key(ui->sys, LC80_KEY_7);
         }
         /* Row 5 */
         if (_ui_lc80_btn("EX", white, bg_black)) {
-            lc80_key(ui->sys, 0x20);    /* SPACE */
+            lc80_key(ui->sys, LC80_KEY_EX);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("0", black, bg_white)) {
-            lc80_key(ui->sys, '0');
+            lc80_key(ui->sys, LC80_KEY_0);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("1", black, bg_white)) {
-            lc80_key(ui->sys, '1');
+            lc80_key(ui->sys, LC80_KEY_1);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("2", black, bg_white)) {
-            lc80_key(ui->sys, '2');
+            lc80_key(ui->sys, LC80_KEY_2);
         }
         ImGui::SameLine();
         if (_ui_lc80_btn("3", black, bg_white)) {
-            lc80_key(ui->sys, '3');
+            lc80_key(ui->sys, LC80_KEY_3);
         }
     }
     ImGui::End();

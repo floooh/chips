@@ -74,6 +74,33 @@
 extern "C" {
 #endif
 
+/* key codes (for lc80_key(), lc80_key_down(), lc80_key_up() */
+#define LC80_KEY_0      ('0')
+#define LC80_KEY_1      ('1')
+#define LC80_KEY_2      ('2')
+#define LC80_KEY_3      ('3')
+#define LC80_KEY_4      ('4')
+#define LC80_KEY_5      ('5')
+#define LC80_KEY_6      ('6')
+#define LC80_KEY_7      ('7')
+#define LC80_KEY_8      ('8')
+#define LC80_KEY_9      ('9')
+#define LC80_KEY_A      ('a')
+#define LC80_KEY_B      ('b')
+#define LC80_KEY_C      ('c')
+#define LC80_KEY_D      ('d')
+#define LC80_KEY_E      ('e')
+#define LC80_KEY_F      ('f')
+#define LC80_KEY_RES    (0x01)
+#define LC80_KEY_ADR    (0x0B)
+#define LC80_KEY_DAT    (0x0A)
+#define LC80_KEY_PLUS   (0x09)
+#define LC80_KEY_MINUS  (0x08)
+#define LC80_KEY_NMI    (0x0D)
+#define LC80_KEY_ST     (0x02)
+#define LC80_KEY_LD     (0x03)
+#define LC80_KEY_EX     (0x20)
+
 /* U505D ROM chip pins */
 #define LC80_U505_A0     (1<<0)
 #define LC80_U505_A1     (1<<1)
@@ -185,6 +212,8 @@ typedef struct {
     uint32_t u505;              /* pin state of the 2 U505D ROM chips */
     uint32_t u214[2];           /* pin state of the 2 U214D RAM chips */
     uint32_t ds8205[2];         /* pin state of the 2 DS8205 3-to-8 decoders (equiv LS138) */
+    bool reset;
+    bool nmi;
 
     beeper_t beeper;
     clk_t clk;
@@ -269,9 +298,38 @@ void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
     const float audio_vol = _LC80_DEFAULT(desc->audio_volume, 0.8f);
     beeper_init(&sys->beeper, freq_hz, audio_hz, audio_vol);
 
-    kbd_init(&sys->kbd ,1);
-    // FIXME: keyboard matrix
+    /* keyboard matrix:
+          0   1   2   3   4   5
+        +---+---+---+---+---+---+   PIO (USR) Port B
+      0 |   | 3 | 7 | B | F | - |-> 4
+        +---+---+---+---+---+---+
+      1 |LD | 2 | + | E | A | 6 |-> 5
+        +---+---+---+---+---+---+
+      2 |ST | 1 | 5 | 9 | D |DAT|-> 6
+        +---+---+---+---+---+---+
+      3 |EX | 0 | 4 | 8 | C |ADR|-> 7
+        +---+---+---+---+---+---+
+          ^   ^   ^   ^   ^   ^
+          2   3   4   5   6   7
+             PIO (SYS) Port B
+    */
+    int kbd_matrix[4][6] = {
+        { 0,            LC80_KEY_3, LC80_KEY_7,     LC80_KEY_B, LC80_KEY_F, LC80_KEY_MINUS },
+        { LC80_KEY_LD,  LC80_KEY_2, LC80_KEY_PLUS,  LC80_KEY_E, LC80_KEY_A, LC80_KEY_6 },
+        { LC80_KEY_ST,  LC80_KEY_1, LC80_KEY_5,     LC80_KEY_9, LC80_KEY_D, LC80_KEY_DAT },
+        { LC80_KEY_EX,  LC80_KEY_0, LC80_KEY_4,     LC80_KEY_8, LC80_KEY_C, LC80_KEY_ADR }
+    };
+    kbd_init(&sys->kbd, 2);
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 6; col++) {
+            int key = kbd_matrix[row][col];
+            if (0 != key) {
+                kbd_register_key(&sys->kbd, key, col, row, 0);
+            }
+        }
+    }
 
+    /* execution starts at 0x0000 */
     z80_set_pc(&sys->cpu, 0x0000);
 }
 
@@ -282,6 +340,8 @@ void lc80_discard(lc80_t* sys) {
 
 void lc80_reset(lc80_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
+    sys->reset = false;
+    sys->nmi = false;
     z80_reset(&sys->cpu);
     z80ctc_reset(&sys->ctc);
     z80pio_reset(&sys->pio_sys);
@@ -296,22 +356,40 @@ void lc80_exec(lc80_t* sys, uint32_t micro_seconds) {
     uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);
+    if (sys->nmi) {
+        sys->nmi = false;
+    }
+    if (sys->reset) {
+        lc80_reset(sys);
+    }
 }
 
 void lc80_key_down(lc80_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
-    kbd_key_down(&sys->kbd, key_code);
+    switch (key_code) {
+        case LC80_KEY_RES: sys->reset = true; break;
+        case LC80_KEY_NMI: sys->nmi = true; break;
+        default: kbd_key_down(&sys->kbd, key_code);
+    }
 }
 
 void lc80_key_up(lc80_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
-    kbd_key_up(&sys->kbd, key_code);
+    switch (key_code) {
+        case LC80_KEY_RES:
+        case LC80_KEY_NMI:
+            /* not a bug */
+            break;
+        default:
+            kbd_key_up(&sys->kbd, key_code);
+            break;
+    }
 }
 
 void lc80_key(lc80_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
-    kbd_key_down(&sys->kbd, key_code);
-    kbd_key_up(&sys->kbd, key_code);
+    lc80_key_down(sys, key_code);
+    lc80_key_up(sys, key_code);
 }
 
 #define _LC80_HI(pins,mask) (0!=(pins&mask))
@@ -452,6 +530,15 @@ uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
         pins = z80pio_int(&sys->pio_sys, pins);
     }
     Z80_DAISYCHAIN_END(pins);
+
+    /* NMI? */
+    if (sys->nmi) {
+        pins |= Z80_NMI;
+    }
+    else {
+        pins &= ~Z80_NMI;
+    }
+
     return (pins & Z80_PIN_MASK);
 }
 
@@ -542,12 +629,22 @@ void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data) {
         else {
             sys->led[2] &= ~LC80_VQE23_K2;
         }
+        /* bits 2..7 of port B also double as input to the keyboard matrix */
+        uint8_t kbd_columns = ~(data >> 2) & 0x3F;
+        kbd_set_active_columns(&sys->kbd, kbd_columns);
     }
 }
 
 uint8_t _lc80_pio_usr_in(int port_id, void* user_data) {
-    // FIXME
-    return 0xFF;
+    lc80_t* sys = (lc80_t*) user_data;
+    /* bits 4..7 of port B are keyboard matrix lines */
+    if (port_id == 1) {
+        uint8_t kbd_lines = ~(kbd_scan_lines(&sys->kbd)<<4);
+        return kbd_lines;
+    }
+    else {
+        return 0xFF;
+    }
 }
 
 void _lc80_pio_usr_out(int port_id, uint8_t data, void* user_data) {
