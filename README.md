@@ -15,7 +15,7 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 ## What's New
 
 * **05-Aug-2019**:
-    - The Z80 and 6052 CPU emulators are now each in a single header instead
+    - The Z80 and 6502 CPU emulators are now each in a single header instead
     of being split into a manually written "outer header" which includes
     another code-generated header with the instruction decoder.
     No functional changes (I tried a variation of the Z80 emulator which goes
