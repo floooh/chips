@@ -65,6 +65,9 @@ typedef struct {
 typedef struct {
     const char* name;           /* the chip's name */
     int num_slots;              /* the number of pin slots */
+    int width;                  /* chip width in pixels (default: 64) */
+    bool pin_names_inside;      /* default: false */
+    bool name_outside;          /* default: false */
     ui_chip_pin_t pins[UI_CHIP_MAX_PINS];   /* the pin descriptions */
 } ui_chip_desc_t;
 
@@ -72,11 +75,15 @@ typedef struct {
 typedef struct {
     const char* name;
     int num_slots;
+    float width;
+    bool pin_names_inside;
+    bool name_outside;
     ui_chip_pin_t pins[UI_CHIP_MAX_PINS];   
 } ui_chip_t;
 
 void ui_chip_init(ui_chip_t* chip, const ui_chip_desc_t* desc);
 void ui_chip_draw(ui_chip_t* chip, uint64_t pins);
+void ui_chip_draw_at(ui_chip_t* chip, uint64_t pins, float x, float y); /* position is screen pos */
 
 /* helper function and macro to initialize a ui_chip_desc_t from an array of ui_chip_pin_t */
 void ui_chip_init_chip_desc(ui_chip_desc_t* desc, const char* name, int num_slots, const ui_chip_pin_t* pins, int num_pins);
@@ -104,19 +111,20 @@ void ui_chip_init(ui_chip_t* c, const ui_chip_desc_t* desc) {
     memset(c, 0, sizeof(ui_chip_t));
     c->name = desc->name;
     c->num_slots = desc->num_slots;
+    c->width = (desc->width == 0) ? 64.0f : (float) desc->width;
+    c->pin_names_inside = desc->pin_names_inside;
+    c->name_outside = desc->name_outside;
     for (int i = 0; i < UI_CHIP_MAX_PINS; i++) {
         c->pins[i] = desc->pins[i];
     }
 }
 
-void ui_chip_draw(ui_chip_t* c, uint64_t pins) {
+void ui_chip_draw_at(ui_chip_t* c, uint64_t pins, float x, float y) {
     ImDrawList* l = ImGui::GetWindowDrawList();
-    const ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
-    const ImVec2 canvas_area = ImGui::GetContentRegionAvail();
-    const float w = 64.0f;
+    const float w = c->width;
     const float h = (c->num_slots / 2) * 16.0f;
-    const float x0 = (float)(int) (canvas_pos.x + (canvas_area.x * 0.5f) - (w * 0.5f));
-    const float y0 = (float)(int) (canvas_pos.y + (canvas_area.y * 0.5f) - (h * 0.5f));
+    const float x0 = (float)(int) (x - (w * 0.5f));
+    const float y0 = (float)(int) (y - (h * 0.5f));
     const float x1 = x0 + w;
     const float y1 = y0 + h;
     const float xm = (float)(int)((x0 + x1) * 0.5f);
@@ -130,7 +138,12 @@ void ui_chip_draw(ui_chip_t* c, uint64_t pins) {
 
     l->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), line_color);
     ImVec2 ts = ImGui::CalcTextSize(c->name);
-    l->AddText(ImVec2(xm-(ts.x/2), ym-(ts.y/2)), text_color, c->name);
+    if (c->name_outside) {
+        l->AddText(ImVec2(xm-(ts.x/2), y0-ts.y), text_color, c->name);
+    }
+    else {
+        l->AddText(ImVec2(xm-(ts.x/2), ym-(ts.y/2)), text_color, c->name);
+    }
 
     float px, py, tx, ty;
     for (int i = 0; i < c->num_slots; i++) {
@@ -145,13 +158,23 @@ void ui_chip_draw(ui_chip_t* c, uint64_t pins) {
             /* left side */
             py += slot * slot_height;
             px = x0 - pw;
-            tx = px - ts.x - 4;
+            if (c->pin_names_inside) {
+                tx = px + pw + 4;
+            }
+            else {
+                tx = px - ts.x - 4;
+            }
         }
         else {
             /* right side */
             py += (slot - (c->num_slots/2)) * slot_height;
             px = x1;
-            tx = px + pw + 4;
+            if (c->pin_names_inside) {
+                tx = px - ts.x - 4;
+            }
+            else {
+                tx = px + pw + 4;
+            }
         }
         ty = py + (ph * 0.5f) - (ts.y * 0.5f);
         if (pins & pin->mask) {
@@ -160,6 +183,14 @@ void ui_chip_draw(ui_chip_t* c, uint64_t pins) {
         l->AddRect(ImVec2(px, py), ImVec2(px+pw, py+ph), line_color);
         l->AddText(ImVec2(tx, ty), text_color, pin->name);
     }
+}
+
+void ui_chip_draw(ui_chip_t* c, uint64_t pins) {
+    const ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+    const ImVec2 canvas_area = ImGui::GetContentRegionAvail();
+    const float x = canvas_pos.x + (canvas_area.x * 0.5f);
+    const float y = canvas_pos.y + (canvas_area.y * 0.5f);
+    ui_chip_draw_at(c, pins, x, y);
 }
 
 void ui_chip_init_chip_desc(ui_chip_desc_t* desc, const char* name, int num_slots, const ui_chip_pin_t* pins, int num_pins) {
