@@ -75,15 +75,23 @@ typedef struct {
     void* imgui_font;
     lc80_t* sys;
     ui_lc80_boot_t boot_cb;
-    ui_z80_t cpu;
-    ui_z80pio_t pio_sys;
-    ui_z80pio_t pio_usr;
-    ui_z80ctc_t ctc;
-    ui_audio_t audio;
-    ui_kbd_t kbd;
-    ui_memedit_t memedit[4];
-    ui_dasm_t dasm[4];
-    ui_dbg_t dbg;
+    struct {
+        ui_z80_t cpu;
+        ui_z80pio_t pio_sys;
+        ui_z80pio_t pio_usr;
+        ui_z80ctc_t ctc;
+        ui_audio_t audio;
+        ui_kbd_t kbd;
+        ui_memedit_t memedit[4];
+        ui_dasm_t dasm[4];
+        ui_dbg_t dbg;
+    } win;
+    struct {
+        ui_chip_t cpu;
+        ui_chip_t pio_sys;
+        ui_chip_t pio_usr;
+        ui_chip_t ctc;
+    } mb;
 } ui_lc80_t;
 
 void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* desc);
@@ -110,6 +118,22 @@ void ui_lc80_after_exec(ui_lc80_t* ui);
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
+
+/* set ImGui screen cursor pos */
+static void _ui_lc80_set_pos(float x, float y) {
+    ImVec2 disp_size = ImGui::GetIO().DisplaySize;
+    if (x < 0) {
+        x = disp_size.x + x;
+    }
+    if (y < 0) {
+        y = disp_size.y + y;
+    }
+    ImGui::SetCursorScreenPos(ImVec2(x, y));
+}
+
+static ImVec2 _ui_lc80_pos(void) {
+    return ImGui::GetCursorScreenPos();
+}
 
 /*
     Draw a 7+1 segment digit
@@ -198,27 +222,29 @@ static ImVec2 _ui_lc80_draw_vqe23(ImDrawList* l, ImVec2 pos, uint16_t segs, cons
 
 static ImVec2 _ui_lc80_draw_tape_led(ImDrawList* l, ImVec2 pos, bool on, const _ui_lc80_display_config& conf) {
     l->AddCircleFilled(pos, conf.led_radius, on ? conf.color_on : conf.color_off);
-    l->AddCircle(pos, conf.led_radius, conf.color_outline);
+    return ImVec2(pos.x + 2 * conf.led_radius, pos.y);
+}
+
+static ImVec2 _ui_lc80_draw_halt_led(ImDrawList* l, ImVec2 pos, bool on, const _ui_lc80_display_config& conf) {
+    ImU32 color_on = 0xFF0000CC;
+    ImU32 color_off = 0xFF888888;
+    l->AddCircleFilled(pos, conf.led_radius, on ? color_on : color_off);
     return ImVec2(pos.x + 2 * conf.led_radius, pos.y);
 }
 
 static void _ui_lc80_draw_display(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui);
     const _ui_lc80_display_config conf;
-    ImGui::SetNextWindowPos(ImVec2(600, 172), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(380, 128), ImGuiCond_Once);
-    if (ImGui::Begin("LC-80 Display Test")) {
-        ImDrawList* l = ImGui::GetWindowDrawList();
-        ImVec2 p = ImGui::GetCursorScreenPos();
-        const ImVec2 led_pos(p.x + 10.0f, p.y + 24.0f);
-        _ui_lc80_draw_tape_led(l, ImVec2(p.x+16.0f, p.y+16.0f), 0==(ui->sys->pio_sys.port[Z80PIO_PORT_B].output&2), conf);
-        ImVec2 disp_pos(p.x + 84.0f, p.y + 48.0f);
-        disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[2], conf);
-        disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[1], conf);
-        disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[0], conf);
-        ImGui::SetCursorScreenPos(p);
-    }
-    ImGui::End();
+    ImDrawList* l = ImGui::GetWindowDrawList();
+    ImVec2 p = _ui_lc80_pos();
+    const ImVec2 led_pos(p.x + 10.0f, p.y + 24.0f);
+    _ui_lc80_draw_tape_led(l, ImVec2(p.x+16.0f, p.y+24.0f), 0==(ui->sys->pio_sys.port[Z80PIO_PORT_B].output&2), conf);
+    _ui_lc80_draw_halt_led(l, ImVec2(p.x+16.0f, p.y+48.0f), 0!=(ui->sys->cpu.pins & Z80_HALT), conf);
+    ImVec2 disp_pos(p.x + 84.0f, p.y + 48.0f);
+    disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[2], conf);
+    disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[1], conf);
+    disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[0], conf);
+    _ui_lc80_set_pos(p.x, p.y + 104.0f);
 }
 
 static bool _ui_lc80_btn(const char* text, ImU32 fg_color, ImU32 bg_color) {
@@ -234,114 +260,137 @@ static bool _ui_lc80_btn(const char* text, ImU32 fg_color, ImU32 bg_color) {
 
 static void _ui_lc80_draw_keyboard(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui);
-    ImGui::SetNextWindowPos(ImVec2(600, 300), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(380, 400), ImGuiCond_Once);
-    if (ImGui::Begin("LC-80 Keyboard Test")) {
-        const ImU32 bg_red = 0xFF0000AA;
-        const ImU32 bg_black = 0xFF444444;
-        const ImU32 bg_white = 0xFFBBBBBB;
-        const ImU32 black = 0xFF000000;
-        const ImU32 white = 0xFFFFFFFF;
-        /* Row 1 */
-        if (_ui_lc80_btn("RES", white, bg_red)) {
-            lc80_key(ui->sys, LC80_KEY_RES);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("ADR", white, bg_black)) {
-            lc80_key(ui->sys, LC80_KEY_ADR);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("DAT", white, bg_black)) {
-            lc80_key(ui->sys, LC80_KEY_DAT);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("+", white, bg_black)) {
-            lc80_key(ui->sys, LC80_KEY_PLUS);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("-", white, bg_black)) {
-            lc80_key(ui->sys, LC80_KEY_MINUS);
-        }
-        /* Row 2 */
-        if (_ui_lc80_btn("NMI", white, bg_red)) {
-            lc80_key(ui->sys, LC80_KEY_NMI);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("C", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_C);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("D", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_D);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("E", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_E);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("F", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_F);
-        }
-        /* Row 3 */
-        if (_ui_lc80_btn("ST", white, bg_black)) {
-            lc80_key(ui->sys, LC80_KEY_ST);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("8", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_8);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("9", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_9);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("A", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_A);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("B", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_B);
-        }
-        /* Row 4 */
-        if (_ui_lc80_btn("LD", white, bg_black)) {
-            lc80_key(ui->sys, LC80_KEY_LD);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("4", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_4);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("5", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_5);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("6", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_6);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("7", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_7);
-        }
-        /* Row 5 */
-        if (_ui_lc80_btn("EX", white, bg_black)) {
-            lc80_key(ui->sys, LC80_KEY_EX);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("0", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_0);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("1", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_1);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("2", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_2);
-        }
-        ImGui::SameLine();
-        if (_ui_lc80_btn("3", black, bg_white)) {
-            lc80_key(ui->sys, LC80_KEY_3);
-        }
+    const ImU32 bg_red = 0xFF0000AA;
+    const ImU32 bg_black = 0xFF444444;
+    const ImU32 bg_white = 0xFFBBBBBB;
+    const ImU32 black = 0xFF000000;
+    const ImU32 white = 0xFFFFFFFF;
+    /* Row 1 */
+    if (_ui_lc80_btn("RES", white, bg_red)) {
+        lc80_key(ui->sys, LC80_KEY_RES);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("ADR", white, bg_black)) {
+        lc80_key(ui->sys, LC80_KEY_ADR);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("DAT", white, bg_black)) {
+        lc80_key(ui->sys, LC80_KEY_DAT);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("+", white, bg_black)) {
+        lc80_key(ui->sys, LC80_KEY_PLUS);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("-", white, bg_black)) {
+        lc80_key(ui->sys, LC80_KEY_MINUS);
+    }
+    /* Row 2 */
+    if (_ui_lc80_btn("NMI", white, bg_red)) {
+        lc80_key(ui->sys, LC80_KEY_NMI);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("C", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_C);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("D", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_D);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("E", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_E);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("F", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_F);
+    }
+    /* Row 3 */
+    if (_ui_lc80_btn("ST", white, bg_black)) {
+        lc80_key(ui->sys, LC80_KEY_ST);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("8", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_8);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("9", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_9);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("A", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_A);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("B", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_B);
+    }
+    /* Row 4 */
+    if (_ui_lc80_btn("LD", white, bg_black)) {
+        lc80_key(ui->sys, LC80_KEY_LD);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("4", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_4);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("5", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_5);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("6", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_6);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("7", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_7);
+    }
+    /* Row 5 */
+    if (_ui_lc80_btn("EX", white, bg_black)) {
+        lc80_key(ui->sys, LC80_KEY_EX);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("0", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_0);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("1", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_1);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("2", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_2);
+    }
+    ImGui::SameLine();
+    if (_ui_lc80_btn("3", black, bg_white)) {
+        lc80_key(ui->sys, LC80_KEY_3);
+    }
+}
+
+static void _ui_lc80_draw_display_and_keyboard(ui_lc80_t* ui) {
+    ImVec2 pos = ImGui::GetIO().DisplaySize;
+    pos.x -= 380;
+    pos.y -= 330;
+    _ui_lc80_set_pos(pos.x, pos.y);
+    ImGui::BeginChild("display_keyboard_unit", ImVec2(380, 330));
+    _ui_lc80_draw_display(ui);
+    ImGui::Indent(48.0f);
+    _ui_lc80_draw_keyboard(ui);
+    ImGui::Unindent();
+    ImGui::EndChild();
+}
+
+static void _ui_lc80_draw_motherboard(ui_lc80_t* ui) {
+    ImGui::SetNextWindowPos(ImVec2(0, 16), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
+    if (ImGui::Begin("LC-80", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar)) {
+        _ui_lc80_set_pos(-380, -330);
+        _ui_lc80_draw_display_and_keyboard(ui);
+        ui_chip_draw_at(&ui->mb.cpu, ui->sys->cpu.pins, 128, 520);
+        ui_chip_draw_at(&ui->mb.ctc, ui->sys->ctc.pins, 128, 190);
+        ui_chip_draw_at(&ui->mb.pio_usr, ui->sys->pio_usr.pins, 460, 210);
+        ui_chip_draw_at(&ui->mb.pio_sys, ui->sys->pio_sys.pins, 800, 210);
+
     }
     ImGui::End();
 }
@@ -352,7 +401,7 @@ static void _ui_lc80_draw_menu(ui_lc80_t* ui, double time_ms) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
                 lc80_reset(ui->sys);
-                ui_dbg_reset(&ui->dbg);
+                ui_dbg_reset(&ui->win.dbg);
             }
             if (ImGui::MenuItem("Cold Boot")) {
                 ui->boot_cb(ui->sys);
@@ -360,37 +409,51 @@ static void _ui_lc80_draw_menu(ui_lc80_t* ui, double time_ms) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Hardware")) {
-            ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
-            ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
-            ImGui::MenuItem("Z80 CPU", 0, &ui->cpu.open);
-            ImGui::MenuItem("Z80 PIO (SYS)", 0, &ui->pio_sys.open);
-            ImGui::MenuItem("Z80 PIO (USR)", 0, &ui->pio_usr.open);
-            ImGui::MenuItem("Z80 CTC", 0, &ui->ctc.open);
+            ImGui::MenuItem("Keyboard Matrix", 0, &ui->win.kbd.open);
+            ImGui::MenuItem("Audio Output", 0, &ui->win.audio.open);
+            ImGui::MenuItem("Z80 CPU", 0, &ui->win.cpu.open);
+            ImGui::MenuItem("Z80 PIO (SYS)", 0, &ui->win.pio_sys.open);
+            ImGui::MenuItem("Z80 PIO (USR)", 0, &ui->win.pio_usr.open);
+            ImGui::MenuItem("Z80 CTC", 0, &ui->win.ctc.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
-            ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
-            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
-            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
+            ImGui::MenuItem("CPU Debugger", 0, &ui->win.dbg.ui.open);
+            ImGui::MenuItem("Breakpoints", 0, &ui->win.dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Memory Heatmap", 0, &ui->win.dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
-                ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
-                ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
-                ImGui::MenuItem("Window #3", 0, &ui->memedit[2].open);
-                ImGui::MenuItem("Window #4", 0, &ui->memedit[3].open);
+                ImGui::MenuItem("Window #1", 0, &ui->win.memedit[0].open);
+                ImGui::MenuItem("Window #2", 0, &ui->win.memedit[1].open);
+                ImGui::MenuItem("Window #3", 0, &ui->win.memedit[2].open);
+                ImGui::MenuItem("Window #4", 0, &ui->win.memedit[3].open);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Disassembler")) {
-                ImGui::MenuItem("Window #1", 0, &ui->dasm[0].open);
-                ImGui::MenuItem("Window #2", 0, &ui->dasm[1].open);
-                ImGui::MenuItem("Window #3", 0, &ui->dasm[2].open);
-                ImGui::MenuItem("Window #4", 0, &ui->dasm[3].open);
+                ImGui::MenuItem("Window #1", 0, &ui->win.dasm[0].open);
+                ImGui::MenuItem("Window #2", 0, &ui->win.dasm[1].open);
+                ImGui::MenuItem("Window #3", 0, &ui->win.dasm[2].open);
+                ImGui::MenuItem("Window #4", 0, &ui->win.dasm[3].open);
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu(time_ms, ui->win.dbg.dbg.stopped);
         ImGui::EndMainMenuBar();
     }
+}
+
+static void _ui_lc80_draw_windows(ui_lc80_t* ui) {
+    ui_audio_draw(&ui->win.audio, ui->sys->sample_pos);
+    ui_kbd_draw(&ui->win.kbd);
+    ui_z80_draw(&ui->win.cpu);
+    ui_z80pio_draw(&ui->win.pio_sys);
+    ui_z80pio_draw(&ui->win.pio_usr);
+    ui_z80ctc_draw(&ui->win.ctc);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_draw(&ui->win.memedit[i]);
+        ui_dasm_draw(&ui->win.dasm[i]);
+    }
+    ui_dbg_draw(&ui->win.dbg);
 }
 
 static const ui_chip_pin_t _ui_lc80_cpu_pins[] = {
@@ -492,6 +555,33 @@ static const ui_chip_pin_t _ui_lc80_ctc_pins[] = {
     { "CT3",    25,     Z80CTC_CLKTRG3 },
 };
 
+static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
+    const float chip_width = 96.0f;
+
+    ui_chip_desc_t cpu_desc;
+    UI_CHIP_INIT_DESC(&cpu_desc, "Z80 CPU", 36, _ui_lc80_cpu_pins);
+    cpu_desc.width = chip_width;
+    cpu_desc.pin_names_inside = true;
+    cpu_desc.name_outside = true;
+    ui_chip_init(&ui->mb.cpu, &cpu_desc);
+
+    ui_chip_desc_t pio_desc;
+    UI_CHIP_INIT_DESC(&pio_desc, "Z80 PIO (SYS)", 40, _ui_lc80_pio_pins);
+    pio_desc.width = chip_width;
+    pio_desc.pin_names_inside = true;
+    pio_desc.name_outside = true;
+    ui_chip_init(&ui->mb.pio_sys, &pio_desc);
+    pio_desc.name = "Z80 PIO (USR)";
+    ui_chip_init(&ui->mb.pio_usr, &pio_desc);
+
+    ui_chip_desc_t ctc_desc;
+    UI_CHIP_INIT_DESC(&ctc_desc, "Z80 CTC", 32, _ui_lc80_ctc_pins);
+    ctc_desc.width = chip_width;
+    ctc_desc.pin_names_inside = true;
+    ctc_desc.name_outside = true;
+    ui_chip_init(&ui->mb.ctc, &ctc_desc);
+}
+
 static uint8_t _ui_lc80_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
     lc80_t* sys = (lc80_t*) user_data;
@@ -517,13 +607,7 @@ void _ui_lc80_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data)
     }
 }
 
-void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
-    CHIPS_ASSERT(ui && ui_desc);
-    CHIPS_ASSERT(ui_desc->sys);
-    CHIPS_ASSERT(ui_desc->boot_cb);
-
-    ui->sys = ui_desc->sys;
-    ui->boot_cb = ui_desc->boot_cb;
+static void _ui_lc80_init_windows(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};
@@ -537,7 +621,7 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui->sys;
-        ui_dbg_init(&ui->dbg, &desc);
+        ui_dbg_init(&ui->win.dbg, &desc);
     }
     x += dx; y += dy;
     {
@@ -547,7 +631,7 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCPU", 36, _ui_lc80_cpu_pins);
-        ui_z80_init(&ui->cpu, &desc);
+        ui_z80_init(&ui->win.cpu, &desc);
     }
     x += dx; y += dy;
     {
@@ -557,11 +641,11 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nPIO", 40, _ui_lc80_pio_pins);
-        ui_z80pio_init(&ui->pio_sys, &desc);
+        ui_z80pio_init(&ui->win.pio_sys, &desc);
         x += dx; y += dy;
         desc.title = "Z80 PIO (USR)";
         desc.pio = &ui->sys->pio_usr;
-        ui_z80pio_init(&ui->pio_usr, &desc);
+        ui_z80pio_init(&ui->win.pio_usr, &desc);
     }
     x += dx; y += dy;
     {
@@ -571,7 +655,7 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "Z80\nCTC", 32, _ui_lc80_ctc_pins);
-        ui_z80ctc_init(&ui->ctc, &desc);
+        ui_z80ctc_init(&ui->win.ctc, &desc);
     }
     x += dx; y += dy;
     {
@@ -581,7 +665,7 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         desc.num_samples = ui->sys->num_samples;
         desc.x = x;
         desc.y = y;
-        ui_audio_init(&ui->audio, &desc);
+        ui_audio_init(&ui->win.audio, &desc);
     }
     x += dx; y += dy;
     {
@@ -591,7 +675,7 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         desc.layers[0] = "None";
         desc.x = x;
         desc.y = y;
-        ui_kbd_init(&ui->kbd, &desc);
+        ui_kbd_init(&ui->win.kbd, &desc);
     }
     x += dx; y += dy;
     {
@@ -603,7 +687,7 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         static const char* titles[] = { "Memory Editor #1", "Memory Editor #2", "Memory Editor #3", "Memory Editor #4" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
-            ui_memedit_init(&ui->memedit[i], &desc);
+            ui_memedit_init(&ui->win.memedit[i], &desc);
             x += dx; y += dy;
         }
     }
@@ -617,54 +701,57 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
         static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
-            ui_dasm_init(&ui->dasm[i], &desc);
+            ui_dasm_init(&ui->win.dasm[i], &desc);
             x += dx; y += dy;
         }
     }
 }
 
+static void _ui_lc80_discard_windows(ui_lc80_t* ui) {
+    ui_z80_discard(&ui->win.cpu);
+    ui_z80pio_discard(&ui->win.pio_sys);
+    ui_z80pio_discard(&ui->win.pio_usr);
+    ui_z80ctc_discard(&ui->win.ctc);
+    ui_audio_discard(&ui->win.audio);
+    ui_kbd_discard(&ui->win.kbd);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_discard(&ui->win.memedit[i]);
+        ui_dasm_discard(&ui->win.dasm[i]);
+    }
+    ui_dbg_discard(&ui->win.dbg);
+}
+
+void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
+    CHIPS_ASSERT(ui && ui_desc);
+    CHIPS_ASSERT(ui_desc->sys);
+    CHIPS_ASSERT(ui_desc->boot_cb);
+    ui->sys = ui_desc->sys;
+    ui->boot_cb = ui_desc->boot_cb;
+    _ui_lc80_init_windows(ui, ui_desc);
+    _ui_lc80_init_motherboard(ui);
+}
+
 void ui_lc80_discard(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui && ui->sys);
     ui->sys = 0;
-    ui_z80_discard(&ui->cpu);
-    ui_z80pio_discard(&ui->pio_sys);
-    ui_z80pio_discard(&ui->pio_usr);
-    ui_z80ctc_discard(&ui->ctc);
-    ui_audio_discard(&ui->audio);
-    ui_kbd_discard(&ui->kbd);
-    for (int i = 0; i < 4; i++) {
-        ui_memedit_discard(&ui->memedit[i]);
-        ui_dasm_discard(&ui->dasm[i]);
-    }
-    ui_dbg_discard(&ui->dbg);
+    _ui_lc80_discard_windows(ui);
 }
 
 void ui_lc80_draw(ui_lc80_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->sys);
     _ui_lc80_draw_menu(ui, time_ms);
-    _ui_lc80_draw_display(ui);
-    _ui_lc80_draw_keyboard(ui);
-    ui_audio_draw(&ui->audio, ui->sys->sample_pos);
-    ui_kbd_draw(&ui->kbd);
-    ui_z80_draw(&ui->cpu);
-    ui_z80pio_draw(&ui->pio_sys);
-    ui_z80pio_draw(&ui->pio_usr);
-    ui_z80ctc_draw(&ui->ctc);
-    for (int i = 0; i < 4; i++) {
-        ui_memedit_draw(&ui->memedit[i]);
-        ui_dasm_draw(&ui->dasm[i]);
-    }
-    ui_dbg_draw(&ui->dbg);
+    _ui_lc80_draw_motherboard(ui);
+    _ui_lc80_draw_windows(ui);
 }
 
 bool ui_lc80_before_exec(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui && ui->sys);
-    return ui_dbg_before_exec(&ui->dbg);
+    return ui_dbg_before_exec(&ui->win.dbg);
 }
 
 void ui_lc80_after_exec(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui && ui->sys);
-    ui_dbg_after_exec(&ui->dbg);
+    ui_dbg_after_exec(&ui->win.dbg);
 }
 
 #ifdef __clang__
