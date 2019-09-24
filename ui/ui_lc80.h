@@ -91,6 +91,9 @@ typedef struct {
         ui_chip_t pio_sys;
         ui_chip_t pio_usr;
         ui_chip_t ctc;
+        ui_chip_t u505;
+        ui_chip_t u214[2];
+        ui_chip_t ds8205[2];
     } mb;
 } ui_lc80_t;
 
@@ -386,11 +389,15 @@ static void _ui_lc80_draw_motherboard(ui_lc80_t* ui) {
     if (ImGui::Begin("LC-80", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar)) {
         _ui_lc80_set_pos(-380, -330);
         _ui_lc80_draw_display_and_keyboard(ui);
-        ui_chip_draw_at(&ui->mb.cpu, ui->sys->cpu.pins, 128, 520);
-        ui_chip_draw_at(&ui->mb.ctc, ui->sys->ctc.pins, 128, 190);
-        ui_chip_draw_at(&ui->mb.pio_usr, ui->sys->pio_usr.pins, 460, 210);
-        ui_chip_draw_at(&ui->mb.pio_sys, ui->sys->pio_sys.pins, 800, 210);
-
+        ui_chip_draw_at(&ui->mb.cpu, ui->sys->cpu.pins, 128, 190);
+        ui_chip_draw_at(&ui->mb.ctc, ui->sys->ctc.pins, 128, 560);
+        ui_chip_draw_at(&ui->mb.pio_usr, ui->sys->pio_usr.pins, 320, 540);
+        ui_chip_draw_at(&ui->mb.pio_sys, ui->sys->pio_sys.pins, 520, 540);
+        ui_chip_draw_at(&ui->mb.u505, ui->sys->u505, 520, 190);
+        ui_chip_draw_at(&ui->mb.u214[0], ui->sys->u214[0], 700, 190);
+        ui_chip_draw_at(&ui->mb.u214[0], ui->sys->u214[1], 880, 190);
+        ui_chip_draw_at(&ui->mb.ds8205[0], ui->sys->ds8205[0], 320, 120);
+        ui_chip_draw_at(&ui->mb.ds8205[0], ui->sys->ds8205[1], 320, 270);
     }
     ImGui::End();
 }
@@ -555,19 +562,79 @@ static const ui_chip_pin_t _ui_lc80_ctc_pins[] = {
     { "CT3",    25,     Z80CTC_CLKTRG3 },
 };
 
+static const ui_chip_pin_t _ui_lc80_u505_pins[] = {
+    { "A0",     0,      LC80_U505_A0 },
+    { "A1",     1,      LC80_U505_A1 },
+    { "A2",     2,      LC80_U505_A2 },
+    { "A3",     3,      LC80_U505_A3 },
+    { "A4",     4,      LC80_U505_A4 },
+    { "A5",     5,      LC80_U505_A5 },
+    { "A6",     6,      LC80_U505_A6 },
+    { "A7",     7,      LC80_U505_A7 },
+    { "A8",     8,      LC80_U505_A8 },
+    { "A9",     9,      LC80_U505_A9 },
+    { "A10",    10,     LC80_U505_A10 },
+    { "CS",     11,     LC80_U505_CS },
+    { "D0",     13,     LC80_U505_D0 },
+    { "D1",     14,     LC80_U505_D1 },
+    { "D2",     15,     LC80_U505_D2 },
+    { "D3",     16,     LC80_U505_D3 },
+    { "D4",     17,     LC80_U505_D4 },
+    { "D5",     18,     LC80_U505_D5 },
+    { "D6",     19,     LC80_U505_D6 },
+    { "D7",     20,     LC80_U505_D7 },
+};
+
+static const ui_chip_pin_t _ui_lc80_u214_pins[] = {
+    { "A0",     0,      LC80_U214_A0 },
+    { "A1",     1,      LC80_U214_A1 },
+    { "A2",     2,      LC80_U214_A2 },
+    { "A3",     3,      LC80_U214_A3 },
+    { "A4",     4,      LC80_U214_A4 },
+    { "A5",     5,      LC80_U214_A5 },
+    { "A6",     6,      LC80_U214_A6 },
+    { "A7",     7,      LC80_U214_A7 },
+    { "A8",     8,      LC80_U214_A8 },
+    { "A9",     9,      LC80_U214_A8 },
+    { "CS",     10,     LC80_U214_CS },
+    { "WR",     11,     LC80_U214_WR },
+    { "D0",     13,     LC80_U214_D0 },
+    { "D1",     14,     LC80_U214_D1 },
+    { "D2",     15,     LC80_U214_D2 },
+    { "D3",     16,     LC80_U214_D3 },
+};
+
+static const ui_chip_pin_t _ui_lc80_ds8205_pins[] = {
+    { "A",      0,      LC80_DS8205_A },
+    { "B",      1,      LC80_DS8205_B },
+    { "C",      2,      LC80_DS8205_C },
+    { "G1",     4,      LC80_DS8205_G1 },
+    { "G2A",    5,      LC80_DS8205_G2A },
+    { "G2B",    6,      LC80_DS8205_G2B },
+    { "Y0",     8,      LC80_DS8205_Y0 },
+    { "Y1",     9,      LC80_DS8205_Y1 },
+    { "Y2",     10,     LC80_DS8205_Y2 },
+    { "Y3",     11,     LC80_DS8205_Y3 },
+    { "Y4",     12,     LC80_DS8205_Y4 },
+    { "Y5",     13,     LC80_DS8205_Y5 },
+    { "Y6",     14,     LC80_DS8205_Y6 },
+    { "Y7",     15,     LC80_DS8205_Y7 },
+};
+
 static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
-    const float chip_width = 96.0f;
+    const float ic_width = 80.0f;
+    const float ic_width_slim = 48.0f;
 
     ui_chip_desc_t cpu_desc;
     UI_CHIP_INIT_DESC(&cpu_desc, "Z80 CPU", 36, _ui_lc80_cpu_pins);
-    cpu_desc.width = chip_width;
+    cpu_desc.width = ic_width;
     cpu_desc.pin_names_inside = true;
     cpu_desc.name_outside = true;
     ui_chip_init(&ui->mb.cpu, &cpu_desc);
 
     ui_chip_desc_t pio_desc;
     UI_CHIP_INIT_DESC(&pio_desc, "Z80 PIO (SYS)", 40, _ui_lc80_pio_pins);
-    pio_desc.width = chip_width;
+    pio_desc.width = ic_width;
     pio_desc.pin_names_inside = true;
     pio_desc.name_outside = true;
     ui_chip_init(&ui->mb.pio_sys, &pio_desc);
@@ -576,10 +643,33 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
 
     ui_chip_desc_t ctc_desc;
     UI_CHIP_INIT_DESC(&ctc_desc, "Z80 CTC", 32, _ui_lc80_ctc_pins);
-    ctc_desc.width = chip_width;
+    ctc_desc.width = ic_width;
     ctc_desc.pin_names_inside = true;
     ctc_desc.name_outside = true;
     ui_chip_init(&ui->mb.ctc, &ctc_desc);
+
+    ui_chip_desc_t u505_desc;
+    UI_CHIP_INIT_DESC(&u505_desc, "U505 (ROM)", 22, _ui_lc80_u505_pins);
+    u505_desc.width = ic_width_slim;
+    u505_desc.pin_names_inside = true;
+    u505_desc.name_outside = true;
+    ui_chip_init(&ui->mb.u505, &u505_desc);
+
+    ui_chip_desc_t u214_desc;
+    UI_CHIP_INIT_DESC(&u214_desc, "U214 (RAM)", 20, _ui_lc80_u214_pins);
+    u214_desc.width = ic_width_slim;
+    u214_desc.pin_names_inside = true;
+    u214_desc.name_outside = true;
+    ui_chip_init(&ui->mb.u214[0], &u214_desc);
+    ui_chip_init(&ui->mb.u214[1], &u214_desc);
+
+    ui_chip_desc_t ds8205_desc;
+    UI_CHIP_INIT_DESC(&ds8205_desc, "DS8205", 16, _ui_lc80_ds8205_pins);
+    ds8205_desc.width = ic_width_slim;
+    ds8205_desc.pin_names_inside = true;
+    ds8205_desc.name_outside = true;
+    ui_chip_init(&ui->mb.ds8205[0], &ds8205_desc);
+    ui_chip_init(&ui->mb.ds8205[1], &ds8205_desc);
 }
 
 static uint8_t _ui_lc80_mem_read(int layer, uint16_t addr, void* user_data) {
