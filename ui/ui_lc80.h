@@ -627,14 +627,14 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
 
     ui_chip_desc_t cpu_desc;
     UI_CHIP_INIT_DESC(&cpu_desc, "Z80 CPU", 36, _ui_lc80_cpu_pins);
-    cpu_desc.width = ic_width;
+    cpu_desc.chip_width = ic_width;
     cpu_desc.pin_names_inside = true;
     cpu_desc.name_outside = true;
     ui_chip_init(&ui->mb.cpu, &cpu_desc);
 
     ui_chip_desc_t pio_desc;
     UI_CHIP_INIT_DESC(&pio_desc, "Z80 PIO (SYS)", 40, _ui_lc80_pio_pins);
-    pio_desc.width = ic_width;
+    pio_desc.chip_width = ic_width;
     pio_desc.pin_names_inside = true;
     pio_desc.name_outside = true;
     ui_chip_init(&ui->mb.pio_sys, &pio_desc);
@@ -643,21 +643,21 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
 
     ui_chip_desc_t ctc_desc;
     UI_CHIP_INIT_DESC(&ctc_desc, "Z80 CTC", 32, _ui_lc80_ctc_pins);
-    ctc_desc.width = ic_width;
+    ctc_desc.chip_width = ic_width;
     ctc_desc.pin_names_inside = true;
     ctc_desc.name_outside = true;
     ui_chip_init(&ui->mb.ctc, &ctc_desc);
 
     ui_chip_desc_t u505_desc;
     UI_CHIP_INIT_DESC(&u505_desc, "U505 (ROM)", 22, _ui_lc80_u505_pins);
-    u505_desc.width = ic_width_slim;
+    u505_desc.chip_width = ic_width_slim;
     u505_desc.pin_names_inside = true;
     u505_desc.name_outside = true;
     ui_chip_init(&ui->mb.u505, &u505_desc);
 
     ui_chip_desc_t u214_desc;
     UI_CHIP_INIT_DESC(&u214_desc, "U214 (RAM)", 20, _ui_lc80_u214_pins);
-    u214_desc.width = ic_width_slim;
+    u214_desc.chip_width = ic_width_slim;
     u214_desc.pin_names_inside = true;
     u214_desc.name_outside = true;
     ui_chip_init(&ui->mb.u214[0], &u214_desc);
@@ -665,7 +665,7 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
 
     ui_chip_desc_t ds8205_desc;
     UI_CHIP_INIT_DESC(&ds8205_desc, "DS8205", 16, _ui_lc80_ds8205_pins);
-    ds8205_desc.width = ic_width_slim;
+    ds8205_desc.chip_width = ic_width_slim;
     ds8205_desc.pin_names_inside = true;
     ds8205_desc.name_outside = true;
     ui_chip_init(&ui->mb.ds8205[0], &ds8205_desc);
