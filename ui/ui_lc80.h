@@ -122,6 +122,31 @@ void ui_lc80_after_exec(ui_lc80_t* ui);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
+struct _ui_lc80_mb_config {
+    ImVec2 cpu_pos = { 128, 190 };
+    ImVec2 ctc_pos = { 128, 560 };
+    ImVec2 pio_usr_pos = { 320, 540 };
+    ImVec2 pio_sys_pos = { 520, 540 };
+    ImVec2 u505_pos = { 520, 190 };
+    ImVec2 u214_pos[2] = { { 700, 190 }, { 880, 190 } };
+    ImVec2 ds8205_pos[2]  { { 320, 120 }, { 320, 270 } };
+    ImU32 wire_color_on = 0xFFFFFFFF;
+    ImU32 wire_color_off = 0xFF777777;
+    struct {
+        float digit_padding = 14.0f;
+        float segment_length = 24.0f;
+        float segment_thickness = 8.0f;
+        float dot_offset_x = 22.0f;
+        float dot_offset_y = 24.0f;
+        float dot_radius = 5.0f;
+        float led_radius = 10.0f;
+        ImU32 color_on = 0xFF00FF00;
+        ImU32 color_off = 0xFF004400;
+        ImU32 color_outline = 0xFF002200;
+        ImU32 color_background = 0xFF002200;
+    } display;
+};
+
 /* set ImGui screen cursor pos */
 static void _ui_lc80_set_pos(float x, float y) {
     ImVec2 disp_size = ImGui::GetIO().DisplaySize;
@@ -147,23 +172,10 @@ static ImVec2 _ui_lc80_pos(void) {
     |   |
      --- x
 */
-struct _ui_lc80_display_config {
-    float digit_padding = 14.0f;
-    float segment_length = 24.0f;
-    float segment_thickness = 8.0f;
-    float dot_offset_x = 22.0f;
-    float dot_offset_y = 24.0f;
-    float dot_radius = 5.0f;
-    float led_radius = 10.0f;
-    ImU32 color_on = 0xFF00FF00;
-    ImU32 color_off = 0xFF004400;
-    ImU32 color_outline = 0xFF002200;
-    ImU32 color_background = 0xFF002200;
-};
 
-static void _ui_lc80_draw_seg_hori(ImDrawList* l, const ImVec2& p, bool on, const _ui_lc80_display_config& conf) {
-    const float dx = conf.segment_length * 0.5f;
-    const float dy = conf.segment_thickness * 0.5f;
+static void _ui_lc80_draw_seg_hori(ImDrawList* l, const ImVec2& p, bool on, const _ui_lc80_mb_config& conf) {
+    const float dx = conf.display.segment_length * 0.5f;
+    const float dy = conf.display.segment_thickness * 0.5f;
     ImVec2 points[6] = {
         ImVec2((p.x - dx),      p.y),
         ImVec2((p.x - dx) + dy, p.y - dy),
@@ -172,13 +184,13 @@ static void _ui_lc80_draw_seg_hori(ImDrawList* l, const ImVec2& p, bool on, cons
         ImVec2((p.x + dx) - dy, p.y + dy),
         ImVec2((p.x - dx) + dy, p.y + dy)
     };
-    l->AddConvexPolyFilled(points, 6, on ? conf.color_on : conf.color_off);
-    l->AddPolyline(points, 6, conf.color_outline, true, 1.0f);
+    l->AddConvexPolyFilled(points, 6, on ? conf.display.color_on : conf.display.color_off);
+    l->AddPolyline(points, 6, conf.display.color_outline, true, 1.0f);
 }
 
-static void _ui_lc80_draw_seg_vert(ImDrawList* l, const ImVec2& p, bool on, const _ui_lc80_display_config& conf) {
-    const float dx = conf.segment_thickness * 0.5f;
-    const float dy = conf.segment_length * 0.5f;
+static void _ui_lc80_draw_seg_vert(ImDrawList* l, const ImVec2& p, bool on, const _ui_lc80_mb_config& conf) {
+    const float dx = conf.display.segment_thickness * 0.5f;
+    const float dy = conf.display.segment_length * 0.5f;
     ImVec2 points[6] = {
         ImVec2(p.x,      (p.y - dy)),
         ImVec2(p.x + dx, (p.y - dy) + dx),
@@ -187,17 +199,17 @@ static void _ui_lc80_draw_seg_vert(ImDrawList* l, const ImVec2& p, bool on, cons
         ImVec2(p.x - dx, (p.y + dy) - dx),
         ImVec2(p.x - dx, (p.y - dy) + dx)
     };
-    l->AddConvexPolyFilled(points, 6, on ? conf.color_on : conf.color_off);
-    l->AddPolyline(points, 6, conf.color_outline, true, 1.0f);
+    l->AddConvexPolyFilled(points, 6, on ? conf.display.color_on : conf.display.color_off);
+    l->AddPolyline(points, 6, conf.display.color_outline, true, 1.0f);
 }
 
-static void _ui_lc80_draw_vqe23_segments(ImDrawList* l, const ImVec2& p, uint8_t segs, const _ui_lc80_display_config& conf) {
-    const float seg_l = conf.segment_length;
+static void _ui_lc80_draw_vqe23_segments(ImDrawList* l, const ImVec2& p, uint8_t segs, const _ui_lc80_mb_config& conf) {
+    const float seg_l = conf.display.segment_length;
     const float seg_lh = seg_l * 0.5f;
-    const float dot_x = conf.dot_offset_x;
-    const float dot_y = conf.dot_offset_y;
-    const float dot_r = conf.dot_radius;
-    const ImU32 dot_color = (0 == (segs & 0x80)) ? conf.color_on : conf.color_off;
+    const float dot_x = conf.display.dot_offset_x;
+    const float dot_y = conf.display.dot_offset_y;
+    const float dot_r = conf.display.dot_radius;
+    const ImU32 dot_color = (0 == (segs & 0x80)) ? conf.display.color_on : conf.display.color_off;
     _ui_lc80_draw_seg_hori(l, ImVec2(p.x, p.y-seg_l), 0==(segs&0x01), conf);
     _ui_lc80_draw_seg_hori(l, p, 0==(segs&0x40), conf);
     _ui_lc80_draw_seg_hori(l, ImVec2(p.x, p.y+seg_l), 0==(segs&0x08), conf);
@@ -206,38 +218,37 @@ static void _ui_lc80_draw_vqe23_segments(ImDrawList* l, const ImVec2& p, uint8_t
     _ui_lc80_draw_seg_vert(l, ImVec2(p.x - seg_lh, p.y + seg_lh), 0==(segs&0x10), conf);
     _ui_lc80_draw_seg_vert(l, ImVec2(p.x + seg_lh, p.y + seg_lh), 0==(segs&0x04), conf);
     l->AddCircleFilled(ImVec2(p.x + dot_x, p.y + dot_y), dot_r, dot_color);
-    l->AddCircle(ImVec2(p.x + dot_x, p.y + dot_y), dot_r, conf.color_outline);
-    l->AddCircleFilled(ImVec2(p.x - dot_x, p.y - dot_y), dot_r, conf.color_off);
-    l->AddCircle(ImVec2(p.x - dot_x, p.y - dot_y), dot_r, conf.color_outline);
+    l->AddCircle(ImVec2(p.x + dot_x, p.y + dot_y), dot_r, conf.display.color_outline);
+    l->AddCircleFilled(ImVec2(p.x - dot_x, p.y - dot_y), dot_r, conf.display.color_off);
+    l->AddCircle(ImVec2(p.x - dot_x, p.y - dot_y), dot_r, conf.display.color_outline);
 }
 
-static ImVec2 _ui_lc80_draw_vqe23(ImDrawList* l, ImVec2 pos, uint16_t segs, const _ui_lc80_display_config& conf) {
-    const float dx = conf.segment_length * 0.5 + conf.digit_padding;
-    const float w = 2 * conf.segment_length + 4 * conf.digit_padding;
-    const float h = 2 * conf.segment_length + 2 * conf.digit_padding;
+static ImVec2 _ui_lc80_draw_vqe23(ImDrawList* l, ImVec2 pos, uint16_t segs, const _ui_lc80_mb_config& conf) {
+    const float dx = conf.display.segment_length * 0.5 + conf.display.digit_padding;
+    const float w = 2 * conf.display.segment_length + 4 * conf.display.digit_padding;
+    const float h = 2 * conf.display.segment_length + 2 * conf.display.digit_padding;
     ImVec2 p0(pos.x - w * 0.5f, pos.y - h * 0.5f);
     ImVec2 p1(pos.x + w * 0.5f, pos.y + h * 0.5f);
-    l->AddRectFilled(p0, p1, conf.color_background);
+    l->AddRectFilled(p0, p1, conf.display.color_background);
     _ui_lc80_draw_vqe23_segments(l, ImVec2(pos.x - dx, pos.y), segs>>8, conf);
     _ui_lc80_draw_vqe23_segments(l, ImVec2(pos.x + dx, pos.y), segs&0xFF, conf);
     return ImVec2(pos.x + w, pos.y);
 }
 
-static ImVec2 _ui_lc80_draw_tape_led(ImDrawList* l, ImVec2 pos, bool on, const _ui_lc80_display_config& conf) {
-    l->AddCircleFilled(pos, conf.led_radius, on ? conf.color_on : conf.color_off);
-    return ImVec2(pos.x + 2 * conf.led_radius, pos.y);
+static ImVec2 _ui_lc80_draw_tape_led(ImDrawList* l, ImVec2 pos, bool on, const _ui_lc80_mb_config& conf) {
+    l->AddCircleFilled(pos, conf.display.led_radius, on ? conf.display.color_on : conf.display.color_off);
+    return ImVec2(pos.x + 2 * conf.display.led_radius, pos.y);
 }
 
-static ImVec2 _ui_lc80_draw_halt_led(ImDrawList* l, ImVec2 pos, bool on, const _ui_lc80_display_config& conf) {
+static ImVec2 _ui_lc80_draw_halt_led(ImDrawList* l, ImVec2 pos, bool on, const _ui_lc80_mb_config& conf) {
     ImU32 color_on = 0xFF0000CC;
     ImU32 color_off = 0xFF888888;
-    l->AddCircleFilled(pos, conf.led_radius, on ? color_on : color_off);
-    return ImVec2(pos.x + 2 * conf.led_radius, pos.y);
+    l->AddCircleFilled(pos, conf.display.led_radius, on ? color_on : color_off);
+    return ImVec2(pos.x + 2 * conf.display.led_radius, pos.y);
 }
 
-static void _ui_lc80_draw_display(ui_lc80_t* ui) {
+static void _ui_lc80_draw_display(ui_lc80_t* ui, const _ui_lc80_mb_config conf) {
     CHIPS_ASSERT(ui);
-    const _ui_lc80_display_config conf;
     ImDrawList* l = ImGui::GetWindowDrawList();
     ImVec2 p = _ui_lc80_pos();
     const ImVec2 led_pos(p.x + 10.0f, p.y + 24.0f);
@@ -370,34 +381,53 @@ static void _ui_lc80_draw_keyboard(ui_lc80_t* ui) {
     }
 }
 
-static void _ui_lc80_draw_display_and_keyboard(ui_lc80_t* ui) {
+static void _ui_lc80_draw_display_and_keyboard(ui_lc80_t* ui, const _ui_lc80_mb_config& conf) {
     ImVec2 pos = ImGui::GetIO().DisplaySize;
     pos.x -= 380;
     pos.y -= 330;
     _ui_lc80_set_pos(pos.x, pos.y);
     ImGui::BeginChild("display_keyboard_unit", ImVec2(380, 330));
-    _ui_lc80_draw_display(ui);
+    _ui_lc80_draw_display(ui, conf);
     ImGui::Indent(48.0f);
     _ui_lc80_draw_keyboard(ui);
     ImGui::Unindent();
     ImGui::EndChild();
 }
 
+static void _ui_lc80_draw_wire(ImDrawList* l, const ImVec2* points, int num, ImU32 color) {
+    l->AddPolyline(points, num, color, false, 2.0f);
+}
+
+static void _ui_lc80_draw_wire_m1(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    ui_chip_vec2_t p0 = ui_chip_pinmask_pos(&ui->mb.cpu, Z80_M1, c.cpu_pos.x, c.cpu_pos.y);
+    ui_chip_vec2_t p1 = ui_chip_pinmask_pos(&ui->mb.ctc, Z80CTC_M1, c.ctc_pos.x, c.ctc_pos.y);
+    ImVec2 points[] = {
+        { p0.x,      p0.y },
+        { p0.x - 20, p0.y },
+        { p1.x - 20, p1.y },
+        { p1.x,      p1.y },
+    };
+    ImU32 color = (ui->sys->cpu.pins & Z80_M1) ? c.wire_color_on : c.wire_color_off;
+    _ui_lc80_draw_wire(ImGui::GetWindowDrawList(), points, 4, color);
+}
+
 static void _ui_lc80_draw_motherboard(ui_lc80_t* ui) {
     ImGui::SetNextWindowPos(ImVec2(0, 16), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
     if (ImGui::Begin("LC-80", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar)) {
+        _ui_lc80_mb_config c;
         _ui_lc80_set_pos(-380, -330);
-        _ui_lc80_draw_display_and_keyboard(ui);
-        ui_chip_draw_at(&ui->mb.cpu, ui->sys->cpu.pins, 128, 190);
-        ui_chip_draw_at(&ui->mb.ctc, ui->sys->ctc.pins, 128, 560);
-        ui_chip_draw_at(&ui->mb.pio_usr, ui->sys->pio_usr.pins, 320, 540);
-        ui_chip_draw_at(&ui->mb.pio_sys, ui->sys->pio_sys.pins, 520, 540);
-        ui_chip_draw_at(&ui->mb.u505, ui->sys->u505, 520, 190);
-        ui_chip_draw_at(&ui->mb.u214[0], ui->sys->u214[0], 700, 190);
-        ui_chip_draw_at(&ui->mb.u214[0], ui->sys->u214[1], 880, 190);
-        ui_chip_draw_at(&ui->mb.ds8205[0], ui->sys->ds8205[0], 320, 120);
-        ui_chip_draw_at(&ui->mb.ds8205[0], ui->sys->ds8205[1], 320, 270);
+        _ui_lc80_draw_display_and_keyboard(ui, c);
+        _ui_lc80_draw_wire_m1(ui, c);
+        ui_chip_draw_at(&ui->mb.cpu, ui->sys->cpu.pins, c.cpu_pos.x, c.cpu_pos.y);
+        ui_chip_draw_at(&ui->mb.ctc, ui->sys->ctc.pins, c.ctc_pos.x, c.ctc_pos.y);
+        ui_chip_draw_at(&ui->mb.pio_usr, ui->sys->pio_usr.pins, c.pio_usr_pos.x, c.pio_usr_pos.y);
+        ui_chip_draw_at(&ui->mb.pio_sys, ui->sys->pio_sys.pins, c.pio_sys_pos.x, c.pio_sys_pos.y);
+        ui_chip_draw_at(&ui->mb.u505, ui->sys->u505, c.u505_pos.x, c.u505_pos.y);
+        for (int i = 0; i < 2; i++) {
+            ui_chip_draw_at(&ui->mb.u214[i], ui->sys->u214[i], c.u214_pos[i].x, c.u214_pos[i].y);
+            ui_chip_draw_at(&ui->mb.ds8205[i], ui->sys->ds8205[i], c.ds8205_pos[i].x, c.ds8205_pos[i].y);
+        }
     }
     ImGui::End();
 }
