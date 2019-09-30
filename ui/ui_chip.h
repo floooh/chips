@@ -98,8 +98,12 @@ void ui_chip_init(ui_chip_t* chip, const ui_chip_desc_t* desc);
 void ui_chip_draw(ui_chip_t* chip, uint64_t pins);
 /* draw chip centered at screen pos */
 void ui_chip_draw_at(ui_chip_t* chip, uint64_t pins, float x, float y);
-/* get screen pos of center of pin with chip center at cx, cy */
+/* find pin index by pin bit (return -1 if no match) */
+int ui_chip_pin_index(ui_chip_t* chip, uint64_t mask);
+/* get screen pos of center of pin (by pin index) with chip center at cx, cy */
 ui_chip_vec2_t ui_chip_pin_pos(ui_chip_t* chip, int pin_index, float cx, float cy);
+/* same, but with pin bit mask */
+ui_chip_vec2_t ui_chip_pinmask_pos(ui_chip_t* c, uint64_t pin_mask, float cx, float cy);
 
 /* helper function and macro to initialize a ui_chip_desc_t from an array of ui_chip_pin_t */
 void ui_chip_init_chip_desc(ui_chip_desc_t* desc, const char* name, int num_slots, const ui_chip_pin_t* pins, int num_pins);
@@ -164,6 +168,22 @@ ui_chip_vec2_t ui_chip_pin_pos(ui_chip_t* c, int pin_index, float cx, float cy) 
     return pos;
 }
 
+int ui_chip_pin_index(ui_chip_t* c, uint64_t mask) {
+    CHIPS_ASSERT(c);
+    for (int i = 0; i < c->num_slots; i++) {
+        if (c->pins[i].mask == mask) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+ui_chip_vec2_t ui_chip_pinmask_pos(ui_chip_t* c, uint64_t pin_mask, float cx, float cy) {
+    CHIPS_ASSERT(c);
+    int pin_index = ui_chip_pin_index(c, pin_mask);
+    CHIPS_ASSERT(pin_index != -1);
+    return ui_chip_pin_pos(c, pin_index, cx, cy);
+}
 
 void ui_chip_draw_at(ui_chip_t* c, uint64_t pins, float x, float y) {
     ImDrawList* l = ImGui::GetWindowDrawList();
@@ -179,7 +199,8 @@ void ui_chip_draw_at(ui_chip_t* c, uint64_t pins, float x, float y) {
     const float ph = c->pin_height;
     const ImU32 text_color = ui_util_color(ImGuiCol_Text);
     const ImU32 line_color = text_color;
-    const ImU32 pin_color  = ImColor(0.0f, 1.0f, 0.0f, ImGui::GetStyle().Alpha);
+    const ImU32 pin_color_on  = ImColor(0.0f, 1.0f, 0.0f, ImGui::GetStyle().Alpha);
+    const ImU32 pin_color_off = ImColor(0.0f, 0.25f, 0.0f, ImGui::GetStyle().Alpha);
 
     l->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), line_color);
     ImVec2 ts = ImGui::CalcTextSize(c->name);
@@ -219,9 +240,7 @@ void ui_chip_draw_at(ui_chip_t* c, uint64_t pins, float x, float y) {
             }
         }
         ty = py + (ph * 0.5f) - (ts.y * 0.5f);
-        if (pins & pin->mask) {
-            l->AddRectFilled(ImVec2(px, py), ImVec2(px+pw, py+ph), pin_color);
-        }
+        l->AddRectFilled(ImVec2(px, py), ImVec2(px+pw, py+ph), (pins & pin->mask) ? pin_color_on : pin_color_off);
         l->AddRect(ImVec2(px, py), ImVec2(px+pw, py+ph), line_color);
         l->AddText(ImVec2(tx, ty), text_color, pin->name);
     }
