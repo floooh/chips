@@ -493,6 +493,9 @@ uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
         }
         ctc->pins = pins;
     }
+    else {
+        ctc->pins = (ctc->pins & ~(Z80CTC_CE|Z80CTC_M1|Z80CTC_IORQ|Z80CTC_RD)) | (pins & (Z80CTC_CE|Z80CTC_M1|Z80CTC_IORQ|Z80CTC_RD));
+    }
     return pins;
 }
 

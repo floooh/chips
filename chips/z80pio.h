@@ -592,6 +592,9 @@ uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins) {
         Z80PIO_SET_PB(pins, pio->port[Z80PIO_PORT_B].port);
         pio->pins = pins;
     }
+    else {
+        pio->pins = (pio->pins & ~(Z80PIO_CE|Z80PIO_M1|Z80PIO_IORQ|Z80PIO_RD)) | (pins & (Z80PIO_CE|Z80PIO_M1|Z80PIO_IORQ|Z80PIO_RD));
+    }
     return pins;
 }
 
