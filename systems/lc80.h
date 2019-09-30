@@ -480,32 +480,26 @@ uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
         sys->u214[1] = LC80_U214_CS | (pins & Z80_WR) | addr | (((data>>4) & 0x0F)<<16);
     }
 
-    /* IO requests */
-    if (pins & Z80_IORQ) {
-        /* System PIO */
-        if (0 == (pins & Z80_A3)) {
-            pins |= Z80PIO_CE;
-            if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
-            if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
-            pins = z80pio_iorq(&sys->pio_sys, pins) & Z80_PIN_MASK;
-        }
+    /* System PIO */
+    uint64_t pio_sys_pins = pins;
+    if (0 == (pins & Z80_A3)) { pio_sys_pins |= Z80PIO_CE; }
+    if (pins & Z80_A0) { pio_sys_pins |= Z80PIO_BASEL; }
+    if (pins & Z80_A1) { pio_sys_pins |= Z80PIO_CDSEL; }
+    pins = z80pio_iorq(&sys->pio_sys, pio_sys_pins) & Z80_PIN_MASK;
 
-        /* User PIO */
-        if (0 == (pins & Z80_A2)) {
-            pins |= Z80PIO_CE;
-            if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
-            if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
-            pins = z80pio_iorq(&sys->pio_usr, pins) & Z80_PIN_MASK;
-        }
+    /* User PIO */
+    uint64_t pio_usr_pins = pins;
+    if (0 == (pins & Z80_A2)) { pio_usr_pins |= Z80PIO_CE; }
+    if (pins & Z80_A0) { pio_usr_pins |= Z80PIO_BASEL; }
+    if (pins & Z80_A1) { pio_usr_pins |= Z80PIO_CDSEL; }
+    pins = z80pio_iorq(&sys->pio_usr, pio_usr_pins) & Z80_PIN_MASK;
 
-        /* CTC */
-        if (0 == (pins & Z80_A4)) {
-            pins |= Z80CTC_CE;
-            if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
-            if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
-            pins = z80ctc_iorq(&sys->ctc, pins) & Z80_PIN_MASK;
-        }
-    }
+    /* CTC */
+    uint64_t ctc_pins = pins;
+    if (0 == (pins & Z80_A4)) { ctc_pins |= Z80CTC_CE; };
+    if (pins & Z80_A0) { ctc_pins |= Z80CTC_CS0; }
+    if (pins & Z80_A1) { ctc_pins |= Z80CTC_CS1; }
+    pins = z80ctc_iorq(&sys->ctc, ctc_pins) & Z80_PIN_MASK;
 
     /* tick CTC and handle beeper */
     for (int i = 0; i < num_ticks; i++) {
