@@ -412,7 +412,7 @@ void z80_reset(z80_t* cpu);
 void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb, void* trap_user_data);
 /* execute instructions for at least 'ticks', but at least one, return executed ticks */
 uint32_t z80_exec(z80_t* cpu, uint32_t ticks);
-/* return false if z80_exec() returned in the middle of an extended intruction */
+/* return false if z80_exec() returned in the middle of an extended instruction */
 bool z80_opdone(z80_t* cpu);
 
 /* register access functions */
@@ -562,7 +562,7 @@ bool z80_ei_pending(z80_t* cpu);
 #define _T(num) pins=tick(num,(pins&~Z80_CTRL_MASK),ud);ticks+=num
 /* invoke tick callback with pins mask */
 #define _TM(num,mask) pins=tick(num,(pins&~(Z80_CTRL_MASK))|(mask),ud);ticks+=num
-/* invoke tick callback (with wait state detecion) */
+/* invoke tick callback (with wait state detection) */
 #define _TWM(num,mask) pins=tick(num,(pins&~(Z80_WAIT_MASK|Z80_CTRL_MASK))|(mask),ud);ticks+=num+Z80_GET_WAIT(pins)
 /* memory read machine cycle */
 #define _MR(addr,data) _SA(addr);_TWM(3,Z80_MREQ|Z80_RD);data=_GD()
@@ -1289,7 +1289,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
 
         }
         bool nmi = 0 != ((pins & (pre_pins ^ pins)) & Z80_NMI);
-        if (nmi || (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1))) {
+        if (nmi || ((pins & Z80_INT) && (r2 & _BIT_IFF1))) {
             r2 &= ~_BIT_IFF1;
             if (pins & Z80_INT) {
                 r2 &= ~_BIT_IFF2;

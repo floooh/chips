@@ -860,7 +860,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
 $decode_block
         }
         bool nmi = 0 != ((pins & (pre_pins ^ pins)) & Z80_NMI);
-        if (nmi || (((pins & (Z80_INT|Z80_BUSREQ))==Z80_INT) && (r2 & _BIT_IFF1))) {
+        if (nmi || ((pins & Z80_INT) && (r2 & _BIT_IFF1))) {
             r2 &= ~_BIT_IFF1;
             if (pins & Z80_INT) {
                 r2 &= ~_BIT_IFF2;
