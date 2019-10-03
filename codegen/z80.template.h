@@ -392,9 +392,9 @@ typedef struct {
     uint64_t bc_de_hl_fa;   /* B:63..56 C:55..48 D:47..40 E:39..32 H:31..24 L:23..16: F:15..8, A:7..0 */
     /* shadow register bank (BC', DE', HL', FA') */
     uint64_t bc_de_hl_fa_;
-    /* IR,WZ,SP,PC */
+    /* internal WZ, and IX, YI, SP registers  */ 
     uint64_t wz_ix_iy_sp;
-    /* control bits,IM,IY,IX */
+    /* interrupt mode, I, R, PC registers, various status bits */
     uint64_t im_ir_pc_bits;
     /* last pin state (only for debug inspection) */
     uint64_t pins;
