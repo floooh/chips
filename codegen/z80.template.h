@@ -308,7 +308,7 @@ extern "C" {
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins, void* user_data);
 typedef int (*z80_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* trap_user_data);
 
-/*--- address lines ---*/
+/*--- address bus pins ---*/
 #define Z80_A0  (1ULL<<0)
 #define Z80_A1  (1ULL<<1)
 #define Z80_A2  (1ULL<<2)
@@ -326,7 +326,7 @@ typedef int (*z80_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* trap_user
 #define Z80_A14 (1ULL<<14)
 #define Z80_A15 (1ULL<<15)
 
-/*--- data lines ------*/
+/*--- data bus pins ------*/
 #define Z80_D0  (1ULL<<16)
 #define Z80_D1  (1ULL<<17)
 #define Z80_D2  (1ULL<<18)
@@ -380,28 +380,22 @@ typedef int (*z80_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* trap_user
 
 /* initialization attributes */
 typedef struct {
-    z80_tick_t tick_cb;
-    void* user_data;
+    z80_tick_t tick_cb;         /* tick callback */
+    void* user_data;            /* optional user data for tick callback */
 } z80_desc_t;
 
 /* Z80 CPU state */
 typedef struct {
-    /* tick callback */
     z80_tick_t tick_cb;
-    /* main register bank (BC, DE, HL, FA) */
-    uint64_t bc_de_hl_fa;   /* B:63..56 C:55..48 D:47..40 E:39..32 H:31..24 L:23..16: F:15..8, A:7..0 */
-    /* shadow register bank (BC', DE', HL', FA') */
+    uint64_t bc_de_hl_fa;
     uint64_t bc_de_hl_fa_;
-    /* internal WZ, and IX, YI, SP registers  */ 
     uint64_t wz_ix_iy_sp;
-    /* interrupt mode, I, R, PC registers, various status bits */
-    uint64_t im_ir_pc_bits;
-    /* last pin state (only for debug inspection) */
-    uint64_t pins;
+    uint64_t im_ir_pc_bits;     
+    uint64_t pins;              /* only for debug inspection */
     void* user_data;
     z80_trap_t trap_cb;
     void* trap_user_data;
-    int trap_id;
+    int trap_id;                /* != 0 if a trap has been hit */
 } z80_t;
 
 /* initialize a new z80 instance */
@@ -540,7 +534,7 @@ bool z80_ei_pending(z80_t* cpu);
 #define _BIT_IFF1   (1ULL<<_IFF1)
 #define _BIT_IFF2   (1ULL<<_IFF2)
 #define _BIT_EI     (1ULL<<_EI)
-#define _BITS_MAP_REGS (_BIT_USE_IX|_BIT_USE_IY)
+#define _BITS_USE_IXIY  (_BIT_USE_IX|_BIT_USE_IY)
 
 /* set 8-bit immediate value in 64-bit register bank */
 #define _S8(bank,shift,val) bank=(((bank)&~(0xFFULL<<(shift)))|(((val)&0xFFULL)<<(shift)))
@@ -599,6 +593,7 @@ bool z80_ei_pending(z80_t* cpu);
 /* evaluate flags for LD A,I and LD A,R */
 #define _SZIFF2_FLAGS(val) ((_G_F()&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((r2&_BIT_IFF2)?Z80_PF:0))
 
+/* register setter/getter shortcut macros */
 #define _S_A(val)  _S8(ws,_A,val)
 #define _S_F(val)  _S8(ws,_F,val)
 #define _S_L(val)  _S8(ws,_L,val)
@@ -620,7 +615,6 @@ bool z80_ei_pending(z80_t* cpu);
 #define _S_R(val)  _S8(r2,_R,val)
 #define _S_IR(val) _S16(r2,_IR,val)
 #define _S_PC(val) _S16(r2,_PC,val)
-
 #define _G_A()  _G8(ws,_A)
 #define _G_F()  _G8(ws,_F)
 #define _G_L()  _G8(ws,_L)
@@ -765,6 +759,7 @@ static uint8_t _z80_szp[256] = {
   0xa4,0xa0,0xa0,0xa4,0xa0,0xa4,0xa4,0xa0,0xa8,0xac,0xac,0xa8,0xac,0xa8,0xa8,0xac,
 };
 
+/* DAA instruction */
 static inline uint64_t _z80_daa(uint64_t ws) {
     uint8_t a = _G8(ws,_A);
     uint8_t v = a;
@@ -794,7 +789,7 @@ static inline uint64_t _z80_daa(uint64_t ws) {
     return ws;
 }
 
-/* manage the virtual 'working set' register bank */
+/* get 'working set' register bank with renamed HL <=> IX/IY */
 static inline uint64_t _z80_map_regs(uint64_t r0, uint64_t r1, uint64_t r2) {
     uint64_t ws = r0;
     if (r2 & _BIT_USE_IX) {
@@ -806,6 +801,7 @@ static inline uint64_t _z80_map_regs(uint64_t r0, uint64_t r1, uint64_t r2) {
     return ws;
 }
 
+/* write HL <=> IX/IY register-renamed working set back to actual register banks */
 static inline uint64_t _z80_flush_r0(uint64_t ws, uint64_t r0, uint64_t map_bits) {
     if (map_bits & (_BIT_USE_IX|_BIT_USE_IY)) {
         r0 = (r0 & (0xFFFFULL<<_HL)) | (ws & ~(0xFFFFULL<<_HL));
@@ -826,6 +822,7 @@ static inline uint64_t _z80_flush_r1(uint64_t ws, uint64_t r1, uint64_t map_bits
     return r1;
 }
 
+/* instruction decoder */
 uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     cpu->trap_id = 0;
     uint64_t r0 = cpu->bc_de_hl_fa;
@@ -833,7 +830,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     uint64_t r2 = cpu->im_ir_pc_bits;
     uint64_t r3 = cpu->bc_de_hl_fa_;
     uint64_t ws = _z80_map_regs(r0, r1, r2);
-    uint64_t map_bits = r2 & _BITS_MAP_REGS;
+    uint64_t map_bits = r2 & _BITS_USE_IXIY;
     uint64_t pins = cpu->pins;
     const z80_tick_t tick = cpu->tick_cb;
     const z80_trap_t trap = cpu->trap_cb;
@@ -844,77 +841,104 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
     uint16_t pc = _G_PC();
     uint64_t pre_pins = pins;
     do {
+        /* fetch next opcode byte */
         _FETCH(op)
+        /* special case ED-prefixed instruction: cancel effect of DD/FD prefix */
         if (op == 0xED) {
             map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
         }
-        if (map_bits != (r2 & _BITS_MAP_REGS)) {
-            const uint64_t old_map_bits = r2 & _BITS_MAP_REGS;
+        /* handle HL <=> IX/IY renaming for indexed ops */
+        if (map_bits != (r2 & _BITS_USE_IXIY)) {
+            const uint64_t old_map_bits = r2 & _BITS_USE_IXIY;
             r0 = _z80_flush_r0(ws, r0, old_map_bits);
             r1 = _z80_flush_r1(ws, r1, old_map_bits);
-            r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
+            r2 = (r2 & ~_BITS_USE_IXIY) | map_bits;
             ws = _z80_map_regs(r0, r1, r2);
         }
-        /* code-generated instruction decoder */
+        /* decode instruction */
         switch (op) {
 $decode_block
         }
+        /* check for interrupt request */
         bool nmi = 0 != ((pins & (pre_pins ^ pins)) & Z80_NMI);
-        if (nmi || ((pins & Z80_INT) && (r2 & _BIT_IFF1))) {
+        bool irq = (pins & Z80_INT) && (r2 & _BIT_IFF1);
+        if (nmi || irq) {
+            /* clear IFF flags (disables interrupt) */
             r2 &= ~_BIT_IFF1;
             if (pins & Z80_INT) {
                 r2 &= ~_BIT_IFF2;
             }
+            /* if in HALT state, continue */
             if (pins & Z80_HALT) {
                 pins &= ~Z80_HALT;
                 pc++;
             }
+            /* put PC on address bus */
             _SA(pc);
-            if (nmi) {
+            if (nmi) { /* non-maskable interrupt? */
+
+                /* a no-op 5 tick opcode fetch */
                 _TWM(5,Z80_M1|Z80_MREQ|Z80_RD);_BUMPR();
+                /* put PC on stack */
                 uint16_t sp = _G_SP();
                 _MW(--sp,pc>>8);
                 _MW(--sp,pc);
                 _S_SP(sp);
+                /* jump to address 0x0066 */
                 pc = 0x0066;
                 _S_WZ(pc);
             }
-            else {
+            else { /* maskable interrupt */
+
+                /* interrupt acknowledge machine cycle, interrupt 
+                   controller is expected to put interrupt vector low byte
+                   on address bus
+                */
                 _TWM(4,Z80_M1|Z80_IORQ);
                 const uint8_t int_vec = _GD();
                 _BUMPR();
                 _T(2);
                 switch (_G_IM()) {
-                case 0:
-                    break;
-                case 1:
-                    {
-                        uint16_t sp = _G_SP();
-                        _MW(--sp,pc>>8);
-                        _MW(--sp,pc);
-                        _S_SP(sp);
-                        pc = 0x0038;
-                        _S_WZ(pc);
-                    }
-                    break;
-              case 2:
-                    {
-                        uint16_t sp = _G_SP();
-                        _MW(--sp,pc>>8);
-                        _MW(--sp,pc);
-                        _S_SP(sp);
-                        addr = (_G_I()<<8) | (int_vec & 0xFE);
-                        uint8_t z,w;
-                        _MR(addr++,z);
-                        _MR(addr,w);
-                        pc = (w<<8)|z;
-                        _S_WZ(pc);
-                    }
-                    break;
+                    case 0: /* interrupt mode 0 not supported */
+                        break;
+                    case 1:
+                        {
+                            /* interrupt mode 1: 
+                                - put PC on stack
+                                - load address 0x0038 into PC
+                            */
+                            uint16_t sp = _G_SP();
+                            _MW(--sp,pc>>8);
+                            _MW(--sp,pc);
+                            _S_SP(sp);
+                            pc = 0x0038;
+                            _S_WZ(pc);
+                        }
+                        break;
+                    case 2:
+                        {
+                            /* interrupt mode 2:
+                                - put PC on stack
+                                - build interrupt vector address
+                                - load address of interrupt service routine from
+                                  interrupt vector and load into PC
+                            */
+                            uint16_t sp = _G_SP();
+                            _MW(--sp,pc>>8);
+                            _MW(--sp,pc);
+                            _S_SP(sp);
+                            addr = (_G_I()<<8) | (int_vec & 0xFE);
+                            uint8_t z,w;
+                            _MR(addr++,z);
+                            _MR(addr,w);
+                            pc = (w<<8)|z;
+                            _S_WZ(pc);
+                        }
+                        break;
                 }
             }
         }
-        map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
+        /* call track evaluation callback if set */
         if (trap) {
             int trap_id = trap(pc,ticks,pins,cpu->trap_user_data);
             if (trap_id) {
@@ -922,7 +946,9 @@ $decode_block
                 break;
             }
         }
-        pins&=~Z80_INT;
+        /* clear state bits for next instruction */
+        map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
+        pins &= ~Z80_INT;
         /* delay-enable interrupt flags */
         if (r2 & _BIT_EI) {
             r2 &= ~_BIT_EI;
@@ -930,10 +956,11 @@ $decode_block
         }
         pre_pins = pins;
     } while (ticks < num_ticks);
+    /* flush local state back to persistent CPU state before leaving */
     _S_PC(pc);
     r0 = _z80_flush_r0(ws, r0, r2);
     r1 = _z80_flush_r1(ws, r1, r2);
-    r2 = (r2 & ~_BITS_MAP_REGS) | map_bits;
+    r2 = (r2 & ~_BITS_USE_IXIY) | map_bits;
     cpu->bc_de_hl_fa = r0;
     cpu->wz_ix_iy_sp = r1;
     cpu->im_ir_pc_bits = r2;
@@ -973,7 +1000,7 @@ $decode_block
 #undef _BIT_EI  
 #undef _BIT_USE_IX
 #undef _BIT_USE_IY
-#undef _BITS_MAP_REGS
+#undef _BITS_USE_IXIY
 #undef _S8
 #undef _G8
 #undef _S16
