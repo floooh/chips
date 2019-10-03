@@ -417,7 +417,11 @@ static void _ui_lc80_draw_wire(ui_lc80_chip_t* from_chip,
         { p1.x + dx1, p1.y },
         { p1.x,       p1.y }
     };
-    ImGui::GetWindowDrawList()->AddPolyline(points, 6, color, false, 2.0f);
+    ImDrawList* l = ImGui::GetWindowDrawList();
+    ImDrawListFlags f = l->Flags;
+    l->Flags = ImDrawListFlags_None;
+    l->AddPolyline(points, 6, color, false, 1.0f);
+    l->Flags = f;
 }
 
 
@@ -446,13 +450,41 @@ static void _ui_lc80_draw_wire_rd(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
     _ui_lc80_draw_wire(&mb.cpu, &mb.pio_usr, Z80_RD, Z80PIO_RD, -28, 408, -28, color);
 }
 
+static void _ui_lc80_draw_wire_wr(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    auto& mb = ui->mb;
+    ImU32 color = (ui->sys->cpu.pins & Z80_WR) ? c.wire_color_on : c.wire_color_off;
+    _ui_lc80_draw_wire(&mb.cpu, &mb.u214[0], Z80_WR, LC80_U214_WR, -16, 396, +26, color);
+    _ui_lc80_draw_wire(&mb.cpu, &mb.u214[1], Z80_WR, LC80_U214_WR, -16, 396, +26, color);
+}
+
 static void _ui_lc80_draw_data_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
     auto& mb = ui->mb;
-    ImU32 color = (ui->sys->cpu.pins & Z80_RD) ? 0xFF00FFFF : 0xFF008888;
     for (int i = 0; i < 8; i++) {
-        _ui_lc80_draw_wire(&mb.cpu, &mb.ctc, (Z80_D0<<i), (Z80_D0<<i), -60+i*4, -1, -60+i*4, color);
-        _ui_lc80_draw_wire(&mb.cpu, &mb.pio_sys, (Z80_D0<<i), (Z80_D0<<i), -60+i*4, 360+i*4, -60+i*4, color);
-        _ui_lc80_draw_wire(&mb.cpu, &mb.pio_usr, (Z80_D0<<i), (Z80_D0<<i), -60+i*4, 360+i*4, -60+i*4, color);
+        ImU32 color = (ui->sys->cpu.pins & (Z80_D0<<i)) ? 0xFF00FF00 : 0xFF008800;
+        _ui_lc80_draw_wire(&mb.cpu, &mb.ctc,     Z80_D0<<i, Z80_D0<<i,       -60+i*4, -1, -60+i*4, color);
+        _ui_lc80_draw_wire(&mb.cpu, &mb.pio_sys, Z80_D0<<i, Z80_D0<<i,       -60+i*4, 360+i*4, -60+i*4, color);
+        _ui_lc80_draw_wire(&mb.cpu, &mb.pio_usr, Z80_D0<<i, Z80_D0<<i,       -60+i*4, 360+i*4, -60+i*4, color);
+        _ui_lc80_draw_wire(&mb.cpu, &mb.u505,    Z80_D0<<i, LC80_U505_D0<<i, -60+i*4, 360+i*4,  10+i*4, color);
+        if (i < 4) {
+            _ui_lc80_draw_wire(&mb.cpu, &mb.u214[0], Z80_D0<<i, LC80_U214_D0<<i, -60+i*4, 360+i*4, 10+i*4, color);
+        }
+        else {
+            _ui_lc80_draw_wire(&mb.cpu, &mb.u214[1], Z80_D0<<i, LC80_U214_D0<<(i-4), -60+i*4, 360+i*4, 10+(i-4)*4, color);
+        }
+    }
+}
+
+static void _ui_lc80_draw_addr_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    auto& mb = ui->mb;
+    for (int i = 0; i < 16; i++) {
+        ImU32 color = (ui->sys->cpu.pins & (Z80_A0<<i)) ? 0xFF0000FF : 0xFF000088;
+        if (i < 11) {
+            _ui_lc80_draw_wire(&mb.cpu, &mb.u505, Z80_A0<<i, LC80_U505_A0<<i, 10+i*4, 60+i*4, -10-i*4, color);
+        }
+        if (i < 10) {
+            _ui_lc80_draw_wire(&mb.cpu, &mb.u214[0], Z80_A0<<i, LC80_U214_A0<<i, 10+i*4, 60+i*4, -10-i*4, color);
+            _ui_lc80_draw_wire(&mb.cpu, &mb.u214[1], Z80_A0<<i, LC80_U214_A0<<i, 10+i*4, 60+i*4, -10-i*4, color);
+        }
     }
 }
 
@@ -467,7 +499,9 @@ static void _ui_lc80_draw_motherboard(ui_lc80_t* ui) {
         _ui_lc80_draw_wire_m1(ui, c);
         _ui_lc80_draw_wire_iorq(ui, c);
         _ui_lc80_draw_wire_rd(ui, c);
+        _ui_lc80_draw_wire_wr(ui, c);
         _ui_lc80_draw_data_bus(ui, c);
+        _ui_lc80_draw_addr_bus(ui, c);
         ui_chip_draw_at(&mb.cpu.chip, ui->sys->cpu.pins, mb.cpu.pos.x, mb.cpu.pos.y);
         ui_chip_draw_at(&mb.ctc.chip, ui->sys->ctc.pins, mb.ctc.pos.x, mb.ctc.pos.y);
         ui_chip_draw_at(&mb.pio_usr.chip, ui->sys->pio_usr.pins, mb.pio_usr.pos.x, mb.pio_usr.pos.y);
@@ -674,7 +708,7 @@ static const ui_chip_pin_t _ui_lc80_u214_pins[] = {
     { "A6",     6,      LC80_U214_A6 },
     { "A7",     7,      LC80_U214_A7 },
     { "A8",     8,      LC80_U214_A8 },
-    { "A9",     9,      LC80_U214_A8 },
+    { "A9",     9,      LC80_U214_A9 },
     { "CS",     10,     LC80_U214_CS },
     { "WR",     11,     LC80_U214_WR },
     { "D0",     13,     LC80_U214_D0 },
@@ -754,7 +788,7 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
     _ui_lc80_config_chip_desc(&ds8205_desc, ic_width_slim);
     ui_chip_init(&ui->mb.ds8205[0].chip, &ds8205_desc);
     ui_chip_init(&ui->mb.ds8205[1].chip, &ds8205_desc);
-    ui->mb.ds8205[0].pos = { 320, 120 };
+    ui->mb.ds8205[0].pos = { 320, 170 };
     ui->mb.ds8205[1].pos = { 320, 270 };
 }
 
