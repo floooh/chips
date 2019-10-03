@@ -571,7 +571,7 @@ bool z80_ei_pending(z80_t* cpu);
 /* read 16-bit immediate value (also update WZ register) */
 #define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S_WZ(data);} 
 /* true if current op is an indexed op */
-#define _IDX() (0!=(r2&(_BIT_USE_IX|_BIT_USE_IY)))
+#define _IDX() (0!=(r2&_BITS_USE_IXIY))
 /* generate effective address for (HL), (IX+d), (IY+d) */
 #define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if(_IDX()){int8_t d;_MR(pc++,d);addr+=d;_S_WZ(addr);_T(ext_ticks);}}
 /* helper macro to bump R register */
@@ -736,7 +736,7 @@ void z80_trap_cb(z80_t* cpu, z80_trap_t trap_cb, void* trap_user_data) {
 }
 
 bool z80_opdone(z80_t* cpu) {
-    return 0 == (cpu->im_ir_pc_bits & (_BIT_USE_IX|_BIT_USE_IY));
+    return 0 == (cpu->im_ir_pc_bits & _BITS_USE_IXIY);
 }
 
 /* sign+zero+parity lookup table */
@@ -803,7 +803,7 @@ static inline uint64_t _z80_map_regs(uint64_t r0, uint64_t r1, uint64_t r2) {
 
 /* write HL <=> IX/IY register-renamed working set back to actual register banks */
 static inline uint64_t _z80_flush_r0(uint64_t ws, uint64_t r0, uint64_t map_bits) {
-    if (map_bits & (_BIT_USE_IX|_BIT_USE_IY)) {
+    if (map_bits & _BITS_USE_IXIY) {
         r0 = (r0 & (0xFFFFULL<<_HL)) | (ws & ~(0xFFFFULL<<_HL));
     }
     else {
@@ -845,7 +845,7 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
         _FETCH(op)
         /* special case ED-prefixed instruction: cancel effect of DD/FD prefix */
         if (op == 0xED) {
-            map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
+            map_bits &= ~_BITS_USE_IXIY;
         }
         /* handle HL <=> IX/IY renaming for indexed ops */
         if (map_bits != (r2 & _BITS_USE_IXIY)) {
@@ -947,7 +947,7 @@ $decode_block
             }
         }
         /* clear state bits for next instruction */
-        map_bits &= ~(_BIT_USE_IX|_BIT_USE_IY);
+        map_bits &= ~_BITS_USE_IXIY;
         pins &= ~Z80_INT;
         /* delay-enable interrupt flags */
         if (r2 & _BIT_EI) {
