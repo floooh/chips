@@ -350,8 +350,6 @@ typedef int (*z80_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* trap_user
 #define  Z80_HALT  (1ULL<<29)       /* halt state */
 #define  Z80_INT   (1ULL<<30)       /* interrupt request */
 #define  Z80_NMI   (1ULL<<31)       /* non-maskable interrupt */
-#define  Z80_BUSREQ (1ULL<<32)      /* bus request */
-#define  Z80_BUSACK (1ULL<<33)      /* bus acknowledge */
 
 /* up to 7 wait states can be injected per machine cycle */
 #define Z80_WAIT0   (1ULL<<34)
