@@ -103,6 +103,7 @@ typedef struct {
         ui_lc80_chip_t u505;
         ui_lc80_chip_t u214[2];
         ui_lc80_chip_t ds8205[2];
+        ui_lc80_chip_t vqe23[3];
     } mb;
     int wire_hovered_num;
     bool wire_active;
@@ -171,10 +172,6 @@ static void _ui_lc80_set_pos(float x, float y) {
     ImGui::SetCursorScreenPos(ImVec2(x, y));
 }
 
-static ImVec2 _ui_lc80_pos(void) {
-    return ImGui::GetCursorScreenPos();
-}
-
 /*
     Draw a 7+1 segment digit
 
@@ -235,15 +232,49 @@ static void _ui_lc80_draw_vqe23_segments(ImDrawList* l, const ImVec2& p, uint8_t
     l->AddCircle(ImVec2(p.x - dot_x, p.y - dot_y), dot_r, conf.display.color_outline);
 }
 
-static ImVec2 _ui_lc80_draw_vqe23(ImDrawList* l, ImVec2 pos, uint16_t segs, const _ui_lc80_mb_config& conf) {
+static ui_chip_vec2_t _ui_lc80_vqe23_pin_pos(const ui_chip_t* c, int pin_index, float x0, float y0) {
+    ui_chip_vec2_t pos = { 0.0f, 0.0f };
+    if (pin_index < c->num_slots) {
+        float slot_dist = c->pin_slot_dist;
+        const ui_chip_pin_t* pin = &c->pins[pin_index];
+        pos.x = (float)(int) x0 + slot_dist * 0.5f + pin->slot * slot_dist;
+        pos.y = (float)(int) y0 - c->pin_height * 0.5f;
+    }
+    return pos;
+}
+
+static ui_chip_vec2_t _ui_lc80_vqe23_pinmask_pos(ui_chip_t* c, uint64_t pin_mask, float x0, float y0) {
+     CHIPS_ASSERT(c);
+     int pin_index = ui_chip_pin_index(c, pin_mask);
+     CHIPS_ASSERT(pin_index != -1);
+     return _ui_lc80_vqe23_pin_pos(c, pin_index, x0, y0);
+}
+
+static void _ui_lc80_draw_vqe23_pins(ImDrawList* l, const ui_chip_t* c, const ImVec2& p0, uint32_t pins) {
+    for (int i = 0; i < c->num_slots; i++) {
+        const ui_chip_pin_t* pin = &c->pins[i];
+        if (!pin->name) {
+            break;
+        }
+        ui_chip_vec2_t pos = _ui_lc80_vqe23_pin_pos(c, i, p0.x, p0.y);
+        float x0 = pos.x + c->pin_width * 0.5f;
+        float y0 = pos.y + c->pin_height * 0.5f;
+        float x1 = x0 + c->pin_width;
+        float y1 = y0 + c->pin_height;
+        l->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), (pins & pin->mask) ? 0xFFFFFFFF : 0xFF888888);
+    }
+}
+
+static ImVec2 _ui_lc80_draw_vqe23(ImDrawList* l, const ui_chip_t* c, ImVec2 pos, uint32_t pins, const _ui_lc80_mb_config& conf) {
     const float dx = conf.display.segment_length * 0.5 + conf.display.digit_padding;
     const float w = 2 * conf.display.segment_length + 4 * conf.display.digit_padding;
     const float h = 2 * conf.display.segment_length + 2 * conf.display.digit_padding;
     ImVec2 p0(pos.x - w * 0.5f, pos.y - h * 0.5f);
     ImVec2 p1(pos.x + w * 0.5f, pos.y + h * 0.5f);
     l->AddRectFilled(p0, p1, conf.display.color_background);
-    _ui_lc80_draw_vqe23_segments(l, ImVec2(pos.x - dx, pos.y), segs>>8, conf);
-    _ui_lc80_draw_vqe23_segments(l, ImVec2(pos.x + dx, pos.y), segs&0xFF, conf);
+    _ui_lc80_draw_vqe23_segments(l, ImVec2(pos.x - dx, pos.y), pins>>8, conf);
+    _ui_lc80_draw_vqe23_segments(l, ImVec2(pos.x + dx, pos.y), pins&0xFF, conf);
+    _ui_lc80_draw_vqe23_pins(l, c, p0, pins);
     return ImVec2(pos.x + w, pos.y);
 }
 
@@ -259,17 +290,18 @@ static ImVec2 _ui_lc80_draw_halt_led(ImDrawList* l, ImVec2 pos, bool on, const _
     return ImVec2(pos.x + 2 * conf.display.led_radius, pos.y);
 }
 
-static void _ui_lc80_draw_display(ui_lc80_t* ui, const _ui_lc80_mb_config conf) {
+static void _ui_lc80_draw_display(ui_lc80_t* ui, const ImVec2 p, const _ui_lc80_mb_config conf) {
     CHIPS_ASSERT(ui);
     ImDrawList* l = ImGui::GetWindowDrawList();
-    ImVec2 p = _ui_lc80_pos();
     const ImVec2 led_pos(p.x + 10.0f, p.y + 24.0f);
     _ui_lc80_draw_tape_led(l, ImVec2(p.x+16.0f, p.y+24.0f), 0==(ui->sys->pio_sys.port[Z80PIO_PORT_B].output&2), conf);
     _ui_lc80_draw_halt_led(l, ImVec2(p.x+16.0f, p.y+48.0f), 0!=(ui->sys->cpu.pins & Z80_HALT), conf);
     ImVec2 disp_pos(p.x + 84.0f, p.y + 48.0f);
-    disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[2], conf);
-    disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[1], conf);
-    disp_pos = _ui_lc80_draw_vqe23(l, disp_pos, ui->sys->led[0], conf);
+    disp_pos = _ui_lc80_draw_vqe23(l, &ui->mb.vqe23[2].chip, disp_pos, ui->sys->led[2], conf);
+    disp_pos.x += 4.0f;
+    disp_pos = _ui_lc80_draw_vqe23(l, &ui->mb.vqe23[1].chip, disp_pos, ui->sys->led[1], conf);
+    disp_pos.x += 4.0f;
+    disp_pos = _ui_lc80_draw_vqe23(l, &ui->mb.vqe23[0].chip, disp_pos, ui->sys->led[0], conf);
     _ui_lc80_set_pos(p.x, p.y + 104.0f);
 }
 
@@ -284,8 +316,11 @@ static bool _ui_lc80_btn(const char* text, ImU32 fg_color, ImU32 bg_color) {
     return res;
 }
 
-static void _ui_lc80_draw_keyboard(ui_lc80_t* ui) {
+static void _ui_lc80_draw_keyboard(ui_lc80_t* ui, const ImVec2& pos) {
     CHIPS_ASSERT(ui);
+    _ui_lc80_set_pos(pos.x, pos.y);
+    ImGui::BeginChild("keyboard", ImVec2(380, 330));
+    ImGui::Indent(48.0f);
     const ImU32 bg_red = 0xFF0000AA;
     const ImU32 bg_black = 0xFF444444;
     const ImU32 bg_white = 0xFFBBBBBB;
@@ -391,17 +426,6 @@ static void _ui_lc80_draw_keyboard(ui_lc80_t* ui) {
     if (_ui_lc80_btn("3", black, bg_white)) {
         lc80_key(ui->sys, LC80_KEY_3);
     }
-}
-
-static void _ui_lc80_draw_display_and_keyboard(ui_lc80_t* ui, const _ui_lc80_mb_config& conf) {
-    ImVec2 pos = ImGui::GetIO().DisplaySize;
-    pos.x -= 380;
-    pos.y -= 330;
-    _ui_lc80_set_pos(pos.x, pos.y);
-    ImGui::BeginChild("display_keyboard_unit", ImVec2(380, 330));
-    _ui_lc80_draw_display(ui, conf);
-    ImGui::Indent(48.0f);
-    _ui_lc80_draw_keyboard(ui);
     ImGui::Unindent();
     ImGui::EndChild();
 }
@@ -413,7 +437,7 @@ static ui_chip_vec2_t _ui_lc80_pin_pos(ui_lc80_chip_t* c, uint64_t pin_mask) {
 static bool _ui_lc80_pin_hovered(ui_lc80_chip_t* c, uint64_t pin_mask) {
     ui_chip_vec2_t pin_pos = _ui_lc80_pin_pos(c, pin_mask);
     const float w = 20.0f;
-    const float h = c->chip.pin_slot_height * 0.5f;
+    const float h = c->chip.pin_slot_dist * 0.5f;
     const float x0 = pin_pos.x - w;
     const float x1 = pin_pos.x + w;
     const float y0 = pin_pos.y - h;
@@ -421,6 +445,47 @@ static bool _ui_lc80_pin_hovered(ui_lc80_chip_t* c, uint64_t pin_mask) {
     const float mx = ImGui::GetIO().MousePos.x;
     const float my = ImGui::GetIO().MousePos.y;
     return (mx > x0) && (mx < x1) && (my > y0) && (my < y1);
+}
+
+static void _ui_lc80_draw_wire_pos(ui_lc80_t* ui,
+                                   float x0, float y0,
+                                   float x1, float y1,
+                                   float dx0,
+                                   float y,
+                                   float dx1,
+                                   _ui_lc80_wire_type_t wire_type,
+                                   bool active,
+                                   bool hovered)
+{
+    ImVec2 points[] = {
+        { x0,       y0 },
+        { x0 + dx0, y0 },
+        { x0 + dx0, (y == -1) ? y0 : y },
+        { x1 + dx1, (y == -1) ? y0 : y },
+        { x1 + dx1, y1 },
+        { x1,       y1 }
+    };
+    ImU32 color;
+    switch (wire_type) {
+        case _UI_LC80_WIRETYPE_ADDR:    color = active ? 0xFF0000FF : 0xFF000088; break;
+        case _UI_LC80_WIRETYPE_DATA:    color = active ? 0xFF00FF00 : 0xFF008800; break;
+        case _UI_LC80_WIRETYPE_SELECT:  color = active ? 0xFF00FFFF : 0xFF008888; break;
+        default: color = active ? 0xFFFFFFFF : 0xFF888888; break;
+    }
+    ImDrawList* l = ImGui::GetWindowDrawList();
+    ImDrawListFlags f = l->Flags;
+    l->Flags = ImDrawListFlags_None;
+    l->AddPolyline(points, 6, color, false, 1.0f);
+    l->Flags = f;
+    if (hovered) {
+        CHIPS_ASSERT(ui->wire_hovered_num < UI_LC80_MAX_PIN_CONNECTIONS);
+        ui->wire_active = active;
+        for (int i = 0; i < 6; i++) {
+            ui->wire_hovered_pos[ui->wire_hovered_num][i][0] = points[i].x;
+            ui->wire_hovered_pos[ui->wire_hovered_num][i][1] = points[i].y;
+        }
+        ui->wire_hovered_num++;
+    }
 }
 
 static void _ui_lc80_draw_wire(ui_lc80_t* ui,
@@ -436,37 +501,27 @@ static void _ui_lc80_draw_wire(ui_lc80_t* ui,
 {
     ui_chip_vec2_t p0 = _ui_lc80_pin_pos(from_chip, from_pin);
     ui_chip_vec2_t p1 = _ui_lc80_pin_pos(to_chip, to_pin);
-    ImVec2 points[] = {
-        { p0.x,       p0.y },
-        { p0.x + dx0, p0.y },
-        { p0.x + dx0, (y == -1) ? p0.y : y },
-        { p1.x + dx1, (y == -1) ? p0.y : y },
-        { p1.x + dx1, p1.y },
-        { p1.x,       p1.y }
-    };
-    ImU32 color;
-    switch (wire_type) {
-        case _UI_LC80_WIRETYPE_ADDR:    color = active ? 0xFF0000FF : 0xFF000088; break;
-        case _UI_LC80_WIRETYPE_DATA:    color = active ? 0xFF00FF00 : 0xFF008800; break;
-        case _UI_LC80_WIRETYPE_SELECT:  color = active ? 0xFF00FFFF : 0xFF008888; break;
-        default: color = active ? 0xFFFFFFFF : 0xFF888888; break;
-    }
-    ImDrawList* l = ImGui::GetWindowDrawList();
-    ImDrawListFlags f = l->Flags;
-    l->Flags = ImDrawListFlags_None;
-    l->AddPolyline(points, 6, color, false, 1.0f);
-    l->Flags = f;
     bool hovered = _ui_lc80_pin_hovered(from_chip, from_pin) | _ui_lc80_pin_hovered(to_chip, to_pin);
-    if (hovered) {
-        CHIPS_ASSERT(ui->wire_hovered_num < UI_LC80_MAX_PIN_CONNECTIONS);
-        ui->wire_active = active;
-        for (int i = 0; i < 6; i++) {
-            ui->wire_hovered_pos[ui->wire_hovered_num][i][0] = points[i].x;
-            ui->wire_hovered_pos[ui->wire_hovered_num][i][1] = points[i].y;
-        }
-        ui->wire_hovered_num++;
-    }
+    _ui_lc80_draw_wire_pos(ui, p0.x, p0.y, p1.x, p1.y, dx0, y, dx1, wire_type, active, hovered);
 }
+
+/*
+static void _ui_lc80_draw_wire_vqe23(ui_lc80_t* ui,
+                                     ui_lc80_chip_t* from_chip,
+                                     ui_lc80_chip_t* to_vqe23,
+                                     uint64_t from_pin,
+                                     uint32_t to_pin,
+                                     float dx0,
+                                     float y,
+                                     float dx1,
+                                     _ui_lc80_wire_type_t wire_type,
+                                     bool active)
+{
+    ui_chip_vec2_t p0 = _ui_lc80_pin_pos(from_chip, from_pin);
+    ui_chip_vec2_t p1 = _ui_lc80_vqe23_pinmask_pos(to_vqe23, to_pin, x0, y0);
+    FIXME!!!
+}
+*/
 
 static void _ui_lc80_draw_hovered_wire(ui_lc80_t* ui) {
     ImU32 color = ui->wire_active ? 0xFFFF00FF : 0xFFCC00CC;
@@ -484,7 +539,7 @@ static void _ui_lc80_draw_ctrl_wires(ui_lc80_t* ui, const _ui_lc80_mb_config& c)
         uint64_t cpu_pin = Z80_M1<<i;
         bool active = 0 != (ui->sys->cpu.pins & cpu_pin);
         float x0 = -10 - i*4;
-        float y = 320 + i*4;
+        float y = 300 + i*4;
         if (cpu_pin == Z80_M1) {
             float x1 = -20;
             _ui_lc80_draw_wire(ui, &mb.cpu, &mb.ctc,     cpu_pin, Z80CTC_M1, x0, y, x1, type, active);
@@ -552,7 +607,7 @@ static void _ui_lc80_draw_addr_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_ADDR;
         bool active = 0 != (ui->sys->cpu.pins & (Z80_A0<<i));
         const float x0 = 10 + i*4;
-        const float y = 360 + i*4;
+        const float y = 340 + i*4;
         const float x1 = -48 + i*4;
         if (i < 11) {
             _ui_lc80_draw_wire(ui, &mb.cpu, &mb.u505, Z80_A0<<i, LC80_U505_A0<<i, x0, y, x1, type, active);
@@ -618,8 +673,8 @@ static void _ui_lc80_draw_motherboard(ui_lc80_t* ui) {
     if (ImGui::Begin("LC-80", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar)) {
         auto& mb = ui->mb;
         _ui_lc80_mb_config c;
-        _ui_lc80_set_pos(-380, -330);
-        _ui_lc80_draw_display_and_keyboard(ui, c);
+        _ui_lc80_draw_keyboard(ui, ImVec2(640, 480));
+        _ui_lc80_draw_display(ui, ImVec2(640, 380), c);
         _ui_lc80_draw_ctrl_wires(ui, c);
         _ui_lc80_draw_data_bus(ui, c);
         _ui_lc80_draw_addr_bus(ui, c);
@@ -857,8 +912,29 @@ static const ui_chip_pin_t _ui_lc80_ds8205_pins[] = {
     { "Y7",     15,     LC80_DS8205_Y7 },
 };
 
+static const ui_chip_pin_t _ui_lc80_vqe23_pins[] = {
+    { "A1",    13,      LC80_VQE23_A1 },
+    { "B1",    14,      LC80_VQE23_B1 },
+    { "C1",    15,      LC80_VQE23_C1 },
+    { "D1",    16,      LC80_VQE23_D1 },
+    { "E1",    17,      LC80_VQE23_E1 },
+    { "F1",    18,      LC80_VQE23_F1 },
+    { "G1",    19,      LC80_VQE23_G1 },
+    { "P1",    20,      LC80_VQE23_P1 },
+    { "K1",    22,      LC80_VQE23_K1 },
+    { "A2",     0,      LC80_VQE23_A2 },
+    { "B2",     1,      LC80_VQE23_B2 },
+    { "C2",     2,      LC80_VQE23_C2 },
+    { "D2",     3,      LC80_VQE23_D2 },
+    { "E2",     4,      LC80_VQE23_E2 },
+    { "F2",     5,      LC80_VQE23_F2 },
+    { "G2",     6,      LC80_VQE23_G2 },
+    { "P2",     7,      LC80_VQE23_P2 },
+    { "K2",     9,      LC80_VQE23_K2 }
+};
+
 static void _ui_lc80_config_chip_desc(ui_chip_desc_t* desc, float width) {
-    desc->pin_slot_height = 10.0f;
+    desc->pin_slot_dist = 10.0f;
     desc->pin_width = 8.0f;
     desc->pin_height = 8.0f;
     desc->chip_width = width;
@@ -913,6 +989,15 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
     ui_chip_init(&ui->mb.u214[1].chip, &u214_desc);
     ui->mb.u214[0].pos = { 420, 530 };
     ui->mb.u214[1].pos = { 560, 530 };
+
+    ui_chip_desc_t vqe23_desc;
+    UI_CHIP_INIT_DESC(&vqe23_desc, "VQE23", 23, _ui_lc80_vqe23_pins);
+    vqe23_desc.pin_slot_dist = 4.0f;
+    vqe23_desc.pin_width = 3.0f;
+    vqe23_desc.pin_height = 8.0f;
+    ui_chip_init(&ui->mb.vqe23[0].chip, &vqe23_desc);
+    ui_chip_init(&ui->mb.vqe23[1].chip, &vqe23_desc);
+    ui_chip_init(&ui->mb.vqe23[2].chip, &vqe23_desc);
 }
 
 static uint8_t _ui_lc80_mem_read(int layer, uint16_t addr, void* user_data) {

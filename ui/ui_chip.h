@@ -66,7 +66,7 @@ typedef struct {
     const char* name;           /* the chip's name */
     int num_slots;              /* the number of pin slots */
     int chip_width;             /* chip width in pixels (default: 64) */
-    int pin_slot_height;        /* vertical distance between pins (default: 16) */
+    int pin_slot_dist;          /* distance between pins (default: 16) */
     int pin_width;              /* width of a pin in pixels */
     int pin_height;             /* height of a pin in pixels */
     bool pin_names_inside;      /* default: false */
@@ -79,7 +79,7 @@ typedef struct {
     const char* name;
     int num_slots;
     float chip_width;
-    float pin_slot_height;
+    float pin_slot_dist;
     float pin_width;
     float pin_height;
     bool pin_names_inside;
@@ -132,7 +132,7 @@ void ui_chip_init(ui_chip_t* c, const ui_chip_desc_t* desc) {
     c->name = desc->name;
     c->num_slots = desc->num_slots;
     c->chip_width = (desc->chip_width == 0) ? 64.0f : (float) desc->chip_width;
-    c->pin_slot_height = (desc->pin_slot_height == 0) ? 16.0f : (float) desc->pin_slot_height;
+    c->pin_slot_dist = (desc->pin_slot_dist == 0) ? 16.0f : (float) desc->pin_slot_dist;
     c->pin_width = (desc->pin_width == 0) ? 12.0f : (float) desc->pin_width;
     c->pin_height = (desc->pin_height == 0) ? 12.0f : (float) desc->pin_height;
     c->pin_names_inside = desc->pin_names_inside;
@@ -148,21 +148,21 @@ ui_chip_vec2_t ui_chip_pin_pos(ui_chip_t* c, int pin_index, float cx, float cy) 
     ui_chip_vec2_t pos = { 0.0f, 0.0f };
     if (pin_index < c->num_slots) {
         const float w = c->chip_width;
-        const float h = (c->num_slots / 2) * c->pin_slot_height;
+        const float h = (c->num_slots / 2) * c->pin_slot_dist;
         const float x0 = (float)(int) (cx - (w * 0.5f));
         const float y0 = (float)(int) (cy - (h * 0.5f));
-        const float slot_height = c->pin_slot_height;
+        const float slot_dist = c->pin_slot_dist;
         const float pwh = c->pin_width * 0.5f;
         const ui_chip_pin_t* pin = &c->pins[pin_index];
         if (pin->slot < (c->num_slots / 2)) {
             /* left side */
             pos.x = x0 - pwh;
-            pos.y = y0 + slot_height * 0.5f + pin->slot * slot_height;
+            pos.y = y0 + slot_dist * 0.5f + pin->slot * slot_dist;
         }
         else {
             /* right side */
             pos.x = x0 + w + pwh;
-            pos.y = y0 + slot_height * 0.5f + (pin->slot - (c->num_slots / 2)) * slot_height;
+            pos.y = y0 + slot_dist * 0.5f + (pin->slot - (c->num_slots / 2)) * slot_dist;
         }
     }
     return pos;
@@ -188,7 +188,7 @@ ui_chip_vec2_t ui_chip_pinmask_pos(ui_chip_t* c, uint64_t pin_mask, float cx, fl
 void ui_chip_draw_at(ui_chip_t* c, uint64_t pins, float x, float y) {
     ImDrawList* l = ImGui::GetWindowDrawList();
     const float w = c->chip_width;
-    const float h = (c->num_slots / 2) * c->pin_slot_height;
+    const float h = (c->num_slots / 2) * c->pin_slot_dist;
     const float x0 = (float)(int) (x - (w * 0.5f));
     const float y0 = (float)(int) (y - (h * 0.5f));
     const float x1 = x0 + w;
