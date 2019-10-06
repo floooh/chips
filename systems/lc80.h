@@ -456,6 +456,10 @@ uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
         Z80_SET_DATA(pins, data);
         sys->u505 = LC80_U505_CS | (data << 16) | addr;
     }
+    else {
+        sys->u505 = (pins & 0xFF07FF);
+    }
+
     /* RAM access?
 
         D210 output Y4 selected RAM bank 0
@@ -465,19 +469,23 @@ uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
     if (d210 & LC80_DS8205_Y4) {
         /* Y4 output of D209 selects RAM bank 0 (D204 and D205, each 4 bit of data) */
         uint16_t addr = pins & 0x3FF;
-        uint8_t data;
+        uint8_t data = 0xFF;
         if (pins & Z80_WR) {
             /* RAM write access */
             data = Z80_GET_DATA(pins);
             sys->ram[addr] = data;
         }
-        else {
+        else if (pins & Z80_RD) {
             /* RAM read access */
             data = sys->ram[addr];
             Z80_SET_DATA(pins, data);
         }
         sys->u214[0] = LC80_U214_CS | (pins & Z80_WR) | addr | (((data>>0) & 0x0F)<<16);
         sys->u214[1] = LC80_U214_CS | (pins & Z80_WR) | addr | (((data>>4) & 0x0F)<<16);
+    }
+    else {
+        sys->u214[0] = pins & (Z80_WR | 0x0F03FF);
+        sys->u214[1] = (pins & (Z80_WR | 0x0003FF)) | ((pins & 0xF00000)>>4);
     }
 
     /* System PIO */
