@@ -398,7 +398,7 @@ static void _upd765_cmd(upd765_t* upd) {
                     if (UPD765_RESULT_NOT_READY & res) {
                         upd->st[0] |= UPD765_ST0_NR;
                     }
-                    if (UPD765_RESULT_NOT_FOUND) {
+                    if (UPD765_RESULT_NOT_FOUND & res) {
                         upd->st[1] |= UPD765_ST1_ND;
                     }
                     _upd765_to_phase_result(upd);
