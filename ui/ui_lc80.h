@@ -635,7 +635,7 @@ static void _ui_lc80_draw_display_wires(ui_lc80_t* ui, const _ui_lc80_mb_config&
         uint64_t pio_pin_mask = Z80PIO_PA0<<i;
         bool active = 0 != (ui->sys->pio_sys.pins & pio_pin_mask);
         float x0 = 72 - i*4;
-        float y  = 372 - i*4;
+        float y  = 360 - i*4;
         for (int j = 0; j < 3; j++) {
             _ui_lc80_draw_wire(ui, &mb.pio_sys, &mb.vqe23[j], pio_pin_mask, LC80_VQE23_A1<<i, x0, y, 0, type, active);
             _ui_lc80_draw_wire(ui, &mb.pio_sys, &mb.vqe23[j], pio_pin_mask, LC80_VQE23_A2<<i, x0, y, 0, type, active);
@@ -647,7 +647,7 @@ static void _ui_lc80_draw_display_wires(ui_lc80_t* ui, const _ui_lc80_mb_config&
         uint64_t vqe23_pin_mask = (0 == (i & 1)) ? LC80_VQE23_K1 : LC80_VQE23_K2;
         int vqe23_index = i/2;
         bool active = 0 != (ui->sys->pio_sys.pins & pio_pin_mask);
-        _ui_lc80_draw_wire(ui, &mb.pio_sys, &mb.vqe23[vqe23_index], pio_pin_mask, vqe23_pin_mask, 34-i*4, 336-i*4, 0, type, active);
+        _ui_lc80_draw_wire(ui, &mb.pio_sys, &mb.vqe23[vqe23_index], pio_pin_mask, vqe23_pin_mask, 34-i*4, 316-i*4, 0, type, active);
     }
 }
 
@@ -657,7 +657,7 @@ static void _ui_lc80_draw_led_wires(ui_lc80_t* ui, const _ui_lc80_mb_config& c) 
     ui_chip_vec2_t p1 = { 656, 384 };
     bool active = 0 != (ui->sys->pio_sys.pins & Z80PIO_PB1);
     bool hovered = _ui_lc80_pin_hovered(&mb.pio_sys, Z80PIO_PB1);
-    _ui_lc80_draw_wire_pos(ui, p0.x, p0.y, p1.x, p1.y, 38, 340, 0, _UI_LC80_WIRETYPE_SELECT, active, hovered);
+    _ui_lc80_draw_wire_pos(ui, p0.x, p0.y, p1.x, p1.y, 38, 320, 0, _UI_LC80_WIRETYPE_SELECT, active, hovered);
 }
 
 static void _ui_lc80_draw_motherboard(ui_lc80_t* ui) {
@@ -666,7 +666,12 @@ static void _ui_lc80_draw_motherboard(ui_lc80_t* ui) {
     p1.y -= p0.y;
     ImGui::SetNextWindowPos(p0, ImGuiCond_Always);
     ImGui::SetNextWindowSize(p1, ImGuiCond_Always);
-    if (ImGui::Begin("LC-80", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoScrollbar)) {
+    const ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoBringToFrontOnFocus;
+    if (ImGui::Begin("LC-80", nullptr, flags)) {
         auto& mb = ui->mb;
         _ui_lc80_mb_config c;
         _ui_lc80_draw_ctrl_wires(ui, c);
@@ -1001,9 +1006,9 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
     ui_chip_init(&ui->mb.vqe23[0].chip, &vqe23_desc);
     ui_chip_init(&ui->mb.vqe23[1].chip, &vqe23_desc);
     ui_chip_init(&ui->mb.vqe23[2].chip, &vqe23_desc);
-    ui->mb.vqe23[0].pos = { 940, 428 };
-    ui->mb.vqe23[1].pos = { 832, 428 };
-    ui->mb.vqe23[2].pos = { 724, 428 };
+    ui->mb.vqe23[0].pos = { 940, 408 };
+    ui->mb.vqe23[1].pos = { 832, 408 };
+    ui->mb.vqe23[2].pos = { 724, 408 };
 }
 
 static uint8_t _ui_lc80_mem_read(int layer, uint16_t addr, void* user_data) {

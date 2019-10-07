@@ -193,7 +193,7 @@ typedef struct {
     lc80_audio_callback_t audio_cb;     /* called when audio_num_samples are ready */
     int audio_num_samples;              /* default is LC80_DEFAULT_AUDIO_SAMPLES */
     int audio_sample_rate;              /* playback sample rate, default is 44100 */
-    float audio_volume;                 /* audio volume (0.0 .. 1.0), default is 0.4 */
+    float audio_volume;                 /* audio volume (0.0 .. 1.0), default is 0.3 */
 
     /* ROM image (must be single 2KByte image) */
     const void* rom_ptr;
@@ -295,7 +295,7 @@ void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _LC80_DEFAULT(desc->audio_num_samples, LC80_DEFAULT_AUDIO_SAMPLES);
     const int audio_hz = _LC80_DEFAULT(desc->audio_sample_rate, 44100);
-    const float audio_vol = _LC80_DEFAULT(desc->audio_volume, 0.5f);
+    const float audio_vol = _LC80_DEFAULT(desc->audio_volume, 0.3f);
     beeper_init(&sys->beeper, freq_hz, audio_hz, audio_vol);
 
     /* keyboard matrix:
