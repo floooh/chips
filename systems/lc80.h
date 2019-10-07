@@ -208,7 +208,7 @@ typedef struct {
     z80ctc_t ctc;
     z80pio_t pio_sys;
     z80pio_t pio_usr;
-    uint32_t led[3];            /* state of the 2-digit LED modules */
+    uint32_t vqe23[3];          /* state of the 2-digit LED modules */
     uint32_t u505;              /* pin state of the 2 U505D ROM chips */
     uint32_t u214[2];           /* pin state of the 2 U214D RAM chips */
     uint32_t ds8205[2];         /* pin state of the 2 DS8205 3-to-8 decoders (equiv LS138) */
@@ -289,13 +289,13 @@ void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
     z80pio_init(&sys->pio_usr, &pio_desc);
 
     for (int i = 0; i < 3; i++) {
-        sys->led[i] = 0x0000FFFF;
+        sys->vqe23[i] = 0x0000FFFF;
     }
 
     sys->audio_cb = desc->audio_cb;
     sys->num_samples = _LC80_DEFAULT(desc->audio_num_samples, LC80_DEFAULT_AUDIO_SAMPLES);
     const int audio_hz = _LC80_DEFAULT(desc->audio_sample_rate, 44100);
-    const float audio_vol = _LC80_DEFAULT(desc->audio_volume, 0.8f);
+    const float audio_vol = _LC80_DEFAULT(desc->audio_volume, 0.5f);
     beeper_init(&sys->beeper, freq_hz, audio_hz, audio_vol);
 
     /* keyboard matrix:
@@ -590,46 +590,46 @@ void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data) {
         */
         const uint8_t outp = sys->pio_sys.port[Z80PIO_PORT_A].output;
         if (0 == (data & (1<<2))) {
-            sys->led[0] = _lc80_vqe23_write(sys->led[0], 0, outp);
-            sys->led[0] |= LC80_VQE23_K1;
+            sys->vqe23[0] = _lc80_vqe23_write(sys->vqe23[0], 0, outp);
+            sys->vqe23[0] |= LC80_VQE23_K1;
         }
         else {
-            sys->led[0] &= ~LC80_VQE23_K1;
+            sys->vqe23[0] &= ~LC80_VQE23_K1;
         }
         if (0 == (data & (1<<3))) {
-            sys->led[0] = _lc80_vqe23_write(sys->led[0], 1, outp);
-            sys->led[0] |= LC80_VQE23_K2;
+            sys->vqe23[0] = _lc80_vqe23_write(sys->vqe23[0], 1, outp);
+            sys->vqe23[0] |= LC80_VQE23_K2;
         }
         else {
-            sys->led[0] &= ~LC80_VQE23_K2;
+            sys->vqe23[0] &= ~LC80_VQE23_K2;
         }
         if (0 == (data & (1<<4))) {
-            sys->led[1] = _lc80_vqe23_write(sys->led[1], 0, outp);
-            sys->led[1] |= LC80_VQE23_K1;
+            sys->vqe23[1] = _lc80_vqe23_write(sys->vqe23[1], 0, outp);
+            sys->vqe23[1] |= LC80_VQE23_K1;
         }
         else {
-            sys->led[1] &= ~LC80_VQE23_K1;
+            sys->vqe23[1] &= ~LC80_VQE23_K1;
         }
         if (0 == (data & (1<<5))) {
-            sys->led[1] = _lc80_vqe23_write(sys->led[1], 1, outp);
-            sys->led[1] |= LC80_VQE23_K2;
+            sys->vqe23[1] = _lc80_vqe23_write(sys->vqe23[1], 1, outp);
+            sys->vqe23[1] |= LC80_VQE23_K2;
         }
         else {
-            sys->led[1] &= ~LC80_VQE23_K2;
+            sys->vqe23[1] &= ~LC80_VQE23_K2;
         }
         if (0 == (data & (1<<6))) {
-            sys->led[2] = _lc80_vqe23_write(sys->led[2], 0, outp);
-            sys->led[2] |= LC80_VQE23_K1;
+            sys->vqe23[2] = _lc80_vqe23_write(sys->vqe23[2], 0, outp);
+            sys->vqe23[2] |= LC80_VQE23_K1;
         }
         else {
-            sys->led[2] &= ~LC80_VQE23_K1;
+            sys->vqe23[2] &= ~LC80_VQE23_K1;
         }
         if (0 == (data & (1<<7))) {
-            sys->led[2] = _lc80_vqe23_write(sys->led[2], 1, outp);
-            sys->led[2] |= LC80_VQE23_K2;
+            sys->vqe23[2] = _lc80_vqe23_write(sys->vqe23[2], 1, outp);
+            sys->vqe23[2] |= LC80_VQE23_K2;
         }
         else {
-            sys->led[2] &= ~LC80_VQE23_K2;
+            sys->vqe23[2] &= ~LC80_VQE23_K2;
         }
         /* bits 2..7 of port B also double as input to the keyboard matrix */
         uint8_t kbd_columns = ~(data >> 2) & 0x3F;
