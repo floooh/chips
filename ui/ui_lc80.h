@@ -250,7 +250,7 @@ static void _ui_lc80_draw_vqe23_pins(ImDrawList* l, ui_chip_t* c, float x, float
 }
 
 static void _ui_lc80_draw_vqe23(ImDrawList* l, ui_chip_t* c, float x, float y, uint32_t pins, const _ui_lc80_mb_config& conf) {
-    const float dx = conf.display.segment_length * 0.5 + conf.display.digit_padding;
+    const float dx = conf.display.segment_length * 0.5f + conf.display.digit_padding;
     const ImVec2 p0(x - c->chip_width * 0.5f, y - c->chip_height * 0.5f);
     const ImVec2 p1(x + c->chip_width * 0.5f, y + c->chip_height * 0.5f);
     l->AddRectFilled(p0, p1, conf.display.color_background);
@@ -499,8 +499,8 @@ static void _ui_lc80_draw_ctrl_wires(ui_lc80_t* ui, const _ui_lc80_mb_config& c)
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_CTRL;
         uint64_t cpu_pin = Z80_M1<<i;
         bool active = 0 != (ui->sys->cpu.pins & cpu_pin);
-        float x0 = -10 - i*4;
-        float y = 300 + i*4;
+        float x0 = -10.0f - i*4;
+        float y = 300.0f + i*4;
         if (cpu_pin == Z80_M1) {
             float x1 = -20;
             _ui_lc80_draw_wire(ui, &mb.cpu, &mb.ctc,     cpu_pin, Z80CTC_M1, x0, y, x1, type, active);
@@ -543,12 +543,12 @@ static void _ui_lc80_draw_data_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
     for (int i = 0; i < 8; i++) {
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_DATA;
         bool active = 0 != (ui->sys->cpu.pins & (Z80_D0<<i));
-        const float x0 = -70 + i*4;
-        const float x1 = -36 + i*4;
-        const float x2 = 10 + i*4;
-        const float x3 = 10 + (i-4)*4;
-        const float y0 = 40 + i * 4;
-        const float y1 = 660 - i * 4;
+        const float x0 = -70.0f + i*4;
+        const float x1 = -36.0f + i*4;
+        const float x2 = 10.0f + i*4;
+        const float x3 = 10.0f+ (i-4)*4;
+        const float y0 = 40.0f + i * 4;
+        const float y1 = 660.0f - i * 4;
         _ui_lc80_draw_wire(ui, &mb.cpu, &mb.ctc,     Z80_D0<<i, Z80_D0<<i, x0, y0, x1, type, active);
         _ui_lc80_draw_wire(ui, &mb.cpu, &mb.pio_sys, Z80_D0<<i, Z80_D0<<i, x0, y0, x1, type, active);
         _ui_lc80_draw_wire(ui, &mb.cpu, &mb.pio_usr, Z80_D0<<i, Z80_D0<<i, x0, y0, x1, type, active);
@@ -567,9 +567,9 @@ static void _ui_lc80_draw_addr_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
     for (int i = 0; i < 16; i++) {
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_ADDR;
         bool active = 0 != (ui->sys->cpu.pins & (Z80_A0<<i));
-        const float x0 = 10 + i*4;
-        const float y = 340 + i*4;
-        const float x1 = -48 + i*4;
+        const float x0 = 10.0f + i*4;
+        const float y = 340.0f + i*4;
+        const float x1 = -48.0f + i*4;
         if (i < 11) {
             _ui_lc80_draw_wire(ui, &mb.cpu, &mb.u505, Z80_A0<<i, LC80_U505_A0<<i, x0, y, x1, type, active);
         }
@@ -596,7 +596,7 @@ static void _ui_lc80_draw_addr_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
         if (i == 4) {
             _ui_lc80_draw_wire(ui, &mb.cpu, &mb.ctc, Z80_A0<<i, Z80CTC_CE, x0, y, -40, type, active);
         }
-        const float ds_x1 = 30 - i*4;
+        const float ds_x1 = 30.0f - i*4;
         if (i == 10) {
             _ui_lc80_draw_wire(ui, &mb.cpu, &mb.ds8205[1], Z80_A10, LC80_DS8205_A, x0, y, ds_x1, type, active);
         }
@@ -634,8 +634,8 @@ static void _ui_lc80_draw_display_wires(ui_lc80_t* ui, const _ui_lc80_mb_config&
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_DISPLAY;
         uint64_t pio_pin_mask = Z80PIO_PA0<<i;
         bool active = 0 != (ui->sys->pio_sys.pins & pio_pin_mask);
-        float x0 = 72 - i*4;
-        float y  = 360 - i*4;
+        float x0 = 72.0f - i*4;
+        float y  = 360.0f - i*4;
         for (int j = 0; j < 3; j++) {
             _ui_lc80_draw_wire(ui, &mb.pio_sys, &mb.vqe23[j], pio_pin_mask, LC80_VQE23_A1<<i, x0, y, 0, type, active);
             _ui_lc80_draw_wire(ui, &mb.pio_sys, &mb.vqe23[j], pio_pin_mask, LC80_VQE23_A2<<i, x0, y, 0, type, active);
@@ -647,7 +647,7 @@ static void _ui_lc80_draw_display_wires(ui_lc80_t* ui, const _ui_lc80_mb_config&
         uint64_t vqe23_pin_mask = (0 == (i & 1)) ? LC80_VQE23_K1 : LC80_VQE23_K2;
         int vqe23_index = i/2;
         bool active = 0 != (ui->sys->pio_sys.pins & pio_pin_mask);
-        _ui_lc80_draw_wire(ui, &mb.pio_sys, &mb.vqe23[vqe23_index], pio_pin_mask, vqe23_pin_mask, 34-i*4, 316-i*4, 0, type, active);
+        _ui_lc80_draw_wire(ui, &mb.pio_sys, &mb.vqe23[vqe23_index], pio_pin_mask, vqe23_pin_mask, 34.0f-i*4, 316.0f-i*4, 0, type, active);
     }
 }
 
@@ -936,10 +936,10 @@ static const ui_chip_pin_t _ui_lc80_vqe23_pins[] = {
     { "K2",     9,      LC80_VQE23_K2 }
 };
 
-static void _ui_lc80_config_chip_desc(ui_chip_desc_t* desc, float width) {
-    desc->pin_slot_dist = 10.0f;
-    desc->pin_width = 8.0f;
-    desc->pin_height = 8.0f;
+static void _ui_lc80_config_chip_desc(ui_chip_desc_t* desc, int width) {
+    desc->pin_slot_dist = 10;
+    desc->pin_width = 8;
+    desc->pin_height = 8;
     desc->chip_width = width;
     desc->pin_names_inside = true;
     desc->name_outside = true;
@@ -947,8 +947,8 @@ static void _ui_lc80_config_chip_desc(ui_chip_desc_t* desc, float width) {
 
 static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
     auto& mb = ui->mb;
-    const float ic_width = 80.0f;
-    const float ic_width_slim = 48.0f;
+    const int ic_width = 80;
+    const int ic_width_slim = 48;
 
     ui_chip_desc_t cpu_desc;
     UI_CHIP_INIT_DESC(&cpu_desc, "Z80 CPU", 36, _ui_lc80_cpu_pins);
@@ -998,11 +998,11 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
     UI_CHIP_INIT_DESC(&vqe23_desc, "VQE23", 23, _ui_lc80_vqe23_pins);
     vqe23_desc.num_slots = 0;
     vqe23_desc.num_slots_top = 23;
-    vqe23_desc.chip_width = 2 * mb_conf.display.segment_length + 4 * mb_conf.display.digit_padding;
-    vqe23_desc.chip_height = 2 * mb_conf.display.segment_length + 2 * mb_conf.display.digit_padding;
-    vqe23_desc.pin_slot_dist = 4.0f;
-    vqe23_desc.pin_width = 3.0f;
-    vqe23_desc.pin_height = 8.0f;
+    vqe23_desc.chip_width = (int) (2 * mb_conf.display.segment_length + 4 * mb_conf.display.digit_padding);
+    vqe23_desc.chip_height = (int) (2 * mb_conf.display.segment_length + 2 * mb_conf.display.digit_padding);
+    vqe23_desc.pin_slot_dist = 4;
+    vqe23_desc.pin_width = 3;
+    vqe23_desc.pin_height = 8;
     ui_chip_init(&ui->mb.vqe23[0].chip, &vqe23_desc);
     ui_chip_init(&ui->mb.vqe23[1].chip, &vqe23_desc);
     ui_chip_init(&ui->mb.vqe23[2].chip, &vqe23_desc);
