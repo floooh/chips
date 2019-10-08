@@ -14,11 +14,17 @@ jobs:
             git clone https://github.com/floooh/chips-test
             cd chips-test
         - name: win64-vstudio-debug
-          run:  python fips build win64-vstudio-debug
+          run: |
+            cd workspace/chips-test
+            python fips build win64-vstudio-debug
         - name: win64-vstudio-release
-          run:  python fips build win64-vstudio-release
+          run: |
+            cd workspace/chips-test
+            python fips build win64-vstudio-release
         - name: win64-vstudio-debug
-          run:  python fips run chips-test win64-vstudio-debug
+          run: |
+            cd workspace/chips-test
+            python fips run chips-test win64-vstudio-debug
     mac:
         runs-on: macos-latest
         steps:
@@ -30,11 +36,17 @@ jobs:
             git clone https://github.com/floooh/chips-test
             cd chips-test
         - name: osx-make-debug
-          run:  python fips build osx-make-debug
+          run:  |
+            cd workspace/chips-test
+            python fips build osx-make-debug
         - name: osx-make-release 
-          run:  python fips build osx-make-release
+          run:  |
+            cd workspace/chips-test
+            python fips build osx-make-release
         - name: osx-make-debug
-          run:  python fips run chips-test osx-make-debug
+          run:  |
+            cd workspace/chips-test
+            python fips run chips-test osx-make-debug
     linux:
         runs-on: ubuntu-latest
         steps:
@@ -47,11 +59,17 @@ jobs:
             git clone https://github.com/floooh/chips-test
             cd chips-test
         - name: linux-make-debug
-          run:  python fips build linux-make-debug
+          run:  |
+            cd workspace/chips-test
+            python fips build linux-make-debug
         - name: linux-make-release
-          run:  python fips build linux-make-release
+          run:  |
+            cd workspace/chips-test
+            python fips build linux-make-release
         - name: linux-make-debug
-          run:  python fips run chips-test linux-make-debug
+          run:  |
+            cd workspace/chips-test
+            python fips run chips-test linux-make-debug
     emscripten:
         runs-on: ubuntu-latest
         steps:
@@ -65,8 +83,12 @@ jobs:
             cd chips-test
             python fips emsdk install latest
         - name: wasm-ninja-debug
-          run:  python fips build wasm-ninja-debug
+          run: |
+            cd workspace/chips-test
+            python fips build wasm-ninja-debug
         - name: wasm-ninja-release
-          run:  python fips build wasm-ninja-release
+          run: |
+            cd workspace/chips-test
+            python fips build wasm-ninja-release
 
 
