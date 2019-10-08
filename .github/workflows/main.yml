@@ -21,7 +21,7 @@ jobs:
           run: |
             cd workspace/chips-test
             python fips build win64-vstudio-release
-        - name: win64-vstudio-debug
+        - name: chips-test win64-vstudio-debug
           run: |
             cd workspace/chips-test
             python fips run chips-test win64-vstudio-debug
@@ -43,7 +43,7 @@ jobs:
           run:  |
             cd workspace/chips-test
             python fips build osx-make-release
-        - name: osx-make-debug
+        - name: chips-test osx-make-debug
           run:  |
             cd workspace/chips-test
             python fips run chips-test osx-make-debug
@@ -66,7 +66,7 @@ jobs:
           run:  |
             cd workspace/chips-test
             python fips build linux-make-release
-        - name: linux-make-debug
+        - name: chips-test linux-make-debug
           run:  |
             cd workspace/chips-test
             python fips run chips-test linux-make-debug
