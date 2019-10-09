@@ -73,6 +73,7 @@ typedef enum {
     C64_JOYSTICKTYPE_NONE,
     C64_JOYSTICKTYPE_DIGITAL_1,
     C64_JOYSTICKTYPE_DIGITAL_2,
+    C64_JOYSTICKTYPE_DIGITAL_12,    /* input routed to both joysticks */
     C64_JOYSTICKTYPE_PADDLE_1,  /* FIXME: not emulated */
     C64_JOYSTICKTYPE_PADDLE_2,  /* FIXME: not emulated */
 } c64_joystick_type_t;
@@ -386,11 +387,18 @@ void c64_key_down(c64_t* sys, int key_code) {
             default: kbd_key_down(&sys->kbd, key_code); break;
         }
         if (m != 0) {
-            if (sys->joystick_type == C64_JOYSTICKTYPE_DIGITAL_1) {
-                sys->kbd_joy1_mask |= m;
-            }
-            else {
-                sys->kbd_joy2_mask |= m;
+            switch (sys->joystick_type) {
+                case C64_JOYSTICKTYPE_DIGITAL_1:
+                    sys->kbd_joy1_mask |= m;
+                    break;
+                case C64_JOYSTICKTYPE_DIGITAL_2:
+                    sys->kbd_joy2_mask |= m;
+                    break;
+                case C64_JOYSTICKTYPE_DIGITAL_12:
+                    sys->kbd_joy1_mask |= m;
+                    sys->kbd_joy2_mask |= m;
+                    break;
+                default: break;
             }
         }
     }
@@ -412,11 +420,18 @@ void c64_key_up(c64_t* sys, int key_code) {
             default: kbd_key_up(&sys->kbd, key_code); break;
         }
         if (m != 0) {
-            if (sys->joystick_type == C64_JOYSTICKTYPE_DIGITAL_1) {
-                sys->kbd_joy1_mask &= ~m;
-            }
-            else {
-                sys->kbd_joy2_mask &= ~m;
+            switch (sys->joystick_type) {
+                case C64_JOYSTICKTYPE_DIGITAL_1:
+                    sys->kbd_joy1_mask &= ~m;
+                    break;
+                case C64_JOYSTICKTYPE_DIGITAL_2:
+                    sys->kbd_joy2_mask &= ~m;
+                    break;
+                case C64_JOYSTICKTYPE_DIGITAL_12:
+                    sys->kbd_joy1_mask &= ~m;
+                    sys->kbd_joy2_mask &= ~m;
+                    break;
+                default: break;
             }
         }
     }
