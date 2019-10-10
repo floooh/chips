@@ -184,7 +184,6 @@ typedef struct {
     uint16_t h_count;
     uint16_t v_count;
     uint16_t v_irqline;     /* raster interrupt line, updated when ctrl_1 or raster is written */
-    uint16_t sh_count;      /* separate counter for sprite, reset at h_count=55 */
     uint16_t vc;            /* 10-bit video counter */
     uint16_t vc_base;       /* 10-bit video counter base */
     uint8_t rc;             /* 3-bit raster counter */
@@ -424,7 +423,6 @@ static void _m6569_reset_register_bank(m6569_registers_t* r) {
 
 static void _m6569_reset_raster_unit(m6569_raster_unit_t* r) {
     r->h_count = r->v_count = 0;
-    r->sh_count = 0;
     r->v_irqline = 0;
     r->vc = r->vc_base = 0;
     r->rc = 0;
@@ -883,7 +881,6 @@ static inline void _m6569_sunit_rewind(m6569_t* vic) {
          in tick 15/16 as described in the recipe turns off rendering the
          last line of a sprite)
     */
-    vic->rs.sh_count = 0xFFFF;
     const uint8_t me = vic->reg.me;
     const uint8_t mye = vic->reg.mye;
     for (int i = 0; i < 8; i++) {
@@ -1191,13 +1188,15 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
     than in the other lines.
 */
 static inline void _m6569_rs_next_rasterline(m6569_t* vic) {
-    vic->rs.h_count = 0xFFFF;
+    vic->rs.h_count = 0;
     /* new scanline */
     if (vic->rs.v_count == _M6569_VTOTAL) {
-        vic->rs.v_count = 0xFFFF;
+        vic->rs.v_count = 0;
         vic->rs.vc_base = 0;
     }
-    vic->rs.v_count++;
+    else {
+        vic->rs.v_count++;
+    }
 }
 
 static inline void _m6569_rs_check_irq(m6569_t* vic) {
@@ -1286,11 +1285,13 @@ static inline void _m6569_rs_rewind_vc_vmli_rc(m6569_t* vic) {
 }
 
 static inline void _m6569_crt_next_crtline(m6569_t* vic) {
-    vic->crt.x = 0xFFFF;
+    vic->crt.x = 0;
     if (vic->rs.v_count == _M6569_VRETRACEPOS) {
-        vic->crt.y = 0xFFFF;
+        vic->crt.y = 0;
     }
-    vic->crt.y++;
+    else {
+        vic->crt.y++;
+    }
 }
 
 /* perform a c-access */
@@ -1365,17 +1366,14 @@ static inline uint8_t _m6569_s_i_access(m6569_t* vic, uint32_t s_index) {
 
 /*=== TICK FUNCTION ==========================================================*/
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
-    pins &= ~(M6569_BA|M6569_AEC|M6569_IRQ);
-
     uint8_t g_data = 0;
-    vic->rs.h_count++;
-    vic->rs.sh_count++;
-    vic->crt.x++;
     _m6569_rs_update_badline(vic);
 
     /* a raster line is 63 ticks */
     switch (vic->rs.h_count) {
         case 0:
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_rs_check_irq(vic);
             g_data = _m6569_s_i_access(vic, 2);
             _m6569_s_access(vic, 2);
@@ -1385,6 +1383,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 4, pins);
             break;
         case 1:
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_p_access(vic, 3);
             _m6569_s_access(vic, 3);
             pins = _m6569_sunit_dma_aec(vic, 3, pins);
@@ -1392,6 +1392,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 4, pins);
             break;
         case 2:
+            vic->rs.h_count++;
+            vic->crt.x++;
             g_data = _m6569_s_i_access(vic, 3);
             _m6569_s_access(vic, 3);
             pins = _m6569_sunit_dma_aec(vic, 3, pins);
@@ -1400,6 +1402,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 5, pins);
             break;
         case 3: /* HRETRACEPOS */
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_crt_next_crtline(vic);
             _m6569_p_access(vic, 4);
             _m6569_s_access(vic, 4);
@@ -1408,6 +1412,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 5, pins);
             break;
         case 4:
+            vic->rs.h_count++;
+            vic->crt.x++;
             g_data = _m6569_s_i_access(vic, 4);
             _m6569_s_access(vic, 4);
             pins = _m6569_sunit_dma_aec(vic, 4, pins);
@@ -1416,6 +1422,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 6, pins);
             break;
         case 5:
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_p_access(vic, 5);
             _m6569_s_access(vic, 5);
             pins = _m6569_sunit_dma_aec(vic, 5, pins);
@@ -1423,6 +1431,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 6, pins);
             break;
         case 6:
+            vic->rs.h_count++;
+            vic->crt.x++;
             g_data = _m6569_s_i_access(vic, 5);
             _m6569_s_access(vic, 5);
             pins = _m6569_sunit_dma_aec(vic, 5, pins);
@@ -1431,6 +1441,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 7, pins);
             break;
         case 7:
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_p_access(vic, 6);
             _m6569_s_access(vic, 6);
             pins = _m6569_sunit_dma_aec(vic, 6, pins);
@@ -1438,6 +1450,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 7, pins);
             break;
         case 8:
+            vic->rs.h_count++;
+            vic->crt.x++;
             g_data = _m6569_s_i_access(vic, 6);
             _m6569_s_access(vic, 6);
             pins = _m6569_sunit_dma_aec(vic, 6, pins);
@@ -1445,27 +1459,41 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 7, pins);
             break;
         case 9:
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_p_access(vic, 7);
             _m6569_s_access(vic, 7);
             pins = _m6569_sunit_dma_aec(vic, 7, pins);
             pins = _m6569_sunit_dma_ba(vic, 7, pins);
             break;
         case 10:
+            vic->rs.h_count++;
+            vic->crt.x++;
             g_data = _m6569_s_i_access(vic, 7);
             _m6569_s_access(vic, 7);
             pins = _m6569_sunit_dma_aec(vic, 7, pins);
             pins = _m6569_sunit_dma_ba(vic, 7, pins);
             break;
         case 11:
+            vic->rs.h_count++;
+            vic->crt.x++;
             break;
         case 12:
+            vic->rs.h_count++;
+            vic->crt.x++;
             break;
         case 13:
+            vic->rs.h_count++;
+            vic->crt.x++;
             break;
         case 14:
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_rs_rewind_vc_vmli_rc(vic);
             break;
         case 15:
+            vic->rs.h_count++;
+            vic->crt.x++;
             pins |= M6569_AEC;
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_gunit_rewind(vic, vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL);
@@ -1474,253 +1502,47 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             g_data = _m6569_g_i_access(vic);
             break;
         case 16:
+            vic->rs.h_count++;
+            vic->crt.x++;
             pins |= M6569_AEC;
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_sunit_dma_disp_disable(vic);
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
             break;
-        case 17:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 18:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 19:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 20:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 21:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 22:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 23:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 24:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 25:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 26:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 27:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 28:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 29:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 30:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 31:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 32:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 33:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 34:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 35:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 36:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 37:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 38:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 39:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 40:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 41:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 42:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 43:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 44:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 45:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 46:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 47:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 48:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 49:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 50:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 51:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 52:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 53:
-            pins |= M6569_AEC;
-            vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
-            g_data = _m6569_g_i_access(vic);
-            break;
-        case 54:
+                                                                       case 17: case 18: case 19:
+        case 20: case 21: case 22: case 23: case 24: case 25: case 26: case 27: case 28: case 29:
+        case 30: case 31: case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39:
+        case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47: case 48: case 49:
+        case 50: case 51: case 52: case 53: case 54:
+            vic->rs.h_count++;
+            vic->crt.x++;
             pins |= M6569_AEC;
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
             break;
         case 55:
+            vic->rs.h_count++;
+            vic->crt.x++;
             vic->gunit.enabled = false;
             _m6569_sunit_rewind(vic);
             pins = _m6569_sunit_dma_ba(vic, 0, pins);
             break;
         case 56:
+            vic->rs.h_count++;
+            vic->crt.x++;
             pins = _m6569_sunit_dma_ba(vic, 0, pins);
             break;
         case 57:
+            vic->rs.h_count++;
+            vic->crt.x++;
             pins = _m6569_sunit_dma_ba(vic, 0, pins);
             pins = _m6569_sunit_dma_ba(vic, 1, pins);
             break;
         case 58:
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_rs_update_display_state(vic);
             _m6569_sunit_update_mc_disp_enable(vic);
             _m6569_p_access(vic, 0);
@@ -1730,6 +1552,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 1, pins);
             break;
         case 59:
+            vic->rs.h_count++;
+            vic->crt.x++;
             g_data = _m6569_s_i_access(vic, 0);
             _m6569_s_access(vic, 0);
             pins = _m6569_sunit_dma_aec(vic, 0, pins);
@@ -1738,6 +1562,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 2, pins);
             break;
         case 60:
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_p_access(vic, 1);
             _m6569_s_access(vic, 1);
             pins = _m6569_sunit_dma_aec(vic, 1, pins);
@@ -1745,6 +1571,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 2, pins);
             break;
         case 61:
+            vic->rs.h_count++;
+            vic->crt.x++;
             g_data = _m6569_s_i_access(vic, 1);
             _m6569_s_access(vic, 1);
             pins = _m6569_sunit_dma_aec(vic, 1, pins);
@@ -1753,6 +1581,8 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 3, pins);
             break;
         case 62:    /* HTOTAL */
+            vic->rs.h_count++;
+            vic->crt.x++;
             _m6569_rs_next_rasterline(vic);
             _m6569_p_access(vic, 2);
             _m6569_s_access(vic, 2);

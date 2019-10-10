@@ -206,7 +206,6 @@ static void _ui_m6569_draw_raster_unit(const ui_m6569_t* win) {
     if (ImGui::CollapsingHeader("Raster Unit")) {
         const m6569_raster_unit_t* rs = &win->vic->rs;
         ImGui::Text("h_count:%02X v_count:%03X v_irq:%03X", rs->h_count, rs->v_count, rs->v_irqline);
-        ImGui::Text("sh_count:%02X", rs->sh_count);
         ImGui::Text("vc:%03X vc_base:%03X rc:%X", rs->vc, rs->vc_base, rs->rc);
         ImGui::Text("display:%s badline:%s", rs->display_state?"ON ":"OFF", rs->badline?"ON ":"OFF");
         ImGui::Text("badlines enabled: %s", rs->frame_badlines_enabled?"YES":"NO ");
