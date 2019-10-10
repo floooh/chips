@@ -386,7 +386,6 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
             x += dx; y += dy;
         }
     }
-    x += dx; y += dy;
     {
         ui->video.create_texture = ui_desc->create_texture_cb;
         ui->video.update_texture = ui_desc->update_texture_cb;
