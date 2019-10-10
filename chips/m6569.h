@@ -545,7 +545,7 @@ static void _m6569_io_update_sunit(m6569_t* vic, int i, uint8_t mx, uint8_t my, 
     su->h_offset = (xpos & 7);
     const uint16_t w = ((mxe & (1<<i)) ? 5 : 2) + ((su->h_offset > 0) ? 1:0);
     su->h_last   = su->h_first + w;
-    /* 1. The expansion flip flip is set as long as the bit in MxYE in register
+    /* 1. The expansion flip flop is set as long as the bit in MxYE in register
         $d017 corresponding to the sprite is cleared.
     */
     if ((mye & (1<<i)) == 0) {
@@ -1206,7 +1206,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
 
     /*--- sprite unit preparations -------------------------------------------*/
 
-    /* 1. The expansion flip flip is set as long as the bit in MxYE in register
+    /* 1. The expansion flip flop is set as long as the bit in MxYE in register
         $d017 corresponding to the sprite is cleared.
         (FIXME: this is currently only done when updating the MxYE register)
        2. If the MxYE bit is set in the first phase of cycle 55, the expansion
