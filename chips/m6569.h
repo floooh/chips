@@ -388,7 +388,6 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
 used here: http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt
 */
 #define _M6569_HTICK(t)             (vic->rs.h_count == (t))
-#define _M6569_HTICK_GE(t)          (vic->rs.h_count >= (t))
 #define _M6569_HTICK_RANGE(t0,t1)   ((vic->rs.h_count >= (t0)) && (vic->rs.h_count <= (t1)))
 #define _M6569_RAST(r)              (vic->rs.v_count == (r))
 #define _M6569_RAST_RANGE(r0,r1)    ((vic->rs.v_count >= (r0)) && (vic->rs.v_count <= (r1)))
@@ -1103,47 +1102,32 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* 
             - likewise the alpha channel bits for the graphics sequencer
               are used to communicate whether the returned color is a 
               background or foreground colors (fg: alpha == 0xFF, bg: alpha == 0)
-    */
-    if (!vic->brd.vert) {
-        const uint8_t mdp = vic->reg.mdp;
-        const uint8_t mode = vic->gunit.mode;
-        uint32_t bmc = 0;
-        for (int i = 0; i < 8; i++) {
-            uint32_t sc = _m6569_sunit_decode(vic);
-            _m6569_gunit_tick(vic, g_data);
-            switch (mode) {
-                case 0: bmc = _m6569_gunit_decode_mode0(vic); break;
-                case 1: bmc = _m6569_gunit_decode_mode1(vic); break;
-                case 2: bmc = _m6569_gunit_decode_mode2(vic); break;
-                case 3: bmc = _m6569_gunit_decode_mode3(vic); break;
-                case 4: bmc = _m6569_gunit_decode_mode4(vic);
-                /* default: invalid mode => black */
-            }
-            _m6569_test_mob_data_col(vic, bmc, sc);
-            dst[i] = _m6569_color_multiplex(bmc, sc, mdp);
-        }
-    }
-    /*
-        "...otherwise it displays the background color"
-    */
-    else {
-        const uint32_t c = vic->gunit.bg_rgba8[0];
-        for (int i = 0; i < 8; i++) {
-            dst[i] = c;
-        }
-    }
-    /*
+
         "The main border flip flop controls the border display. If it is set, the
         VIC displays the color stored in register $d020, otherwise it displays the
         color that the priority multiplexer switches through from the graphics or
         sprite data sequencer. So the border overlays the text/bitmap graphics as
         well as the sprites. It has the highest display priority."
+
+        ...otherwise it displays the background color
     */
-    if (vic->brd.main) {
-        const uint32_t c = vic->brd.bc_rgba8;
-        for (int i = 0; i < 8; i++) {
-            dst[i] = c;
+    bool brd = vic->brd.vert | vic->brd.main;
+    uint32_t brd_color = vic->brd.main ? vic->brd.bc_rgba8 : vic->gunit.bg_rgba8[0];
+    const uint8_t mdp = vic->reg.mdp;
+    const uint8_t mode = vic->gunit.mode;
+    uint32_t bmc = 0;
+    for (int i = 0; i < 8; i++) {
+        uint32_t sc = _m6569_sunit_decode(vic);
+        _m6569_gunit_tick(vic, g_data);
+        switch (mode) {
+            case 0: bmc = _m6569_gunit_decode_mode0(vic); break;
+            case 1: bmc = _m6569_gunit_decode_mode1(vic); break;
+            case 2: bmc = _m6569_gunit_decode_mode2(vic); break;
+            case 3: bmc = _m6569_gunit_decode_mode3(vic); break;
+            case 4: bmc = _m6569_gunit_decode_mode4(vic); break;
         }
+        _m6569_test_mob_data_col(vic, bmc, sc);
+        dst[i] = brd ? brd_color : _m6569_color_multiplex(bmc, sc, mdp);
     }
 }
 
@@ -1293,7 +1277,54 @@ static inline void _m6569_crt_next_crtline(m6569_t* vic) {
     }
 }
 
-/* perform a c-access */
+/* border unit functions */
+static inline void _m6569_bunit_left(m6569_t* vic, uint32_t hpos) {
+    if (hpos == vic->brd.left) {
+        /* 4. If the X coordinate reaches the left comparison value and the Y
+              coordinate reaches the bottom one, the vertical border flip flop is set.
+        */
+        if (vic->rs.v_count == vic->brd.bottom) {
+            vic->brd.vert = true;
+        }
+        /* 5. If the X coordinate reaches the left comparison value and the Y
+              coordinate reaches the top one and the DEN bit in register $d011 is set,
+              the vertical border flip flop is reset.
+        */
+        else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
+            vic->brd.vert = false;
+        }
+        /* 6. If the X coordinate reaches the left comparison value and the vertical
+              border flip flop is not set, the main flip flop is reset.
+        */
+        if (!vic->brd.vert) {
+            vic->brd.main = false;
+        }
+    }
+}
+
+static inline void _m6569_bunit_right(m6569_t* vic, uint32_t hpos) {
+    if (hpos == vic->brd.right) {
+        vic->brd.main = true;
+    }
+}
+
+static inline void _m6569_bunit_end(m6569_t* vic) {
+    /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
+          vertical border flip flop is set.
+    */
+    if (vic->rs.v_count == vic->brd.bottom) {
+        vic->brd.vert = true;
+    }
+    /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
+          DEN bit in register $d011 is set, the vertical border flip flop is
+          reset.
+    */
+    else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
+        vic->brd.vert = false;
+    }
+}
+
+/* memory access functions */
 static inline void _m6569_c_access(m6569_t* vic) {
     if (vic->rs.badline) {
         /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
@@ -1302,13 +1333,12 @@ static inline void _m6569_c_access(m6569_t* vic) {
     }
 }
 
-/* perform i-access */
 static inline uint8_t _m6569_i_access(m6569_t* vic) {
     return (uint8_t) vic->mem.fetch_cb(vic->mem.i_addr, vic->mem.user_data);
 }
 
-/* perform a g-access or i access */
 static inline uint8_t _m6569_g_i_access(m6569_t* vic) {
+    /* perform a g-access or i access */
     if (vic->rs.display_state) {
         uint16_t addr;
         if (vic->reg.ctrl_1 & M6569_CTRL1_BMM) {
@@ -1330,13 +1360,11 @@ static inline uint8_t _m6569_g_i_access(m6569_t* vic) {
     }
 }
 
-/* perform a p-access */
 static inline void _m6569_p_access(m6569_t* vic, uint32_t p_index) {
     uint16_t addr = vic->mem.p_addr_or + p_index;
     vic->sunit.p_data[p_index] = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
 }
 
-/* perform a simple s-access */
 static inline void _m6569_s_access(m6569_t* vic, uint32_t s_index) {
     /* sprite s-access: |MP7|MP6|MP5|MP4|MP3|MP2|MP1|MP0|MC5|MC4|MC3|MC2|MC1|MC0| */
     m6569_sprite_unit_t* su = &vic->sunit;
@@ -1348,8 +1376,8 @@ static inline void _m6569_s_access(m6569_t* vic, uint32_t s_index) {
     }
 }
 
-/* perform an s-access if dma is enabled, otherwise an i-access */
 static inline uint8_t _m6569_s_i_access(m6569_t* vic, uint32_t s_index) {
+    /* perform an s-access if dma is enabled, otherwise an i-access */
     m6569_sprite_unit_t* su = &vic->sunit;
     if (su->dma_enabled[s_index]) {
         uint16_t addr = (su->p_data[s_index]<<6) | su->mc[s_index];
@@ -1378,7 +1406,7 @@ static inline uint64_t _m6569_aec(uint64_t pins) {
 
 /*=== TICK FUNCTION ==========================================================*/
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
-    uint8_t g_data = 0xAA;
+    uint8_t g_data = 0x00;
     _m6569_rs_update_badline(vic);
 
     /* a raster line is 63 ticks */
@@ -1409,7 +1437,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 4, pins);
             pins = _m6569_sunit_dma_ba(vic, 5, pins);
             break;
-        case 4: /* HRETRACEPOS */
+        case 4:
             _m6569_crt_next_crtline(vic);
             _m6569_p_access(vic, 4);
             _m6569_s_access(vic, 4);
@@ -1467,11 +1495,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 7, pins);
             break;
         case 12:
-            pins = _m6569_ba(vic, pins);
-            break;
         case 13:
-            pins = _m6569_ba(vic, pins);
-            break;
         case 14:
             pins = _m6569_ba(vic, pins);
             break;
@@ -1487,6 +1511,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             _m6569_sunit_update_mcbase(vic);
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
+            _m6569_bunit_left(vic, 16);
             break;
         case 17:
             pins = _m6569_ba(vic, pins);
@@ -1495,22 +1520,32 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             _m6569_sunit_dma_disp_disable(vic);
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
+            _m6569_bunit_left(vic, 17);
             break;
-                                                                                case 18: case 19:
+        case 18: case 19:
         case 20: case 21: case 22: case 23: case 24: case 25: case 26: case 27: case 28: case 29:
         case 30: case 31: case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39:
         case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47: case 48: case 49:
-        case 50: case 51: case 52: case 53: case 54: case 55:
+        case 50: case 51: case 52: case 53: case 54:
             pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
             break;
+        case 55:
+            pins = _m6569_ba(vic, pins);
+            pins = _m6569_aec(pins);
+            vic->gunit.enabled = vic->rs.display_state;
+            _m6569_c_access(vic);
+            g_data = _m6569_g_i_access(vic);
+            _m6569_bunit_right(vic, 55);
+            break;
         case 56:
             vic->gunit.enabled = false;
             _m6569_sunit_rewind(vic);
             pins = _m6569_sunit_dma_ba(vic, 0, pins);
+            _m6569_bunit_right(vic, 56);
             break;
         case 57:
             pins = _m6569_sunit_dma_ba(vic, 0, pins);
@@ -1558,6 +1593,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_aec(vic, 2, pins);
             pins = _m6569_sunit_dma_ba(vic, 2, pins);
             pins = _m6569_sunit_dma_ba(vic, 3, pins);
+            _m6569_bunit_end(vic);
             break;
     }
     /*-- main interrupt bit --*/
@@ -1569,53 +1605,6 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     }
     if (vic->reg.int_latch & (1<<7)) {
         pins |= M6569_IRQ;
-    }
-
-    /*--- update the border flip-flops ---------------------------------------*/
-    /* (see 3.9 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
-    {
-        /* 1. If the X coordinate reaches the right comparison value, the main border
-              flip flop is set.
-        */
-        if (_M6569_HTICK(vic->brd.right)) {
-            vic->brd.main = true;
-        }
-        else if (_M6569_HTICK(0)) {
-            /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
-                  vertical border flip flop is set.
-            */
-            if (vic->rs.v_count == vic->brd.bottom) {
-                vic->brd.vert = true;
-            }
-            /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
-                  DEN bit in register $d011 is set, the vertical border flip flop is
-                  reset.
-            */
-            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
-                vic->brd.vert = false;
-            }
-        }
-        else if (_M6569_HTICK(vic->brd.left)) {
-            /* 4. If the X coordinate reaches the left comparison value and the Y
-                  coordinate reaches the bottom one, the vertical border flip flop is set.
-            */
-            if (vic->rs.v_count == vic->brd.bottom) {
-                vic->brd.vert = true;
-            }
-            /* 5. If the X coordinate reaches the left comparison value and the Y
-                  coordinate reaches the top one and the DEN bit in register $d011 is set,
-                  the vertical border flip flop is reset.
-            */
-            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
-                vic->brd.vert = false;
-            }
-            /* 6. If the X coordinate reaches the left comparison value and the vertical
-                  border flip flop is not set, the main flip flop is reset.
-            */
-            if (!vic->brd.vert) {
-                vic->brd.main = false;
-            }
-        }
     }
 
     /*--- decode pixels into framebuffer -------------------------------------*/
