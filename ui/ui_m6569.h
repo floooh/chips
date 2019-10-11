@@ -288,6 +288,16 @@ static void _ui_m6569_draw_sprite_units(const ui_m6569_t* win) {
     }
 }
 
+static void _ui_m6569_tint_framebuffer(ui_m6569_t* win) {
+    uint32_t* ptr = win->vic->crt.rgba8_buffer;
+    if (ptr) {
+        const int num = m6569_display_width(win->vic) * m6569_display_height(win->vic);
+        for (int i = 0; i < num; i++) {
+            ptr[i] = ~ptr[i] | 0xFF0000F0;
+        }
+    }
+}
+
 void ui_m6569_draw(ui_m6569_t* win) {
     CHIPS_ASSERT(win && win->valid);
     if (!win->open) {
@@ -302,6 +312,9 @@ void ui_m6569_draw(ui_m6569_t* win) {
         ImGui::SameLine();
         ImGui::BeginChild("##m6569_state", ImVec2(0, 0), true);
         ImGui::Checkbox("Debug Visualization", &win->vic->debug_vis);
+        if (ImGui::Button("Tint Framebuffer")) {
+            _ui_m6569_tint_framebuffer(win);
+        }
         _ui_m6569_draw_hwcolors(win);
         _ui_m6569_draw_registers(win);
         _ui_m6569_draw_raster_unit(win);
