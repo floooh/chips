@@ -246,9 +246,7 @@ typedef struct {
     uint8_t h_first[8];         /* first horizontal visible tick */
     uint8_t h_last[8];          /* last horizontal visible tick */
     uint8_t h_offset[8];        /* x-offset within 8-pixel raster */
-
     uint8_t p_data[8];          /* the byte read by p_access memory fetch */
-    
     bool dma_enabled[8];        /* sprite dma is enabled */
     bool disp_enabled[8];       /* sprite display is enabled */
     bool expand[8];             /* expand flip-flop */
@@ -270,13 +268,13 @@ typedef struct {
 typedef struct {
     bool debug_vis;             /* toggle this to switch debug visualization on/off */
     m6569_registers_t reg;
-    m6569_raster_unit_t rs;
     m6569_crt_t crt;
     m6569_border_unit_t brd;
+    m6569_raster_unit_t rs;
     m6569_memory_unit_t mem;
-    m6569_video_matrix_t vm;
     m6569_graphics_unit_t gunit;
     m6569_sprite_unit_t sunit;
+    m6569_video_matrix_t vm;
     uint64_t pins;
 } m6569_t;
 
@@ -384,11 +382,6 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
 #define _M6569_CSEL0_BORDER_LEFT    (17)    /* left border when CSEL=0 (38 columns) */
 #define _M6569_CSEL0_BORDER_RIGHT   (55)    /* right border when CSEL=0 */
 
-/* internal helper macros to check for horizontal ticks with coordinates 
-used here: http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt
-*/
-#define _M6569_HTICK(t)             (vic->rs.h_count == (t))
-#define _M6569_HTICK_RANGE(t0,t1)   ((vic->rs.h_count >= (t0)) && (vic->rs.h_count <= (t1)))
 #define _M6569_RAST(r)              (vic->rs.v_count == (r))
 #define _M6569_RAST_RANGE(r0,r1)    ((vic->rs.v_count >= (r0)) && (vic->rs.v_count <= (r1)))
 
@@ -536,9 +529,7 @@ static void _m6569_io_update_sunit(m6569_t* vic, int i, uint8_t mx, uint8_t my, 
     m6569_sprite_unit_t* su = &vic->sunit;
     /* mxb: MSB for each xpos */
     uint16_t xpos = ((mx8 & (1<<i))<<(8-i)) | mx;
-// FIXME!
-//    su->h_first  = (xpos / 8) + 12;
-su->h_first[i]  = (xpos / 8) + 13;
+    su->h_first[i]  = (xpos / 8) + 13;
     su->h_offset[i] = (xpos & 7);
     const uint16_t w = ((mxe & (1<<i)) ? 5 : 2) + ((su->h_offset[i] > 0) ? 1:0);
     su->h_last[i] = su->h_first[i] + w;
@@ -972,7 +963,7 @@ static inline uint64_t _m6569_sunit_dma_aec(m6569_t* vic, uint32_t s_index, uint
     return pins;
 }
 
-static inline uint32_t _m6569_sunit_decode(m6569_t* vic) {
+static inline uint32_t _m6569_sunit_decode(m6569_t* vic, uint8_t hpos) {
     /* this will tick all the sprite units and return the color
         of the highest-priority sprite color for the current pixel,
         or 0 if the sprite units didn't produce a color 
@@ -984,10 +975,12 @@ static inline uint32_t _m6569_sunit_decode(m6569_t* vic) {
     uint32_t c = 0;
     bool collision = false;
     m6569_sprite_unit_t* su = &vic->sunit;
+    uint8_t mxe = vic->reg.mxe;
+    uint8_t mmc = vic->reg.mmc;
     for (int i = 0; i < 8; i++) {
-        if (su->disp_enabled[i] && _M6569_HTICK_RANGE(su->h_first[i], su->h_last[i])) {
+        if (su->disp_enabled[i] && (hpos >= su->h_first[i]) && (hpos <= su->h_last[i])) {
             if (su->delay_count[i] == 0) {
-                if ((0 == (su->xexp_count[i]++ & 1)) || (0 == (vic->reg.mxe & (1<<i)))) {
+                if ((0 == (su->xexp_count[i]++ & 1)) || (0 == (mxe & (1<<i)))) {
                     /* bit 31 of outp is the current shifter output */
                     su->outp[i] = su->shift[i];
                     /* bits 31 and 30 of outp is half-frequency shifter output */
@@ -996,7 +989,7 @@ static inline uint32_t _m6569_sunit_decode(m6569_t* vic) {
                     }
                     su->shift[i] <<= 1;
                 }
-                if (vic->reg.mmc & (1<<i)) {
+                if (mmc & (1<<i)) {
                     /* multicolor mode */
                     uint32_t ci = (su->outp2[i] & ((1<<31)|(1<<30)))>>30;
                     if (ci != 0) {
@@ -1085,11 +1078,11 @@ static inline uint32_t _m6569_color_multiplex(uint32_t bmc, uint32_t sc, uint8_t
 }
 
 /* decode the next 8 pixels */
-static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* dst) {
+static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* dst, uint8_t hpos) {
 
     m6569_sprite_unit_t* su = &vic->sunit;
     for (int i = 0; i < 8; i++) {
-        if (_M6569_HTICK(su->h_first[i]) && su->disp_enabled[i]) {
+        if (su->disp_enabled[i] && (hpos == su->h_first[i])) {
             su->delay_count[i] = su->h_offset[i];
             su->outp2_count[i] = 0;
             su->xexp_count[i] = 0;
@@ -1126,7 +1119,7 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* 
     const uint8_t mode = vic->gunit.mode;
     uint32_t bmc = 0;
     for (int i = 0; i < 8; i++) {
-        uint32_t sc = _m6569_sunit_decode(vic);
+        uint32_t sc = _m6569_sunit_decode(vic, hpos);
         _m6569_gunit_tick(vic, g_data);
         switch (mode) {
             case 0: bmc = _m6569_gunit_decode_mode0(vic); break;
@@ -1141,8 +1134,8 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* 
 }
 
 /* decode the next 8 pixels as debug visualization */
-static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint32_t* dst) {
-    _m6569_decode_pixels(vic, g_data, dst);
+static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint32_t* dst, uint8_t hpos) {
+    _m6569_decode_pixels(vic, g_data, dst, hpos);
     dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
     uint32_t mask = 0x00000000;
     if (vic->rs.badline) {
@@ -1155,7 +1148,7 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
     const m6569_sprite_unit_t* su = &vic->sunit;
     for (int si = 0; si < 8; si++) {
         if (su->disp_enabled[si]) {
-            if (_M6569_HTICK_RANGE(su->h_first[si], su->h_last[si])) {
+            if ((hpos >= su->h_first[si]) && (hpos <= su->h_last[si])) {
                 mask |= 0x00880088;
             }
         }
@@ -1418,7 +1411,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     uint8_t g_data = 0x00;
     _m6569_rs_update_badline(vic);
 
-    /* a raster line is 63 ticks */
+    /* a raster line is 63 ticks, and each line goes through a fixed 'program' */
     vic->rs.h_count++;
     vic->crt.x++;
     switch (vic->rs.h_count) {
@@ -1629,7 +1622,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             y = vic->rs.v_count;
             w = _M6569_HTOTAL + 1;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
-            _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst);
+            _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
         }
         else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
                  (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
@@ -1638,7 +1631,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             const int y = vic->crt.y - vic->crt.vis_y0;
             const int w = vic->crt.vis_w;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
-            _m6569_decode_pixels(vic, g_data, dst);
+            _m6569_decode_pixels(vic, g_data, dst, vic->rs.h_count);
         }
     }
     vic->vm.vmli = vic->vm.next_vmli;
