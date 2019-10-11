@@ -269,21 +269,21 @@ static void _ui_m6569_draw_sprite_units(const ui_m6569_t* win) {
         "Sprite Unit 0", "Sprite Unit 1", "Sprite Unit 2", "Sprite Unit 3",
         "Sprite Unit 4", "Sprite Unit 5", "Sprite Unit 6", "Sprite Unit 7",
     };
+    const m6569_sprite_unit_t* su = &win->vic->sunit;
     for (int i = 0; i < 8; i++) {
         if (ImGui::CollapsingHeader(su_names[i])) {
-            const m6569_sprite_unit_t* su = &win->vic->sunit[i];
-            ImGui::Text("dma:%s", su->dma_enabled?"ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("display:%s", su->disp_enabled?"ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("expand:%s", su->expand?"ON ":"OFF");
-            ImGui::Text("h_first:%02X h_last:%02X h_offset:%02X", su->h_first, su->h_last, su->h_offset);
-            ImGui::Text("p_data:%02X mc:%02X mc_base:%02X", su->p_data, su->mc, su->mc_base);
-            ImGui::Text("delay_cnt:%02X outp2_cnt:%02X xexp_cnt:%02X", su->delay_count, su->outp2_count, su->xexp_count);
-            ui_util_b32("shift:", su->shift);
-            ui_util_b32("outp: ", su->outp);
-            ui_util_b32("outp2:", su->outp2);
-            _ui_m6569_draw_rgb("multicolor0:", su->colors[1]);
-            _ui_m6569_draw_rgb("main color: ", su->colors[2]);
-            _ui_m6569_draw_rgb("multicolor1:", su->colors[3]);
+            ImGui::Text("dma:%s", su->dma_enabled[i]?"ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("display:%s", su->disp_enabled[i]?"ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("expand:%s", su->expand[i]?"ON ":"OFF");
+            ImGui::Text("h_first:%02X h_last:%02X h_offset:%02X", su->h_first[i], su->h_last[i], su->h_offset[i]);
+            ImGui::Text("p_data:%02X mc:%02X mc_base:%02X", su->p_data[i], su->mc[i], su->mc_base[i]);
+            ImGui::Text("delay_cnt:%02X outp2_cnt:%02X xexp_cnt:%02X", su->delay_count[i], su->outp2_count[i], su->xexp_count[i]);
+            ui_util_b32("shift:", su->shift[i]);
+            ui_util_b32("outp: ", su->outp[i]);
+            ui_util_b32("outp2:", su->outp2[i]);
+            _ui_m6569_draw_rgb("multicolor0:", su->colors[i][1]);
+            _ui_m6569_draw_rgb("main color: ", su->colors[i][2]);
+            _ui_m6569_draw_rgb("multicolor1:", su->colors[i][3]);
         }
     }
 }
