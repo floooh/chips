@@ -76,6 +76,7 @@ typedef struct {
 
 typedef struct {
     c64_t* c64;
+    int dbg_scanline;
     ui_c64_boot_cb boot_cb;
     ui_m6502_t cpu;
     ui_m6526_t cia[2];
@@ -191,7 +192,8 @@ static const char* _ui_c64_memlayer_names[_UI_C64_MEMLAYER_NUM] = {
 
 static uint8_t _ui_c64_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
-    c64_t* c64 = (c64_t*) user_data;
+    ui_c64_t* ui = (ui_c64_t*) user_data;
+    c64_t* c64 = ui->c64;
     switch (layer) {
         case _UI_C64_MEMLAYER_CPU:
             return mem_rd(&c64->mem_cpu, addr);
@@ -231,7 +233,8 @@ static uint8_t _ui_c64_mem_read(int layer, uint16_t addr, void* user_data) {
 
 static void _ui_c64_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
     CHIPS_ASSERT(user_data);
-    c64_t* c64 = (c64_t*) user_data;
+    ui_c64_t* ui = (ui_c64_t*) user_data;
+    c64_t* c64 = ui->c64;
     switch (layer) {
         case _UI_C64_MEMLAYER_CPU:
             mem_wr(&c64->mem_cpu, addr, data);
@@ -282,6 +285,47 @@ static void _ui_c64_update_memmap(ui_c64_t* ui) {
         ui_memmap_region(&ui->memmap, "KERNAL ROM", 0xE000, 0x2000, kernal_rom);
     ui_memmap_layer(&ui->memmap, "RAM");
         ui_memmap_region(&ui->memmap, "RAM", 0x0000, 0x10000, true);
+}
+
+static int _ui_c64_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
+    CHIPS_ASSERT(user_data);
+    ui_c64_t* ui = (ui_c64_t*) user_data;
+    c64_t* c64 = ui->c64;
+    int scanline = c64->vic.rs.v_count;
+    int trap_id = 0;
+    for (int i = 0; (i < dbg_win->dbg.num_breakpoints) && (trap_id == 0); i++) {
+        const ui_dbg_breakpoint_t* bp = &dbg_win->dbg.breakpoints[i];
+        if (bp->enabled) {
+            switch (bp->type) {
+                /* scanline number */
+                case UI_DBG_BREAKTYPE_USER+0:
+                    if ((ui->dbg_scanline != scanline) && (scanline == bp->val)) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* next scanline */
+                case UI_DBG_BREAKTYPE_USER+1:
+                    if (ui->dbg_scanline != scanline) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* next badline */
+                case UI_DBG_BREAKTYPE_USER+2:
+                    if ((ui->dbg_scanline != scanline) && c64->vic.rs.badline) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* next frame */
+                case UI_DBG_BREAKTYPE_USER+3:
+                    if ((ui->dbg_scanline != scanline) && (scanline == 0)) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+            }
+        }
+    }
+    ui->dbg_scanline = scanline;
+    return trap_id;
 }
 
 static const ui_chip_pin_t _ui_c64_cpu_pins[] = {
@@ -422,11 +466,18 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
         desc.y = y;
         desc.m6502 = &ui->c64->cpu;
         desc.read_cb = _ui_c64_mem_read;
+        desc.break_cb = _ui_c64_eval_bp;
         desc.create_texture_cb = ui_desc->create_texture_cb;
         desc.update_texture_cb = ui_desc->update_texture_cb;
         desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
         desc.keys = ui_desc->dbg_keys;
-        desc.user_data = ui->c64;
+        desc.user_data = ui;
+        /* custom breakpoint types */
+        desc.user_breaktypes[0].label = "Scanline at";
+        desc.user_breaktypes[0].show_val16 = true;
+        desc.user_breaktypes[1].label = "Next Scanline";
+        desc.user_breaktypes[2].label = "Next Badline";
+        desc.user_breaktypes[3].label = "Next Frame";
         ui_dbg_init(&ui->dbg, &desc);
     }
     x += dx; y += dy;
@@ -506,7 +557,7 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
         }
         desc.read_cb = _ui_c64_mem_read;
         desc.write_cb = _ui_c64_mem_write;
-        desc.user_data = ui->c64;
+        desc.user_data = ui;
         static const char* titles[] = { "Memory Editor #1", "Memory Editor #2", "Memory Editor #3", "Memory Editor #4" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
@@ -531,7 +582,7 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
         desc.cpu_type = UI_DASM_CPUTYPE_M6502;
         desc.start_addr = mem_rd16(&ui->c64->mem_cpu, 0xFFFC);
         desc.read_cb = _ui_c64_mem_read;
-        desc.user_data = ui->c64;
+        desc.user_data = ui;
         static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;

@@ -24,7 +24,34 @@ are easy to embed into bigger applications.
     - *CPC 6128*: the improved CPC with 128 KB RAM
     - *KC Compact*: an East German CPC clone (the emulator only differs in color palette and ROM, it doesn't emulate the gate-array 'hardware-emulation' in the KC Compact
 - **atom.h**: an *Acorn Atom* with modern extensions (32 KB RAM + 8 KB video memory, a rudimentary VIA 6522 emulation and MMC joystick support)
-- (TODO) **c64.h**: a *C64* emulator with PAL display
+- **c64.h**: a *C64* emulator with PAL display
+    - Wolfgang Lorenz test suite status (non-CPU stuff):
+        - branchwrap: OK
+        - cia1pb6: OK
+        - cia1pb7: OK
+        - cia1ta: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
+        - cia1tab: OK
+        - cia1tb: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
+        - cia1tb123: OK
+        - cia2pb6: OK
+        - cia2pb7: OK
+        - cia2ta: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
+        - cia2tb: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
+        - cia2tb123: OK
+        - cntdef: OK
+        - cnto2: OK
+        - cpuport: OK
+        - cputiming: OK
+        - flipos: OK
+        - icr01: OK
+        - imr: OK
+        - irq: FAIL (1 OFF)
+        - loadth: OK
+        - mmu: OK
+        - mmufetch: OK
+        - nmi: FAIL
+        - oneshot: OK
+
 - (TODO) **kc85.h**: an emulator for 3 KC85 models from VEB Mikroelektronik Mühlhausen:
     - *KC85/2*: the original KC85 model with 16 KB RAM, CAOS 2.2 and no integrated BASIC
     - *KC85/3*: an incremental improvement with CAOS 3.1 and integrated BASIC ROM

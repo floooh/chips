@@ -164,41 +164,10 @@ The MOS Technology 6502 CPU.
 - test coverage:
     - **NESTEST**: completely working (this runs through all documented, and most 'common'
       undocumented instructions but doesn't test decimal mode)
-    - **Wolfgang Lorenz C64 Test Suite** (CPU tests):
-      - _adc*_: OK
-      - _alrb, arrb, ancb_: OK
-      - _and*_: OK
-      - _aneb_: **FAIL**
-      - _asl*_: OK
-      - _aso*_: OK
-      - _axs*_: OK
-      - _b*r_ (branches): OK
-      - _bit*_: OK
-      - _branchwrap_: OK
-      - _brkn_: OK
-      - _cl*_, se*_ (set/clear flags): OK
-      - _cmp*_: OK
-      - _cpuport_: OK (m6510 CPU port)
-      - _cputiming_: **FAIL** (opcodes 5C and 7C show 'clocks: 8 right: 9')
-      - _dcm*_: OK
-      - _dec*, dexn, deyn_: OK
-      - _eor*_: OK
-      - _inc*, inxn, inyn_: OK
-      - _ins*_: OK
-      - _inxn, inyn_: OK
-      - _irq_: **FAIL**
-      - _jmpi, jmpw, jsrw_: OK
-      - _lasay_: **FAIL**
-      - _lax*_: OK
-      - _lda*_: OK
-      - _ldx*, ldy*_: OK
-      - _lse*_: OK
-      - _lsr*_: OK
-      - _lxab_: **FAIL**
-      - _nmi_: **FAIL**
-      - _nop*_: OK
-      - _ora*_: OK
-      - ...
+    - **Wolfgang Lorenz C64 Test Suite**: all CPU opcode tests working, including
+      the unintended and unstable instructions, instruction timings, branchwrap etc.
+      Only two known issues remaining: the **irq** and **nmi** tests (also see
+      the C64 notes in https://github.com/floooh/chips/blob/master/systems/README.md)
 
 ### AY-3-8910 (chips/ay38910.h)
 
@@ -260,7 +229,7 @@ MOS Technology 6526 Complex Interface Adapter
 
 - **Wolfgang Lorenz C64 Test Suite Status**:
   - _cia1pb6, cia1pb7, cia2pb6, cia2pb7_: OK
-  - _cia1ta, cia1tb, cia2ta, cia2tb_: **FAIL** (but improved, doesn't fail immediately)
+  - _cia1ta, cia1tb, cia2ta, cia2tb_: **FAIL** (these are marked as "under construction" in the test-suite readme though)
   - _cia1tab_: OK
   - _cia1tb123, cia2tb123_: OK
   - _cntdef, cnto2_: OK (but note that CNT pin is not emulated, it's always high)

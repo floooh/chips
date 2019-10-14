@@ -184,7 +184,6 @@ typedef struct {
     uint16_t h_count;
     uint16_t v_count;
     uint16_t v_irqline;     /* raster interrupt line, updated when ctrl_1 or raster is written */
-    uint16_t sh_count;      /* separate counter for sprite, reset at h_count=55 */
     uint16_t vc;            /* 10-bit video counter */
     uint16_t vc_base;       /* 10-bit video counter base */
     uint8_t rc;             /* 3-bit raster counter */
@@ -207,6 +206,7 @@ typedef struct {
 /* video matrix state */
 typedef struct {
     uint8_t vmli;           /* 6-bit 'vmli' video-matrix line buffer index */
+    uint8_t next_vmli;
     uint16_t line[64];      /* 40x 8+4 bits line buffer (64 items because vmli is a 6-bit ctr) */
 } m6569_video_matrix_t;
 
@@ -243,24 +243,22 @@ typedef struct {
 /* sprite sequencer state */
 typedef struct {
     /* updated when setting sprite position registers */
-    uint8_t h_first;            /* first horizontal visible tick */
-    uint8_t h_last;             /* last horizontal visible tick */
-    uint8_t h_offset;           /* x-offset within 8-pixel raster */
-
-    uint8_t p_data;             /* the byte read by p_access memory fetch */
-    
-    bool dma_enabled;           /* sprite dma is enabled */
-    bool disp_enabled;          /* sprite display is enabled */
-    bool expand;                /* expand flip-flop */
-    uint8_t mc;                 /* 6-bit mob-data-counter */
-    uint8_t mc_base;            /* 6-bit mob-data-counter base */
-    uint8_t delay_count;        /* 0..7 delay pixels */
-    uint8_t outp2_count;        /* outp2 is updated when bit 0 is on */
-    uint8_t xexp_count;         /* if x stretched, only shift every second pixel tick */
-    uint32_t shift;             /* 24-bit shift register */
-    uint32_t outp;              /* current shifter output (bit 31) */
-    uint32_t outp2;             /* current shifter output at half frequency (bits 31 and 30) */
-    uint32_t colors[4];         /* 0: unused, 1: multicolor0, 2: main color, 3: multicolor1
+    uint8_t h_first[8];         /* first horizontal visible tick */
+    uint8_t h_last[8];          /* last horizontal visible tick */
+    uint8_t h_offset[8];        /* x-offset within 8-pixel raster */
+    uint8_t p_data[8];          /* the byte read by p_access memory fetch */
+    bool dma_enabled[8];        /* sprite dma is enabled */
+    bool disp_enabled[8];       /* sprite display is enabled */
+    bool expand[8];             /* expand flip-flop */
+    uint8_t mc[8];              /* 6-bit mob-data-counter */
+    uint8_t mc_base[8];         /* 6-bit mob-data-counter base */
+    uint8_t delay_count[8];     /* 0..7 delay pixels */
+    uint8_t outp2_count[8];     /* outp2 is updated when bit 0 is on */
+    uint8_t xexp_count[8];      /* if x stretched, only shift every second pixel tick */
+    uint32_t shift[8];          /* 24-bit shift register */
+    uint32_t outp[8];           /* current shifter output (bit 31) */
+    uint32_t outp2[8];          /* current shifter output at half frequency (bits 31 and 30) */
+    uint32_t colors[8][4];      /* 0: unused, 1: multicolor0, 2: main color, 3: multicolor1
                                    the alpha channel is cleared and used as bitmask for sprites
                                    which produced a color
                                 */
@@ -270,13 +268,13 @@ typedef struct {
 typedef struct {
     bool debug_vis;             /* toggle this to switch debug visualization on/off */
     m6569_registers_t reg;
-    m6569_raster_unit_t rs;
     m6569_crt_t crt;
     m6569_border_unit_t brd;
+    m6569_raster_unit_t rs;
     m6569_memory_unit_t mem;
-    m6569_video_matrix_t vm;
     m6569_graphics_unit_t gunit;
-    m6569_sprite_unit_t sunit[8];
+    m6569_sprite_unit_t sunit;
+    m6569_video_matrix_t vm;
     uint64_t pins;
 } m6569_t;
 
@@ -373,24 +371,17 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
 
 /* internal implementation constants */
 #define _M6569_HTOTAL               (62)    /* 63 cycles per line (PAL) */
-#define _M6569_HRETRACEPOS          (3)     /* start of horizontal beam retrace */
 #define _M6569_VTOTAL               (311)   /* 312 lines total (PAL) */
 #define _M6569_VRETRACEPOS          (303)   /* start of vertical beam retrace */
 #define _M6569_RSEL1_BORDER_TOP     (51)    /* top border when RSEL=1 (25 rows) */
 #define _M6569_RSEL1_BORDER_BOTTOM  (251)   /* bottom border when RSEL=1 */
 #define _M6569_RSEL0_BORDER_TOP     (55)    /* top border when RSEL=0 (24 rows) */
 #define _M6569_RSEL0_BORDER_BOTTOM  (247)   /* bottom border when RSEL=0 (24 rows) */
-#define _M6569_CSEL1_BORDER_LEFT    (15)    /* left border when CSEL=1 (40 columns) */
-#define _M6569_CSEL1_BORDER_RIGHT   (55)    /* right border when CSEL=1 */
-#define _M6569_CSEL0_BORDER_LEFT    (16)    /* left border when CSEL=0 (38 columns) */
-#define _M6569_CSEL0_BORDER_RIGHT   (54)    /* right border when CSEL=0 */
+#define _M6569_CSEL1_BORDER_LEFT    (16)    /* left border when CSEL=1 (40 columns) */
+#define _M6569_CSEL1_BORDER_RIGHT   (56)    /* right border when CSEL=1 */
+#define _M6569_CSEL0_BORDER_LEFT    (17)    /* left border when CSEL=0 (38 columns) */
+#define _M6569_CSEL0_BORDER_RIGHT   (55)    /* right border when CSEL=0 */
 
-/* internal helper macros to check for horizontal ticks with coordinates 
-used here: http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt
-*/
-#define _M6569_HTICK(t)             (vic->rs.h_count == (t))
-#define _M6569_HTICK_GE(t)          (vic->rs.h_count >= (t))
-#define _M6569_HTICK_RANGE(t0,t1)   ((vic->rs.h_count >= (t0)) && (vic->rs.h_count <= (t1)))
 #define _M6569_RAST(r)              (vic->rs.v_count == (r))
 #define _M6569_RAST_RANGE(r0,r1)    ((vic->rs.v_count >= (r0)) && (vic->rs.v_count <= (r1)))
 
@@ -424,7 +415,6 @@ static void _m6569_reset_register_bank(m6569_registers_t* r) {
 
 static void _m6569_reset_raster_unit(m6569_raster_unit_t* r) {
     r->h_count = r->v_count = 0;
-    r->sh_count = 0;
     r->v_irqline = 0;
     r->vc = r->vc_base = 0;
     r->rc = 0;
@@ -470,9 +460,7 @@ void m6569_reset(m6569_t* vic) {
     _m6569_reset_memory_unit(&vic->mem);
     _m6569_reset_video_matrix_unit(&vic->vm);
     _m6569_reset_graphics_unit(&vic->gunit);
-    for (int i = 0; i < 8; i++) {
-        _m6569_reset_sprite_unit(&(vic->sunit[i]));
-    }
+    _m6569_reset_sprite_unit(&vic->sunit);
 }
 
 /*--- I/O requests -----------------------------------------------------------*/
@@ -538,18 +526,18 @@ static inline void _m6569_io_update_gunit_mode(m6569_graphics_unit_t* gu, uint8_
 
 /* update sprite unit positions and sizes when updating registers */
 static void _m6569_io_update_sunit(m6569_t* vic, int i, uint8_t mx, uint8_t my, uint8_t mx8, uint8_t mxe, uint8_t mye) {
-    m6569_sprite_unit_t* su = &vic->sunit[i];
+    m6569_sprite_unit_t* su = &vic->sunit;
     /* mxb: MSB for each xpos */
     uint16_t xpos = ((mx8 & (1<<i))<<(8-i)) | mx;
-    su->h_first  = (xpos / 8) + 12;
-    su->h_offset = (xpos & 7);
-    const uint16_t w = ((mxe & (1<<i)) ? 5 : 2) + ((su->h_offset > 0) ? 1:0);
-    su->h_last   = su->h_first + w;
+    su->h_first[i]  = (xpos / 8) + 13;
+    su->h_offset[i] = (xpos & 7);
+    const uint16_t w = ((mxe & (1<<i)) ? 5 : 2) + ((su->h_offset[i] > 0) ? 1:0);
+    su->h_last[i] = su->h_first[i] + w;
     /* 1. The expansion flip flop is set as long as the bit in MxYE in register
         $d017 corresponding to the sprite is cleared.
     */
     if ((mye & (1<<i)) == 0) {
-        su->expand = true;
+        su->expand[i] = true;
     }
 }
 
@@ -705,19 +693,19 @@ uint64_t m6569_iorq(m6569_t* vic, uint64_t pins) {
                 case 0x25:
                     /* sprite multicolor 0 */
                     for (int i = 0; i < 8; i++) {
-                        vic->sunit[i].colors[1] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
+                        vic->sunit.colors[i][1] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
                     }
                     break;
                 case 0x26:
                     /* sprite multicolor 1*/
                     for (int i = 0; i < 8; i++) {
-                        vic->sunit[i].colors[3] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
+                        vic->sunit.colors[i][3] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
                     }
                     break;
                 case 0x27: case 0x28: case 0x29: case 0x2A: 
                 case 0x2B: case 0x2C: case 0x2D: case 0x2E:
                     /* sprite main color */
-                    vic->sunit[r_addr-0x27].colors[2] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
+                    vic->sunit.colors[r_addr-0x27][2] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
                     break;
             }
             if (write) {
@@ -734,7 +722,7 @@ uint64_t m6569_iorq(m6569_t* vic, uint64_t pins) {
 /* start the graphics sequencer, this happens at the first g_access,
    the graphics sequencer must be delayed by xscroll
 */
-static inline void _m6569_gunit_reload(m6569_t* vic, uint8_t xscroll) {
+static inline void _m6569_gunit_rewind(m6569_t* vic, uint8_t xscroll) {
     vic->gunit.count = xscroll;
     vic->gunit.shift = 0;
     vic->gunit.outp = 0;
@@ -862,7 +850,120 @@ static inline uint32_t _m6569_gunit_decode_mode4(m6569_t* vic) {
 }
 
 /*--- sprite sequencer helper ------------------------------------------------*/
-static inline uint32_t _m6569_sunit_decode(m6569_t* vic) {
+
+static inline void _m6569_sunit_start(m6569_t* vic) {
+    /*
+        1. The expansion flip flop is set as long as the bit in MxYE in register
+         $d017 corresponding to the sprite is cleared.
+         (FIXME: this is currently only done when updating the MxYE register)
+        2. If the MxYE bit is set in the first phase of cycle 55, the expansion
+         flip flop is inverted.
+        3. In the first phases of cycle 55 and 56, the VIC checks for every sprite
+         if the corresponding MxE bit in register $d015 is set and the Y
+         coordinate of the sprite (odd registers $d001-$d00f) match the lower 8
+         bits of RASTER. If this is the case and the DMA for the sprite is still
+         off, the DMA is switched on, MCBASE is cleared, and if the MxYE bit is
+         set the expansion flip flip is reset.
+
+         NOTE: sprite disp_enabled flag is turned off here if dma flag is off,
+         this is different from the recipe in vic-ii.txt (switching off display
+         in tick 15/16 as described in the recipe turns off rendering the
+         last line of a sprite)
+    */
+    const uint8_t me = vic->reg.me;
+    const uint8_t mye = vic->reg.mye;
+    m6569_sprite_unit_t* su = &vic->sunit;
+    for (int i = 0; i < 8; i++) {
+        const uint8_t mask = (1<<i);
+        if (mye & mask) {
+            su->expand[i] = !su->expand[i];
+        }
+        if ((me & mask) && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
+            if (!su->dma_enabled[i]) {
+                su->dma_enabled[i] = true;
+                su->mc_base[i] = 0;
+                if (mye & mask) {
+                    su->expand[i] = false;
+                }
+            }
+        }
+        /* NOTE: the following behaviour differes from the recipe */
+        if (!su->dma_enabled[i]) {
+            su->disp_enabled[i] = false;
+        }
+    }
+}
+
+static inline void _m6569_sunit_update_mc_disp_enable(m6569_t* vic) {
+    /* 4. In the first phase of cycle 58, the MC of every sprite is loaded from
+        its belonging MCBASE (MCBASE->MC) and it is checked if the DMA for the
+        sprite is turned on and the Y coordinate of the sprite matches the lower
+        8 bits of RASTER. If this is the case, the display of the sprite is
+        turned on.
+    */
+    m6569_sprite_unit_t* su = &vic->sunit;
+    for (int i = 0; i < 8; i++) {
+        su->mc[i] = su->mc_base[i];
+        if (su->dma_enabled[i] && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
+            su->disp_enabled[i] = true;
+        }
+    }
+}
+
+/*
+    7. In the first phase of cycle 15, it is checked if the expansion flip flop
+    is set. If so, MCBASE is incremented by 2.
+*/
+static inline void _m6569_sunit_update_mcbase(m6569_t* vic) {
+    m6569_sprite_unit_t* su = &vic->sunit;
+    for (int i = 0; i < 8; i++) {
+        if (su->expand[i]) {
+            su->mc_base[i] = (su->mc_base[i] + 2) & 0x3F;
+        }
+    }
+}
+
+/*
+    8. In the first phase of cycle 16, it is checked if the expansion flip flop
+    is set. If so, MCBASE is incremented by 1. After that, the VIC checks if
+    MCBASE is equal to 63 and turns of the DMA and the display of the sprite
+    if it is.
+
+    NOTE: The display is turned off in _m6569_sunit_update_mc_disp_enable()
+    instead (at the end of the last valid rasterline the sprite must
+    be displayed). Otherwise the last line won't be displayed.
+
+    This is different behaviour than described in the recipe!.
+*/
+static inline void _m6569_sunit_dma_disp_disable(m6569_t* vic) {
+    m6569_sprite_unit_t* su = &vic->sunit;
+    for (int i = 0; i < 8; i++) {
+        if (su->expand[i]) {
+            su->mc_base[i] = (su->mc_base[i] + 1) & 0x3F;
+        }
+        if (su->mc_base[i] == 0x3F) {
+            su->dma_enabled[i] = false;
+        }
+    }
+}
+
+/* set the BA pin if a sprite's DMA is enabled */
+static inline uint64_t _m6569_sunit_dma_ba(m6569_t* vic, uint32_t s_index, uint64_t pins) {
+    if (vic->sunit.dma_enabled[s_index]) {
+        pins |= M6569_BA;
+    }
+    return pins;
+}
+
+/* set the AEC pin if a sprite's DMA is enabled */
+static inline uint64_t _m6569_sunit_dma_aec(m6569_t* vic, uint32_t s_index, uint64_t pins) {
+    if (vic->sunit.dma_enabled[s_index]) {
+        pins |= M6569_AEC;
+    }
+    return pins;
+}
+
+static inline uint32_t _m6569_sunit_decode(m6569_t* vic, uint8_t hpos) {
     /* this will tick all the sprite units and return the color
         of the highest-priority sprite color for the current pixel,
         or 0 if the sprite units didn't produce a color 
@@ -873,26 +974,28 @@ static inline uint32_t _m6569_sunit_decode(m6569_t* vic) {
     */
     uint32_t c = 0;
     bool collision = false;
+    m6569_sprite_unit_t* su = &vic->sunit;
+    uint8_t mxe = vic->reg.mxe;
+    uint8_t mmc = vic->reg.mmc;
     for (int i = 0; i < 8; i++) {
-        m6569_sprite_unit_t* su = &vic->sunit[i];
-        if (su->disp_enabled && _M6569_HTICK_RANGE(su->h_first, su->h_last)) {
-            if (su->delay_count == 0) {
-                if ((0 == (su->xexp_count++ & 1)) || (0 == (vic->reg.mxe & (1<<i)))) {
+        if (su->disp_enabled[i] && (hpos >= su->h_first[i]) && (hpos <= su->h_last[i])) {
+            if (su->delay_count[i] == 0) {
+                if ((0 == (su->xexp_count[i]++ & 1)) || (0 == (mxe & (1<<i)))) {
                     /* bit 31 of outp is the current shifter output */
-                    su->outp = su->shift;
+                    su->outp[i] = su->shift[i];
                     /* bits 31 and 30 of outp is half-frequency shifter output */
-                    if (0 == (su->outp2_count++ & 1)) {
-                        su->outp2 = su->shift;
+                    if (0 == (su->outp2_count[i]++ & 1)) {
+                        su->outp2[i] = su->shift[i];
                     }
-                    su->shift <<= 1;
+                    su->shift[i] <<= 1;
                 }
-                if (vic->reg.mmc & (1<<i)) {
+                if (mmc & (1<<i)) {
                     /* multicolor mode */
-                    uint32_t ci = (su->outp2 & ((1<<31)|(1<<30)))>>30;
+                    uint32_t ci = (su->outp2[i] & ((1<<31)|(1<<30)))>>30;
                     if (ci != 0) {
                         /* don't overwrite higher-priority colors */
                         if (0 == c) {
-                            c = su->colors[ci];
+                            c = su->colors[i][ci];
                         }
                         else {
                             collision = true;
@@ -902,10 +1005,10 @@ static inline uint32_t _m6569_sunit_decode(m6569_t* vic) {
                 }
                 else {
                     /* standard color mode */
-                    if (su->outp & (1<<31)) {
+                    if (su->outp[i] & (1<<31)) {
                         /* don't overwrite higher-priority colors */
                         if (0 == c) {
-                            c = su->colors[2] | (1<<(24+i));
+                            c = su->colors[i][2] | (1<<(24+i));
                         }
                         else {
                             collision = true;
@@ -915,7 +1018,7 @@ static inline uint32_t _m6569_sunit_decode(m6569_t* vic) {
                 }
             }
             else {
-                su->delay_count--;
+                su->delay_count[i]--;
             }
         }
     }
@@ -975,7 +1078,17 @@ static inline uint32_t _m6569_color_multiplex(uint32_t bmc, uint32_t sc, uint8_t
 }
 
 /* decode the next 8 pixels */
-static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* dst) {
+static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* dst, uint8_t hpos) {
+
+    m6569_sprite_unit_t* su = &vic->sunit;
+    for (int i = 0; i < 8; i++) {
+        if (su->disp_enabled[i] && (hpos == su->h_first[i])) {
+            su->delay_count[i] = su->h_offset[i];
+            su->outp2_count[i] = 0;
+            su->xexp_count[i] = 0;
+        }
+    }
+
     /*
         "...the vertical border flip flop controls the output of the graphics
         data sequencer. The sequencer only outputs data if the flip flop is
@@ -991,53 +1104,38 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* 
             - likewise the alpha channel bits for the graphics sequencer
               are used to communicate whether the returned color is a 
               background or foreground colors (fg: alpha == 0xFF, bg: alpha == 0)
-    */
-    if (!vic->brd.vert) {
-        const uint8_t mdp = vic->reg.mdp;
-        const uint8_t mode = vic->gunit.mode;
-        uint32_t bmc = 0;
-        for (int i = 0; i < 8; i++) {
-            uint32_t sc = _m6569_sunit_decode(vic);
-            _m6569_gunit_tick(vic, g_data);
-            switch (mode) {
-                case 0: bmc = _m6569_gunit_decode_mode0(vic); break;
-                case 1: bmc = _m6569_gunit_decode_mode1(vic); break;
-                case 2: bmc = _m6569_gunit_decode_mode2(vic); break;
-                case 3: bmc = _m6569_gunit_decode_mode3(vic); break;
-                case 4: bmc = _m6569_gunit_decode_mode4(vic);
-                /* default: invalid mode => black */
-            }
-            _m6569_test_mob_data_col(vic, bmc, sc);
-            dst[i] = _m6569_color_multiplex(bmc, sc, mdp);
-        }
-    }
-    /*
-        "...otherwise it displays the background color"
-    */
-    else {
-        const uint32_t c = vic->gunit.bg_rgba8[0];
-        for (int i = 0; i < 8; i++) {
-            dst[i] = c;
-        }
-    }
-    /*
+
         "The main border flip flop controls the border display. If it is set, the
         VIC displays the color stored in register $d020, otherwise it displays the
         color that the priority multiplexer switches through from the graphics or
         sprite data sequencer. So the border overlays the text/bitmap graphics as
         well as the sprites. It has the highest display priority."
+
+        ...otherwise it displays the background color
     */
-    if (vic->brd.main) {
-        const uint32_t c = vic->brd.bc_rgba8;
-        for (int i = 0; i < 8; i++) {
-            dst[i] = c;
+    bool brd = vic->brd.vert | vic->brd.main;
+    uint32_t brd_color = vic->brd.main ? vic->brd.bc_rgba8 : vic->gunit.bg_rgba8[0];
+    const uint8_t mdp = vic->reg.mdp;
+    const uint8_t mode = vic->gunit.mode;
+    uint32_t bmc = 0;
+    for (int i = 0; i < 8; i++) {
+        uint32_t sc = _m6569_sunit_decode(vic, hpos);
+        _m6569_gunit_tick(vic, g_data);
+        switch (mode) {
+            case 0: bmc = _m6569_gunit_decode_mode0(vic); break;
+            case 1: bmc = _m6569_gunit_decode_mode1(vic); break;
+            case 2: bmc = _m6569_gunit_decode_mode2(vic); break;
+            case 3: bmc = _m6569_gunit_decode_mode3(vic); break;
+            case 4: bmc = _m6569_gunit_decode_mode4(vic); break;
         }
+        _m6569_test_mob_data_col(vic, bmc, sc);
+        dst[i] = brd ? brd_color : _m6569_color_multiplex(bmc, sc, mdp);
     }
 }
 
 /* decode the next 8 pixels as debug visualization */
-static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint32_t* dst) {
-    _m6569_decode_pixels(vic, g_data, dst);
+static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint32_t* dst, uint8_t hpos) {
+    _m6569_decode_pixels(vic, g_data, dst, hpos);
     dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
     uint32_t mask = 0x00000000;
     if (vic->rs.badline) {
@@ -1047,10 +1145,10 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
         mask = 0x000000FF;
     }
     /* sprites */
+    const m6569_sprite_unit_t* su = &vic->sunit;
     for (int si = 0; si < 8; si++) {
-        const m6569_sprite_unit_t* su = &vic->sunit[si];
-        if (su->disp_enabled) {
-            if (_M6569_HTICK_RANGE(su->h_first, su->h_last)) {
+        if (su->disp_enabled[si]) {
+            if ((hpos >= su->h_first[si]) && (hpos <= su->h_last[si])) {
                 mask |= 0x00880088;
             }
         }
@@ -1066,291 +1164,184 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
     }
 }
 
-/*=== TICK FUNCTION ==========================================================*/
-uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
-    /*--- raster unit --------------------------------------------------------*/
-    bool c_access = false;
-    bool g_access = false;
-    bool ba_pin = false;
-    bool aec_pin = false;
-    /*--- update the raster unit ---------------------------------------------*/
-    {
-        /* 
-            Update the raster unit.
+/*
+    (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
 
-            (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
-            
-            FIXME: "Raster line 0 is, however, an exception: In this line, IRQ
-            and incrementing (resp. resetting) of RASTER are performed one cycle later
-            than in the other lines.
-        */
-        if (vic->rs.h_count == _M6569_HTOTAL) {
-            vic->rs.h_count = 0;
-            /* new scanline */
-            if (vic->rs.v_count == _M6569_VTOTAL) {
-                vic->rs.v_count = 0;
-                vic->rs.vc_base = 0;
-            }
-            else {
-                vic->rs.v_count++;
-            }
-        }
-        else {
-            vic->rs.h_count++;
-        }
-        /* update CRT beam pos */
-        if (vic->rs.h_count == _M6569_HRETRACEPOS) {
-            vic->crt.x = 0;
-            if (vic->rs.v_count == _M6569_VRETRACEPOS) {
-                vic->crt.y = 0;
-            }
-            else {
-                vic->crt.y++;
-            }
-        }
-        else {
-            vic->crt.x++;
-        }
-
-        /* check for raster interrupt */
-        if (_M6569_HTICK(0) && (vic->rs.v_count == vic->rs.v_irqline)) {
-            vic->reg.int_latch |= M6569_INT_IRST;
-        }
-
-        /*
-            Update the badline state:
-
-            ( see 3.5 http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt )
-            
-            "A Bad Line Condition is given at any arbitrary clock cycle, if at the
-            negative edge of �0 at the beginning of the cycle RASTER >= $30 (48) and RASTER
-            <= $f7 (247) and the lower three bits of RASTER are equal to YSCROLL and if the
-            DEN bit was set during an arbitrary cycle of raster line $30."
-        */
-        if (_M6569_RAST_RANGE(48, 247)) {
-            /* DEN bit must have been set in raster line $30 */
-            if (_M6569_RAST(48) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
-                vic->rs.frame_badlines_enabled = true;
-            }
-            /* a badline is active when the low 3 bits of raster position
-                are identical with YSCROLL
-            */
-            bool yscroll_match = ((vic->rs.v_count & 7) == (vic->reg.ctrl_1 & 7));
-            vic->rs.badline = vic->rs.frame_badlines_enabled && yscroll_match;
-        }
-        else {
-            vic->rs.frame_badlines_enabled = false;
-            vic->rs.badline = false;
-        }
-
-        /*
-            Update the display/idle state flag.
-
-            ( see 3.7.1 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt )
-
-            "The transition from idle to display state occurs as soon as there is a Bad
-            Line Condition (see section 3.5.). The transition from display to idle
-            state occurs in cycle 58 of a line if the RC (see next section) contains
-            the value 7 and there is no Bad Line Condition."
-            "...In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
-            logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE). If
-            the video logic is in display state afterwards (this is always the case
-            if there is a Bad Line Condition), RC is incremented.""
-        */
-        if (vic->rs.badline) {
-            vic->rs.display_state = true;
-        }
-        if (_M6569_HTICK(58)) {
-            if (vic->rs.rc == 7) {
-                vic->rs.vc_base = vic->rs.vc;
-                if (!vic->rs.badline) {
-                    vic->rs.display_state = false;
-                }
-            }
-            if (vic->rs.display_state) {
-                vic->rs.rc = (vic->rs.rc + 1) & 7;
-            }
-        }
-
-        /* If there is a Bad Line Condition in cycles 12-54, BA is set low and the
-            c-accesses are started. Also set the AEC pin 3 cycles later.
-        */
-        if (_M6569_HTICK_RANGE(12,54)) {
-            if (vic->rs.badline) {
-                ba_pin = true;
-                if (_M6569_HTICK_GE(15)) {
-                    aec_pin = true;
-                    c_access = true;
-                }
-            }
-            /* In the first phase of cycle 14 of each line, VC is loaded from VCBASE
-                (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
-                this phase, RC is also reset to zero.
-            */
-            if (_M6569_HTICK(14)) {
-                vic->rs.vc = vic->rs.vc_base;
-                vic->vm.vmli = 0;
-                if (vic->rs.badline) {
-                    vic->rs.rc = 0;
-                }
-            }
-        }
-        /* g-accesses start at cycle 15 of each line in display state */
-        g_access = vic->rs.display_state && _M6569_HTICK_RANGE(15,54);
-        vic->gunit.enabled = g_access;
-        if (_M6569_HTICK(15)) {
-            /* reset the graphics sequencer, potentially delayed by xscroll value */
-            _m6569_gunit_reload(vic, vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL);
-        }
-    }
-
-    /*--- sprite unit preparations -------------------------------------------*/
-
-    /* 1. The expansion flip flop is set as long as the bit in MxYE in register
-        $d017 corresponding to the sprite is cleared.
-        (FIXME: this is currently only done when updating the MxYE register)
-       2. If the MxYE bit is set in the first phase of cycle 55, the expansion
-        flip flop is inverted.
-       3. In the first phases of cycle 55 and 56, the VIC checks for every sprite
-        if the corresponding MxE bit in register $d015 is set and the Y
-        coordinate of the sprite (odd registers $d001-$d00f) match the lower 8
-        bits of RASTER. If this is the case and the DMA for the sprite is still
-        off, the DMA is switched on, MCBASE is cleared, and if the MxYE bit is
-        set the expansion flip flip is reset.
-
-        NOTE: sprite display_enabled flag is turned off here if dma flag is off,
-        this is different from the recipe in vic-ii.txt (switching off display
-        in tick 15/16 as described in the recipe turns off rendering the
-        last line of a sprite)
-    */
-    if (_M6569_HTICK(55)) {
-        vic->rs.sh_count = 0;
-        const uint8_t me = vic->reg.me;
-        const uint8_t mye = vic->reg.mye;
-        for (int i = 0; i < 8; i++) {
-            m6569_sprite_unit_t* su = &vic->sunit[i];
-            const uint8_t mask = (1<<i);
-            if (mye & mask) {
-                su->expand = !su->expand;
-            }
-            if ((me & mask) && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
-                if (!su->dma_enabled) {
-                    su->dma_enabled = true;
-                    su->mc_base = 0;
-                    if (mye & mask) {
-                        su->expand = false;
-                    }
-                }
-            }
-            if (!su->dma_enabled) {
-                su->disp_enabled = false;
-            }
-        }
+    FIXME: "Raster line 0 is, however, an exception: In this line, IRQ
+    and incrementing (resp. resetting) of RASTER are performed one cycle later
+    than in the other lines.
+*/
+static inline void _m6569_rs_next_rasterline(m6569_t* vic) {
+    vic->rs.h_count = 0;
+    /* new scanline */
+    if (vic->rs.v_count == _M6569_VTOTAL) {
+        vic->rs.v_count = 0;
+        vic->rs.vc_base = 0;
     }
     else {
-        vic->rs.sh_count++;
+        vic->rs.v_count++;
     }
+}
 
-    /* 4. In the first phase of cycle 58, the MC of every sprite is loaded from
-        its belonging MCBASE (MCBASE->MC) and it is checked if the DMA for the
-        sprite is turned on and the Y coordinate of the sprite matches the lower
-        8 bits of RASTER. If this is the case, the display of the sprite is
-        turned on.
+static inline void _m6569_rs_check_irq(m6569_t* vic) {
+    if (vic->rs.v_count == vic->rs.v_irqline) {
+        vic->reg.int_latch |= M6569_INT_IRST;
+    }
+}
+
+/*
+    Update the badline state:
+
+    ( see 3.5 http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt )
+
+    "A Bad Line Condition is given at any arbitrary clock cycle, if at the
+    negative edge of 0 at the beginning of the cycle RASTER >= $30 (48) and RASTER
+    <= $f7 (247) and the lower three bits of RASTER are equal to YSCROLL and if the
+    DEN bit was set during an arbitrary cycle of raster line $30."
+
+    Update the display/idle state flag.
+
+    ( see 3.7.1 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt )
+
+    "The transition from idle to display state occurs as soon as there is a Bad
+    Line Condition (see section 3.5.)...
+
+*/
+static inline void _m6569_rs_update_badline(m6569_t* vic) {
+    if (_M6569_RAST_RANGE(48, 247)) {
+        /* DEN bit must have been set in raster line $30 */
+        if (_M6569_RAST(48) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
+            vic->rs.frame_badlines_enabled = true;
+        }
+        /* a badline is active when the low 3 bits of raster position
+            are identical with YSCROLL
+        */
+        bool yscroll_match = ((vic->rs.v_count & 7) == (vic->reg.ctrl_1 & 7));
+        vic->rs.badline = vic->rs.frame_badlines_enabled && yscroll_match;
+    }
+    else {
+        vic->rs.frame_badlines_enabled = false;
+        vic->rs.badline = false;
+    }
+    if (vic->rs.badline) {
+        vic->rs.display_state = true;
+    }
+}
+
+/*
+    Update the display/idle state flag.
+
+    ( see 3.7.1 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt )
+
+    "The transition from idle to display state occurs as soon as there is a Bad
+    Line Condition (see section 3.5.) (see _m6569_rs_update_badline())
+
+    ...The transition from display to idle
+    state occurs in cycle 58 of a line if the RC (see next section) contains
+    the value 7 and there is no Bad Line Condition."
+    "...In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
+    logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE). If
+    the video logic is in display state afterwards (this is always the case
+    if there is a Bad Line Condition), RC is incremented.""
+*/
+static inline void _m6569_rs_update_display_state(m6569_t* vic) {
+    if (vic->rs.rc == 7) {
+        vic->rs.vc_base = vic->rs.vc;
+        if (!vic->rs.badline) {
+            vic->rs.display_state = false;
+        }
+    }
+    if (vic->rs.display_state) {
+        vic->rs.rc = (vic->rs.rc + 1) & 7;
+    }
+}
+
+/* In the first phase of cycle 14 of each line, VC is loaded from VCBASE
+    (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
+    this phase, RC is also reset to zero.
+*/
+static inline void _m6569_rs_rewind_vc_vmli_rc(m6569_t* vic) {
+    vic->rs.vc = vic->rs.vc_base;
+    vic->vm.vmli = 0;
+    vic->vm.next_vmli = 0;
+    if (vic->rs.badline) {
+        vic->rs.rc = 0;
+    }
+}
+
+static inline void _m6569_crt_next_crtline(m6569_t* vic) {
+    vic->crt.x = 0;
+    if (vic->rs.v_count == _M6569_VRETRACEPOS) {
+        vic->crt.y = 0;
+    }
+    else {
+        vic->crt.y++;
+    }
+}
+
+/* border unit functions */
+static inline void _m6569_bunit_left(m6569_t* vic, uint32_t hpos) {
+    if (hpos == vic->brd.left) {
+        /* 4. If the X coordinate reaches the left comparison value and the Y
+              coordinate reaches the bottom one, the vertical border flip flop is set.
+        */
+        if (vic->rs.v_count == vic->brd.bottom) {
+            vic->brd.vert = true;
+        }
+        /* 5. If the X coordinate reaches the left comparison value and the Y
+              coordinate reaches the top one and the DEN bit in register $d011 is set,
+              the vertical border flip flop is reset.
+        */
+        else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
+            vic->brd.vert = false;
+        }
+        /* 6. If the X coordinate reaches the left comparison value and the vertical
+              border flip flop is not set, the main flip flop is reset.
+        */
+        if (!vic->brd.vert) {
+            vic->brd.main = false;
+        }
+    }
+}
+
+static inline void _m6569_bunit_right(m6569_t* vic, uint32_t hpos) {
+    if (hpos == vic->brd.right) {
+        vic->brd.main = true;
+    }
+}
+
+static inline void _m6569_bunit_end(m6569_t* vic) {
+    /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
+          vertical border flip flop is set.
     */
-    if (_M6569_HTICK(58)) {
-        for (int i = 0; i < 8; i++) {
-            m6569_sprite_unit_t* su = &vic->sunit[i];
-            su->mc = su->mc_base;
-            if (su->dma_enabled && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
-                su->disp_enabled = true;
-            }
-        }
+    if (vic->rs.v_count == vic->brd.bottom) {
+        vic->brd.vert = true;
     }
-
-    /* 7. In the first phase of cycle 15, it is checked if the expansion flip flop
-        is set. If so, MCBASE is incremented by 2.
-       8. In the first phase of cycle 16, it is checked if the expansion flip flop
-        is set. If so, MCBASE is incremented by 1. After that, the VIC checks if
-        MCBASE is equal to 63 and turns of the DMA and the display of the sprite
-        if it is.
-
-        NOTE: 
-            - I have merged actions of cycle 15 and 16 into cycle 15
-            - I have moved switching off the display enable flag at the end
-              of line into tick 55
-            - I have 'rewinding' the sprite units here
+    /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
+          DEN bit in register $d011 is set, the vertical border flip flop is
+          reset.
     */
-    if (_M6569_HTICK(15)) {
-        for (int i = 0; i < 8; i++) {
-            m6569_sprite_unit_t* su = &vic->sunit[i];
-            if (su->expand) {
-                su->mc_base = (su->mc_base + 3) & 0x3F;
-            }
-            if (su->mc_base == 63) {
-                su->dma_enabled = false;
-            }
-        }
+    else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
+        vic->brd.vert = false;
     }
+}
 
-    /* on the first visible sprite tick each line, 'rewind' the sprite unit */
-    for (int i = 0; i < 8; i++) {
-        m6569_sprite_unit_t* su = &vic->sunit[i];
-        if (_M6569_HTICK(su->h_first) && su->disp_enabled) {
-            su->delay_count = su->h_offset;
-            su->outp2_count = 0;
-            su->xexp_count = 0;
-        }
-    }
-
-    /* s-access and p-access, ba/aec, for dma_enabled sprites */
-    int s_index = -1;
-    int p_index = -1;
-    if (vic->rs.sh_count < (2*8 + 3)) {
-        switch (vic->rs.sh_count) {
-            case 3:     p_index = 0; break;
-            case 5:     p_index = 1; break;
-            case 7:     p_index = 2; break;
-            case 9:     p_index = 3; break;
-            case 11:    p_index = 4; break;
-            case 13:    p_index = 5; break;
-            case 15:    p_index = 6; break;
-            case 17:    p_index = 7; break;
-        }
-        uint16_t sh = 3;
-        for (int i = 0; i < 8; i++, sh+=2) {
-            m6569_sprite_unit_t* su = &vic->sunit[i];
-            if (su->dma_enabled) {
-                if ((vic->rs.sh_count >= (sh-3)) && (vic->rs.sh_count <= (sh+1))) {
-                    ba_pin = true;
-                    if (vic->rs.sh_count >= sh) {
-                        aec_pin = true;
-                        s_index = i;
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    /*--- perform memory fetches ---------------------------------------------*/
-    /* (see 3.6.3. in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
-    bool i_access = true;
-    if (c_access) {
+/* memory access functions */
+static inline void _m6569_c_access(m6569_t* vic) {
+    if (vic->rs.badline) {
         /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
         uint16_t addr = vic->rs.vc | vic->mem.c_addr_or;
         vic->vm.line[vic->vm.vmli] = vic->mem.fetch_cb(addr, vic->mem.user_data) & 0x0FFF;
-        i_access = false;
     }
-    else if (p_index >= 0) {
-        /* a sprite p-access */
-        uint16_t addr = vic->mem.p_addr_or + p_index;
-        vic->sunit[p_index].p_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
-        i_access = false;
-    }
+}
 
-    /* in the first half-cycle, either a g_access, p_access or i_access happens */
-    uint8_t g_data = 0;
-    if (g_access) {
+static inline uint8_t _m6569_i_access(m6569_t* vic) {
+    return (uint8_t) vic->mem.fetch_cb(vic->mem.i_addr, vic->mem.user_data);
+}
+
+static inline uint8_t _m6569_g_i_access(m6569_t* vic) {
+    /* perform a g-access or i access */
+    if (vic->rs.display_state) {
         uint16_t addr;
         if (vic->reg.ctrl_1 & M6569_CTRL1_BMM) {
             /* bitmap mode: addr=|CB13|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0|RC2|RC1|RC0| */
@@ -1362,84 +1353,265 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             addr = ((vic->vm.line[vic->vm.vmli]&0xFF)<<3) | vic->rs.rc;
             addr = (addr | vic->mem.g_addr_or) & vic->mem.g_addr_and;
         }
-        g_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
-        i_access = false;
+        vic->rs.vc = (vic->rs.vc + 1) & 0x3FF;          /* VC is a 10-bit counter */
+        vic->vm.next_vmli = (vic->vm.vmli + 1) & 0x3F;  /* VMLI is a 6-bit counter */
+        return (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
     }
-    else if (s_index >= 0) {
-        /* sprite s-access: |MP7|MP6|MP5|MP4|MP3|MP2|MP1|MP0|MC5|MC4|MC3|MC2|MC1|MC0| */
-        m6569_sprite_unit_t* su = &vic->sunit[s_index];
-        uint16_t addr = (su->p_data<<6) | su->mc;
+    else {
+        return _m6569_i_access(vic);
+    }
+}
+
+static inline void _m6569_p_access(m6569_t* vic, uint32_t p_index) {
+    uint16_t addr = vic->mem.p_addr_or + p_index;
+    vic->sunit.p_data[p_index] = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
+}
+
+static inline void _m6569_s_access(m6569_t* vic, uint32_t s_index) {
+    /* sprite s-access: |MP7|MP6|MP5|MP4|MP3|MP2|MP1|MP0|MC5|MC4|MC3|MC2|MC1|MC0| */
+    m6569_sprite_unit_t* su = &vic->sunit;
+    if (su->dma_enabled[s_index]) {
+        uint16_t addr = (su->p_data[s_index]<<6) | su->mc[s_index];
         uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
-        su->shift = (su->shift<<8) | (s_data<<8);
-        su->mc = (su->mc + 1) & 0x3F;
-        /* in the tick *after* the p-access, need to do 2 s-accesses (one each half-tick) */
-        if (p_index == -1) {
-            uint16_t addr = (su->p_data<<6) | su->mc;
-            uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
-            su->shift = (su->shift<<8) | (s_data<<8);
-            su->mc = (su->mc + 1) & 0x3F;
-        }
-        i_access = false;
+        su->shift[s_index] = (su->shift[s_index]<<8) | (s_data<<8);
+        su->mc[s_index] = (su->mc[s_index] + 1) & 0x3F;
     }
+}
 
-    /* if no other accesses happened, do an i-access */
-    if (i_access) {
-        g_data = (uint8_t) vic->mem.fetch_cb(vic->mem.i_addr, vic->mem.user_data);
+static inline uint8_t _m6569_s_i_access(m6569_t* vic, uint32_t s_index) {
+    /* perform an s-access if dma is enabled, otherwise an i-access */
+    m6569_sprite_unit_t* su = &vic->sunit;
+    if (su->dma_enabled[s_index]) {
+        uint16_t addr = (su->p_data[s_index]<<6) | su->mc[s_index];
+        uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
+        su->shift[s_index] = (su->shift[s_index]<<8) | (s_data<<8);
+        su->mc[s_index] = (su->mc[s_index] + 1) & 0x3F;
+        return 0;
     }
-
-    /*--- update the border flip-flops ---------------------------------------*/
-    /* (see 3.9 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt) */
-    {
-        /* 1. If the X coordinate reaches the right comparison value, the main border
-              flip flop is set.
-        */
-        if (_M6569_HTICK(vic->brd.right)) {
-            vic->brd.main = true;
-        }
-        else if (_M6569_HTICK(0)) {
-            /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
-                  vertical border flip flop is set.
-            */
-            if (vic->rs.v_count == vic->brd.bottom) {
-                vic->brd.vert = true;
-            }
-            /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
-                  DEN bit in register $d011 is set, the vertical border flip flop is
-                  reset.
-            */
-            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
-                vic->brd.vert = false;
-            }
-        }
-        else if (_M6569_HTICK(vic->brd.left)) {
-            /* 4. If the X coordinate reaches the left comparison value and the Y
-                  coordinate reaches the bottom one, the vertical border flip flop is set.
-            */
-            if (vic->rs.v_count == vic->brd.bottom) {
-                vic->brd.vert = true;
-            }
-            /* 5. If the X coordinate reaches the left comparison value and the Y
-                  coordinate reaches the top one and the DEN bit in register $d011 is set,
-                  the vertical border flip flop is reset.
-            */
-            else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
-                vic->brd.vert = false;
-            }
-            /* 6. If the X coordinate reaches the left comparison value and the vertical
-                  border flip flop is not set, the main flip flop is reset.
-            */
-            if (!vic->brd.vert) {
-                vic->brd.main = false;
-            }
-        }
+    else {
+        return _m6569_i_access(vic);
     }
+}
 
+/* set BA pin if badline flag is set */
+static inline uint64_t _m6569_ba(m6569_t* vic, uint64_t pins) {
+    if (vic->rs.badline) {
+        pins |= M6569_BA;
+    }
+    return pins;
+}
+
+/* set AEC pin */
+static inline uint64_t _m6569_aec(uint64_t pins) {
+    return pins | M6569_AEC;
+}
+
+/*=== TICK FUNCTION ==========================================================*/
+uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
+    uint8_t g_data = 0x00;
+    _m6569_rs_update_badline(vic);
+
+    /* a raster line is 63 ticks, and each line goes through a fixed 'program' */
+    vic->rs.h_count++;
+    vic->crt.x++;
+    switch (vic->rs.h_count) {
+        case 1:
+            _m6569_p_access(vic, 3);
+            _m6569_s_access(vic, 3);
+            pins = _m6569_sunit_dma_aec(vic, 3, pins);
+            pins = _m6569_sunit_dma_ba(vic, 3, pins);
+            pins = _m6569_sunit_dma_ba(vic, 4, pins);
+            break;
+        case 2:
+            /* FIXME: raster interrupt should be checked in the first horizontal tick,
+               but moving it to the second seems to be more correct...
+            */
+            _m6569_rs_check_irq(vic);
+            g_data = _m6569_s_i_access(vic, 3);
+            _m6569_s_access(vic, 3);
+            pins = _m6569_sunit_dma_aec(vic, 3, pins);
+            pins = _m6569_sunit_dma_ba(vic, 3, pins);
+            pins = _m6569_sunit_dma_ba(vic, 4, pins);
+            pins = _m6569_sunit_dma_ba(vic, 5, pins);
+            break;
+        case 3:
+            _m6569_p_access(vic, 4);
+            _m6569_s_access(vic, 4);
+            pins = _m6569_sunit_dma_aec(vic, 4, pins);
+            pins = _m6569_sunit_dma_ba(vic, 4, pins);
+            pins = _m6569_sunit_dma_ba(vic, 5, pins);
+            break;
+        case 4:
+            _m6569_crt_next_crtline(vic);
+            g_data = _m6569_s_i_access(vic, 4);
+            _m6569_s_access(vic, 4);
+            pins = _m6569_sunit_dma_aec(vic, 4, pins);
+            pins = _m6569_sunit_dma_ba(vic, 4, pins);
+            pins = _m6569_sunit_dma_ba(vic, 5, pins);
+            pins = _m6569_sunit_dma_ba(vic, 6, pins);
+            break;
+        case 5:
+            _m6569_p_access(vic, 5);
+            _m6569_s_access(vic, 5);
+            pins = _m6569_sunit_dma_aec(vic, 5, pins);
+            pins = _m6569_sunit_dma_ba(vic, 5, pins);
+            pins = _m6569_sunit_dma_ba(vic, 6, pins);
+            break;
+        case 6:
+            g_data = _m6569_s_i_access(vic, 5);
+            _m6569_s_access(vic, 5);
+            pins = _m6569_sunit_dma_aec(vic, 5, pins);
+            pins = _m6569_sunit_dma_ba(vic, 5, pins);
+            pins = _m6569_sunit_dma_ba(vic, 6, pins);
+            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            break;
+        case 7:
+            _m6569_p_access(vic, 6);
+            _m6569_s_access(vic, 6);
+            pins = _m6569_sunit_dma_aec(vic, 6, pins);
+            pins = _m6569_sunit_dma_ba(vic, 6, pins);
+            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            break;
+        case 8:
+            g_data = _m6569_s_i_access(vic, 6);
+            _m6569_s_access(vic, 6);
+            pins = _m6569_sunit_dma_aec(vic, 6, pins);
+            pins = _m6569_sunit_dma_ba(vic, 6, pins);
+            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            break;
+        case 9:
+            _m6569_p_access(vic, 7);
+            _m6569_s_access(vic, 7);
+            pins = _m6569_sunit_dma_aec(vic, 7, pins);
+            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            break;
+        case 10:
+            g_data = _m6569_s_i_access(vic, 7);
+            _m6569_s_access(vic, 7);
+            pins = _m6569_sunit_dma_aec(vic, 7, pins);
+            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            break;
+        case 11:
+            break;
+        case 12:
+        case 13:
+        case 14:
+            pins = _m6569_ba(vic, pins);
+            break;
+        case 15:
+            pins = _m6569_ba(vic, pins);
+            _m6569_rs_rewind_vc_vmli_rc(vic);
+            break;
+        case 16:
+            pins = _m6569_ba(vic, pins);
+            pins = _m6569_aec(pins);
+            vic->gunit.enabled = vic->rs.display_state;
+            _m6569_gunit_rewind(vic, vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL);
+            _m6569_sunit_update_mcbase(vic);
+            _m6569_c_access(vic);
+            g_data = _m6569_g_i_access(vic);
+            _m6569_bunit_left(vic, 16);
+            break;
+        case 17:
+            pins = _m6569_ba(vic, pins);
+            pins = _m6569_aec(pins);
+            vic->gunit.enabled = vic->rs.display_state;
+            _m6569_sunit_dma_disp_disable(vic);
+            _m6569_c_access(vic);
+            g_data = _m6569_g_i_access(vic);
+            _m6569_bunit_left(vic, 17);
+            break;
+        case 18: case 19:
+        case 20: case 21: case 22: case 23: case 24: case 25: case 26: case 27: case 28: case 29:
+        case 30: case 31: case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39:
+        case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47: case 48: case 49:
+        case 50: case 51: case 52: case 53: case 54:
+            pins = _m6569_ba(vic, pins);
+            pins = _m6569_aec(pins);
+            vic->gunit.enabled = vic->rs.display_state;
+            _m6569_c_access(vic);
+            g_data = _m6569_g_i_access(vic);
+            break;
+        case 55:
+            pins = _m6569_ba(vic, pins);
+            pins = _m6569_aec(pins);
+            vic->gunit.enabled = vic->rs.display_state;
+            _m6569_c_access(vic);
+            g_data = _m6569_g_i_access(vic);
+            pins = _m6569_sunit_dma_ba(vic, 0, pins);
+            _m6569_bunit_right(vic, 55);
+            break;
+        case 56:
+            vic->gunit.enabled = false;
+            _m6569_sunit_start(vic);
+            g_data = _m6569_i_access(vic);
+            pins = _m6569_sunit_dma_ba(vic, 0, pins);
+            _m6569_bunit_right(vic, 56);
+            break;
+        case 57:
+            g_data = _m6569_i_access(vic);
+            pins = _m6569_sunit_dma_ba(vic, 0, pins);
+            pins = _m6569_sunit_dma_ba(vic, 1, pins);
+            break;
+        case 58:
+            _m6569_sunit_update_mc_disp_enable(vic);
+            _m6569_p_access(vic, 0);
+            _m6569_s_access(vic, 0);
+            pins = _m6569_sunit_dma_aec(vic, 0, pins);
+            pins = _m6569_sunit_dma_ba(vic, 0, pins);
+            pins = _m6569_sunit_dma_ba(vic, 1, pins);
+            break;
+        case 59:
+            _m6569_rs_update_display_state(vic);
+            g_data = _m6569_s_i_access(vic, 0);
+            _m6569_s_access(vic, 0);
+            pins = _m6569_sunit_dma_aec(vic, 0, pins);
+            pins = _m6569_sunit_dma_ba(vic, 0, pins);
+            pins = _m6569_sunit_dma_ba(vic, 1, pins);
+            pins = _m6569_sunit_dma_ba(vic, 2, pins);
+            break;
+        case 60:
+            _m6569_p_access(vic, 1);
+            _m6569_s_access(vic, 1);
+            pins = _m6569_sunit_dma_aec(vic, 1, pins);
+            pins = _m6569_sunit_dma_ba(vic, 1, pins);
+            pins = _m6569_sunit_dma_ba(vic, 2, pins);
+            break;
+        case 61:
+            g_data = _m6569_s_i_access(vic, 1);
+            _m6569_s_access(vic, 1);
+            pins = _m6569_sunit_dma_aec(vic, 1, pins);
+            pins = _m6569_sunit_dma_ba(vic, 1, pins);
+            pins = _m6569_sunit_dma_ba(vic, 2, pins);
+            pins = _m6569_sunit_dma_ba(vic, 3, pins);
+            break;
+        case 62:
+            _m6569_p_access(vic, 2);
+            _m6569_s_access(vic, 2);
+            pins = _m6569_sunit_dma_aec(vic, 2, pins);
+            pins = _m6569_sunit_dma_ba(vic, 2, pins);
+            pins = _m6569_sunit_dma_ba(vic, 3, pins);
+            break;
+        case 63:    /* HTOTAL */
+            _m6569_rs_next_rasterline(vic);
+            g_data = _m6569_s_i_access(vic, 2);
+            _m6569_s_access(vic, 2);
+            pins = _m6569_sunit_dma_aec(vic, 2, pins);
+            pins = _m6569_sunit_dma_ba(vic, 2, pins);
+            pins = _m6569_sunit_dma_ba(vic, 3, pins);
+            pins = _m6569_sunit_dma_ba(vic, 4, pins);
+            _m6569_bunit_end(vic);
+            break;
+    }
     /*-- main interrupt bit --*/
     if (vic->reg.int_latch & vic->reg.int_mask & 0x0F) {
         vic->reg.int_latch |= M6569_INT_IRQ;
     }
     else {
         vic->reg.int_latch &= ~M6569_INT_IRQ;
+    }
+    if (vic->reg.int_latch & (1<<7)) {
+        pins |= M6569_IRQ;
     }
 
     /*--- decode pixels into framebuffer -------------------------------------*/
@@ -1450,7 +1622,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             y = vic->rs.v_count;
             w = _M6569_HTOTAL + 1;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
-            _m6569_decode_pixels_debug(vic, g_data, ba_pin, dst);
+            _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
         }
         else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
                  (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
@@ -1459,26 +1631,12 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             const int y = vic->crt.y - vic->crt.vis_y0;
             const int w = vic->crt.vis_w;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
-            _m6569_decode_pixels(vic, g_data, dst);
+            _m6569_decode_pixels(vic, g_data, dst, vic->rs.h_count);
         }
     }
-
-    /*--- bump the VC and vmli counters --------------------------------------*/
-    if (g_access) {
-        vic->rs.vc = (vic->rs.vc + 1) & 0x3FF;        /* VS is a 10-bit counter */
-        vic->vm.vmli = (vic->vm.vmli + 1) & 0x3F;     /* VMLI is a 6-bit counter */
-    }
+    vic->vm.vmli = vic->vm.next_vmli;
 
     /*--- set CPU pins -------------------------------------------------------*/
-    if (ba_pin) {
-        pins |= M6569_BA;
-    }
-    if (aec_pin) {
-        pins |= M6569_AEC;
-    }
-    if (vic->reg.int_latch & (1<<7)) {
-        pins |= M6569_IRQ;
-    }
     vic->pins = (vic->pins & ~(M6569_BA|M6569_AEC|M6569_IRQ)) | (pins & (M6569_BA|M6569_AEC|M6569_IRQ));
     return pins;
 }

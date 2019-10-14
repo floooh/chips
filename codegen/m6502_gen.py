@@ -74,7 +74,7 @@ ops = [
         [[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_]],  # relative branches
         [[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M__W],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_]],
         [[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___]],
-        [[A_ABX,M_R_],[A_ABX,M_R_],[A_ABS,M_R_],[A_ABS,M_R_],[A_ABX,M__W],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_]]        
+        [[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M__W],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_]]        
     ],
     # cc = 01
     [
@@ -277,9 +277,8 @@ def u_lax(o):
 def x_lxa(o):
     # undocumented LXA
     # and immediate byte with A, then load X with A
-    # this fails in the Wolfgang Lorenz test suite
     u_cmt(o,'LXA')
-    o.src += '_RD();c.A&=_GD();c.X=c.A;_NZ(c.A);'
+    o.src += '_RD();c.A=c.X=(c.A|0xEE)&_GD();_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def i_sta(o):
@@ -538,12 +537,15 @@ def u_dcp(o):
 def x_sbx(o):
     # undocumented SBX
     # AND X register with accumulator and store result in X register, then
-    # subtract byte from X register (without borrow)
+    # subtract byte from X register (without borrow) where the
+    # subtract works like a CMP instruction
     #
-    # we just ignore this for now and treat it like a imm-nop
-    #
-    u_cmt(o,'SBX (not impl)')
-    o.src += '_RD();'
+    u_cmt(o,'SBX')
+    o.src += '_RD();l=_GD();'
+    o.src += 't=(c.A&c.X)-l;'
+    o.src += '_NZ((uint8_t)t)&~M6502_CF;'
+    o.src += 'if(!(t&0xFF00)){c.P|=M6502_CF;}'
+    o.src += 'c.X=(uint8_t)t;'
 
 #-------------------------------------------------------------------------------
 def i_dex(o):
@@ -751,40 +753,36 @@ def x_arr(o):
 #-------------------------------------------------------------------------------
 def x_ane(o):
     # undocumented ANE
-    # NOTE: this implementation fails in the Wolfgang Lorenz test suite
     u_cmt(o,'ANE')
     o.src += '_RD();'
-    o.src += 'l=_GD();c.A&=l&c.X;_NZ(c.A);'
+    o.src += 'l=_GD();c.A=(c.A|0xEE)&c.X&l;_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def x_sha(o):
     # undocumented SHA
-    # AND X register with accumulator then AND result with 7 and store in
-    # memory.
+    #  stores the result of A AND X AND the high byte of the target address of
+    #  the operand +1 in memory
     #
-    # we just ignore this for now
-    u_cmt(o,'SHA (not impl)')
-    o.src += '_RD();'
+    u_cmt(o,'SHA')
+    o.src += '_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();'
 
 #-------------------------------------------------------------------------------
 def x_shx(o):
     # undocumented SHX
-    # AND X register with the high byte of the target address of the argument
-    # + 1. Store the result in memory.
+    # AND X register with the high byte of the target address of the 
+    # argument + 1. Store the result in memory.
     #
-    # we just ignore this for now
-    u_cmt(o, 'SHX (not impl)')
-    o.src += '_RD();'
+    u_cmt(o, 'SHX')
+    o.src += '_SD(c.X&(uint8_t)((a>>8)+1));_WR();'
 
 #-------------------------------------------------------------------------------
 def x_shy(o):
     # undocumented SHX
-    # AND Y register with the high byte of the target address of the argument
-    # + 1. Store the result in memory.
+    # AND Y register with the high byte of the target address of the
+    # argument + 1. Store the result in memory.
     #
-    # we just ignore this for now
-    u_cmt(o, 'SHY (not impl)')
-    o.src += '_RD();'
+    u_cmt(o, 'SHY')
+    o.src += '_SD(c.Y&(uint8_t)((a>>8)+1));_WR();'
 
 #-------------------------------------------------------------------------------
 def x_shs(o):
@@ -793,9 +791,8 @@ def x_shs(o):
     # AND stack pointer with the high byte of the target address of the
     # argument + 1. Store result in memory.
     #
-    # we just ignore this for now
-    u_cmt(o, 'SHS (not impl)')
-    o.src += '_RD();'
+    u_cmt(o, 'SHS')
+    o.src += 'c.S=c.A&c.X;_SD(c.S&(uint8_t)((a>>8)+1));_WR();'
 
 #-------------------------------------------------------------------------------
 def x_anc(o):
@@ -814,9 +811,8 @@ def x_las(o):
     # AND memory with stack pointer, transfer result to accumulator, X
     # register and stack pointer.
     #
-    # we just ignore this for now
-    u_cmt(o, 'LAS (not impl)')
-    o.src += '_RD();'
+    u_cmt(o, 'LAS')
+    o.src += '_RD();c.A=c.X=c.S=_GD()&c.S;_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def i_bit(o):
