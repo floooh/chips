@@ -793,7 +793,6 @@ def x_shs(o):
     # AND stack pointer with the high byte of the target address of the
     # argument + 1. Store result in memory.
     #
-    # we just ignore this for now
     u_cmt(o, 'SHS')
     o.src += 'c.S=c.A&c.X;_SD(c.S&(uint8_t)((a>>8)+1));_WR();'
 
@@ -814,9 +813,8 @@ def x_las(o):
     # AND memory with stack pointer, transfer result to accumulator, X
     # register and stack pointer.
     #
-    # we just ignore this for now
-    u_cmt(o, 'LAS (not impl)')
-    o.src += '_RD();'
+    u_cmt(o, 'LAS')
+    o.src += '_RD();c.A=c.X=c.S=_GD()&c.S;_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def i_bit(o):
