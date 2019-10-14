@@ -794,8 +794,8 @@ def x_shs(o):
     # argument + 1. Store result in memory.
     #
     # we just ignore this for now
-    u_cmt(o, 'SHS (not impl)')
-    o.src += '_RD();'
+    u_cmt(o, 'SHS')
+    o.src += 'c.S=c.A&c.X;_SD(c.S&(uint8_t)((a>>8)+1));_WR();'
 
 #-------------------------------------------------------------------------------
 def x_anc(o):
