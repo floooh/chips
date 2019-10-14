@@ -749,9 +749,9 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x99:/*STA abs,Y*/_A_ABY_W();_SD(c.A);_WR();break;
             case 0x9a:/*TXS */_A_IMP();_RD();c.S=c.X;break;
             case 0x9b:/*SHS (not impl) abs,Y (undoc)*/_A_ABY_W();_RD();break;
-            case 0x9c:/*SHY (not impl) abs,X (undoc)*/_A_ABX_W();_RD();break;
+            case 0x9c:/*SHY abs,X (undoc)*/_A_ABX_W();_SD(c.Y&(uint8_t)((a>>8)+1));_WR();break;
             case 0x9d:/*STA abs,X*/_A_ABX_W();_SD(c.A);_WR();break;
-            case 0x9e:/*SHX (not impl) abs,Y (undoc)*/_A_ABY_W();_RD();break;
+            case 0x9e:/*SHX abs,Y (undoc)*/_A_ABY_W();_SD(c.X&(uint8_t)((a>>8)+1));_WR();break;
             case 0x9f:/*SHA abs,Y (undoc)*/_A_ABY_W();_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();break;
             case 0xa0:/*LDY #*/_A_IMM();_RD();c.Y=_GD();_NZ(c.Y);break;
             case 0xa1:/*LDA (zp,X)*/_A_IDX();_RD();c.A=_GD();_NZ(c.A);break;

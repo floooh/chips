@@ -771,22 +771,20 @@ def x_sha(o):
 #-------------------------------------------------------------------------------
 def x_shx(o):
     # undocumented SHX
-    # AND X register with the high byte of the target address of the argument
-    # + 1. Store the result in memory.
+    # AND X register with the high byte of the target address of the 
+    # argument + 1. Store the result in memory.
     #
-    # we just ignore this for now
-    u_cmt(o, 'SHX (not impl)')
-    o.src += '_RD();'
+    u_cmt(o, 'SHX')
+    o.src += '_SD(c.X&(uint8_t)((a>>8)+1));_WR();'
 
 #-------------------------------------------------------------------------------
 def x_shy(o):
     # undocumented SHX
-    # AND Y register with the high byte of the target address of the argument
-    # + 1. Store the result in memory.
+    # AND Y register with the high byte of the target address of the
+    # argument + 1. Store the result in memory.
     #
-    # we just ignore this for now
-    u_cmt(o, 'SHY (not impl)')
-    o.src += '_RD();'
+    u_cmt(o, 'SHY')
+    o.src += '_SD(c.Y&(uint8_t)((a>>8)+1));_WR();'
 
 #-------------------------------------------------------------------------------
 def x_shs(o):
