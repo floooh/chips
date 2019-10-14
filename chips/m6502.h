@@ -740,7 +740,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x90:/*BCC #*/_A_IMM();_RD();if((c.P&0x1)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
             case 0x91:/*STA (zp),Y*/_A_IDY_W();_SD(c.A);_WR();break;
             case 0x92:/*INVALID*/break;
-            case 0x93:/*SHA (not impl) (zp),Y (undoc)*/_A_IDY_W();_RD();break;
+            case 0x93:/*SHA (zp),Y (undoc)*/_A_IDY_W();_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();break;
             case 0x94:/*STY zp,X*/_A_ZPX();_SD(c.Y);_WR();break;
             case 0x95:/*STA zp,X*/_A_ZPX();_SD(c.A);_WR();break;
             case 0x96:/*STX zp,Y*/_A_ZPY();_SD(c.X);_WR();break;
@@ -752,7 +752,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x9c:/*SHY (not impl) abs,X (undoc)*/_A_ABX_W();_RD();break;
             case 0x9d:/*STA abs,X*/_A_ABX_W();_SD(c.A);_WR();break;
             case 0x9e:/*SHX (not impl) abs,Y (undoc)*/_A_ABY_W();_RD();break;
-            case 0x9f:/*SHA (not impl) abs,Y (undoc)*/_A_ABY_W();_RD();break;
+            case 0x9f:/*SHA abs,Y (undoc)*/_A_ABY_W();_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();break;
             case 0xa0:/*LDY #*/_A_IMM();_RD();c.Y=_GD();_NZ(c.Y);break;
             case 0xa1:/*LDA (zp,X)*/_A_IDX();_RD();c.A=_GD();_NZ(c.A);break;
             case 0xa2:/*LDX #*/_A_IMM();_RD();c.X=_GD();_NZ(c.X);break;

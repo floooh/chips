@@ -762,12 +762,11 @@ def x_ane(o):
 #-------------------------------------------------------------------------------
 def x_sha(o):
     # undocumented SHA
-    # AND X register with accumulator then AND result with 7 and store in
-    # memory.
+    #  stores the result of A AND X AND the high byte of the target address of
+    #  the operand +1 in memory
     #
-    # we just ignore this for now
-    u_cmt(o,'SHA (not impl)')
-    o.src += '_RD();'
+    u_cmt(o,'SHA')
+    o.src += '_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();'
 
 #-------------------------------------------------------------------------------
 def x_shx(o):
