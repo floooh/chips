@@ -29,14 +29,11 @@ are easy to embed into bigger applications.
         - branchwrap: OK
         - cia1pb6: OK
         - cia1pb7: OK
-        - cia1ta: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
         - cia1tab: OK
-        - cia1tb: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
         - cia1tb123: OK
         - cia2pb6: OK
         - cia2pb7: OK
-        - cia2ta: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
-        - cia2tb: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
+        - cia1ta/b,cia2ta/b: FAIL (mentioned as 'under construction' in TestSuite2.15 readme)
         - cia2tb123: OK
         - cntdef: OK
         - cnto2: OK
@@ -45,12 +42,14 @@ are easy to embed into bigger applications.
         - flipos: OK
         - icr01: OK
         - imr: OK
-        - irq: FAIL (1 OFF)
         - loadth: OK
         - mmu: OK
         - mmufetch: OK
+        - irq: FAIL
         - nmi: FAIL
         - oneshot: OK
+        - trap1..17: OK
+
 
 - (TODO) **kc85.h**: an emulator for 3 KC85 models from VEB Mikroelektronik Mühlhausen:
     - *KC85/2*: the original KC85 model with 16 KB RAM, CAOS 2.2 and no integrated BASIC
