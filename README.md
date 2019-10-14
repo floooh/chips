@@ -14,9 +14,8 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 
 ## What's New
 
-* **14-Oct-2019**:
-    - Improvements to the 6502 and C64 emulation. All tests of the Wolfgang
-      Lorenz test suite are passing now, except:
+* **14-Oct-2019**: Improvements to the 6502 and C64 emulation:
+    - All tests of the Wolfgang Lorenz test suite are passing now, except:
         - irq and nmi: the timing for interrupt requests is slightly off,
         this is most likely because the 6502 emulation currently doesn't
         delay interrupt handling to the end of the next instruction under
@@ -30,6 +29,9 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
         - all instruction clock cycles are now correct (previously two
         unintended NOP instructions were one clock tick off because they used
         the wrong addressing mode)
+    - Some code cleanup and (very minor) optimizations in the 6569 (SID-II) 
+      emulation, and improved the raster interrupt timing which was slightly
+      off.
 
 * **05-Aug-2019**:
     - The Z80 and 6502 CPU emulators are now each in a single header instead
