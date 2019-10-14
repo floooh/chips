@@ -181,7 +181,7 @@ typedef struct {
 
 /* raster unit state */
 typedef struct {
-    uint16_t h_count;
+    uint8_t h_count;
     uint16_t v_count;
     uint16_t v_irqline;     /* raster interrupt line, updated when ctrl_1 or raster is written */
     uint16_t vc;            /* 10-bit video counter */
@@ -414,7 +414,8 @@ static void _m6569_reset_register_bank(m6569_registers_t* r) {
 }
 
 static void _m6569_reset_raster_unit(m6569_raster_unit_t* r) {
-    r->h_count = r->v_count = 0;
+    r->h_count = 0;
+    r->v_count = 0;
     r->v_irqline = 0;
     r->vc = r->vc_base = 0;
     r->rc = 0;
