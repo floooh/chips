@@ -164,16 +164,8 @@ The MOS Technology 6502 CPU.
 - test coverage:
     - **NESTEST**: completely working (this runs through all documented, and most 'common'
       undocumented instructions but doesn't test decimal mode)
-    - **Wolfgang Lorenz C64 Test Suite** (CPU instruction tests), all working except
-      the following 'unintended instructions':
-        - aneb (unstable, chip/temperature dependent)
-        - lxab (unstable, chip/temperature dependent)
-        - shaay
-        - shaiy
-        - shxay
-        - shyax
-        - shsay
-        - lasay
+    - **Wolfgang Lorenz C64 Test Suite**: all CPU instructions tests working, including
+      the unintended and unstable instructions
 
 ### AY-3-8910 (chips/ay38910.h)
 
