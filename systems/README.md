@@ -41,7 +41,7 @@ are easy to embed into bigger applications.
         - cntdef: OK
         - cnto2: OK
         - cpuport: OK
-        - cputiming: FAIL: 5C 8 vs 9 clocks, 7C 8 vs 9 clocks
+        - cputiming: OK
         - flipos: OK
         - icr01: OK
         - imr: OK

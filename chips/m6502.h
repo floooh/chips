@@ -685,7 +685,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x59:/*EOR abs,Y*/_A_ABY_R();_RD();c.A^=_GD();_NZ(c.A);break;
             case 0x5a:/*NOP  (undoc)*/_A_IMP();_RD();break;
             case 0x5b:/*SRE abs,Y (undoc)*/_A_ABY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x5c:/*NOP abs (undoc)*/_A_ABS();_RD();break;
+            case 0x5c:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
             case 0x5d:/*EOR abs,X*/_A_ABX_R();_RD();c.A^=_GD();_NZ(c.A);break;
             case 0x5e:/*LSR abs,X*/_A_ABX_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();break;
             case 0x5f:/*SRE abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
@@ -717,7 +717,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x79:/*ADC abs,Y*/_A_ABY_R();_RD();_m6502_adc(&c,_GD());break;
             case 0x7a:/*NOP  (undoc)*/_A_IMP();_RD();break;
             case 0x7b:/*RRA abs,Y (undoc)*/_A_ABY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x7c:/*NOP abs (undoc)*/_A_ABS();_RD();break;
+            case 0x7c:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
             case 0x7d:/*ADC abs,X*/_A_ABX_R();_RD();_m6502_adc(&c,_GD());break;
             case 0x7e:/*ROR abs,X*/_A_ABX_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();break;
             case 0x7f:/*RRA abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
