@@ -277,9 +277,8 @@ def u_lax(o):
 def x_lxa(o):
     # undocumented LXA
     # and immediate byte with A, then load X with A
-    # this fails in the Wolfgang Lorenz test suite
     u_cmt(o,'LXA')
-    o.src += '_RD();c.A&=_GD();c.X=c.A;_NZ(c.A);'
+    o.src += '_RD();c.A=c.X=(c.A|0xEE)&_GD();_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def i_sta(o):
@@ -754,7 +753,6 @@ def x_arr(o):
 #-------------------------------------------------------------------------------
 def x_ane(o):
     # undocumented ANE
-    # NOTE: this implementation fails in the Wolfgang Lorenz test suite
     u_cmt(o,'ANE')
     o.src += '_RD();'
     o.src += 'l=_GD();c.A=(c.A|0xEE)&c.X&l;_NZ(c.A);'
