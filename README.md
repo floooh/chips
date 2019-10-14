@@ -29,7 +29,7 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
         - all instruction clock cycles are now correct (previously two
         unintended NOP instructions were one clock tick off because they used
         the wrong addressing mode)
-    - Some code cleanup and (very minor) optimizations in the 6569 (SID-II) 
+    - Some code cleanup and (very minor) optimizations in the 6569 (VIC-II) 
       emulation, and improved the raster interrupt timing which was slightly
       off.
 
