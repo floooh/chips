@@ -757,7 +757,7 @@ def x_ane(o):
     # NOTE: this implementation fails in the Wolfgang Lorenz test suite
     u_cmt(o,'ANE')
     o.src += '_RD();'
-    o.src += 'l=_GD();c.A&=l&c.X;_NZ(c.A);'
+    o.src += 'l=_GD();c.A=(c.A|0xEE)&c.X&l;_NZ(c.A);'
 
 #-------------------------------------------------------------------------------
 def x_sha(o):
