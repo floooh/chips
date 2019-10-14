@@ -796,7 +796,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xc8:/*INY */_A_IMP();_RD();c.Y++;_NZ(c.Y);break;
             case 0xc9:/*CMP #*/_A_IMM();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
             case 0xca:/*DEX */_A_IMP();_RD();c.X--;_NZ(c.X);break;
-            case 0xcb:/*SBX (not impl) # (undoc)*/_A_IMM();_RD();break;
+            case 0xcb:/*SBX # (undoc)*/_A_IMM();_RD();l=_GD();t=(c.A&c.X)-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}c.X=(uint8_t)t;break;
             case 0xcc:/*CPY abs*/_A_ABS();_RD();l=_GD();t=c.Y-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
             case 0xcd:/*CMP abs*/_A_ABS();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
             case 0xce:/*DEC abs*/_A_ABS();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;

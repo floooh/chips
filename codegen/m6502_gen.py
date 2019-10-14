@@ -538,12 +538,15 @@ def u_dcp(o):
 def x_sbx(o):
     # undocumented SBX
     # AND X register with accumulator and store result in X register, then
-    # subtract byte from X register (without borrow)
+    # subtract byte from X register (without borrow) where the
+    # subtract works like a CMP instruction
     #
-    # we just ignore this for now and treat it like a imm-nop
-    #
-    u_cmt(o,'SBX (not impl)')
-    o.src += '_RD();'
+    u_cmt(o,'SBX')
+    o.src += '_RD();l=_GD();'
+    o.src += 't=(c.A&c.X)-l;'
+    o.src += '_NZ((uint8_t)t)&~M6502_CF;'
+    o.src += 'if(!(t&0xFF00)){c.P|=M6502_CF;}'
+    o.src += 'c.X=(uint8_t)t;'
 
 #-------------------------------------------------------------------------------
 def i_dex(o):

@@ -164,41 +164,16 @@ The MOS Technology 6502 CPU.
 - test coverage:
     - **NESTEST**: completely working (this runs through all documented, and most 'common'
       undocumented instructions but doesn't test decimal mode)
-    - **Wolfgang Lorenz C64 Test Suite** (CPU tests):
-      - _adc*_: OK
-      - _alrb, arrb, ancb_: OK
-      - _and*_: OK
-      - _aneb_: **FAIL**
-      - _asl*_: OK
-      - _aso*_: OK
-      - _axs*_: OK
-      - _b*r_ (branches): OK
-      - _bit*_: OK
-      - _branchwrap_: OK
-      - _brkn_: OK
-      - _cl*_, se*_ (set/clear flags): OK
-      - _cmp*_: OK
-      - _cpuport_: OK (m6510 CPU port)
-      - _cputiming_: **FAIL** (opcodes 5C and 7C show 'clocks: 8 right: 9')
-      - _dcm*_: OK
-      - _dec*, dexn, deyn_: OK
-      - _eor*_: OK
-      - _inc*, inxn, inyn_: OK
-      - _ins*_: OK
-      - _inxn, inyn_: OK
-      - _irq_: **FAIL**
-      - _jmpi, jmpw, jsrw_: OK
-      - _lasay_: **FAIL**
-      - _lax*_: OK
-      - _lda*_: OK
-      - _ldx*, ldy*_: OK
-      - _lse*_: OK
-      - _lsr*_: OK
-      - _lxab_: **FAIL**
-      - _nmi_: **FAIL**
-      - _nop*_: OK
-      - _ora*_: OK
-      - ...
+    - **Wolfgang Lorenz C64 Test Suite** (CPU instruction tests), all working except
+      the following 'unintended instructions':
+        - aneb (unstable, chip/temperature dependent)
+        - lxab (unstable, chip/temperature dependent)
+        - shaay
+        - shaiy
+        - shxay
+        - shyax
+        - shsay
+        - lasay
 
 ### AY-3-8910 (chips/ay38910.h)
 
