@@ -538,12 +538,14 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 #define _ON(m) pins|=(m)
 /* disable control pins */
 #define _OFF(m) pins&=~(m)
+/* put IRQ state into pipeline */
+#define _INT() irq_pip=(irq_pip<<1)|((pins>>26)&1);nmi_pip=(nmi_pip<<1)|(((pins&(pre_pins^pins))>>27)&1);
 /* execute a tick */
 #define _T() pins=tick(pins,ud);ticks++;
 /* a memory read tick */
-#define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);
+#define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);_INT()
 /* a memory write tick */
-#define _WR() _OFF(M6502_RW);_T()
+#define _WR() _OFF(M6502_RW);_T();_INT()
 /* implied addressing mode, this still puts the PC on the address bus */
 #define _A_IMP() _SA(c.PC)
 /* immediate addressing mode */
@@ -584,6 +586,8 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
     const m6502_trap_t trap = cpu->trap_cb;
     void* ud = cpu->user_data;
     do {
+        uint8_t irq_pip = 0;
+        uint8_t nmi_pip = 0;
         uint64_t pre_pins = pins;
         _OFF(M6502_IRQ|M6502_NMI);
         /* fetch opcode */
@@ -851,10 +855,10 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xff:/*ISB abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
 
         }
-        /* edge detection for NMI pin */
-        bool nmi = 0 != ((pins & (pre_pins ^ pins)) & M6502_NMI);
-        /* check for interrupt request */
-        if (nmi || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {
+        /* check for interrupt request
+            FIXME: NMI and IRQ check time!
+        */
+        if ((nmi_pip & 1) || ((irq_pip & 2) && !(c.pi & M6502_IF))) {
             /* execute a slightly modified BRK instruction, do NOT increment PC! */
             _SA(c.PC);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
             _SA(c.PC); _RD();
