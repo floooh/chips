@@ -192,11 +192,12 @@ typedef struct {
 
 /* interrupt state */
 typedef struct {
-    uint8_t imr;        /* interrupt mask */
-    uint8_t imr1;       /* one cycle delay for imr updates */
-    uint8_t icr;        /* interrupt control register */
-    uint8_t pip_irq;    /* 1-cycle delay pipeline to request irq */
-    bool flag;          /* last state of flag bit, to detect edge */
+    uint8_t imr;            /* interrupt mask */
+    uint8_t imr1;           /* one cycle delay for imr updates */
+    uint8_t icr;            /* interrupt control register */
+    uint8_t pip_irq;        /* 1-cycle delay pipeline to request irq */
+    uint8_t pip_read_icr;   /* timer B bug: remember reads from ICR */
+    bool flag;              /* last state of flag bit, to detect edge */
 } m6526_int_t;
 
 /* m6526 state */
@@ -266,6 +267,7 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->imr1 = 0;
     intr->icr = 0;
     intr->pip_irq = 0;
+    intr->pip_read_icr = 0;
     intr->flag = false;
 }
 
@@ -416,6 +418,8 @@ static uint8_t _m6526_read_icr(m6526_t* c) {
     c->intr.icr = 0;
     /* cancel an interrupt pending in the pipeline */
     c->intr.pip_irq = 0;
+    /* remember reads from ICR to implement "Timer B Bug" */
+    c->intr.pip_read_icr |= 1;
     return data;
 }
 
@@ -428,7 +432,10 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
     }
     /* timer B underflow interrupt flag? */
     if (c->tb.t_out) {
-        c->intr.icr |= (1<<1);
+        /* "Timer B Bug": reads from ICR block timer B interrupt generation */
+        if (0 == (c->intr.pip_read_icr & 1)) {
+            c->intr.icr |= (1<<1);
+        }
     }
     /* check for FLAG pin trigger */
     if ((pins & M6526_FLAG) && (!c->intr.flag)) {
@@ -534,6 +541,7 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     }
     _M6526_PIP_STEP(c->intr.pip_irq);
     c->intr.imr = c->intr.imr1;
+    c->intr.pip_read_icr <<= 1;
 }
 
 uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
