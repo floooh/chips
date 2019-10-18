@@ -935,6 +935,15 @@ static inline void _m6569_sunit_update_mcbase(m6569_t* vic) {
     be displayed). Otherwise the last line won't be displayed.
 
     This is different behaviour than described in the recipe!.
+    
+    BUT: https://sourceforge.net/p/vice-emu/code/HEAD/tree/techdocs/VICII/VIC-Addendum.txt
+    mentions this:
+
+        Note: The original rule 8 mentions turning the display of the sprite off
+        if MCBASE is equal to 63. If this were true, then the last line of the sprite
+        would not be displayed beyond coordinates corresponsing to cycle 16.
+        The above rewritten rule corrects this. The actual disabling of sprite display
+        is likely handled during the first phase of cycle 58 (see rule 4).
 */
 static inline void _m6569_sunit_dma_disp_disable(m6569_t* vic) {
     m6569_sprite_unit_t* su = &vic->sunit;
