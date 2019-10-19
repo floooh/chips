@@ -369,6 +369,14 @@ def i_cl(o, f):
 
 #-------------------------------------------------------------------------------
 def i_br(o, m, v):
+    # FIXME: When an interrupt occurs 2 or more cycles before the current command
+    # ends, it is executed immediately after the command.
+    # Otherwise, the CPU executes the next command first before it calls the
+    # interrupt handler.
+    # The only exception to this rule are taken branches to the same page
+    # which last 3 cycles. Here, the interrupt must have occurred before clock
+    # 1 of the branch command; the normal rule says before clock 2. Branches
+    # to a different page or branches not taken are behaving normal.
     cmt(o,branch_name(m,v))
     o.src += '_RD();'
     o.src += 'if((c.P&'+hex(m)+')=='+hex(v)+'){'
