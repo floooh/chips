@@ -224,11 +224,7 @@ typedef struct {
     uint64_t PINS;
     uint8_t A,X,Y,S,P;      /* 8-bit registers */
     uint16_t PC;            /* 16-bit program counter */
-    /* state of interrupt enable flag at the time when the IRQ pin is sampled,
-       this is used to implement 'delayed IRQ response'
-       (see: https://wiki.nesdev.com/w/index.php/CPU_interrupts)
-    */
-    uint8_t pi;
+    uint8_t int_pip;        /* interrupt state history */
     bool bcd_enabled;       /* this is actually not mutable but needed when ticking */
 } m6502_state_t;
 
@@ -526,6 +522,8 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
     return pins;
 }
 
+/* check IRQ and NMI state and put into a bit-shift pipeline */
+#define _CHECK_INT() {c.int_pip=(c.int_pip<<1)|((pins>>26)&((~c.P)>>2)&1)|(((pins&(pre_pins^pins))>>27)&1);pre_pins=pins;}
 /* set 16-bit address in 64-bit pin mask*/
 #define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
@@ -541,9 +539,9 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 /* execute a tick */
 #define _T() pins=tick(pins,ud);ticks++;
 /* a memory read tick */
-#define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);
+#define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);_CHECK_INT()
 /* a memory write tick */
-#define _WR() _OFF(M6502_RW);_T()
+#define _WR() _OFF(M6502_RW);_T();_CHECK_INT()
 /* implied addressing mode, this still puts the PC on the address bus */
 #define _A_IMP() _SA(c.PC)
 /* immediate addressing mode */
@@ -588,8 +586,6 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
         _OFF(M6502_IRQ|M6502_NMI);
         /* fetch opcode */
         _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
-        /* store 'delayed IRQ response' flag state */
-        c.pi = c.P;
         const uint8_t opcode = _GD();
         /* code-generated decode block */
         switch (opcode) {
@@ -657,7 +653,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x3d:/*AND abs,X*/_A_ABX_R();_RD();c.A&=_GD();_NZ(c.A);break;
             case 0x3e:/*ROL abs,X*/_A_ABX_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();break;
             case 0x3f:/*RLA abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x40:/*RTI */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S++);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;_SA(0x0100|c.S++);_RD();l=_GD();_SA(0x0100|c.S);_RD();h=_GD();c.PC=(h<<8)|l;c.pi=c.P;break;
+            case 0x40:/*RTI */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S++);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;_SA(0x0100|c.S++);_RD();l=_GD();_SA(0x0100|c.S);_RD();h=_GD();c.PC=(h<<8)|l;break;
             case 0x41:/*EOR (zp,X)*/_A_IDX();_RD();c.A^=_GD();_NZ(c.A);break;
             case 0x42:/*INVALID*/break;
             case 0x43:/*SRE (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
@@ -851,17 +847,15 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xff:/*ISB abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
 
         }
-        /* edge detection for NMI pin */
-        bool nmi = 0 != ((pins & (pre_pins ^ pins)) & M6502_NMI);
         /* check for interrupt request */
-        if (nmi || ((pins & M6502_IRQ) && !(c.pi & M6502_IF))) {
+        if (c.int_pip & 0xFE) {
             /* execute a slightly modified BRK instruction, do NOT increment PC! */
             _SA(c.PC);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
             _SA(c.PC); _RD();
             _SAD(0x0100|c.S--, c.PC>>8); _WR();
             _SAD(0x0100|c.S--, c.PC); _WR();
             _SAD(0x0100|c.S--, c.P&~M6502_BF); _WR();
-            if (pins & M6502_NMI) {
+            if (pins & M6502_NMI) {    /* not a bug, see "interrupt hijacking" */
                 _SA(0xFFFA); _RD(); l=_GD();
                 c.P |= M6502_IF;
                 _SA(0xFFFB); _RD(); h=_GD();
@@ -873,6 +867,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             }
             c.PC = (h<<8)|l;
         }
+        c.int_pip &= 1;
         if (trap) {
             int trap_id=trap(c.PC,ticks,pins,cpu->trap_user_data);
             if (trap_id) {

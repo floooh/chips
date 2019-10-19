@@ -225,6 +225,7 @@ def enc_addr(op):
 def i_brk(o):
     # this only covers the normal instruction version of brk, not
     # an interrupt acknowlegde brk!
+    # FIXME: interrupt highjacking!
     cmt(o, 'BRK')
     o.src += '_RD();'
     o.src += 'c.PC++;'
@@ -456,8 +457,6 @@ def i_rti(o):
     o.src += '_SA(0x0100|c.S);_RD();h=_GD();'
     # update PC (which is already placed on the right return-to instruction)
     o.src += 'c.PC=(h<<8)|l;'
-    # interrupt reponse after RTI is immediately
-    o.src += 'c.pi=c.P;'
 
 #-------------------------------------------------------------------------------
 def i_ora(o):
