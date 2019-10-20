@@ -224,7 +224,8 @@ typedef struct {
     uint64_t PINS;
     uint8_t A,X,Y,S,P;      /* 8-bit registers */
     uint16_t PC;            /* 16-bit program counter */
-    uint8_t int_pip;        /* interrupt state history */
+    uint8_t irq_pip;        /* IRQ state history */
+    uint8_t nmi_pip;        /* NMI state history */
     bool bcd_enabled;       /* this is actually not mutable but needed when ticking */
 } m6502_state_t;
 
@@ -523,7 +524,7 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 }
 
 /* check IRQ and NMI state and put into a bit-shift pipeline */
-#define _CHECK_INT() {c.int_pip=(c.int_pip<<1)|((pins>>26)&((~c.P)>>2)&1)|(((pins&(pre_pins^pins))>>27)&1);pre_pins=pins;}
+#define _CHECK_INT() {c.irq_pip=(c.irq_pip<<1)|((pins>>26)&((~c.P)>>2)&1);c.nmi_pip=(c.nmi_pip<<1)|(((pins&(pre_pins^pins))>>27)&1);pre_pins=pins;}
 /* set 16-bit address in 64-bit pin mask*/
 #define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
@@ -583,7 +584,6 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
     void* ud = cpu->user_data;
     do {
         uint64_t pre_pins = pins;
-        _OFF(M6502_IRQ|M6502_NMI);
         /* fetch opcode */
         _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
         const uint8_t opcode = _GD();
@@ -592,14 +592,15 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
 $decode_block
         }
         /* check for interrupt request */
-        if (c.int_pip & 0xFE) {
-            /* execute a slightly modified BRK instruction, do NOT increment PC! */
+        if ((c.nmi_pip & 0xFE) || (c.irq_pip & 0xFE)) {
+            /* execute a BRK instruction in 'interrupt mode' */
             _SA(c.PC);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
             _SA(c.PC); _RD();
+            /* push PC and P onto stack */
             _SAD(0x0100|c.S--, c.PC>>8); _WR();
             _SAD(0x0100|c.S--, c.PC); _WR();
             _SAD(0x0100|c.S--, c.P&~M6502_BF); _WR();
-            if (pins & M6502_NMI) {    /* not a bug, see "interrupt hijacking" */
+            if (c.nmi_pip & 0xFE) {
                 _SA(0xFFFA); _RD(); l=_GD();
                 c.P |= M6502_IF;
                 _SA(0xFFFB); _RD(); h=_GD();
@@ -611,7 +612,8 @@ $decode_block
             }
             c.PC = (h<<8)|l;
         }
-        c.int_pip &= 1;
+        c.irq_pip &= 1;
+        c.nmi_pip &= 1;
         if (trap) {
             int trap_id=trap(c.PC,ticks,pins,cpu->trap_user_data);
             if (trap_id) {

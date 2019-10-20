@@ -494,8 +494,14 @@ static uint64_t _c64_tick(uint64_t pins, void* user_data) {
     if (m6526_tick(&sys->cia_1, cia1_pins & ~M6502_IRQ) & M6502_IRQ) {
         pins |= M6502_IRQ;
     }
+    else {
+        pins &= ~M6502_IRQ;
+    }
     if (m6526_tick(&sys->cia_2, pins & ~M6502_IRQ) & M6502_IRQ) {
         pins |= M6502_NMI;
+    }
+    else {
+        pins &= ~M6502_NMI;
     }
 
     /* tick the VIC-II display chip:

@@ -223,26 +223,25 @@ def enc_addr(op):
 
 #-------------------------------------------------------------------------------
 def i_brk(o):
-    # this only covers the normal instruction version of brk, not
-    # an interrupt acknowlegde brk!
-    # FIXME: interrupt highjacking!
+    # implements 'interrupt hijacking'
     cmt(o, 'BRK')
     o.src += '_RD();'
     o.src += 'c.PC++;'
-    # write PC high byte to stack
     o.src += '_SAD(0x0100|c.S--,c.PC>>8);_WR();'
-    # write PC low byte to stack
     o.src += '_SAD(0x0100|c.S--,c.PC);_WR();'
-    # write status flags to stack (with set BF flag)
     o.src += '_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();'
-    # load jump vector low byte from 0xFFFE
-    o.src += '_SA(0xFFFE);_RD();l=_GD();'
-    # load jump vector high byte from 0xFFFF
-    o.src += '_SA(0xFFFF);_RD();h=_GD();'
-    # build PC
+    o.src += 'if(c.nmi_pip&0xFE){'
+    o.src +=   '_SA(0xFFFA);_RD();l=_GD();'
+    o.src +=   'c.P|=M6502_IF;'
+    o.src +=   '_SA(0xFFFB);_RD();h=_GD();'
+    o.src += '}'
+    o.src += 'else{'
+    o.src +=   '_SA(0xFFFE);_RD();l=_GD();'
+    o.src +=   'c.P|=M6502_IF;'
+    o.src +=   '_SA(0xFFFF);_RD();h=_GD();'
+    o.src += '}'
     o.src += 'c.PC=(h<<8)|l;'
-    # disable interrupts
-    o.src += 'c.P|=M6502_IF;'
+    o.src += 'c.irq_pip&=1; c.nmi_pip&=1;' # FIXME: this should supress the normal interrupt handling at end of instruction, is this correct?
 
 #-------------------------------------------------------------------------------
 def i_nop(o):
@@ -385,7 +384,7 @@ def i_br(o, m, v):
     o.src +=   'if((t&0xFF00)!=(c.PC&0xFF00)){' 
     o.src +=     '_RD();' # target address not in same memory page, 4 cycles
     o.src +=   '}else{'
-    o.src +=     'c.int_pip>>=1;' # 'branchquirk' interrupt fix
+    o.src +=     'c.irq_pip>>=1;c.nmi_pip>>=1;' # 'branchquirk' interrupt fix
     o.src +=   '}'
     o.src +=   'c.PC=t;'
     o.src += '}'

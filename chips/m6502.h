@@ -224,7 +224,8 @@ typedef struct {
     uint64_t PINS;
     uint8_t A,X,Y,S,P;      /* 8-bit registers */
     uint16_t PC;            /* 16-bit program counter */
-    uint8_t int_pip;        /* interrupt state history */
+    uint8_t irq_pip;        /* IRQ state history */
+    uint8_t nmi_pip;        /* NMI state history */
     bool bcd_enabled;       /* this is actually not mutable but needed when ticking */
 } m6502_state_t;
 
@@ -523,7 +524,7 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 }
 
 /* check IRQ and NMI state and put into a bit-shift pipeline */
-#define _CHECK_INT() {c.int_pip=(c.int_pip<<1)|((pins>>26)&((~c.P)>>2)&1)|(((pins&(pre_pins^pins))>>27)&1);pre_pins=pins;}
+#define _CHECK_INT() {c.irq_pip=(c.irq_pip<<1)|((pins>>26)&((~c.P)>>2)&1);c.nmi_pip=(c.nmi_pip<<1)|(((pins&(pre_pins^pins))>>27)&1);pre_pins=pins;}
 /* set 16-bit address in 64-bit pin mask*/
 #define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
@@ -583,13 +584,12 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
     void* ud = cpu->user_data;
     do {
         uint64_t pre_pins = pins;
-        _OFF(M6502_IRQ|M6502_NMI);
         /* fetch opcode */
         _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
         const uint8_t opcode = _GD();
         /* code-generated decode block */
         switch (opcode) {
-            case 0x0:/*BRK */_A_IMP();_RD();c.PC++;_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();_SA(0xFFFE);_RD();l=_GD();_SA(0xFFFF);_RD();h=_GD();c.PC=(h<<8)|l;c.P|=M6502_IF;break;
+            case 0x0:/*BRK */_A_IMP();_RD();c.PC++;_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();if(c.nmi_pip&0xFE){_SA(0xFFFA);_RD();l=_GD();c.P|=M6502_IF;_SA(0xFFFB);_RD();h=_GD();}else{_SA(0xFFFE);_RD();l=_GD();c.P|=M6502_IF;_SA(0xFFFF);_RD();h=_GD();}c.PC=(h<<8)|l;c.irq_pip&=1; c.nmi_pip&=1;break;
             case 0x1:/*ORA (zp,X)*/_A_IDX();_RD();c.A|=_GD();_NZ(c.A);break;
             case 0x2:/*INVALID*/break;
             case 0x3:/*SLO (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
@@ -605,7 +605,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xd:/*ORA abs*/_A_ABS();_RD();c.A|=_GD();_NZ(c.A);break;
             case 0xe:/*ASL abs*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
             case 0xf:/*SLO abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x10:/*BPL #*/_A_IMM();_RD();if((c.P&0x80)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
+            case 0x10:/*BPL #*/_A_IMM();_RD();if((c.P&0x80)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
             case 0x11:/*ORA (zp),Y*/_A_IDY_R();_RD();c.A|=_GD();_NZ(c.A);break;
             case 0x12:/*INVALID*/break;
             case 0x13:/*SLO (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
@@ -637,7 +637,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x2d:/*AND abs*/_A_ABS();_RD();c.A&=_GD();_NZ(c.A);break;
             case 0x2e:/*ROL abs*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();break;
             case 0x2f:/*RLA abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x30:/*BMI #*/_A_IMM();_RD();if((c.P&0x80)==0x80){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
+            case 0x30:/*BMI #*/_A_IMM();_RD();if((c.P&0x80)==0x80){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
             case 0x31:/*AND (zp),Y*/_A_IDY_R();_RD();c.A&=_GD();_NZ(c.A);break;
             case 0x32:/*INVALID*/break;
             case 0x33:/*RLA (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
@@ -669,7 +669,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x4d:/*EOR abs*/_A_ABS();_RD();c.A^=_GD();_NZ(c.A);break;
             case 0x4e:/*LSR abs*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();break;
             case 0x4f:/*SRE abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x50:/*BVC #*/_A_IMM();_RD();if((c.P&0x40)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
+            case 0x50:/*BVC #*/_A_IMM();_RD();if((c.P&0x40)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
             case 0x51:/*EOR (zp),Y*/_A_IDY_R();_RD();c.A^=_GD();_NZ(c.A);break;
             case 0x52:/*INVALID*/break;
             case 0x53:/*SRE (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
@@ -701,7 +701,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x6d:/*ADC abs*/_A_ABS();_RD();_m6502_adc(&c,_GD());break;
             case 0x6e:/*ROR abs*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();break;
             case 0x6f:/*RRA abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x70:/*BVS #*/_A_IMM();_RD();if((c.P&0x40)==0x40){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
+            case 0x70:/*BVS #*/_A_IMM();_RD();if((c.P&0x40)==0x40){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
             case 0x71:/*ADC (zp),Y*/_A_IDY_R();_RD();_m6502_adc(&c,_GD());break;
             case 0x72:/*INVALID*/break;
             case 0x73:/*RRA (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
@@ -733,7 +733,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x8d:/*STA abs*/_A_ABS();_SD(c.A);_WR();break;
             case 0x8e:/*STX abs*/_A_ABS();_SD(c.X);_WR();break;
             case 0x8f:/*SAX abs (undoc)*/_A_ABS();_SD(c.A&c.X);_WR();break;
-            case 0x90:/*BCC #*/_A_IMM();_RD();if((c.P&0x1)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
+            case 0x90:/*BCC #*/_A_IMM();_RD();if((c.P&0x1)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
             case 0x91:/*STA (zp),Y*/_A_IDY_W();_SD(c.A);_WR();break;
             case 0x92:/*INVALID*/break;
             case 0x93:/*SHA (zp),Y (undoc)*/_A_IDY_W();_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();break;
@@ -765,7 +765,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xad:/*LDA abs*/_A_ABS();_RD();c.A=_GD();_NZ(c.A);break;
             case 0xae:/*LDX abs*/_A_ABS();_RD();c.X=_GD();_NZ(c.X);break;
             case 0xaf:/*LAX abs (undoc)*/_A_ABS();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-            case 0xb0:/*BCS #*/_A_IMM();_RD();if((c.P&0x1)==0x1){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
+            case 0xb0:/*BCS #*/_A_IMM();_RD();if((c.P&0x1)==0x1){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
             case 0xb1:/*LDA (zp),Y*/_A_IDY_R();_RD();c.A=_GD();_NZ(c.A);break;
             case 0xb2:/*INVALID*/break;
             case 0xb3:/*LAX (zp),Y (undoc)*/_A_IDY_R();_RD();c.A=c.X=_GD();_NZ(c.A);break;
@@ -797,7 +797,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xcd:/*CMP abs*/_A_ABS();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
             case 0xce:/*DEC abs*/_A_ABS();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
             case 0xcf:/*DCP abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xd0:/*BNE #*/_A_IMM();_RD();if((c.P&0x2)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
+            case 0xd0:/*BNE #*/_A_IMM();_RD();if((c.P&0x2)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
             case 0xd1:/*CMP (zp),Y*/_A_IDY_R();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
             case 0xd2:/*INVALID*/break;
             case 0xd3:/*DCP (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
@@ -829,7 +829,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xed:/*SBC abs*/_A_ABS();_RD();_m6502_sbc(&c,_GD());break;
             case 0xee:/*INC abs*/_A_ABS();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
             case 0xef:/*ISB abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-            case 0xf0:/*BEQ #*/_A_IMM();_RD();if((c.P&0x2)==0x2){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
+            case 0xf0:/*BEQ #*/_A_IMM();_RD();if((c.P&0x2)==0x2){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
             case 0xf1:/*SBC (zp),Y*/_A_IDY_R();_RD();_m6502_sbc(&c,_GD());break;
             case 0xf2:/*INVALID*/break;
             case 0xf3:/*ISB (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
@@ -848,14 +848,15 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
 
         }
         /* check for interrupt request */
-        if (c.int_pip & 0xFE) {
-            /* execute a slightly modified BRK instruction, do NOT increment PC! */
+        if ((c.nmi_pip & 0xFE) || (c.irq_pip & 0xFE)) {
+            /* execute a BRK instruction in 'interrupt mode' */
             _SA(c.PC);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
             _SA(c.PC); _RD();
+            /* push PC and P onto stack */
             _SAD(0x0100|c.S--, c.PC>>8); _WR();
             _SAD(0x0100|c.S--, c.PC); _WR();
             _SAD(0x0100|c.S--, c.P&~M6502_BF); _WR();
-            if (pins & M6502_NMI) {    /* not a bug, see "interrupt hijacking" */
+            if (c.nmi_pip & 0xFE) {
                 _SA(0xFFFA); _RD(); l=_GD();
                 c.P |= M6502_IF;
                 _SA(0xFFFB); _RD(); h=_GD();
@@ -867,7 +868,8 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             }
             c.PC = (h<<8)|l;
         }
-        c.int_pip &= 1;
+        c.irq_pip &= 1;
+        c.nmi_pip &= 1;
         if (trap) {
             int trap_id=trap(c.PC,ticks,pins,cpu->trap_user_data);
             if (trap_id) {
