@@ -605,7 +605,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xd:/*ORA abs*/_A_ABS();_RD();c.A|=_GD();_NZ(c.A);break;
             case 0xe:/*ASL abs*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
             case 0xf:/*SLO abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x10:/*BPL #*/_A_IMM();_RD();if((c.P&0x80)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
+            case 0x10:/*BPL #*/_A_IMM();_RD();if((c.P&0x80)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
             case 0x11:/*ORA (zp),Y*/_A_IDY_R();_RD();c.A|=_GD();_NZ(c.A);break;
             case 0x12:/*INVALID*/break;
             case 0x13:/*SLO (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
@@ -637,7 +637,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x2d:/*AND abs*/_A_ABS();_RD();c.A&=_GD();_NZ(c.A);break;
             case 0x2e:/*ROL abs*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();break;
             case 0x2f:/*RLA abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x30:/*BMI #*/_A_IMM();_RD();if((c.P&0x80)==0x80){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
+            case 0x30:/*BMI #*/_A_IMM();_RD();if((c.P&0x80)==0x80){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
             case 0x31:/*AND (zp),Y*/_A_IDY_R();_RD();c.A&=_GD();_NZ(c.A);break;
             case 0x32:/*INVALID*/break;
             case 0x33:/*RLA (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
@@ -669,7 +669,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x4d:/*EOR abs*/_A_ABS();_RD();c.A^=_GD();_NZ(c.A);break;
             case 0x4e:/*LSR abs*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();break;
             case 0x4f:/*SRE abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x50:/*BVC #*/_A_IMM();_RD();if((c.P&0x40)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
+            case 0x50:/*BVC #*/_A_IMM();_RD();if((c.P&0x40)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
             case 0x51:/*EOR (zp),Y*/_A_IDY_R();_RD();c.A^=_GD();_NZ(c.A);break;
             case 0x52:/*INVALID*/break;
             case 0x53:/*SRE (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
@@ -701,7 +701,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x6d:/*ADC abs*/_A_ABS();_RD();_m6502_adc(&c,_GD());break;
             case 0x6e:/*ROR abs*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();break;
             case 0x6f:/*RRA abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x70:/*BVS #*/_A_IMM();_RD();if((c.P&0x40)==0x40){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
+            case 0x70:/*BVS #*/_A_IMM();_RD();if((c.P&0x40)==0x40){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
             case 0x71:/*ADC (zp),Y*/_A_IDY_R();_RD();_m6502_adc(&c,_GD());break;
             case 0x72:/*INVALID*/break;
             case 0x73:/*RRA (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
@@ -733,7 +733,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0x8d:/*STA abs*/_A_ABS();_SD(c.A);_WR();break;
             case 0x8e:/*STX abs*/_A_ABS();_SD(c.X);_WR();break;
             case 0x8f:/*SAX abs (undoc)*/_A_ABS();_SD(c.A&c.X);_WR();break;
-            case 0x90:/*BCC #*/_A_IMM();_RD();if((c.P&0x1)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
+            case 0x90:/*BCC #*/_A_IMM();_RD();if((c.P&0x1)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
             case 0x91:/*STA (zp),Y*/_A_IDY_W();_SD(c.A);_WR();break;
             case 0x92:/*INVALID*/break;
             case 0x93:/*SHA (zp),Y (undoc)*/_A_IDY_W();_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();break;
@@ -765,7 +765,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xad:/*LDA abs*/_A_ABS();_RD();c.A=_GD();_NZ(c.A);break;
             case 0xae:/*LDX abs*/_A_ABS();_RD();c.X=_GD();_NZ(c.X);break;
             case 0xaf:/*LAX abs (undoc)*/_A_ABS();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-            case 0xb0:/*BCS #*/_A_IMM();_RD();if((c.P&0x1)==0x1){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
+            case 0xb0:/*BCS #*/_A_IMM();_RD();if((c.P&0x1)==0x1){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
             case 0xb1:/*LDA (zp),Y*/_A_IDY_R();_RD();c.A=_GD();_NZ(c.A);break;
             case 0xb2:/*INVALID*/break;
             case 0xb3:/*LAX (zp),Y (undoc)*/_A_IDY_R();_RD();c.A=c.X=_GD();_NZ(c.A);break;
@@ -797,7 +797,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xcd:/*CMP abs*/_A_ABS();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
             case 0xce:/*DEC abs*/_A_ABS();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
             case 0xcf:/*DCP abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xd0:/*BNE #*/_A_IMM();_RD();if((c.P&0x2)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
+            case 0xd0:/*BNE #*/_A_IMM();_RD();if((c.P&0x2)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
             case 0xd1:/*CMP (zp),Y*/_A_IDY_R();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
             case 0xd2:/*INVALID*/break;
             case 0xd3:/*DCP (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
@@ -829,7 +829,7 @@ uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
             case 0xed:/*SBC abs*/_A_ABS();_RD();_m6502_sbc(&c,_GD());break;
             case 0xee:/*INC abs*/_A_ABS();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
             case 0xef:/*ISB abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-            case 0xf0:/*BEQ #*/_A_IMM();_RD();if((c.P&0x2)==0x2){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}c.PC=t;}break;
+            case 0xf0:/*BEQ #*/_A_IMM();_RD();if((c.P&0x2)==0x2){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.int_pip>>=1;}c.PC=t;}break;
             case 0xf1:/*SBC (zp),Y*/_A_IDY_R();_RD();_m6502_sbc(&c,_GD());break;
             case 0xf2:/*INVALID*/break;
             case 0xf3:/*ISB (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;

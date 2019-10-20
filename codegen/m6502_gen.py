@@ -369,7 +369,7 @@ def i_cl(o, f):
 
 #-------------------------------------------------------------------------------
 def i_br(o, m, v):
-    # FIXME: When an interrupt occurs 2 or more cycles before the current command
+    # 'branchquirk' NOTE: When an interrupt occurs 2 or more cycles before the current command
     # ends, it is executed immediately after the command.
     # Otherwise, the CPU executes the next command first before it calls the
     # interrupt handler.
@@ -384,22 +384,10 @@ def i_br(o, m, v):
     o.src +=   't=c.PC+(int8_t)_GD();'
     o.src +=   'if((t&0xFF00)!=(c.PC&0xFF00)){' 
     o.src +=     '_RD();' # target address not in same memory page, 4 cycles
+    o.src +=   '}else{'
+    o.src +=     'c.int_pip>>=1;' # 'branchquirk' interrupt fix
     o.src +=   '}'
     o.src +=   'c.PC=t;'
-    o.src += '}'
-
-#-------------------------------------------------------------------------------
-def x_bra(o):
-    # this is 'branch always' instruction on the 65C02
-    cmt(o,'BRA (65C02 ext)')
-    o.src += '_RD();'
-    o.src += 'if(c.m65c02_mode){'
-    o.src += '_RD();'   # branch always taken, at least 3 cycles
-    o.src += 't=c.PC+(int8_t)_GD();'
-    o.src += 'if((t&0xFF00)!=(c.PC&0xFF00)){' 
-    o.src +=   '_RD();' # target address not in same memory page, 4 cycles
-    o.src += '}'
-    o.src += 'c.PC=t;'
     o.src += '}'
 
 #-------------------------------------------------------------------------------
