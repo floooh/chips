@@ -62,6 +62,7 @@
 extern "C" {
 #endif
 
+/* NOTE: keep all MAX and NUM values 2^N */
 #define UI_DBG_MAX_BREAKPOINTS (32)
 #define UI_DBG_MAX_USER_BREAKTYPES (8)              /* max number of user breakpoint types */
 #define UI_DBG_STEP_TRAPID (128)                    /* special trap id when step-mode active */
@@ -70,6 +71,7 @@ extern "C" {
 #define UI_DBG_MAX_BINLEN (16)
 #define UI_DBG_NUM_LINES (256)
 #define UI_DBG_NUM_BACKTRACE_LINES (UI_DBG_NUM_LINES/2)
+#define UI_DBG_NUM_HISTORY_ITEMS (256)
 
 /* breakpoint types */
 enum {
@@ -225,6 +227,7 @@ typedef struct ui_dbg_uistate_t {
     bool show_breakpoints;
     bool show_bytes;
     bool show_ticks;
+    bool show_history;
     bool request_scroll;
     ui_dbg_keydesc_t keys;
     ui_dbg_line_t line_array[UI_DBG_NUM_LINES];
@@ -256,6 +259,11 @@ typedef struct ui_dbg_heatmap_t {
     uint32_t pixels[1<<16];    /* execution counters converted to pixel data */
 } ui_dbg_heatmap_t;
 
+typedef struct ui_dbg_history_t {
+    uint16_t pc[UI_DBG_NUM_HISTORY_ITEMS];
+    uint16_t pos;
+} ui_dbg_history_t;
+
 typedef struct ui_dbg_t {
     bool valid;
     ui_dbg_read_t read_cb;
@@ -269,6 +277,7 @@ typedef struct ui_dbg_t {
     ui_dbg_state_t dbg;
     ui_dbg_uistate_t ui;
     ui_dbg_heatmap_t heatmap;
+    ui_dbg_history_t history;
 } ui_dbg_t;
 
 /* initialize a new ui_dbg_t instance */
@@ -303,6 +312,27 @@ void ui_dbg_reboot(ui_dbg_t* win);
 #if defined(UI_DBG_USE_Z80) && defined(UI_DBG_USE_M6502)
 #error "only one of UI_DBG_USE_Z80 or UI_DBG_USE_M6502 can be defined"
 #endif
+
+/*== HISTORY =================================================================*/
+static void _ui_dbg_history_reset(ui_dbg_t* win) {
+    memset(&win->history, 0, sizeof(win->history));
+}
+
+static void _ui_dbg_history_reboot(ui_dbg_t* win) {
+    _ui_dbg_history_reset(win);
+}
+
+static void _ui_dbg_history_push(ui_dbg_t* win, uint16_t pc) {
+    win->history.pc[win->history.pos] = pc;
+    win->history.pos = (win->history.pos + 1) & (UI_DBG_NUM_HISTORY_ITEMS-1);
+}
+
+/* FIXME: actually use this
+static uint16_t _ui_dbg_history_get(ui_dbg_t* win, uint16_t rel_pos) {
+    uint16_t index = (win->history.pos - rel_pos) & (UI_DBG_NUM_HISTORY_ITEMS-1);
+    return win->history.pc[index];
+}
+*/
 
 /*== GENERAL HELPERS =========================================================*/
 static inline const char* _ui_dbg_str_or_def(const char* str, const char* def) {
@@ -671,6 +701,8 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
         else {
             win->heatmap.items[win->dbg.trap_pc].ticks = ticks;
         }
+        /* add PC to history */
+        _ui_dbg_history_push(win, pc);
     }
     #if defined(UI_DBG_USE_Z80)
         if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_RD)) {
@@ -1192,6 +1224,7 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui->show_buttons = true;
     ui->show_bytes = true;
     ui->show_ticks = true;
+    ui->show_history = false;
     ui->show_breakpoints = false;
     ui->keys = desc->keys;
     int i = 0;
@@ -1299,6 +1332,7 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
             ImGui::MenuItem("Breakpoints", 0, &win->ui.show_breakpoints);
             ImGui::MenuItem("Opcode Bytes", 0, &win->ui.show_bytes);
             ImGui::MenuItem("Opcode Ticks", 0, &win->ui.show_ticks);
+            ImGui::MenuItem("Opcode History (TODO)", 0, &win->ui.show_history);
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
@@ -1735,6 +1769,7 @@ void ui_dbg_reset(ui_dbg_t* win) {
     _ui_dbg_dbgstate_reset(win);
     _ui_dbg_uistate_reset(win);
     _ui_dbg_heatmap_reset(win);
+    _ui_dbg_history_reset(win);
 }
 
 void ui_dbg_reboot(ui_dbg_t* win) {
@@ -1742,6 +1777,7 @@ void ui_dbg_reboot(ui_dbg_t* win) {
     _ui_dbg_dbgstate_reboot(win);
     _ui_dbg_uistate_reboot(win);
     _ui_dbg_heatmap_reboot(win);
+    _ui_dbg_history_reboot(win);
 }
 
 bool ui_dbg_before_exec(ui_dbg_t* win) {
