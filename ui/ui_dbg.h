@@ -313,27 +313,6 @@ void ui_dbg_reboot(ui_dbg_t* win);
 #error "only one of UI_DBG_USE_Z80 or UI_DBG_USE_M6502 can be defined"
 #endif
 
-/*== HISTORY =================================================================*/
-static void _ui_dbg_history_reset(ui_dbg_t* win) {
-    memset(&win->history, 0, sizeof(win->history));
-}
-
-static void _ui_dbg_history_reboot(ui_dbg_t* win) {
-    _ui_dbg_history_reset(win);
-}
-
-static void _ui_dbg_history_push(ui_dbg_t* win, uint16_t pc) {
-    win->history.pc[win->history.pos] = pc;
-    win->history.pos = (win->history.pos + 1) & (UI_DBG_NUM_HISTORY_ITEMS-1);
-}
-
-/* FIXME: actually use this
-static uint16_t _ui_dbg_history_get(ui_dbg_t* win, uint16_t rel_pos) {
-    uint16_t index = (win->history.pos - rel_pos) & (UI_DBG_NUM_HISTORY_ITEMS-1);
-    return win->history.pc[index];
-}
-*/
-
 /*== GENERAL HELPERS =========================================================*/
 static inline const char* _ui_dbg_str_or_def(const char* str, const char* def) {
     if (str) {
@@ -529,6 +508,95 @@ static void _ui_dbg_step_over(ui_dbg_t* win) {
         win->dbg.step_mode = UI_DBG_STEPMODE_INTO;
     }
 }
+
+/*== HISTORY =================================================================*/
+static void _ui_dbg_history_reset(ui_dbg_t* win) {
+    memset(&win->history, 0, sizeof(win->history));
+}
+
+static void _ui_dbg_history_reboot(ui_dbg_t* win) {
+    _ui_dbg_history_reset(win);
+}
+
+static void _ui_dbg_history_push(ui_dbg_t* win, uint16_t pc) {
+    win->history.pc[win->history.pos] = pc;
+    win->history.pos = (win->history.pos + 1) & (UI_DBG_NUM_HISTORY_ITEMS-1);
+}
+
+static uint16_t _ui_dbg_history_get(ui_dbg_t* win, uint16_t rel_pos) {
+    uint16_t index = (win->history.pos - rel_pos - 1) & (UI_DBG_NUM_HISTORY_ITEMS-1);
+    return win->history.pc[index];
+}
+
+static void _ui_dbg_history_draw(ui_dbg_t* win) {
+    if (!win->ui.show_history) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 64), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, 376), ImGuiCond_Once);
+    if (ImGui::Begin("Execution History", &win->ui.show_history)) {
+        const float line_height = ImGui::GetTextLineHeight();
+        ImGui::SetNextWindowContentSize(ImVec2(0, UI_DBG_NUM_HISTORY_ITEMS * line_height));
+        ImGui::BeginChild("##main", ImGui::GetContentRegionAvail(), false);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0,0));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0,0));
+        const float glyph_width = ImGui::CalcTextSize("F").x;
+        const float cell_width = 3 * glyph_width;
+
+        ImGuiListClipper clipper(UI_DBG_NUM_LINES, line_height);
+        for (int line_i = 0; line_i < UI_DBG_NUM_LINES; line_i++) {
+
+            /* skip rendering if not in visible area */
+            bool visible_line = (line_i >= clipper.DisplayStart) && (line_i < clipper.DisplayEnd);
+            if (!visible_line) {
+                continue;
+            }
+
+            /* get history PC */
+            uint16_t pc = _ui_dbg_history_get(win, line_i);
+            uint16_t addr = _ui_dbg_disasm(win, pc);
+            const int num_bytes = addr - pc;
+
+            /* address */
+            if (0 == line_i) {
+                ImGui::Text("cur> %04X:   ", pc);
+            }
+            else {
+                ImGui::Text("%4d %04X:   ", -line_i, pc);
+            }
+            ImGui::SameLine();
+
+            /* instruction bytes (optional) */
+            float x = ImGui::GetCursorPosX();
+            if (win->ui.show_bytes) {
+                for (int n = 0; n < num_bytes; n++) {
+                    ImGui::SameLine(x + cell_width * n);
+                    uint8_t val = win->dasm.bin_buf[n];
+                    ImGui::Text("%02X ", val);
+                }
+                x += cell_width * 4;
+            }
+
+            /* disassembled instruction */
+            x += glyph_width * 4;
+            ImGui::SameLine(x);
+            ImGui::Text("%s", win->dasm.str_buf);
+
+            /* tick count */
+            x += glyph_width * 17;
+            if (win->ui.show_ticks) {
+                int ticks = win->heatmap.items[pc].ticks;
+                ImGui::SameLine(x);
+                ImGui::Text("%d", ticks);
+            }
+        }
+        clipper.End();
+        ImGui::PopStyleVar(2);
+        ImGui::EndChild();
+    }
+    ImGui::End();
+}
+
 
 /*== DEBUGGER STATE ==========================================================*/
 static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
@@ -1327,12 +1395,12 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
         }
         if (ImGui::BeginMenu("Show")) {
             ImGui::MenuItem("Memory Heatmap", 0, &win->ui.show_heatmap);
+            ImGui::MenuItem("Execution History", 0, &win->ui.show_history);
             ImGui::MenuItem("Registers", 0, &win->ui.show_regs);
             ImGui::MenuItem("Button Bar", 0, &win->ui.show_buttons);
             ImGui::MenuItem("Breakpoints", 0, &win->ui.show_breakpoints);
             ImGui::MenuItem("Opcode Bytes", 0, &win->ui.show_bytes);
             ImGui::MenuItem("Opcode Ticks", 0, &win->ui.show_ticks);
-            ImGui::MenuItem("Opcode History (TODO)", 0, &win->ui.show_history);
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
@@ -1832,11 +1900,12 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
 
 void ui_dbg_draw(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid && win->ui.title);
-    if (!(win->ui.open || win->ui.show_heatmap || win->ui.show_breakpoints)) {
+    if (!(win->ui.open || win->ui.show_heatmap || win->ui.show_breakpoints || win->ui.show_history)) {
         return;
     }
     _ui_dbg_dbgwin_draw(win);
     _ui_dbg_heatmap_draw(win);
+    _ui_dbg_history_draw(win);
     _ui_dbg_bp_draw(win);
 }
 #endif /* CHIPS_IMPL */
