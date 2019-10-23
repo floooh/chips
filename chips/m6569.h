@@ -1149,7 +1149,7 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
     dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
     uint32_t mask = 0x00000000;
     if (vic->rs.badline) {
-        mask = 0x0000007F;
+        mask = 0x00FF0000;
     }
     if (ba_pin) {
         mask = 0x000000FF;
@@ -1165,7 +1165,7 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
     }
     /* main interrupt bit */
     if (vic->reg.int_latch & (1<<7)) {
-        mask |= 0x00008800;
+        mask |= 0x0000FF00;
     }
     if (mask != 0) {
         for (int i = 0; i < 8; i++) {
