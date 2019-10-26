@@ -212,7 +212,7 @@ typedef struct {
 typedef struct {
     uint16_t IR;
     uint16_t PC;
-    uint16_t L;          /* FIXME: temp value for addressing modes */
+    uint16_t AD;        /* ADL/ADH internal register */
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
     uint8_t bcd_enabled;
@@ -421,8 +421,6 @@ void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
 #define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
 /* fetch next opcode byte */
 #define _FETCH() _SA(c->PC++);_ON(M6502X_SYNC);
-/* get 16-bit address in 64-bit pin mask */
-#define _GA() ((uint16_t)(pins&0xFFFF))
 /* set 8-bit data in 64-bit pin mask */
 #define _SD(data) pins=((pins&~0xFF0000ULL)|(((data&0xFF)<<16)&0xFF0000ULL))
 /* extract 8-bit data from 64-bit pin mask */
@@ -457,7 +455,6 @@ $decode_block
 #undef _SA
 #undef _SAD
 #undef _FETCH
-#undef _GA
 #undef _SD
 #undef _GD
 #undef _ON

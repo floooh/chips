@@ -183,58 +183,58 @@ def enc_addr(op, addr_mode, mem_access):
     elif addr_mode == A_ZPX:
         # zero page + X
         op.t('_SA(c->PC++);')
-        op.t('c->L=_GD();_SA(c->L);')
-        op.t('_SA((c->L+c->X)&0x00FF);')
+        op.t('c->AD=_GD();_SA(c->AD);')
+        op.t('_SA((c->AD+c->X)&0x00FF);')
     elif addr_mode == A_ZPY:
         # zero page + Y
         op.t('_SA(c->PC++);')
-        op.t('c->L=_GD();_SA(c->L);')
-        op.t('_SA((c->L+c->Y)&0x00FF);')
+        op.t('c->AD=_GD();_SA(c->AD);')
+        op.t('_SA((c->AD+c->Y)&0x00FF);')
     elif addr_mode == A_ABS:
         # absolute
         op.t('_SA(c->PC++);')
-        op.t('_SA(c->PC++);c->L=_GD();')
-        op.t('_SA((_GD()<<8)|c->L);')
+        op.t('_SA(c->PC++);c->AD=_GD();')
+        op.t('_SA((_GD()<<8)|c->AD);')
     elif addr_mode == A_ABX:
         # absolute + X
         # this needs to check if a page boundary is crossed, which costs
         # and additional cycle, but this early-out only happens when the
         # instruction doesn't need to write back to memory
         op.t('_SA(c->PC++);')
-        op.t('_SA(c->PC++);c->L=_GD()+c->X;')
-        op.t('_SA((_GD()<<8)|(c->L&0xFF));')
+        op.t('_SA(c->PC++);c->AD=_GD();')
+        op.t('c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));')
         if mem_access == M_R_:
             # skip next tick if read access and page not crossed
-            op.ta('if((c->L&0xFF00)==0){c->IR++;};')
-        op.t('_SA((_GA()&0xFF00)+c->L);')
+            op.ta('if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};')
+        op.t('_SA(c->AD+c->X);')
     elif addr_mode == A_ABY:
         # absolute + Y
         # same page-boundary-crossed special case as absolute+X
         op.t('_SA(c->PC++);')
-        op.t('_SA(c->PC++);c->L=_GD()+c->Y;')
-        op.t('_SA((_GD()<<8)|(c->L&0xFF));')
+        op.t('_SA(c->PC++);c->AD=_GD();')
+        op.t('c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));')
         if mem_access == M_R_:
             # skip next tick if read access and page not crossed
-            op.ta('if((c->L&0xFF00)==0){c->IR++;}')
-        op.t('_SA((_GA()&0xFF00)+c->L);')
+            op.ta('if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};')
+        op.t('_SA(c->AD+c->Y);')
     elif addr_mode == A_IDX:
         # (zp,X)
         op.t('_SA(c->PC++);')
-        op.t('_SA(_GD());')
-        op.t('_SA((_GA()+c->X)&0xFF);')
-        op.t('_SA((_GA()+1)&0xFF);c->L=_GD();')
-        op.t('_SA((_GD()<<8)|c->L);')
+        op.t('c->AD=_GD();_SA(c->AD);')
+        op.t('c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);')
+        op.t('_SA((c->AD+1)&0xFF);c->AD=_GD();')
+        op.t('_SA((_GD()<<8)|c->AD);')
     elif addr_mode == A_IDY:
         # (zp),Y
         # same page-boundary-crossed special case as absolute+X
         op.t('_SA(c->PC++);')
-        op.t('_SA(_GD());')
-        op.t('_SA((_GA()+1)&0xFF);c->L=_GD()+c->Y;')
-        op.t('_SA((_GD()<<8)|(c->L&0xFF));')
+        op.t('c->AD=_GD();_SA(c->AD);')
+        op.t('_SA((c->AD+1)&0xFF);c->AD=_GD();')
+        op.t('c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));')
         if mem_access == M_R_:
             # skip next tick if read access and page not crossed
-            op.ta('if((c->L&0xFF00)==0){c->IR++;}')
-        op.t('_SA((_GA()&0xFF00)+c->L);')
+            op.ta('if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}')
+        op.t('_SA(c->AD+c->Y);')
     elif addr_mode == A_JMP:
         # jmp is completely handled in instruction decoding
         pass
@@ -392,27 +392,27 @@ def i_cl(o, f):
 def i_br(o, m, v):
     cmt(o,branch_name(m,v))
     # if branch not taken?
-    o.t('c->L=c->PC+(int8_t)_GD();if((c->P&'+hex(m)+')!='+hex(v)+'){_FETCH();};')
+    o.t('c->AD=c->PC+(int8_t)_GD();if((c->P&'+hex(m)+')!='+hex(v)+'){_FETCH();};')
     # branch taken: shortcut if page not crossed:
-    o.t('_SA((c->PC&0xFF00)|(c->L&0x00FF));if((c->L&0xFF00)==(c->PC&0xFF00)){c->PC=c->L;_FETCH();};')
+    o.t('_SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;_FETCH();};')
     # page crossed extra cycle:
-    o.t('c->PC=c->L;')
+    o.t('c->PC=c->AD;')
 
 #-------------------------------------------------------------------------------
 def i_jmp(o):
     cmt(o,'JMP')
     o.t('_SA(c->PC++);')
-    o.t('_SA(c->PC++);c->L=_GD();')
-    o.t('c->PC=(_GD()<<8)|c->L;')
+    o.t('_SA(c->PC++);c->AD=_GD();')
+    o.t('c->PC=(_GD()<<8)|c->AD;')
 
 #-------------------------------------------------------------------------------
 def i_jmpi(o):
     cmt(o,'JMPI')
     o.t('_SA(c->PC++);')
-    o.t('_SA(c->PC++);c->L=_GD();')
-    o.t('c->L|=_GD()<<8;_SA(c->L);')
-    o.t('_SA((c->L&0xFF00)|((c->L+1)&0x00FF));c->L=_GD();')
-    o.t('c->PC=(_GD()<<8)|c->L;')
+    o.t('_SA(c->PC++);c->AD=_GD();')
+    o.t('c->AD|=_GD()<<8;_SA(c->AD);')
+    o.t('_SA((c->AD&0xFF00)|((c->AD+1)&0x00FF));c->AD=_GD();')
+    o.t('c->PC=(_GD()<<8)|c->AD;')
 
 #-------------------------------------------------------------------------------
 def i_jsr(o):
@@ -420,7 +420,7 @@ def i_jsr(o):
     # read low byte of target address
     o.t('_SA(c->PC++);')
     # put SP on addr bus, next cycle is a junk read
-    o.t('_SA(0x0100|c->S);c->L=_GD();')
+    o.t('_SA(0x0100|c->S);c->AD=_GD();')
     # write PC high byte to stack
     o.t('_SAD(0x0100|c->S--,c->PC>>8);_WR();')
     # write PC low byte to stack
@@ -428,7 +428,7 @@ def i_jsr(o):
     # load target address high byte
     o.t('_SA(c->PC);')
     # load PC and done
-    o.t('c->PC=(_GD()<<8)|c->L;')
+    o.t('c->PC=(_GD()<<8)|c->AD;')
 
 #-------------------------------------------------------------------------------
 def i_rts(o):
@@ -438,9 +438,9 @@ def i_rts(o):
     # load return address low byte from stack
     o.t('_SA(0x0100|c->S++);')
     # load return address high byte from stack
-    o.t('_SA(0x0100|c->S);c->L=_GD();')
+    o.t('_SA(0x0100|c->S);c->AD=_GD();')
     # put return address in PC, this is one byte before next op, do junk read from PC
-    o.t('c->PC=(_GD()<<8)|c->L;_SA(c->PC++);')
+    o.t('c->PC=(_GD()<<8)|c->AD;_SA(c->PC++);')
     # next tick is opcode fetch
     o.t('');
 
