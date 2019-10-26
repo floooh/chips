@@ -215,7 +215,7 @@ typedef struct {
     uint16_t L;          /* FIXME: temp value for addressing modes */
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
-    uint8_t bcd_disabled;
+    uint8_t bcd_enabled;
 } m6502x_t;
 
 /* initialize a new m6502 instance */
@@ -420,7 +420,7 @@ void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
 #define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
 /* fetch next opcode byte */
-#define _FETCH() _SA(c->PC++);_ON(M6502X_SYNC);'
+#define _FETCH() _SA(c->PC++);_ON(M6502X_SYNC);
 /* get 16-bit address in 64-bit pin mask */
 #define _GA() ((uint16_t)(pins&0xFFFF))
 /* set 8-bit data in 64-bit pin mask */
@@ -436,10 +436,10 @@ void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
 /* a memory write tick */
 #define _WR() _OFF(M6502X_RW);
 /* set N and Z flags depending on value */
-#define _NZ(v) c.P=((c.P&~(M6502X_NF|M6502X_ZF))|((v&0xFF)?(v&M6502X_NF):M6502X_ZF))
+#define _NZ(v) c->P=((c->P&~(M6502X_NF|M6502X_ZF))|((v&0xFF)?(v&M6502X_NF):M6502X_ZF))
 
 uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
-    if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES) {
+    if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES)) {
         if (pins & M6502X_SYNC) {
             // load new instruction into 'instruction register' and restart tick counter
             c->IR = _GD()<<3;
@@ -451,7 +451,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     switch (c->IR++) {
 $decode_block
     }
-    c.PINS = pins;
+    c->PINS = pins;
     return pins;
 }
 #undef _SA
