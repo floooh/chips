@@ -423,10 +423,12 @@ void m6502_init(m6502_t* c, const m6502_desc_t* desc) {
 
 /* check IRQ and NMI state and put into a bit-shift pipeline */
 #define _CHECK_INT() {c.irq_pip=(c.irq_pip<<1)|((pins>>26)&((~c.P)>>2)&1);c.nmi_pip=(c.nmi_pip<<1)|(((pins&(pre_pins^pins))>>27)&1);pre_pins=pins;}
-/* set 16-bit address in 64-bit pin mask*/
+/* set 16-bit address in 64-bit pin mask */
 #define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
 #define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
+/* get 16-bit address in 64-bit pin mask */
+#define _GA() ((uint16_t)(pins&0xFFFF))
 /* set 8-bit data in 64-bit pin mask */
 #define _SD(data) pins=((pins&~0xFF0000ULL)|(((data&0xFF)<<16)&0xFF0000ULL))
 /* extract 8-bit data from 64-bit pin mask */
@@ -435,41 +437,23 @@ void m6502_init(m6502_t* c, const m6502_desc_t* desc) {
 #define _ON(m) pins|=(m)
 /* disable control pins */
 #define _OFF(m) pins&=~(m)
-/* execute a tick */
 /* a memory read tick */
 #define _RD() _ON(M6502_RW);
 /* a memory write tick */
 #define _WR() _OFF(M6502_RW);
-/* implied addressing mode, this still puts the PC on the address bus */
-#define _A_IMP() _SA(c.PC)
-/* immediate addressing mode */
-#define _A_IMM() _SA(c.PC++)
-/* zero-page addressing mode */
-#define _A_ZER() _SA(c.PC++);_RD();a=_GD();_SA(a)
-/* zero page + X addressing mode */
-#define _A_ZPX() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.X)&0x00FF;_SA(a)
-/* zero page + Y addressing mode */
-#define _A_ZPY() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.Y)&0x00FF;_SA(a)
-/* absolute addressing mode */
-#define _A_ABS() _SA(c.PC++);_RD();l=_GD();_SA(c.PC++);_RD();h=_GD();a=(h<<8)|l;_SA(a)
-/* absolute+X addressing mode for read-only instructions, early out if no page boundary is crossed */
-#define _A_ABX_R() _SA(c.PC++);_RD();t=_GD()+c.X;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}
-/* absolute+X addressing mode for read/write instructions */
-#define _A_ABX_W() _SA(c.PC++);_RD();t=_GD()+c.X;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)
-/* absolute+Y addressing mode for read-only instructions, early out if no page boundary is crossed */
-#define _A_ABY_R() _SA(c.PC++);_RD();t=_GD()+c.Y;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}
-/* absolute+Y addressing mode for read/write instructions */
-#define _A_ABY_W() _SA(c.PC++);_RD();t=_GD()+c.Y;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)
-/* (zp,X) indexed indirect addressing mode */
-#define _A_IDX() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.X)&0xFF;_SA(a);_RD();t=_GD();a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|t;_SA(a);
-/* (zp),Y indirect indexed addressing mode for read-only instructions, early out if no page boundary crossed */
-#define _A_IDY_R() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();t=_GD()+c.Y;a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}
-/* (zp),Y indirect indexed addressing mode for read/write instructions */
-#define _A_IDY_W() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();t=_GD()+c.Y;a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)
 /* set N and Z flags depending on value */
 #define _NZ(v) c.P=((c.P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
 uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
+    if (pins & (M6502_SYNC|M6502_IRQ|M6502_NMI|M6502_RDY|M6502_RES) {
+        if (pins & M6502_SYNC) {
+            // load new instruction into 'instruction register' and restart tick counter
+            c->IR = _GD()<<3;
+            _OFF(M6502_SYNC);
+        }
+    }
+    // reads are default, writes a special
+    _RD();
     switch (c->IR++) {
 $decode_block
     }
@@ -478,24 +462,12 @@ $decode_block
 }
 #undef _SA
 #undef _SAD
+#undef _GA
+#undef _SD
 #undef _GD
 #undef _ON
 #undef _OFF
-#undef _T
 #undef _RD
 #undef _WR
-#undef _A_IMP
-#undef _A_IMM
-#undef _A_ZER
-#undef _A_ZPX
-#undef _A_ZPY
-#undef _A_ABS
-#undef _A_ABX_R
-#undef _A_ABX_W
-#undef _A_ABY_R
-#undef _A_ABY_W
-#undef _A_IDX
-#undef _A_IDY_R
-#undef _A_IDY_W
 #undef _NZ
 #endif /* CHIPS_IMPL */

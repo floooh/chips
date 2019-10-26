@@ -69,7 +69,7 @@ ops = [
         # ---         BIT          JMP          JMP()        STY          LDY          CPY          CPX
         [[A____,M___],[A_JSR,M_R_],[A____,M_R_],[A____,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_]],
         [[A_ZER,M_R_],[A_ZER,M_R_],[A_ZER,M_R_],[A_ZER,M_R_],[A_ZER,M__W],[A_ZER,M_R_],[A_ZER,M_R_],[A_ZER,M_R_]],
-        [[A____,M___],[A____,M___],[A____,M__W],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___]],
+        [[A____,M__W],[A____,M___],[A____,M__W],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___]],
         [[A_ABS,M_R_],[A_ABS,M_R_],[A_JMP,M_R_],[A_JMP,M_R_],[A_ABS,M__W],[A_ABS,M_R_],[A_ABS,M_R_],[A_ABS,M_R_]],
         [[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_]],  # relative branches
         [[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M__W],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_]],
@@ -122,6 +122,8 @@ class opcode:
     def t(self, src):
         self.src[self.i] = src
         self.i += 1
+    def ta(self, src):
+        self.src[self.i-1] += src
 
 #-------------------------------------------------------------------------------
 #   output a src line
@@ -137,9 +139,8 @@ def write_op(op):
         op.cmt = '???'
     l('    /* {} */'.format(op.cmt if op.cmt else '???'))
     for t in range(0, 8):
-        t_str = ['T0', 'T1', 'T1x', 'T2', 'T3', 'T4', 'T5', 'T6'][t]
         if t < op.i:
-            l('        case (0x{:02X}<<3)|{}: /*{:3}*/ {} break;'.format(op.code, t, t_str, op.src[t]))
+            l('        case (0x{:02X}<<3)|{}: {}break;'.format(op.code, t, op.src[t]))
         else:
             l('        case (0x{:02X}<<3)|{}: break;'.format(op.code, t))
 
@@ -167,69 +168,73 @@ def invalid_opcode(op):
     return addr_mode == A_INV
 
 #-------------------------------------------------------------------------------
-def enc_addr(op):
-    # encode address mode decoder steps
-    cc = op.code & 3
-    bbb = (op.code>>2) & 7
-    aaa = (op.code>>5) & 7
-    addr_mode = ops[cc][bbb][aaa][0]
-    mem_access = ops[cc][bbb][aaa][1]
+def enc_addr(op, addr_mode, mem_access):
     if addr_mode == A____:
         # no addressing, this still puts the PC on the address bus without 
         # incrementing the PC
-        op.t('_SA(c->PC);_RD();')
+        op.t('_SA(c->PC);')
     elif addr_mode == A_IMM:
         # immediate mode
-        op.t('_SA(c->PC++);_RD();')
+        op.t('_SA(c->PC++);')
     elif addr_mode == A_ZER:
         # zero page
-        op.t('_SA(c->PC++);_RD();')
-        op.t('_SA(_GD());_RD();')
+        op.t('_SA(c->PC++);')
+        op.t('_SA(_GD());')
     elif addr_mode == A_ZPX:
         # zero page + X
-        op.t('_SA(c->PC++);_RD();')
-        op.t('_SA(_GD());_RD();')
-        op.t('_SA((_GD()+c->X)&0x00FF);_RD();')
+        op.t('_SA(c->PC++);')
+        op.t('_SA(_GD());')
+        op.t('_SA((_GD()+c->X)&0x00FF);')
     elif addr_mode == A_ZPY:
         # zero page + Y
-        op.t('_SA(c->PC++);_RD();')
-        op.t('_SA(_GD());_RD();')
-        op.t('_SA((_GD()+c->Y)&0x00FF);_RD();')
+        op.t('_SA(c->PC++);')
+        op.t('_SA(_GD());')
+        op.t('_SA((_GD()+c->Y)&0x00FF);')
     elif addr_mode == A_ABS:
         # absolute
-        op.t('_SA(c->PC++);_RD();')
-        op.t('_SA(c->PC++);c->L=_GD();_RD();')
-        op.t('_SA((_GD()<<8)|c->L);_RD();')
+        op.t('_SA(c->PC++);')
+        op.t('_SA(c->PC++);c->L=_GD();')
+        op.t('_SA((_GD()<<8)|c->L);')
     elif addr_mode == A_ABX:
         # absolute + X
         # this needs to check if a page boundary is crossed, which costs
         # and additional cycle, but this early-out only happens when the
         # instruction doesn't need to write back to memory
-        op.t('FIXME')
-        #if mem_access == M_R_:
-        #    src = '_A_ABX_R();'
-        #else:
-        #    src = '_A_ABX_W();'
+        op.t('_SA(c->PC++);')
+        op.t('_SA(c->PC++);c->L=_GD()+c->X;')
+        op.t('_SA((_GD()<<8)|(c->L&0xFF));')
+        if mem_access == M_R_:
+            # skip next tick if read access and page not crossed
+            op.ta('if((c->L&0xFF00)==0){c->IR++};')
+        op.t('_SA((_GA()&0xFF00)+c->L);')
     elif addr_mode == A_ABY:
         # absolute + Y
         # same page-boundary-crossed special case as absolute+X
-        op.t('FIXME')
-        #if mem_access == M_R_:
-        #    src = '_A_ABY_R();'
-        #else:
-        #    src = '_A_ABY_W();'
+        op.t('_SA(c->PC++);')
+        op.t('_SA(c->PC++);c->L=_GD()+c->Y;')
+        op.t('_SA((_GD()<<8)|(c->L&0xFF));')
+        if mem_access == M_R_:
+            # skip next tick if read access and page not crossed
+            op.ta('if((c->L&0xFF00)==0){c->IR++;}')
+        op.t('_SA((_GA()&0xFF00)+c->L);')
     elif addr_mode == A_IDX:
         # (zp,X)
-        op.t('FIXME')
-        # src = '_A_IDX();'
+        op.t('_SA(c->PC++);')
+        op.t('_SA(_GD());')
+        op.t('_SA((_GA()+c->X)&0xFF);')
+        op.t('_SA((_GA()+1)&0xFF);c->L=_GD();')
+        op.t('_SA((_GD()<<8)|c->L);')
     elif addr_mode == A_IDY:
         # (zp),Y
         # same page-boundary-crossed special case as absolute+X
-        op.t('FIXME')
-        #if mem_access == M_R_:
-        #    src = '_A_IDY_R();'
-        #else:
-        #    src = '_A_IDY_W();'
+        op.t('_SA(c->PC++);')
+        op.t('_SA(_GD());')
+        op.t('_SA((_GA()+1)&0xFF);c->L=_GD()+c.Y;')
+        op.t('_SA((_GD()<<8)|(c->L&0xFF));')
+        if mem_access == M_R_:
+            # skip next tick if read access and page not crossed
+            op.ta('if((c->L&0xFF00)==0){c->IR++;}')
+        op.t('_SA((_GA()&0xFF00)+c->L);')
     elif addr_mode == A_JMP:
         # jmp is completely handled in instruction decoding
         op.t('FIXME')
@@ -276,115 +281,113 @@ def u_nop(o):
 #-------------------------------------------------------------------------------
 def i_lda(o):
     cmt(o,'LDA')
-    # o.src += '_RD();c.A=_GD();_NZ(c.A);'
+    o.t('c.A=_GD();_NZ(c.A);')
 
 #-------------------------------------------------------------------------------
 def i_ldx(o):
     cmt(o,'LDX')
-    # o.src += '_RD();c.X=_GD();_NZ(c.X);'
+    o.t('c.X=_GD();_NZ(c.X);')
 
 #-------------------------------------------------------------------------------
 def i_ldy(o):
     cmt(o,'LDY')
-    #o.src += '_RD();c.Y=_GD();_NZ(c.Y);'
+    o.t('c.Y=_GD();_NZ(c.Y);')
 
 #-------------------------------------------------------------------------------
 def u_lax(o):
     u_cmt(o,'LAX')
-    #o.src += '_RD();c.A=c.X=_GD();_NZ(c.A);'
+    o.t('c.A=c.X=_GD();_NZ(c.A);')
 
 #-------------------------------------------------------------------------------
 def x_lxa(o):
     # undocumented LXA
     # and immediate byte with A, then load X with A
     u_cmt(o,'LXA')
-    #o.src += '_RD();c.A=c.X=(c.A|0xEE)&_GD();_NZ(c.A);'
+    o.t('c.A=c.X=(c.A|0xEE)&_GD();_NZ(c.A);')
 
 #-------------------------------------------------------------------------------
 def i_sta(o):
     cmt(o,'STA')
-    #o.src += '_SD(c.A);_WR();'
+    o.ta('_SD(c.A);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_stx(o):
     cmt(o,'STX')
-    #o.src += '_SD(c.X);_WR();'
+    o.ta('_SD(c.X);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_sty(o):
     cmt(o,'STY')
-    #o.src += '_SD(c.Y);_WR();'
+    o.ta('_SD(c.Y);_WR();')
 
 #-------------------------------------------------------------------------------
 def u_sax(o):
     u_cmt(o,'SAX')
-    #o.src += '_SD(c.A&c.X);_WR();'
+    o.ta('_SD(c.A&c.X);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_tax(o):
     cmt(o,'TAX')
-    #o.src += '_RD();c.X=c.A;_NZ(c.X);'
+    o.t('c.X=c.A;_NZ(c.X);')
 
 #-------------------------------------------------------------------------------
 def i_tay(o):
     cmt(o,'TAY')
-    #o.src += '_RD();c.Y=c.A;_NZ(c.Y);'
+    o.t('c.Y=c.A;_NZ(c.Y);')
 
 #-------------------------------------------------------------------------------
 def i_txa(o):
     cmt(o,'TXA')
-    #o.src += '_RD();c.A=c.X;_NZ(c.A);'
+    o.t('c.A=c.X;_NZ(c.A);')
 
 #-------------------------------------------------------------------------------
 def i_tya(o):
     cmt(o,'TYA')
-    #o.src += '_RD();c.A=c.Y;_NZ(c.A);'
+    o.t('c.A=c.Y;_NZ(c.A);')
 
 #-------------------------------------------------------------------------------
 def i_txs(o):
     cmt(o,'TXS')
-    #o.src += '_RD();c.S=c.X;'
+    o.t('c.S=c.X;')
 
 #-------------------------------------------------------------------------------
 def i_tsx(o):
     cmt(o,'TSX')
-    #o.src += '_RD();c.X=c.S;_NZ(c.X);'
+    o.t('c.X=c.S;_NZ(c.X);')
 
 #-------------------------------------------------------------------------------
 def i_php(o):
     cmt(o,'PHP')
-    #o.src += '_RD();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();'
+    o.t('_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_plp(o):
     cmt(o,'PLP')
-    #o.src += '_RD();'
-    #o.src += '_SA(0x0100|c.S++);_RD();' # read junk byte from current SP
-    #o.src += '_SA(0x0100|c.S);_RD();'   # read actual byte
-    #o.src += 'c.P=(_GD()&~M6502_BF)|M6502_XF;'
+    o.t('_SA(0x0100|c->S++);')   # read junk byte from current SP
+    o.t('_SA(0x0100|c->S);')     # read actual byte  
+    o.t('c->P=(_GD()&~M6502_BF)|M6502_XF;');
 
 #-------------------------------------------------------------------------------
 def i_pha(o):
     cmt(o,'PHA')
-    #o.src += '_RD();_SAD(0x0100|c.S--,c.A);_WR();'
+    o.t('_SAD(0x0100|c->S--,c->A);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_pla(o):
     cmt(o,'PLA')
-    #o.src += '_RD();'
-    #o.src += '_SA(0x0100|c.S++);_RD();' # read junk byte from current SP
-    #o.src += '_SA(0x0100|c.S);_RD();'   # read actual byte
-    #o.src += 'c.A=_GD();_NZ(c.A);'
+    o.t('_SA(0x0100|c->S++);') # read junk byte from current SP
+    o.t('_SA(0x0100|c->S);')   # read actual byte
+    o.t('c->A=_GD();_NZ(c->A);')
 
 #-------------------------------------------------------------------------------
 def i_se(o, f):
     cmt(o,'SE'+flag_name(f))
-    #o.src += '_RD();c.P|='+hex(f)+';'
+    o.t('c.P|='+hex(f)+';')
 
 #-------------------------------------------------------------------------------
 def i_cl(o, f):
     cmt(o,'CL'+flag_name(f))
-    #o.src += '_RD();c.P&=~'+hex(f)+';'
+    o.t('c.P&=~'+hex(f)+';')
 
 #-------------------------------------------------------------------------------
 def i_br(o, m, v):
@@ -476,17 +479,17 @@ def i_rti(o):
 #-------------------------------------------------------------------------------
 def i_ora(o):
     cmt(o,'ORA')
-    #o.src += '_RD();c.A|=_GD();_NZ(c.A);'
+    o.t('c.A|=_GD();_NZ(c.A);')
 
 #-------------------------------------------------------------------------------
 def i_and(o):
     cmt(o,'AND')
-    #o.src += '_RD();c.A&=_GD();_NZ(c.A);'
+    o.t('c.A&=_GD();_NZ(c.A);')
 
 #-------------------------------------------------------------------------------
 def i_eor(o):
     cmt(o,'EOR')
-    #o.src += '_RD();c.A^=_GD();_NZ(c.A);'
+    o.t('c.A^=_GD();_NZ(c.A);')
 
 #-------------------------------------------------------------------------------
 def i_adc(o):
@@ -844,12 +847,16 @@ def enc_op(op):
         o.cmt = 'INVALID'
         o.t('FIXME')
         return o
-    # addressing mode decoder
-    enc_addr(o)
-    # instruction decoding
+
+    # decode the opcode byte
     cc = op & 3
     bbb = (op>>2) & 7
     aaa = (op>>5) & 7
+    addr_mode = ops[cc][bbb][aaa][0]
+    mem_access = ops[cc][bbb][aaa][1]
+    # addressing mode
+    enc_addr(o, addr_mode, mem_access);
+    # actual instruction
     if cc == 0:
         if aaa == 0:
             if bbb == 0:        i_brk(o)
@@ -977,6 +984,12 @@ def enc_op(op):
         elif aaa == 7:
             if bbb == 2:    u_sbc(o)
             else:           u_isb(o)
+    # fetch next opcode byte
+    fetch_str = '_SA(c->PC++);_ON(M6502_SYNC);'
+    if mem_access in [M_R_,M___]:
+        o.ta(fetch_str);
+    else:
+        o.t(fetch_str)
     return o
 
 #-------------------------------------------------------------------------------
