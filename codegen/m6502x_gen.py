@@ -142,7 +142,7 @@ def write_op(op):
         if t < op.i:
             l('        case (0x{:02X}<<3)|{}: {}break;'.format(op.code, t, op.src[t]))
         else:
-            l('        case (0x{:02X}<<3)|{}: break;'.format(op.code, t))
+            l('        case (0x{:02X}<<3)|{}: assert(false);break;'.format(op.code, t))
 
 #-------------------------------------------------------------------------------
 def cmt(o,cmd):
@@ -237,12 +237,10 @@ def enc_addr(op, addr_mode, mem_access):
         op.t('_SA((_GA()&0xFF00)+c->L);')
     elif addr_mode == A_JMP:
         # jmp is completely handled in instruction decoding
-        op.t('FIXME')
-        # src = ''
+        pass
     elif addr_mode == A_JSR:
         # jsr is completely handled in instruction decoding 
-        op.t('FIXME')
-        # src = ''
+        pass
     else:
         # invalid instruction
         op.t('FIXME')
@@ -391,75 +389,59 @@ def i_cl(o, f):
 
 #-------------------------------------------------------------------------------
 def i_br(o, m, v):
-    # 'branchquirk' NOTE: When an interrupt occurs 2 or more cycles before the current command
-    # ends, it is executed immediately after the command.
-    # Otherwise, the CPU executes the next command first before it calls the
-    # interrupt handler.
-    # The only exception to this rule are taken branches to the same page
-    # which last 3 cycles. Here, the interrupt must have occurred before clock
-    # 1 of the branch command; the normal rule says before clock 2. Branches
-    # to a different page or branches not taken are behaving normal.
     cmt(o,branch_name(m,v))
-    # o.src += '_RD();'
-    # o.src += 'if((c.P&'+hex(m)+')=='+hex(v)+'){'
-    # o.src +=   '_RD();'   # branch taken, at least 3 cycles
-    # o.src +=   't=c.PC+(int8_t)_GD();'
-    # o.src +=   'if((t&0xFF00)!=(c.PC&0xFF00)){' 
-    # o.src +=     '_RD();' # target address not in same memory page, 4 cycles
-    # o.src +=   '}else{'
-    # o.src +=     'c.irq_pip>>=1;c.nmi_pip>>=1;' # 'branchquirk' interrupt fix
-    # o.src +=   '}'
-    # o.src +=   'c.PC=t;'
-    # o.src += '}'
+    # if branch not taken?
+    o.t('c->L=c->PC+(int8_t)_GD();if((c->P&'+hex(m)+')!='+hex(v)+'){_FETCH();};')
+    # branch taken: shortcut if page not crossed:
+    o.t('_SA((c->PC&0xFF00)|(c->L&0x00FF));if((c->L&0xFF00)==(c->PC&0xFF00)){c->PC=c->L;_FETCH();};')
+    # page crossed extra cycle:
+    o.t('c->PC=c->L;')
 
 #-------------------------------------------------------------------------------
 def i_jmp(o):
     cmt(o,'JMP')
-    # o.src += '_SA(c.PC++);_RD();l=_GD();'
-    # o.src += '_SA(c.PC++);_RD();h=_GD();'
-    # o.src += 'c.PC=(h<<8)|l;'
+    o.t('_SA(c->PC++);')
+    o.t('_SA(c->PC++);c->L=_GD();')
+    o.t('c->PC=(_GD()<<8)|c->L;')
 
 #-------------------------------------------------------------------------------
 def i_jmpi(o):
     cmt(o,'JMPI')
-    # o.src += '_SA(c.PC++);_RD();l=_GD();'
-    # o.src += '_SA(c.PC++);_RD();h=_GD();'
-    # o.src += 'a=(h<<8)|l;'
-    # o.src += '_SA(a);_RD();l=_GD();'    # load first byte of target address
-    # o.src += 'a=(a&0xFF00)|((a+1)&0x00FF);'
-    # o.src += '_SA(a);_RD();h=_GD();'    # load second byte of target address
-    # o.src += 'c.PC=(h<<8)|l;'
+    o.t('_SA(c->PC++);')
+    o.t('_SA(c->PC++);c->L=_GD();')
+    o.t('c->L|=_GD()<<8;_SA(c->L);')
+    o.t('_SA((c->L&0xFF00)|((c->L+1)&0x00FF));c->L=_GD();')
+    o.t('c->PC=(_GD()<<8)|c->L;')
 
 #-------------------------------------------------------------------------------
 def i_jsr(o):
     cmt(o,'JSR')
     # read low byte of target address
-    #o.src += '_SA(c.PC++);_RD();l=_GD();'
+    o.t('_SA(c->PC++);')
     # put SP on addr bus, next cycle is a junk read
-    #o.src += '_SA(0x0100|c.S);_RD();'
+    o.t('_SA(0x0100|c->S);c->L=_GD();')
     # write PC high byte to stack
-    #o.src += '_SAD(0x0100|c.S--,c.PC>>8);_WR();'
+    o.t('_SAD(0x0100|c->S--,c->PC>>8);_WR();')
     # write PC low byte to stack
-    #o.src += '_SAD(0x0100|c.S--,c.PC);_WR();'
+    o.t('_SAD(0x0100|c->S--,c->PC);_WR();')
     # load target address high byte
-    #o.src += '_SA(c.PC);_RD();h=_GD();'
-    # build new PC
-    #o.src += 'c.PC=(h<<8)|l;'
+    o.t('_SA(c->PC);')
+    # load PC and done
+    o.t('c->PC=(_GD()<<8)|c->L;')
 
 #-------------------------------------------------------------------------------
 def i_rts(o):
     cmt(o,'RTS')
-    #o.src += '_RD();'
     # put SP on stack and do a junk read
-    #o.src += '_SA(0x0100|c.S++);_RD();'
+    o.t('_SA(0x0100|c->S++);')
     # load return address low byte from stack
-    #o.src += '_SA(0x0100|c.S++);_RD();l=_GD();'
+    o.t('_SA(0x0100|c->S++);')
     # load return address high byte from stack
-    #o.src += '_SA(0x0100|c.S);_RD();h=_GD();'
-    # put return address in PC, this is one byte before next op
-    #o.src += 'c.PC=(h<<8)|l;'
-    # do a junk read from PC, increment PC to actual return-to instruction
-    #o.src += '_SA(c.PC++);_RD();'
+    o.t('_SA(0x0100|c->S);c->L=_GD();')
+    # put return address in PC, this is one byte before next op, do junk read from PC
+    o.t('c->PC=(_GD()<<8)|c->L;_SA(c->PC++);')
+    # next tick is opcode fetch
+    o.t('');
 
 #-------------------------------------------------------------------------------
 def i_rti(o):
@@ -985,11 +967,10 @@ def enc_op(op):
             if bbb == 2:    u_sbc(o)
             else:           u_isb(o)
     # fetch next opcode byte
-    fetch_str = '_SA(c->PC++);_ON(M6502_SYNC);'
     if mem_access in [M_R_,M___]:
-        o.ta(fetch_str);
+        o.ta('_FETCH();')
     else:
-        o.t(fetch_str)
+        o.t('_FETCH();')
     return o
 
 #-------------------------------------------------------------------------------

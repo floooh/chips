@@ -1,6 +1,6 @@
 #pragma once
 /*#
-    # m6502.h
+    # m6502x.h
 
     MOS Technology 6502 / 6510 CPU emulator.
 
@@ -145,74 +145,68 @@ extern "C" {
 #endif
 
 /* address lines */
-#define M6502_A0  (1ULL<<0)
-#define M6502_A1  (1ULL<<1)
-#define M6502_A2  (1ULL<<2)
-#define M6502_A3  (1ULL<<3)
-#define M6502_A4  (1ULL<<4)
-#define M6502_A5  (1ULL<<5)
-#define M6502_A6  (1ULL<<6)
-#define M6502_A7  (1ULL<<7)
-#define M6502_A8  (1ULL<<8)
-#define M6502_A9  (1ULL<<9)
-#define M6502_A10 (1ULL<<10)
-#define M6502_A11 (1ULL<<11)
-#define M6502_A12 (1ULL<<12)
-#define M6502_A13 (1ULL<<13)
-#define M6502_A14 (1ULL<<14)
-#define M6502_A15 (1ULL<<15)
+#define M6502X_A0  (1ULL<<0)
+#define M6502X_A1  (1ULL<<1)
+#define M6502X_A2  (1ULL<<2)
+#define M6502X_A3  (1ULL<<3)
+#define M6502X_A4  (1ULL<<4)
+#define M6502X_A5  (1ULL<<5)
+#define M6502X_A6  (1ULL<<6)
+#define M6502X_A7  (1ULL<<7)
+#define M6502X_A8  (1ULL<<8)
+#define M6502X_A9  (1ULL<<9)
+#define M6502X_A10 (1ULL<<10)
+#define M6502X_A11 (1ULL<<11)
+#define M6502X_A12 (1ULL<<12)
+#define M6502X_A13 (1ULL<<13)
+#define M6502X_A14 (1ULL<<14)
+#define M6502X_A15 (1ULL<<15)
 
 /*--- data lines ------*/
-#define M6502_D0  (1ULL<<16)
-#define M6502_D1  (1ULL<<17)
-#define M6502_D2  (1ULL<<18)
-#define M6502_D3  (1ULL<<19)
-#define M6502_D4  (1ULL<<20)
-#define M6502_D5  (1ULL<<21)
-#define M6502_D6  (1ULL<<22)
-#define M6502_D7  (1ULL<<23)
+#define M6502X_D0  (1ULL<<16)
+#define M6502X_D1  (1ULL<<17)
+#define M6502X_D2  (1ULL<<18)
+#define M6502X_D3  (1ULL<<19)
+#define M6502X_D4  (1ULL<<20)
+#define M6502X_D5  (1ULL<<21)
+#define M6502X_D6  (1ULL<<22)
+#define M6502X_D7  (1ULL<<23)
 
 /*--- control pins ---*/
-#define M6502_RW    (1ULL<<24)
-#define M6502_SYNC  (1ULL<<25)
-#define M6502_IRQ   (1ULL<<26)
-#define M6502_NMI   (1ULL<<27)
-#define M6502_RDY   (1ULL<<28)
-#define M6502_RES   (1ULL<<29)
-#define M6510_AEC   (1ULL<<30)
+#define M6502X_RW    (1ULL<<24)
+#define M6502X_SYNC  (1ULL<<25)
+#define M6502X_IRQ   (1ULL<<26)
+#define M6502X_NMI   (1ULL<<27)
+#define M6502X_RDY   (1ULL<<28)
+#define M6502X_RES   (1ULL<<29)
+#define M6510X_AEC   (1ULL<<30)
 
 /*--- m6510 specific port pins ---*/
-#define M6510_P0    (1ULL<<32)
-#define M6510_P1    (1ULL<<33)
-#define M6510_P2    (1ULL<<34)
-#define M6510_P3    (1ULL<<35)
-#define M6510_P4    (1ULL<<36)
-#define M6510_P5    (1ULL<<37)
-#define M6510_PORT_BITS (M6510_P0|M6510_P1|M6510_P2|M6510_P3|M6510_P4|M6510_P5)
+#define M6510X_P0    (1ULL<<32)
+#define M6510X_P1    (1ULL<<33)
+#define M6510X_P2    (1ULL<<34)
+#define M6510X_P3    (1ULL<<35)
+#define M6510X_P4    (1ULL<<36)
+#define M6510X_P5    (1ULL<<37)
+#define M6510X_PORT_BITS (M6510X_P0|M6510X_P1|M6510X_P2|M6510X_P3|M6510X_P4|M6510X_P5)
 
 /* bit mask for all CPU pins (up to bit pos 40) */
-#define M6502_PIN_MASK ((1ULL<<40)-1)
+#define M6502X_PIN_MASK ((1ULL<<40)-1)
 
 /*--- status indicator flags ---*/
-#define M6502_CF (1<<0)   /* carry */
-#define M6502_ZF (1<<1)   /* zero */
-#define M6502_IF (1<<2)   /* IRQ disable */
-#define M6502_DF (1<<3)   /* decimal mode */
-#define M6502_BF (1<<4)   /* BRK command */
-#define M6502_XF (1<<5)   /* unused */
-#define M6502_VF (1<<6)   /* overflow */
-#define M6502_NF (1<<7)   /* negative */
-
-/* callback function typedefs */
-typedef uint64_t (*m6502_tick_t)(uint64_t pins, void* user_data);
-typedef int (*m6502_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* user_data);
-typedef void (*m6510_out_t)(uint8_t data, void* user_data);
-typedef uint8_t (*m6510_in_t)(void* user_data);
+#define M6502X_CF (1<<0)   /* carry */
+#define M6502X_ZF (1<<1)   /* zero */
+#define M6502X_IF (1<<2)   /* IRQ disable */
+#define M6502X_DF (1<<3)   /* decimal mode */
+#define M6502X_BF (1<<4)   /* BRK command */
+#define M6502X_XF (1<<5)   /* unused */
+#define M6502X_VF (1<<6)   /* overflow */
+#define M6502X_NF (1<<7)   /* negative */
 
 /* the desc structure provided to m6502_init() */
 typedef struct {
     bool bcd_disabled;      /* set to true if BCD mode is disabled */
-} m6502_desc_t;
+} m6502x_desc_t;
 
 /* M6502 CPU state */
 typedef struct {
@@ -222,38 +216,38 @@ typedef struct {
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
     uint8_t bcd_disabled;
-} m6502_t;
+} m6502x_t;
 
 /* initialize a new m6502 instance */
-void m6502_init(m6502_t* cpu, const m6502_desc_t* desc);
+void m6502x_init(m6502x_t* cpu, const m6502x_desc_t* desc);
 /* execute one tick */
-uint64_t m6502_tick(m6502_t* cpu, uint64_t pins);
+uint64_t m6502x_tick(m6502x_t* cpu, uint64_t pins);
 
 /* register access functions */
-void m6502_set_a(m6502_t* cpu, uint8_t v);
-void m6502_set_x(m6502_t* cpu, uint8_t v);
-void m6502_set_y(m6502_t* cpu, uint8_t v);
-void m6502_set_s(m6502_t* cpu, uint8_t v);
-void m6502_set_p(m6502_t* cpu, uint8_t v);
-void m6502_set_pc(m6502_t* cpu, uint16_t v);
+void m6502x_set_a(m6502x_t* cpu, uint8_t v);
+void m6502x_set_x(m6502x_t* cpu, uint8_t v);
+void m6502x_set_y(m6502x_t* cpu, uint8_t v);
+void m6502x_set_s(m6502x_t* cpu, uint8_t v);
+void m6502x_set_p(m6502x_t* cpu, uint8_t v);
+void m6502x_set_pc(m6502x_t* cpu, uint16_t v);
 
-uint8_t m6502_a(m6502_t* cpu);
-uint8_t m6502_x(m6502_t* cpu);
-uint8_t m6502_y(m6502_t* cpu);
-uint8_t m6502_s(m6502_t* cpu);
-uint8_t m6502_p(m6502_t* cpu);
-uint16_t m6502_pc(m6502_t* cpu);
+uint8_t m6502x_a(m6502x_t* cpu);
+uint8_t m6502x_x(m6502x_t* cpu);
+uint8_t m6502x_y(m6502x_t* cpu);
+uint8_t m6502x_s(m6502x_t* cpu);
+uint8_t m6502x_p(m6502x_t* cpu);
+uint16_t m6502x_pc(m6502x_t* cpu);
 
 /* extract 16-bit address bus from 64-bit pins */
-#define M6502_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
+#define M6502X_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
 /* merge 16-bit address bus value into 64-bit pins */
-#define M6502_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|((a)&0xFFFFULL));}
+#define M6502X_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|((a)&0xFFFFULL));}
 /* extract 8-bit data bus from 64-bit pins */
-#define M6502_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define M6502X_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define M6502_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+#define M6502X_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 /* return a pin mask with control-pins, address and data bus */
-#define M6502_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
+#define M6502X_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -268,69 +262,69 @@ uint16_t m6502_pc(m6502_t* cpu);
 #endif
 
 /* register access functions */
-void m6502_set_a(m6502_t* cpu, uint8_t v) { cpu->state.A = v; }
-void m6502_set_x(m6502_t* cpu, uint8_t v) { cpu->state.X = v; }
-void m6502_set_y(m6502_t* cpu, uint8_t v) { cpu->state.Y = v; }
-void m6502_set_s(m6502_t* cpu, uint8_t v) { cpu->state.S = v; }
-void m6502_set_p(m6502_t* cpu, uint8_t v) { cpu->state.P = v; }
-void m6502_set_pc(m6502_t* cpu, uint16_t v) { cpu->state.PC = v; }
-uint8_t m6502_a(m6502_t* cpu) { return cpu->state.A; }
-uint8_t m6502_x(m6502_t* cpu) { return cpu->state.X; }
-uint8_t m6502_y(m6502_t* cpu) { return cpu->state.Y; }
-uint8_t m6502_s(m6502_t* cpu) { return cpu->state.S; }
-uint8_t m6502_p(m6502_t* cpu) { return cpu->state.P; }
-uint16_t m6502_pc(m6502_t* cpu) { return cpu->state.PC; }
+void m6502x_set_a(m6502x_t* cpu, uint8_t v) { cpu->A = v; }
+void m6502x_set_x(m6502x_t* cpu, uint8_t v) { cpu->X = v; }
+void m6502x_set_y(m6502x_t* cpu, uint8_t v) { cpu->Y = v; }
+void m6502x_set_s(m6502x_t* cpu, uint8_t v) { cpu->S = v; }
+void m6502x_set_p(m6502x_t* cpu, uint8_t v) { cpu->P = v; }
+void m6502x_set_pc(m6502x_t* cpu, uint16_t v) { cpu->PC = v; }
+uint8_t m6502x_a(m6502x_t* cpu) { return cpu->A; }
+uint8_t m6502x_x(m6502x_t* cpu) { return cpu->X; }
+uint8_t m6502x_y(m6502x_t* cpu) { return cpu->Y; }
+uint8_t m6502x_s(m6502x_t* cpu) { return cpu->S; }
+uint8_t m6502x_p(m6502x_t* cpu) { return cpu->P; }
+uint16_t m6502x_pc(m6502x_t* cpu) { return cpu->PC; }
 
 /* helper macros and functions for code-generated instruction decoder */
-#define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
+#define _M6502X_NZ(p,v) ((p&~(M6502X_NF|M6502X_ZF))|((v&0xFF)?(v&M6502X_NF):M6502X_ZF))
 
-static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
-    if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
+static inline void _m6502x_adc(m6502x_t* cpu, uint8_t val) {
+    if (cpu->bcd_enabled && (cpu->P & M6502X_DF)) {
         /* decimal mode (credit goes to MAME) */
-        uint8_t c = cpu->P & M6502_CF ? 1 : 0;
-        cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
+        uint8_t c = cpu->P & M6502X_CF ? 1 : 0;
+        cpu->P &= ~(M6502X_NF|M6502X_VF|M6502X_ZF|M6502X_CF);
         uint8_t al = (cpu->A & 0x0F) + (val & 0x0F) + c;
         if (al > 9) {
             al += 6;
         }
         uint8_t ah = (cpu->A >> 4) + (val >> 4) + (al > 0x0F);
         if (0 == (uint8_t)(cpu->A + val + c)) {
-            cpu->P |= M6502_ZF;
+            cpu->P |= M6502X_ZF;
         }
         else if (ah & 0x08) {
-            cpu->P |= M6502_NF;
+            cpu->P |= M6502X_NF;
         }
         if (~(cpu->A^val) & (cpu->A^(ah<<4)) & 0x80) {
-            cpu->P |= M6502_VF;
+            cpu->P |= M6502X_VF;
         }
         if (ah > 9) {
             ah += 6;
         }
         if (ah > 15) {
-            cpu->P |= M6502_CF;
+            cpu->P |= M6502X_CF;
         }
         cpu->A = (ah<<4) | (al & 0x0F);
     }
     else {
         /* default mode */
-        uint16_t sum = cpu->A + val + (cpu->P & M6502_CF ? 1:0);
-        cpu->P &= ~(M6502_VF|M6502_CF);
-        cpu->P = _M6502_NZ(cpu->P,sum);
+        uint16_t sum = cpu->A + val + (cpu->P & M6502X_CF ? 1:0);
+        cpu->P &= ~(M6502X_VF|M6502X_CF);
+        cpu->P = _M6502X_NZ(cpu->P,sum);
         if (~(cpu->A^val) & (cpu->A^sum) & 0x80) {
-            cpu->P |= M6502_VF;
+            cpu->P |= M6502X_VF;
         }
         if (sum & 0xFF00) {
-            cpu->P |= M6502_CF;
+            cpu->P |= M6502X_CF;
         }
         cpu->A = sum & 0xFF;
     }    
 }
 
-static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
-    if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
+static inline void _m6502x_sbc(m6502x_t* cpu, uint8_t val) {
+    if (cpu->bcd_enabled && (cpu->P & M6502X_DF)) {
         /* decimal mode (credit goes to MAME) */
-        uint8_t c = cpu->P & M6502_CF ? 0 : 1;
-        cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
+        uint8_t c = cpu->P & M6502X_CF ? 0 : 1;
+        cpu->P &= ~(M6502X_NF|M6502X_VF|M6502X_ZF|M6502X_CF);
         uint16_t diff = cpu->A - val - c;
         uint8_t al = (cpu->A & 0x0F) - (val & 0x0F) - c;
         if ((int8_t)al < 0) {
@@ -338,16 +332,16 @@ static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
         }
         uint8_t ah = (cpu->A>>4) - (val>>4) - ((int8_t)al < 0);
         if (0 == (uint8_t)diff) {
-            cpu->P |= M6502_ZF;
+            cpu->P |= M6502X_ZF;
         }
         else if (diff & 0x80) {
-            cpu->P |= M6502_NF;
+            cpu->P |= M6502X_NF;
         }
         if ((cpu->A^val) & (cpu->A^diff) & 0x80) {
-            cpu->P |= M6502_VF;
+            cpu->P |= M6502X_VF;
         }
         if (!(diff & 0xFF00)) {
-            cpu->P |= M6502_CF;
+            cpu->P |= M6502X_CF;
         }
         if (ah & 0x80) {
             ah -= 6;
@@ -356,77 +350,77 @@ static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
     }
     else {
         /* default mode */
-        uint16_t diff = cpu->A - val - (cpu->P & M6502_CF ? 0 : 1);
-        cpu->P &= ~(M6502_VF|M6502_CF);
-        cpu->P = _M6502_NZ(cpu->P, (uint8_t)diff);
+        uint16_t diff = cpu->A - val - (cpu->P & M6502X_CF ? 0 : 1);
+        cpu->P &= ~(M6502X_VF|M6502X_CF);
+        cpu->P = _M6502X_NZ(cpu->P, (uint8_t)diff);
         if ((cpu->A^val) & (cpu->A^diff) & 0x80) {
-            cpu->P |= M6502_VF;
+            cpu->P |= M6502X_VF;
         }
         if (!(diff & 0xFF00)) {
-            cpu->P |= M6502_CF;
+            cpu->P |= M6502X_CF;
         }
         cpu->A = diff & 0xFF;
     }
 }
 
-static inline void _m6502_arr(m6502_t* cpu) {
+static inline void _m6502x_arr(m6502x_t* cpu) {
     /* undocumented, unreliable ARR instruction, but this is tested
        by the Wolfgang Lorenz C64 test suite
        implementation taken from MAME
     */
-    if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
-        bool c = cpu->P & M6502_CF;
-        cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
+    if (cpu->bcd_enabled && (cpu->P & M6502X_DF)) {
+        bool c = cpu->P & M6502X_CF;
+        cpu->P &= ~(M6502X_NF|M6502X_VF|M6502X_ZF|M6502X_CF);
         uint8_t a = cpu->A>>1;
         if (c) {
             a |= 0x80;
         }
-        cpu->P = _M6502_NZ(cpu->P,a);
+        cpu->P = _M6502X_NZ(cpu->P,a);
         if ((a ^ cpu->A) & 0x40) {
-            cpu->P |= M6502_VF;
+            cpu->P |= M6502X_VF;
         }
         if ((cpu->A & 0xF) >= 5) {
             a = ((a + 6) & 0xF) | (a & 0xF0);
         }
         if ((cpu->A & 0xF0) >= 0x50) {
             a += 0x60;
-            cpu->P |= M6502_CF;
+            cpu->P |= M6502X_CF;
         }
         cpu->A = a;
     }
     else {
-        bool c = cpu->P & M6502_CF;
-        cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF|M6502_CF);
+        bool c = cpu->P & M6502X_CF;
+        cpu->P &= ~(M6502X_NF|M6502X_VF|M6502X_ZF|M6502X_CF);
         cpu->A >>= 1;
         if (c) {
             cpu->A |= 0x80;
         }
-        cpu->P = _M6502_NZ(cpu->P,cpu->A);
+        cpu->P = _M6502X_NZ(cpu->P,cpu->A);
         if (cpu->A & 0x40) {
-            cpu->P |= M6502_VF|M6502_CF;
+            cpu->P |= M6502X_VF|M6502X_CF;
         }
         if (cpu->A & 0x20) {
-            cpu->P ^= M6502_VF;
+            cpu->P ^= M6502X_VF;
         }
     }
 }
-#undef _M6502_NZ
+#undef _M6502X_NZ
 
-void m6502_init(m6502_t* c, const m6502_desc_t* desc) {
+void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
     CHIPS_ASSERT(c && desc);
     memset(c, 0, sizeof(*c));
-    c->PINS = M6502_RW;
-    c->P = M6502_IF|M6502_XF;
+    c->PINS = M6502X_RW;
+    c->P = M6502X_IF|M6502X_XF;
     c->S = 0xFD;
     c->bcd_enabled = !desc->bcd_disabled;
 }
 
-/* check IRQ and NMI state and put into a bit-shift pipeline */
-#define _CHECK_INT() {c.irq_pip=(c.irq_pip<<1)|((pins>>26)&((~c.P)>>2)&1);c.nmi_pip=(c.nmi_pip<<1)|(((pins&(pre_pins^pins))>>27)&1);pre_pins=pins;}
 /* set 16-bit address in 64-bit pin mask */
 #define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
 #define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
+/* fetch next opcode byte */
+#define _FETCH() _SA(c->PC++);_ON(M6502X_SYNC);'
 /* get 16-bit address in 64-bit pin mask */
 #define _GA() ((uint16_t)(pins&0xFFFF))
 /* set 8-bit data in 64-bit pin mask */
@@ -438,18 +432,18 @@ void m6502_init(m6502_t* c, const m6502_desc_t* desc) {
 /* disable control pins */
 #define _OFF(m) pins&=~(m)
 /* a memory read tick */
-#define _RD() _ON(M6502_RW);
+#define _RD() _ON(M6502X_RW);
 /* a memory write tick */
-#define _WR() _OFF(M6502_RW);
+#define _WR() _OFF(M6502X_RW);
 /* set N and Z flags depending on value */
-#define _NZ(v) c.P=((c.P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
+#define _NZ(v) c.P=((c.P&~(M6502X_NF|M6502X_ZF))|((v&0xFF)?(v&M6502X_NF):M6502X_ZF))
 
-uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
-    if (pins & (M6502_SYNC|M6502_IRQ|M6502_NMI|M6502_RDY|M6502_RES) {
-        if (pins & M6502_SYNC) {
+uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
+    if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES) {
+        if (pins & M6502X_SYNC) {
             // load new instruction into 'instruction register' and restart tick counter
             c->IR = _GD()<<3;
-            _OFF(M6502_SYNC);
+            _OFF(M6502X_SYNC);
         }
     }
     // reads are default, writes a special
@@ -462,6 +456,7 @@ $decode_block
 }
 #undef _SA
 #undef _SAD
+#undef _FETCH
 #undef _GA
 #undef _SD
 #undef _GD
