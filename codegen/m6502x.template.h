@@ -363,6 +363,58 @@ static inline void _m6502x_sbc(m6502x_t* cpu, uint8_t val) {
     }
 }
 
+static inline void _m6502x_cmp(m6502x_t* cpu, uint8_t r, uint8_t v) {
+    uint16_t t = r - v;
+    cpu->P = (_M6502X_NZ(cpu->P, (uint8_t)t) & ~M6502X_CF) | ((t & 0xFF00) ? 0:M6502X_CF);
+}
+
+static inline uint8_t _m6502x_asl(m6502x_t* cpu, uint8_t v) {
+    cpu->P = (_M6502X_NZ(cpu->P, v<<1) & ~M6502X_CF) | ((v & 0x80) ? M6502X_CF:0);
+    return v<<1;
+}
+
+static inline uint8_t _m6502x_lsr(m6502x_t* cpu, uint8_t v) {
+    cpu->P = (_M6502X_NZ(cpu->P, v>>1) & ~M6502X_CF) | ((v & 0x01) ? M6502X_CF:0);
+    return v>>1;
+}
+
+static inline uint8_t _m6502x_rol(m6502x_t* cpu, uint8_t v) {
+    bool carry = cpu->P & M6502X_CF;
+    cpu->P &= ~(M6502X_NF|M6502X_ZF|M6502X_CF);
+    if (v & 0x80) {
+        cpu->P |= M6502X_CF;
+    }
+    v <<= 1;
+    if (carry) {
+        v |= 1;
+    }
+    cpu->P = _M6502X_NZ(cpu->P, v);
+    return v;
+}
+
+static inline uint8_t _m6502x_ror(m6502x_t* cpu, uint8_t v) {
+    bool carry = cpu->P & M6502X_CF;
+    cpu->P &= ~(M6502X_NF|M6502X_ZF|M6502X_CF);
+    if (v & 1) {
+        cpu->P |= M6502X_CF;
+    }
+    v >>= 1;
+    if (carry) {
+        v |= 0x80;
+    }
+    cpu->P = _M6502X_NZ(cpu->P, v);
+    return v;
+}
+
+static inline void _m6502x_bit(m6502x_t* cpu, uint8_t v) {
+    uint8_t t = cpu->A & v;
+    cpu->P &= ~(M6502X_NF|M6502X_VF|M6502X_ZF);
+    if (!t) {
+        cpu->P |= M6502X_ZF;
+    }
+    cpu->P |= t & (M6502X_NF|M6502X_VF);
+}
+
 static inline void _m6502x_arr(m6502x_t* cpu) {
     /* undocumented, unreliable ARR instruction, but this is tested
        by the Wolfgang Lorenz C64 test suite
