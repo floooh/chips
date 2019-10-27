@@ -672,7 +672,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x11<<3)|0: _SA(c->PC++);break;
         case (0x11<<3)|1: c->AD=_GD();_SA(c->AD);break;
         case (0x11<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
-        case (0x11<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}break;
+        case (0x11<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0x11<<3)|4: _SA(c->AD+c->Y);break;
         case (0x11<<3)|5: c->A|=_GD();_NZ(c->A);_FETCH();break;
         case (0x11<<3)|6: assert(false);break;
@@ -743,7 +743,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* ORA abs,Y */
         case (0x19<<3)|0: _SA(c->PC++);break;
         case (0x19<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x19<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0x19<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0x19<<3)|3: _SA(c->AD+c->Y);break;
         case (0x19<<3)|4: c->A|=_GD();_NZ(c->A);_FETCH();break;
         case (0x19<<3)|5: assert(false);break;
@@ -770,7 +770,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* NOP abs,X (undoc) */
         case (0x1C<<3)|0: _SA(c->PC++);break;
         case (0x1C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x1C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0x1C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0x1C<<3)|3: _SA(c->AD+c->X);break;
         case (0x1C<<3)|4: _FETCH();break;
         case (0x1C<<3)|5: assert(false);break;
@@ -779,7 +779,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* ORA abs,X */
         case (0x1D<<3)|0: _SA(c->PC++);break;
         case (0x1D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x1D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0x1D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0x1D<<3)|3: _SA(c->AD+c->X);break;
         case (0x1D<<3)|4: c->A|=_GD();_NZ(c->A);_FETCH();break;
         case (0x1D<<3)|5: assert(false);break;
@@ -960,7 +960,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x31<<3)|0: _SA(c->PC++);break;
         case (0x31<<3)|1: c->AD=_GD();_SA(c->AD);break;
         case (0x31<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
-        case (0x31<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}break;
+        case (0x31<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0x31<<3)|4: _SA(c->AD+c->Y);break;
         case (0x31<<3)|5: c->A&=_GD();_NZ(c->A);_FETCH();break;
         case (0x31<<3)|6: assert(false);break;
@@ -1031,7 +1031,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* AND abs,Y */
         case (0x39<<3)|0: _SA(c->PC++);break;
         case (0x39<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x39<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0x39<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0x39<<3)|3: _SA(c->AD+c->Y);break;
         case (0x39<<3)|4: c->A&=_GD();_NZ(c->A);_FETCH();break;
         case (0x39<<3)|5: assert(false);break;
@@ -1058,7 +1058,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* NOP abs,X (undoc) */
         case (0x3C<<3)|0: _SA(c->PC++);break;
         case (0x3C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x3C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0x3C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0x3C<<3)|3: _SA(c->AD+c->X);break;
         case (0x3C<<3)|4: _FETCH();break;
         case (0x3C<<3)|5: assert(false);break;
@@ -1067,7 +1067,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* AND abs,X */
         case (0x3D<<3)|0: _SA(c->PC++);break;
         case (0x3D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x3D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0x3D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0x3D<<3)|3: _SA(c->AD+c->X);break;
         case (0x3D<<3)|4: c->A&=_GD();_NZ(c->A);_FETCH();break;
         case (0x3D<<3)|5: assert(false);break;
@@ -1248,7 +1248,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x51<<3)|0: _SA(c->PC++);break;
         case (0x51<<3)|1: c->AD=_GD();_SA(c->AD);break;
         case (0x51<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
-        case (0x51<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}break;
+        case (0x51<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0x51<<3)|4: _SA(c->AD+c->Y);break;
         case (0x51<<3)|5: c->A^=_GD();_NZ(c->A);_FETCH();break;
         case (0x51<<3)|6: assert(false);break;
@@ -1319,7 +1319,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* EOR abs,Y */
         case (0x59<<3)|0: _SA(c->PC++);break;
         case (0x59<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x59<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0x59<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0x59<<3)|3: _SA(c->AD+c->Y);break;
         case (0x59<<3)|4: c->A^=_GD();_NZ(c->A);_FETCH();break;
         case (0x59<<3)|5: assert(false);break;
@@ -1346,7 +1346,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* NOP abs,X (undoc) */
         case (0x5C<<3)|0: _SA(c->PC++);break;
         case (0x5C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x5C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0x5C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0x5C<<3)|3: _SA(c->AD+c->X);break;
         case (0x5C<<3)|4: _FETCH();break;
         case (0x5C<<3)|5: assert(false);break;
@@ -1355,7 +1355,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* EOR abs,X */
         case (0x5D<<3)|0: _SA(c->PC++);break;
         case (0x5D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x5D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0x5D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0x5D<<3)|3: _SA(c->AD+c->X);break;
         case (0x5D<<3)|4: c->A^=_GD();_NZ(c->A);_FETCH();break;
         case (0x5D<<3)|5: assert(false);break;
@@ -1536,7 +1536,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x71<<3)|0: _SA(c->PC++);break;
         case (0x71<<3)|1: c->AD=_GD();_SA(c->AD);break;
         case (0x71<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
-        case (0x71<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}break;
+        case (0x71<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0x71<<3)|4: _SA(c->AD+c->Y);break;
         case (0x71<<3)|5: _m6502x_adc(c,_GD());_FETCH();break;
         case (0x71<<3)|6: assert(false);break;
@@ -1607,7 +1607,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* ADC abs,Y */
         case (0x79<<3)|0: _SA(c->PC++);break;
         case (0x79<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x79<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0x79<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0x79<<3)|3: _SA(c->AD+c->Y);break;
         case (0x79<<3)|4: _m6502x_adc(c,_GD());_FETCH();break;
         case (0x79<<3)|5: assert(false);break;
@@ -1634,7 +1634,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* NOP abs,X (undoc) */
         case (0x7C<<3)|0: _SA(c->PC++);break;
         case (0x7C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x7C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0x7C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0x7C<<3)|3: _SA(c->AD+c->X);break;
         case (0x7C<<3)|4: _FETCH();break;
         case (0x7C<<3)|5: assert(false);break;
@@ -1643,7 +1643,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* ADC abs,X */
         case (0x7D<<3)|0: _SA(c->PC++);break;
         case (0x7D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0x7D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0x7D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0x7D<<3)|3: _SA(c->AD+c->X);break;
         case (0x7D<<3)|4: _m6502x_adc(c,_GD());_FETCH();break;
         case (0x7D<<3)|5: assert(false);break;
@@ -2112,7 +2112,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0xB1<<3)|0: _SA(c->PC++);break;
         case (0xB1<<3)|1: c->AD=_GD();_SA(c->AD);break;
         case (0xB1<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
-        case (0xB1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}break;
+        case (0xB1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xB1<<3)|4: _SA(c->AD+c->Y);break;
         case (0xB1<<3)|5: c->A=_GD();_NZ(c->A);_FETCH();break;
         case (0xB1<<3)|6: assert(false);break;
@@ -2130,7 +2130,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0xB3<<3)|0: _SA(c->PC++);break;
         case (0xB3<<3)|1: c->AD=_GD();_SA(c->AD);break;
         case (0xB3<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
-        case (0xB3<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}break;
+        case (0xB3<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xB3<<3)|4: _SA(c->AD+c->Y);break;
         case (0xB3<<3)|5: c->A=c->X=_GD();_NZ(c->A);_FETCH();break;
         case (0xB3<<3)|6: assert(false);break;
@@ -2183,7 +2183,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* LDA abs,Y */
         case (0xB9<<3)|0: _SA(c->PC++);break;
         case (0xB9<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xB9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0xB9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xB9<<3)|3: _SA(c->AD+c->Y);break;
         case (0xB9<<3)|4: c->A=_GD();_NZ(c->A);_FETCH();break;
         case (0xB9<<3)|5: assert(false);break;
@@ -2201,7 +2201,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* LAS abs,Y (undoc) */
         case (0xBB<<3)|0: _SA(c->PC++);break;
         case (0xBB<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xBB<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0xBB<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xBB<<3)|3: _SA(c->AD+c->Y);break;
         case (0xBB<<3)|4: c->A=c->X=c->S=_GD()&c->S;_NZ(c->A);_FETCH();break;
         case (0xBB<<3)|5: assert(false);break;
@@ -2210,7 +2210,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* LDY abs,X */
         case (0xBC<<3)|0: _SA(c->PC++);break;
         case (0xBC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xBC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0xBC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0xBC<<3)|3: _SA(c->AD+c->X);break;
         case (0xBC<<3)|4: c->Y=_GD();_NZ(c->Y);_FETCH();break;
         case (0xBC<<3)|5: assert(false);break;
@@ -2219,7 +2219,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* LDA abs,X */
         case (0xBD<<3)|0: _SA(c->PC++);break;
         case (0xBD<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xBD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0xBD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0xBD<<3)|3: _SA(c->AD+c->X);break;
         case (0xBD<<3)|4: c->A=_GD();_NZ(c->A);_FETCH();break;
         case (0xBD<<3)|5: assert(false);break;
@@ -2228,7 +2228,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* LDX abs,Y */
         case (0xBE<<3)|0: _SA(c->PC++);break;
         case (0xBE<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xBE<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0xBE<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xBE<<3)|3: _SA(c->AD+c->Y);break;
         case (0xBE<<3)|4: c->X=_GD();_NZ(c->X);_FETCH();break;
         case (0xBE<<3)|5: assert(false);break;
@@ -2237,7 +2237,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* LAX abs,Y (undoc) */
         case (0xBF<<3)|0: _SA(c->PC++);break;
         case (0xBF<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xBF<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0xBF<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xBF<<3)|3: _SA(c->AD+c->Y);break;
         case (0xBF<<3)|4: c->A=c->X=_GD();_NZ(c->A);_FETCH();break;
         case (0xBF<<3)|5: assert(false);break;
@@ -2400,7 +2400,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0xD1<<3)|0: _SA(c->PC++);break;
         case (0xD1<<3)|1: c->AD=_GD();_SA(c->AD);break;
         case (0xD1<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
-        case (0xD1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}break;
+        case (0xD1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xD1<<3)|4: _SA(c->AD+c->Y);break;
         case (0xD1<<3)|5: _m6502x_cmp(c, c->A, _GD());_FETCH();break;
         case (0xD1<<3)|6: assert(false);break;
@@ -2471,7 +2471,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* CMP abs,Y */
         case (0xD9<<3)|0: _SA(c->PC++);break;
         case (0xD9<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xD9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0xD9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xD9<<3)|3: _SA(c->AD+c->Y);break;
         case (0xD9<<3)|4: _m6502x_cmp(c, c->A, _GD());_FETCH();break;
         case (0xD9<<3)|5: assert(false);break;
@@ -2498,7 +2498,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* NOP abs,X (undoc) */
         case (0xDC<<3)|0: _SA(c->PC++);break;
         case (0xDC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xDC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0xDC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0xDC<<3)|3: _SA(c->AD+c->X);break;
         case (0xDC<<3)|4: _FETCH();break;
         case (0xDC<<3)|5: assert(false);break;
@@ -2507,7 +2507,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* CMP abs,X */
         case (0xDD<<3)|0: _SA(c->PC++);break;
         case (0xDD<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xDD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0xDD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0xDD<<3)|3: _SA(c->AD+c->X);break;
         case (0xDD<<3)|4: _m6502x_cmp(c, c->A, _GD());_FETCH();break;
         case (0xDD<<3)|5: assert(false);break;
@@ -2688,7 +2688,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0xF1<<3)|0: _SA(c->PC++);break;
         case (0xF1<<3)|1: c->AD=_GD();_SA(c->AD);break;
         case (0xF1<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
-        case (0xF1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}break;
+        case (0xF1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xF1<<3)|4: _SA(c->AD+c->Y);break;
         case (0xF1<<3)|5: _m6502x_sbc(c,_GD());_FETCH();break;
         case (0xF1<<3)|6: assert(false);break;
@@ -2759,7 +2759,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* SBC abs,Y */
         case (0xF9<<3)|0: _SA(c->PC++);break;
         case (0xF9<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xF9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};break;
+        case (0xF9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
         case (0xF9<<3)|3: _SA(c->AD+c->Y);break;
         case (0xF9<<3)|4: _m6502x_sbc(c,_GD());_FETCH();break;
         case (0xF9<<3)|5: assert(false);break;
@@ -2786,7 +2786,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* NOP abs,X (undoc) */
         case (0xFC<<3)|0: _SA(c->PC++);break;
         case (0xFC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xFC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0xFC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0xFC<<3)|3: _SA(c->AD+c->X);break;
         case (0xFC<<3)|4: _FETCH();break;
         case (0xFC<<3)|5: assert(false);break;
@@ -2795,7 +2795,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     /* SBC abs,X */
         case (0xFD<<3)|0: _SA(c->PC++);break;
         case (0xFD<<3)|1: _SA(c->PC++);c->AD=_GD();break;
-        case (0xFD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};break;
+        case (0xFD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
         case (0xFD<<3)|3: _SA(c->AD+c->X);break;
         case (0xFD<<3)|4: _m6502x_sbc(c,_GD());_FETCH();break;
         case (0xFD<<3)|5: assert(false);break;

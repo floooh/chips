@@ -205,7 +205,7 @@ def enc_addr(op, addr_mode, mem_access):
         op.t('c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));')
         if mem_access == M_R_:
             # skip next tick if read access and page not crossed
-            op.ta('if((c->AD&0xFF00)==((c->AD+c->X)&0xFF00)){c->IR++;};')
+            op.ta('c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;')
         op.t('_SA(c->AD+c->X);')
     elif addr_mode == A_ABY:
         # absolute + Y
@@ -215,7 +215,7 @@ def enc_addr(op, addr_mode, mem_access):
         op.t('c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));')
         if mem_access == M_R_:
             # skip next tick if read access and page not crossed
-            op.ta('if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;};')
+            op.ta('c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;')
         op.t('_SA(c->AD+c->Y);')
     elif addr_mode == A_IDX:
         # (zp,X)
@@ -233,7 +233,7 @@ def enc_addr(op, addr_mode, mem_access):
         op.t('c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));')
         if mem_access == M_R_:
             # skip next tick if read access and page not crossed
-            op.ta('if((c->AD&0xFF00)==((c->AD+c->Y)&0xFF00)){c->IR++;}')
+            op.ta('c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;')
         op.t('_SA(c->AD+c->Y);')
     elif addr_mode == A_JMP:
         # jmp is completely handled in instruction decoding
