@@ -456,6 +456,20 @@ static inline void _m6502x_arr(m6502x_t* cpu) {
         }
     }
 }
+
+/* undocumented SBX instruction: 
+    AND X register with accumulator and store result in X register, then
+    subtract byte from X register (without borrow) where the
+    subtract works like a CMP instruction
+*/
+static inline void _m6502x_sbx(m6502x_t* cpu, uint8_t v) {
+    uint16_t t = (cpu->A & cpu->X) - v;
+    cpu->P = _M6502X_NZ(cpu->P, t) & ~M6502X_CF;
+    if (!(t & 0xFF00)) {
+        cpu->P |= M6502X_CF;
+    }
+    cpu->X = (uint8_t)t;
+}
 #undef _M6502X_NZ
 
 void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
@@ -469,6 +483,8 @@ void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
 
 /* set 16-bit address in 64-bit pin mask */
 #define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
+/* extract 16-bit addess from pin mask */
+#define _GA() ((uint16_t)(pins&0xFFFFULL))
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
 #define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
 /* fetch next opcode byte */

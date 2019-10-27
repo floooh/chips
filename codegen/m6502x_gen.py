@@ -507,27 +507,13 @@ def i_cpy(o):
 def u_dcp(o):
     # undocumented 'decrement and compare'
     u_cmt(o,'DCP')
-    #o.src += '_RD();'
-    #o.src += '_WR();'
-    #o.src += 'l=_GD();l--;_NZ(l);_SD(l);_WR();'
-    # do a cmp operation on the decremented value
-    #o.src += 't=c.A-l;'
-    #o.src += '_NZ((uint8_t)t)&~M6502_CF;'
-    #o.src += 'if(!(t&0xFF00)){c.P|=M6502_CF;}'
+    o.t('c->AD=_GD();_WR();')
+    o.t('c->AD--;_NZ(c->AD);_SD(c->AD);_m6502x_cmp(c, c->A, c->AD);_WR();')
 
 #-------------------------------------------------------------------------------
 def x_sbx(o):
-    # undocumented SBX
-    # AND X register with accumulator and store result in X register, then
-    # subtract byte from X register (without borrow) where the
-    # subtract works like a CMP instruction
-    #
     u_cmt(o,'SBX')
-    #o.src += '_RD();l=_GD();'
-    #o.src += 't=(c.A&c.X)-l;'
-    #o.src += '_NZ((uint8_t)t)&~M6502_CF;'
-    #o.src += 'if(!(t&0xFF00)){c.P|=M6502_CF;}'
-    #o.src += 'c.X=(uint8_t)t;'
+    o.t('_m6502x_sbx(c, _GD());')
 
 #-------------------------------------------------------------------------------
 def i_dec(o):
@@ -565,16 +551,14 @@ def i_iny(o):
 def u_isb(o):
     # undocumented INC+SBC instruction
     u_cmt(o,'ISB')
-    #o.src += '_RD();'
-    #o.src += '_WR();'
-    #o.src += 'l=_GD();l++;_SD(l);_WR();'
-    #o.src += '_m6502_sbc(&c,l);'
+    o.t('c->AD=_GD();_WR();')
+    o.t('c->AD++;_SD(c->AD);_m6502x_sbc(c,c->AD);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_asl(o):
     cmt(o,'ASL')
-    o.t('_WR();')
-    o.t('_SD(_m6502x_asl(c,_GD()));_WR();')
+    o.t('c->AD=_GD();_WR();')
+    o.t('_SD(_m6502x_asl(c,c->AD));_WR();')
 
 #-------------------------------------------------------------------------------
 def i_asla(o):
@@ -584,8 +568,8 @@ def i_asla(o):
 #-------------------------------------------------------------------------------
 def i_lsr(o):
     cmt(o,'LSR')
-    o.t('_WR();')
-    o.t('_SD(_m6502x_lsr(c,_GD()));_WR();')
+    o.t('c->AD=_GD();_WR();')
+    o.t('_SD(_m6502x_lsr(c,c->AD));_WR();')
 
 #-------------------------------------------------------------------------------
 def i_lsra(o):
@@ -596,39 +580,27 @@ def i_lsra(o):
 def u_slo(o):
     # undocumented ASL+OR
     u_cmt(o,'SLO')
-    #o.src += '_RD();'
-    #o.src += '_WR();'
-    #o.src += 'l=_GD();'
-    #o.src += _asl('l')
-    #o.src += '_SD(l);'
-    #o.src += '_WR();'
-    #o.src += 'c.A|=l;_NZ(c.A);'
+    o.t('c->AD=_GD();_WR();')
+    o.t('c->AD=_m6502x_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();')
 
 #-------------------------------------------------------------------------------
 def x_asr(o):
     # undocumented AND+LSR
     u_cmt(o, 'ASR')
-    #o.src += '_RD();'
-    #o.src += 'c.A&=_GD();'
-    #o.src += _lsr('c.A')
+    o.t('c->A=_GD();c->A=_m6502x_lsr(c,c->A);')
 
 #-------------------------------------------------------------------------------
 def u_sre(o):
     # undocumented LSR+EOR
     u_cmt(o,'SRE')
-    #o.src += '_RD();'
-    #o.src += '_WR();'
-    #o.src += 'l=_GD();'
-    #o.src += _lsr('l')
-    #o.src += '_SD(l);'
-    #o.src += '_WR();'
-    #o.src += 'c.A^=l;_NZ(c.A);'
+    o.t('c->AD=_GD();_WR();')
+    o.t('c->AD=_m6502x_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_rol(o):
     cmt(o,'ROL')
-    o.t('_WR();')
-    o.t('_SD(_m6502x_rol(c,_GD()));_WR();')
+    o.t('c->AD=_GD();_WR();')
+    o.t('_SD(_m6502x_rol(c,c->AD));_WR();')
 
 #-------------------------------------------------------------------------------
 def i_rola(o):
@@ -639,19 +611,14 @@ def i_rola(o):
 def u_rla(o):
     # uncodumented ROL+AND
     u_cmt(o,'RLA')
-    #o.src += '_RD();'
-    #o.src += '_WR();'
-    #o.src += 'l=_GD();'
-    #o.src += _rol('l')
-    #o.src += '_SD(l);'
-    #o.src += '_WR();'
-    #o.src += 'c.A&=l;_NZ(c.A);'
+    o.t('c->AD=_GD();_WR();')
+    o.t('c->AD=_m6502x_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_ror(o):
     cmt(o,'ROR')
-    o.t('_WR();')
-    o.t('_SD(_m6502x_ror(c,_GD()));_WR();')
+    o.t('c->AD=_GD();_WR();')
+    o.t('_SD(_m6502x_ror(c,c->AD));_WR();')
 
 #-------------------------------------------------------------------------------
 def i_rora(o):
@@ -662,28 +629,20 @@ def i_rora(o):
 def u_rra(o):
     # undocumented ROR+ADC
     u_cmt(o,'RRA')
-    #o.src += '_RD();'
-    #o.src += '_WR();'
-    #o.src += 'l=_GD();'
-    #o.src += _ror('l')
-    #o.src += '_SD(l);'
-    #o.src += '_WR();'
-    #o.src += '_m6502_adc(&c,l);'
+    o.t('c->AD=_GD();_WR();')
+    o.t('c->AD=_m6502x_ror(c,c->AD);_SD(c->AD);_m6502x_adc(c,c->AD);_WR();')
 
 #-------------------------------------------------------------------------------
 def x_arr(o):
     # undocumented AND+ROR
     u_cmt(o,'ARR')
-    #o.src += '_RD();'
-    #o.src += 'c.A&=_GD();'
-    #o.src += '_m6502_arr(&c);'
+    o.t('c->A&=_GD();_m6502x_arr(c);')
 
 #-------------------------------------------------------------------------------
 def x_ane(o):
     # undocumented ANE
     u_cmt(o,'ANE')
-    #o.src += '_RD();'
-    #o.src += 'l=_GD();c.A=(c.A|0xEE)&c.X&l;_NZ(c.A);'
+    o.t('c->A=(c->A|0xEE)&c->X&_GD();_NZ(c->A);')
 
 #-------------------------------------------------------------------------------
 def x_sha(o):
@@ -692,7 +651,7 @@ def x_sha(o):
     #  the operand +1 in memory
     #
     u_cmt(o,'SHA')
-    #o.src += '_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();'
+    o.ta('_SD(c->A&c->X&(uint8_t)((_GA()>>8)+1));_WR();')
 
 #-------------------------------------------------------------------------------
 def x_shx(o):
@@ -701,7 +660,7 @@ def x_shx(o):
     # argument + 1. Store the result in memory.
     #
     u_cmt(o, 'SHX')
-    #o.src += '_SD(c.X&(uint8_t)((a>>8)+1));_WR();'
+    o.ta('_SD(c->X&(uint8_t)((_GA()>>8)+1));_WR();')
 
 #-------------------------------------------------------------------------------
 def x_shy(o):
@@ -710,7 +669,7 @@ def x_shy(o):
     # argument + 1. Store the result in memory.
     #
     u_cmt(o, 'SHY')
-    #o.src += '_SD(c.Y&(uint8_t)((a>>8)+1));_WR();'
+    o.ta('_SD(c->Y&(uint8_t)((_GA()>>8)+1));_WR();')
 
 #-------------------------------------------------------------------------------
 def x_shs(o):
@@ -720,7 +679,7 @@ def x_shs(o):
     # argument + 1. Store result in memory.
     #
     u_cmt(o, 'SHS')
-    #o.src += 'c.S=c.A&c.X;_SD(c.S&(uint8_t)((a>>8)+1));_WR();'
+    o.ta('c->S=c->A&c->X;_SD(c->S&(uint8_t)((_GA()>>8)+1));_WR();')
 
 #-------------------------------------------------------------------------------
 def x_anc(o):
@@ -728,10 +687,7 @@ def x_anc(o):
     # AND byte with accumulator. If result is negative then carry is set.
     #
     u_cmt(o, 'ANC')
-    #o.src += '_RD();'
-    #o.src += 'c.A&=_GD();'
-    #o.src += '_NZ(c.A);'
-    #o.src += 'if(c.A&0x80){c.P|=M6502_CF;}else{c.P&=~M6502_CF;}'
+    o.t('c->A&=_GD();_NZ(c->A);if(c->A&0x80){c->P|=M6502X_CF;}else{c->P&=~M6502X_CF;}')
 
 #-------------------------------------------------------------------------------
 def x_las(o):
@@ -740,7 +696,14 @@ def x_las(o):
     # register and stack pointer.
     #
     u_cmt(o, 'LAS')
-    #o.src += '_RD();c.A=c.X=c.S=_GD()&c.S;_NZ(c.A);'
+    o.t('c->A=c->X=c->S=_GD()&c->S;_NZ(c->A);')
+
+#-------------------------------------------------------------------------------
+def x_jam(o):
+    # undocumented JAM, next opcode byte read, data and addr bus set to all 1, execution stops
+    u_cmt(o, 'JAM')
+    o.t('_SA(c->PC);')
+    o.t('_SAD(0xFFFF,0xFF);c->IR--;')
 
 #-------------------------------------------------------------------------------
 def i_bit(o):
@@ -751,7 +714,7 @@ def i_bit(o):
 def enc_op(op):
     o = opcode(op)
     if invalid_opcode(op):
-        o.cmt = 'INVALID'
+        x_jam(o);
         return o
 
     # decode the opcode byte
