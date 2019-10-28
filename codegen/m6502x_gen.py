@@ -392,7 +392,7 @@ def i_cl(o, f):
 def i_br(o, m, v):
     cmt(o,branch_name(m,v))
     # if branch not taken?
-    o.t('c->AD=c->PC+(int8_t)_GD();if((c->P&'+hex(m)+')!='+hex(v)+'){_FETCH();};')
+    o.t('_SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&'+hex(m)+')!='+hex(v)+'){_FETCH();};')
     # branch taken: shortcut if page not crossed:
     o.t('_SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;_FETCH();};')
     # page crossed extra cycle:
