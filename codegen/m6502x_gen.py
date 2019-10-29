@@ -247,25 +247,14 @@ def enc_addr(op, addr_mode, mem_access):
 
 #-------------------------------------------------------------------------------
 def i_brk(o):
-    # implements 'interrupt hijacking'
+    # FIXME: implement 'interrupt hijacking'
     cmt(o, 'BRK')
-    # o.src += '_RD();'
-    # o.src += 'c.PC++;'
-    # o.src += '_SAD(0x0100|c.S--,c.PC>>8);_WR();'
-    # o.src += '_SAD(0x0100|c.S--,c.PC);_WR();'
-    # o.src += '_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();'
-    # o.src += 'if(c.nmi_pip&0xFE){'
-    # o.src +=   '_SA(0xFFFA);_RD();l=_GD();'
-    # o.src +=   'c.P|=M6502_IF;'
-    # o.src +=   '_SA(0xFFFB);_RD();h=_GD();'
-    # o.src += '}'
-    # o.src += 'else{'
-    # o.src +=   '_SA(0xFFFE);_RD();l=_GD();'
-    # o.src +=   'c.P|=M6502_IF;'
-    # o.src +=   '_SA(0xFFFF);_RD();h=_GD();'
-    # o.src += '}'
-    # o.src += 'c.PC=(h<<8)|l;'
-    # o.src += 'c.irq_pip&=1; c.nmi_pip&=1;' # FIXME: this should supress the normal interrupt handling at end of instruction, is this correct?
+    o.t('c->PC++;_SAD(0x0100|c->S--,c->PC>>8);_WR();')
+    o.t('_SAD(0x0100|c->S--,c->PC);_WR();')
+    o.t('_SAD(0x0100|c->S--,c->P|M6502X_BF);_WR();')
+    o.t('_SA(0xFFFE);')
+    o.t('_SA(0xFFFF);c->AD=_GD();c->P|=M6502X_IF;')
+    o.t('c->PC=(_GD()<<8)|c->AD;')
 
 #-------------------------------------------------------------------------------
 def i_nop(o):

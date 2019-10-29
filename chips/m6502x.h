@@ -516,13 +516,13 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     _RD();
     switch (c->IR++) {
     /* BRK  */
-        case (0x00<<3)|0: _SA(c->PC);_FETCH();break;
-        case (0x00<<3)|1: assert(false);break;
-        case (0x00<<3)|2: assert(false);break;
-        case (0x00<<3)|3: assert(false);break;
-        case (0x00<<3)|4: assert(false);break;
-        case (0x00<<3)|5: assert(false);break;
-        case (0x00<<3)|6: assert(false);break;
+        case (0x00<<3)|0: _SA(c->PC);break;
+        case (0x00<<3)|1: c->PC++;_SAD(0x0100|c->S--,c->PC>>8);_WR();break;
+        case (0x00<<3)|2: _SAD(0x0100|c->S--,c->PC);_WR();break;
+        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->P|M6502X_BF);_WR();break;
+        case (0x00<<3)|4: _SA(0xFFFE);break;
+        case (0x00<<3)|5: _SA(0xFFFF);c->AD=_GD();c->P|=M6502X_IF;break;
+        case (0x00<<3)|6: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
         case (0x00<<3)|7: assert(false);break;
     /* ORA (zp,X) */
         case (0x01<<3)|0: _SA(c->PC++);break;
