@@ -215,6 +215,7 @@ typedef struct {
     uint16_t AD;        /* ADL/ADH internal register */
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
+    uint8_t irq;
     uint8_t bcd_enabled;
 } m6502x_t;
 
@@ -510,6 +511,16 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             // load new instruction into 'instruction register' and restart tick counter
             c->IR = _GD()<<3;
             _OFF(M6502X_SYNC);
+            // FIXME: check for reset, this is a bit non-trivial, since setting
+            // the RESET pin to active starts a BRK instruction each tick(?)
+            // until the RESET pin goes inactive, only then the RESET is
+            // allowed to execute
+
+            // check for interrupt
+            if ((pins & M6502X_IRQ) && (0 == (c->P & M6502X_IF))) {
+                c->irq = 1;
+                c->IR = 0;
+            }
         }
     }
     // reads are default, writes a special
