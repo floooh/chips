@@ -34,13 +34,12 @@
     * HALT  <---|           |         *
     * WAIT  --->|           |<--> D0  *
     * INT   --->|           |<--> D1  *
-    *           |           |<--> ... *
+    * RFSH  <---|           |<--> ... *
     *           |           |<--> D7  *
     *           +-----------+         *
     ***********************************
 
     ## Not Emulated
-    - refresh cycles (RFSH pin)
     - interrupt mode 0
     - bus request/acknowledge (BUSRQ and BUSAK pins)
     - the RESET pin is currently not tested, call the z80_reset() 
@@ -200,6 +199,11 @@
       bus pins (D0..D7) contains the byte to be output
       at the port in the address-bus pins (A0..A15). An output
       machine cycle is 4 cycles.
+    - **M1|RFSH**: This is a refresh cycle, the tick callback can
+      read the values of registers IR from the address bus pins
+      A0..A15, with I in the high bits and R in the low ones. Note
+      that RFSH is only emulated if CHIPS_Z80_RFSH is defined when
+      compiling.
 
     Interrupt handling requires to inspect and set additional
     pins, more on that below.
@@ -344,12 +348,13 @@ typedef int (*z80_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* trap_user
 #define  Z80_IORQ  (1ULL<<26)       /* input/output request */
 #define  Z80_RD    (1ULL<<27)       /* read */
 #define  Z80_WR    (1ULL<<28)       /* write */
-#define  Z80_CTRL_MASK (Z80_M1|Z80_MREQ|Z80_IORQ|Z80_RD|Z80_WR)
+#define  Z80_RFSH  (1ULL<<29)       /* refresh */
+#define  Z80_CTRL_MASK (Z80_M1|Z80_MREQ|Z80_IORQ|Z80_RD|Z80_WR|Z80_RFSH)
 
 /* CPU control pins */
-#define  Z80_HALT  (1ULL<<29)       /* halt state */
-#define  Z80_INT   (1ULL<<30)       /* interrupt request */
-#define  Z80_NMI   (1ULL<<31)       /* non-maskable interrupt */
+#define  Z80_HALT  (1ULL<<30)       /* halt state */
+#define  Z80_INT   (1ULL<<31)       /* interrupt request */
+#define  Z80_NMI   (1ULL<<32)       /* non-maskable interrupt */
 
 /* up to 7 wait states can be injected per machine cycle */
 #define Z80_WAIT0   (1ULL<<34)
@@ -534,63 +539,6 @@ bool z80_ei_pending(z80_t* cpu);
 #define _BIT_EI     (1ULL<<_EI)
 #define _BITS_USE_IXIY  (_BIT_USE_IX|_BIT_USE_IY)
 
-/* set 8-bit immediate value in 64-bit register bank */
-#define _S8(bank,shift,val) bank=(((bank)&~(0xFFULL<<(shift)))|(((val)&0xFFULL)<<(shift)))
-/* extract 8-bit value from 64-bit register bank */
-#define _G8(bank,shift) (((bank)>>(shift))&0xFFULL)
-/* set 16-bit immediate value in 64-bit register bank */
-#define _S16(bank,shift,val) bank=((bank&~(0xFFFFULL<<(shift)))|(((val)&0xFFFFULL)<<(shift)))
-/* extract 16-bit value from 64-bit register bank */
-#define _G16(bank,shift) (((bank)>>(shift))&0xFFFFULL)
-/* set a single bit value in 64-bit register mask */
-#define _S1(bank,shift,val) bank=(((bank)&~(1ULL<<(shift)))|(((val)&1ULL)<<(shift)))
-/* set 16-bit address bus pins */
-#define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
-/* set 16-bit address bus and 8-bit data bus pins */
-#define _SAD(addr,data) pins=(pins&~0xFFFFFFULL)|((((data)&0xFFULL)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
-/* get 8-bit data bus value from pins */
-#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
-/* invoke 'filler tick' without control pins set */
-#define _T(num) pins=tick(num,(pins&~Z80_CTRL_MASK),ud);ticks+=num
-/* invoke tick callback with pins mask */
-#define _TM(num,mask) pins=tick(num,(pins&~(Z80_CTRL_MASK))|(mask),ud);ticks+=num
-/* invoke tick callback (with wait state detection) */
-#define _TWM(num,mask) pins=tick(num,(pins&~(Z80_WAIT_MASK|Z80_CTRL_MASK))|(mask),ud);ticks+=num+Z80_GET_WAIT(pins)
-/* memory read machine cycle */
-#define _MR(addr,data) _SA(addr);_TWM(3,Z80_MREQ|Z80_RD);data=_GD()
-/* memory write machine cycle */
-#define _MW(addr,data) _SAD(addr,data);_TWM(3,Z80_MREQ|Z80_WR)
-/* input machine cycle */
-#define _IN(addr,data) _SA(addr);_TWM(4,Z80_IORQ|Z80_RD);data=_GD()
-/* output machine cycle */
-#define _OUT(addr,data) _SAD(addr,data);_TWM(4,Z80_IORQ|Z80_WR);
-/* read 8-bit immediate value */
-#define _IMM8(data) _MR(pc++,data);
-/* read 16-bit immediate value (also update WZ register) */
-#define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S_WZ(data);} 
-/* true if current op is an indexed op */
-#define _IDX() (0!=(r2&_BITS_USE_IXIY))
-/* generate effective address for (HL), (IX+d), (IY+d) */
-#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if(_IDX()){int8_t d;_MR(pc++,d);addr+=d;_S_WZ(addr);_T(ext_ticks);}}
-/* helper macro to bump R register */
-#define _BUMPR() d8=_G8(r2,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r2,_R,d8)
-/* a normal opcode fetch, bump R */
-#define _FETCH(op) {_SA(pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_BUMPR();}
-/* special opcode fetch for CB prefix, only bump R if not a DD/FD+CB 'double prefix' op */
-#define _FETCH_CB(op) {_SA(pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();if(!_IDX()){_BUMPR();}}
-/* evaluate S+Z flags */
-#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
-/* evaluate SZYXCH flags */
-#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
-/* evaluate flags for 8-bit adds */
-#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
-/* evaluate flags for 8-bit subs */
-#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
-/* evaluate flags for 8-bit compare */
-#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
-/* evaluate flags for LD A,I and LD A,R */
-#define _SZIFF2_FLAGS(val) ((_G_F()&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((r2&_BIT_IFF2)?Z80_PF:0))
-
 /* register setter/getter shortcut macros */
 #define _S_A(val)  _S8(ws,_A,val)
 #define _S_F(val)  _S8(ws,_F,val)
@@ -634,6 +582,67 @@ bool z80_ei_pending(z80_t* cpu);
 #define _G_R()  _G8(r2,_R)
 #define _G_IR() _G16(r2,_IR)
 #define _G_PC() _G16(r2,_PC)
+
+/* set 8-bit immediate value in 64-bit register bank */
+#define _S8(bank,shift,val) bank=(((bank)&~(0xFFULL<<(shift)))|(((val)&0xFFULL)<<(shift)))
+/* extract 8-bit value from 64-bit register bank */
+#define _G8(bank,shift) (((bank)>>(shift))&0xFFULL)
+/* set 16-bit immediate value in 64-bit register bank */
+#define _S16(bank,shift,val) bank=((bank&~(0xFFFFULL<<(shift)))|(((val)&0xFFFFULL)<<(shift)))
+/* extract 16-bit value from 64-bit register bank */
+#define _G16(bank,shift) (((bank)>>(shift))&0xFFFFULL)
+/* set a single bit value in 64-bit register mask */
+#define _S1(bank,shift,val) bank=(((bank)&~(1ULL<<(shift)))|(((val)&1ULL)<<(shift)))
+/* set 16-bit address bus pins */
+#define _SA(addr) pins=(pins&~0xFFFFULL)|((addr)&0xFFFFULL)
+/* set 16-bit address bus and 8-bit data bus pins */
+#define _SAD(addr,data) pins=(pins&~0xFFFFFFULL)|((((data)&0xFFULL)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
+/* get 8-bit data bus value from pins */
+#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
+/* invoke 'filler tick' without control pins set */
+#define _T(num) pins=tick(num,(pins&~Z80_CTRL_MASK),ud);ticks+=num
+/* invoke tick callback with pins mask */
+#define _TM(num,mask) pins=tick(num,(pins&~(Z80_CTRL_MASK))|(mask),ud);ticks+=num
+/* invoke tick callback (with wait state detection) */
+#define _TWM(num,mask) pins=tick(num,(pins&~(Z80_WAIT_MASK|Z80_CTRL_MASK))|(mask),ud);ticks+=num+Z80_GET_WAIT(pins)
+/* memory read machine cycle */
+#define _MR(addr,data) _SA(addr);_TWM(3,Z80_MREQ|Z80_RD);data=_GD()
+/* memory write machine cycle */
+#define _MW(addr,data) _SAD(addr,data);_TWM(3,Z80_MREQ|Z80_WR)
+/* input machine cycle */
+#define _IN(addr,data) _SA(addr);_TWM(4,Z80_IORQ|Z80_RD);data=_GD()
+/* output machine cycle */
+#define _OUT(addr,data) _SAD(addr,data);_TWM(4,Z80_IORQ|Z80_WR);
+/* read 8-bit immediate value */
+#define _IMM8(data) _MR(pc++,data);
+/* read 16-bit immediate value (also update WZ register) */
+#define _IMM16(data) {uint8_t w,z;_MR(pc++,z);_MR(pc++,w);data=(w<<8)|z;_S_WZ(data);} 
+/* true if current op is an indexed op */
+#define _IDX() (0!=(r2&_BITS_USE_IXIY))
+/* generate effective address for (HL), (IX+d), (IY+d) */
+#define _ADDR(addr,ext_ticks) {addr=_G16(ws,_HL);if(_IDX()){int8_t d;_MR(pc++,d);addr+=d;_S_WZ(addr);_T(ext_ticks);}}
+/* helper macro to bump R register */
+#define _BUMPR() d8=_G8(r2,_R);d8=(d8&0x80)|((d8+1)&0x7F);_S8(r2,_R,d8)
+/* a normal opcode fetch, bump R */
+#ifdef CHIPS_Z80_RFSH
+#define _FETCH(op) {_SA(pc++);_TWM(3,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_SA(_G_I()<<8|_G_R());_TM(1,Z80_MREQ|Z80_RFSH);_BUMPR();}
+#else
+#define _FETCH(op) {_SA(pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();_BUMPR();}
+#endif
+/* special opcode fetch for CB prefix, only bump R if not a DD/FD+CB 'double prefix' op */
+#define _FETCH_CB(op) {_SA(pc++);_TWM(4,Z80_M1|Z80_MREQ|Z80_RD);op=_GD();if(!_IDX()){_BUMPR();}}
+/* evaluate S+Z flags */
+#define _SZ(val) ((val&0xFF)?(val&Z80_SF):Z80_ZF)
+/* evaluate SZYXCH flags */
+#define _SZYXCH(acc,val,res) (_SZ(res)|(res&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))
+/* evaluate flags for 8-bit adds */
+#define _ADD_FLAGS(acc,val,res) (_SZYXCH(acc,val,res)|((((val^acc^0x80)&(val^res))>>5)&Z80_VF))
+/* evaluate flags for 8-bit subs */
+#define _SUB_FLAGS(acc,val,res) (Z80_NF|_SZYXCH(acc,val,res)|((((val^acc)&(res^acc))>>5)&Z80_VF))
+/* evaluate flags for 8-bit compare */
+#define _CP_FLAGS(acc,val,res) (Z80_NF|(_SZ(res)|(val&(Z80_YF|Z80_XF))|((res>>8)&Z80_CF)|((acc^val^res)&Z80_HF))|((((val^acc)&(res^acc))>>5)&Z80_VF))
+/* evaluate flags for LD A,I and LD A,R */
+#define _SZIFF2_FLAGS(val) ((_G_F()&Z80_CF)|_SZ(val)|(val&(Z80_YF|Z80_XF))|((r2&_BIT_IFF2)?Z80_PF:0))
 
 /* register access functions */
 void z80_set_a(z80_t* cpu, uint8_t v)         { _S8(cpu->bc_de_hl_fa,_A,v); }
@@ -876,7 +885,11 @@ $decode_block
             if (nmi) { /* non-maskable interrupt? */
 
                 /* a no-op 5 tick opcode fetch */
+#ifdef CHIPS_Z80_RFSH
+                _TWM(3,Z80_M1|Z80_MREQ|Z80_RD);_SA(_G_I()<<8|_G_R());_TM(2,Z80_MREQ|Z80_RFSH);_BUMPR();
+#else
                 _TWM(5,Z80_M1|Z80_MREQ|Z80_RD);_BUMPR();
+#endif
                 /* put PC on stack */
                 uint16_t sp = _G_SP();
                 _MW(--sp,pc>>8);

@@ -315,6 +315,7 @@ static const ui_chip_pin_t _ui_zx_cpu_pins[] = {
     { "A13",    31,     Z80_A13 },
     { "A14",    32,     Z80_A14 },
     { "A15",    33,     Z80_A15 },
+    { "RFSH",   35,     Z80_RFSH },
 };
 
 static const ui_chip_pin_t _ui_zx_ay_pins[] = {
