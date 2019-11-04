@@ -463,7 +463,7 @@ struct MemoryEditor
                         else
                             ImGui::Text("%02X ", b);
                     }
-                    if (!ReadOnly && ImGui::IsItemHovered() && ImGui::IsMouseClicked(0))
+                    if (!ReadOnly && ImGui::IsItemHovered() && ImGui::IsMouseReleased(0))
                     {
                         DataEditingTakeFocus = true;
                         data_editing_addr_next = addr;
