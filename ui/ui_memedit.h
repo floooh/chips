@@ -76,6 +76,8 @@ typedef struct {
     const char* layers[UI_MEMEDIT_MAX_LAYERS];   /* memory system layer names */
     ui_memedit_read_t read_cb;
     ui_memedit_write_t write_cb;
+    int num_rows;       /* initial number of rows, default is 16 */
+    bool hide_ascii;    /* initially hide the ASCII column */
     void* user_data;
     int x, y;           /* initial window pos */
     int w, h;           /* initial window size, or 0 for default size */
@@ -542,7 +544,9 @@ struct MemoryEditor
         /*--- BEGIN ui_memedit.h changes */
         ImGui::SameLine();
         ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth());
-        ImGui::Combo("##layer", &CurLayer, Layers, NumLayers);
+        if (NumLayers > 1) {
+            ImGui::Combo("##layer", &CurLayer, Layers, NumLayers);
+        }
         ImGui::PopItemWidth();
         /*--- END ui_memedit.h changes */
 
@@ -603,6 +607,8 @@ void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc) {
     win->init_h = (float) ((desc->h == 0) ? 120 : desc->h);
     win->open = desc->open;
     win->ed = new MemoryEditor;
+    win->ed->Rows = (desc->num_rows == 0) ? win->ed->Rows : desc->num_rows;
+    win->ed->OptShowAscii = !desc->hide_ascii;
     win->ed->Open = win->open;
     win->ed->ReadFn = _ui_memedit_readfn;
     win->ed->WriteFn = _ui_memedit_writefn;
