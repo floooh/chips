@@ -100,6 +100,7 @@ typedef struct {
 void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc);
 /* frees memory via delete() */
 void ui_memedit_discard(ui_memedit_t* win);
+void ui_memedit_draw_content(ui_memedit_t* win);
 void ui_memedit_draw(ui_memedit_t* win);
 
 #ifdef __cplusplus
@@ -641,6 +642,11 @@ void ui_memedit_draw(ui_memedit_t* win) {
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
     win->ed->DrawWindow(win->title, (uint8_t*)win, (1<<16));
     win->open = win->ed->Open;
+}
+
+void ui_memedit_draw_content(ui_memedit_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    win->ed->DrawContents((uint8_t*)win, (1<<16));
 }
 #ifdef _MSC_VER
 #pragma warning(pop)
