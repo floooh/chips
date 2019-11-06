@@ -78,6 +78,8 @@ typedef struct {
     ui_memedit_write_t write_cb;
     int num_rows;       /* initial number of rows, default is 16 */
     bool hide_ascii;    /* initially hide the ASCII column */
+    bool hide_options;  /* hide the Options dropdown */
+    bool hide_addr_input;   /* hide the address input field */
     void* user_data;
     int x, y;           /* initial window pos */
     int w, h;           /* initial window size, or 0 for default size */
@@ -169,6 +171,8 @@ struct MemoryEditor
     bool            Open;                                   // = true   // set to false when DrawWindow() was closed. ignore if not using DrawWindow
     bool            ReadOnly;                               // = false  // set to true to disable any editing
     int             Rows;                                   // = 16     //
+    bool            Options;                                // = true
+    bool            AddrInput;                              // = true
     bool            OptShowAscii;                           // = true   //
     bool            OptShowHexII;                           // = false  //
     bool            OptGreyOutZeroes;                       // = true   //
@@ -200,6 +204,8 @@ struct MemoryEditor
         Open = true;
         ReadOnly = false;
         Rows = 16;
+        Options = true;
+        AddrInput = true;
         OptShowAscii = true;
         OptShowHexII = false;
         OptGreyOutZeroes = true;
@@ -311,7 +317,10 @@ struct MemoryEditor
         }
         ImGuiStyle& style = ImGui::GetStyle();
 
-        const float footer_height_to_reserve = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing(); // 1 separator, 1 input text
+        float footer_height_to_reserve = 0.0f;
+        if (Options || AddrInput || (NumLayers > 1)) {
+            footer_height_to_reserve = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing(); // 1 separator, 1 input text
+        }
         ImGui::BeginChild("##scrolling", ImVec2(0, -footer_height_to_reserve));
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -513,42 +522,48 @@ struct MemoryEditor
             DataEditingAddr = data_editing_addr_next;
         }
 
-        ImGui::Separator();
+        if (Options || AddrInput || (NumLayers > 1)) {
+            ImGui::Separator();
+        }
 
         // Options menu
-        if (ImGui::Button("Options"))
-            ImGui::OpenPopup("context");
-        if (ImGui::BeginPopup("context"))
-        {
-            ImGui::PushItemWidth(56);
-            if (ImGui::DragInt("##rows", &Rows, 0.2f, 4, 32, "%.0f rows")) ContentsWidthChanged = true;
-            ImGui::PopItemWidth();
-            ImGui::Checkbox("Show HexII", &OptShowHexII);
-            if (ImGui::Checkbox("Show Ascii", &OptShowAscii)) ContentsWidthChanged = true;
-            ImGui::Checkbox("Grey out zeroes", &OptGreyOutZeroes);
-            ImGui::EndPopup();
+        if (Options) {
+            if (ImGui::Button("Options"))
+                ImGui::OpenPopup("context");
+            if (ImGui::BeginPopup("context"))
+            {
+                ImGui::PushItemWidth(56);
+                if (ImGui::DragInt("##rows", &Rows, 0.2f, 4, 32, "%.0f rows")) ContentsWidthChanged = true;
+                ImGui::PopItemWidth();
+                ImGui::Checkbox("Show HexII", &OptShowHexII);
+                if (ImGui::Checkbox("Show Ascii", &OptShowAscii)) ContentsWidthChanged = true;
+                ImGui::Checkbox("Grey out zeroes", &OptGreyOutZeroes);
+                ImGui::EndPopup();
+            }
+            ImGui::SameLine();
         }
 
-        ImGui::SameLine();
-        ImGui::PushItemWidth((s.AddrDigitsCount + 1) * s.GlyphWidth + style.FramePadding.x * 2.0f);
-        if (ImGui::InputText("##addr", AddrInputBuf, 32, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue))
-        {
-            size_t goto_addr;
-            if (sscanf(AddrInputBuf, "%" _PRISizeT, &goto_addr) == 1)
+        if (AddrInput) {
+            ImGui::PushItemWidth((s.AddrDigitsCount + 1) * s.GlyphWidth + style.FramePadding.x * 2.0f);
+            if (ImGui::InputText("##addr", AddrInputBuf, 32, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue))
             {
-                GotoAddr = goto_addr - base_display_addr;
-                HighlightMin = HighlightMax = (size_t)-1;
+                size_t goto_addr;
+                if (sscanf(AddrInputBuf, "%" _PRISizeT, &goto_addr) == 1)
+                {
+                    GotoAddr = goto_addr - base_display_addr;
+                    HighlightMin = HighlightMax = (size_t)-1;
+                }
             }
+            ImGui::PopItemWidth();
+            ImGui::SameLine();
         }
-        ImGui::PopItemWidth();
 
         /*--- BEGIN ui_memedit.h changes */
-        ImGui::SameLine();
-        ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth());
         if (NumLayers > 1) {
+            ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth());
             ImGui::Combo("##layer", &CurLayer, Layers, NumLayers);
+            ImGui::PopItemWidth();
         }
-        ImGui::PopItemWidth();
         /*--- END ui_memedit.h changes */
 
         if (GotoAddr != (size_t)-1)
@@ -609,6 +624,8 @@ void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc) {
     win->open = desc->open;
     win->ed = new MemoryEditor;
     win->ed->Rows = (desc->num_rows == 0) ? win->ed->Rows : desc->num_rows;
+    win->ed->Options = !desc->hide_options;
+    win->ed->AddrInput = !desc->hide_addr_input;
     win->ed->OptShowAscii = !desc->hide_ascii;
     win->ed->Open = win->open;
     win->ed->ReadFn = _ui_memedit_readfn;
