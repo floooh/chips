@@ -348,13 +348,13 @@ typedef int (*z80_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* trap_user
 #define  Z80_IORQ  (1ULL<<26)       /* input/output request */
 #define  Z80_RD    (1ULL<<27)       /* read */
 #define  Z80_WR    (1ULL<<28)       /* write */
-#define  Z80_RFSH  (1ULL<<29)       /* refresh */
+#define  Z80_RFSH  (1ULL<<32)       /* refresh */
 #define  Z80_CTRL_MASK (Z80_M1|Z80_MREQ|Z80_IORQ|Z80_RD|Z80_WR|Z80_RFSH)
 
 /* CPU control pins */
-#define  Z80_HALT  (1ULL<<30)       /* halt state */
-#define  Z80_INT   (1ULL<<31)       /* interrupt request */
-#define  Z80_NMI   (1ULL<<32)       /* non-maskable interrupt */
+#define  Z80_HALT  (1ULL<<29)       /* halt state */
+#define  Z80_INT   (1ULL<<30)       /* interrupt request */
+#define  Z80_NMI   (1ULL<<31)       /* non-maskable interrupt */
 
 /* up to 7 wait states can be injected per machine cycle */
 #define Z80_WAIT0   (1ULL<<34)
