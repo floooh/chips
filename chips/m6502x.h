@@ -215,7 +215,8 @@ typedef struct {
     uint16_t AD;        /* ADL/ADH internal register */
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
-    uint8_t irq;
+    uint8_t irq_pip;
+    uint8_t brk_irq;
     uint8_t bcd_enabled;
 } m6502x_t;
 
@@ -478,7 +479,7 @@ void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
     memset(c, 0, sizeof(*c));
     c->PINS = M6502X_RW;
     c->P = M6502X_BF|M6502X_IF|M6502X_XF|M6502X_ZF;
-    c->S = 0xBD;    /* visual6502 starts with S at 0xBD */
+    c->S = 0xBD;
     c->bcd_enabled = !desc->bcd_disabled;
 }
 
@@ -506,6 +507,7 @@ void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
 #define _NZ(v) c->P=((c->P&~(M6502X_NF|M6502X_ZF))|((v&0xFF)?(v&M6502X_NF):M6502X_ZF))
 
 uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
+    c->irq_pip <<= 1;
     if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES)) {
         if (pins & M6502X_SYNC) {
             // load new instruction into 'instruction register' and restart tick counter
@@ -516,11 +518,19 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             // until the RESET pin goes inactive, only then the RESET is
             // allowed to execute
 
-            // check for interrupt
-            if ((pins & M6502X_IRQ) && (0 == (c->P & M6502X_IF))) {
-                c->irq = 1;
+            // if interrupt was requested, force a BRK instruction
+            if ((c->irq_pip & 4) && (0 == (c->P & M6502X_IF))) {
                 c->IR = 0;
+                c->brk_irq = true;
+                c->PC--;
             }
+            else {
+                c->brk_irq = false;
+            }
+        }
+        // check for interrupt
+        if (pins & M6502X_IRQ) {
+            c->irq_pip |= 1;
         }
     }
     // reads are default, writes a special
@@ -528,9 +538,9 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     switch (c->IR++) {
     /* BRK  */
         case (0x00<<3)|0: _SA(c->PC);break;
-        case (0x00<<3)|1: c->PC++;_SAD(0x0100|c->S--,c->PC>>8);_WR();break;
+        case (0x00<<3)|1: if(!c->brk_irq){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);_WR();break;
         case (0x00<<3)|2: _SAD(0x0100|c->S--,c->PC);_WR();break;
-        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->P|M6502X_BF);_WR();break;
+        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->brk_irq?(c->P&~M6502X_BF):(c->P|M6502X_BF));_WR();break;
         case (0x00<<3)|4: _SA(0xFFFE);break;
         case (0x00<<3)|5: _SA(0xFFFF);c->AD=_GD();c->P|=M6502X_IF;break;
         case (0x00<<3)|6: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
