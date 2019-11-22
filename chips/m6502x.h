@@ -478,7 +478,7 @@ void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
     memset(c, 0, sizeof(*c));
     c->PINS = M6502X_RW;
     c->P = M6502X_BF|M6502X_IF|M6502X_XF|M6502X_ZF;
-    c->S = 0xFD;
+    c->S = 0xBD;    /* visual6502 starts with S at 0xBD */
     c->bcd_enabled = !desc->bcd_disabled;
 }
 
