@@ -216,7 +216,7 @@ typedef struct {
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
     uint8_t irq_pip;
-    uint8_t brk_irq;
+    uint8_t is_irq;
     uint8_t bcd_enabled;
 } m6502x_t;
 
@@ -519,17 +519,14 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             // allowed to execute
 
             // if interrupt was requested, force a BRK instruction
-            if ((c->irq_pip & 4) && (0 == (c->P & M6502X_IF))) {
+            c->is_irq = 0 != (c->irq_pip & 4);
+            if (c->is_irq) {
                 c->IR = 0;
-                c->brk_irq = true;
                 c->PC--;
-            }
-            else {
-                c->brk_irq = false;
             }
         }
         // check for interrupt
-        if (pins & M6502X_IRQ) {
+        if ((pins & M6502X_IRQ) && (0 == (c->P & M6502X_IF))) {
             c->irq_pip |= 1;
         }
     }
@@ -538,11 +535,11 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     switch (c->IR++) {
     /* BRK  */
         case (0x00<<3)|0: _SA(c->PC);break;
-        case (0x00<<3)|1: if(!c->brk_irq){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);_WR();break;
+        case (0x00<<3)|1: if(!c->is_irq){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);_WR();break;
         case (0x00<<3)|2: _SAD(0x0100|c->S--,c->PC);_WR();break;
-        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->brk_irq?(c->P&~M6502X_BF):(c->P|M6502X_BF));_WR();break;
-        case (0x00<<3)|4: _SA(0xFFFE);break;
-        case (0x00<<3)|5: _SA(0xFFFF);c->AD=_GD();c->P|=M6502X_IF;break;
+        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->is_irq?(c->P&~M6502X_BF):(c->P|M6502X_BF));_WR();break;
+        case (0x00<<3)|4: _SA(0xFFFE);c->P|=M6502X_IF;break;
+        case (0x00<<3)|5: _SA(0xFFFF);c->AD=_GD();break;
         case (0x00<<3)|6: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
         case (0x00<<3)|7: assert(false);break;
     /* ORA (zp,X) */

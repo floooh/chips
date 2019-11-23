@@ -216,7 +216,7 @@ typedef struct {
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
     uint8_t irq_pip;
-    uint8_t brk_irq;
+    uint8_t is_irq;
     uint8_t bcd_enabled;
 } m6502x_t;
 
@@ -519,17 +519,14 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             // allowed to execute
 
             // if interrupt was requested, force a BRK instruction
-            if ((c->irq_pip & 4) && (0 == (c->P & M6502X_IF))) {
+            c->is_irq = 0 != (c->irq_pip & 4);
+            if (c->is_irq) {
                 c->IR = 0;
-                c->brk_irq = true;
                 c->PC--;
-            }
-            else {
-                c->brk_irq = false;
             }
         }
         // check for interrupt
-        if (pins & M6502X_IRQ) {
+        if ((pins & M6502X_IRQ) && (0 == (c->P & M6502X_IF))) {
             c->irq_pip |= 1;
         }
     }
