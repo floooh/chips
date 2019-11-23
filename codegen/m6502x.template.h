@@ -216,7 +216,8 @@ typedef struct {
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
     uint8_t irq_pip;
-    uint8_t is_irq;
+    uint8_t nmi_pip;
+    uint8_t is_int;
     uint8_t bcd_enabled;
 } m6502x_t;
 
@@ -508,6 +509,7 @@ void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
 
 uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     c->irq_pip <<= 1;
+    c->nmi_pip <<= 1;
     if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES)) {
         if (pins & M6502X_SYNC) {
             // load new instruction into 'instruction register' and restart tick counter
@@ -519,15 +521,19 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             // allowed to execute
 
             // if interrupt was requested, force a BRK instruction
-            c->is_irq = 0 != (c->irq_pip & 4);
-            if (c->is_irq) {
+            c->is_int = 0 != ((c->irq_pip | c->nmi_pip) & 4);
+            if (c->is_int) {
                 c->IR = 0;
                 c->PC--;
             }
         }
-        // check for interrupt
+        // check for interrupt, IRQ is level-triggered
         if ((pins & M6502X_IRQ) && (0 == (c->P & M6502X_IF))) {
             c->irq_pip |= 1;
+        }
+        // NMI is edge-triggered
+        if (0 != ((pins & (pins ^ c->PINS)) & M6502X_NMI)) {
+            c->nmi_pip |= 1;
         }
     }
     // reads are default, writes a special
