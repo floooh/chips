@@ -416,7 +416,7 @@ static inline void _m6502x_bit(m6502x_t* cpu, uint8_t v) {
     if (!t) {
         cpu->P |= M6502X_ZF;
     }
-    cpu->P |= t & (M6502X_NF|M6502X_VF);
+    cpu->P |= v & (M6502X_NF|M6502X_VF);
 }
 
 static inline void _m6502x_arr(m6502x_t* cpu) {
