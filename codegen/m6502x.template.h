@@ -28,6 +28,7 @@
     *   IRQ --->|           |---> A0  *
     *   NMI --->|           |...      *
     *    RDY--->|           |---> A15 *
+    *    RES--->|           |         *
     *    RW <---|           |         *
     *  SYNC <---|           |         *
     *           |           |<--> D0  *
@@ -511,18 +512,15 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     c->irq_pip <<= 1;
     c->nmi_pip <<= 1;
     if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES)) {
-        if (pins & M6502X_RDY) {
+        // RDY pin is only checked during read cycles
+        if ((pins & (M6502X_RW|M6502X_RDY)) == (M6502X_RW|M6502X_RDY)) {
             return pins;
         }
         if (pins & M6502X_SYNC) {
             // load new instruction into 'instruction register' and restart tick counter
             c->IR = _GD()<<3;
             _OFF(M6502X_SYNC);
-            // FIXME: check for reset, this is a bit non-trivial, since setting
-            // the RESET pin to active starts a BRK instruction each tick(?)
-            // until the RESET pin goes inactive, only then the RESET is
-            // allowed to execute
-
+            
             // if interrupt was requested, force a BRK instruction
             c->is_int = 0 != ((c->irq_pip | c->nmi_pip) & 4);
             if (c->is_int) {
@@ -553,7 +551,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             c->nmi_pip |= 1;
         }
     }
-    // reads are default, writes a special
+    // reads are default, writes are special
     _RD();
     switch (c->IR++) {
 $decode_block
