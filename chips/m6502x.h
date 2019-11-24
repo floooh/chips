@@ -511,6 +511,9 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     c->irq_pip <<= 1;
     c->nmi_pip <<= 1;
     if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES)) {
+        if (pins & M6502X_RDY) {
+            return pins;
+        }
         if (pins & M6502X_SYNC) {
             // load new instruction into 'instruction register' and restart tick counter
             c->IR = _GD()<<3;
