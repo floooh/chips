@@ -218,11 +218,12 @@ typedef struct {
     uint8_t irq_pip;
     uint8_t nmi_pip;
     uint8_t is_int;
+    uint8_t is_res;
     uint8_t bcd_enabled;
 } m6502x_t;
 
-/* initialize a new m6502 instance */
-void m6502x_init(m6502x_t* cpu, const m6502x_desc_t* desc);
+/* initialize a new m6502 instance and return initial pin mask */
+uint64_t m6502x_init(m6502x_t* cpu, const m6502x_desc_t* desc);
 /* execute one tick */
 uint64_t m6502x_tick(m6502x_t* cpu, uint64_t pins);
 
@@ -475,13 +476,12 @@ static inline void _m6502x_sbx(m6502x_t* cpu, uint8_t v) {
 }
 #undef _M6502X_NZ
 
-void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
+uint64_t m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
     CHIPS_ASSERT(c && desc);
     memset(c, 0, sizeof(*c));
-    c->PINS = M6502X_RW;
-    c->P = M6502X_BF|M6502X_IF|M6502X_XF|M6502X_ZF;
-    c->S = 0xBD;
+    c->P = M6502X_ZF;
     c->bcd_enabled = !desc->bcd_disabled;
+    return M6502X_RW | M6502X_SYNC | M6502X_RES;
 }
 
 /* set 16-bit address in 64-bit pin mask */
@@ -528,6 +528,20 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             if (c->is_int) {
                 c->IR = 0;
                 c->PC--;
+                c->P &= ~M6502X_BF;
+            }
+
+            // Check the reset pin, this behaviour isn't 100% correct, on a real
+            // 6502, active RES puts the CPU into some sort of half-frozen
+            // weird state, and falling RES unfreezes, finishes the current 
+            // instruction, and then starts a special BRK instruction.
+            // We'll simply start the special BRK instruction when RES is 
+            // high during a SYNC
+            c->is_res = 0 != (pins & M6502X_RES);
+            if (c->is_res) {
+                c->IR = 0;
+                c->P &= ~M6502X_BF;
+                pins &= ~M6502X_RES;
             }
         }
         // check for interrupt, IRQ is level-triggered
@@ -544,10 +558,10 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     switch (c->IR++) {
     /* BRK  */
         case (0x00<<3)|0: _SA(c->PC);break;
-        case (0x00<<3)|1: if(!c->is_int){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);_WR();break;
-        case (0x00<<3)|2: _SAD(0x0100|c->S--,c->PC);_WR();break;
-        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->is_int?(c->P&~M6502X_BF):(c->P|M6502X_BF));_WR();break;
-        case (0x00<<3)|4: if(0!=(pins&M6502X_NMI)){_SA(0xFFFA);c->AD=0xFFFB;}else{_SA(0xFFFE);c->AD=0xFFFF;}c->P|=M6502X_IF; /* NMI hijacking */break;
+        case (0x00<<3)|1: if(!c->is_int){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(!c->is_res){_WR();}break;
+        case (0x00<<3)|2: _SAD(0x0100|c->S--,c->PC);if(!c->is_res){_WR();}break;
+        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->P|M6502X_XF);if(!c->is_res){_WR();}break;
+        case (0x00<<3)|4: if(c->is_res){_SA(0xFFFC);c->AD=0xFFFD;}else if(0!=(pins&M6502X_NMI)){_SA(0xFFFA);c->AD=0xFFFB;}else{_SA(0xFFFE);c->AD=0xFFFF;}c->P|=(M6502X_IF|M6502X_BF); /* NMI hijacking */break;
         case (0x00<<3)|5: _SA(c->AD);c->AD=_GD(); /* NMI "half-hijacking" not possible */break;
         case (0x00<<3)|6: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
         case (0x00<<3)|7: assert(false);break;
@@ -616,7 +630,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x07<<3)|7: assert(false);break;
     /* PHP  */
         case (0x08<<3)|0: _SA(c->PC);break;
-        case (0x08<<3)|1: _SAD(0x0100|c->S--,c->P|M6502X_BF);_WR();break;
+        case (0x08<<3)|1: _SAD(0x0100|c->S--,c->P|M6502X_XF);_WR();break;
         case (0x08<<3)|2: _FETCH();break;
         case (0x08<<3)|3: assert(false);break;
         case (0x08<<3)|4: assert(false);break;
@@ -906,7 +920,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x28<<3)|0: _SA(c->PC);break;
         case (0x28<<3)|1: _SA(0x0100|c->S++);break;
         case (0x28<<3)|2: _SA(0x0100|c->S);break;
-        case (0x28<<3)|3: c->P=(_GD()&~M6502X_BF)|M6502X_XF;_FETCH();break;
+        case (0x28<<3)|3: c->P=(_GD()&~M6502X_XF);_FETCH();break;
         case (0x28<<3)|4: assert(false);break;
         case (0x28<<3)|5: assert(false);break;
         case (0x28<<3)|6: assert(false);break;
@@ -1122,7 +1136,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x40<<3)|0: _SA(c->PC);break;
         case (0x40<<3)|1: _SA(0x0100|c->S++);break;
         case (0x40<<3)|2: _SA(0x0100|c->S++);break;
-        case (0x40<<3)|3: _SA(0x0100|c->S++);c->P=(_GD()&~M6502X_BF)|M6502X_XF;break;
+        case (0x40<<3)|3: _SA(0x0100|c->S++);c->P=_GD()&~M6502X_XF;break;
         case (0x40<<3)|4: _SA(0x0100|c->S);c->AD=_GD();break;
         case (0x40<<3)|5: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
         case (0x40<<3)|6: assert(false);break;

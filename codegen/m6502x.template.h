@@ -222,8 +222,8 @@ typedef struct {
     uint8_t bcd_enabled;
 } m6502x_t;
 
-/* initialize a new m6502 instance */
-void m6502x_init(m6502x_t* cpu, const m6502x_desc_t* desc);
+/* initialize a new m6502 instance and return initial pin mask */
+uint64_t m6502x_init(m6502x_t* cpu, const m6502x_desc_t* desc);
 /* execute one tick */
 uint64_t m6502x_tick(m6502x_t* cpu, uint64_t pins);
 
@@ -476,13 +476,12 @@ static inline void _m6502x_sbx(m6502x_t* cpu, uint8_t v) {
 }
 #undef _M6502X_NZ
 
-void m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
+uint64_t m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
     CHIPS_ASSERT(c && desc);
     memset(c, 0, sizeof(*c));
-    c->PINS = M6502X_RW;
-    c->P = M6502X_BF|M6502X_IF|M6502X_XF|M6502X_ZF;
-    c->S = 0xBD;
+    c->P = M6502X_ZF;
     c->bcd_enabled = !desc->bcd_disabled;
+    return M6502X_RW | M6502X_SYNC | M6502X_RES;
 }
 
 /* set 16-bit address in 64-bit pin mask */
@@ -529,6 +528,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             if (c->is_int) {
                 c->IR = 0;
                 c->PC--;
+                c->P &= ~M6502X_BF;
             }
 
             // Check the reset pin, this behaviour isn't 100% correct, on a real
@@ -540,6 +540,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             c->is_res = 0 != (pins & M6502X_RES);
             if (c->is_res) {
                 c->IR = 0;
+                c->P &= ~M6502X_BF;
                 pins &= ~M6502X_RES;
             }
         }

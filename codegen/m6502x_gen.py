@@ -250,8 +250,8 @@ def i_brk(o):
     cmt(o, 'BRK')
     o.t('if(!c->is_int){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(!c->is_res){_WR();}')
     o.t('_SAD(0x0100|c->S--,c->PC);if(!c->is_res){_WR();}')
-    o.t('_SAD(0x0100|c->S--,c->is_int?(c->P&~M6502X_BF):(c->P|M6502X_BF));if(!c->is_res){_WR();}')
-    o.t('if(c->is_res){_SA(0xFFFC);c->AD=0xFFFD;}else if(0!=(pins&M6502X_NMI)){_SA(0xFFFA);c->AD=0xFFFB;}else{_SA(0xFFFE);c->AD=0xFFFF;}c->P|=M6502X_IF; /* NMI hijacking */')
+    o.t('_SAD(0x0100|c->S--,c->P|M6502X_XF);if(!c->is_res){_WR();}')
+    o.t('if(c->is_res){_SA(0xFFFC);c->AD=0xFFFD;}else if(0!=(pins&M6502X_NMI)){_SA(0xFFFA);c->AD=0xFFFB;}else{_SA(0xFFFE);c->AD=0xFFFF;}c->P|=(M6502X_IF|M6502X_BF); /* NMI hijacking */')
     o.t('_SA(c->AD);c->AD=_GD(); /* NMI "half-hijacking" not possible */')
     o.t('c->PC=(_GD()<<8)|c->AD;')
 
@@ -345,14 +345,14 @@ def i_tsx(o):
 #-------------------------------------------------------------------------------
 def i_php(o):
     cmt(o,'PHP')
-    o.t('_SAD(0x0100|c->S--,c->P|M6502X_BF);_WR();')
+    o.t('_SAD(0x0100|c->S--,c->P|M6502X_XF);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_plp(o):
     cmt(o,'PLP')
     o.t('_SA(0x0100|c->S++);')   # read junk byte from current SP
     o.t('_SA(0x0100|c->S);')     # read actual byte  
-    o.t('c->P=(_GD()&~M6502X_BF)|M6502X_XF;');
+    o.t('c->P=(_GD()&~M6502X_XF);');
 
 #-------------------------------------------------------------------------------
 def i_pha(o):
@@ -440,7 +440,7 @@ def i_rti(o):
     # load processor status flag from stack
     o.t('_SA(0x0100|c->S++);')
     # load return address low byte from stack
-    o.t('_SA(0x0100|c->S++);c->P=(_GD()&~M6502X_BF)|M6502X_XF;')
+    o.t('_SA(0x0100|c->S++);c->P=_GD()&~M6502X_XF;')
     # load return address high byte from stack
     o.t('_SA(0x0100|c->S);c->AD=_GD();')
     # update PC (which is already placed on the right return-to instruction)
