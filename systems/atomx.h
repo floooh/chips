@@ -293,7 +293,7 @@ int atom_display_height(atom_t* sys) {
 
 void atom_reset(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    sys->cpu_pins |= M6502X_RES;
+    sys->cpu_pins = m6502x_reset(&sys->cpu);
     i8255_reset(&sys->ppi);
     m6522_reset(&sys->via);
     mc6847_reset(&sys->vdg);

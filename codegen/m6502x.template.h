@@ -204,9 +204,17 @@ extern "C" {
 #define M6502X_VF (1<<6)   /* overflow */
 #define M6502X_NF (1<<7)   /* negative */
 
+typedef void (*m6510_out_t)(uint8_t data, void* user_data);
+typedef uint8_t (*m6510_in_t)(void* user_data);
+
 /* the desc structure provided to m6502_init() */
 typedef struct {
-    bool bcd_disabled;      /* set to true if BCD mode is disabled */
+    bool bcd_disabled;              /* set to true if BCD mode is disabled */
+    m6510_in_t m6510_in_cb;         /* optional port IO input callback (only on m6510) */
+    m6510_out_t m6510_out_cb;       /* optional port IO output callback (only on m6510) */
+    void* m6510_user_data;          /* optional callback user data */
+    uint8_t m6510_io_pullup;        /* IO port bits that are 1 when reading */
+    uint8_t m6510_io_floating;      /* unconnected IO port pins */
 } m6502x_desc_t;
 
 /* M6502 CPU state */
@@ -221,12 +229,28 @@ typedef struct {
     uint8_t is_int;
     uint8_t is_res;
     uint8_t bcd_enabled;
+
+    /* 6510 IO port state */
+    void* user_data;
+    m6510_in_t in_cb;
+    m6510_out_t out_cb;
+    uint8_t io_ddr;     /* 1: output, 0: input */
+    uint8_t io_inp;     /* last port input */
+    uint8_t io_out;     /* last port output */
+    uint8_t io_pins;    /* current state of IO pins (combined input/output) */
+    uint8_t io_pullup;
+    uint8_t io_floating;
+    uint8_t io_drive;
 } m6502x_t;
 
 /* initialize a new m6502 instance and return initial pin mask */
 uint64_t m6502x_init(m6502x_t* cpu, const m6502x_desc_t* desc);
+/* initiate reset sequence (takes the next 7 ticks to execute) */
+uint64_t m6502x_reset(m6502x_t* cpu);
 /* execute one tick */
 uint64_t m6502x_tick(m6502x_t* cpu, uint64_t pins);
+/* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
+uint64_t m6510_iorq(m6502x_t* cpu, uint64_t pins);
 
 /* register access functions */
 void m6502x_set_a(m6502x_t* cpu, uint8_t v);
@@ -253,6 +277,10 @@ uint16_t m6502x_pc(m6502x_t* cpu);
 #define M6502X_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 /* return a pin mask with control-pins, address and data bus */
 #define M6502X_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
+/* set the port bits on the 64-bit pin mask */
+#define M6510X_SET_PORT(p,d) {p=(((p)&~M6510X_PORT_BITS)|((((uint64_t)d)<<32)&M6510X_PORT_BITS));}
+/* M6510: check for IO port access to address 0 or 1 */
+#define M6510_CHECK_IO(p) ((p&0xFFFEULL)==0)
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -482,7 +510,59 @@ uint64_t m6502x_init(m6502x_t* c, const m6502x_desc_t* desc) {
     memset(c, 0, sizeof(*c));
     c->P = M6502X_ZF;
     c->bcd_enabled = !desc->bcd_disabled;
-    return M6502X_RW | M6502X_SYNC | M6502X_RES;
+    c->PINS = M6502X_RW | M6502X_SYNC | M6502X_RES;
+    c->in_cb = desc->m6510_in_cb;
+    c->out_cb = desc->m6510_out_cb;
+    c->user_data = desc->m6510_user_data;
+    c->io_pullup = desc->m6510_io_pullup;
+    c->io_floating = desc->m6510_io_floating;
+    return c->PINS;
+}
+
+uint64_t m6502x_reset(m6502x_t* c) {
+    CHIPS_ASSERT(c);
+    c->PINS = M6502X_RW | M6502X_SYNC | M6502X_RES;
+    c->io_ddr = 0;
+    c->io_out = 0;
+    c->io_inp = 0;
+    c->io_pins = 0;
+    return c->PINS;
+}
+
+/* only call this when accessing address 0 or 1 (M6510_CHECK_IO(pins) evaluates to true) */
+uint64_t m6510_iorq(m6502x_t* c, uint64_t pins) {
+    CHIPS_ASSERT(c->in_cb && c->out_cb);
+    if ((pins & M6502X_A0) == 0) {
+        /* address 0: access to data direction register */
+        if (pins & M6502X_RW) {
+            /* read IO direction bits */
+            M6502X_SET_DATA(pins, c->io_ddr);
+        }
+        else {
+            /* write IO direction bits and update outside world */
+            c->io_ddr = M6502X_GET_DATA(pins);
+            c->io_drive = (c->io_out & c->io_ddr) | (c->io_drive & ~c->io_ddr);
+            c->out_cb((c->io_out & c->io_ddr) | (c->io_pullup & ~c->io_ddr), c->user_data);
+            c->io_pins = (c->io_out & c->io_ddr) | (c->io_inp & ~c->io_ddr);
+        }
+    }
+    else {
+        /* address 1: perform I/O */
+        if (pins & M6502X_RW) {
+            /* an input operation */
+            c->io_inp = c->in_cb(c->user_data);
+            uint8_t val = ((c->io_inp | (c->io_floating & c->io_drive)) & ~c->io_ddr) | (c->io_out & c->io_ddr);
+            M6502X_SET_DATA(pins, val);
+        }
+        else {
+            /* an output operation */
+            c->io_out = M6502X_GET_DATA(pins);
+            c->io_drive = (c->io_out & c->io_ddr) | (c->io_drive & ~c->io_ddr);
+            c->out_cb((c->io_out & c->io_ddr) | (c->io_pullup & ~c->io_ddr), c->user_data);
+        }
+        c->io_pins = (c->io_out & c->io_ddr) | (c->io_inp & ~c->io_ddr);
+    }
+    return pins;
 }
 
 /* set 16-bit address in 64-bit pin mask */
@@ -556,6 +636,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     switch (c->IR++) {
 $decode_block
     }
+    M6510X_SET_PORT(pins, c->io_pins);
     c->PINS = pins;
     return pins;
 }
