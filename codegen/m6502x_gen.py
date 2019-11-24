@@ -248,10 +248,10 @@ def enc_addr(op, addr_mode, mem_access):
 #-------------------------------------------------------------------------------
 def i_brk(o):
     cmt(o, 'BRK')
-    o.t('if(!c->is_int){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);_WR();')
-    o.t('_SAD(0x0100|c->S--,c->PC);_WR();')
-    o.t('_SAD(0x0100|c->S--,c->is_int?(c->P&~M6502X_BF):(c->P|M6502X_BF));_WR();')
-    o.t('if(0!=(pins&M6502X_NMI)){_SA(0xFFFA);c->AD=0xFFFB;}else{_SA(0xFFFE);c->AD=0xFFFF;}c->P|=M6502X_IF; /* NMI hijacking */')
+    o.t('if(!c->is_int){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(!c->is_res){_WR();}')
+    o.t('_SAD(0x0100|c->S--,c->PC);if(!c->is_res){_WR();}')
+    o.t('_SAD(0x0100|c->S--,c->is_int?(c->P&~M6502X_BF):(c->P|M6502X_BF));if(!c->is_res){_WR();}')
+    o.t('if(c->is_res){_SA(0xFFFC);c->AD=0xFFFD;}else if(0!=(pins&M6502X_NMI)){_SA(0xFFFA);c->AD=0xFFFB;}else{_SA(0xFFFE);c->AD=0xFFFF;}c->P|=M6502X_IF; /* NMI hijacking */')
     o.t('_SA(c->AD);c->AD=_GD(); /* NMI "half-hijacking" not possible */')
     o.t('c->PC=(_GD()<<8)|c->AD;')
 

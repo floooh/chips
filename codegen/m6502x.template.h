@@ -218,6 +218,7 @@ typedef struct {
     uint8_t irq_pip;
     uint8_t nmi_pip;
     uint8_t is_int;
+    uint8_t is_res;
     uint8_t bcd_enabled;
 } m6502x_t;
 
@@ -528,6 +529,18 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             if (c->is_int) {
                 c->IR = 0;
                 c->PC--;
+            }
+
+            // Check the reset pin, this behaviour isn't 100% correct, on a real
+            // 6502, active RES puts the CPU into some sort of half-frozen
+            // weird state, and falling RES unfreezes, finishes the current 
+            // instruction, and then starts a special BRK instruction.
+            // We'll simply start the special BRK instruction when RES is 
+            // high during a SYNC
+            c->is_res = 0 != (pins & M6502X_RES);
+            if (c->is_res) {
+                c->IR = 0;
+                pins &= ~M6502X_RES;
             }
         }
         // check for interrupt, IRQ is level-triggered
