@@ -305,23 +305,20 @@ void atom_reset(atom_t* sys) {
 
 void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
-    uint32_t ticks = 0;
-    int trap_id = 0;
-    uint64_t pins = sys->cpu_pins;
-    for (ticks = 0; (ticks < ticks_to_run) && (0 == trap_id); ticks++) {
-        pins = _atom_tick(sys, pins);
-        /* check if the trapped OSLoad function was hit to implement tape file loading */
-        /* FIXME
-        trap_id = sys->cpu.trap_id;
-        if (1 == trap_id) {
-            _atom_osload(sys);
-            trap_id = 0;
+    uint32_t num_ticks = clk_us_to_ticks(&sys->clk, micro_seconds);
+    const uint64_t trap_mask = M6502X_SYNC|0xFFFF;
+    const uint64_t trap_val  = M6502X_SYNC|0xF96E;
+    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+        sys->cpu_pins = _atom_tick(sys, sys->cpu_pins);
+        if (sys->tape_size > 0) {
+            if ((sys->cpu_pins & trap_mask) == trap_val) {
+                /* check if the trapped OSLoad function was hit to implement tape file loading
+                    http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis
+                */
+                _atom_osload(sys);
+            }
         }
-        */
     }
-    sys->cpu_pins = pins;
-    clk_ticks_executed(&sys->clk, ticks);
     kbd_update(&sys->kbd);
 }
 
@@ -683,11 +680,6 @@ typedef struct {
     uint16_t length;
 } _atom_tap_header;
 
-/* trap the OSLOAD function (http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis) */
-static int _atom_trap_cb(uint16_t pc, int ticks, uint64_t pins, void* user_data) {
-    return (pc == 0xF96E) ? 1 : 0;
-}
-
 bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid);
     CHIPS_ASSERT(ptr);
@@ -699,8 +691,6 @@ bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
     memcpy(sys->tape_buf, ptr, num_bytes);
     sys->tape_pos = 0;
     sys->tape_size = num_bytes;
-// FIXME
-//    m6502_trap_cb(&sys->cpu, _atom_trap_cb, sys);
     return true;
 }
 
@@ -708,8 +698,6 @@ void atom_remove_tape(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->tape_pos = 0;
     sys->tape_size = 0;
-// FIXME
-//  m6502_trap_cb(&sys->cpu, 0, 0);
 }
 
 /*
@@ -790,18 +778,18 @@ void _atom_osload(atom_t* sys) {
     dd &= ~(1<<7);
     mem_wr(&sys->mem, 0xDD, dd);
 
-    /* execute RTS */
-    sys->cpu.S++;
-    uint8_t l = mem_rd(&sys->mem, 0x0100|sys->cpu.S++);
-    uint8_t h = mem_rd(&sys->mem, 0x0100|sys->cpu.S);
     if (success) {
-        /* jump to start of loaded code */
-        sys->cpu.PC = exec_addr;
+        /* on success, continue with start of loaded code */
+        sys->cpu.S += 2;
+        M6502X_SET_ADDR(sys->cpu_pins, exec_addr);
+        M6502X_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, exec_addr));
+        m6502x_set_pc(&sys->cpu, exec_addr+1);
     }
     else {
-        /* on error, just execute the RTS */
-        sys->cpu.PC = (h<<8)|l;
-        sys->cpu.PC++;
+        /* otherwise just continue with an RTS */
+        M6502X_SET_ADDR(sys->cpu_pins, 0xF9A1);
+        M6502X_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, 0xF9A1));
+        m6502x_set_pc(&sys->cpu, 0xF9A2);
     }
 }
 
