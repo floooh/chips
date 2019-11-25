@@ -594,6 +594,8 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
     if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES)) {
         // RDY pin is only checked during read cycles
         if ((pins & (M6502X_RW|M6502X_RDY)) == (M6502X_RW|M6502X_RDY)) {
+            M6510X_SET_PORT(pins, c->io_pins);
+            c->PINS = pins;
             return pins;
         }
         if (pins & M6502X_SYNC) {
