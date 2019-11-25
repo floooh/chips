@@ -1418,6 +1418,7 @@ static inline uint64_t _m6569_aec(uint64_t pins) {
 
 /*=== TICK FUNCTION ==========================================================*/
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
+    pins &= ~M6569_BA;
     uint8_t g_data = 0x00;
     _m6569_rs_update_badline(vic);
 
