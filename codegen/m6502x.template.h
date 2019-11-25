@@ -179,8 +179,8 @@ extern "C" {
 #define M6502X_IRQ   (1ULL<<26)
 #define M6502X_NMI   (1ULL<<27)
 #define M6502X_RDY   (1ULL<<28)
-#define M6502X_RES   (1ULL<<29)
-#define M6510X_AEC   (1ULL<<30)
+#define M6510X_AEC   (1ULL<<29)
+#define M6502X_RES   (1ULL<<30)
 
 /*--- m6510 specific port pins ---*/
 #define M6510X_P0    (1ULL<<32)
