@@ -998,7 +998,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x28<<3)|0: _SA(c->PC);break;
         case (0x28<<3)|1: _SA(0x0100|c->S++);break;
         case (0x28<<3)|2: _SA(0x0100|c->S);break;
-        case (0x28<<3)|3: c->P=(_GD()&~M6502X_XF);_FETCH();break;
+        case (0x28<<3)|3: c->P=(_GD()|M6502X_BF)&~M6502X_XF;_FETCH();break;
         case (0x28<<3)|4: assert(false);break;
         case (0x28<<3)|5: assert(false);break;
         case (0x28<<3)|6: assert(false);break;
@@ -1214,7 +1214,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x40<<3)|0: _SA(c->PC);break;
         case (0x40<<3)|1: _SA(0x0100|c->S++);break;
         case (0x40<<3)|2: _SA(0x0100|c->S++);break;
-        case (0x40<<3)|3: _SA(0x0100|c->S++);c->P=_GD()&~M6502X_XF;break;
+        case (0x40<<3)|3: _SA(0x0100|c->S++);c->P=(_GD()|M6502X_BF)&~M6502X_XF;break;
         case (0x40<<3)|4: _SA(0x0100|c->S);c->AD=_GD();break;
         case (0x40<<3)|5: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
         case (0x40<<3)|6: assert(false);break;
@@ -1311,7 +1311,7 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
         case (0x4A<<3)|7: assert(false);break;
     /* ASR # (undoc) */
         case (0x4B<<3)|0: _SA(c->PC++);break;
-        case (0x4B<<3)|1: c->A=_GD();c->A=_m6502x_lsr(c,c->A);_FETCH();break;
+        case (0x4B<<3)|1: c->A&=_GD();c->A=_m6502x_lsr(c,c->A);_FETCH();break;
         case (0x4B<<3)|2: assert(false);break;
         case (0x4B<<3)|3: assert(false);break;
         case (0x4B<<3)|4: assert(false);break;

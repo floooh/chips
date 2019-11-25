@@ -352,7 +352,7 @@ def i_plp(o):
     cmt(o,'PLP')
     o.t('_SA(0x0100|c->S++);')   # read junk byte from current SP
     o.t('_SA(0x0100|c->S);')     # read actual byte  
-    o.t('c->P=(_GD()&~M6502X_XF);');
+    o.t('c->P=(_GD()|M6502X_BF)&~M6502X_XF;');
 
 #-------------------------------------------------------------------------------
 def i_pha(o):
@@ -440,7 +440,7 @@ def i_rti(o):
     # load processor status flag from stack
     o.t('_SA(0x0100|c->S++);')
     # load return address low byte from stack
-    o.t('_SA(0x0100|c->S++);c->P=_GD()&~M6502X_XF;')
+    o.t('_SA(0x0100|c->S++);c->P=(_GD()|M6502X_BF)&~M6502X_XF;')
     # load return address high byte from stack
     o.t('_SA(0x0100|c->S);c->AD=_GD();')
     # update PC (which is already placed on the right return-to instruction)
@@ -575,7 +575,7 @@ def u_slo(o):
 def x_asr(o):
     # undocumented AND+LSR
     u_cmt(o, 'ASR')
-    o.t('c->A=_GD();c->A=_m6502x_lsr(c,c->A);')
+    o.t('c->A&=_GD();c->A=_m6502x_lsr(c,c->A);')
 
 #-------------------------------------------------------------------------------
 def u_sre(o):
