@@ -98,7 +98,8 @@ typedef struct {
     c64_joystick_type_t joystick_type;  /* default is C64_JOYSTICK_NONE */
 
     /* video output config (if you don't want video decoding, set these to 0) */
-    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 392*272*4 bytes */
+    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, 
+                                   at least 512*312*4 bytes, or ask via c64_max_display_size() */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
 
     /* optional user-data for callback functions */
