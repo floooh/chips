@@ -204,6 +204,11 @@ extern "C" {
 #define M6502X_VF (1<<6)   /* overflow */
 #define M6502X_NF (1<<7)   /* negative */
 
+/*--- internal BRK state flags */
+#define M6502X_BRK_IRQ      (1<<0)  /* IRQ was triggered */
+#define M6502X_BRK_NMI      (1<<1)  /* NMI was triggered */
+#define M6502X_BRK_RESET    (1<<2)  /* RES was triggered */
+
 typedef void (*m6510_out_t)(uint8_t data, void* user_data);
 typedef uint8_t (*m6510_in_t)(void* user_data);
 
@@ -224,10 +229,9 @@ typedef struct {
     uint16_t AD;        /* ADL/ADH internal register */
     uint8_t A,X,Y,S,P;
     uint64_t PINS;
-    uint8_t irq_pip;
-    uint8_t nmi_pip;
-    uint8_t is_int;
-    uint8_t is_res;
+    uint16_t irq_pip;
+    uint16_t nmi_pip;
+    uint8_t brk_flags;
     uint8_t bcd_enabled;
 
     /* 6510 IO port state */
@@ -589,8 +593,6 @@ uint64_t m6510_iorq(m6502x_t* c, uint64_t pins) {
 #define _NZ(v) c->P=((c->P&~(M6502X_NF|M6502X_ZF))|((v&0xFF)?(v&M6502X_NF):M6502X_ZF))
 
 uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
-    c->irq_pip <<= 1;
-    c->nmi_pip <<= 1;
     if (pins & (M6502X_SYNC|M6502X_IRQ|M6502X_NMI|M6502X_RDY|M6502X_RES)) {
         // RDY pin is only checked during read cycles
         if ((pins & (M6502X_RW|M6502X_RDY)) == (M6502X_RW|M6502X_RDY)) {
@@ -603,28 +605,36 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             c->IR = _GD()<<3;
             _OFF(M6502X_SYNC);
             
-            // if interrupt was requested, force a BRK instruction
-            c->is_int = 0 != ((c->irq_pip | c->nmi_pip) & 4);
-            if (c->is_int) {
+            // check IRQ, NMI and RES state
+            //  - IRQ is level-triggered and must be active in the full cycle
+            //    before SYNC
+            //  - NMI is edge-triggered, and the change must have happened in
+            //    any cycle before SYNC
+            //  - RES behaves slightly different than on a real 6502, we go
+            //    into RES state as soon as the pin goes active, from there
+            //    on, behaviour is 'standard'
+            if (0 != (c->irq_pip & 4)) {
+                c->brk_flags |= M6502X_BRK_IRQ;
+            }
+            if (0 != (c->nmi_pip & 0xFFFC)) {
+                c->brk_flags |= M6502X_BRK_NMI;
+            }
+            if (0 != (pins & M6502X_RES)) {
+                c->brk_flags |= M6502X_BRK_RESET;
+            }
+            c->irq_pip &= 3;
+            c->nmi_pip &= 3;
+
+            // if interrupt or reset was requested, force a BRK instruction
+            // check for interrupt:
+            if (c->brk_flags) {
                 c->IR = 0;
                 c->PC--;
-                c->P &= ~M6502X_BF;
-            }
-
-            // Check the reset pin, this behaviour isn't 100% correct, on a real
-            // 6502, active RES puts the CPU into some sort of half-frozen
-            // weird state, and falling RES unfreezes, finishes the current 
-            // instruction, and then starts a special BRK instruction.
-            // We'll simply start the special BRK instruction when RES is 
-            // high during a SYNC
-            c->is_res = 0 != (pins & M6502X_RES);
-            if (c->is_res) {
-                c->IR = 0;
                 c->P &= ~M6502X_BF;
                 pins &= ~M6502X_RES;
             }
         }
-        // check for interrupt, IRQ is level-triggered
+        // IRQ test is level triggered
         if ((pins & M6502X_IRQ) && (0 == (c->P & M6502X_IF))) {
             c->irq_pip |= 1;
         }
@@ -640,6 +650,8 @@ $decode_block
     }
     M6510X_SET_PORT(pins, c->io_pins);
     c->PINS = pins;
+    c->irq_pip <<= 1;
+    c->nmi_pip <<= 1;
     return pins;
 }
 #undef _SA
