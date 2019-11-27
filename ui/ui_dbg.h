@@ -16,6 +16,7 @@
 
     UI_DBG_USE_Z80
     UI_DBG_USE_M6502
+    UI_DBG_USE_M6502X
 
     Optionally provide the following macros with your own implementation
     
@@ -153,11 +154,14 @@ typedef struct ui_dbg_keydesc_t {
 
 typedef struct ui_dbg_desc_t {
     const char* title;          /* window title */
-    #ifdef UI_DBG_USE_Z80
+    #if defined(UI_DBG_USE_Z80)
     z80_t* z80;                 /* Z80 CPU to track */
-    #endif
-    #ifdef UI_DBG_USE_M6502
+    #elif defined(UI_DBG_USE_M6502)
     m6502_t* m6502;             /* 6502 CPU to track */
+    #elif defined(UI_DBG_USE_M6502X)
+    m6502x_t* m6502;
+    #else
+    #error "CPU TYPE"
     #endif
     ui_dbg_read_t read_cb;          /* callback to read memory */
     int read_layer;                 /* layer argument for read_cb */
@@ -184,15 +188,18 @@ typedef struct ui_dbg_dasm_t {
 
 /* debugger state */
 typedef struct ui_dbg_state_t {
-    #ifdef UI_DBG_USE_Z80
+    #if defined(UI_DBG_USE_Z80)
     z80_t* z80;
     z80_trap_t z80_trap_cb;
     void* z80_trap_ud;
-    #endif
-    #ifdef UI_DBG_USE_M6502
+    #elif defined(UI_DBG_USE_M6502)
     m6502_t* m6502;
     m6502_trap_t m6502_trap_cb;
     void* m6502_trap_ud;
+    #elif defined(UI_DBG_USE_M6502X)
+    m6502x_t* m6502;
+    #else
+    #error "CPU TYPE"
     #endif
     bool stopped;
     int step_mode;
@@ -306,11 +313,8 @@ void ui_dbg_reboot(ui_dbg_t* win);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
-#if !defined(UI_DBG_USE_Z80) && !defined(UI_DBG_USE_M6502)
-#error "please define UI_DBG_USE_Z80 or UI_DBG_USE_M6502"
-#endif
-#if defined(UI_DBG_USE_Z80) && defined(UI_DBG_USE_M6502)
-#error "only one of UI_DBG_USE_Z80 or UI_DBG_USE_M6502 can be defined"
+#if !defined(UI_DBG_USE_Z80) && !defined(UI_DBG_USE_M6502) && !defined(UI_DBG_USE_M6502X)
+#error "please define UI_DBG_USE_Z80, UI_DBG_USE_M6502 or UI_DBG_USE_M6502X"
 #endif
 
 /*== GENERAL HELPERS =========================================================*/
@@ -338,6 +342,10 @@ static inline uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
         return z80_pc(win->dbg.z80);
     #elif defined(UI_DBG_USE_M6502)
         return m6502_pc(win->dbg.m6502);
+    #elif defined(UI_DBG_USE_M6502X)
+        return m6502x_pc(win->dbg.m6502);
+    #else
+    #error "CPU TYPE"
     #endif
 }
 
@@ -367,8 +375,10 @@ static inline uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
     win->dasm.bin_pos = 0;
     #if defined(UI_DBG_USE_Z80)
         z80dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
-    #elif defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502) || defined(UI_DBG_USE_M6502X)
         m6502dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
+    #else
+    #error "CPU TYPE"
     #endif
     return win->dasm.cur_addr;
 }
@@ -380,8 +390,10 @@ static inline uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
     win->dasm.bin_pos = 0;
     #if defined(UI_DBG_USE_Z80)
         uint16_t next_pc = z80dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
-    #elif defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502) || defined(UI_DBG_USE_M6502X)
         uint16_t next_pc = m6502dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
+    #else
+    #error "CPU TYPE"
     #endif
     return next_pc - pc;
 }
@@ -401,9 +413,11 @@ static bool _ui_dbg_is_stepover_op(uint8_t opcode) {
             default:
                 return false;
         }
-    #elif defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502) || defined(UI_DBG_USE_M6502X)
         /* on 6502, only JSR qualifies */
         return opcode == 0x20;
+    #else
+    #error "CPU TYPE"
     #endif
 }
 
@@ -456,7 +470,7 @@ static bool _ui_dbg_is_controlflow_op(uint8_t opcode0, uint8_t opcode1) {
             default:
                 return false;
         }
-    #elif defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502) || defined(UI_DBG_USE_M6502X)
         switch (opcode0) {
             /* BRK */
             case 0x00:
@@ -476,6 +490,8 @@ static bool _ui_dbg_is_controlflow_op(uint8_t opcode0, uint8_t opcode1) {
             default:
                 return false;
         }
+    #else
+    #error "CPU TYPE"
     #endif
 }
 
@@ -604,9 +620,11 @@ static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     #if defined(UI_DBG_USE_Z80)
         CHIPS_ASSERT(desc->z80);
         dbg->z80 = desc->z80;
-    #elif defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502) || defined(UI_DBG_USE_M6502X)
         CHIPS_ASSERT(desc->m6502);
         dbg->m6502 = desc->m6502;
+    #else
+    #error "CPU TYPE"
     #endif
     dbg->install_trap_cb = true;
     dbg->delete_breakpoint_index = -1;
@@ -620,6 +638,10 @@ static void _ui_dbg_dbgstate_reset(ui_dbg_t* win) {
     #elif defined(UI_DBG_USE_M6502)
         dbg->m6502_trap_cb = 0;
         dbg->m6502_trap_ud = 0;
+    #elif defined(UI_DBG_USE_M6502X)
+        CHIPS_ASSERT(false && "FIXME");
+    #else
+    #error "CPU TYPE"
     #endif
     dbg->stopped = false;
     dbg->step_mode = UI_DBG_STEPMODE_NONE;
@@ -711,6 +733,12 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                             if (M6502_IRQ & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
+                        #elif defined(UI_DBG_USE_M6502X)
+                            if (M6502X_IRQ & rising_pins) {
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                            }
+                        #else
+                        #error "CPU TYPE"
                         #endif
                         break;
 
@@ -723,6 +751,12 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                             if (M6502_NMI & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
+                        #elif defined(UI_DBG_USE_M6502X)
+                            if (M6502X_NMI & rising_pins) {
+                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                            }
+                        #else
+                        #error "CPU TYPE"
                         #endif
                         break;
 
@@ -790,6 +824,17 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
         else {
             win->heatmap.items[addr].write_count++;
         }
+    #elif defined(UI_DBG_USE_M6502X)
+        /* every tick on 6502 is either a read or a write */
+        const uint16_t addr = M6502X_GET_ADDR(pins);
+        if (0 != (pins & M6502X_RW)) {
+            win->heatmap.items[addr].read_count++;
+        }
+        else {
+            win->heatmap.items[addr].write_count++;
+        }
+    #else
+    #error "CPU TYPE"
     #endif
     win->dbg.trap_pc = pc;
     win->dbg.trap_frame_id = win->dbg.frame_id;
@@ -806,6 +851,10 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
             if (win->dbg.m6502_trap_cb) {
                 trap_id = win->dbg.m6502_trap_cb(pc, ticks, pins, win->dbg.m6502_trap_ud);
             }
+        #elif defined(UI_DBG_USE_M6502X)
+            CHIPS_ASSERT(false && "FIXME");
+        #else
+        #error "CPU TYPE"
         #endif
     }
     return trap_id;
@@ -1493,6 +1542,10 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         ImGui::AlignTextToFramePadding();
         ImGui::Text("%s", p_str);
         ImGui::EndChild();
+    #elif defined(UI_DBG_USE_M6502X)
+        CHIPS_ASSERT(false && "FIXME");
+    #else
+    #error "CPU TYPE"
     #endif
     ImGui::Separator();
 }
@@ -1861,6 +1914,10 @@ bool ui_dbg_before_exec(ui_dbg_t* win) {
                 win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
                 win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
                 m6502_trap_cb(win->dbg.m6502, _ui_dbg_bp_eval, win);
+            #elif defined(UI_DBG_USE_M6502X)
+                CHIPS_ASSERT(false && "FIXME");
+            #else
+            #error "CPU TYPE"
             #endif
         }
         return !win->dbg.stopped;
@@ -1888,6 +1945,10 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
         win->dbg.m6502_trap_cb = 0;
         win->dbg.m6502_trap_ud = 0;
         trap_id = win->dbg.m6502->trap_id;
+    #elif defined(UI_DBG_USE_M6502X)
+        CHIPS_ASSERT(false && "FIXME");
+    #else
+    #error "CPU TYPE"
     #endif
     if (trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
