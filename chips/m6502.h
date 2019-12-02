@@ -82,7 +82,7 @@
     ~~~
         Execute instructions until the requested number of _ticks_ is reached,
         or a trap has been hit. Return number of executed cycles. To check if a trap
-        has been hit, test the m6502_t.trap_id member on >= 0. 
+        has been hit, test the m6502_t.trap_id member on > 0. 
         During execution the tick callback will be called for each clock cycle
         with the current CPU pin bitmask. The tick callback function must inspect
         the pin bitmask, perform memory requests and if necessary update the
@@ -236,7 +236,7 @@ typedef struct {
     m6502_trap_t trap_cb;
     void* user_data;
     void* trap_user_data;
-    int trap_id;        /* index of trap hit (-1 if no trap) */
+    int trap_id;        /* index of trap hit (0 if no trap) */
 
     /* the m6510 IO port stuff */
     m6510_in_t in_cb;
@@ -463,7 +463,6 @@ void m6502_init(m6502_t* c, const m6502_desc_t* desc) {
     c->out_cb = desc->out_cb;
     c->io_pullup = desc->m6510_io_pullup;
     c->io_floating = desc->m6510_io_floating;
-    c->trap_id = -1;
 }
 
 void m6502_reset(m6502_t* c) {

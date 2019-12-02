@@ -209,6 +209,7 @@ extern "C" {
 #define M6502X_BRK_NMI      (1<<1)  /* NMI was triggered */
 #define M6502X_BRK_RESET    (1<<2)  /* RES was triggered */
 
+typedef int (*m6502x_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* user_data);
 typedef void (*m6510_out_t)(uint8_t data, void* user_data);
 typedef uint8_t (*m6510_in_t)(void* user_data);
 
@@ -233,7 +234,10 @@ typedef struct {
     uint16_t nmi_pip;
     uint8_t brk_flags;
     uint8_t bcd_enabled;
-
+    /* trap related stuff */
+    m6502x_trap_t trap_cb;
+    void* trap_user_data;
+    int trap_id;
     /* 6510 IO port state */
     void* user_data;
     m6510_in_t in_cb;
@@ -251,6 +255,8 @@ typedef struct {
 uint64_t m6502x_init(m6502x_t* cpu, const m6502x_desc_t* desc);
 /* initiate reset sequence (takes the next 7 ticks to execute) */
 uint64_t m6502x_reset(m6502x_t* cpu);
+/* set or clear trap callback */
+void m6502x_trap_cb(m6502x_t* cpu, m6502x_trap_t trap_cb, void* trap_user_data);
 /* execute one tick */
 uint64_t m6502x_tick(m6502x_t* cpu, uint64_t pins);
 /* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
@@ -533,6 +539,12 @@ uint64_t m6502x_reset(m6502x_t* c) {
     return c->PINS;
 }
 
+void m6502x_trap_cb(m6502x_t* c, m6502x_trap_t trap_cb, void* trap_user_data) {
+    CHIPS_ASSERT(c);
+    c->trap_cb = trap_cb;
+    c->trap_user_data = trap_user_data;
+}
+
 /* only call this when accessing address 0 or 1 (M6510_CHECK_IO(pins) evaluates to true) */
 uint64_t m6510_iorq(m6502x_t* c, uint64_t pins) {
     CHIPS_ASSERT(c->in_cb && c->out_cb);
@@ -632,6 +644,11 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
                 c->PC--;
                 c->P &= ~M6502X_BF;
                 pins &= ~M6502X_RES;
+            }
+
+            // invoke the trap callback (FIXME: number of ticks since last SYNC
+            if (c->trap_cb) {
+                c->trap_id = c->trap_cb(M6502X_GET_ADDR(pins), 0, pins, c->trap_user_data);
             }
         }
         // IRQ test is level triggered

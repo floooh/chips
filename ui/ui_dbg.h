@@ -852,7 +852,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
                 trap_id = win->dbg.m6502_trap_cb(pc, ticks, pins, win->dbg.m6502_trap_ud);
             }
         #elif defined(UI_DBG_USE_M6502X)
-            CHIPS_ASSERT(false && "FIXME");
+            //CHIPS_ASSERT(false && "FIXME");
         #else
         #error "CPU TYPE"
         #endif
@@ -1543,7 +1543,36 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         ImGui::Text("%s", p_str);
         ImGui::EndChild();
     #elif defined(UI_DBG_USE_M6502X)
-        CHIPS_ASSERT(false && "FIXME");
+        const float h = 1*ImGui::GetFrameHeightWithSpacing();
+        ImGui::BeginChild("##regs", ImVec2(0, h), false);
+        m6502x_t* c = win->dbg.m6502;
+        ImGui::Columns(7, "##reg_columns", false);
+        for (int i = 0; i < 5; i++) {
+            ImGui::SetColumnWidth(i, 44);
+        }
+        ImGui::SetColumnWidth(5, 64);
+        ImGui::SetColumnWidth(6, 72);
+        m6502x_set_a(c, ui_util_input_u8("A", m6502x_a(c))); ImGui::NextColumn();
+        m6502x_set_x(c, ui_util_input_u8("X", m6502x_x(c))); ImGui::NextColumn();
+        m6502x_set_y(c, ui_util_input_u8("Y", m6502x_y(c))); ImGui::NextColumn();
+        m6502x_set_s(c, ui_util_input_u8("S", m6502x_s(c))); ImGui::NextColumn();
+        m6502x_set_p(c, ui_util_input_u8("P", m6502x_p(c))); ImGui::NextColumn();
+        m6502x_set_pc(c, ui_util_input_u16("PC", m6502x_pc(c))); ImGui::NextColumn();
+        const uint8_t p = m6502x_p(c);
+        char p_str[9] = {
+            (p & M6502X_NF) ? 'N':'-',
+            (p & M6502X_VF) ? 'V':'-',
+            (p & M6502X_XF) ? 'X':'-',
+            (p & M6502X_BF) ? 'B':'-',
+            (p & M6502X_DF) ? 'D':'-',
+            (p & M6502X_IF) ? 'I':'-',
+            (p & M6502X_ZF) ? 'Z':'-',
+            (p & M6502X_CF) ? 'C':'-',
+            0,
+        };
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%s", p_str);
+        ImGui::EndChild();
     #else
     #error "CPU TYPE"
     #endif
@@ -1915,7 +1944,7 @@ bool ui_dbg_before_exec(ui_dbg_t* win) {
                 win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
                 m6502_trap_cb(win->dbg.m6502, _ui_dbg_bp_eval, win);
             #elif defined(UI_DBG_USE_M6502X)
-                CHIPS_ASSERT(false && "FIXME");
+                //CHIPS_ASSERT(false && "FIXME");
             #else
             #error "CPU TYPE"
             #endif
@@ -1946,7 +1975,11 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
         win->dbg.m6502_trap_ud = 0;
         trap_id = win->dbg.m6502->trap_id;
     #elif defined(UI_DBG_USE_M6502X)
-        CHIPS_ASSERT(false && "FIXME");
+        if (win->dbg.m6502->PINS & M6502X_SYNC) {
+            uint16_t pc = M6502X_GET_ADDR(win->dbg.m6502->PINS);
+            trap_id = _ui_dbg_bp_eval(pc, 0, win->dbg.m6502->PINS, win);
+        }
+        //CHIPS_ASSERT(false && "FIXME");
     #else
     #error "CPU TYPE"
     #endif
