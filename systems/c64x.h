@@ -183,8 +183,10 @@ int c64_display_width(c64_t* sys);
 int c64_display_height(c64_t* sys);
 /* reset a C64 instance */
 void c64_reset(c64_t* sys);
-/* tick C64 instance for a given number of microseconds */
+/* tick C64 instance for a given number of microseconds, also updates keyboard state */
 void c64_exec(c64_t* sys, uint32_t micro_seconds);
+/* tick the C64 instance once, does not update keyboard! */
+void c64_tick(c64_t* sys);
 /* send a key-down event to the C64 */
 void c64_key_down(c64_t* sys, int key_code);
 /* send a key-up event to the C64 */
@@ -359,6 +361,10 @@ void c64_reset(c64_t* sys) {
     sys->tape_size = 0;
     sys->tape_pos = 0;
     sys->tape_tick_count = 0;
+}
+
+void c64_tick(c64_t* sys) {
+    sys->cpu_pins = _c64_tick(sys, sys->cpu_pins);
 }
 
 void c64_exec(c64_t* sys, uint32_t micro_seconds) {

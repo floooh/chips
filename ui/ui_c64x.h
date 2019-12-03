@@ -93,8 +93,7 @@ typedef struct {
 void ui_c64x_init(ui_c64x_t* ui, const ui_c64x_desc_t* desc);
 void ui_c64x_discard(ui_c64x_t* ui);
 void ui_c64x_draw(ui_c64x_t* ui, double time_ms);
-bool ui_c64x_before_exec(ui_c64x_t* ui);
-void ui_c64x_after_exec(ui_c64x_t* ui);
+void ui_c64x_exec(ui_c64x_t* ui, uint32_t frame_time_us);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -633,15 +632,22 @@ void ui_c64x_draw(ui_c64x_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-bool ui_c64x_before_exec(ui_c64x_t* ui) {
+void ui_c64x_exec(ui_c64x_t* ui, uint32_t frame_time_us) {
     CHIPS_ASSERT(ui && ui->c64);
-    return ui_dbg_before_exec(&ui->dbg);
+    uint32_t ticks_to_run = clk_ticks_to_run(&ui->c64->clk, frame_time_us);
+    uint32_t ticks_executed = 0;
+    c64_t* c64 = ui->c64;
+    while (!ui->dbg.dbg.stopped && (ticks_executed < ticks_to_run)) {
+        // run full instructions
+        do {
+            c64_tick(ui->c64);
+            ticks_executed++;
+        } while (0 == (c64->cpu_pins & M6502X_SYNC));
+        ui_dbg_after_instr(&ui->dbg, c64->cpu_pins);
+    }
+    clk_ticks_executed(&ui->c64->clk, ticks_executed);
 }
 
-void ui_c64x_after_exec(ui_c64x_t* ui) {
-    CHIPS_ASSERT(ui && ui->c64);
-    ui_dbg_after_exec(&ui->dbg);
-}
 
 #ifdef __clang__
 #pragma clang diagnostic pop

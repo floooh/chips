@@ -293,10 +293,12 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
 void ui_dbg_discard(ui_dbg_t* win);
 /* render the ui_dbg_t UIs */
 void ui_dbg_draw(ui_dbg_t* win);
-/* call before executing system ticks, don't tick if function returns false */
+/* only z80/m6502: call before executing system ticks, don't tick if function returns false */
 bool ui_dbg_before_exec(ui_dbg_t* win);
-/* call after executing system ticks */
+/* only z80/m6502: call after executing system ticks */
 void ui_dbg_after_exec(ui_dbg_t* win);
+/* only m6502x: call after each tick */
+void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins);
 /* call when resetting the emulated machine (re-initializes some data structures) */
 void ui_dbg_reset(ui_dbg_t* win);
 /* call when rebooting the emulated machine (re-initializes some data structures) */
@@ -343,7 +345,7 @@ static inline uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
     #elif defined(UI_DBG_USE_M6502)
         return m6502_pc(win->dbg.m6502);
     #elif defined(UI_DBG_USE_M6502X)
-        return m6502x_pc(win->dbg.m6502);
+        return win->dbg.trap_pc;
     #else
     #error "CPU TYPE"
     #endif
@@ -664,15 +666,32 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     if (win->dbg.step_mode != UI_DBG_STEPMODE_NONE) {
         switch (win->dbg.step_mode) {
             case UI_DBG_STEPMODE_INTO:
+                #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
                 /* stop when PC has changed */
                 if (pc != win->dbg.trap_pc) {
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
+                #elif defined(UI_DBG_USE_M6502X)
+                /* stop on new instruction */
+                if (pins & M6502X_SYNC) {
+                    trap_id = UI_DBG_STEP_TRAPID;
+                }
+                #else
+                #error "CPU TYPE"
+                #endif
                 break;
             case UI_DBG_STEPMODE_OVER:
+                #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
                 if (pc == win->dbg.stepover_pc) {
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
+                #elif defined(UI_DBG_USE_M6502X)
+                if ((pins & M6502X_SYNC) && (pc == win->dbg.stepover_pc)) {
+                    trap_id = UI_DBG_STEP_TRAPID;
+                }
+                #else
+                #error "CPU TYPE"
+                #endif
                 break;
         }
     }
@@ -1931,65 +1950,76 @@ void ui_dbg_reboot(ui_dbg_t* win) {
 }
 
 bool ui_dbg_before_exec(ui_dbg_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    if (win->dbg.install_trap_cb) {
-        win->dbg.frame_id++;
-        if (!win->dbg.stopped) {
-            #if defined(UI_DBG_USE_Z80)
-                win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
-                win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
-                z80_trap_cb(win->dbg.z80, _ui_dbg_bp_eval, win);
-            #elif defined(UI_DBG_USE_M6502)
-                win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
-                win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
-                m6502_trap_cb(win->dbg.m6502, _ui_dbg_bp_eval, win);
-            #elif defined(UI_DBG_USE_M6502X)
-                //CHIPS_ASSERT(false && "FIXME");
-            #else
-            #error "CPU TYPE"
-            #endif
+    #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
+        CHIPS_ASSERT(win && win->valid);
+        if (win->dbg.install_trap_cb) {
+            win->dbg.frame_id++;
+            if (!win->dbg.stopped) {
+                #if defined(UI_DBG_USE_Z80)
+                    win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
+                    win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
+                    z80_trap_cb(win->dbg.z80, _ui_dbg_bp_eval, win);
+                #elif defined(UI_DBG_USE_M6502)
+                    win->dbg.m6502_trap_cb = win->dbg.m6502->trap_cb;
+                    win->dbg.m6502_trap_ud = win->dbg.m6502->trap_user_data;
+                    m6502_trap_cb(win->dbg.m6502, _ui_dbg_bp_eval, win);
+                #else
+                #error "CPU TYPE"
+                #endif
+            }
+            return !win->dbg.stopped;
         }
-        return !win->dbg.stopped;
-    }
-    else {
-        return true;
-    }
+        else {
+            return true;
+        }
+    #else
+        return false;
+    #endif
 }
 
 void ui_dbg_after_exec(ui_dbg_t* win) {
-    CHIPS_ASSERT(win && win->valid);
-    /* uninstall our trap callback, but only if it hasn't been overwritten */
-    int trap_id = 0;
-    #if defined(UI_DBG_USE_Z80)
-        if (win->dbg.z80->trap_cb == _ui_dbg_bp_eval) {
-            z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
+    #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
+        CHIPS_ASSERT(win && win->valid);
+        /* uninstall our trap callback, but only if it hasn't been overwritten */
+        int trap_id = 0;
+        #if defined(UI_DBG_USE_Z80)
+            if (win->dbg.z80->trap_cb == _ui_dbg_bp_eval) {
+                z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
+            }
+            win->dbg.z80_trap_cb = 0;
+            win->dbg.z80_trap_ud = 0;
+            trap_id = win->dbg.z80->trap_id;
+        #elif defined(UI_DBG_USE_M6502)
+            if (win->dbg.m6502->trap_cb == _ui_dbg_bp_eval) {
+                m6502_trap_cb(win->dbg.m6502, win->dbg.m6502_trap_cb, win->dbg.m6502_trap_ud);
+            }
+            win->dbg.m6502_trap_cb = 0;
+            win->dbg.m6502_trap_ud = 0;
+            trap_id = win->dbg.m6502->trap_id;
+        #else
+        #error "CPU TYPE"
+        #endif
+        if (trap_id >= UI_DBG_STEP_TRAPID) {
+            win->dbg.stopped = true;
+            win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
+            ImGui::SetWindowFocus(win->ui.title);
+            win->ui.open = true;
         }
-        win->dbg.z80_trap_cb = 0;
-        win->dbg.z80_trap_ud = 0;
-        trap_id = win->dbg.z80->trap_id;
-    #elif defined(UI_DBG_USE_M6502)
-        if (win->dbg.m6502->trap_cb == _ui_dbg_bp_eval) {
-            m6502_trap_cb(win->dbg.m6502, win->dbg.m6502_trap_cb, win->dbg.m6502_trap_ud);
-        }
-        win->dbg.m6502_trap_cb = 0;
-        win->dbg.m6502_trap_ud = 0;
-        trap_id = win->dbg.m6502->trap_id;
-    #elif defined(UI_DBG_USE_M6502X)
-        if (win->dbg.m6502->PINS & M6502X_SYNC) {
-            uint16_t pc = M6502X_GET_ADDR(win->dbg.m6502->PINS);
-            trap_id = _ui_dbg_bp_eval(pc, 0, win->dbg.m6502->PINS, win);
-        }
-        //CHIPS_ASSERT(false && "FIXME");
-    #else
-    #error "CPU TYPE"
+        win->dbg.last_trap_id = trap_id;
     #endif
-    if (trap_id >= UI_DBG_STEP_TRAPID) {
+}
+
+void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins) {
+    #if defined(UI_DBG_USE_M6502X)
+    uint16_t pc = M6502X_GET_ADDR(pins);
+    win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, 0, pins, win);
+    if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
         ImGui::SetWindowFocus(win->ui.title);
         win->ui.open = true;
     }
-    win->dbg.last_trap_id = trap_id;
+    #endif
 }
 
 void ui_dbg_draw(ui_dbg_t* win) {
