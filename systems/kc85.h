@@ -75,7 +75,9 @@
         it needs to share memory accesses with the video system. Also, CPU
         accesses to this RAM block are visible as 'display needling' artefacts.
 
-        Both video memory effects are not currently emulated.
+        (NOTE: the slow video memory access is not emulation, display needling
+        is emulated, but I haven't verified against real hardware 
+        whether it actually looks correct)
 
     ### Special Operating System Conditions
 
@@ -130,7 +132,7 @@
             
     ## The Module System:
 
-    This emulator supports the most common RAM- and ROM-modules,
+    The emulator supports the most common RAM- and ROM-modules,
     but doesn't emulate special-hardware modules like the V24 or 
     A/D converter module.
 
@@ -187,8 +189,7 @@
       resolution, this was realized by using 1 bit from the 
       pixel-bank and the other bit from the color-bank, so setting
       one pixel required 2 memory accesses and a bank switch. Maybe
-      this was the reason why this mode was hardly used (this
-      per-pixel-color mode is currently not implemented in this emulator).
+      this was the reason why this mode was hardly used.
     - Improved '90-degree-rotated' video memory layout, the 320x256
       pixel video memory was organized as 40 vertical stacks of 256 bytes,
       and the entire video memory was linear, this was perfectly suited
@@ -228,10 +229,7 @@
 
     - optionally proper keyboard emulation (the current implementation
       uses a shortcut to directly write the key code into a memory address)
-    - video-decoding is currently per-scanline
-    - KC85/4 pixel-color mode
     - wait states for video RAM access
-    - display needling
     - audio volume is currently not implemented
 
     ## zlib/libpng license
