@@ -160,7 +160,7 @@ typedef struct ui_dbg_desc_t {
     #elif defined(UI_DBG_USE_M6502)
     m6502_t* m6502;             /* 6502 CPU to track */
     #elif defined(UI_DBG_USE_M6502X)
-    m6502x_t* m6502;
+    m6502_t* m6502;
     #else
     #error "CPU TYPE"
     #endif
@@ -198,7 +198,7 @@ typedef struct ui_dbg_state_t {
     m6502_trap_t m6502_trap_cb;
     void* m6502_trap_ud;
     #elif defined(UI_DBG_USE_M6502X)
-    m6502x_t* m6502;
+    m6502_t* m6502;
     #else
     #error "CPU TYPE"
     #endif
@@ -666,7 +666,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
                 }
                 #elif defined(UI_DBG_USE_M6502X)
                 /* stop on new instruction */
-                if (pins & M6502X_SYNC) {
+                if (pins & M6502_SYNC) {
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
                 #else
@@ -679,7 +679,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
                 #elif defined(UI_DBG_USE_M6502X)
-                if ((pins & M6502X_SYNC) && (pc == win->dbg.stepover_pc)) {
+                if ((pins & M6502_SYNC) && (pc == win->dbg.stepover_pc)) {
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
                 #else
@@ -746,7 +746,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #elif defined(UI_DBG_USE_M6502X)
-                            if (M6502X_IRQ & rising_pins) {
+                            if (M6502_IRQ & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #else
@@ -764,7 +764,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #elif defined(UI_DBG_USE_M6502X)
-                            if (M6502X_NMI & rising_pins) {
+                            if (M6502_NMI & rising_pins) {
                                 trap_id = UI_DBG_BP_BASE_TRAPID + i;
                             }
                         #else
@@ -838,8 +838,8 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
         }
     #elif defined(UI_DBG_USE_M6502X)
         /* every tick on 6502 is either a read or a write */
-        const uint16_t addr = M6502X_GET_ADDR(pins);
-        if (0 != (pins & M6502X_RW)) {
+        const uint16_t addr = M6502_GET_ADDR(pins);
+        if (0 != (pins & M6502_RW)) {
             win->heatmap.items[addr].read_count++;
         }
         else {
@@ -1523,7 +1523,7 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         ImGui::AlignTextToFramePadding();
         ImGui::Text("%s", f_str);
         ImGui::EndChild();
-    #elif defined(UI_DBG_USE_M6502)
+    #elif defined(UI_DBG_USE_M6502) || defined(UI_DBG_USE_M6502X)
         const float h = 1*ImGui::GetFrameHeightWithSpacing();
         ImGui::BeginChild("##regs", ImVec2(0, h), false);
         m6502_t* c = win->dbg.m6502;
@@ -1549,37 +1549,6 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
             (p & M6502_IF) ? 'I':'-',
             (p & M6502_ZF) ? 'Z':'-',
             (p & M6502_CF) ? 'C':'-',
-            0,
-        };
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("%s", p_str);
-        ImGui::EndChild();
-    #elif defined(UI_DBG_USE_M6502X)
-        const float h = 1*ImGui::GetFrameHeightWithSpacing();
-        ImGui::BeginChild("##regs", ImVec2(0, h), false);
-        m6502x_t* c = win->dbg.m6502;
-        ImGui::Columns(7, "##reg_columns", false);
-        for (int i = 0; i < 5; i++) {
-            ImGui::SetColumnWidth(i, 44);
-        }
-        ImGui::SetColumnWidth(5, 64);
-        ImGui::SetColumnWidth(6, 72);
-        m6502x_set_a(c, ui_util_input_u8("A", m6502x_a(c))); ImGui::NextColumn();
-        m6502x_set_x(c, ui_util_input_u8("X", m6502x_x(c))); ImGui::NextColumn();
-        m6502x_set_y(c, ui_util_input_u8("Y", m6502x_y(c))); ImGui::NextColumn();
-        m6502x_set_s(c, ui_util_input_u8("S", m6502x_s(c))); ImGui::NextColumn();
-        m6502x_set_p(c, ui_util_input_u8("P", m6502x_p(c))); ImGui::NextColumn();
-        m6502x_set_pc(c, ui_util_input_u16("PC", m6502x_pc(c))); ImGui::NextColumn();
-        const uint8_t p = m6502x_p(c);
-        char p_str[9] = {
-            (p & M6502X_NF) ? 'N':'-',
-            (p & M6502X_VF) ? 'V':'-',
-            (p & M6502X_XF) ? 'X':'-',
-            (p & M6502X_BF) ? 'B':'-',
-            (p & M6502X_DF) ? 'D':'-',
-            (p & M6502X_IF) ? 'I':'-',
-            (p & M6502X_ZF) ? 'Z':'-',
-            (p & M6502X_CF) ? 'C':'-',
             0,
         };
         ImGui::AlignTextToFramePadding();
@@ -2004,7 +1973,7 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
 
 void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins, uint32_t ticks) {
     #if defined(UI_DBG_USE_M6502X)
-    uint16_t pc = M6502X_GET_ADDR(pins);
+    uint16_t pc = M6502_GET_ADDR(pins);
     win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, ticks, pins, win);
     if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;

@@ -113,7 +113,7 @@ typedef struct {
 /* Acorn Atom emulation state */
 typedef struct {
     uint64_t cpu_pins;
-    m6502x_t cpu;
+    m6502_t cpu;
     mc6847_t vdg;
     i8255_t ppi;
     m6522_t via;
@@ -228,9 +228,9 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     clk_init(&sys->clk, _ATOM_FREQUENCY);
     sys->period_2_4khz = _ATOM_FREQUENCY / 4800;
 
-    m6502x_desc_t cpu_desc;
+    m6502_desc_t cpu_desc;
     _ATOM_CLEAR(cpu_desc);
-    sys->cpu_pins = m6502x_init(&sys->cpu, &cpu_desc);
+    sys->cpu_pins = m6502_init(&sys->cpu, &cpu_desc);
 
     mc6847_desc_t vdg_desc;
     _ATOM_CLEAR(vdg_desc);
@@ -293,7 +293,7 @@ int atom_display_height(atom_t* sys) {
 
 void atom_reset(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    sys->cpu_pins = m6502x_reset(&sys->cpu);
+    sys->cpu_pins |= M6502_RES;
     i8255_reset(&sys->ppi);
     m6522_reset(&sys->via);
     mc6847_reset(&sys->vdg);
@@ -306,8 +306,8 @@ void atom_reset(atom_t* sys) {
 void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     uint32_t num_ticks = clk_us_to_ticks(&sys->clk, micro_seconds);
-    const uint64_t trap_mask = M6502X_SYNC|0xFFFF;
-    const uint64_t trap_val  = M6502X_SYNC|0xF96E;
+    const uint64_t trap_mask = M6502_SYNC|0xFFFF;
+    const uint64_t trap_val  = M6502_SYNC|0xF96E;
     for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
         sys->cpu_pins = _atom_tick(sys, sys->cpu_pins);
         if (sys->tape_size > 0) {
@@ -379,7 +379,7 @@ void atom_joystick(atom_t* sys, uint8_t mask) {
 uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
 
     /* tick the CPU */
-    pins = m6502x_tick(&sys->cpu, pins);
+    pins = m6502_tick(&sys->cpu, pins);
 
     /* tick the video chip */
     mc6847_tick(&sys->vdg);
@@ -407,66 +407,66 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
     }
 
     /* decode address for memory-mapped IO and memory read/write */
-    const uint16_t addr = M6502X_GET_ADDR(pins);
+    const uint16_t addr = M6502_GET_ADDR(pins);
     if ((addr >= 0xB000) && (addr < 0xC000)) {
         /* memory-mapped IO area */
         if ((addr >= 0xB000) && (addr < 0xB400)) {
             /* i8255 PPI: http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_8255.htm */
-            uint64_t ppi_pins = (pins & M6502X_PIN_MASK) | I8255_CS;
-            if (pins & M6502X_RW) { ppi_pins |= I8255_RD; }  /* PPI read access */
+            uint64_t ppi_pins = (pins & M6502_PIN_MASK) | I8255_CS;
+            if (pins & M6502_RW) { ppi_pins |= I8255_RD; }  /* PPI read access */
             else { ppi_pins |= I8255_WR; }                  /* PPI write access */
-            if (pins & M6502X_A0) { ppi_pins |= I8255_A0; }  /* PPI has 4 addresses (port A,B,C or control word */
-            if (pins & M6502X_A1) { ppi_pins |= I8255_A1; }
-            pins = i8255_iorq(&sys->ppi, ppi_pins) & M6502X_PIN_MASK;
+            if (pins & M6502_A0) { ppi_pins |= I8255_A0; }  /* PPI has 4 addresses (port A,B,C or control word */
+            if (pins & M6502_A1) { ppi_pins |= I8255_A1; }
+            pins = i8255_iorq(&sys->ppi, ppi_pins) & M6502_PIN_MASK;
         }       
         else if ((addr >= 0xB400) && (addr < 0xB800)) {
             /* extensions (only rudimentary)
                 FIXME: implement a proper AtoMMC emulation, for now just
                 a quick'n'dirty hack for joystick input
             */
-            if (pins & M6502X_RW) {
+            if (pins & M6502_RW) {
                 /* read from MMC extension */
                 if (addr == 0xB400) {
                     /* reading from 0xB400 returns a status/error code, the important
                         ones are STATUS_OK=0x3F, and STATUS_BUSY=0x80, STATUS_COMPLETE
                         together with an error code is used to communicate errors
                     */
-                    M6502X_SET_DATA(pins, 0x3F);
+                    M6502_SET_DATA(pins, 0x3F);
                 }
                 else if ((addr == 0xB401) && (sys->mmc_cmd == 0xA2)) {
                     /* read MMC joystick */
-                    M6502X_SET_DATA(pins, ~(sys->kbd_joymask | sys->joy_joymask));
+                    M6502_SET_DATA(pins, ~(sys->kbd_joymask | sys->joy_joymask));
                 }
             }
             else {
                 /* write to MMC extension */
                 if (addr == 0xB400) {
-                    sys->mmc_cmd = M6502X_GET_DATA(pins);
+                    sys->mmc_cmd = M6502_GET_DATA(pins);
                 }
             }
         } 
         else if ((addr >= 0xB800) && (addr < 0xBC00)) {
             /* 6522 VIA: http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_6522.htm */
-            uint64_t via_pins = (pins & M6502X_PIN_MASK)|M6522_CS1;
+            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
             /* NOTE: M6522_RW pin is identical with M6502_RW) */
-            pins = m6522_iorq(&sys->via, via_pins) & M6502X_PIN_MASK;
+            pins = m6522_iorq(&sys->via, via_pins) & M6502_PIN_MASK;
         }
         else {
             /* remaining IO space is for expansion devices */
-            if (pins & M6502X_RW) {
-                M6502X_SET_DATA(pins, 0x00);
+            if (pins & M6502_RW) {
+                M6502_SET_DATA(pins, 0x00);
             }
         }
     }
     else {
         /* regular memory access */
-        if (pins & M6502X_RW) {
+        if (pins & M6502_RW) {
             /* memory read */
-            M6502X_SET_DATA(pins, mem_rd(&sys->mem, addr));
+            M6502_SET_DATA(pins, mem_rd(&sys->mem, addr));
         }
         else {
             /* memory access */
-            mem_wr(&sys->mem, addr, M6502X_GET_DATA(pins));
+            mem_wr(&sys->mem, addr, M6502_GET_DATA(pins));
         }
     }
     return pins;
@@ -781,15 +781,15 @@ void _atom_osload(atom_t* sys) {
     if (success) {
         /* on success, continue with start of loaded code */
         sys->cpu.S += 2;
-        M6502X_SET_ADDR(sys->cpu_pins, exec_addr);
-        M6502X_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, exec_addr));
-        m6502x_set_pc(&sys->cpu, exec_addr);
+        M6502_SET_ADDR(sys->cpu_pins, exec_addr);
+        M6502_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, exec_addr));
+        m6502_set_pc(&sys->cpu, exec_addr);
     }
     else {
         /* otherwise just continue with an RTS */
-        M6502X_SET_ADDR(sys->cpu_pins, 0xF9A1);
-        M6502X_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, 0xF9A1));
-        m6502x_set_pc(&sys->cpu, 0xF9A1);
+        M6502_SET_ADDR(sys->cpu_pins, 0xF9A1);
+        M6502_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, 0xF9A1));
+        m6502_set_pc(&sys->cpu, 0xF9A1);
     }
 }
 

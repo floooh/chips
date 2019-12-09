@@ -61,26 +61,26 @@ extern "C" {
 */
 typedef struct {
     const char* title;          /* window title */
-    m6502x_t* cpu;              /* m6502x_t instance to track */
+    m6502_t* cpu;               /* m6502_t instance to track */
     int x, y;                   /* initial window position */
     int w, h;                   /* initial window width and height */
     bool open;                  /* initial open state */
     ui_chip_desc_t chip_desc;   /* chips visualization desc */
-} ui_m6502x_desc_t;
+} ui_m6502_desc_t;
 
 typedef struct {
     const char* title;
-    m6502x_t* cpu;
+    m6502_t* cpu;
     float init_x, init_y;
     float init_w, init_h;
     bool open;
     bool valid;
     ui_chip_t chip;
-} ui_m6502x_t;
+} ui_m6502_t;
 
-void ui_m6502x_init(ui_m6502x_t* win, const ui_m6502x_desc_t* desc);
-void ui_m6502x_discard(ui_m6502x_t* win);
-void ui_m6502x_draw(ui_m6502x_t* win);
+void ui_m6502_init(ui_m6502_t* win, const ui_m6502_desc_t* desc);
+void ui_m6502_discard(ui_m6502_t* win);
+void ui_m6502_draw(ui_m6502_t* win);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -97,11 +97,11 @@ void ui_m6502x_draw(ui_m6502x_t* win);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void ui_m6502x_init(ui_m6502x_t* win, const ui_m6502x_desc_t* desc) {
+void ui_m6502_init(ui_m6502_t* win, const ui_m6502_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->cpu);
-    memset(win, 0, sizeof(ui_m6502x_t));
+    memset(win, 0, sizeof(ui_m6502_t));
     win->title = desc->title;
     win->cpu = desc->cpu;
     win->init_x = (float) desc->x;
@@ -113,27 +113,27 @@ void ui_m6502x_init(ui_m6502x_t* win, const ui_m6502x_desc_t* desc) {
     ui_chip_init(&win->chip, &desc->chip_desc);
 }
 
-void ui_m6502x_discard(ui_m6502x_t* win) {
+void ui_m6502_discard(ui_m6502_t* win) {
     CHIPS_ASSERT(win && win->valid);
     win->valid = false;
 }
 
-static void _ui_m6502x_regs(ui_m6502x_t* win) {
-    m6502x_t* cpu = win->cpu;
+static void _ui_m6502_regs(ui_m6502_t* win) {
+    m6502_t* cpu = win->cpu;
     ImGui::Text("A:  %02X", cpu->A);
     ImGui::Text("X:  %02X", cpu->X);
     ImGui::Text("Y:  %02X", cpu->Y);
     ImGui::Text("S:  %02X", cpu->S);
     const uint8_t f = cpu->P;
     char f_str[9] = {
-        (f & M6502X_NF) ? 'N':'-',
-        (f & M6502X_VF) ? 'V':'-',
-        (f & M6502X_XF) ? 'X':'-',
-        (f & M6502X_BF) ? 'B':'-',
-        (f & M6502X_DF) ? 'D':'-',
-        (f & M6502X_IF) ? 'I':'-',
-        (f & M6502X_ZF) ? 'Z':'-',
-        (f & M6502X_CF) ? 'C':'-',
+        (f & M6502_NF) ? 'N':'-',
+        (f & M6502_VF) ? 'V':'-',
+        (f & M6502_XF) ? 'X':'-',
+        (f & M6502_BF) ? 'B':'-',
+        (f & M6502_DF) ? 'D':'-',
+        (f & M6502_IF) ? 'I':'-',
+        (f & M6502_ZF) ? 'Z':'-',
+        (f & M6502_CF) ? 'C':'-',
         0
     };
     ImGui::Text("P:  %02X %s", f, f_str);
@@ -151,7 +151,7 @@ static void _ui_m6502x_regs(ui_m6502x_t* win) {
     ImGui::Text("BCD: %s", cpu->bcd_enabled ? "enabled":"disabled");
 }
 
-void ui_m6502_draw(ui_m6502x_t* win) {
+void ui_m6502_draw(ui_m6502_t* win) {
     CHIPS_ASSERT(win && win->valid && win->cpu);
     if (!win->open) {
         return;
@@ -164,7 +164,7 @@ void ui_m6502_draw(ui_m6502x_t* win) {
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##m6502_regs", ImVec2(0, 0), true);
-        _ui_m6502x_regs(win);
+        _ui_m6502_regs(win);
         ImGui::EndChild();
     }
     ImGui::End();

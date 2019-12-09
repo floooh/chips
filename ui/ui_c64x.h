@@ -78,7 +78,7 @@ typedef struct {
     c64_t* c64;
     int dbg_scanline;
     ui_c64x_boot_cb boot_cb;
-    ui_m6502x_t cpu;
+    ui_m6502_t cpu;
     ui_m6526_t cia[2];
     ui_m6581_t sid;
     ui_m6569_t vic;
@@ -329,42 +329,43 @@ static int _ui_c64x_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t 
 }
 
 static const ui_chip_pin_t _ui_c64x_cpu_pins[] = {
-    { "D0",     0,      M6502X_D0 },
-    { "D1",     1,      M6502X_D1 },
-    { "D2",     2,      M6502X_D2 },
-    { "D3",     3,      M6502X_D3 },
-    { "D4",     4,      M6502X_D4 },
-    { "D5",     5,      M6502X_D5 },
-    { "D6",     6,      M6502X_D6 },
-    { "D7",     7,      M6502X_D7 },
-    { "RW",     9,      M6502X_RW },
-    { "RDY",    10,     M6502X_RDY },
-    { "AEC",    11,     M6510X_AEC },
-    { "IRQ",    12,     M6502X_IRQ },
-    { "NMI",    13,     M6502X_NMI },
-    { "RES",    14,     M6502X_RES },
-    { "P0",     15,     M6510X_P0 },
-    { "P1",     16,     M6510X_P1 },
-    { "P2",     17,     M6510X_P2 },
-    { "P3",     18,     M6510X_P3 },
-    { "P4",     19,     M6510X_P4 },
-    { "P5",     20,     M6510X_P5 },
-    { "A0",     21,     M6502X_A0 },
-    { "A1",     22,     M6502X_A1 },
-    { "A2",     23,     M6502X_A2 },
-    { "A3",     24,     M6502X_A3 },
-    { "A4",     25,     M6502X_A4 },
-    { "A5",     26,     M6502X_A5 },
-    { "A6",     27,     M6502X_A6 },
-    { "A7",     28,     M6502X_A7 },
-    { "A8",     29,     M6502X_A8 },
-    { "A9",     30,     M6502X_A9 },
-    { "A10",    31,     M6502X_A10 },
-    { "A11",    32,     M6502X_A11 },
-    { "A12",    33,     M6502X_A12 },
-    { "A13",    34,     M6502X_A13 },
-    { "A14",    35,     M6502X_A14 },
-    { "A15",    36,     M6502X_A15 },
+    { "D0",     0,      M6502_D0 },
+    { "D1",     1,      M6502_D1 },
+    { "D2",     2,      M6502_D2 },
+    { "D3",     3,      M6502_D3 },
+    { "D4",     4,      M6502_D4 },
+    { "D5",     5,      M6502_D5 },
+    { "D6",     6,      M6502_D6 },
+    { "D7",     7,      M6502_D7 },
+    { "RW",     9,      M6502_RW },
+    { "SYNC",   10,     M6502_SYNC },
+    { "RDY",    11,     M6502_RDY },
+    { "AEC",    12,     M6510_AEC },
+    { "IRQ",    13,     M6502_IRQ },
+    { "NMI",    14,     M6502_NMI },
+    { "RES",    15,     M6502_RES },
+    { "P0",     16,     M6510_P0 },
+    { "P1",     17,     M6510_P1 },
+    { "P2",     18,     M6510_P2 },
+    { "P3",     19,     M6510_P3 },
+    { "P4",     20,     M6510_P4 },
+    { "P5",     21,     M6510_P5 },
+    { "A0",     22,     M6502_A0 },
+    { "A1",     23,     M6502_A1 },
+    { "A2",     24,     M6502_A2 },
+    { "A3",     25,     M6502_A3 },
+    { "A4",     26,     M6502_A4 },
+    { "A5",     27,     M6502_A5 },
+    { "A6",     28,     M6502_A6 },
+    { "A7",     29,     M6502_A7 },
+    { "A8",     30,     M6502_A8 },
+    { "A9",     31,     M6502_A9 },
+    { "A10",    32,     M6502_A10 },
+    { "A11",    33,     M6502_A11 },
+    { "A12",    34,     M6502_A12 },
+    { "A13",    35,     M6502_A13 },
+    { "A14",    36,     M6502_A14 },
+    { "A15",    37,     M6502_A15 },
 };
 
 static const ui_chip_pin_t _ui_c64x_cia_pins[] = {
@@ -483,14 +484,14 @@ void ui_c64x_init(ui_c64x_t* ui, const ui_c64x_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
-        ui_m6502x_desc_t desc = {0};
+        ui_m6502_desc_t desc = {0};
         desc.title = "MOS 6510";
         desc.cpu = &ui->c64->cpu;
         desc.x = x;
         desc.y = y;
         desc.h = 390;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6510", 42, _ui_c64x_cpu_pins);
-        ui_m6502x_init(&ui->cpu, &desc);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6510", 44, _ui_c64x_cpu_pins);
+        ui_m6502_init(&ui->cpu, &desc);
     }
     x += dx; y += dy;
     {
@@ -596,7 +597,7 @@ void ui_c64x_init(ui_c64x_t* ui, const ui_c64x_desc_t* ui_desc) {
 void ui_c64x_discard(ui_c64x_t* ui) {
     CHIPS_ASSERT(ui && ui->c64);
     ui->c64 = 0;
-    ui_m6502x_discard(&ui->cpu);
+    ui_m6502_discard(&ui->cpu);
     ui_m6526_discard(&ui->cia[0]);
     ui_m6526_discard(&ui->cia[1]);
     ui_m6581_discard(&ui->sid);
@@ -642,7 +643,7 @@ void ui_c64x_exec(ui_c64x_t* ui, uint32_t frame_time_us) {
         do {
             c64_tick(ui->c64);
             ticks_executed++;
-        } while (0 == (c64->cpu_pins & M6502X_SYNC));
+        } while (0 == (c64->cpu_pins & M6502_SYNC));
         ui_dbg_after_instr(&ui->dbg, c64->cpu_pins, c64->ticks);
     }
     clk_ticks_executed(&ui->c64->clk, ticks_executed);

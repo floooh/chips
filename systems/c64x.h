@@ -98,7 +98,8 @@ typedef struct {
     c64_joystick_type_t joystick_type;  /* default is C64_JOYSTICK_NONE */
 
     /* video output config (if you don't want video decoding, set these to 0) */
-    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 392*272*4 bytes */
+    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, 
+                                   at least 512*312*4 bytes, or ask via c64_max_display_size() */
     int pixel_buffer_size;      /* size of the pixel buffer in bytes */
 
     /* optional user-data for callback functions */
@@ -125,7 +126,7 @@ typedef struct {
 typedef struct {
     uint64_t cpu_pins;
     uint32_t ticks;
-    m6502x_t cpu;
+    m6502_t cpu;
     m6526_t cia_1;
     m6526_t cia_2;
     m6569_t vic;
@@ -270,14 +271,14 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     sys->cpu_port = 0xF7;       /* for initial memory mapping */
     sys->io_mapped = true;
     
-    m6502x_desc_t cpu_desc;
+    m6502_desc_t cpu_desc;
     _C64_CLEAR(cpu_desc);
     cpu_desc.m6510_in_cb = _c64_cpu_port_in;
     cpu_desc.m6510_out_cb = _c64_cpu_port_out;
     cpu_desc.m6510_io_pullup = 0x17;
     cpu_desc.m6510_io_floating = 0xC8;
     cpu_desc.m6510_user_data = sys;
-    sys->cpu_pins = m6502x_init(&sys->cpu, &cpu_desc);
+    sys->cpu_pins = m6502_init(&sys->cpu, &cpu_desc);
 
     m6526_desc_t cia_desc;
     _C64_CLEAR(cia_desc);
@@ -351,7 +352,7 @@ void c64_reset(c64_t* sys) {
     sys->joy_joy1_mask = sys->joy_joy2_mask = 0;
     sys->io_mapped = true;
     _c64_update_memory_map(sys);
-    sys->cpu_pins = m6502x_reset(&sys->cpu);
+    sys->cpu_pins |= M6502_RES;
     m6526_reset(&sys->cia_1);
     m6526_reset(&sys->cia_2);
     m6569_reset(&sys->vic);
@@ -464,8 +465,8 @@ void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask) {
 static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
 
     /* tick the CPU */
-    pins = m6502x_tick(&sys->cpu, pins);
-    const uint16_t addr = M6502X_GET_ADDR(pins);
+    pins = m6502_tick(&sys->cpu, pins);
+    const uint16_t addr = M6502_GET_ADDR(pins);
 
     /* tick the datasette, when the datasette output pulse
        toggles, the FLAG input pin on CIA-1 will go active for 1 tick
@@ -501,17 +502,17 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         - the CIA-1 IRQ pin is connected to the CPU IRQ pin
         - the CIA-2 IRQ pin is connected to the CPU NMI pin
     */
-    if (m6526_tick(&sys->cia_1, cia1_pins & ~M6502X_IRQ) & M6502X_IRQ) {
-        pins |= M6502X_IRQ;
+    if (m6526_tick(&sys->cia_1, cia1_pins & ~M6502_IRQ) & M6502_IRQ) {
+        pins |= M6502_IRQ;
     }
     else {
-        pins &= ~M6502X_IRQ;
+        pins &= ~M6502_IRQ;
     }
-    if (m6526_tick(&sys->cia_2, pins & ~M6502X_IRQ) & M6502X_IRQ) {
-        pins |= M6502X_NMI;
+    if (m6526_tick(&sys->cia_2, pins & ~M6502_IRQ) & M6502_IRQ) {
+        pins |= M6502_NMI;
     }
     else {
-        pins &= ~M6502X_NMI;
+        pins &= ~M6502_NMI;
     }
 
     /* tick the VIC-II display chip:
@@ -533,7 +534,7 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         active to inactive (I haven't found definitive documentation if
         this is the right behaviour, but it made the Boulderdash fast loader work).
     */
-    if ((pins & (M6502X_RDY|M6502X_RW)) == (M6502X_RDY|M6502X_RW)) {
+    if ((pins & (M6502_RDY|M6502_RW)) == (M6502_RDY|M6502_RW)) {
         return pins;
     }
 
@@ -547,32 +548,32 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         if (sys->io_mapped && ((addr & 0xF000) == 0xD000)) {
             if (addr < 0xD400) {
                 /* VIC-II (D000..D3FF) */
-                uint64_t vic_pins = (pins & M6502X_PIN_MASK)|M6569_CS;
-                pins = m6569_iorq(&sys->vic, vic_pins) & M6502X_PIN_MASK;
+                uint64_t vic_pins = (pins & M6502_PIN_MASK)|M6569_CS;
+                pins = m6569_iorq(&sys->vic, vic_pins) & M6502_PIN_MASK;
             }
             else if (addr < 0xD800) {
                 /* SID (D400..D7FF) */
-                uint64_t sid_pins = (pins & M6502X_PIN_MASK)|M6581_CS;
-                pins = m6581_iorq(&sys->sid, sid_pins) & M6502X_PIN_MASK;
+                uint64_t sid_pins = (pins & M6502_PIN_MASK)|M6581_CS;
+                pins = m6581_iorq(&sys->sid, sid_pins) & M6502_PIN_MASK;
             }
             else if (addr < 0xDC00) {
                 /* read or write the special color Static-RAM bank (D800..DBFF) */
-                if (pins & M6502X_RW) {
-                    M6502X_SET_DATA(pins, sys->color_ram[addr & 0x03FF]);
+                if (pins & M6502_RW) {
+                    M6502_SET_DATA(pins, sys->color_ram[addr & 0x03FF]);
                 }
                 else {
-                    sys->color_ram[addr & 0x03FF] = M6502X_GET_DATA(pins);
+                    sys->color_ram[addr & 0x03FF] = M6502_GET_DATA(pins);
                 }
             }
             else if (addr < 0xDD00) {
                 /* CIA-1 (DC00..DCFF) */
-                uint64_t cia_pins = (pins & M6502X_PIN_MASK)|M6526_CS;
-                pins = m6526_iorq(&sys->cia_1, cia_pins) & M6502X_PIN_MASK;
+                uint64_t cia_pins = (pins & M6502_PIN_MASK)|M6526_CS;
+                pins = m6526_iorq(&sys->cia_1, cia_pins) & M6502_PIN_MASK;
             }
             else if (addr < 0xDE00) {
                 /* CIA-2 (DD00..DDFF) */
-                uint64_t cia_pins = (pins & M6502X_PIN_MASK)|M6526_CS;
-                pins = m6526_iorq(&sys->cia_2, cia_pins) & M6502X_PIN_MASK;
+                uint64_t cia_pins = (pins & M6502_PIN_MASK)|M6526_CS;
+                pins = m6526_iorq(&sys->cia_2, cia_pins) & M6502_PIN_MASK;
             }
             else {
                 /* FIXME: expansion system (not implemented) */
@@ -580,13 +581,13 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         }
         else {
             /* a regular memory access */
-            if (pins & M6502X_RW) {
+            if (pins & M6502_RW) {
                 /* memory read */
-                M6502X_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
+                M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
             }
             else {
                 /* memory write */
-                mem_wr(&sys->mem_cpu, addr, M6502X_GET_DATA(pins));
+                mem_wr(&sys->mem_cpu, addr, M6502_GET_DATA(pins));
             }
         }
     }
