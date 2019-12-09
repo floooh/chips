@@ -248,10 +248,10 @@ def enc_addr(op, addr_mode, mem_access):
 #-------------------------------------------------------------------------------
 def i_brk(o):
     cmt(o, 'BRK')
-    o.t('if(0==(c->brk_flags&(M6502X_BRK_IRQ|M6502X_BRK_NMI))){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(0==(c->brk_flags&M6502X_BRK_RESET)){_WR();}')
-    o.t('_SAD(0x0100|c->S--,c->PC);if(0==(c->brk_flags&M6502X_BRK_RESET)){_WR();}')
-    o.t('_SAD(0x0100|c->S--,c->P|M6502X_XF);if(c->brk_flags&M6502X_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502X_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}')
-    o.t('_SA(c->AD++);c->P|=(M6502X_IF|M6502X_BF);c->brk_flags=0; /* RES/NMI hijacking */')
+    o.t('if(0==(c->brk_flags&(M6502_BRK_IRQ|M6502_BRK_NMI))){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}')
+    o.t('_SAD(0x0100|c->S--,c->PC);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}')
+    o.t('_SAD(0x0100|c->S--,c->P|M6502_XF);if(c->brk_flags&M6502_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}')
+    o.t('_SA(c->AD++);c->P|=(M6502_IF|M6502_BF);c->brk_flags=0; /* RES/NMI hijacking */')
     o.t('_SA(c->AD);c->AD=_GD(); /* NMI "half-hijacking" not possible */')
     o.t('c->PC=(_GD()<<8)|c->AD;')
 
@@ -345,14 +345,14 @@ def i_tsx(o):
 #-------------------------------------------------------------------------------
 def i_php(o):
     cmt(o,'PHP')
-    o.t('_SAD(0x0100|c->S--,c->P|M6502X_XF);_WR();')
+    o.t('_SAD(0x0100|c->S--,c->P|M6502_XF);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_plp(o):
     cmt(o,'PLP')
     o.t('_SA(0x0100|c->S++);')   # read junk byte from current SP
     o.t('_SA(0x0100|c->S);')     # read actual byte  
-    o.t('c->P=(_GD()|M6502X_BF)&~M6502X_XF;');
+    o.t('c->P=(_GD()|M6502_BF)&~M6502_XF;');
 
 #-------------------------------------------------------------------------------
 def i_pha(o):
@@ -440,7 +440,7 @@ def i_rti(o):
     # load processor status flag from stack
     o.t('_SA(0x0100|c->S++);')
     # load return address low byte from stack
-    o.t('_SA(0x0100|c->S++);c->P=(_GD()|M6502X_BF)&~M6502X_XF;')
+    o.t('_SA(0x0100|c->S++);c->P=(_GD()|M6502_BF)&~M6502_XF;')
     # load return address high byte from stack
     o.t('_SA(0x0100|c->S);c->AD=_GD();')
     # update PC (which is already placed on the right return-to instruction)
@@ -464,44 +464,44 @@ def i_eor(o):
 #-------------------------------------------------------------------------------
 def i_adc(o):
     cmt(o,'ADC')
-    o.t('_m6502x_adc(c,_GD());')
+    o.t('_m6502_adc(c,_GD());')
 
 #-------------------------------------------------------------------------------
 def i_sbc(o):
     cmt(o,'SBC')
-    o.t('_m6502x_sbc(c,_GD());')
+    o.t('_m6502_sbc(c,_GD());')
 
 #-------------------------------------------------------------------------------
 def u_sbc(o):
     u_cmt(o,'SBC')
-    o.t('_m6502x_sbc(c,_GD());')
+    o.t('_m6502_sbc(c,_GD());')
 
 #-------------------------------------------------------------------------------
 def i_cmp(o):
     cmt(o,'CMP')
-    o.t('_m6502x_cmp(c, c->A, _GD());')
+    o.t('_m6502_cmp(c, c->A, _GD());')
 
 #-------------------------------------------------------------------------------
 def i_cpx(o):
     cmt(o,'CPX')
-    o.t('_m6502x_cmp(c, c->X, _GD());')
+    o.t('_m6502_cmp(c, c->X, _GD());')
 
 #-------------------------------------------------------------------------------
 def i_cpy(o):
     cmt(o,'CPY')
-    o.t('_m6502x_cmp(c, c->Y, _GD());')
+    o.t('_m6502_cmp(c, c->Y, _GD());')
 
 #-------------------------------------------------------------------------------
 def u_dcp(o):
     # undocumented 'decrement and compare'
     u_cmt(o,'DCP')
     o.t('c->AD=_GD();_WR();')
-    o.t('c->AD--;_NZ(c->AD);_SD(c->AD);_m6502x_cmp(c, c->A, c->AD);_WR();')
+    o.t('c->AD--;_NZ(c->AD);_SD(c->AD);_m6502_cmp(c, c->A, c->AD);_WR();')
 
 #-------------------------------------------------------------------------------
 def x_sbx(o):
     u_cmt(o,'SBX')
-    o.t('_m6502x_sbx(c, _GD());')
+    o.t('_m6502_sbx(c, _GD());')
 
 #-------------------------------------------------------------------------------
 def i_dec(o):
@@ -540,91 +540,91 @@ def u_isb(o):
     # undocumented INC+SBC instruction
     u_cmt(o,'ISB')
     o.t('c->AD=_GD();_WR();')
-    o.t('c->AD++;_SD(c->AD);_m6502x_sbc(c,c->AD);_WR();')
+    o.t('c->AD++;_SD(c->AD);_m6502_sbc(c,c->AD);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_asl(o):
     cmt(o,'ASL')
     o.t('c->AD=_GD();_WR();')
-    o.t('_SD(_m6502x_asl(c,c->AD));_WR();')
+    o.t('_SD(_m6502_asl(c,c->AD));_WR();')
 
 #-------------------------------------------------------------------------------
 def i_asla(o):
     cmt(o,'ASLA')
-    o.t('c->A=_m6502x_asl(c,c->A);')
+    o.t('c->A=_m6502_asl(c,c->A);')
 
 #-------------------------------------------------------------------------------
 def i_lsr(o):
     cmt(o,'LSR')
     o.t('c->AD=_GD();_WR();')
-    o.t('_SD(_m6502x_lsr(c,c->AD));_WR();')
+    o.t('_SD(_m6502_lsr(c,c->AD));_WR();')
 
 #-------------------------------------------------------------------------------
 def i_lsra(o):
     cmt(o,'LSRA')
-    o.t('c->A=_m6502x_lsr(c,c->A);')
+    o.t('c->A=_m6502_lsr(c,c->A);')
 
 #-------------------------------------------------------------------------------
 def u_slo(o):
     # undocumented ASL+OR
     u_cmt(o,'SLO')
     o.t('c->AD=_GD();_WR();')
-    o.t('c->AD=_m6502x_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();')
+    o.t('c->AD=_m6502_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();')
 
 #-------------------------------------------------------------------------------
 def x_asr(o):
     # undocumented AND+LSR
     u_cmt(o, 'ASR')
-    o.t('c->A&=_GD();c->A=_m6502x_lsr(c,c->A);')
+    o.t('c->A&=_GD();c->A=_m6502_lsr(c,c->A);')
 
 #-------------------------------------------------------------------------------
 def u_sre(o):
     # undocumented LSR+EOR
     u_cmt(o,'SRE')
     o.t('c->AD=_GD();_WR();')
-    o.t('c->AD=_m6502x_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();')
+    o.t('c->AD=_m6502_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_rol(o):
     cmt(o,'ROL')
     o.t('c->AD=_GD();_WR();')
-    o.t('_SD(_m6502x_rol(c,c->AD));_WR();')
+    o.t('_SD(_m6502_rol(c,c->AD));_WR();')
 
 #-------------------------------------------------------------------------------
 def i_rola(o):
     cmt(o,'ROLA')
-    o.t('c->A=_m6502x_rol(c,c->A);')
+    o.t('c->A=_m6502_rol(c,c->A);')
 
 #-------------------------------------------------------------------------------
 def u_rla(o):
     # uncodumented ROL+AND
     u_cmt(o,'RLA')
     o.t('c->AD=_GD();_WR();')
-    o.t('c->AD=_m6502x_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();')
+    o.t('c->AD=_m6502_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();')
 
 #-------------------------------------------------------------------------------
 def i_ror(o):
     cmt(o,'ROR')
     o.t('c->AD=_GD();_WR();')
-    o.t('_SD(_m6502x_ror(c,c->AD));_WR();')
+    o.t('_SD(_m6502_ror(c,c->AD));_WR();')
 
 #-------------------------------------------------------------------------------
 def i_rora(o):
     cmt(o,'RORA')
-    o.t('c->A=_m6502x_ror(c,c->A);')
+    o.t('c->A=_m6502_ror(c,c->A);')
 
 #-------------------------------------------------------------------------------
 def u_rra(o):
     # undocumented ROR+ADC
     u_cmt(o,'RRA')
     o.t('c->AD=_GD();_WR();')
-    o.t('c->AD=_m6502x_ror(c,c->AD);_SD(c->AD);_m6502x_adc(c,c->AD);_WR();')
+    o.t('c->AD=_m6502_ror(c,c->AD);_SD(c->AD);_m6502_adc(c,c->AD);_WR();')
 
 #-------------------------------------------------------------------------------
 def x_arr(o):
     # undocumented AND+ROR
     u_cmt(o,'ARR')
-    o.t('c->A&=_GD();_m6502x_arr(c);')
+    o.t('c->A&=_GD();_m6502_arr(c);')
 
 #-------------------------------------------------------------------------------
 def x_ane(o):
@@ -675,7 +675,7 @@ def x_anc(o):
     # AND byte with accumulator. If result is negative then carry is set.
     #
     u_cmt(o, 'ANC')
-    o.t('c->A&=_GD();_NZ(c->A);if(c->A&0x80){c->P|=M6502X_CF;}else{c->P&=~M6502X_CF;}')
+    o.t('c->A&=_GD();_NZ(c->A);if(c->A&0x80){c->P|=M6502_CF;}else{c->P&=~M6502_CF;}')
 
 #-------------------------------------------------------------------------------
 def x_las(o):
@@ -696,7 +696,7 @@ def x_jam(o):
 #-------------------------------------------------------------------------------
 def i_bit(o):
     cmt(o,'BIT')
-    o.t('_m6502x_bit(c,_GD());')
+    o.t('_m6502_bit(c,_GD());')
 
 #-------------------------------------------------------------------------------
 def enc_op(op):
