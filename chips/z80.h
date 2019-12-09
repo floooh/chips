@@ -310,7 +310,7 @@ extern "C" {
 
 /*--- callback function typedefs ---*/
 typedef uint64_t (*z80_tick_t)(int num_ticks, uint64_t pins, void* user_data);
-typedef int (*z80_trap_t)(uint16_t pc, int ticks, uint64_t pins, void* trap_user_data);
+typedef int (*z80_trap_t)(uint16_t pc, uint32_t ticks, uint64_t pins, void* trap_user_data);
 
 /*--- address bus pins ---*/
 #define Z80_A0  (1ULL<<0)

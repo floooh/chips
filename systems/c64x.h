@@ -124,6 +124,7 @@ typedef struct {
 /* C64 emulator state */
 typedef struct {
     uint64_t cpu_pins;
+    uint32_t ticks;
     m6502x_t cpu;
     m6526_t cia_1;
     m6526_t cia_2;
@@ -365,6 +366,7 @@ void c64_reset(c64_t* sys) {
 
 void c64_tick(c64_t* sys) {
     sys->cpu_pins = _c64_tick(sys, sys->cpu_pins);
+    sys->ticks++;
 }
 
 void c64_exec(c64_t* sys, uint32_t micro_seconds) {
@@ -372,6 +374,7 @@ void c64_exec(c64_t* sys, uint32_t micro_seconds) {
     uint32_t num_ticks = clk_ticks_to_run(&sys->clk, micro_seconds);
     for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
         sys->cpu_pins = _c64_tick(sys, sys->cpu_pins);
+        sys->ticks++;
     }
     kbd_update(&sys->kbd);
 }

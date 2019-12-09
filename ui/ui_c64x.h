@@ -643,7 +643,7 @@ void ui_c64x_exec(ui_c64x_t* ui, uint32_t frame_time_us) {
             c64_tick(ui->c64);
             ticks_executed++;
         } while (0 == (c64->cpu_pins & M6502X_SYNC));
-        ui_dbg_after_instr(&ui->dbg, c64->cpu_pins);
+        ui_dbg_after_instr(&ui->dbg, c64->cpu_pins, c64->ticks);
     }
     clk_ticks_executed(&ui->c64->clk, ticks_executed);
 }

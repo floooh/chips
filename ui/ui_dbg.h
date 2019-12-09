@@ -34,6 +34,7 @@
         - z80dasm.h     (only if UI_DBG_USE_Z80 is defined)
         - m6502.h       (only if UI_DBG_USE_M6502 is defined)
         - m6502dasm.h   (only if UI_DBG_USE_M6502 is defined)
+        - m6502x.h      (only if UI_DBG_USE_M6502X is defined)
 
     All strings provided to ui_dbg_init() must remain alive until
     ui_dbg_discard() is called!
@@ -207,8 +208,8 @@ typedef struct ui_dbg_state_t {
     uint64_t cpu_pins;          /* last state of CPU pins */
     uint32_t frame_id;          /* used in trap callback to detect when a new frame has started */
     uint32_t trap_frame_id;
-    uint16_t trap_pc;           /* last PC in CPU trap callback */
-    int trap_ticks;             /* last tick count in CPU trap callback */
+    uint16_t next_pc;           /* PC of next instruction to be loaded */
+    int last_ticks;             /* last instruction tick count */
     int last_trap_id;           /* can be used to identify breakpoint which caused trap */
     uint16_t stepover_pc;
     int delete_breakpoint_index;
@@ -298,7 +299,7 @@ bool ui_dbg_before_exec(ui_dbg_t* win);
 /* only z80/m6502: call after executing system ticks */
 void ui_dbg_after_exec(ui_dbg_t* win);
 /* only m6502x: call after each tick */
-void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins);
+void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins, uint32_t ticks);
 /* call when resetting the emulated machine (re-initializes some data structures) */
 void ui_dbg_reset(ui_dbg_t* win);
 /* call when rebooting the emulated machine (re-initializes some data structures) */
@@ -340,15 +341,7 @@ static inline uint16_t _ui_dbg_read_word(ui_dbg_t* win, uint16_t addr) {
 }
 
 static inline uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
-    #if defined(UI_DBG_USE_Z80)
-        return z80_pc(win->dbg.z80);
-    #elif defined(UI_DBG_USE_M6502)
-        return m6502_pc(win->dbg.m6502);
-    #elif defined(UI_DBG_USE_M6502X)
-        return win->dbg.trap_pc;
-    #else
-    #error "CPU TYPE"
-    #endif
+    return win->dbg.next_pc;
 }
 
 /* disassembler callback to fetch the next instruction byte */
@@ -648,8 +641,8 @@ static void _ui_dbg_dbgstate_reset(ui_dbg_t* win) {
     dbg->stopped = false;
     dbg->step_mode = UI_DBG_STEPMODE_NONE;
     dbg->install_trap_cb = true;
-    dbg->trap_pc = 0;
-    dbg->trap_ticks = 0;
+    dbg->next_pc = 0;
+    dbg->last_ticks = 0;
     dbg->last_trap_id = 0;
 }
 
@@ -658,7 +651,7 @@ static void _ui_dbg_dbgstate_reboot(ui_dbg_t* win) {
 }
 
 /* breakpoint evaluation callback, this is installed as CPU trap callback when needed */
-static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_data) {
+static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data) {
     ui_dbg_t* win = (ui_dbg_t*) user_data;
     int trap_id = 0;
     
@@ -668,7 +661,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
             case UI_DBG_STEPMODE_INTO:
                 #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
                 /* stop when PC has changed */
-                if (pc != win->dbg.trap_pc) {
+                if (pc != win->dbg.next_pc) {
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
                 #elif defined(UI_DBG_USE_M6502X)
@@ -807,7 +800,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
         trap_id = win->break_cb(win, pc, ticks, pins, win->user_data);
     }
     /* track execution */
-    if (pc != win->dbg.trap_pc) {
+    if (pc != win->dbg.next_pc) {
         /* first byte of an instruction */
         win->heatmap.items[pc].op_count++;
         win->heatmap.items[pc].op_start = 0;
@@ -817,10 +810,10 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
         }
         /* update last instruction's ticks */
         if (win->dbg.trap_frame_id == win->dbg.frame_id) {
-            win->heatmap.items[win->dbg.trap_pc].ticks = ticks - win->dbg.trap_ticks;
+            win->heatmap.items[win->dbg.next_pc].ticks = ticks - win->dbg.last_ticks;
         }
         else {
-            win->heatmap.items[win->dbg.trap_pc].ticks = ticks;
+            win->heatmap.items[win->dbg.next_pc].ticks = ticks;
         }
         /* add PC to history */
         _ui_dbg_history_push(win, pc);
@@ -855,9 +848,9 @@ static int _ui_dbg_bp_eval(uint16_t pc, int ticks, uint64_t pins, void* user_dat
     #else
     #error "CPU TYPE"
     #endif
-    win->dbg.trap_pc = pc;
+    win->dbg.next_pc = pc;
     win->dbg.trap_frame_id = win->dbg.frame_id;
-    win->dbg.trap_ticks = ticks;
+    win->dbg.last_ticks = ticks;
     win->dbg.cpu_pins = pins;
 
     /* call original trap callback if exists */
@@ -2009,10 +2002,10 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
     #endif
 }
 
-void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins) {
+void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins, uint32_t ticks) {
     #if defined(UI_DBG_USE_M6502X)
     uint16_t pc = M6502X_GET_ADDR(pins);
-    win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, 0, pins, win);
+    win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, ticks, pins, win);
     if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
