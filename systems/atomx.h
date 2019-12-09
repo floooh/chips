@@ -783,13 +783,13 @@ void _atom_osload(atom_t* sys) {
         sys->cpu.S += 2;
         M6502X_SET_ADDR(sys->cpu_pins, exec_addr);
         M6502X_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, exec_addr));
-        m6502x_set_pc(&sys->cpu, exec_addr+1);
+        m6502x_set_pc(&sys->cpu, exec_addr);
     }
     else {
         /* otherwise just continue with an RTS */
         M6502X_SET_ADDR(sys->cpu_pins, 0xF9A1);
         M6502X_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, 0xF9A1));
-        m6502x_set_pc(&sys->cpu, 0xF9A2);
+        m6502x_set_pc(&sys->cpu, 0xF9A1);
     }
 }
 
