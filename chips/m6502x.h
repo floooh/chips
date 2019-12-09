@@ -549,7 +549,7 @@ uint64_t m6510_iorq(m6502x_t* c, uint64_t pins) {
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
 #define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
 /* fetch next opcode byte */
-#define _FETCH() _SA(c->PC++);_ON(M6502X_SYNC);
+#define _FETCH() _SA(c->PC);_ON(M6502X_SYNC);
 /* set 8-bit data in 64-bit pin mask */
 #define _SD(data) pins=((pins&~0xFF0000ULL)|(((data&0xFF)<<16)&0xFF0000ULL))
 /* extract 8-bit data from 64-bit pin mask */
@@ -599,12 +599,13 @@ uint64_t m6502x_tick(m6502x_t* c, uint64_t pins) {
             c->nmi_pip &= 3;
 
             // if interrupt or reset was requested, force a BRK instruction
-            // check for interrupt:
             if (c->brk_flags) {
                 c->IR = 0;
-                c->PC--;
                 c->P &= ~M6502X_BF;
                 pins &= ~M6502X_RES;
+            }
+            else {
+                c->PC++;
             }
         }
         // IRQ test is level triggered
