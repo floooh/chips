@@ -1427,6 +1427,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     vic->crt.x++;
     switch (vic->rs.h_count) {
         case 1:
+            _m6569_rs_check_irq(vic);
             _m6569_p_access(vic, 3);
             _m6569_s_access(vic, 3);
             pins = _m6569_sunit_dma_aec(vic, 3, pins);
@@ -1434,10 +1435,6 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 4, pins);
             break;
         case 2:
-            /* FIXME: raster interrupt should be checked in the first horizontal tick,
-               but moving it to the second seems to be more correct...
-            */
-            _m6569_rs_check_irq(vic);
             g_data = _m6569_s_i_access(vic, 3);
             _m6569_s_access(vic, 3);
             pins = _m6569_sunit_dma_aec(vic, 3, pins);
