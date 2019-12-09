@@ -646,6 +646,7 @@ void ui_c64x_exec(ui_c64x_t* ui, uint32_t frame_time_us) {
         ui_dbg_after_instr(&ui->dbg, c64->cpu_pins, c64->ticks);
     }
     clk_ticks_executed(&ui->c64->clk, ticks_executed);
+    kbd_update(&ui->c64->kbd);
 }
 
 
