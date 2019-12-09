@@ -634,7 +634,7 @@ static void _ui_dbg_dbgstate_reset(ui_dbg_t* win) {
         dbg->m6502_trap_cb = 0;
         dbg->m6502_trap_ud = 0;
     #elif defined(UI_DBG_USE_M6502X)
-        CHIPS_ASSERT(false && "FIXME");
+        //CHIPS_ASSERT(false && "FIXME");
     #else
     #error "CPU TYPE"
     #endif
