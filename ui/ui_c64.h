@@ -646,7 +646,6 @@ void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
     kbd_update(&ui->c64->kbd);
 }
 
-
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

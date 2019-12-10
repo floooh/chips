@@ -1016,7 +1016,7 @@ bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
 
 /*=== CASSETTE TAPE FILE LOADING =============================================*/
 /* CPU trap handler to check for casread */
-static int _cpc_trap_cb(uint16_t pc, int ticks, uint64_t pins, void* user_data) {
+static int _cpc_trap_cb(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     return (pc == sys->casread_trap) ? 1 : 0;
 }

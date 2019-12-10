@@ -64,6 +64,7 @@
 extern "C" {
 #endif
 
+#define ATOM_FREQUENCY (1000000)
 #define ATOM_MAX_AUDIO_SAMPLES (1024)       /* max number of audio samples in internal sample buffer */
 #define ATOM_DEFAULT_AUDIO_SAMPLES (128)    /* default number of samples in internal sample buffer */
 #define ATOM_MAX_TAPE_SIZE (1<<16)          /* max size of tape file in bytes */
@@ -112,7 +113,7 @@ typedef struct {
 
 /* Acorn Atom emulation state */
 typedef struct {
-    uint64_t cpu_pins;
+    uint64_t pins;
     m6502_t cpu;
     mc6847_t vdg;
     i8255_t ppi;
@@ -160,6 +161,8 @@ int atom_display_width(atom_t* sys);
 int atom_display_height(atom_t* sys);
 /* reset Atom instance */
 void atom_reset(atom_t* sys);
+/* execute a single tick */
+void atom_tick(atom_t* sys);
 /* run Atom instance for a number of microseconds */
 void atom_exec(atom_t* sys, uint32_t micro_seconds);
 /* send a key down event */
@@ -189,7 +192,6 @@ void atom_remove_tape(atom_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _ATOM_FREQUENCY (1000000)
 #define _ATOM_ROM_DOSROM_SIZE (0x1000)
 
 static uint64_t _atom_tick(atom_t* sys, uint64_t pins);
@@ -224,15 +226,15 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     memcpy(&sys->rom_dosrom, desc->rom_dosrom, sizeof(sys->rom_dosrom));
 
     /* initialize the hardware */
-    sys->period_2_4khz = _ATOM_FREQUENCY / 4800;
+    sys->period_2_4khz = ATOM_FREQUENCY / 4800;
 
     m6502_desc_t cpu_desc;
     _ATOM_CLEAR(cpu_desc);
-    sys->cpu_pins = m6502_init(&sys->cpu, &cpu_desc);
+    sys->pins = m6502_init(&sys->cpu, &cpu_desc);
 
     mc6847_desc_t vdg_desc;
     _ATOM_CLEAR(vdg_desc);
-    vdg_desc.tick_hz = _ATOM_FREQUENCY;
+    vdg_desc.tick_hz = ATOM_FREQUENCY;
     vdg_desc.rgba8_buffer = (uint32_t*) desc->pixel_buffer;
     vdg_desc.rgba8_buffer_size = desc->pixel_buffer_size;
     vdg_desc.fetch_cb = _atom_vdg_fetch;
@@ -255,7 +257,7 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
 
     const int audio_hz = _ATOM_DEFAULT(desc->audio_sample_rate, 44100);
     const float audio_vol = _ATOM_DEFAULT(desc->audio_volume, 0.5f);
-    beeper_init(&sys->beeper, _ATOM_FREQUENCY, audio_hz, audio_vol);
+    beeper_init(&sys->beeper, ATOM_FREQUENCY, audio_hz, audio_vol);
 
     /* setup memory map and keyboard matrix */
     _atom_init_memorymap(sys);
@@ -291,7 +293,7 @@ int atom_display_height(atom_t* sys) {
 
 void atom_reset(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    sys->cpu_pins |= M6502_RES;
+    sys->pins |= M6502_RES;
     i8255_reset(&sys->ppi);
     m6522_reset(&sys->via);
     mc6847_reset(&sys->vdg);
@@ -301,11 +303,15 @@ void atom_reset(atom_t* sys) {
     sys->out_cass1 = false;
 }
 
+void atom_tick(atom_t* sys) {
+    sys->pins = _atom_tick(sys, sys->pins);
+}
+
 void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t num_ticks = clk_us_to_ticks(_ATOM_FREQUENCY, micro_seconds);
+    uint32_t num_ticks = clk_us_to_ticks(ATOM_FREQUENCY, micro_seconds);
     for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-        sys->cpu_pins = _atom_tick(sys, sys->cpu_pins);
+        sys->pins = _atom_tick(sys, sys->pins);
     }
     kbd_update(&sys->kbd);
 }
@@ -780,14 +786,14 @@ void _atom_osload(atom_t* sys) {
     if (success) {
         /* on success, continue with start of loaded code */
         sys->cpu.S += 2;
-        M6502_SET_ADDR(sys->cpu_pins, exec_addr);
-        M6502_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, exec_addr));
+        M6502_SET_ADDR(sys->pins, exec_addr);
+        M6502_SET_DATA(sys->pins, mem_rd(&sys->mem, exec_addr));
         m6502_set_pc(&sys->cpu, exec_addr);
     }
     else {
         /* otherwise just continue with an RTS */
-        M6502_SET_ADDR(sys->cpu_pins, 0xF9A1);
-        M6502_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, 0xF9A1));
+        M6502_SET_ADDR(sys->pins, 0xF9A1);
+        M6502_SET_DATA(sys->pins, mem_rd(&sys->mem, 0xF9A1));
         m6502_set_pc(&sys->cpu, 0xF9A1);
     }
 }
