@@ -28,6 +28,7 @@
     *   IRQ --->|           |---> A0  *
     *   NMI --->|           |...      *
     *    RDY--->|           |---> A15 *
+    *    RES--->|           |         *
     *    RW <---|           |         *
     *  SYNC <---|           |         *
     *           |           |<--> D0  *
@@ -42,74 +43,135 @@
     If the RDY pin is active (1) the CPU will loop on the next read
     access until the pin goes inactive.
 
-    ## Notes
+    ## Overview
 
-    Stored here for later referencer:
+    m6502.h implements a cycle-stepped 6502/6510 CPU emulator, meaning
+    that the emulation state can be ticked forward in clock cycles instead
+    of full instructions.
 
-    - https://www.pagetable.com/?p=39
+    To initialize the emulator, fill out a m6502_desc_t structure with
+    initialization parameters and then call m6502_init(). 
+
+        ~~~C
+        typedef struct {
+            bool bcd_disabled;          // set to true if BCD mode is disabled
+            m6510_in_t in_cb;           // only m6510: port IO input callback
+            m6510_out_t out_cb;         // only m6510: port IO output callback
+            uint8_t m6510_io_pullup;    // only m6510: IO port bits that are 1 when reading
+            uint8_t m6510_io_floating;  // only m6510: unconnected IO port pins
+            void* m6510_user_data;      // only m6510: optional in/out callback user data
+         } m6502_desc_t;
+         ~~~
+
+    At the end of m6502_init(), the CPU emulation will be at the start of
+    RESET state, and the first 7 ticks will execute the reset sequence
+    (loading the reset vector at address 0xFFFC and continuing execution
+    there.
+
+    m6502_init() will return a 64-bit pin mask which must be the input argument
+    to the first call of m6502_tick().
+
+    To execute instructions, call m6502_tick() in a loop. m6502_tick() takes
+    a 64-bit pin mask as input, executes one clock tick, and returns
+    a modified pin mask.
+
+    After executing one tick, the pin mask must be inspected, a memory read
+    or write operation must be performed, and the modified pin mask must be
+    used for the next call to m6502_tick(). This 64-bit pin mask is how
+    the CPU emulation communicates with the outside world.
+
+    The simplest-possible execution loop would look like this:
+
+        ~~~C
+        // setup 64 kBytes of memory
+        uint8_t mem[1<<16] = { ... };
+        // initialize the CPU
+        m6502_t cpu;
+        uint64_t pins = m6502_init(&cpu, &(m6502_desc_t){...});
+        while (...) {
+            // run the CPU emulation for one tick
+            pins = m6502_tick(&cpu, pins);
+            // extract 16-bit address from pin mask
+            const uint16_t addr = M6502_GET_ADDR(pins);
+            // perform memory access
+            if (pins & M6502_RW) {
+                // a memory read
+                M6502_SET_DATA(pins, mem[addr]);
+            }
+            else {
+                // a memory write
+                mem[addr] = M6502_GET_DATA(pins);
+            }
+        }
+        ~~~
+
+    To start a reset sequence, set the M6502_RES bit in the pin mask and
+    continue calling the m6502_tick() function. At the start of the next
+    instruction, the CPU will initiate the 7-tick reset sequence. You do NOT
+    need to clear the M6502_RES bit, this will be cleared when the reset
+    sequence starts.
+
+    To request an interrupt, set the M6502_IRQ or M6502_NMI bits in the pin
+    mask and continue calling the tick function. The interrupt sequence
+    will be initiated at the end of the current or next instruction
+    (depending on the exact cycle the interrupt pin has been set).
     
-    Maybe it makes sense to rewrite the code-generation python script with
-    a real 'decode' ROM?
+    Unlike the M6502_RES pin, you are also responsible for clearing the
+    interrupt pins (typically, the interrupt lines are cleared by the chip
+    which requested the interrupt once the CPU reads a chip's interrupt
+    status register to check which chip requested the interrupt).
+
+    To find out whether a new instruction is about to start, check if the
+    M6502_SYNC pin is set.
+
+    To "goto" a random address at any time, a 'prefetch' like this is
+    necessary (this basically simulates a normal instruction fetch from
+    address 'next_pc'). This is usually only needed in "trap code" which
+    intercepts operating system calls, executes some native code to emulate
+    the operating system call, and then continue execution somewhere else:
+
+        ~~~C
+        pins = M6502_SYNC;
+        M6502_SET_ADDR(pins, next_pc);
+        M6502_SET_DATA(pins, mem[next_pc]);
+        m6502_set_pc(next_pc);
+        ~~~~
 
     ## Functions
     ~~~C
-    void m6502_init(m6502_t* cpu, const m6502_desc_t* desc)
+    uint64_t m6502_init(m6502_t* cpu, const m6502_desc_t* desc)
     ~~~
-        Initialize a m6502_t instance, the desc structure provides initialization
-        attributes:
+        Initialize a m6502_t instance, the desc structure provides
+        initialization attributes:
             ~~~C
             typedef struct {
-                m6502_tick_t tick_cb;       // the CPU tick callback
-                bool bcd_disabled;          // set to true if BCD mode is disabled
-                m6510_in_t in_cb;           // optional port IO input callback (only on m6510)
-                m6510_out_t out_cb;         // optional port IO output callback (only on m6510)
-                uint8_t m6510_io_pullup;    // IO port bits that are 1 when reading
-                uint8_t m6510_io_floating;  // unconnected IO port pins
-                void* user_data;            // optional user-data for callbacks
+                bool bcd_disabled;              // set to true if BCD mode is disabled
+                m6510_in_t m6510_in_cb;         // m6510 only: optional port IO input callback
+                m6510_out_t m6510_out_cb;       // m6510 only: optional port IO output callback
+                void* m6510_user_data;          // m6510 only: optional callback user data
+                uint8_t m6510_io_pullup;        // m6510 only: IO port bits that are 1 when reading
+                uint8_t m6510_io_floating;      // m6510 only: unconnected IO port pins
             } m6502_desc_t;
             ~~~
 
-        To emulate a m6510 you must provide port IO callbacks in _in_cb_ and _out_cb_,
-        and should initialize the m6510_io_pullup and m6510_io_floating members.
+        To emulate a m6510 you must provide port IO callbacks in m6510_in_cb
+        and m6510_out_cb, and should initialize the m6510_io_pullup and
+        m6510_io_floating members to indicate which of the IO pins are
+        connected or hardwired to a 1-state.
 
     ~~~C
-    void m6502_reset(m6502_t* cpu)
+    uint64_t m6502_tick(m6502_t* cpu, uint64_t pins)
     ~~~
-        Reset the m6502 instance.
-
-    ~~~C
-    uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks)
-    ~~~
-        Execute instructions until the requested number of _ticks_ is reached,
-        or a trap has been hit. Return number of executed cycles. To check if a trap
-        has been hit, test the m6502_t.trap_id member on > 0. 
-        During execution the tick callback will be called for each clock cycle
-        with the current CPU pin bitmask. The tick callback function must inspect
-        the pin bitmask, perform memory requests and if necessary update the
-        data bus pins. Finally the tick callback returns the (optionally
-        modified) pin bitmask. If the tick callback sets the RDY pin (1),
-        and the current tick is a read-access, the CPU will loop until the
-        RDY pin is (0). The RDY pin is automatically cleared before the
-        tick function is called for a read-access.
+        Tick the CPU for one clock cycle. The 'pins' argument and return value
+        is the current state of the CPU pins used to communicate with the
+        outside world (see the Overview section above for details).
 
     ~~~C
     uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins)
     ~~~
-        For the m6510, call this function from inside the tick callback when the
-        CPU wants to access the special memory location 0 and 1 (these are mapped
-        to the IO port control registers of the m6510). m6510_iorq() may call the
-        input/output callback functions provided in m6510_init().
-
-    ~~~C
-    void m6502_trap_cb(m6502_t* cpu, m6502_trap_t trap_cb)
-    ~~~
-        Set an optional trap callback. If this is set it will be invoked
-        at the end of an instruction with the current PC (which points
-        to the start of the next instruction). The trap callback should
-        return a non-zero value if the execution loop should exit. The
-        returned value will also be written to m6502_t.trap_id.
-        Set a null ptr as trap callback disables the trap checking.
-        To get the current trap callback, simply access m6502_t.trap_cb directly.
+        For the 6510, call this function after the tick callback when memory
+        access to the special addresses 0 and 1 are requested. m6510_iorq()
+        may call the input/output callback functions provided in m6502_desc_t.
 
     ~~~C
     void m6502_set_x(m6502_t* cpu, uint8_t val)
@@ -144,43 +206,44 @@
 extern "C" {
 #endif
 
-/* address lines */
-#define M6502_A0  (1ULL<<0)
-#define M6502_A1  (1ULL<<1)
-#define M6502_A2  (1ULL<<2)
-#define M6502_A3  (1ULL<<3)
-#define M6502_A4  (1ULL<<4)
-#define M6502_A5  (1ULL<<5)
-#define M6502_A6  (1ULL<<6)
-#define M6502_A7  (1ULL<<7)
-#define M6502_A8  (1ULL<<8)
-#define M6502_A9  (1ULL<<9)
-#define M6502_A10 (1ULL<<10)
-#define M6502_A11 (1ULL<<11)
-#define M6502_A12 (1ULL<<12)
-#define M6502_A13 (1ULL<<13)
-#define M6502_A14 (1ULL<<14)
-#define M6502_A15 (1ULL<<15)
+/* address bus pins */
+#define M6502_A0    (1ULL<<0)
+#define M6502_A1    (1ULL<<1)
+#define M6502_A2    (1ULL<<2)
+#define M6502_A3    (1ULL<<3)
+#define M6502_A4    (1ULL<<4)
+#define M6502_A5    (1ULL<<5)
+#define M6502_A6    (1ULL<<6)
+#define M6502_A7    (1ULL<<7)
+#define M6502_A8    (1ULL<<8)
+#define M6502_A9    (1ULL<<9)
+#define M6502_A10   (1ULL<<10)
+#define M6502_A11   (1ULL<<11)
+#define M6502_A12   (1ULL<<12)
+#define M6502_A13   (1ULL<<13)
+#define M6502_A14   (1ULL<<14)
+#define M6502_A15   (1ULL<<15)
 
-/*--- data lines ------*/
-#define M6502_D0  (1ULL<<16)
-#define M6502_D1  (1ULL<<17)
-#define M6502_D2  (1ULL<<18)
-#define M6502_D3  (1ULL<<19)
-#define M6502_D4  (1ULL<<20)
-#define M6502_D5  (1ULL<<21)
-#define M6502_D6  (1ULL<<22)
-#define M6502_D7  (1ULL<<23)
+/* data bus pins */
+#define M6502_D0    (1ULL<<16)
+#define M6502_D1    (1ULL<<17)
+#define M6502_D2    (1ULL<<18)
+#define M6502_D3    (1ULL<<19)
+#define M6502_D4    (1ULL<<20)
+#define M6502_D5    (1ULL<<21)
+#define M6502_D6    (1ULL<<22)
+#define M6502_D7    (1ULL<<23)
 
-/*--- control pins ---*/
-#define M6502_RW    (1ULL<<24)
-#define M6502_SYNC  (1ULL<<25)
-#define M6502_IRQ   (1ULL<<26)
-#define M6502_NMI   (1ULL<<27)
-#define M6502_RDY   (1ULL<<28)
-#define M6510_AEC   (1ULL<<29)
+/* control pins */
+#define M6502_RW    (1ULL<<24)      /* out: memory read or write access */
+#define M6502_SYNC  (1ULL<<25)      /* out: start of a new instruction */
+#define M6502_IRQ   (1ULL<<26)      /* in: maskable interrupt requested */
+#define M6502_NMI   (1ULL<<27)      /* in: non-maskable interrupt requested */
+#define M6502_RDY   (1ULL<<28)      /* in: freeze execution at next read cycle */
+#define M6510_AEC   (1ULL<<29)      /* in, m6510 only, put bus lines into tristate mode, not implemented */
+#define M6502_RES   (1ULL<<30)      /* request RESET */
 
-/*--- m6510 specific port pins ---*/
+/* m6510 IO port pins */
 #define M6510_P0    (1ULL<<32)
 #define M6510_P1    (1ULL<<33)
 #define M6510_P2    (1ULL<<34)
@@ -192,53 +255,49 @@ extern "C" {
 /* bit mask for all CPU pins (up to bit pos 40) */
 #define M6502_PIN_MASK ((1ULL<<40)-1)
 
-/*--- status indicator flags ---*/
-#define M6502_CF (1<<0)   /* carry */
-#define M6502_ZF (1<<1)   /* zero */
-#define M6502_IF (1<<2)   /* IRQ disable */
-#define M6502_DF (1<<3)   /* decimal mode */
-#define M6502_BF (1<<4)   /* BRK command */
-#define M6502_XF (1<<5)   /* unused */
-#define M6502_VF (1<<6)   /* overflow */
-#define M6502_NF (1<<7)   /* negative */
+/* status indicator flags */
+#define M6502_CF    (1<<0)  /* carry */
+#define M6502_ZF    (1<<1)  /* zero */
+#define M6502_IF    (1<<2)  /* IRQ disable */
+#define M6502_DF    (1<<3)  /* decimal mode */
+#define M6502_BF    (1<<4)  /* BRK command */
+#define M6502_XF    (1<<5)  /* unused */
+#define M6502_VF    (1<<6)  /* overflow */
+#define M6502_NF    (1<<7)  /* negative */
 
-/* callback function typedefs */
-typedef uint64_t (*m6502_tick_t)(uint64_t pins, void* user_data);
-typedef int (*m6502_trap_t)(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data);
+/* internal BRK state flags */
+#define M6502_BRK_IRQ   (1<<0)  /* IRQ was triggered */
+#define M6502_BRK_NMI   (1<<1)  /* NMI was triggered */
+#define M6502_BRK_RESET (1<<2)  /* RES was triggered */
+
+/* m6510 IO port callback prototypes */
 typedef void (*m6510_out_t)(uint8_t data, void* user_data);
 typedef uint8_t (*m6510_in_t)(void* user_data);
 
 /* the desc structure provided to m6502_init() */
 typedef struct {
-    m6502_tick_t tick_cb;   /* the CPU tick callback */
-    void* user_data;        /* optional callback user data */
-    bool bcd_disabled;      /* set to true if BCD mode is disabled */
-    m6510_in_t in_cb;       /* optional port IO input callback (only on m6510) */
-    m6510_out_t out_cb;     /* optional port IO output callback (only on m6510) */
-    uint8_t m6510_io_pullup;    /* IO port bits that are 1 when reading */
-    uint8_t m6510_io_floating;  /* unconnected IO port pins */
+    bool bcd_disabled;              /* set to true if BCD mode is disabled */
+    m6510_in_t m6510_in_cb;         /* optional port IO input callback (only on m6510) */
+    m6510_out_t m6510_out_cb;       /* optional port IO output callback (only on m6510) */
+    void* m6510_user_data;          /* optional callback user data */
+    uint8_t m6510_io_pullup;        /* IO port bits that are 1 when reading */
+    uint8_t m6510_io_floating;      /* unconnected IO port pins */
 } m6502_desc_t;
 
-/* mutable tick state */
+/* CPU state */
 typedef struct {
-    uint64_t PINS;
-    uint8_t A,X,Y,S,P;      /* 8-bit registers */
-    uint16_t PC;            /* 16-bit program counter */
-    uint8_t irq_pip;        /* IRQ state history */
-    uint8_t nmi_pip;        /* NMI state history */
-    bool bcd_enabled;       /* this is actually not mutable but needed when ticking */
-} m6502_state_t;
-
-/* M6502 CPU state */
-typedef struct {
-    m6502_state_t state;
-    m6502_tick_t tick_cb;
-    m6502_trap_t trap_cb;
+    uint16_t IR;        /* internal instruction register */
+    uint16_t PC;        /* internal program counter register */
+    uint16_t AD;        /* ADL/ADH internal register */
+    uint8_t A,X,Y,S,P;  /* regular registers */
+    uint64_t PINS;      /* last stored pin state (do NOT modify) */
+    uint16_t irq_pip;
+    uint16_t nmi_pip;
+    uint8_t brk_flags;  /* M6502_BRK_* */
+    uint8_t bcd_enabled;
+    uint64_t ticks;     /* tick counter (only for inspection) */
+    /* 6510 IO port state */
     void* user_data;
-    void* trap_user_data;
-    int trap_id;        /* index of trap hit (0 if no trap) */
-
-    /* the m6510 IO port stuff */
     m6510_in_t in_cb;
     m6510_out_t out_cb;
     uint8_t io_ddr;     /* 1: output, 0: input */
@@ -250,14 +309,10 @@ typedef struct {
     uint8_t io_drive;
 } m6502_t;
 
-/* initialize a new m6502 instance */
-void m6502_init(m6502_t* cpu, const m6502_desc_t* desc);
-/* reset an existing m6502 instance */
-void m6502_reset(m6502_t* cpu);
-/* set a trap callback function */
-void m6502_trap_cb(m6502_t* cpu, m6502_trap_t trap_cb, void* trap_user_data);
-/* execute instruction for at least 'ticks' or trap hit, return number of executed ticks */
-uint32_t m6502_exec(m6502_t* cpu, uint32_t ticks);
+/* initialize a new m6502 instance and return initial pin mask */
+uint64_t m6502_init(m6502_t* cpu, const m6502_desc_t* desc);
+/* execute one tick */
+uint64_t m6502_tick(m6502_t* cpu, uint64_t pins);
 /* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
 uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
 
@@ -268,7 +323,6 @@ void m6502_set_y(m6502_t* cpu, uint8_t v);
 void m6502_set_s(m6502_t* cpu, uint8_t v);
 void m6502_set_p(m6502_t* cpu, uint8_t v);
 void m6502_set_pc(m6502_t* cpu, uint16_t v);
-
 uint8_t m6502_a(m6502_t* cpu);
 uint8_t m6502_x(m6502_t* cpu);
 uint8_t m6502_y(m6502_t* cpu);
@@ -288,7 +342,6 @@ uint16_t m6502_pc(m6502_t* cpu);
 #define M6502_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
 /* set the port bits on the 64-bit pin mask */
 #define M6510_SET_PORT(p,d) {p=(((p)&~M6510_PORT_BITS)|((((uint64_t)d)<<32)&M6510_PORT_BITS));}
-
 /* M6510: check for IO port access to address 0 or 1 */
 #define M6510_CHECK_IO(p) ((p&0xFFFEULL)==0)
 
@@ -305,23 +358,23 @@ uint16_t m6502_pc(m6502_t* cpu);
 #endif
 
 /* register access functions */
-void m6502_set_a(m6502_t* cpu, uint8_t v) { cpu->state.A = v; }
-void m6502_set_x(m6502_t* cpu, uint8_t v) { cpu->state.X = v; }
-void m6502_set_y(m6502_t* cpu, uint8_t v) { cpu->state.Y = v; }
-void m6502_set_s(m6502_t* cpu, uint8_t v) { cpu->state.S = v; }
-void m6502_set_p(m6502_t* cpu, uint8_t v) { cpu->state.P = v; }
-void m6502_set_pc(m6502_t* cpu, uint16_t v) { cpu->state.PC = v; }
-uint8_t m6502_a(m6502_t* cpu) { return cpu->state.A; }
-uint8_t m6502_x(m6502_t* cpu) { return cpu->state.X; }
-uint8_t m6502_y(m6502_t* cpu) { return cpu->state.Y; }
-uint8_t m6502_s(m6502_t* cpu) { return cpu->state.S; }
-uint8_t m6502_p(m6502_t* cpu) { return cpu->state.P; }
-uint16_t m6502_pc(m6502_t* cpu) { return cpu->state.PC; }
+void m6502_set_a(m6502_t* cpu, uint8_t v) { cpu->A = v; }
+void m6502_set_x(m6502_t* cpu, uint8_t v) { cpu->X = v; }
+void m6502_set_y(m6502_t* cpu, uint8_t v) { cpu->Y = v; }
+void m6502_set_s(m6502_t* cpu, uint8_t v) { cpu->S = v; }
+void m6502_set_p(m6502_t* cpu, uint8_t v) { cpu->P = v; }
+void m6502_set_pc(m6502_t* cpu, uint16_t v) { cpu->PC = v; }
+uint8_t m6502_a(m6502_t* cpu) { return cpu->A; }
+uint8_t m6502_x(m6502_t* cpu) { return cpu->X; }
+uint8_t m6502_y(m6502_t* cpu) { return cpu->Y; }
+uint8_t m6502_s(m6502_t* cpu) { return cpu->S; }
+uint8_t m6502_p(m6502_t* cpu) { return cpu->P; }
+uint16_t m6502_pc(m6502_t* cpu) { return cpu->PC; }
 
 /* helper macros and functions for code-generated instruction decoder */
 #define _M6502_NZ(p,v) ((p&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
-static inline void _m6502_adc(m6502_state_t* cpu, uint8_t val) {
+static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
     if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 1 : 0;
@@ -363,7 +416,7 @@ static inline void _m6502_adc(m6502_state_t* cpu, uint8_t val) {
     }    
 }
 
-static inline void _m6502_sbc(m6502_state_t* cpu, uint8_t val) {
+static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
     if (cpu->bcd_enabled && (cpu->P & M6502_DF)) {
         /* decimal mode (credit goes to MAME) */
         uint8_t c = cpu->P & M6502_CF ? 0 : 1;
@@ -406,7 +459,59 @@ static inline void _m6502_sbc(m6502_state_t* cpu, uint8_t val) {
     }
 }
 
-static inline void _m6502_arr(m6502_state_t* cpu) {
+static inline void _m6502_cmp(m6502_t* cpu, uint8_t r, uint8_t v) {
+    uint16_t t = r - v;
+    cpu->P = (_M6502_NZ(cpu->P, (uint8_t)t) & ~M6502_CF) | ((t & 0xFF00) ? 0:M6502_CF);
+}
+
+static inline uint8_t _m6502_asl(m6502_t* cpu, uint8_t v) {
+    cpu->P = (_M6502_NZ(cpu->P, v<<1) & ~M6502_CF) | ((v & 0x80) ? M6502_CF:0);
+    return v<<1;
+}
+
+static inline uint8_t _m6502_lsr(m6502_t* cpu, uint8_t v) {
+    cpu->P = (_M6502_NZ(cpu->P, v>>1) & ~M6502_CF) | ((v & 0x01) ? M6502_CF:0);
+    return v>>1;
+}
+
+static inline uint8_t _m6502_rol(m6502_t* cpu, uint8_t v) {
+    bool carry = cpu->P & M6502_CF;
+    cpu->P &= ~(M6502_NF|M6502_ZF|M6502_CF);
+    if (v & 0x80) {
+        cpu->P |= M6502_CF;
+    }
+    v <<= 1;
+    if (carry) {
+        v |= 1;
+    }
+    cpu->P = _M6502_NZ(cpu->P, v);
+    return v;
+}
+
+static inline uint8_t _m6502_ror(m6502_t* cpu, uint8_t v) {
+    bool carry = cpu->P & M6502_CF;
+    cpu->P &= ~(M6502_NF|M6502_ZF|M6502_CF);
+    if (v & 1) {
+        cpu->P |= M6502_CF;
+    }
+    v >>= 1;
+    if (carry) {
+        v |= 0x80;
+    }
+    cpu->P = _M6502_NZ(cpu->P, v);
+    return v;
+}
+
+static inline void _m6502_bit(m6502_t* cpu, uint8_t v) {
+    uint8_t t = cpu->A & v;
+    cpu->P &= ~(M6502_NF|M6502_VF|M6502_ZF);
+    if (!t) {
+        cpu->P |= M6502_ZF;
+    }
+    cpu->P |= v & (M6502_NF|M6502_VF);
+}
+
+static inline void _m6502_arr(m6502_t* cpu) {
     /* undocumented, unreliable ARR instruction, but this is tested
        by the Wolfgang Lorenz C64 test suite
        implementation taken from MAME
@@ -447,43 +552,34 @@ static inline void _m6502_arr(m6502_state_t* cpu) {
         }
     }
 }
+
+/* undocumented SBX instruction: 
+    AND X register with accumulator and store result in X register, then
+    subtract byte from X register (without borrow) where the
+    subtract works like a CMP instruction
+*/
+static inline void _m6502_sbx(m6502_t* cpu, uint8_t v) {
+    uint16_t t = (cpu->A & cpu->X) - v;
+    cpu->P = _M6502_NZ(cpu->P, t) & ~M6502_CF;
+    if (!(t & 0xFF00)) {
+        cpu->P |= M6502_CF;
+    }
+    cpu->X = (uint8_t)t;
+}
 #undef _M6502_NZ
 
-void m6502_init(m6502_t* c, const m6502_desc_t* desc) {
+uint64_t m6502_init(m6502_t* c, const m6502_desc_t* desc) {
     CHIPS_ASSERT(c && desc);
-    CHIPS_ASSERT(desc->tick_cb);
     memset(c, 0, sizeof(*c));
-    c->tick_cb = desc->tick_cb;
-    c->user_data = desc->user_data;
-    c->state.PINS = M6502_RW;
-    c->state.P = M6502_IF|M6502_XF;
-    c->state.S = 0xFD;
-    c->state.bcd_enabled = !desc->bcd_disabled;
-    c->in_cb = desc->in_cb;
-    c->out_cb = desc->out_cb;
+    c->P = M6502_ZF;
+    c->bcd_enabled = !desc->bcd_disabled;
+    c->PINS = M6502_RW | M6502_SYNC | M6502_RES;
+    c->in_cb = desc->m6510_in_cb;
+    c->out_cb = desc->m6510_out_cb;
+    c->user_data = desc->m6510_user_data;
     c->io_pullup = desc->m6510_io_pullup;
     c->io_floating = desc->m6510_io_floating;
-}
-
-void m6502_reset(m6502_t* c) {
-    CHIPS_ASSERT(c);
-    c->state.P = M6502_IF|M6502_XF;
-    c->state.S = 0xFD;
-    c->state.PINS = M6502_RW;
-    /* load reset vector from 0xFFFD into PC */
-    uint8_t l = M6502_GET_DATA(c->tick_cb(M6502_MAKE_PINS(M6502_RW, 0xFFFC, 0x00), c->user_data));
-    uint8_t h = M6502_GET_DATA(c->tick_cb(M6502_MAKE_PINS(M6502_RW, 0xFFFD, 0x00), c->user_data));
-    c->state.PC = (h<<8)|l;
-    c->io_ddr = 0;
-    c->io_out = 0;
-    c->io_inp = 0;
-    c->io_pins = 0;
-}
-
-void m6502_trap_cb(m6502_t* c, m6502_trap_t trap_cb, void* trap_user_data) {
-    CHIPS_ASSERT(c);
-    c->trap_cb = trap_cb;
-    c->trap_user_data = trap_user_data;
+    return c->PINS;
 }
 
 /* only call this when accessing address 0 or 1 (M6510_CHECK_IO(pins) evaluates to true) */
@@ -522,12 +618,14 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
     return pins;
 }
 
-/* check IRQ and NMI state and put into a bit-shift pipeline */
-#define _CHECK_INT() {c.irq_pip=(c.irq_pip<<1)|((pins>>26)&((~c.P)>>2)&1);c.nmi_pip=(c.nmi_pip<<1)|(((pins&(pre_pins^pins))>>27)&1);pre_pins=pins;}
-/* set 16-bit address in 64-bit pin mask*/
+/* set 16-bit address in 64-bit pin mask */
 #define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
+/* extract 16-bit addess from pin mask */
+#define _GA() ((uint16_t)(pins&0xFFFFULL))
 /* set 16-bit address and 8-bit data in 64-bit pin mask */
 #define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
+/* fetch next opcode byte */
+#define _FETCH() _SA(c->PC);_ON(M6502_SYNC);
 /* set 8-bit data in 64-bit pin mask */
 #define _SD(data) pins=((pins&~0xFF0000ULL)|(((data&0xFF)<<16)&0xFF0000ULL))
 /* extract 8-bit data from 64-bit pin mask */
@@ -536,372 +634,2393 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 #define _ON(m) pins|=(m)
 /* disable control pins */
 #define _OFF(m) pins&=~(m)
-/* execute a tick */
-#define _T() pins=tick(pins,ud);ticks++;
 /* a memory read tick */
-#define _RD() _ON(M6502_RW);do{_OFF(M6502_RDY);_T();}while(pins&M6502_RDY);_CHECK_INT()
+#define _RD() _ON(M6502_RW);
 /* a memory write tick */
-#define _WR() _OFF(M6502_RW);_T();_CHECK_INT()
-/* implied addressing mode, this still puts the PC on the address bus */
-#define _A_IMP() _SA(c.PC)
-/* immediate addressing mode */
-#define _A_IMM() _SA(c.PC++)
-/* zero-page addressing mode */
-#define _A_ZER() _SA(c.PC++);_RD();a=_GD();_SA(a)
-/* zero page + X addressing mode */
-#define _A_ZPX() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.X)&0x00FF;_SA(a)
-/* zero page + Y addressing mode */
-#define _A_ZPY() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.Y)&0x00FF;_SA(a)
-/* absolute addressing mode */
-#define _A_ABS() _SA(c.PC++);_RD();l=_GD();_SA(c.PC++);_RD();h=_GD();a=(h<<8)|l;_SA(a)
-/* absolute+X addressing mode for read-only instructions, early out if no page boundary is crossed */
-#define _A_ABX_R() _SA(c.PC++);_RD();t=_GD()+c.X;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}
-/* absolute+X addressing mode for read/write instructions */
-#define _A_ABX_W() _SA(c.PC++);_RD();t=_GD()+c.X;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)
-/* absolute+Y addressing mode for read-only instructions, early out if no page boundary is crossed */
-#define _A_ABY_R() _SA(c.PC++);_RD();t=_GD()+c.Y;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}
-/* absolute+Y addressing mode for read/write instructions */
-#define _A_ABY_W() _SA(c.PC++);_RD();t=_GD()+c.Y;_SA(c.PC++);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)
-/* (zp,X) indexed indirect addressing mode */
-#define _A_IDX() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();a=(a+c.X)&0xFF;_SA(a);_RD();t=_GD();a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|t;_SA(a);
-/* (zp),Y indirect indexed addressing mode for read-only instructions, early out if no page boundary crossed */
-#define _A_IDY_R() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();t=_GD()+c.Y;a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);if((t&0xFF00)!=0){_RD();a=(a&0xFF00)+t;_SA(a);}
-/* (zp),Y indirect indexed addressing mode for read/write instructions */
-#define _A_IDY_W() _SA(c.PC++);_RD();a=_GD();_SA(a);_RD();t=_GD()+c.Y;a=(a+1)&0xFF;_SA(a);_RD();a=(_GD()<<8)|(t&0xFF);_SA(a);_RD();a=(a&0xFF00)+t;_SA(a)
+#define _WR() _OFF(M6502_RW);
 /* set N and Z flags depending on value */
-#define _NZ(v) c.P=((c.P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
+#define _NZ(v) c->P=((c->P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
-uint32_t m6502_exec(m6502_t* cpu, uint32_t num_ticks) {
-    cpu->trap_id = 0;
-    m6502_state_t c = cpu->state;
-    uint8_t l, h;
-    uint16_t a, t;
-    uint32_t ticks = 0;
-    uint64_t pins = c.PINS;
-    const m6502_tick_t tick = cpu->tick_cb;
-    const m6502_trap_t trap = cpu->trap_cb;
-    void* ud = cpu->user_data;
-    do {
-        uint64_t pre_pins = pins;
-        /* fetch opcode */
-        _SA(c.PC++);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
-        const uint8_t opcode = _GD();
-        /* code-generated decode block */
-        switch (opcode) {
-            case 0x0:/*BRK */_A_IMP();_RD();c.PC++;_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();if(c.nmi_pip&0xFE){_SA(0xFFFA);_RD();l=_GD();c.P|=M6502_IF;_SA(0xFFFB);_RD();h=_GD();}else{_SA(0xFFFE);_RD();l=_GD();c.P|=M6502_IF;_SA(0xFFFF);_RD();h=_GD();}c.PC=(h<<8)|l;c.irq_pip&=1; c.nmi_pip&=1;break;
-            case 0x1:/*ORA (zp,X)*/_A_IDX();_RD();c.A|=_GD();_NZ(c.A);break;
-            case 0x2:/*INVALID*/break;
-            case 0x3:/*SLO (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x4:/*NOP zp (undoc)*/_A_ZER();_RD();break;
-            case 0x5:/*ORA zp*/_A_ZER();_RD();c.A|=_GD();_NZ(c.A);break;
-            case 0x6:/*ASL zp*/_A_ZER();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
-            case 0x7:/*SLO zp (undoc)*/_A_ZER();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x8:/*PHP */_A_IMP();_RD();_SAD(0x0100|c.S--,c.P|M6502_BF);_WR();break;
-            case 0x9:/*ORA #*/_A_IMM();_RD();c.A|=_GD();_NZ(c.A);break;
-            case 0xa:/*ASLA */_A_IMP();_RD();c.P=(c.P&~M6502_CF)|((c.A&0x80)?M6502_CF:0);c.A<<=1;_NZ(c.A);break;
-            case 0xb:/*ANC # (undoc)*/_A_IMM();_RD();c.A&=_GD();_NZ(c.A);if(c.A&0x80){c.P|=M6502_CF;}else{c.P&=~M6502_CF;}break;
-            case 0xc:/*NOP abs (undoc)*/_A_ABS();_RD();break;
-            case 0xd:/*ORA abs*/_A_ABS();_RD();c.A|=_GD();_NZ(c.A);break;
-            case 0xe:/*ASL abs*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
-            case 0xf:/*SLO abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x10:/*BPL #*/_A_IMM();_RD();if((c.P&0x80)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
-            case 0x11:/*ORA (zp),Y*/_A_IDY_R();_RD();c.A|=_GD();_NZ(c.A);break;
-            case 0x12:/*INVALID*/break;
-            case 0x13:/*SLO (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x14:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
-            case 0x15:/*ORA zp,X*/_A_ZPX();_RD();c.A|=_GD();_NZ(c.A);break;
-            case 0x16:/*ASL zp,X*/_A_ZPX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
-            case 0x17:/*SLO zp,X (undoc)*/_A_ZPX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x18:/*CLC */_A_IMP();_RD();c.P&=~0x1;break;
-            case 0x19:/*ORA abs,Y*/_A_ABY_R();_RD();c.A|=_GD();_NZ(c.A);break;
-            case 0x1a:/*NOP  (undoc)*/_A_IMP();_RD();break;
-            case 0x1b:/*SLO abs,Y (undoc)*/_A_ABY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x1c:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
-            case 0x1d:/*ORA abs,X*/_A_ABX_R();_RD();c.A|=_GD();_NZ(c.A);break;
-            case 0x1e:/*ASL abs,X*/_A_ABX_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();break;
-            case 0x1f:/*SLO abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x80)?M6502_CF:0);l<<=1;_NZ(l);_SD(l);_WR();c.A|=l;_NZ(c.A);break;
-            case 0x20:/*JSR */_SA(c.PC++);_RD();l=_GD();_SA(0x0100|c.S);_RD();_SAD(0x0100|c.S--,c.PC>>8);_WR();_SAD(0x0100|c.S--,c.PC);_WR();_SA(c.PC);_RD();h=_GD();c.PC=(h<<8)|l;break;
-            case 0x21:/*AND (zp,X)*/_A_IDX();_RD();c.A&=_GD();_NZ(c.A);break;
-            case 0x22:/*INVALID*/break;
-            case 0x23:/*RLA (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x24:/*BIT zp*/_A_ZER();_RD();l=_GD();h=c.A&l;c.P&=~(M6502_NF|M6502_VF|M6502_ZF);if(!h){c.P|=M6502_ZF;}c.P|=l&(M6502_NF|M6502_VF);break;
-            case 0x25:/*AND zp*/_A_ZER();_RD();c.A&=_GD();_NZ(c.A);break;
-            case 0x26:/*ROL zp*/_A_ZER();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();break;
-            case 0x27:/*RLA zp (undoc)*/_A_ZER();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x28:/*PLP */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;break;
-            case 0x29:/*AND #*/_A_IMM();_RD();c.A&=_GD();_NZ(c.A);break;
-            case 0x2a:/*ROLA */_A_IMP();_RD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(c.A&0x80){c.P|=M6502_CF;}c.A<<=1;if(carry){c.A|=0x01;}_NZ(c.A);}break;
-            case 0x2b:/*ANC # (undoc)*/_A_IMM();_RD();c.A&=_GD();_NZ(c.A);if(c.A&0x80){c.P|=M6502_CF;}else{c.P&=~M6502_CF;}break;
-            case 0x2c:/*BIT abs*/_A_ABS();_RD();l=_GD();h=c.A&l;c.P&=~(M6502_NF|M6502_VF|M6502_ZF);if(!h){c.P|=M6502_ZF;}c.P|=l&(M6502_NF|M6502_VF);break;
-            case 0x2d:/*AND abs*/_A_ABS();_RD();c.A&=_GD();_NZ(c.A);break;
-            case 0x2e:/*ROL abs*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();break;
-            case 0x2f:/*RLA abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x30:/*BMI #*/_A_IMM();_RD();if((c.P&0x80)==0x80){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
-            case 0x31:/*AND (zp),Y*/_A_IDY_R();_RD();c.A&=_GD();_NZ(c.A);break;
-            case 0x32:/*INVALID*/break;
-            case 0x33:/*RLA (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x34:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
-            case 0x35:/*AND zp,X*/_A_ZPX();_RD();c.A&=_GD();_NZ(c.A);break;
-            case 0x36:/*ROL zp,X*/_A_ZPX();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();break;
-            case 0x37:/*RLA zp,X (undoc)*/_A_ZPX();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x38:/*SEC */_A_IMP();_RD();c.P|=0x1;break;
-            case 0x39:/*AND abs,Y*/_A_ABY_R();_RD();c.A&=_GD();_NZ(c.A);break;
-            case 0x3a:/*NOP  (undoc)*/_A_IMP();_RD();break;
-            case 0x3b:/*RLA abs,Y (undoc)*/_A_ABY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x3c:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
-            case 0x3d:/*AND abs,X*/_A_ABX_R();_RD();c.A&=_GD();_NZ(c.A);break;
-            case 0x3e:/*ROL abs,X*/_A_ABX_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();break;
-            case 0x3f:/*RLA abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x80){c.P|=M6502_CF;}l<<=1;if(carry){l|=0x01;}_NZ(l);}_SD(l);_WR();c.A&=l;_NZ(c.A);break;
-            case 0x40:/*RTI */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S++);_RD();c.P=(_GD()&~M6502_BF)|M6502_XF;_SA(0x0100|c.S++);_RD();l=_GD();_SA(0x0100|c.S);_RD();h=_GD();c.PC=(h<<8)|l;break;
-            case 0x41:/*EOR (zp,X)*/_A_IDX();_RD();c.A^=_GD();_NZ(c.A);break;
-            case 0x42:/*INVALID*/break;
-            case 0x43:/*SRE (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x44:/*NOP zp (undoc)*/_A_ZER();_RD();break;
-            case 0x45:/*EOR zp*/_A_ZER();_RD();c.A^=_GD();_NZ(c.A);break;
-            case 0x46:/*LSR zp*/_A_ZER();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();break;
-            case 0x47:/*SRE zp (undoc)*/_A_ZER();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x48:/*PHA */_A_IMP();_RD();_SAD(0x0100|c.S--,c.A);_WR();break;
-            case 0x49:/*EOR #*/_A_IMM();_RD();c.A^=_GD();_NZ(c.A);break;
-            case 0x4a:/*LSRA */_A_IMP();_RD();c.P=(c.P&~M6502_CF)|((c.A&0x01)?M6502_CF:0);c.A>>=1;_NZ(c.A);break;
-            case 0x4b:/*ASR # (undoc)*/_A_IMM();_RD();c.A&=_GD();c.P=(c.P&~M6502_CF)|((c.A&0x01)?M6502_CF:0);c.A>>=1;_NZ(c.A);break;
-            case 0x4c:/*JMP */_SA(c.PC++);_RD();l=_GD();_SA(c.PC++);_RD();h=_GD();c.PC=(h<<8)|l;break;
-            case 0x4d:/*EOR abs*/_A_ABS();_RD();c.A^=_GD();_NZ(c.A);break;
-            case 0x4e:/*LSR abs*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();break;
-            case 0x4f:/*SRE abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x50:/*BVC #*/_A_IMM();_RD();if((c.P&0x40)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
-            case 0x51:/*EOR (zp),Y*/_A_IDY_R();_RD();c.A^=_GD();_NZ(c.A);break;
-            case 0x52:/*INVALID*/break;
-            case 0x53:/*SRE (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x54:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
-            case 0x55:/*EOR zp,X*/_A_ZPX();_RD();c.A^=_GD();_NZ(c.A);break;
-            case 0x56:/*LSR zp,X*/_A_ZPX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();break;
-            case 0x57:/*SRE zp,X (undoc)*/_A_ZPX();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x58:/*CLI */_A_IMP();_RD();c.P&=~0x4;break;
-            case 0x59:/*EOR abs,Y*/_A_ABY_R();_RD();c.A^=_GD();_NZ(c.A);break;
-            case 0x5a:/*NOP  (undoc)*/_A_IMP();_RD();break;
-            case 0x5b:/*SRE abs,Y (undoc)*/_A_ABY_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x5c:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
-            case 0x5d:/*EOR abs,X*/_A_ABX_R();_RD();c.A^=_GD();_NZ(c.A);break;
-            case 0x5e:/*LSR abs,X*/_A_ABX_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();break;
-            case 0x5f:/*SRE abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();c.P=(c.P&~M6502_CF)|((l&0x01)?M6502_CF:0);l>>=1;_NZ(l);_SD(l);_WR();c.A^=l;_NZ(c.A);break;
-            case 0x60:/*RTS */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S++);_RD();l=_GD();_SA(0x0100|c.S);_RD();h=_GD();c.PC=(h<<8)|l;_SA(c.PC++);_RD();break;
-            case 0x61:/*ADC (zp,X)*/_A_IDX();_RD();_m6502_adc(&c,_GD());break;
-            case 0x62:/*INVALID*/break;
-            case 0x63:/*RRA (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x64:/*NOP zp (undoc)*/_A_ZER();_RD();break;
-            case 0x65:/*ADC zp*/_A_ZER();_RD();_m6502_adc(&c,_GD());break;
-            case 0x66:/*ROR zp*/_A_ZER();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();break;
-            case 0x67:/*RRA zp (undoc)*/_A_ZER();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x68:/*PLA */_A_IMP();_RD();_SA(0x0100|c.S++);_RD();_SA(0x0100|c.S);_RD();c.A=_GD();_NZ(c.A);break;
-            case 0x69:/*ADC #*/_A_IMM();_RD();_m6502_adc(&c,_GD());break;
-            case 0x6a:/*RORA */_A_IMP();_RD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(c.A&0x01){c.P|=M6502_CF;}c.A>>=1;if(carry){c.A|=0x80;}_NZ(c.A);}break;
-            case 0x6b:/*ARR # (undoc)*/_A_IMM();_RD();c.A&=_GD();_m6502_arr(&c);break;
-            case 0x6c:/*JMPI */_SA(c.PC++);_RD();l=_GD();_SA(c.PC++);_RD();h=_GD();a=(h<<8)|l;_SA(a);_RD();l=_GD();a=(a&0xFF00)|((a+1)&0x00FF);_SA(a);_RD();h=_GD();c.PC=(h<<8)|l;break;
-            case 0x6d:/*ADC abs*/_A_ABS();_RD();_m6502_adc(&c,_GD());break;
-            case 0x6e:/*ROR abs*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();break;
-            case 0x6f:/*RRA abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x70:/*BVS #*/_A_IMM();_RD();if((c.P&0x40)==0x40){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
-            case 0x71:/*ADC (zp),Y*/_A_IDY_R();_RD();_m6502_adc(&c,_GD());break;
-            case 0x72:/*INVALID*/break;
-            case 0x73:/*RRA (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x74:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
-            case 0x75:/*ADC zp,X*/_A_ZPX();_RD();_m6502_adc(&c,_GD());break;
-            case 0x76:/*ROR zp,X*/_A_ZPX();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();break;
-            case 0x77:/*RRA zp,X (undoc)*/_A_ZPX();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x78:/*SEI */_A_IMP();_RD();c.P|=0x4;break;
-            case 0x79:/*ADC abs,Y*/_A_ABY_R();_RD();_m6502_adc(&c,_GD());break;
-            case 0x7a:/*NOP  (undoc)*/_A_IMP();_RD();break;
-            case 0x7b:/*RRA abs,Y (undoc)*/_A_ABY_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x7c:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
-            case 0x7d:/*ADC abs,X*/_A_ABX_R();_RD();_m6502_adc(&c,_GD());break;
-            case 0x7e:/*ROR abs,X*/_A_ABX_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();break;
-            case 0x7f:/*RRA abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();{bool carry=c.P&M6502_CF;c.P&=~(M6502_NF|M6502_ZF|M6502_CF);if(l&0x01){c.P|=M6502_CF;}l>>=1;if(carry){l|=0x80;}_NZ(l);}_SD(l);_WR();_m6502_adc(&c,l);break;
-            case 0x80:/*NOP # (undoc)*/_A_IMM();_RD();break;
-            case 0x81:/*STA (zp,X)*/_A_IDX();_SD(c.A);_WR();break;
-            case 0x82:/*NOP # (undoc)*/_A_IMM();_RD();break;
-            case 0x83:/*SAX (zp,X) (undoc)*/_A_IDX();_SD(c.A&c.X);_WR();break;
-            case 0x84:/*STY zp*/_A_ZER();_SD(c.Y);_WR();break;
-            case 0x85:/*STA zp*/_A_ZER();_SD(c.A);_WR();break;
-            case 0x86:/*STX zp*/_A_ZER();_SD(c.X);_WR();break;
-            case 0x87:/*SAX zp (undoc)*/_A_ZER();_SD(c.A&c.X);_WR();break;
-            case 0x88:/*DEY */_A_IMP();_RD();c.Y--;_NZ(c.Y);break;
-            case 0x89:/*NOP # (undoc)*/_A_IMM();_RD();break;
-            case 0x8a:/*TXA */_A_IMP();_RD();c.A=c.X;_NZ(c.A);break;
-            case 0x8b:/*ANE # (undoc)*/_A_IMM();_RD();l=_GD();c.A=(c.A|0xEE)&c.X&l;_NZ(c.A);break;
-            case 0x8c:/*STY abs*/_A_ABS();_SD(c.Y);_WR();break;
-            case 0x8d:/*STA abs*/_A_ABS();_SD(c.A);_WR();break;
-            case 0x8e:/*STX abs*/_A_ABS();_SD(c.X);_WR();break;
-            case 0x8f:/*SAX abs (undoc)*/_A_ABS();_SD(c.A&c.X);_WR();break;
-            case 0x90:/*BCC #*/_A_IMM();_RD();if((c.P&0x1)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
-            case 0x91:/*STA (zp),Y*/_A_IDY_W();_SD(c.A);_WR();break;
-            case 0x92:/*INVALID*/break;
-            case 0x93:/*SHA (zp),Y (undoc)*/_A_IDY_W();_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();break;
-            case 0x94:/*STY zp,X*/_A_ZPX();_SD(c.Y);_WR();break;
-            case 0x95:/*STA zp,X*/_A_ZPX();_SD(c.A);_WR();break;
-            case 0x96:/*STX zp,Y*/_A_ZPY();_SD(c.X);_WR();break;
-            case 0x97:/*SAX zp,Y (undoc)*/_A_ZPY();_SD(c.A&c.X);_WR();break;
-            case 0x98:/*TYA */_A_IMP();_RD();c.A=c.Y;_NZ(c.A);break;
-            case 0x99:/*STA abs,Y*/_A_ABY_W();_SD(c.A);_WR();break;
-            case 0x9a:/*TXS */_A_IMP();_RD();c.S=c.X;break;
-            case 0x9b:/*SHS abs,Y (undoc)*/_A_ABY_W();c.S=c.A&c.X;_SD(c.S&(uint8_t)((a>>8)+1));_WR();break;
-            case 0x9c:/*SHY abs,X (undoc)*/_A_ABX_W();_SD(c.Y&(uint8_t)((a>>8)+1));_WR();break;
-            case 0x9d:/*STA abs,X*/_A_ABX_W();_SD(c.A);_WR();break;
-            case 0x9e:/*SHX abs,Y (undoc)*/_A_ABY_W();_SD(c.X&(uint8_t)((a>>8)+1));_WR();break;
-            case 0x9f:/*SHA abs,Y (undoc)*/_A_ABY_W();_SD(c.A&c.X&(uint8_t)((a>>8)+1));_WR();break;
-            case 0xa0:/*LDY #*/_A_IMM();_RD();c.Y=_GD();_NZ(c.Y);break;
-            case 0xa1:/*LDA (zp,X)*/_A_IDX();_RD();c.A=_GD();_NZ(c.A);break;
-            case 0xa2:/*LDX #*/_A_IMM();_RD();c.X=_GD();_NZ(c.X);break;
-            case 0xa3:/*LAX (zp,X) (undoc)*/_A_IDX();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-            case 0xa4:/*LDY zp*/_A_ZER();_RD();c.Y=_GD();_NZ(c.Y);break;
-            case 0xa5:/*LDA zp*/_A_ZER();_RD();c.A=_GD();_NZ(c.A);break;
-            case 0xa6:/*LDX zp*/_A_ZER();_RD();c.X=_GD();_NZ(c.X);break;
-            case 0xa7:/*LAX zp (undoc)*/_A_ZER();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-            case 0xa8:/*TAY */_A_IMP();_RD();c.Y=c.A;_NZ(c.Y);break;
-            case 0xa9:/*LDA #*/_A_IMM();_RD();c.A=_GD();_NZ(c.A);break;
-            case 0xaa:/*TAX */_A_IMP();_RD();c.X=c.A;_NZ(c.X);break;
-            case 0xab:/*LXA # (undoc)*/_A_IMM();_RD();c.A=c.X=(c.A|0xEE)&_GD();_NZ(c.A);break;
-            case 0xac:/*LDY abs*/_A_ABS();_RD();c.Y=_GD();_NZ(c.Y);break;
-            case 0xad:/*LDA abs*/_A_ABS();_RD();c.A=_GD();_NZ(c.A);break;
-            case 0xae:/*LDX abs*/_A_ABS();_RD();c.X=_GD();_NZ(c.X);break;
-            case 0xaf:/*LAX abs (undoc)*/_A_ABS();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-            case 0xb0:/*BCS #*/_A_IMM();_RD();if((c.P&0x1)==0x1){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
-            case 0xb1:/*LDA (zp),Y*/_A_IDY_R();_RD();c.A=_GD();_NZ(c.A);break;
-            case 0xb2:/*INVALID*/break;
-            case 0xb3:/*LAX (zp),Y (undoc)*/_A_IDY_R();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-            case 0xb4:/*LDY zp,X*/_A_ZPX();_RD();c.Y=_GD();_NZ(c.Y);break;
-            case 0xb5:/*LDA zp,X*/_A_ZPX();_RD();c.A=_GD();_NZ(c.A);break;
-            case 0xb6:/*LDX zp,Y*/_A_ZPY();_RD();c.X=_GD();_NZ(c.X);break;
-            case 0xb7:/*LAX zp,Y (undoc)*/_A_ZPY();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-            case 0xb8:/*CLV */_A_IMP();_RD();c.P&=~0x40;break;
-            case 0xb9:/*LDA abs,Y*/_A_ABY_R();_RD();c.A=_GD();_NZ(c.A);break;
-            case 0xba:/*TSX */_A_IMP();_RD();c.X=c.S;_NZ(c.X);break;
-            case 0xbb:/*LAS abs,Y (undoc)*/_A_ABY_R();_RD();c.A=c.X=c.S=_GD()&c.S;_NZ(c.A);break;
-            case 0xbc:/*LDY abs,X*/_A_ABX_R();_RD();c.Y=_GD();_NZ(c.Y);break;
-            case 0xbd:/*LDA abs,X*/_A_ABX_R();_RD();c.A=_GD();_NZ(c.A);break;
-            case 0xbe:/*LDX abs,Y*/_A_ABY_R();_RD();c.X=_GD();_NZ(c.X);break;
-            case 0xbf:/*LAX abs,Y (undoc)*/_A_ABY_R();_RD();c.A=c.X=_GD();_NZ(c.A);break;
-            case 0xc0:/*CPY #*/_A_IMM();_RD();l=_GD();t=c.Y-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xc1:/*CMP (zp,X)*/_A_IDX();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xc2:/*NOP # (undoc)*/_A_IMM();_RD();break;
-            case 0xc3:/*DCP (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xc4:/*CPY zp*/_A_ZER();_RD();l=_GD();t=c.Y-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xc5:/*CMP zp*/_A_ZER();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xc6:/*DEC zp*/_A_ZER();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
-            case 0xc7:/*DCP zp (undoc)*/_A_ZER();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xc8:/*INY */_A_IMP();_RD();c.Y++;_NZ(c.Y);break;
-            case 0xc9:/*CMP #*/_A_IMM();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xca:/*DEX */_A_IMP();_RD();c.X--;_NZ(c.X);break;
-            case 0xcb:/*SBX # (undoc)*/_A_IMM();_RD();l=_GD();t=(c.A&c.X)-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}c.X=(uint8_t)t;break;
-            case 0xcc:/*CPY abs*/_A_ABS();_RD();l=_GD();t=c.Y-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xcd:/*CMP abs*/_A_ABS();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xce:/*DEC abs*/_A_ABS();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
-            case 0xcf:/*DCP abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xd0:/*BNE #*/_A_IMM();_RD();if((c.P&0x2)==0x0){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
-            case 0xd1:/*CMP (zp),Y*/_A_IDY_R();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xd2:/*INVALID*/break;
-            case 0xd3:/*DCP (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xd4:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
-            case 0xd5:/*CMP zp,X*/_A_ZPX();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xd6:/*DEC zp,X*/_A_ZPX();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
-            case 0xd7:/*DCP zp,X (undoc)*/_A_ZPX();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xd8:/*CLD */_A_IMP();_RD();c.P&=~0x8;break;
-            case 0xd9:/*CMP abs,Y*/_A_ABY_R();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xda:/*NOP  (undoc)*/_A_IMP();_RD();break;
-            case 0xdb:/*DCP abs,Y (undoc)*/_A_ABY_W();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xdc:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
-            case 0xdd:/*CMP abs,X*/_A_ABX_R();_RD();l=_GD();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xde:/*DEC abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l--;_NZ(l);_SD(l);_WR();break;
-            case 0xdf:/*DCP abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();l--;_NZ(l);_SD(l);_WR();t=c.A-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xe0:/*CPX #*/_A_IMM();_RD();l=_GD();t=c.X-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xe1:/*SBC (zp,X)*/_A_IDX();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xe2:/*NOP # (undoc)*/_A_IMM();_RD();break;
-            case 0xe3:/*ISB (zp,X) (undoc)*/_A_IDX();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-            case 0xe4:/*CPX zp*/_A_ZER();_RD();l=_GD();t=c.X-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xe5:/*SBC zp*/_A_ZER();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xe6:/*INC zp*/_A_ZER();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
-            case 0xe7:/*ISB zp (undoc)*/_A_ZER();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-            case 0xe8:/*INX */_A_IMP();_RD();c.X++;_NZ(c.X);break;
-            case 0xe9:/*SBC #*/_A_IMM();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xea:/*NOP */_A_IMP();_RD();break;
-            case 0xeb:/*SBC # (undoc)*/_A_IMM();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xec:/*CPX abs*/_A_ABS();_RD();l=_GD();t=c.X-l;_NZ((uint8_t)t)&~M6502_CF;if(!(t&0xFF00)){c.P|=M6502_CF;}break;
-            case 0xed:/*SBC abs*/_A_ABS();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xee:/*INC abs*/_A_ABS();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
-            case 0xef:/*ISB abs (undoc)*/_A_ABS();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-            case 0xf0:/*BEQ #*/_A_IMM();_RD();if((c.P&0x2)==0x2){_RD();t=c.PC+(int8_t)_GD();if((t&0xFF00)!=(c.PC&0xFF00)){_RD();}else{c.irq_pip>>=1;c.nmi_pip>>=1;}c.PC=t;}break;
-            case 0xf1:/*SBC (zp),Y*/_A_IDY_R();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xf2:/*INVALID*/break;
-            case 0xf3:/*ISB (zp),Y (undoc)*/_A_IDY_W();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-            case 0xf4:/*NOP zp,X (undoc)*/_A_ZPX();_RD();break;
-            case 0xf5:/*SBC zp,X*/_A_ZPX();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xf6:/*INC zp,X*/_A_ZPX();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
-            case 0xf7:/*ISB zp,X (undoc)*/_A_ZPX();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-            case 0xf8:/*SED */_A_IMP();_RD();c.P|=0x8;break;
-            case 0xf9:/*SBC abs,Y*/_A_ABY_R();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xfa:/*NOP  (undoc)*/_A_IMP();_RD();break;
-            case 0xfb:/*ISB abs,Y (undoc)*/_A_ABY_W();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-            case 0xfc:/*NOP abs,X (undoc)*/_A_ABX_R();_RD();break;
-            case 0xfd:/*SBC abs,X*/_A_ABX_R();_RD();_m6502_sbc(&c,_GD());break;
-            case 0xfe:/*INC abs,X*/_A_ABX_W();_RD();l=_GD();_WR();l++;_NZ(l);_SD(l);_WR();break;
-            case 0xff:/*ISB abs,X (undoc)*/_A_ABX_W();_RD();_WR();l=_GD();l++;_SD(l);_WR();_m6502_sbc(&c,l);break;
-
+uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
+    c->ticks++;
+    if (pins & (M6502_SYNC|M6502_IRQ|M6502_NMI|M6502_RDY|M6502_RES)) {
+        // RDY pin is only checked during read cycles
+        if ((pins & (M6502_RW|M6502_RDY)) == (M6502_RW|M6502_RDY)) {
+            M6510_SET_PORT(pins, c->io_pins);
+            c->PINS = pins;
+            return pins;
         }
-        /* check for interrupt request */
-        if ((c.nmi_pip & 0xFE) || (c.irq_pip & 0xFE)) {
-            /* execute a BRK instruction in 'interrupt mode' */
-            _SA(c.PC);_ON(M6502_SYNC);_RD();_OFF(M6502_SYNC);
-            _SA(c.PC); _RD();
-            /* push PC and P onto stack */
-            _SAD(0x0100|c.S--, c.PC>>8); _WR();
-            _SAD(0x0100|c.S--, c.PC); _WR();
-            _SAD(0x0100|c.S--, c.P&~M6502_BF); _WR();
-            if (c.nmi_pip & 0xFE) {
-                _SA(0xFFFA); _RD(); l=_GD();
-                c.P |= M6502_IF;
-                _SA(0xFFFB); _RD(); h=_GD();
+        if (pins & M6502_SYNC) {
+            // load new instruction into 'instruction register' and restart tick counter
+            c->IR = _GD()<<3;
+            _OFF(M6502_SYNC);
+            
+            // check IRQ, NMI and RES state
+            //  - IRQ is level-triggered and must be active in the full cycle
+            //    before SYNC
+            //  - NMI is edge-triggered, and the change must have happened in
+            //    any cycle before SYNC
+            //  - RES behaves slightly different than on a real 6502, we go
+            //    into RES state as soon as the pin goes active, from there
+            //    on, behaviour is 'standard'
+            if (0 != (c->irq_pip & 4)) {
+                c->brk_flags |= M6502_BRK_IRQ;
+            }
+            if (0 != (c->nmi_pip & 0xFFFC)) {
+                c->brk_flags |= M6502_BRK_NMI;
+            }
+            if (0 != (pins & M6502_RES)) {
+                c->brk_flags |= M6502_BRK_RESET;
+                c->io_ddr = 0;
+                c->io_out = 0;
+                c->io_inp = 0;
+                c->io_pins = 0;
+            }
+            c->irq_pip &= 3;
+            c->nmi_pip &= 3;
+
+            // if interrupt or reset was requested, force a BRK instruction
+            if (c->brk_flags) {
+                c->IR = 0;
+                c->P &= ~M6502_BF;
+                pins &= ~M6502_RES;
             }
             else {
-                _SA(0xFFFE); _RD(); l=_GD();
-                c.P |= M6502_IF;
-                _SA(0xFFFF); _RD(); h=_GD();
-            }
-            c.PC = (h<<8)|l;
-        }
-        c.irq_pip &= 1;
-        c.nmi_pip &= 1;
-        if (trap) {
-            int trap_id=trap(c.PC,ticks,pins,cpu->trap_user_data);
-            if (trap_id) {
-                cpu->trap_id=trap_id;
-                break;
+                c->PC++;
             }
         }
-    } while (ticks < num_ticks);
-    M6510_SET_PORT(pins, cpu->io_pins);
-    c.PINS = pins;
-    cpu->state = c;
-    return ticks;
+        // IRQ test is level triggered
+        if ((pins & M6502_IRQ) && (0 == (c->P & M6502_IF))) {
+            c->irq_pip |= 1;
+        }
+        // NMI is edge-triggered
+        if (0 != ((pins & (pins ^ c->PINS)) & M6502_NMI)) {
+            c->nmi_pip |= 1;
+        }
+    }
+    // reads are default, writes are special
+    _RD();
+    switch (c->IR++) {
+    /* BRK  */
+        case (0x00<<3)|0: _SA(c->PC);break;
+        case (0x00<<3)|1: if(0==(c->brk_flags&(M6502_BRK_IRQ|M6502_BRK_NMI))){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}break;
+        case (0x00<<3)|2: _SAD(0x0100|c->S--,c->PC);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}break;
+        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->P|M6502_XF);if(c->brk_flags&M6502_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}break;
+        case (0x00<<3)|4: _SA(c->AD++);c->P|=(M6502_IF|M6502_BF);c->brk_flags=0; /* RES/NMI hijacking */break;
+        case (0x00<<3)|5: _SA(c->AD);c->AD=_GD(); /* NMI "half-hijacking" not possible */break;
+        case (0x00<<3)|6: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
+        case (0x00<<3)|7: assert(false);break;
+    /* ORA (zp,X) */
+        case (0x01<<3)|0: _SA(c->PC++);break;
+        case (0x01<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x01<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x01<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x01<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0x01<<3)|5: c->A|=_GD();_NZ(c->A);_FETCH();break;
+        case (0x01<<3)|6: assert(false);break;
+        case (0x01<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x02<<3)|0: _SA(c->PC);break;
+        case (0x02<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x02<<3)|2: assert(false);break;
+        case (0x02<<3)|3: assert(false);break;
+        case (0x02<<3)|4: assert(false);break;
+        case (0x02<<3)|5: assert(false);break;
+        case (0x02<<3)|6: assert(false);break;
+        case (0x02<<3)|7: assert(false);break;
+    /* SLO (zp,X) (undoc) */
+        case (0x03<<3)|0: _SA(c->PC++);break;
+        case (0x03<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x03<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x03<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x03<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0x03<<3)|5: c->AD=_GD();_WR();break;
+        case (0x03<<3)|6: c->AD=_m6502_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();break;
+        case (0x03<<3)|7: _FETCH();break;
+    /* NOP zp (undoc) */
+        case (0x04<<3)|0: _SA(c->PC++);break;
+        case (0x04<<3)|1: _SA(_GD());break;
+        case (0x04<<3)|2: _FETCH();break;
+        case (0x04<<3)|3: assert(false);break;
+        case (0x04<<3)|4: assert(false);break;
+        case (0x04<<3)|5: assert(false);break;
+        case (0x04<<3)|6: assert(false);break;
+        case (0x04<<3)|7: assert(false);break;
+    /* ORA zp */
+        case (0x05<<3)|0: _SA(c->PC++);break;
+        case (0x05<<3)|1: _SA(_GD());break;
+        case (0x05<<3)|2: c->A|=_GD();_NZ(c->A);_FETCH();break;
+        case (0x05<<3)|3: assert(false);break;
+        case (0x05<<3)|4: assert(false);break;
+        case (0x05<<3)|5: assert(false);break;
+        case (0x05<<3)|6: assert(false);break;
+        case (0x05<<3)|7: assert(false);break;
+    /* ASL zp */
+        case (0x06<<3)|0: _SA(c->PC++);break;
+        case (0x06<<3)|1: _SA(_GD());break;
+        case (0x06<<3)|2: c->AD=_GD();_WR();break;
+        case (0x06<<3)|3: _SD(_m6502_asl(c,c->AD));_WR();break;
+        case (0x06<<3)|4: _FETCH();break;
+        case (0x06<<3)|5: assert(false);break;
+        case (0x06<<3)|6: assert(false);break;
+        case (0x06<<3)|7: assert(false);break;
+    /* SLO zp (undoc) */
+        case (0x07<<3)|0: _SA(c->PC++);break;
+        case (0x07<<3)|1: _SA(_GD());break;
+        case (0x07<<3)|2: c->AD=_GD();_WR();break;
+        case (0x07<<3)|3: c->AD=_m6502_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();break;
+        case (0x07<<3)|4: _FETCH();break;
+        case (0x07<<3)|5: assert(false);break;
+        case (0x07<<3)|6: assert(false);break;
+        case (0x07<<3)|7: assert(false);break;
+    /* PHP  */
+        case (0x08<<3)|0: _SA(c->PC);break;
+        case (0x08<<3)|1: _SAD(0x0100|c->S--,c->P|M6502_XF);_WR();break;
+        case (0x08<<3)|2: _FETCH();break;
+        case (0x08<<3)|3: assert(false);break;
+        case (0x08<<3)|4: assert(false);break;
+        case (0x08<<3)|5: assert(false);break;
+        case (0x08<<3)|6: assert(false);break;
+        case (0x08<<3)|7: assert(false);break;
+    /* ORA # */
+        case (0x09<<3)|0: _SA(c->PC++);break;
+        case (0x09<<3)|1: c->A|=_GD();_NZ(c->A);_FETCH();break;
+        case (0x09<<3)|2: assert(false);break;
+        case (0x09<<3)|3: assert(false);break;
+        case (0x09<<3)|4: assert(false);break;
+        case (0x09<<3)|5: assert(false);break;
+        case (0x09<<3)|6: assert(false);break;
+        case (0x09<<3)|7: assert(false);break;
+    /* ASLA  */
+        case (0x0A<<3)|0: _SA(c->PC);break;
+        case (0x0A<<3)|1: c->A=_m6502_asl(c,c->A);_FETCH();break;
+        case (0x0A<<3)|2: assert(false);break;
+        case (0x0A<<3)|3: assert(false);break;
+        case (0x0A<<3)|4: assert(false);break;
+        case (0x0A<<3)|5: assert(false);break;
+        case (0x0A<<3)|6: assert(false);break;
+        case (0x0A<<3)|7: assert(false);break;
+    /* ANC # (undoc) */
+        case (0x0B<<3)|0: _SA(c->PC++);break;
+        case (0x0B<<3)|1: c->A&=_GD();_NZ(c->A);if(c->A&0x80){c->P|=M6502_CF;}else{c->P&=~M6502_CF;}_FETCH();break;
+        case (0x0B<<3)|2: assert(false);break;
+        case (0x0B<<3)|3: assert(false);break;
+        case (0x0B<<3)|4: assert(false);break;
+        case (0x0B<<3)|5: assert(false);break;
+        case (0x0B<<3)|6: assert(false);break;
+        case (0x0B<<3)|7: assert(false);break;
+    /* NOP abs (undoc) */
+        case (0x0C<<3)|0: _SA(c->PC++);break;
+        case (0x0C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x0C<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x0C<<3)|3: _FETCH();break;
+        case (0x0C<<3)|4: assert(false);break;
+        case (0x0C<<3)|5: assert(false);break;
+        case (0x0C<<3)|6: assert(false);break;
+        case (0x0C<<3)|7: assert(false);break;
+    /* ORA abs */
+        case (0x0D<<3)|0: _SA(c->PC++);break;
+        case (0x0D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x0D<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x0D<<3)|3: c->A|=_GD();_NZ(c->A);_FETCH();break;
+        case (0x0D<<3)|4: assert(false);break;
+        case (0x0D<<3)|5: assert(false);break;
+        case (0x0D<<3)|6: assert(false);break;
+        case (0x0D<<3)|7: assert(false);break;
+    /* ASL abs */
+        case (0x0E<<3)|0: _SA(c->PC++);break;
+        case (0x0E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x0E<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x0E<<3)|3: c->AD=_GD();_WR();break;
+        case (0x0E<<3)|4: _SD(_m6502_asl(c,c->AD));_WR();break;
+        case (0x0E<<3)|5: _FETCH();break;
+        case (0x0E<<3)|6: assert(false);break;
+        case (0x0E<<3)|7: assert(false);break;
+    /* SLO abs (undoc) */
+        case (0x0F<<3)|0: _SA(c->PC++);break;
+        case (0x0F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x0F<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x0F<<3)|3: c->AD=_GD();_WR();break;
+        case (0x0F<<3)|4: c->AD=_m6502_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();break;
+        case (0x0F<<3)|5: _FETCH();break;
+        case (0x0F<<3)|6: assert(false);break;
+        case (0x0F<<3)|7: assert(false);break;
+    /* BPL # */
+        case (0x10<<3)|0: _SA(c->PC++);break;
+        case (0x10<<3)|1: _SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&0x80)!=0x0){_FETCH();};break;
+        case (0x10<<3)|2: _SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;
+        case (0x10<<3)|3: c->PC=c->AD;_FETCH();break;
+        case (0x10<<3)|4: assert(false);break;
+        case (0x10<<3)|5: assert(false);break;
+        case (0x10<<3)|6: assert(false);break;
+        case (0x10<<3)|7: assert(false);break;
+    /* ORA (zp),Y */
+        case (0x11<<3)|0: _SA(c->PC++);break;
+        case (0x11<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x11<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x11<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0x11<<3)|4: _SA(c->AD+c->Y);break;
+        case (0x11<<3)|5: c->A|=_GD();_NZ(c->A);_FETCH();break;
+        case (0x11<<3)|6: assert(false);break;
+        case (0x11<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x12<<3)|0: _SA(c->PC);break;
+        case (0x12<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x12<<3)|2: assert(false);break;
+        case (0x12<<3)|3: assert(false);break;
+        case (0x12<<3)|4: assert(false);break;
+        case (0x12<<3)|5: assert(false);break;
+        case (0x12<<3)|6: assert(false);break;
+        case (0x12<<3)|7: assert(false);break;
+    /* SLO (zp),Y (undoc) */
+        case (0x13<<3)|0: _SA(c->PC++);break;
+        case (0x13<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x13<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x13<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x13<<3)|4: _SA(c->AD+c->Y);break;
+        case (0x13<<3)|5: c->AD=_GD();_WR();break;
+        case (0x13<<3)|6: c->AD=_m6502_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();break;
+        case (0x13<<3)|7: _FETCH();break;
+    /* NOP zp,X (undoc) */
+        case (0x14<<3)|0: _SA(c->PC++);break;
+        case (0x14<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x14<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x14<<3)|3: _FETCH();break;
+        case (0x14<<3)|4: assert(false);break;
+        case (0x14<<3)|5: assert(false);break;
+        case (0x14<<3)|6: assert(false);break;
+        case (0x14<<3)|7: assert(false);break;
+    /* ORA zp,X */
+        case (0x15<<3)|0: _SA(c->PC++);break;
+        case (0x15<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x15<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x15<<3)|3: c->A|=_GD();_NZ(c->A);_FETCH();break;
+        case (0x15<<3)|4: assert(false);break;
+        case (0x15<<3)|5: assert(false);break;
+        case (0x15<<3)|6: assert(false);break;
+        case (0x15<<3)|7: assert(false);break;
+    /* ASL zp,X */
+        case (0x16<<3)|0: _SA(c->PC++);break;
+        case (0x16<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x16<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x16<<3)|3: c->AD=_GD();_WR();break;
+        case (0x16<<3)|4: _SD(_m6502_asl(c,c->AD));_WR();break;
+        case (0x16<<3)|5: _FETCH();break;
+        case (0x16<<3)|6: assert(false);break;
+        case (0x16<<3)|7: assert(false);break;
+    /* SLO zp,X (undoc) */
+        case (0x17<<3)|0: _SA(c->PC++);break;
+        case (0x17<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x17<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x17<<3)|3: c->AD=_GD();_WR();break;
+        case (0x17<<3)|4: c->AD=_m6502_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();break;
+        case (0x17<<3)|5: _FETCH();break;
+        case (0x17<<3)|6: assert(false);break;
+        case (0x17<<3)|7: assert(false);break;
+    /* CLC  */
+        case (0x18<<3)|0: _SA(c->PC);break;
+        case (0x18<<3)|1: c->P&=~0x1;_FETCH();break;
+        case (0x18<<3)|2: assert(false);break;
+        case (0x18<<3)|3: assert(false);break;
+        case (0x18<<3)|4: assert(false);break;
+        case (0x18<<3)|5: assert(false);break;
+        case (0x18<<3)|6: assert(false);break;
+        case (0x18<<3)|7: assert(false);break;
+    /* ORA abs,Y */
+        case (0x19<<3)|0: _SA(c->PC++);break;
+        case (0x19<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x19<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0x19<<3)|3: _SA(c->AD+c->Y);break;
+        case (0x19<<3)|4: c->A|=_GD();_NZ(c->A);_FETCH();break;
+        case (0x19<<3)|5: assert(false);break;
+        case (0x19<<3)|6: assert(false);break;
+        case (0x19<<3)|7: assert(false);break;
+    /* NOP  (undoc) */
+        case (0x1A<<3)|0: _SA(c->PC);break;
+        case (0x1A<<3)|1: _FETCH();break;
+        case (0x1A<<3)|2: assert(false);break;
+        case (0x1A<<3)|3: assert(false);break;
+        case (0x1A<<3)|4: assert(false);break;
+        case (0x1A<<3)|5: assert(false);break;
+        case (0x1A<<3)|6: assert(false);break;
+        case (0x1A<<3)|7: assert(false);break;
+    /* SLO abs,Y (undoc) */
+        case (0x1B<<3)|0: _SA(c->PC++);break;
+        case (0x1B<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x1B<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x1B<<3)|3: _SA(c->AD+c->Y);break;
+        case (0x1B<<3)|4: c->AD=_GD();_WR();break;
+        case (0x1B<<3)|5: c->AD=_m6502_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();break;
+        case (0x1B<<3)|6: _FETCH();break;
+        case (0x1B<<3)|7: assert(false);break;
+    /* NOP abs,X (undoc) */
+        case (0x1C<<3)|0: _SA(c->PC++);break;
+        case (0x1C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x1C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0x1C<<3)|3: _SA(c->AD+c->X);break;
+        case (0x1C<<3)|4: _FETCH();break;
+        case (0x1C<<3)|5: assert(false);break;
+        case (0x1C<<3)|6: assert(false);break;
+        case (0x1C<<3)|7: assert(false);break;
+    /* ORA abs,X */
+        case (0x1D<<3)|0: _SA(c->PC++);break;
+        case (0x1D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x1D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0x1D<<3)|3: _SA(c->AD+c->X);break;
+        case (0x1D<<3)|4: c->A|=_GD();_NZ(c->A);_FETCH();break;
+        case (0x1D<<3)|5: assert(false);break;
+        case (0x1D<<3)|6: assert(false);break;
+        case (0x1D<<3)|7: assert(false);break;
+    /* ASL abs,X */
+        case (0x1E<<3)|0: _SA(c->PC++);break;
+        case (0x1E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x1E<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x1E<<3)|3: _SA(c->AD+c->X);break;
+        case (0x1E<<3)|4: c->AD=_GD();_WR();break;
+        case (0x1E<<3)|5: _SD(_m6502_asl(c,c->AD));_WR();break;
+        case (0x1E<<3)|6: _FETCH();break;
+        case (0x1E<<3)|7: assert(false);break;
+    /* SLO abs,X (undoc) */
+        case (0x1F<<3)|0: _SA(c->PC++);break;
+        case (0x1F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x1F<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x1F<<3)|3: _SA(c->AD+c->X);break;
+        case (0x1F<<3)|4: c->AD=_GD();_WR();break;
+        case (0x1F<<3)|5: c->AD=_m6502_asl(c,c->AD);_SD(c->AD);c->A|=c->AD;_NZ(c->A);_WR();break;
+        case (0x1F<<3)|6: _FETCH();break;
+        case (0x1F<<3)|7: assert(false);break;
+    /* JSR  */
+        case (0x20<<3)|0: _SA(c->PC++);break;
+        case (0x20<<3)|1: _SA(0x0100|c->S);c->AD=_GD();break;
+        case (0x20<<3)|2: _SAD(0x0100|c->S--,c->PC>>8);_WR();break;
+        case (0x20<<3)|3: _SAD(0x0100|c->S--,c->PC);_WR();break;
+        case (0x20<<3)|4: _SA(c->PC);break;
+        case (0x20<<3)|5: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
+        case (0x20<<3)|6: assert(false);break;
+        case (0x20<<3)|7: assert(false);break;
+    /* AND (zp,X) */
+        case (0x21<<3)|0: _SA(c->PC++);break;
+        case (0x21<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x21<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x21<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x21<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0x21<<3)|5: c->A&=_GD();_NZ(c->A);_FETCH();break;
+        case (0x21<<3)|6: assert(false);break;
+        case (0x21<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x22<<3)|0: _SA(c->PC);break;
+        case (0x22<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x22<<3)|2: assert(false);break;
+        case (0x22<<3)|3: assert(false);break;
+        case (0x22<<3)|4: assert(false);break;
+        case (0x22<<3)|5: assert(false);break;
+        case (0x22<<3)|6: assert(false);break;
+        case (0x22<<3)|7: assert(false);break;
+    /* RLA (zp,X) (undoc) */
+        case (0x23<<3)|0: _SA(c->PC++);break;
+        case (0x23<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x23<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x23<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x23<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0x23<<3)|5: c->AD=_GD();_WR();break;
+        case (0x23<<3)|6: c->AD=_m6502_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();break;
+        case (0x23<<3)|7: _FETCH();break;
+    /* BIT zp */
+        case (0x24<<3)|0: _SA(c->PC++);break;
+        case (0x24<<3)|1: _SA(_GD());break;
+        case (0x24<<3)|2: _m6502_bit(c,_GD());_FETCH();break;
+        case (0x24<<3)|3: assert(false);break;
+        case (0x24<<3)|4: assert(false);break;
+        case (0x24<<3)|5: assert(false);break;
+        case (0x24<<3)|6: assert(false);break;
+        case (0x24<<3)|7: assert(false);break;
+    /* AND zp */
+        case (0x25<<3)|0: _SA(c->PC++);break;
+        case (0x25<<3)|1: _SA(_GD());break;
+        case (0x25<<3)|2: c->A&=_GD();_NZ(c->A);_FETCH();break;
+        case (0x25<<3)|3: assert(false);break;
+        case (0x25<<3)|4: assert(false);break;
+        case (0x25<<3)|5: assert(false);break;
+        case (0x25<<3)|6: assert(false);break;
+        case (0x25<<3)|7: assert(false);break;
+    /* ROL zp */
+        case (0x26<<3)|0: _SA(c->PC++);break;
+        case (0x26<<3)|1: _SA(_GD());break;
+        case (0x26<<3)|2: c->AD=_GD();_WR();break;
+        case (0x26<<3)|3: _SD(_m6502_rol(c,c->AD));_WR();break;
+        case (0x26<<3)|4: _FETCH();break;
+        case (0x26<<3)|5: assert(false);break;
+        case (0x26<<3)|6: assert(false);break;
+        case (0x26<<3)|7: assert(false);break;
+    /* RLA zp (undoc) */
+        case (0x27<<3)|0: _SA(c->PC++);break;
+        case (0x27<<3)|1: _SA(_GD());break;
+        case (0x27<<3)|2: c->AD=_GD();_WR();break;
+        case (0x27<<3)|3: c->AD=_m6502_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();break;
+        case (0x27<<3)|4: _FETCH();break;
+        case (0x27<<3)|5: assert(false);break;
+        case (0x27<<3)|6: assert(false);break;
+        case (0x27<<3)|7: assert(false);break;
+    /* PLP  */
+        case (0x28<<3)|0: _SA(c->PC);break;
+        case (0x28<<3)|1: _SA(0x0100|c->S++);break;
+        case (0x28<<3)|2: _SA(0x0100|c->S);break;
+        case (0x28<<3)|3: c->P=(_GD()|M6502_BF)&~M6502_XF;_FETCH();break;
+        case (0x28<<3)|4: assert(false);break;
+        case (0x28<<3)|5: assert(false);break;
+        case (0x28<<3)|6: assert(false);break;
+        case (0x28<<3)|7: assert(false);break;
+    /* AND # */
+        case (0x29<<3)|0: _SA(c->PC++);break;
+        case (0x29<<3)|1: c->A&=_GD();_NZ(c->A);_FETCH();break;
+        case (0x29<<3)|2: assert(false);break;
+        case (0x29<<3)|3: assert(false);break;
+        case (0x29<<3)|4: assert(false);break;
+        case (0x29<<3)|5: assert(false);break;
+        case (0x29<<3)|6: assert(false);break;
+        case (0x29<<3)|7: assert(false);break;
+    /* ROLA  */
+        case (0x2A<<3)|0: _SA(c->PC);break;
+        case (0x2A<<3)|1: c->A=_m6502_rol(c,c->A);_FETCH();break;
+        case (0x2A<<3)|2: assert(false);break;
+        case (0x2A<<3)|3: assert(false);break;
+        case (0x2A<<3)|4: assert(false);break;
+        case (0x2A<<3)|5: assert(false);break;
+        case (0x2A<<3)|6: assert(false);break;
+        case (0x2A<<3)|7: assert(false);break;
+    /* ANC # (undoc) */
+        case (0x2B<<3)|0: _SA(c->PC++);break;
+        case (0x2B<<3)|1: c->A&=_GD();_NZ(c->A);if(c->A&0x80){c->P|=M6502_CF;}else{c->P&=~M6502_CF;}_FETCH();break;
+        case (0x2B<<3)|2: assert(false);break;
+        case (0x2B<<3)|3: assert(false);break;
+        case (0x2B<<3)|4: assert(false);break;
+        case (0x2B<<3)|5: assert(false);break;
+        case (0x2B<<3)|6: assert(false);break;
+        case (0x2B<<3)|7: assert(false);break;
+    /* BIT abs */
+        case (0x2C<<3)|0: _SA(c->PC++);break;
+        case (0x2C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x2C<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x2C<<3)|3: _m6502_bit(c,_GD());_FETCH();break;
+        case (0x2C<<3)|4: assert(false);break;
+        case (0x2C<<3)|5: assert(false);break;
+        case (0x2C<<3)|6: assert(false);break;
+        case (0x2C<<3)|7: assert(false);break;
+    /* AND abs */
+        case (0x2D<<3)|0: _SA(c->PC++);break;
+        case (0x2D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x2D<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x2D<<3)|3: c->A&=_GD();_NZ(c->A);_FETCH();break;
+        case (0x2D<<3)|4: assert(false);break;
+        case (0x2D<<3)|5: assert(false);break;
+        case (0x2D<<3)|6: assert(false);break;
+        case (0x2D<<3)|7: assert(false);break;
+    /* ROL abs */
+        case (0x2E<<3)|0: _SA(c->PC++);break;
+        case (0x2E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x2E<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x2E<<3)|3: c->AD=_GD();_WR();break;
+        case (0x2E<<3)|4: _SD(_m6502_rol(c,c->AD));_WR();break;
+        case (0x2E<<3)|5: _FETCH();break;
+        case (0x2E<<3)|6: assert(false);break;
+        case (0x2E<<3)|7: assert(false);break;
+    /* RLA abs (undoc) */
+        case (0x2F<<3)|0: _SA(c->PC++);break;
+        case (0x2F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x2F<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x2F<<3)|3: c->AD=_GD();_WR();break;
+        case (0x2F<<3)|4: c->AD=_m6502_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();break;
+        case (0x2F<<3)|5: _FETCH();break;
+        case (0x2F<<3)|6: assert(false);break;
+        case (0x2F<<3)|7: assert(false);break;
+    /* BMI # */
+        case (0x30<<3)|0: _SA(c->PC++);break;
+        case (0x30<<3)|1: _SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&0x80)!=0x80){_FETCH();};break;
+        case (0x30<<3)|2: _SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;
+        case (0x30<<3)|3: c->PC=c->AD;_FETCH();break;
+        case (0x30<<3)|4: assert(false);break;
+        case (0x30<<3)|5: assert(false);break;
+        case (0x30<<3)|6: assert(false);break;
+        case (0x30<<3)|7: assert(false);break;
+    /* AND (zp),Y */
+        case (0x31<<3)|0: _SA(c->PC++);break;
+        case (0x31<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x31<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x31<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0x31<<3)|4: _SA(c->AD+c->Y);break;
+        case (0x31<<3)|5: c->A&=_GD();_NZ(c->A);_FETCH();break;
+        case (0x31<<3)|6: assert(false);break;
+        case (0x31<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x32<<3)|0: _SA(c->PC);break;
+        case (0x32<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x32<<3)|2: assert(false);break;
+        case (0x32<<3)|3: assert(false);break;
+        case (0x32<<3)|4: assert(false);break;
+        case (0x32<<3)|5: assert(false);break;
+        case (0x32<<3)|6: assert(false);break;
+        case (0x32<<3)|7: assert(false);break;
+    /* RLA (zp),Y (undoc) */
+        case (0x33<<3)|0: _SA(c->PC++);break;
+        case (0x33<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x33<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x33<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x33<<3)|4: _SA(c->AD+c->Y);break;
+        case (0x33<<3)|5: c->AD=_GD();_WR();break;
+        case (0x33<<3)|6: c->AD=_m6502_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();break;
+        case (0x33<<3)|7: _FETCH();break;
+    /* NOP zp,X (undoc) */
+        case (0x34<<3)|0: _SA(c->PC++);break;
+        case (0x34<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x34<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x34<<3)|3: _FETCH();break;
+        case (0x34<<3)|4: assert(false);break;
+        case (0x34<<3)|5: assert(false);break;
+        case (0x34<<3)|6: assert(false);break;
+        case (0x34<<3)|7: assert(false);break;
+    /* AND zp,X */
+        case (0x35<<3)|0: _SA(c->PC++);break;
+        case (0x35<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x35<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x35<<3)|3: c->A&=_GD();_NZ(c->A);_FETCH();break;
+        case (0x35<<3)|4: assert(false);break;
+        case (0x35<<3)|5: assert(false);break;
+        case (0x35<<3)|6: assert(false);break;
+        case (0x35<<3)|7: assert(false);break;
+    /* ROL zp,X */
+        case (0x36<<3)|0: _SA(c->PC++);break;
+        case (0x36<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x36<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x36<<3)|3: c->AD=_GD();_WR();break;
+        case (0x36<<3)|4: _SD(_m6502_rol(c,c->AD));_WR();break;
+        case (0x36<<3)|5: _FETCH();break;
+        case (0x36<<3)|6: assert(false);break;
+        case (0x36<<3)|7: assert(false);break;
+    /* RLA zp,X (undoc) */
+        case (0x37<<3)|0: _SA(c->PC++);break;
+        case (0x37<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x37<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x37<<3)|3: c->AD=_GD();_WR();break;
+        case (0x37<<3)|4: c->AD=_m6502_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();break;
+        case (0x37<<3)|5: _FETCH();break;
+        case (0x37<<3)|6: assert(false);break;
+        case (0x37<<3)|7: assert(false);break;
+    /* SEC  */
+        case (0x38<<3)|0: _SA(c->PC);break;
+        case (0x38<<3)|1: c->P|=0x1;_FETCH();break;
+        case (0x38<<3)|2: assert(false);break;
+        case (0x38<<3)|3: assert(false);break;
+        case (0x38<<3)|4: assert(false);break;
+        case (0x38<<3)|5: assert(false);break;
+        case (0x38<<3)|6: assert(false);break;
+        case (0x38<<3)|7: assert(false);break;
+    /* AND abs,Y */
+        case (0x39<<3)|0: _SA(c->PC++);break;
+        case (0x39<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x39<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0x39<<3)|3: _SA(c->AD+c->Y);break;
+        case (0x39<<3)|4: c->A&=_GD();_NZ(c->A);_FETCH();break;
+        case (0x39<<3)|5: assert(false);break;
+        case (0x39<<3)|6: assert(false);break;
+        case (0x39<<3)|7: assert(false);break;
+    /* NOP  (undoc) */
+        case (0x3A<<3)|0: _SA(c->PC);break;
+        case (0x3A<<3)|1: _FETCH();break;
+        case (0x3A<<3)|2: assert(false);break;
+        case (0x3A<<3)|3: assert(false);break;
+        case (0x3A<<3)|4: assert(false);break;
+        case (0x3A<<3)|5: assert(false);break;
+        case (0x3A<<3)|6: assert(false);break;
+        case (0x3A<<3)|7: assert(false);break;
+    /* RLA abs,Y (undoc) */
+        case (0x3B<<3)|0: _SA(c->PC++);break;
+        case (0x3B<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x3B<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x3B<<3)|3: _SA(c->AD+c->Y);break;
+        case (0x3B<<3)|4: c->AD=_GD();_WR();break;
+        case (0x3B<<3)|5: c->AD=_m6502_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();break;
+        case (0x3B<<3)|6: _FETCH();break;
+        case (0x3B<<3)|7: assert(false);break;
+    /* NOP abs,X (undoc) */
+        case (0x3C<<3)|0: _SA(c->PC++);break;
+        case (0x3C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x3C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0x3C<<3)|3: _SA(c->AD+c->X);break;
+        case (0x3C<<3)|4: _FETCH();break;
+        case (0x3C<<3)|5: assert(false);break;
+        case (0x3C<<3)|6: assert(false);break;
+        case (0x3C<<3)|7: assert(false);break;
+    /* AND abs,X */
+        case (0x3D<<3)|0: _SA(c->PC++);break;
+        case (0x3D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x3D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0x3D<<3)|3: _SA(c->AD+c->X);break;
+        case (0x3D<<3)|4: c->A&=_GD();_NZ(c->A);_FETCH();break;
+        case (0x3D<<3)|5: assert(false);break;
+        case (0x3D<<3)|6: assert(false);break;
+        case (0x3D<<3)|7: assert(false);break;
+    /* ROL abs,X */
+        case (0x3E<<3)|0: _SA(c->PC++);break;
+        case (0x3E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x3E<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x3E<<3)|3: _SA(c->AD+c->X);break;
+        case (0x3E<<3)|4: c->AD=_GD();_WR();break;
+        case (0x3E<<3)|5: _SD(_m6502_rol(c,c->AD));_WR();break;
+        case (0x3E<<3)|6: _FETCH();break;
+        case (0x3E<<3)|7: assert(false);break;
+    /* RLA abs,X (undoc) */
+        case (0x3F<<3)|0: _SA(c->PC++);break;
+        case (0x3F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x3F<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x3F<<3)|3: _SA(c->AD+c->X);break;
+        case (0x3F<<3)|4: c->AD=_GD();_WR();break;
+        case (0x3F<<3)|5: c->AD=_m6502_rol(c,c->AD);_SD(c->AD);c->A&=c->AD;_NZ(c->A);_WR();break;
+        case (0x3F<<3)|6: _FETCH();break;
+        case (0x3F<<3)|7: assert(false);break;
+    /* RTI  */
+        case (0x40<<3)|0: _SA(c->PC);break;
+        case (0x40<<3)|1: _SA(0x0100|c->S++);break;
+        case (0x40<<3)|2: _SA(0x0100|c->S++);break;
+        case (0x40<<3)|3: _SA(0x0100|c->S++);c->P=(_GD()|M6502_BF)&~M6502_XF;break;
+        case (0x40<<3)|4: _SA(0x0100|c->S);c->AD=_GD();break;
+        case (0x40<<3)|5: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
+        case (0x40<<3)|6: assert(false);break;
+        case (0x40<<3)|7: assert(false);break;
+    /* EOR (zp,X) */
+        case (0x41<<3)|0: _SA(c->PC++);break;
+        case (0x41<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x41<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x41<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x41<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0x41<<3)|5: c->A^=_GD();_NZ(c->A);_FETCH();break;
+        case (0x41<<3)|6: assert(false);break;
+        case (0x41<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x42<<3)|0: _SA(c->PC);break;
+        case (0x42<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x42<<3)|2: assert(false);break;
+        case (0x42<<3)|3: assert(false);break;
+        case (0x42<<3)|4: assert(false);break;
+        case (0x42<<3)|5: assert(false);break;
+        case (0x42<<3)|6: assert(false);break;
+        case (0x42<<3)|7: assert(false);break;
+    /* SRE (zp,X) (undoc) */
+        case (0x43<<3)|0: _SA(c->PC++);break;
+        case (0x43<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x43<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x43<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x43<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0x43<<3)|5: c->AD=_GD();_WR();break;
+        case (0x43<<3)|6: c->AD=_m6502_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();break;
+        case (0x43<<3)|7: _FETCH();break;
+    /* NOP zp (undoc) */
+        case (0x44<<3)|0: _SA(c->PC++);break;
+        case (0x44<<3)|1: _SA(_GD());break;
+        case (0x44<<3)|2: _FETCH();break;
+        case (0x44<<3)|3: assert(false);break;
+        case (0x44<<3)|4: assert(false);break;
+        case (0x44<<3)|5: assert(false);break;
+        case (0x44<<3)|6: assert(false);break;
+        case (0x44<<3)|7: assert(false);break;
+    /* EOR zp */
+        case (0x45<<3)|0: _SA(c->PC++);break;
+        case (0x45<<3)|1: _SA(_GD());break;
+        case (0x45<<3)|2: c->A^=_GD();_NZ(c->A);_FETCH();break;
+        case (0x45<<3)|3: assert(false);break;
+        case (0x45<<3)|4: assert(false);break;
+        case (0x45<<3)|5: assert(false);break;
+        case (0x45<<3)|6: assert(false);break;
+        case (0x45<<3)|7: assert(false);break;
+    /* LSR zp */
+        case (0x46<<3)|0: _SA(c->PC++);break;
+        case (0x46<<3)|1: _SA(_GD());break;
+        case (0x46<<3)|2: c->AD=_GD();_WR();break;
+        case (0x46<<3)|3: _SD(_m6502_lsr(c,c->AD));_WR();break;
+        case (0x46<<3)|4: _FETCH();break;
+        case (0x46<<3)|5: assert(false);break;
+        case (0x46<<3)|6: assert(false);break;
+        case (0x46<<3)|7: assert(false);break;
+    /* SRE zp (undoc) */
+        case (0x47<<3)|0: _SA(c->PC++);break;
+        case (0x47<<3)|1: _SA(_GD());break;
+        case (0x47<<3)|2: c->AD=_GD();_WR();break;
+        case (0x47<<3)|3: c->AD=_m6502_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();break;
+        case (0x47<<3)|4: _FETCH();break;
+        case (0x47<<3)|5: assert(false);break;
+        case (0x47<<3)|6: assert(false);break;
+        case (0x47<<3)|7: assert(false);break;
+    /* PHA  */
+        case (0x48<<3)|0: _SA(c->PC);break;
+        case (0x48<<3)|1: _SAD(0x0100|c->S--,c->A);_WR();break;
+        case (0x48<<3)|2: _FETCH();break;
+        case (0x48<<3)|3: assert(false);break;
+        case (0x48<<3)|4: assert(false);break;
+        case (0x48<<3)|5: assert(false);break;
+        case (0x48<<3)|6: assert(false);break;
+        case (0x48<<3)|7: assert(false);break;
+    /* EOR # */
+        case (0x49<<3)|0: _SA(c->PC++);break;
+        case (0x49<<3)|1: c->A^=_GD();_NZ(c->A);_FETCH();break;
+        case (0x49<<3)|2: assert(false);break;
+        case (0x49<<3)|3: assert(false);break;
+        case (0x49<<3)|4: assert(false);break;
+        case (0x49<<3)|5: assert(false);break;
+        case (0x49<<3)|6: assert(false);break;
+        case (0x49<<3)|7: assert(false);break;
+    /* LSRA  */
+        case (0x4A<<3)|0: _SA(c->PC);break;
+        case (0x4A<<3)|1: c->A=_m6502_lsr(c,c->A);_FETCH();break;
+        case (0x4A<<3)|2: assert(false);break;
+        case (0x4A<<3)|3: assert(false);break;
+        case (0x4A<<3)|4: assert(false);break;
+        case (0x4A<<3)|5: assert(false);break;
+        case (0x4A<<3)|6: assert(false);break;
+        case (0x4A<<3)|7: assert(false);break;
+    /* ASR # (undoc) */
+        case (0x4B<<3)|0: _SA(c->PC++);break;
+        case (0x4B<<3)|1: c->A&=_GD();c->A=_m6502_lsr(c,c->A);_FETCH();break;
+        case (0x4B<<3)|2: assert(false);break;
+        case (0x4B<<3)|3: assert(false);break;
+        case (0x4B<<3)|4: assert(false);break;
+        case (0x4B<<3)|5: assert(false);break;
+        case (0x4B<<3)|6: assert(false);break;
+        case (0x4B<<3)|7: assert(false);break;
+    /* JMP  */
+        case (0x4C<<3)|0: _SA(c->PC++);break;
+        case (0x4C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x4C<<3)|2: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
+        case (0x4C<<3)|3: assert(false);break;
+        case (0x4C<<3)|4: assert(false);break;
+        case (0x4C<<3)|5: assert(false);break;
+        case (0x4C<<3)|6: assert(false);break;
+        case (0x4C<<3)|7: assert(false);break;
+    /* EOR abs */
+        case (0x4D<<3)|0: _SA(c->PC++);break;
+        case (0x4D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x4D<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x4D<<3)|3: c->A^=_GD();_NZ(c->A);_FETCH();break;
+        case (0x4D<<3)|4: assert(false);break;
+        case (0x4D<<3)|5: assert(false);break;
+        case (0x4D<<3)|6: assert(false);break;
+        case (0x4D<<3)|7: assert(false);break;
+    /* LSR abs */
+        case (0x4E<<3)|0: _SA(c->PC++);break;
+        case (0x4E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x4E<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x4E<<3)|3: c->AD=_GD();_WR();break;
+        case (0x4E<<3)|4: _SD(_m6502_lsr(c,c->AD));_WR();break;
+        case (0x4E<<3)|5: _FETCH();break;
+        case (0x4E<<3)|6: assert(false);break;
+        case (0x4E<<3)|7: assert(false);break;
+    /* SRE abs (undoc) */
+        case (0x4F<<3)|0: _SA(c->PC++);break;
+        case (0x4F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x4F<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x4F<<3)|3: c->AD=_GD();_WR();break;
+        case (0x4F<<3)|4: c->AD=_m6502_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();break;
+        case (0x4F<<3)|5: _FETCH();break;
+        case (0x4F<<3)|6: assert(false);break;
+        case (0x4F<<3)|7: assert(false);break;
+    /* BVC # */
+        case (0x50<<3)|0: _SA(c->PC++);break;
+        case (0x50<<3)|1: _SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&0x40)!=0x0){_FETCH();};break;
+        case (0x50<<3)|2: _SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;
+        case (0x50<<3)|3: c->PC=c->AD;_FETCH();break;
+        case (0x50<<3)|4: assert(false);break;
+        case (0x50<<3)|5: assert(false);break;
+        case (0x50<<3)|6: assert(false);break;
+        case (0x50<<3)|7: assert(false);break;
+    /* EOR (zp),Y */
+        case (0x51<<3)|0: _SA(c->PC++);break;
+        case (0x51<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x51<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x51<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0x51<<3)|4: _SA(c->AD+c->Y);break;
+        case (0x51<<3)|5: c->A^=_GD();_NZ(c->A);_FETCH();break;
+        case (0x51<<3)|6: assert(false);break;
+        case (0x51<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x52<<3)|0: _SA(c->PC);break;
+        case (0x52<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x52<<3)|2: assert(false);break;
+        case (0x52<<3)|3: assert(false);break;
+        case (0x52<<3)|4: assert(false);break;
+        case (0x52<<3)|5: assert(false);break;
+        case (0x52<<3)|6: assert(false);break;
+        case (0x52<<3)|7: assert(false);break;
+    /* SRE (zp),Y (undoc) */
+        case (0x53<<3)|0: _SA(c->PC++);break;
+        case (0x53<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x53<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x53<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x53<<3)|4: _SA(c->AD+c->Y);break;
+        case (0x53<<3)|5: c->AD=_GD();_WR();break;
+        case (0x53<<3)|6: c->AD=_m6502_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();break;
+        case (0x53<<3)|7: _FETCH();break;
+    /* NOP zp,X (undoc) */
+        case (0x54<<3)|0: _SA(c->PC++);break;
+        case (0x54<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x54<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x54<<3)|3: _FETCH();break;
+        case (0x54<<3)|4: assert(false);break;
+        case (0x54<<3)|5: assert(false);break;
+        case (0x54<<3)|6: assert(false);break;
+        case (0x54<<3)|7: assert(false);break;
+    /* EOR zp,X */
+        case (0x55<<3)|0: _SA(c->PC++);break;
+        case (0x55<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x55<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x55<<3)|3: c->A^=_GD();_NZ(c->A);_FETCH();break;
+        case (0x55<<3)|4: assert(false);break;
+        case (0x55<<3)|5: assert(false);break;
+        case (0x55<<3)|6: assert(false);break;
+        case (0x55<<3)|7: assert(false);break;
+    /* LSR zp,X */
+        case (0x56<<3)|0: _SA(c->PC++);break;
+        case (0x56<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x56<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x56<<3)|3: c->AD=_GD();_WR();break;
+        case (0x56<<3)|4: _SD(_m6502_lsr(c,c->AD));_WR();break;
+        case (0x56<<3)|5: _FETCH();break;
+        case (0x56<<3)|6: assert(false);break;
+        case (0x56<<3)|7: assert(false);break;
+    /* SRE zp,X (undoc) */
+        case (0x57<<3)|0: _SA(c->PC++);break;
+        case (0x57<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x57<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x57<<3)|3: c->AD=_GD();_WR();break;
+        case (0x57<<3)|4: c->AD=_m6502_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();break;
+        case (0x57<<3)|5: _FETCH();break;
+        case (0x57<<3)|6: assert(false);break;
+        case (0x57<<3)|7: assert(false);break;
+    /* CLI  */
+        case (0x58<<3)|0: _SA(c->PC);break;
+        case (0x58<<3)|1: c->P&=~0x4;_FETCH();break;
+        case (0x58<<3)|2: assert(false);break;
+        case (0x58<<3)|3: assert(false);break;
+        case (0x58<<3)|4: assert(false);break;
+        case (0x58<<3)|5: assert(false);break;
+        case (0x58<<3)|6: assert(false);break;
+        case (0x58<<3)|7: assert(false);break;
+    /* EOR abs,Y */
+        case (0x59<<3)|0: _SA(c->PC++);break;
+        case (0x59<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x59<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0x59<<3)|3: _SA(c->AD+c->Y);break;
+        case (0x59<<3)|4: c->A^=_GD();_NZ(c->A);_FETCH();break;
+        case (0x59<<3)|5: assert(false);break;
+        case (0x59<<3)|6: assert(false);break;
+        case (0x59<<3)|7: assert(false);break;
+    /* NOP  (undoc) */
+        case (0x5A<<3)|0: _SA(c->PC);break;
+        case (0x5A<<3)|1: _FETCH();break;
+        case (0x5A<<3)|2: assert(false);break;
+        case (0x5A<<3)|3: assert(false);break;
+        case (0x5A<<3)|4: assert(false);break;
+        case (0x5A<<3)|5: assert(false);break;
+        case (0x5A<<3)|6: assert(false);break;
+        case (0x5A<<3)|7: assert(false);break;
+    /* SRE abs,Y (undoc) */
+        case (0x5B<<3)|0: _SA(c->PC++);break;
+        case (0x5B<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x5B<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x5B<<3)|3: _SA(c->AD+c->Y);break;
+        case (0x5B<<3)|4: c->AD=_GD();_WR();break;
+        case (0x5B<<3)|5: c->AD=_m6502_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();break;
+        case (0x5B<<3)|6: _FETCH();break;
+        case (0x5B<<3)|7: assert(false);break;
+    /* NOP abs,X (undoc) */
+        case (0x5C<<3)|0: _SA(c->PC++);break;
+        case (0x5C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x5C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0x5C<<3)|3: _SA(c->AD+c->X);break;
+        case (0x5C<<3)|4: _FETCH();break;
+        case (0x5C<<3)|5: assert(false);break;
+        case (0x5C<<3)|6: assert(false);break;
+        case (0x5C<<3)|7: assert(false);break;
+    /* EOR abs,X */
+        case (0x5D<<3)|0: _SA(c->PC++);break;
+        case (0x5D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x5D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0x5D<<3)|3: _SA(c->AD+c->X);break;
+        case (0x5D<<3)|4: c->A^=_GD();_NZ(c->A);_FETCH();break;
+        case (0x5D<<3)|5: assert(false);break;
+        case (0x5D<<3)|6: assert(false);break;
+        case (0x5D<<3)|7: assert(false);break;
+    /* LSR abs,X */
+        case (0x5E<<3)|0: _SA(c->PC++);break;
+        case (0x5E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x5E<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x5E<<3)|3: _SA(c->AD+c->X);break;
+        case (0x5E<<3)|4: c->AD=_GD();_WR();break;
+        case (0x5E<<3)|5: _SD(_m6502_lsr(c,c->AD));_WR();break;
+        case (0x5E<<3)|6: _FETCH();break;
+        case (0x5E<<3)|7: assert(false);break;
+    /* SRE abs,X (undoc) */
+        case (0x5F<<3)|0: _SA(c->PC++);break;
+        case (0x5F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x5F<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x5F<<3)|3: _SA(c->AD+c->X);break;
+        case (0x5F<<3)|4: c->AD=_GD();_WR();break;
+        case (0x5F<<3)|5: c->AD=_m6502_lsr(c,c->AD);_SD(c->AD);c->A^=c->AD;_NZ(c->A);_WR();break;
+        case (0x5F<<3)|6: _FETCH();break;
+        case (0x5F<<3)|7: assert(false);break;
+    /* RTS  */
+        case (0x60<<3)|0: _SA(c->PC);break;
+        case (0x60<<3)|1: _SA(0x0100|c->S++);break;
+        case (0x60<<3)|2: _SA(0x0100|c->S++);break;
+        case (0x60<<3)|3: _SA(0x0100|c->S);c->AD=_GD();break;
+        case (0x60<<3)|4: c->PC=(_GD()<<8)|c->AD;_SA(c->PC++);break;
+        case (0x60<<3)|5: _FETCH();break;
+        case (0x60<<3)|6: assert(false);break;
+        case (0x60<<3)|7: assert(false);break;
+    /* ADC (zp,X) */
+        case (0x61<<3)|0: _SA(c->PC++);break;
+        case (0x61<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x61<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x61<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x61<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0x61<<3)|5: _m6502_adc(c,_GD());_FETCH();break;
+        case (0x61<<3)|6: assert(false);break;
+        case (0x61<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x62<<3)|0: _SA(c->PC);break;
+        case (0x62<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x62<<3)|2: assert(false);break;
+        case (0x62<<3)|3: assert(false);break;
+        case (0x62<<3)|4: assert(false);break;
+        case (0x62<<3)|5: assert(false);break;
+        case (0x62<<3)|6: assert(false);break;
+        case (0x62<<3)|7: assert(false);break;
+    /* RRA (zp,X) (undoc) */
+        case (0x63<<3)|0: _SA(c->PC++);break;
+        case (0x63<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x63<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x63<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x63<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0x63<<3)|5: c->AD=_GD();_WR();break;
+        case (0x63<<3)|6: c->AD=_m6502_ror(c,c->AD);_SD(c->AD);_m6502_adc(c,c->AD);_WR();break;
+        case (0x63<<3)|7: _FETCH();break;
+    /* NOP zp (undoc) */
+        case (0x64<<3)|0: _SA(c->PC++);break;
+        case (0x64<<3)|1: _SA(_GD());break;
+        case (0x64<<3)|2: _FETCH();break;
+        case (0x64<<3)|3: assert(false);break;
+        case (0x64<<3)|4: assert(false);break;
+        case (0x64<<3)|5: assert(false);break;
+        case (0x64<<3)|6: assert(false);break;
+        case (0x64<<3)|7: assert(false);break;
+    /* ADC zp */
+        case (0x65<<3)|0: _SA(c->PC++);break;
+        case (0x65<<3)|1: _SA(_GD());break;
+        case (0x65<<3)|2: _m6502_adc(c,_GD());_FETCH();break;
+        case (0x65<<3)|3: assert(false);break;
+        case (0x65<<3)|4: assert(false);break;
+        case (0x65<<3)|5: assert(false);break;
+        case (0x65<<3)|6: assert(false);break;
+        case (0x65<<3)|7: assert(false);break;
+    /* ROR zp */
+        case (0x66<<3)|0: _SA(c->PC++);break;
+        case (0x66<<3)|1: _SA(_GD());break;
+        case (0x66<<3)|2: c->AD=_GD();_WR();break;
+        case (0x66<<3)|3: _SD(_m6502_ror(c,c->AD));_WR();break;
+        case (0x66<<3)|4: _FETCH();break;
+        case (0x66<<3)|5: assert(false);break;
+        case (0x66<<3)|6: assert(false);break;
+        case (0x66<<3)|7: assert(false);break;
+    /* RRA zp (undoc) */
+        case (0x67<<3)|0: _SA(c->PC++);break;
+        case (0x67<<3)|1: _SA(_GD());break;
+        case (0x67<<3)|2: c->AD=_GD();_WR();break;
+        case (0x67<<3)|3: c->AD=_m6502_ror(c,c->AD);_SD(c->AD);_m6502_adc(c,c->AD);_WR();break;
+        case (0x67<<3)|4: _FETCH();break;
+        case (0x67<<3)|5: assert(false);break;
+        case (0x67<<3)|6: assert(false);break;
+        case (0x67<<3)|7: assert(false);break;
+    /* PLA  */
+        case (0x68<<3)|0: _SA(c->PC);break;
+        case (0x68<<3)|1: _SA(0x0100|c->S++);break;
+        case (0x68<<3)|2: _SA(0x0100|c->S);break;
+        case (0x68<<3)|3: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0x68<<3)|4: assert(false);break;
+        case (0x68<<3)|5: assert(false);break;
+        case (0x68<<3)|6: assert(false);break;
+        case (0x68<<3)|7: assert(false);break;
+    /* ADC # */
+        case (0x69<<3)|0: _SA(c->PC++);break;
+        case (0x69<<3)|1: _m6502_adc(c,_GD());_FETCH();break;
+        case (0x69<<3)|2: assert(false);break;
+        case (0x69<<3)|3: assert(false);break;
+        case (0x69<<3)|4: assert(false);break;
+        case (0x69<<3)|5: assert(false);break;
+        case (0x69<<3)|6: assert(false);break;
+        case (0x69<<3)|7: assert(false);break;
+    /* RORA  */
+        case (0x6A<<3)|0: _SA(c->PC);break;
+        case (0x6A<<3)|1: c->A=_m6502_ror(c,c->A);_FETCH();break;
+        case (0x6A<<3)|2: assert(false);break;
+        case (0x6A<<3)|3: assert(false);break;
+        case (0x6A<<3)|4: assert(false);break;
+        case (0x6A<<3)|5: assert(false);break;
+        case (0x6A<<3)|6: assert(false);break;
+        case (0x6A<<3)|7: assert(false);break;
+    /* ARR # (undoc) */
+        case (0x6B<<3)|0: _SA(c->PC++);break;
+        case (0x6B<<3)|1: c->A&=_GD();_m6502_arr(c);_FETCH();break;
+        case (0x6B<<3)|2: assert(false);break;
+        case (0x6B<<3)|3: assert(false);break;
+        case (0x6B<<3)|4: assert(false);break;
+        case (0x6B<<3)|5: assert(false);break;
+        case (0x6B<<3)|6: assert(false);break;
+        case (0x6B<<3)|7: assert(false);break;
+    /* JMPI  */
+        case (0x6C<<3)|0: _SA(c->PC++);break;
+        case (0x6C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x6C<<3)|2: c->AD|=_GD()<<8;_SA(c->AD);break;
+        case (0x6C<<3)|3: _SA((c->AD&0xFF00)|((c->AD+1)&0x00FF));c->AD=_GD();break;
+        case (0x6C<<3)|4: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
+        case (0x6C<<3)|5: assert(false);break;
+        case (0x6C<<3)|6: assert(false);break;
+        case (0x6C<<3)|7: assert(false);break;
+    /* ADC abs */
+        case (0x6D<<3)|0: _SA(c->PC++);break;
+        case (0x6D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x6D<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x6D<<3)|3: _m6502_adc(c,_GD());_FETCH();break;
+        case (0x6D<<3)|4: assert(false);break;
+        case (0x6D<<3)|5: assert(false);break;
+        case (0x6D<<3)|6: assert(false);break;
+        case (0x6D<<3)|7: assert(false);break;
+    /* ROR abs */
+        case (0x6E<<3)|0: _SA(c->PC++);break;
+        case (0x6E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x6E<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x6E<<3)|3: c->AD=_GD();_WR();break;
+        case (0x6E<<3)|4: _SD(_m6502_ror(c,c->AD));_WR();break;
+        case (0x6E<<3)|5: _FETCH();break;
+        case (0x6E<<3)|6: assert(false);break;
+        case (0x6E<<3)|7: assert(false);break;
+    /* RRA abs (undoc) */
+        case (0x6F<<3)|0: _SA(c->PC++);break;
+        case (0x6F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x6F<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0x6F<<3)|3: c->AD=_GD();_WR();break;
+        case (0x6F<<3)|4: c->AD=_m6502_ror(c,c->AD);_SD(c->AD);_m6502_adc(c,c->AD);_WR();break;
+        case (0x6F<<3)|5: _FETCH();break;
+        case (0x6F<<3)|6: assert(false);break;
+        case (0x6F<<3)|7: assert(false);break;
+    /* BVS # */
+        case (0x70<<3)|0: _SA(c->PC++);break;
+        case (0x70<<3)|1: _SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&0x40)!=0x40){_FETCH();};break;
+        case (0x70<<3)|2: _SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;
+        case (0x70<<3)|3: c->PC=c->AD;_FETCH();break;
+        case (0x70<<3)|4: assert(false);break;
+        case (0x70<<3)|5: assert(false);break;
+        case (0x70<<3)|6: assert(false);break;
+        case (0x70<<3)|7: assert(false);break;
+    /* ADC (zp),Y */
+        case (0x71<<3)|0: _SA(c->PC++);break;
+        case (0x71<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x71<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x71<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0x71<<3)|4: _SA(c->AD+c->Y);break;
+        case (0x71<<3)|5: _m6502_adc(c,_GD());_FETCH();break;
+        case (0x71<<3)|6: assert(false);break;
+        case (0x71<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x72<<3)|0: _SA(c->PC);break;
+        case (0x72<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x72<<3)|2: assert(false);break;
+        case (0x72<<3)|3: assert(false);break;
+        case (0x72<<3)|4: assert(false);break;
+        case (0x72<<3)|5: assert(false);break;
+        case (0x72<<3)|6: assert(false);break;
+        case (0x72<<3)|7: assert(false);break;
+    /* RRA (zp),Y (undoc) */
+        case (0x73<<3)|0: _SA(c->PC++);break;
+        case (0x73<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x73<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x73<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x73<<3)|4: _SA(c->AD+c->Y);break;
+        case (0x73<<3)|5: c->AD=_GD();_WR();break;
+        case (0x73<<3)|6: c->AD=_m6502_ror(c,c->AD);_SD(c->AD);_m6502_adc(c,c->AD);_WR();break;
+        case (0x73<<3)|7: _FETCH();break;
+    /* NOP zp,X (undoc) */
+        case (0x74<<3)|0: _SA(c->PC++);break;
+        case (0x74<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x74<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x74<<3)|3: _FETCH();break;
+        case (0x74<<3)|4: assert(false);break;
+        case (0x74<<3)|5: assert(false);break;
+        case (0x74<<3)|6: assert(false);break;
+        case (0x74<<3)|7: assert(false);break;
+    /* ADC zp,X */
+        case (0x75<<3)|0: _SA(c->PC++);break;
+        case (0x75<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x75<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x75<<3)|3: _m6502_adc(c,_GD());_FETCH();break;
+        case (0x75<<3)|4: assert(false);break;
+        case (0x75<<3)|5: assert(false);break;
+        case (0x75<<3)|6: assert(false);break;
+        case (0x75<<3)|7: assert(false);break;
+    /* ROR zp,X */
+        case (0x76<<3)|0: _SA(c->PC++);break;
+        case (0x76<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x76<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x76<<3)|3: c->AD=_GD();_WR();break;
+        case (0x76<<3)|4: _SD(_m6502_ror(c,c->AD));_WR();break;
+        case (0x76<<3)|5: _FETCH();break;
+        case (0x76<<3)|6: assert(false);break;
+        case (0x76<<3)|7: assert(false);break;
+    /* RRA zp,X (undoc) */
+        case (0x77<<3)|0: _SA(c->PC++);break;
+        case (0x77<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x77<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0x77<<3)|3: c->AD=_GD();_WR();break;
+        case (0x77<<3)|4: c->AD=_m6502_ror(c,c->AD);_SD(c->AD);_m6502_adc(c,c->AD);_WR();break;
+        case (0x77<<3)|5: _FETCH();break;
+        case (0x77<<3)|6: assert(false);break;
+        case (0x77<<3)|7: assert(false);break;
+    /* SEI  */
+        case (0x78<<3)|0: _SA(c->PC);break;
+        case (0x78<<3)|1: c->P|=0x4;_FETCH();break;
+        case (0x78<<3)|2: assert(false);break;
+        case (0x78<<3)|3: assert(false);break;
+        case (0x78<<3)|4: assert(false);break;
+        case (0x78<<3)|5: assert(false);break;
+        case (0x78<<3)|6: assert(false);break;
+        case (0x78<<3)|7: assert(false);break;
+    /* ADC abs,Y */
+        case (0x79<<3)|0: _SA(c->PC++);break;
+        case (0x79<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x79<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0x79<<3)|3: _SA(c->AD+c->Y);break;
+        case (0x79<<3)|4: _m6502_adc(c,_GD());_FETCH();break;
+        case (0x79<<3)|5: assert(false);break;
+        case (0x79<<3)|6: assert(false);break;
+        case (0x79<<3)|7: assert(false);break;
+    /* NOP  (undoc) */
+        case (0x7A<<3)|0: _SA(c->PC);break;
+        case (0x7A<<3)|1: _FETCH();break;
+        case (0x7A<<3)|2: assert(false);break;
+        case (0x7A<<3)|3: assert(false);break;
+        case (0x7A<<3)|4: assert(false);break;
+        case (0x7A<<3)|5: assert(false);break;
+        case (0x7A<<3)|6: assert(false);break;
+        case (0x7A<<3)|7: assert(false);break;
+    /* RRA abs,Y (undoc) */
+        case (0x7B<<3)|0: _SA(c->PC++);break;
+        case (0x7B<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x7B<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x7B<<3)|3: _SA(c->AD+c->Y);break;
+        case (0x7B<<3)|4: c->AD=_GD();_WR();break;
+        case (0x7B<<3)|5: c->AD=_m6502_ror(c,c->AD);_SD(c->AD);_m6502_adc(c,c->AD);_WR();break;
+        case (0x7B<<3)|6: _FETCH();break;
+        case (0x7B<<3)|7: assert(false);break;
+    /* NOP abs,X (undoc) */
+        case (0x7C<<3)|0: _SA(c->PC++);break;
+        case (0x7C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x7C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0x7C<<3)|3: _SA(c->AD+c->X);break;
+        case (0x7C<<3)|4: _FETCH();break;
+        case (0x7C<<3)|5: assert(false);break;
+        case (0x7C<<3)|6: assert(false);break;
+        case (0x7C<<3)|7: assert(false);break;
+    /* ADC abs,X */
+        case (0x7D<<3)|0: _SA(c->PC++);break;
+        case (0x7D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x7D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0x7D<<3)|3: _SA(c->AD+c->X);break;
+        case (0x7D<<3)|4: _m6502_adc(c,_GD());_FETCH();break;
+        case (0x7D<<3)|5: assert(false);break;
+        case (0x7D<<3)|6: assert(false);break;
+        case (0x7D<<3)|7: assert(false);break;
+    /* ROR abs,X */
+        case (0x7E<<3)|0: _SA(c->PC++);break;
+        case (0x7E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x7E<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x7E<<3)|3: _SA(c->AD+c->X);break;
+        case (0x7E<<3)|4: c->AD=_GD();_WR();break;
+        case (0x7E<<3)|5: _SD(_m6502_ror(c,c->AD));_WR();break;
+        case (0x7E<<3)|6: _FETCH();break;
+        case (0x7E<<3)|7: assert(false);break;
+    /* RRA abs,X (undoc) */
+        case (0x7F<<3)|0: _SA(c->PC++);break;
+        case (0x7F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x7F<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x7F<<3)|3: _SA(c->AD+c->X);break;
+        case (0x7F<<3)|4: c->AD=_GD();_WR();break;
+        case (0x7F<<3)|5: c->AD=_m6502_ror(c,c->AD);_SD(c->AD);_m6502_adc(c,c->AD);_WR();break;
+        case (0x7F<<3)|6: _FETCH();break;
+        case (0x7F<<3)|7: assert(false);break;
+    /* NOP # (undoc) */
+        case (0x80<<3)|0: _SA(c->PC++);break;
+        case (0x80<<3)|1: _FETCH();break;
+        case (0x80<<3)|2: assert(false);break;
+        case (0x80<<3)|3: assert(false);break;
+        case (0x80<<3)|4: assert(false);break;
+        case (0x80<<3)|5: assert(false);break;
+        case (0x80<<3)|6: assert(false);break;
+        case (0x80<<3)|7: assert(false);break;
+    /* STA (zp,X) */
+        case (0x81<<3)|0: _SA(c->PC++);break;
+        case (0x81<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x81<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x81<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x81<<3)|4: _SA((_GD()<<8)|c->AD);_SD(c->A);_WR();break;
+        case (0x81<<3)|5: _FETCH();break;
+        case (0x81<<3)|6: assert(false);break;
+        case (0x81<<3)|7: assert(false);break;
+    /* NOP # (undoc) */
+        case (0x82<<3)|0: _SA(c->PC++);break;
+        case (0x82<<3)|1: _FETCH();break;
+        case (0x82<<3)|2: assert(false);break;
+        case (0x82<<3)|3: assert(false);break;
+        case (0x82<<3)|4: assert(false);break;
+        case (0x82<<3)|5: assert(false);break;
+        case (0x82<<3)|6: assert(false);break;
+        case (0x82<<3)|7: assert(false);break;
+    /* SAX (zp,X) (undoc) */
+        case (0x83<<3)|0: _SA(c->PC++);break;
+        case (0x83<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x83<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0x83<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x83<<3)|4: _SA((_GD()<<8)|c->AD);_SD(c->A&c->X);_WR();break;
+        case (0x83<<3)|5: _FETCH();break;
+        case (0x83<<3)|6: assert(false);break;
+        case (0x83<<3)|7: assert(false);break;
+    /* STY zp */
+        case (0x84<<3)|0: _SA(c->PC++);break;
+        case (0x84<<3)|1: _SA(_GD());_SD(c->Y);_WR();break;
+        case (0x84<<3)|2: _FETCH();break;
+        case (0x84<<3)|3: assert(false);break;
+        case (0x84<<3)|4: assert(false);break;
+        case (0x84<<3)|5: assert(false);break;
+        case (0x84<<3)|6: assert(false);break;
+        case (0x84<<3)|7: assert(false);break;
+    /* STA zp */
+        case (0x85<<3)|0: _SA(c->PC++);break;
+        case (0x85<<3)|1: _SA(_GD());_SD(c->A);_WR();break;
+        case (0x85<<3)|2: _FETCH();break;
+        case (0x85<<3)|3: assert(false);break;
+        case (0x85<<3)|4: assert(false);break;
+        case (0x85<<3)|5: assert(false);break;
+        case (0x85<<3)|6: assert(false);break;
+        case (0x85<<3)|7: assert(false);break;
+    /* STX zp */
+        case (0x86<<3)|0: _SA(c->PC++);break;
+        case (0x86<<3)|1: _SA(_GD());_SD(c->X);_WR();break;
+        case (0x86<<3)|2: _FETCH();break;
+        case (0x86<<3)|3: assert(false);break;
+        case (0x86<<3)|4: assert(false);break;
+        case (0x86<<3)|5: assert(false);break;
+        case (0x86<<3)|6: assert(false);break;
+        case (0x86<<3)|7: assert(false);break;
+    /* SAX zp (undoc) */
+        case (0x87<<3)|0: _SA(c->PC++);break;
+        case (0x87<<3)|1: _SA(_GD());_SD(c->A&c->X);_WR();break;
+        case (0x87<<3)|2: _FETCH();break;
+        case (0x87<<3)|3: assert(false);break;
+        case (0x87<<3)|4: assert(false);break;
+        case (0x87<<3)|5: assert(false);break;
+        case (0x87<<3)|6: assert(false);break;
+        case (0x87<<3)|7: assert(false);break;
+    /* DEY  */
+        case (0x88<<3)|0: _SA(c->PC);break;
+        case (0x88<<3)|1: c->Y--;_NZ(c->Y);_FETCH();break;
+        case (0x88<<3)|2: assert(false);break;
+        case (0x88<<3)|3: assert(false);break;
+        case (0x88<<3)|4: assert(false);break;
+        case (0x88<<3)|5: assert(false);break;
+        case (0x88<<3)|6: assert(false);break;
+        case (0x88<<3)|7: assert(false);break;
+    /* NOP # (undoc) */
+        case (0x89<<3)|0: _SA(c->PC++);break;
+        case (0x89<<3)|1: _FETCH();break;
+        case (0x89<<3)|2: assert(false);break;
+        case (0x89<<3)|3: assert(false);break;
+        case (0x89<<3)|4: assert(false);break;
+        case (0x89<<3)|5: assert(false);break;
+        case (0x89<<3)|6: assert(false);break;
+        case (0x89<<3)|7: assert(false);break;
+    /* TXA  */
+        case (0x8A<<3)|0: _SA(c->PC);break;
+        case (0x8A<<3)|1: c->A=c->X;_NZ(c->A);_FETCH();break;
+        case (0x8A<<3)|2: assert(false);break;
+        case (0x8A<<3)|3: assert(false);break;
+        case (0x8A<<3)|4: assert(false);break;
+        case (0x8A<<3)|5: assert(false);break;
+        case (0x8A<<3)|6: assert(false);break;
+        case (0x8A<<3)|7: assert(false);break;
+    /* ANE # (undoc) */
+        case (0x8B<<3)|0: _SA(c->PC++);break;
+        case (0x8B<<3)|1: c->A=(c->A|0xEE)&c->X&_GD();_NZ(c->A);_FETCH();break;
+        case (0x8B<<3)|2: assert(false);break;
+        case (0x8B<<3)|3: assert(false);break;
+        case (0x8B<<3)|4: assert(false);break;
+        case (0x8B<<3)|5: assert(false);break;
+        case (0x8B<<3)|6: assert(false);break;
+        case (0x8B<<3)|7: assert(false);break;
+    /* STY abs */
+        case (0x8C<<3)|0: _SA(c->PC++);break;
+        case (0x8C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x8C<<3)|2: _SA((_GD()<<8)|c->AD);_SD(c->Y);_WR();break;
+        case (0x8C<<3)|3: _FETCH();break;
+        case (0x8C<<3)|4: assert(false);break;
+        case (0x8C<<3)|5: assert(false);break;
+        case (0x8C<<3)|6: assert(false);break;
+        case (0x8C<<3)|7: assert(false);break;
+    /* STA abs */
+        case (0x8D<<3)|0: _SA(c->PC++);break;
+        case (0x8D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x8D<<3)|2: _SA((_GD()<<8)|c->AD);_SD(c->A);_WR();break;
+        case (0x8D<<3)|3: _FETCH();break;
+        case (0x8D<<3)|4: assert(false);break;
+        case (0x8D<<3)|5: assert(false);break;
+        case (0x8D<<3)|6: assert(false);break;
+        case (0x8D<<3)|7: assert(false);break;
+    /* STX abs */
+        case (0x8E<<3)|0: _SA(c->PC++);break;
+        case (0x8E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x8E<<3)|2: _SA((_GD()<<8)|c->AD);_SD(c->X);_WR();break;
+        case (0x8E<<3)|3: _FETCH();break;
+        case (0x8E<<3)|4: assert(false);break;
+        case (0x8E<<3)|5: assert(false);break;
+        case (0x8E<<3)|6: assert(false);break;
+        case (0x8E<<3)|7: assert(false);break;
+    /* SAX abs (undoc) */
+        case (0x8F<<3)|0: _SA(c->PC++);break;
+        case (0x8F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x8F<<3)|2: _SA((_GD()<<8)|c->AD);_SD(c->A&c->X);_WR();break;
+        case (0x8F<<3)|3: _FETCH();break;
+        case (0x8F<<3)|4: assert(false);break;
+        case (0x8F<<3)|5: assert(false);break;
+        case (0x8F<<3)|6: assert(false);break;
+        case (0x8F<<3)|7: assert(false);break;
+    /* BCC # */
+        case (0x90<<3)|0: _SA(c->PC++);break;
+        case (0x90<<3)|1: _SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&0x1)!=0x0){_FETCH();};break;
+        case (0x90<<3)|2: _SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;
+        case (0x90<<3)|3: c->PC=c->AD;_FETCH();break;
+        case (0x90<<3)|4: assert(false);break;
+        case (0x90<<3)|5: assert(false);break;
+        case (0x90<<3)|6: assert(false);break;
+        case (0x90<<3)|7: assert(false);break;
+    /* STA (zp),Y */
+        case (0x91<<3)|0: _SA(c->PC++);break;
+        case (0x91<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x91<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x91<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x91<<3)|4: _SA(c->AD+c->Y);_SD(c->A);_WR();break;
+        case (0x91<<3)|5: _FETCH();break;
+        case (0x91<<3)|6: assert(false);break;
+        case (0x91<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0x92<<3)|0: _SA(c->PC);break;
+        case (0x92<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0x92<<3)|2: assert(false);break;
+        case (0x92<<3)|3: assert(false);break;
+        case (0x92<<3)|4: assert(false);break;
+        case (0x92<<3)|5: assert(false);break;
+        case (0x92<<3)|6: assert(false);break;
+        case (0x92<<3)|7: assert(false);break;
+    /* SHA (zp),Y (undoc) */
+        case (0x93<<3)|0: _SA(c->PC++);break;
+        case (0x93<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x93<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0x93<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x93<<3)|4: _SA(c->AD+c->Y);_SD(c->A&c->X&(uint8_t)((_GA()>>8)+1));_WR();break;
+        case (0x93<<3)|5: _FETCH();break;
+        case (0x93<<3)|6: assert(false);break;
+        case (0x93<<3)|7: assert(false);break;
+    /* STY zp,X */
+        case (0x94<<3)|0: _SA(c->PC++);break;
+        case (0x94<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x94<<3)|2: _SA((c->AD+c->X)&0x00FF);_SD(c->Y);_WR();break;
+        case (0x94<<3)|3: _FETCH();break;
+        case (0x94<<3)|4: assert(false);break;
+        case (0x94<<3)|5: assert(false);break;
+        case (0x94<<3)|6: assert(false);break;
+        case (0x94<<3)|7: assert(false);break;
+    /* STA zp,X */
+        case (0x95<<3)|0: _SA(c->PC++);break;
+        case (0x95<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x95<<3)|2: _SA((c->AD+c->X)&0x00FF);_SD(c->A);_WR();break;
+        case (0x95<<3)|3: _FETCH();break;
+        case (0x95<<3)|4: assert(false);break;
+        case (0x95<<3)|5: assert(false);break;
+        case (0x95<<3)|6: assert(false);break;
+        case (0x95<<3)|7: assert(false);break;
+    /* STX zp,Y */
+        case (0x96<<3)|0: _SA(c->PC++);break;
+        case (0x96<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x96<<3)|2: _SA((c->AD+c->Y)&0x00FF);_SD(c->X);_WR();break;
+        case (0x96<<3)|3: _FETCH();break;
+        case (0x96<<3)|4: assert(false);break;
+        case (0x96<<3)|5: assert(false);break;
+        case (0x96<<3)|6: assert(false);break;
+        case (0x96<<3)|7: assert(false);break;
+    /* SAX zp,Y (undoc) */
+        case (0x97<<3)|0: _SA(c->PC++);break;
+        case (0x97<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0x97<<3)|2: _SA((c->AD+c->Y)&0x00FF);_SD(c->A&c->X);_WR();break;
+        case (0x97<<3)|3: _FETCH();break;
+        case (0x97<<3)|4: assert(false);break;
+        case (0x97<<3)|5: assert(false);break;
+        case (0x97<<3)|6: assert(false);break;
+        case (0x97<<3)|7: assert(false);break;
+    /* TYA  */
+        case (0x98<<3)|0: _SA(c->PC);break;
+        case (0x98<<3)|1: c->A=c->Y;_NZ(c->A);_FETCH();break;
+        case (0x98<<3)|2: assert(false);break;
+        case (0x98<<3)|3: assert(false);break;
+        case (0x98<<3)|4: assert(false);break;
+        case (0x98<<3)|5: assert(false);break;
+        case (0x98<<3)|6: assert(false);break;
+        case (0x98<<3)|7: assert(false);break;
+    /* STA abs,Y */
+        case (0x99<<3)|0: _SA(c->PC++);break;
+        case (0x99<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x99<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x99<<3)|3: _SA(c->AD+c->Y);_SD(c->A);_WR();break;
+        case (0x99<<3)|4: _FETCH();break;
+        case (0x99<<3)|5: assert(false);break;
+        case (0x99<<3)|6: assert(false);break;
+        case (0x99<<3)|7: assert(false);break;
+    /* TXS  */
+        case (0x9A<<3)|0: _SA(c->PC);break;
+        case (0x9A<<3)|1: c->S=c->X;_FETCH();break;
+        case (0x9A<<3)|2: assert(false);break;
+        case (0x9A<<3)|3: assert(false);break;
+        case (0x9A<<3)|4: assert(false);break;
+        case (0x9A<<3)|5: assert(false);break;
+        case (0x9A<<3)|6: assert(false);break;
+        case (0x9A<<3)|7: assert(false);break;
+    /* SHS abs,Y (undoc) */
+        case (0x9B<<3)|0: _SA(c->PC++);break;
+        case (0x9B<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x9B<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x9B<<3)|3: _SA(c->AD+c->Y);c->S=c->A&c->X;_SD(c->S&(uint8_t)((_GA()>>8)+1));_WR();break;
+        case (0x9B<<3)|4: _FETCH();break;
+        case (0x9B<<3)|5: assert(false);break;
+        case (0x9B<<3)|6: assert(false);break;
+        case (0x9B<<3)|7: assert(false);break;
+    /* SHY abs,X (undoc) */
+        case (0x9C<<3)|0: _SA(c->PC++);break;
+        case (0x9C<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x9C<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x9C<<3)|3: _SA(c->AD+c->X);_SD(c->Y&(uint8_t)((_GA()>>8)+1));_WR();break;
+        case (0x9C<<3)|4: _FETCH();break;
+        case (0x9C<<3)|5: assert(false);break;
+        case (0x9C<<3)|6: assert(false);break;
+        case (0x9C<<3)|7: assert(false);break;
+    /* STA abs,X */
+        case (0x9D<<3)|0: _SA(c->PC++);break;
+        case (0x9D<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x9D<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0x9D<<3)|3: _SA(c->AD+c->X);_SD(c->A);_WR();break;
+        case (0x9D<<3)|4: _FETCH();break;
+        case (0x9D<<3)|5: assert(false);break;
+        case (0x9D<<3)|6: assert(false);break;
+        case (0x9D<<3)|7: assert(false);break;
+    /* SHX abs,Y (undoc) */
+        case (0x9E<<3)|0: _SA(c->PC++);break;
+        case (0x9E<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x9E<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x9E<<3)|3: _SA(c->AD+c->Y);_SD(c->X&(uint8_t)((_GA()>>8)+1));_WR();break;
+        case (0x9E<<3)|4: _FETCH();break;
+        case (0x9E<<3)|5: assert(false);break;
+        case (0x9E<<3)|6: assert(false);break;
+        case (0x9E<<3)|7: assert(false);break;
+    /* SHA abs,Y (undoc) */
+        case (0x9F<<3)|0: _SA(c->PC++);break;
+        case (0x9F<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0x9F<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0x9F<<3)|3: _SA(c->AD+c->Y);_SD(c->A&c->X&(uint8_t)((_GA()>>8)+1));_WR();break;
+        case (0x9F<<3)|4: _FETCH();break;
+        case (0x9F<<3)|5: assert(false);break;
+        case (0x9F<<3)|6: assert(false);break;
+        case (0x9F<<3)|7: assert(false);break;
+    /* LDY # */
+        case (0xA0<<3)|0: _SA(c->PC++);break;
+        case (0xA0<<3)|1: c->Y=_GD();_NZ(c->Y);_FETCH();break;
+        case (0xA0<<3)|2: assert(false);break;
+        case (0xA0<<3)|3: assert(false);break;
+        case (0xA0<<3)|4: assert(false);break;
+        case (0xA0<<3)|5: assert(false);break;
+        case (0xA0<<3)|6: assert(false);break;
+        case (0xA0<<3)|7: assert(false);break;
+    /* LDA (zp,X) */
+        case (0xA1<<3)|0: _SA(c->PC++);break;
+        case (0xA1<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xA1<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0xA1<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xA1<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0xA1<<3)|5: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0xA1<<3)|6: assert(false);break;
+        case (0xA1<<3)|7: assert(false);break;
+    /* LDX # */
+        case (0xA2<<3)|0: _SA(c->PC++);break;
+        case (0xA2<<3)|1: c->X=_GD();_NZ(c->X);_FETCH();break;
+        case (0xA2<<3)|2: assert(false);break;
+        case (0xA2<<3)|3: assert(false);break;
+        case (0xA2<<3)|4: assert(false);break;
+        case (0xA2<<3)|5: assert(false);break;
+        case (0xA2<<3)|6: assert(false);break;
+        case (0xA2<<3)|7: assert(false);break;
+    /* LAX (zp,X) (undoc) */
+        case (0xA3<<3)|0: _SA(c->PC++);break;
+        case (0xA3<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xA3<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0xA3<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xA3<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0xA3<<3)|5: c->A=c->X=_GD();_NZ(c->A);_FETCH();break;
+        case (0xA3<<3)|6: assert(false);break;
+        case (0xA3<<3)|7: assert(false);break;
+    /* LDY zp */
+        case (0xA4<<3)|0: _SA(c->PC++);break;
+        case (0xA4<<3)|1: _SA(_GD());break;
+        case (0xA4<<3)|2: c->Y=_GD();_NZ(c->Y);_FETCH();break;
+        case (0xA4<<3)|3: assert(false);break;
+        case (0xA4<<3)|4: assert(false);break;
+        case (0xA4<<3)|5: assert(false);break;
+        case (0xA4<<3)|6: assert(false);break;
+        case (0xA4<<3)|7: assert(false);break;
+    /* LDA zp */
+        case (0xA5<<3)|0: _SA(c->PC++);break;
+        case (0xA5<<3)|1: _SA(_GD());break;
+        case (0xA5<<3)|2: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0xA5<<3)|3: assert(false);break;
+        case (0xA5<<3)|4: assert(false);break;
+        case (0xA5<<3)|5: assert(false);break;
+        case (0xA5<<3)|6: assert(false);break;
+        case (0xA5<<3)|7: assert(false);break;
+    /* LDX zp */
+        case (0xA6<<3)|0: _SA(c->PC++);break;
+        case (0xA6<<3)|1: _SA(_GD());break;
+        case (0xA6<<3)|2: c->X=_GD();_NZ(c->X);_FETCH();break;
+        case (0xA6<<3)|3: assert(false);break;
+        case (0xA6<<3)|4: assert(false);break;
+        case (0xA6<<3)|5: assert(false);break;
+        case (0xA6<<3)|6: assert(false);break;
+        case (0xA6<<3)|7: assert(false);break;
+    /* LAX zp (undoc) */
+        case (0xA7<<3)|0: _SA(c->PC++);break;
+        case (0xA7<<3)|1: _SA(_GD());break;
+        case (0xA7<<3)|2: c->A=c->X=_GD();_NZ(c->A);_FETCH();break;
+        case (0xA7<<3)|3: assert(false);break;
+        case (0xA7<<3)|4: assert(false);break;
+        case (0xA7<<3)|5: assert(false);break;
+        case (0xA7<<3)|6: assert(false);break;
+        case (0xA7<<3)|7: assert(false);break;
+    /* TAY  */
+        case (0xA8<<3)|0: _SA(c->PC);break;
+        case (0xA8<<3)|1: c->Y=c->A;_NZ(c->Y);_FETCH();break;
+        case (0xA8<<3)|2: assert(false);break;
+        case (0xA8<<3)|3: assert(false);break;
+        case (0xA8<<3)|4: assert(false);break;
+        case (0xA8<<3)|5: assert(false);break;
+        case (0xA8<<3)|6: assert(false);break;
+        case (0xA8<<3)|7: assert(false);break;
+    /* LDA # */
+        case (0xA9<<3)|0: _SA(c->PC++);break;
+        case (0xA9<<3)|1: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0xA9<<3)|2: assert(false);break;
+        case (0xA9<<3)|3: assert(false);break;
+        case (0xA9<<3)|4: assert(false);break;
+        case (0xA9<<3)|5: assert(false);break;
+        case (0xA9<<3)|6: assert(false);break;
+        case (0xA9<<3)|7: assert(false);break;
+    /* TAX  */
+        case (0xAA<<3)|0: _SA(c->PC);break;
+        case (0xAA<<3)|1: c->X=c->A;_NZ(c->X);_FETCH();break;
+        case (0xAA<<3)|2: assert(false);break;
+        case (0xAA<<3)|3: assert(false);break;
+        case (0xAA<<3)|4: assert(false);break;
+        case (0xAA<<3)|5: assert(false);break;
+        case (0xAA<<3)|6: assert(false);break;
+        case (0xAA<<3)|7: assert(false);break;
+    /* LXA # (undoc) */
+        case (0xAB<<3)|0: _SA(c->PC++);break;
+        case (0xAB<<3)|1: c->A=c->X=(c->A|0xEE)&_GD();_NZ(c->A);_FETCH();break;
+        case (0xAB<<3)|2: assert(false);break;
+        case (0xAB<<3)|3: assert(false);break;
+        case (0xAB<<3)|4: assert(false);break;
+        case (0xAB<<3)|5: assert(false);break;
+        case (0xAB<<3)|6: assert(false);break;
+        case (0xAB<<3)|7: assert(false);break;
+    /* LDY abs */
+        case (0xAC<<3)|0: _SA(c->PC++);break;
+        case (0xAC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xAC<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xAC<<3)|3: c->Y=_GD();_NZ(c->Y);_FETCH();break;
+        case (0xAC<<3)|4: assert(false);break;
+        case (0xAC<<3)|5: assert(false);break;
+        case (0xAC<<3)|6: assert(false);break;
+        case (0xAC<<3)|7: assert(false);break;
+    /* LDA abs */
+        case (0xAD<<3)|0: _SA(c->PC++);break;
+        case (0xAD<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xAD<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xAD<<3)|3: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0xAD<<3)|4: assert(false);break;
+        case (0xAD<<3)|5: assert(false);break;
+        case (0xAD<<3)|6: assert(false);break;
+        case (0xAD<<3)|7: assert(false);break;
+    /* LDX abs */
+        case (0xAE<<3)|0: _SA(c->PC++);break;
+        case (0xAE<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xAE<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xAE<<3)|3: c->X=_GD();_NZ(c->X);_FETCH();break;
+        case (0xAE<<3)|4: assert(false);break;
+        case (0xAE<<3)|5: assert(false);break;
+        case (0xAE<<3)|6: assert(false);break;
+        case (0xAE<<3)|7: assert(false);break;
+    /* LAX abs (undoc) */
+        case (0xAF<<3)|0: _SA(c->PC++);break;
+        case (0xAF<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xAF<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xAF<<3)|3: c->A=c->X=_GD();_NZ(c->A);_FETCH();break;
+        case (0xAF<<3)|4: assert(false);break;
+        case (0xAF<<3)|5: assert(false);break;
+        case (0xAF<<3)|6: assert(false);break;
+        case (0xAF<<3)|7: assert(false);break;
+    /* BCS # */
+        case (0xB0<<3)|0: _SA(c->PC++);break;
+        case (0xB0<<3)|1: _SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&0x1)!=0x1){_FETCH();};break;
+        case (0xB0<<3)|2: _SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;
+        case (0xB0<<3)|3: c->PC=c->AD;_FETCH();break;
+        case (0xB0<<3)|4: assert(false);break;
+        case (0xB0<<3)|5: assert(false);break;
+        case (0xB0<<3)|6: assert(false);break;
+        case (0xB0<<3)|7: assert(false);break;
+    /* LDA (zp),Y */
+        case (0xB1<<3)|0: _SA(c->PC++);break;
+        case (0xB1<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xB1<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xB1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xB1<<3)|4: _SA(c->AD+c->Y);break;
+        case (0xB1<<3)|5: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0xB1<<3)|6: assert(false);break;
+        case (0xB1<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0xB2<<3)|0: _SA(c->PC);break;
+        case (0xB2<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0xB2<<3)|2: assert(false);break;
+        case (0xB2<<3)|3: assert(false);break;
+        case (0xB2<<3)|4: assert(false);break;
+        case (0xB2<<3)|5: assert(false);break;
+        case (0xB2<<3)|6: assert(false);break;
+        case (0xB2<<3)|7: assert(false);break;
+    /* LAX (zp),Y (undoc) */
+        case (0xB3<<3)|0: _SA(c->PC++);break;
+        case (0xB3<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xB3<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xB3<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xB3<<3)|4: _SA(c->AD+c->Y);break;
+        case (0xB3<<3)|5: c->A=c->X=_GD();_NZ(c->A);_FETCH();break;
+        case (0xB3<<3)|6: assert(false);break;
+        case (0xB3<<3)|7: assert(false);break;
+    /* LDY zp,X */
+        case (0xB4<<3)|0: _SA(c->PC++);break;
+        case (0xB4<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xB4<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xB4<<3)|3: c->Y=_GD();_NZ(c->Y);_FETCH();break;
+        case (0xB4<<3)|4: assert(false);break;
+        case (0xB4<<3)|5: assert(false);break;
+        case (0xB4<<3)|6: assert(false);break;
+        case (0xB4<<3)|7: assert(false);break;
+    /* LDA zp,X */
+        case (0xB5<<3)|0: _SA(c->PC++);break;
+        case (0xB5<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xB5<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xB5<<3)|3: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0xB5<<3)|4: assert(false);break;
+        case (0xB5<<3)|5: assert(false);break;
+        case (0xB5<<3)|6: assert(false);break;
+        case (0xB5<<3)|7: assert(false);break;
+    /* LDX zp,Y */
+        case (0xB6<<3)|0: _SA(c->PC++);break;
+        case (0xB6<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xB6<<3)|2: _SA((c->AD+c->Y)&0x00FF);break;
+        case (0xB6<<3)|3: c->X=_GD();_NZ(c->X);_FETCH();break;
+        case (0xB6<<3)|4: assert(false);break;
+        case (0xB6<<3)|5: assert(false);break;
+        case (0xB6<<3)|6: assert(false);break;
+        case (0xB6<<3)|7: assert(false);break;
+    /* LAX zp,Y (undoc) */
+        case (0xB7<<3)|0: _SA(c->PC++);break;
+        case (0xB7<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xB7<<3)|2: _SA((c->AD+c->Y)&0x00FF);break;
+        case (0xB7<<3)|3: c->A=c->X=_GD();_NZ(c->A);_FETCH();break;
+        case (0xB7<<3)|4: assert(false);break;
+        case (0xB7<<3)|5: assert(false);break;
+        case (0xB7<<3)|6: assert(false);break;
+        case (0xB7<<3)|7: assert(false);break;
+    /* CLV  */
+        case (0xB8<<3)|0: _SA(c->PC);break;
+        case (0xB8<<3)|1: c->P&=~0x40;_FETCH();break;
+        case (0xB8<<3)|2: assert(false);break;
+        case (0xB8<<3)|3: assert(false);break;
+        case (0xB8<<3)|4: assert(false);break;
+        case (0xB8<<3)|5: assert(false);break;
+        case (0xB8<<3)|6: assert(false);break;
+        case (0xB8<<3)|7: assert(false);break;
+    /* LDA abs,Y */
+        case (0xB9<<3)|0: _SA(c->PC++);break;
+        case (0xB9<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xB9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xB9<<3)|3: _SA(c->AD+c->Y);break;
+        case (0xB9<<3)|4: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0xB9<<3)|5: assert(false);break;
+        case (0xB9<<3)|6: assert(false);break;
+        case (0xB9<<3)|7: assert(false);break;
+    /* TSX  */
+        case (0xBA<<3)|0: _SA(c->PC);break;
+        case (0xBA<<3)|1: c->X=c->S;_NZ(c->X);_FETCH();break;
+        case (0xBA<<3)|2: assert(false);break;
+        case (0xBA<<3)|3: assert(false);break;
+        case (0xBA<<3)|4: assert(false);break;
+        case (0xBA<<3)|5: assert(false);break;
+        case (0xBA<<3)|6: assert(false);break;
+        case (0xBA<<3)|7: assert(false);break;
+    /* LAS abs,Y (undoc) */
+        case (0xBB<<3)|0: _SA(c->PC++);break;
+        case (0xBB<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xBB<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xBB<<3)|3: _SA(c->AD+c->Y);break;
+        case (0xBB<<3)|4: c->A=c->X=c->S=_GD()&c->S;_NZ(c->A);_FETCH();break;
+        case (0xBB<<3)|5: assert(false);break;
+        case (0xBB<<3)|6: assert(false);break;
+        case (0xBB<<3)|7: assert(false);break;
+    /* LDY abs,X */
+        case (0xBC<<3)|0: _SA(c->PC++);break;
+        case (0xBC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xBC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0xBC<<3)|3: _SA(c->AD+c->X);break;
+        case (0xBC<<3)|4: c->Y=_GD();_NZ(c->Y);_FETCH();break;
+        case (0xBC<<3)|5: assert(false);break;
+        case (0xBC<<3)|6: assert(false);break;
+        case (0xBC<<3)|7: assert(false);break;
+    /* LDA abs,X */
+        case (0xBD<<3)|0: _SA(c->PC++);break;
+        case (0xBD<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xBD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0xBD<<3)|3: _SA(c->AD+c->X);break;
+        case (0xBD<<3)|4: c->A=_GD();_NZ(c->A);_FETCH();break;
+        case (0xBD<<3)|5: assert(false);break;
+        case (0xBD<<3)|6: assert(false);break;
+        case (0xBD<<3)|7: assert(false);break;
+    /* LDX abs,Y */
+        case (0xBE<<3)|0: _SA(c->PC++);break;
+        case (0xBE<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xBE<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xBE<<3)|3: _SA(c->AD+c->Y);break;
+        case (0xBE<<3)|4: c->X=_GD();_NZ(c->X);_FETCH();break;
+        case (0xBE<<3)|5: assert(false);break;
+        case (0xBE<<3)|6: assert(false);break;
+        case (0xBE<<3)|7: assert(false);break;
+    /* LAX abs,Y (undoc) */
+        case (0xBF<<3)|0: _SA(c->PC++);break;
+        case (0xBF<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xBF<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xBF<<3)|3: _SA(c->AD+c->Y);break;
+        case (0xBF<<3)|4: c->A=c->X=_GD();_NZ(c->A);_FETCH();break;
+        case (0xBF<<3)|5: assert(false);break;
+        case (0xBF<<3)|6: assert(false);break;
+        case (0xBF<<3)|7: assert(false);break;
+    /* CPY # */
+        case (0xC0<<3)|0: _SA(c->PC++);break;
+        case (0xC0<<3)|1: _m6502_cmp(c, c->Y, _GD());_FETCH();break;
+        case (0xC0<<3)|2: assert(false);break;
+        case (0xC0<<3)|3: assert(false);break;
+        case (0xC0<<3)|4: assert(false);break;
+        case (0xC0<<3)|5: assert(false);break;
+        case (0xC0<<3)|6: assert(false);break;
+        case (0xC0<<3)|7: assert(false);break;
+    /* CMP (zp,X) */
+        case (0xC1<<3)|0: _SA(c->PC++);break;
+        case (0xC1<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xC1<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0xC1<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xC1<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0xC1<<3)|5: _m6502_cmp(c, c->A, _GD());_FETCH();break;
+        case (0xC1<<3)|6: assert(false);break;
+        case (0xC1<<3)|7: assert(false);break;
+    /* NOP # (undoc) */
+        case (0xC2<<3)|0: _SA(c->PC++);break;
+        case (0xC2<<3)|1: _FETCH();break;
+        case (0xC2<<3)|2: assert(false);break;
+        case (0xC2<<3)|3: assert(false);break;
+        case (0xC2<<3)|4: assert(false);break;
+        case (0xC2<<3)|5: assert(false);break;
+        case (0xC2<<3)|6: assert(false);break;
+        case (0xC2<<3)|7: assert(false);break;
+    /* DCP (zp,X) (undoc) */
+        case (0xC3<<3)|0: _SA(c->PC++);break;
+        case (0xC3<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xC3<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0xC3<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xC3<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0xC3<<3)|5: c->AD=_GD();_WR();break;
+        case (0xC3<<3)|6: c->AD--;_NZ(c->AD);_SD(c->AD);_m6502_cmp(c, c->A, c->AD);_WR();break;
+        case (0xC3<<3)|7: _FETCH();break;
+    /* CPY zp */
+        case (0xC4<<3)|0: _SA(c->PC++);break;
+        case (0xC4<<3)|1: _SA(_GD());break;
+        case (0xC4<<3)|2: _m6502_cmp(c, c->Y, _GD());_FETCH();break;
+        case (0xC4<<3)|3: assert(false);break;
+        case (0xC4<<3)|4: assert(false);break;
+        case (0xC4<<3)|5: assert(false);break;
+        case (0xC4<<3)|6: assert(false);break;
+        case (0xC4<<3)|7: assert(false);break;
+    /* CMP zp */
+        case (0xC5<<3)|0: _SA(c->PC++);break;
+        case (0xC5<<3)|1: _SA(_GD());break;
+        case (0xC5<<3)|2: _m6502_cmp(c, c->A, _GD());_FETCH();break;
+        case (0xC5<<3)|3: assert(false);break;
+        case (0xC5<<3)|4: assert(false);break;
+        case (0xC5<<3)|5: assert(false);break;
+        case (0xC5<<3)|6: assert(false);break;
+        case (0xC5<<3)|7: assert(false);break;
+    /* DEC zp */
+        case (0xC6<<3)|0: _SA(c->PC++);break;
+        case (0xC6<<3)|1: _SA(_GD());break;
+        case (0xC6<<3)|2: c->AD=_GD();_WR();break;
+        case (0xC6<<3)|3: c->AD--;_NZ(c->AD);_SD(c->AD);_WR();break;
+        case (0xC6<<3)|4: _FETCH();break;
+        case (0xC6<<3)|5: assert(false);break;
+        case (0xC6<<3)|6: assert(false);break;
+        case (0xC6<<3)|7: assert(false);break;
+    /* DCP zp (undoc) */
+        case (0xC7<<3)|0: _SA(c->PC++);break;
+        case (0xC7<<3)|1: _SA(_GD());break;
+        case (0xC7<<3)|2: c->AD=_GD();_WR();break;
+        case (0xC7<<3)|3: c->AD--;_NZ(c->AD);_SD(c->AD);_m6502_cmp(c, c->A, c->AD);_WR();break;
+        case (0xC7<<3)|4: _FETCH();break;
+        case (0xC7<<3)|5: assert(false);break;
+        case (0xC7<<3)|6: assert(false);break;
+        case (0xC7<<3)|7: assert(false);break;
+    /* INY  */
+        case (0xC8<<3)|0: _SA(c->PC);break;
+        case (0xC8<<3)|1: c->Y++;_NZ(c->Y);_FETCH();break;
+        case (0xC8<<3)|2: assert(false);break;
+        case (0xC8<<3)|3: assert(false);break;
+        case (0xC8<<3)|4: assert(false);break;
+        case (0xC8<<3)|5: assert(false);break;
+        case (0xC8<<3)|6: assert(false);break;
+        case (0xC8<<3)|7: assert(false);break;
+    /* CMP # */
+        case (0xC9<<3)|0: _SA(c->PC++);break;
+        case (0xC9<<3)|1: _m6502_cmp(c, c->A, _GD());_FETCH();break;
+        case (0xC9<<3)|2: assert(false);break;
+        case (0xC9<<3)|3: assert(false);break;
+        case (0xC9<<3)|4: assert(false);break;
+        case (0xC9<<3)|5: assert(false);break;
+        case (0xC9<<3)|6: assert(false);break;
+        case (0xC9<<3)|7: assert(false);break;
+    /* DEX  */
+        case (0xCA<<3)|0: _SA(c->PC);break;
+        case (0xCA<<3)|1: c->X--;_NZ(c->X);_FETCH();break;
+        case (0xCA<<3)|2: assert(false);break;
+        case (0xCA<<3)|3: assert(false);break;
+        case (0xCA<<3)|4: assert(false);break;
+        case (0xCA<<3)|5: assert(false);break;
+        case (0xCA<<3)|6: assert(false);break;
+        case (0xCA<<3)|7: assert(false);break;
+    /* SBX # (undoc) */
+        case (0xCB<<3)|0: _SA(c->PC++);break;
+        case (0xCB<<3)|1: _m6502_sbx(c, _GD());_FETCH();break;
+        case (0xCB<<3)|2: assert(false);break;
+        case (0xCB<<3)|3: assert(false);break;
+        case (0xCB<<3)|4: assert(false);break;
+        case (0xCB<<3)|5: assert(false);break;
+        case (0xCB<<3)|6: assert(false);break;
+        case (0xCB<<3)|7: assert(false);break;
+    /* CPY abs */
+        case (0xCC<<3)|0: _SA(c->PC++);break;
+        case (0xCC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xCC<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xCC<<3)|3: _m6502_cmp(c, c->Y, _GD());_FETCH();break;
+        case (0xCC<<3)|4: assert(false);break;
+        case (0xCC<<3)|5: assert(false);break;
+        case (0xCC<<3)|6: assert(false);break;
+        case (0xCC<<3)|7: assert(false);break;
+    /* CMP abs */
+        case (0xCD<<3)|0: _SA(c->PC++);break;
+        case (0xCD<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xCD<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xCD<<3)|3: _m6502_cmp(c, c->A, _GD());_FETCH();break;
+        case (0xCD<<3)|4: assert(false);break;
+        case (0xCD<<3)|5: assert(false);break;
+        case (0xCD<<3)|6: assert(false);break;
+        case (0xCD<<3)|7: assert(false);break;
+    /* DEC abs */
+        case (0xCE<<3)|0: _SA(c->PC++);break;
+        case (0xCE<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xCE<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xCE<<3)|3: c->AD=_GD();_WR();break;
+        case (0xCE<<3)|4: c->AD--;_NZ(c->AD);_SD(c->AD);_WR();break;
+        case (0xCE<<3)|5: _FETCH();break;
+        case (0xCE<<3)|6: assert(false);break;
+        case (0xCE<<3)|7: assert(false);break;
+    /* DCP abs (undoc) */
+        case (0xCF<<3)|0: _SA(c->PC++);break;
+        case (0xCF<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xCF<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xCF<<3)|3: c->AD=_GD();_WR();break;
+        case (0xCF<<3)|4: c->AD--;_NZ(c->AD);_SD(c->AD);_m6502_cmp(c, c->A, c->AD);_WR();break;
+        case (0xCF<<3)|5: _FETCH();break;
+        case (0xCF<<3)|6: assert(false);break;
+        case (0xCF<<3)|7: assert(false);break;
+    /* BNE # */
+        case (0xD0<<3)|0: _SA(c->PC++);break;
+        case (0xD0<<3)|1: _SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&0x2)!=0x0){_FETCH();};break;
+        case (0xD0<<3)|2: _SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;
+        case (0xD0<<3)|3: c->PC=c->AD;_FETCH();break;
+        case (0xD0<<3)|4: assert(false);break;
+        case (0xD0<<3)|5: assert(false);break;
+        case (0xD0<<3)|6: assert(false);break;
+        case (0xD0<<3)|7: assert(false);break;
+    /* CMP (zp),Y */
+        case (0xD1<<3)|0: _SA(c->PC++);break;
+        case (0xD1<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xD1<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xD1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xD1<<3)|4: _SA(c->AD+c->Y);break;
+        case (0xD1<<3)|5: _m6502_cmp(c, c->A, _GD());_FETCH();break;
+        case (0xD1<<3)|6: assert(false);break;
+        case (0xD1<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0xD2<<3)|0: _SA(c->PC);break;
+        case (0xD2<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0xD2<<3)|2: assert(false);break;
+        case (0xD2<<3)|3: assert(false);break;
+        case (0xD2<<3)|4: assert(false);break;
+        case (0xD2<<3)|5: assert(false);break;
+        case (0xD2<<3)|6: assert(false);break;
+        case (0xD2<<3)|7: assert(false);break;
+    /* DCP (zp),Y (undoc) */
+        case (0xD3<<3)|0: _SA(c->PC++);break;
+        case (0xD3<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xD3<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xD3<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0xD3<<3)|4: _SA(c->AD+c->Y);break;
+        case (0xD3<<3)|5: c->AD=_GD();_WR();break;
+        case (0xD3<<3)|6: c->AD--;_NZ(c->AD);_SD(c->AD);_m6502_cmp(c, c->A, c->AD);_WR();break;
+        case (0xD3<<3)|7: _FETCH();break;
+    /* NOP zp,X (undoc) */
+        case (0xD4<<3)|0: _SA(c->PC++);break;
+        case (0xD4<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xD4<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xD4<<3)|3: _FETCH();break;
+        case (0xD4<<3)|4: assert(false);break;
+        case (0xD4<<3)|5: assert(false);break;
+        case (0xD4<<3)|6: assert(false);break;
+        case (0xD4<<3)|7: assert(false);break;
+    /* CMP zp,X */
+        case (0xD5<<3)|0: _SA(c->PC++);break;
+        case (0xD5<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xD5<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xD5<<3)|3: _m6502_cmp(c, c->A, _GD());_FETCH();break;
+        case (0xD5<<3)|4: assert(false);break;
+        case (0xD5<<3)|5: assert(false);break;
+        case (0xD5<<3)|6: assert(false);break;
+        case (0xD5<<3)|7: assert(false);break;
+    /* DEC zp,X */
+        case (0xD6<<3)|0: _SA(c->PC++);break;
+        case (0xD6<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xD6<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xD6<<3)|3: c->AD=_GD();_WR();break;
+        case (0xD6<<3)|4: c->AD--;_NZ(c->AD);_SD(c->AD);_WR();break;
+        case (0xD6<<3)|5: _FETCH();break;
+        case (0xD6<<3)|6: assert(false);break;
+        case (0xD6<<3)|7: assert(false);break;
+    /* DCP zp,X (undoc) */
+        case (0xD7<<3)|0: _SA(c->PC++);break;
+        case (0xD7<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xD7<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xD7<<3)|3: c->AD=_GD();_WR();break;
+        case (0xD7<<3)|4: c->AD--;_NZ(c->AD);_SD(c->AD);_m6502_cmp(c, c->A, c->AD);_WR();break;
+        case (0xD7<<3)|5: _FETCH();break;
+        case (0xD7<<3)|6: assert(false);break;
+        case (0xD7<<3)|7: assert(false);break;
+    /* CLD  */
+        case (0xD8<<3)|0: _SA(c->PC);break;
+        case (0xD8<<3)|1: c->P&=~0x8;_FETCH();break;
+        case (0xD8<<3)|2: assert(false);break;
+        case (0xD8<<3)|3: assert(false);break;
+        case (0xD8<<3)|4: assert(false);break;
+        case (0xD8<<3)|5: assert(false);break;
+        case (0xD8<<3)|6: assert(false);break;
+        case (0xD8<<3)|7: assert(false);break;
+    /* CMP abs,Y */
+        case (0xD9<<3)|0: _SA(c->PC++);break;
+        case (0xD9<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xD9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xD9<<3)|3: _SA(c->AD+c->Y);break;
+        case (0xD9<<3)|4: _m6502_cmp(c, c->A, _GD());_FETCH();break;
+        case (0xD9<<3)|5: assert(false);break;
+        case (0xD9<<3)|6: assert(false);break;
+        case (0xD9<<3)|7: assert(false);break;
+    /* NOP  (undoc) */
+        case (0xDA<<3)|0: _SA(c->PC);break;
+        case (0xDA<<3)|1: _FETCH();break;
+        case (0xDA<<3)|2: assert(false);break;
+        case (0xDA<<3)|3: assert(false);break;
+        case (0xDA<<3)|4: assert(false);break;
+        case (0xDA<<3)|5: assert(false);break;
+        case (0xDA<<3)|6: assert(false);break;
+        case (0xDA<<3)|7: assert(false);break;
+    /* DCP abs,Y (undoc) */
+        case (0xDB<<3)|0: _SA(c->PC++);break;
+        case (0xDB<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xDB<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0xDB<<3)|3: _SA(c->AD+c->Y);break;
+        case (0xDB<<3)|4: c->AD=_GD();_WR();break;
+        case (0xDB<<3)|5: c->AD--;_NZ(c->AD);_SD(c->AD);_m6502_cmp(c, c->A, c->AD);_WR();break;
+        case (0xDB<<3)|6: _FETCH();break;
+        case (0xDB<<3)|7: assert(false);break;
+    /* NOP abs,X (undoc) */
+        case (0xDC<<3)|0: _SA(c->PC++);break;
+        case (0xDC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xDC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0xDC<<3)|3: _SA(c->AD+c->X);break;
+        case (0xDC<<3)|4: _FETCH();break;
+        case (0xDC<<3)|5: assert(false);break;
+        case (0xDC<<3)|6: assert(false);break;
+        case (0xDC<<3)|7: assert(false);break;
+    /* CMP abs,X */
+        case (0xDD<<3)|0: _SA(c->PC++);break;
+        case (0xDD<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xDD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0xDD<<3)|3: _SA(c->AD+c->X);break;
+        case (0xDD<<3)|4: _m6502_cmp(c, c->A, _GD());_FETCH();break;
+        case (0xDD<<3)|5: assert(false);break;
+        case (0xDD<<3)|6: assert(false);break;
+        case (0xDD<<3)|7: assert(false);break;
+    /* DEC abs,X */
+        case (0xDE<<3)|0: _SA(c->PC++);break;
+        case (0xDE<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xDE<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0xDE<<3)|3: _SA(c->AD+c->X);break;
+        case (0xDE<<3)|4: c->AD=_GD();_WR();break;
+        case (0xDE<<3)|5: c->AD--;_NZ(c->AD);_SD(c->AD);_WR();break;
+        case (0xDE<<3)|6: _FETCH();break;
+        case (0xDE<<3)|7: assert(false);break;
+    /* DCP abs,X (undoc) */
+        case (0xDF<<3)|0: _SA(c->PC++);break;
+        case (0xDF<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xDF<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0xDF<<3)|3: _SA(c->AD+c->X);break;
+        case (0xDF<<3)|4: c->AD=_GD();_WR();break;
+        case (0xDF<<3)|5: c->AD--;_NZ(c->AD);_SD(c->AD);_m6502_cmp(c, c->A, c->AD);_WR();break;
+        case (0xDF<<3)|6: _FETCH();break;
+        case (0xDF<<3)|7: assert(false);break;
+    /* CPX # */
+        case (0xE0<<3)|0: _SA(c->PC++);break;
+        case (0xE0<<3)|1: _m6502_cmp(c, c->X, _GD());_FETCH();break;
+        case (0xE0<<3)|2: assert(false);break;
+        case (0xE0<<3)|3: assert(false);break;
+        case (0xE0<<3)|4: assert(false);break;
+        case (0xE0<<3)|5: assert(false);break;
+        case (0xE0<<3)|6: assert(false);break;
+        case (0xE0<<3)|7: assert(false);break;
+    /* SBC (zp,X) */
+        case (0xE1<<3)|0: _SA(c->PC++);break;
+        case (0xE1<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xE1<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0xE1<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xE1<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0xE1<<3)|5: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xE1<<3)|6: assert(false);break;
+        case (0xE1<<3)|7: assert(false);break;
+    /* NOP # (undoc) */
+        case (0xE2<<3)|0: _SA(c->PC++);break;
+        case (0xE2<<3)|1: _FETCH();break;
+        case (0xE2<<3)|2: assert(false);break;
+        case (0xE2<<3)|3: assert(false);break;
+        case (0xE2<<3)|4: assert(false);break;
+        case (0xE2<<3)|5: assert(false);break;
+        case (0xE2<<3)|6: assert(false);break;
+        case (0xE2<<3)|7: assert(false);break;
+    /* ISB (zp,X) (undoc) */
+        case (0xE3<<3)|0: _SA(c->PC++);break;
+        case (0xE3<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xE3<<3)|2: c->AD=(c->AD+c->X)&0xFF;_SA(c->AD);break;
+        case (0xE3<<3)|3: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xE3<<3)|4: _SA((_GD()<<8)|c->AD);break;
+        case (0xE3<<3)|5: c->AD=_GD();_WR();break;
+        case (0xE3<<3)|6: c->AD++;_SD(c->AD);_m6502_sbc(c,c->AD);_WR();break;
+        case (0xE3<<3)|7: _FETCH();break;
+    /* CPX zp */
+        case (0xE4<<3)|0: _SA(c->PC++);break;
+        case (0xE4<<3)|1: _SA(_GD());break;
+        case (0xE4<<3)|2: _m6502_cmp(c, c->X, _GD());_FETCH();break;
+        case (0xE4<<3)|3: assert(false);break;
+        case (0xE4<<3)|4: assert(false);break;
+        case (0xE4<<3)|5: assert(false);break;
+        case (0xE4<<3)|6: assert(false);break;
+        case (0xE4<<3)|7: assert(false);break;
+    /* SBC zp */
+        case (0xE5<<3)|0: _SA(c->PC++);break;
+        case (0xE5<<3)|1: _SA(_GD());break;
+        case (0xE5<<3)|2: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xE5<<3)|3: assert(false);break;
+        case (0xE5<<3)|4: assert(false);break;
+        case (0xE5<<3)|5: assert(false);break;
+        case (0xE5<<3)|6: assert(false);break;
+        case (0xE5<<3)|7: assert(false);break;
+    /* INC zp */
+        case (0xE6<<3)|0: _SA(c->PC++);break;
+        case (0xE6<<3)|1: _SA(_GD());break;
+        case (0xE6<<3)|2: c->AD=_GD();_WR();break;
+        case (0xE6<<3)|3: c->AD++;_NZ(c->AD);_SD(c->AD);_WR();break;
+        case (0xE6<<3)|4: _FETCH();break;
+        case (0xE6<<3)|5: assert(false);break;
+        case (0xE6<<3)|6: assert(false);break;
+        case (0xE6<<3)|7: assert(false);break;
+    /* ISB zp (undoc) */
+        case (0xE7<<3)|0: _SA(c->PC++);break;
+        case (0xE7<<3)|1: _SA(_GD());break;
+        case (0xE7<<3)|2: c->AD=_GD();_WR();break;
+        case (0xE7<<3)|3: c->AD++;_SD(c->AD);_m6502_sbc(c,c->AD);_WR();break;
+        case (0xE7<<3)|4: _FETCH();break;
+        case (0xE7<<3)|5: assert(false);break;
+        case (0xE7<<3)|6: assert(false);break;
+        case (0xE7<<3)|7: assert(false);break;
+    /* INX  */
+        case (0xE8<<3)|0: _SA(c->PC);break;
+        case (0xE8<<3)|1: c->X++;_NZ(c->X);_FETCH();break;
+        case (0xE8<<3)|2: assert(false);break;
+        case (0xE8<<3)|3: assert(false);break;
+        case (0xE8<<3)|4: assert(false);break;
+        case (0xE8<<3)|5: assert(false);break;
+        case (0xE8<<3)|6: assert(false);break;
+        case (0xE8<<3)|7: assert(false);break;
+    /* SBC # */
+        case (0xE9<<3)|0: _SA(c->PC++);break;
+        case (0xE9<<3)|1: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xE9<<3)|2: assert(false);break;
+        case (0xE9<<3)|3: assert(false);break;
+        case (0xE9<<3)|4: assert(false);break;
+        case (0xE9<<3)|5: assert(false);break;
+        case (0xE9<<3)|6: assert(false);break;
+        case (0xE9<<3)|7: assert(false);break;
+    /* NOP  */
+        case (0xEA<<3)|0: _SA(c->PC);break;
+        case (0xEA<<3)|1: _FETCH();break;
+        case (0xEA<<3)|2: assert(false);break;
+        case (0xEA<<3)|3: assert(false);break;
+        case (0xEA<<3)|4: assert(false);break;
+        case (0xEA<<3)|5: assert(false);break;
+        case (0xEA<<3)|6: assert(false);break;
+        case (0xEA<<3)|7: assert(false);break;
+    /* SBC # (undoc) */
+        case (0xEB<<3)|0: _SA(c->PC++);break;
+        case (0xEB<<3)|1: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xEB<<3)|2: assert(false);break;
+        case (0xEB<<3)|3: assert(false);break;
+        case (0xEB<<3)|4: assert(false);break;
+        case (0xEB<<3)|5: assert(false);break;
+        case (0xEB<<3)|6: assert(false);break;
+        case (0xEB<<3)|7: assert(false);break;
+    /* CPX abs */
+        case (0xEC<<3)|0: _SA(c->PC++);break;
+        case (0xEC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xEC<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xEC<<3)|3: _m6502_cmp(c, c->X, _GD());_FETCH();break;
+        case (0xEC<<3)|4: assert(false);break;
+        case (0xEC<<3)|5: assert(false);break;
+        case (0xEC<<3)|6: assert(false);break;
+        case (0xEC<<3)|7: assert(false);break;
+    /* SBC abs */
+        case (0xED<<3)|0: _SA(c->PC++);break;
+        case (0xED<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xED<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xED<<3)|3: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xED<<3)|4: assert(false);break;
+        case (0xED<<3)|5: assert(false);break;
+        case (0xED<<3)|6: assert(false);break;
+        case (0xED<<3)|7: assert(false);break;
+    /* INC abs */
+        case (0xEE<<3)|0: _SA(c->PC++);break;
+        case (0xEE<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xEE<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xEE<<3)|3: c->AD=_GD();_WR();break;
+        case (0xEE<<3)|4: c->AD++;_NZ(c->AD);_SD(c->AD);_WR();break;
+        case (0xEE<<3)|5: _FETCH();break;
+        case (0xEE<<3)|6: assert(false);break;
+        case (0xEE<<3)|7: assert(false);break;
+    /* ISB abs (undoc) */
+        case (0xEF<<3)|0: _SA(c->PC++);break;
+        case (0xEF<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xEF<<3)|2: _SA((_GD()<<8)|c->AD);break;
+        case (0xEF<<3)|3: c->AD=_GD();_WR();break;
+        case (0xEF<<3)|4: c->AD++;_SD(c->AD);_m6502_sbc(c,c->AD);_WR();break;
+        case (0xEF<<3)|5: _FETCH();break;
+        case (0xEF<<3)|6: assert(false);break;
+        case (0xEF<<3)|7: assert(false);break;
+    /* BEQ # */
+        case (0xF0<<3)|0: _SA(c->PC++);break;
+        case (0xF0<<3)|1: _SA(c->PC);c->AD=c->PC+(int8_t)_GD();if((c->P&0x2)!=0x2){_FETCH();};break;
+        case (0xF0<<3)|2: _SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;
+        case (0xF0<<3)|3: c->PC=c->AD;_FETCH();break;
+        case (0xF0<<3)|4: assert(false);break;
+        case (0xF0<<3)|5: assert(false);break;
+        case (0xF0<<3)|6: assert(false);break;
+        case (0xF0<<3)|7: assert(false);break;
+    /* SBC (zp),Y */
+        case (0xF1<<3)|0: _SA(c->PC++);break;
+        case (0xF1<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xF1<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xF1<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xF1<<3)|4: _SA(c->AD+c->Y);break;
+        case (0xF1<<3)|5: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xF1<<3)|6: assert(false);break;
+        case (0xF1<<3)|7: assert(false);break;
+    /* JAM INVALID (undoc) */
+        case (0xF2<<3)|0: _SA(c->PC);break;
+        case (0xF2<<3)|1: _SAD(0xFFFF,0xFF);c->IR--;break;
+        case (0xF2<<3)|2: assert(false);break;
+        case (0xF2<<3)|3: assert(false);break;
+        case (0xF2<<3)|4: assert(false);break;
+        case (0xF2<<3)|5: assert(false);break;
+        case (0xF2<<3)|6: assert(false);break;
+        case (0xF2<<3)|7: assert(false);break;
+    /* ISB (zp),Y (undoc) */
+        case (0xF3<<3)|0: _SA(c->PC++);break;
+        case (0xF3<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xF3<<3)|2: _SA((c->AD+1)&0xFF);c->AD=_GD();break;
+        case (0xF3<<3)|3: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0xF3<<3)|4: _SA(c->AD+c->Y);break;
+        case (0xF3<<3)|5: c->AD=_GD();_WR();break;
+        case (0xF3<<3)|6: c->AD++;_SD(c->AD);_m6502_sbc(c,c->AD);_WR();break;
+        case (0xF3<<3)|7: _FETCH();break;
+    /* NOP zp,X (undoc) */
+        case (0xF4<<3)|0: _SA(c->PC++);break;
+        case (0xF4<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xF4<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xF4<<3)|3: _FETCH();break;
+        case (0xF4<<3)|4: assert(false);break;
+        case (0xF4<<3)|5: assert(false);break;
+        case (0xF4<<3)|6: assert(false);break;
+        case (0xF4<<3)|7: assert(false);break;
+    /* SBC zp,X */
+        case (0xF5<<3)|0: _SA(c->PC++);break;
+        case (0xF5<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xF5<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xF5<<3)|3: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xF5<<3)|4: assert(false);break;
+        case (0xF5<<3)|5: assert(false);break;
+        case (0xF5<<3)|6: assert(false);break;
+        case (0xF5<<3)|7: assert(false);break;
+    /* INC zp,X */
+        case (0xF6<<3)|0: _SA(c->PC++);break;
+        case (0xF6<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xF6<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xF6<<3)|3: c->AD=_GD();_WR();break;
+        case (0xF6<<3)|4: c->AD++;_NZ(c->AD);_SD(c->AD);_WR();break;
+        case (0xF6<<3)|5: _FETCH();break;
+        case (0xF6<<3)|6: assert(false);break;
+        case (0xF6<<3)|7: assert(false);break;
+    /* ISB zp,X (undoc) */
+        case (0xF7<<3)|0: _SA(c->PC++);break;
+        case (0xF7<<3)|1: c->AD=_GD();_SA(c->AD);break;
+        case (0xF7<<3)|2: _SA((c->AD+c->X)&0x00FF);break;
+        case (0xF7<<3)|3: c->AD=_GD();_WR();break;
+        case (0xF7<<3)|4: c->AD++;_SD(c->AD);_m6502_sbc(c,c->AD);_WR();break;
+        case (0xF7<<3)|5: _FETCH();break;
+        case (0xF7<<3)|6: assert(false);break;
+        case (0xF7<<3)|7: assert(false);break;
+    /* SED  */
+        case (0xF8<<3)|0: _SA(c->PC);break;
+        case (0xF8<<3)|1: c->P|=0x8;_FETCH();break;
+        case (0xF8<<3)|2: assert(false);break;
+        case (0xF8<<3)|3: assert(false);break;
+        case (0xF8<<3)|4: assert(false);break;
+        case (0xF8<<3)|5: assert(false);break;
+        case (0xF8<<3)|6: assert(false);break;
+        case (0xF8<<3)|7: assert(false);break;
+    /* SBC abs,Y */
+        case (0xF9<<3)|0: _SA(c->PC++);break;
+        case (0xF9<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xF9<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->Y)>>8)))&1;break;
+        case (0xF9<<3)|3: _SA(c->AD+c->Y);break;
+        case (0xF9<<3)|4: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xF9<<3)|5: assert(false);break;
+        case (0xF9<<3)|6: assert(false);break;
+        case (0xF9<<3)|7: assert(false);break;
+    /* NOP  (undoc) */
+        case (0xFA<<3)|0: _SA(c->PC);break;
+        case (0xFA<<3)|1: _FETCH();break;
+        case (0xFA<<3)|2: assert(false);break;
+        case (0xFA<<3)|3: assert(false);break;
+        case (0xFA<<3)|4: assert(false);break;
+        case (0xFA<<3)|5: assert(false);break;
+        case (0xFA<<3)|6: assert(false);break;
+        case (0xFA<<3)|7: assert(false);break;
+    /* ISB abs,Y (undoc) */
+        case (0xFB<<3)|0: _SA(c->PC++);break;
+        case (0xFB<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xFB<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->Y)&0xFF));break;
+        case (0xFB<<3)|3: _SA(c->AD+c->Y);break;
+        case (0xFB<<3)|4: c->AD=_GD();_WR();break;
+        case (0xFB<<3)|5: c->AD++;_SD(c->AD);_m6502_sbc(c,c->AD);_WR();break;
+        case (0xFB<<3)|6: _FETCH();break;
+        case (0xFB<<3)|7: assert(false);break;
+    /* NOP abs,X (undoc) */
+        case (0xFC<<3)|0: _SA(c->PC++);break;
+        case (0xFC<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xFC<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0xFC<<3)|3: _SA(c->AD+c->X);break;
+        case (0xFC<<3)|4: _FETCH();break;
+        case (0xFC<<3)|5: assert(false);break;
+        case (0xFC<<3)|6: assert(false);break;
+        case (0xFC<<3)|7: assert(false);break;
+    /* SBC abs,X */
+        case (0xFD<<3)|0: _SA(c->PC++);break;
+        case (0xFD<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xFD<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));c->IR+=(~((c->AD>>8)-((c->AD+c->X)>>8)))&1;break;
+        case (0xFD<<3)|3: _SA(c->AD+c->X);break;
+        case (0xFD<<3)|4: _m6502_sbc(c,_GD());_FETCH();break;
+        case (0xFD<<3)|5: assert(false);break;
+        case (0xFD<<3)|6: assert(false);break;
+        case (0xFD<<3)|7: assert(false);break;
+    /* INC abs,X */
+        case (0xFE<<3)|0: _SA(c->PC++);break;
+        case (0xFE<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xFE<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0xFE<<3)|3: _SA(c->AD+c->X);break;
+        case (0xFE<<3)|4: c->AD=_GD();_WR();break;
+        case (0xFE<<3)|5: c->AD++;_NZ(c->AD);_SD(c->AD);_WR();break;
+        case (0xFE<<3)|6: _FETCH();break;
+        case (0xFE<<3)|7: assert(false);break;
+    /* ISB abs,X (undoc) */
+        case (0xFF<<3)|0: _SA(c->PC++);break;
+        case (0xFF<<3)|1: _SA(c->PC++);c->AD=_GD();break;
+        case (0xFF<<3)|2: c->AD|=_GD()<<8;_SA((c->AD&0xFF00)|((c->AD+c->X)&0xFF));break;
+        case (0xFF<<3)|3: _SA(c->AD+c->X);break;
+        case (0xFF<<3)|4: c->AD=_GD();_WR();break;
+        case (0xFF<<3)|5: c->AD++;_SD(c->AD);_m6502_sbc(c,c->AD);_WR();break;
+        case (0xFF<<3)|6: _FETCH();break;
+        case (0xFF<<3)|7: assert(false);break;
+
+    }
+    M6510_SET_PORT(pins, c->io_pins);
+    c->PINS = pins;
+    c->irq_pip <<= 1;
+    c->nmi_pip <<= 1;
+    return pins;
 }
 #undef _SA
 #undef _SAD
+#undef _FETCH
+#undef _SD
 #undef _GD
 #undef _ON
 #undef _OFF
-#undef _T
 #undef _RD
 #undef _WR
-#undef _A_IMP
-#undef _A_IMM
-#undef _A_ZER
-#undef _A_ZPX
-#undef _A_ZPY
-#undef _A_ABS
-#undef _A_ABX_R
-#undef _A_ABX_W
-#undef _A_ABY_R
-#undef _A_ABY_W
-#undef _A_IDX
-#undef _A_IDY_R
-#undef _A_IDY_W
 #undef _NZ
 #endif /* CHIPS_IMPL */

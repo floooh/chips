@@ -1,6 +1,6 @@
 #pragma once
 /*#
-    # atom.h
+    # atomx.h
 
     Acorn Atom emulator in a C header.
 
@@ -112,6 +112,7 @@ typedef struct {
 
 /* Acorn Atom emulation state */
 typedef struct {
+    uint64_t cpu_pins;
     m6502_t cpu;
     mc6847_t vdg;
     i8255_t ppi;
@@ -128,7 +129,6 @@ typedef struct {
     uint8_t joy_joymask;        /* joystick mask from calls to atom_joystick() */
     uint8_t mmc_cmd;
     uint8_t mmc_latch;
-    clk_t clk;
     mem_t mem;
     kbd_t kbd;
     void* user_data;
@@ -192,7 +192,7 @@ void atom_remove_tape(atom_t* sys);
 #define _ATOM_FREQUENCY (1000000)
 #define _ATOM_ROM_DOSROM_SIZE (0x1000)
 
-static uint64_t _atom_tick(uint64_t pins, void* user_data);
+static uint64_t _atom_tick(atom_t* sys, uint64_t pins);
 static uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data);
 static uint8_t _atom_ppi_in(int port_id, void* user_data);
 static uint64_t _atom_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data);
@@ -224,14 +224,11 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     memcpy(&sys->rom_dosrom, desc->rom_dosrom, sizeof(sys->rom_dosrom));
 
     /* initialize the hardware */
-    clk_init(&sys->clk, _ATOM_FREQUENCY);
     sys->period_2_4khz = _ATOM_FREQUENCY / 4800;
 
     m6502_desc_t cpu_desc;
     _ATOM_CLEAR(cpu_desc);
-    cpu_desc.tick_cb = _atom_tick;
-    cpu_desc.user_data = sys;
-    m6502_init(&sys->cpu, &cpu_desc);
+    sys->cpu_pins = m6502_init(&sys->cpu, &cpu_desc);
 
     mc6847_desc_t vdg_desc;
     _ATOM_CLEAR(vdg_desc);
@@ -263,9 +260,6 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     /* setup memory map and keyboard matrix */
     _atom_init_memorymap(sys);
     _atom_init_keymap(sys);
-
-    /* CPU start state */
-    m6502_reset(&sys->cpu);
 }
 
 void atom_discard(atom_t* sys) {
@@ -297,7 +291,7 @@ int atom_display_height(atom_t* sys) {
 
 void atom_reset(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    m6502_reset(&sys->cpu);
+    sys->cpu_pins |= M6502_RES;
     i8255_reset(&sys->ppi);
     m6522_reset(&sys->via);
     mc6847_reset(&sys->vdg);
@@ -309,19 +303,10 @@ void atom_reset(atom_t* sys) {
 
 void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
-    uint32_t ticks_executed = 0;
-    int trap_id = 0;
-    while ((ticks_executed < ticks_to_run) && (0 == trap_id)) {
-        ticks_executed += m6502_exec(&sys->cpu, ticks_to_run);
-        /* check if the trapped OSLoad function was hit to implement tape file loading */
-        trap_id = sys->cpu.trap_id;
-        if (1 == trap_id) {
-            _atom_osload(sys);
-            trap_id = 0;
-        }
+    uint32_t num_ticks = clk_us_to_ticks(_ATOM_FREQUENCY, micro_seconds);
+    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+        sys->cpu_pins = _atom_tick(sys, sys->cpu_pins);
     }
-    clk_ticks_executed(&sys->clk, ticks_executed);
     kbd_update(&sys->kbd);
 }
 
@@ -379,8 +364,10 @@ void atom_joystick(atom_t* sys, uint8_t mask) {
 }
 
 /* CPU tick callback */
-uint64_t _atom_tick(uint64_t pins, void* user_data) {
-    atom_t* sys = (atom_t*) user_data;
+uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
+
+    /* tick the CPU */
+    pins = m6502_tick(&sys->cpu, pins);
 
     /* tick the video chip */
     mc6847_tick(&sys->vdg);
@@ -468,6 +455,17 @@ uint64_t _atom_tick(uint64_t pins, void* user_data) {
         else {
             /* memory access */
             mem_wr(&sys->mem, addr, M6502_GET_DATA(pins));
+        }
+    }
+
+    /* check if the trapped OSLoad function was hit to implement tape file loading
+        http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis
+    */
+    if (sys->tape_size > 0) {
+        const uint64_t trap_mask = M6502_SYNC|0xFFFF;
+        const uint64_t trap_val  = M6502_SYNC|0xF96E;
+        if ((pins & trap_mask) == trap_val) {
+            _atom_osload(sys);
         }
     }
     return pins;
@@ -681,11 +679,6 @@ typedef struct {
     uint16_t length;
 } _atom_tap_header;
 
-/* trap the OSLOAD function (http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis) */
-static int _atom_trap_cb(uint16_t pc, int ticks, uint64_t pins, void* user_data) {
-    return (pc == 0xF96E) ? 1 : 0;
-}
-
 bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid);
     CHIPS_ASSERT(ptr);
@@ -697,7 +690,6 @@ bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
     memcpy(sys->tape_buf, ptr, num_bytes);
     sys->tape_pos = 0;
     sys->tape_size = num_bytes;
-    m6502_trap_cb(&sys->cpu, _atom_trap_cb, sys);
     return true;
 }
 
@@ -705,7 +697,6 @@ void atom_remove_tape(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->tape_pos = 0;
     sys->tape_size = 0;
-    m6502_trap_cb(&sys->cpu, 0, 0);
 }
 
 /*
@@ -786,18 +777,18 @@ void _atom_osload(atom_t* sys) {
     dd &= ~(1<<7);
     mem_wr(&sys->mem, 0xDD, dd);
 
-    /* execute RTS */
-    sys->cpu.state.S++;
-    uint8_t l = mem_rd(&sys->mem, 0x0100|sys->cpu.state.S++);
-    uint8_t h = mem_rd(&sys->mem, 0x0100|sys->cpu.state.S);
     if (success) {
-        /* jump to start of loaded code */
-        sys->cpu.state.PC = exec_addr;
+        /* on success, continue with start of loaded code */
+        sys->cpu.S += 2;
+        M6502_SET_ADDR(sys->cpu_pins, exec_addr);
+        M6502_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, exec_addr));
+        m6502_set_pc(&sys->cpu, exec_addr);
     }
     else {
-        /* on error, just execute the RTS */
-        sys->cpu.state.PC = (h<<8)|l;
-        sys->cpu.state.PC++;
+        /* otherwise just continue with an RTS */
+        M6502_SET_ADDR(sys->cpu_pins, 0xF9A1);
+        M6502_SET_DATA(sys->cpu_pins, mem_rd(&sys->mem, 0xF9A1));
+        m6502_set_pc(&sys->cpu, 0xF9A1);
     }
 }
 

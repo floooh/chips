@@ -120,11 +120,11 @@ void ui_m6502_discard(ui_m6502_t* win) {
 
 static void _ui_m6502_regs(ui_m6502_t* win) {
     m6502_t* cpu = win->cpu;
-    ImGui::Text("A:  %02X", cpu->state.A);
-    ImGui::Text("X:  %02X", cpu->state.X);
-    ImGui::Text("Y:  %02X", cpu->state.Y);
-    ImGui::Text("S:  %02X", cpu->state.S);
-    const uint8_t f = cpu->state.P;
+    ImGui::Text("A:  %02X", cpu->A);
+    ImGui::Text("X:  %02X", cpu->X);
+    ImGui::Text("Y:  %02X", cpu->Y);
+    ImGui::Text("S:  %02X", cpu->S);
+    const uint8_t f = cpu->P;
     char f_str[9] = {
         (f & M6502_NF) ? 'N':'-',
         (f & M6502_VF) ? 'V':'-',
@@ -137,7 +137,7 @@ static void _ui_m6502_regs(ui_m6502_t* win) {
         0
     };
     ImGui::Text("P:  %02X %s", f, f_str);
-    ImGui::Text("PC: %04X", cpu->state.PC);
+    ImGui::Text("PC: %04X", cpu->PC);
     ImGui::Separator();
     ImGui::Text("6510 I/O Port:");
     ui_util_b8("  DDR:    ", cpu->io_ddr);
@@ -148,7 +148,7 @@ static void _ui_m6502_regs(ui_m6502_t* win) {
     ui_util_b8("  Pullup: ", cpu->io_pullup);
     ui_util_b8("  Pins:   ", cpu->io_pins);
     ImGui::Separator();
-    ImGui::Text("BCD: %s", cpu->state.bcd_enabled ? "enabled":"disabled");
+    ImGui::Text("BCD: %s", cpu->bcd_enabled ? "enabled":"disabled");
 }
 
 void ui_m6502_draw(ui_m6502_t* win) {
@@ -160,7 +160,7 @@ void ui_m6502_draw(ui_m6502_t* win) {
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##m6502_chip", ImVec2(176, 0), true);
-        ui_chip_draw(&win->chip, win->cpu->state.PINS);
+        ui_chip_draw(&win->chip, win->cpu->PINS);
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##m6502_regs", ImVec2(0, 0), true);

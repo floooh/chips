@@ -93,8 +93,7 @@ typedef struct {
 void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc);
 void ui_c64_discard(ui_c64_t* ui);
 void ui_c64_draw(ui_c64_t* ui, double time_ms);
-bool ui_c64_before_exec(ui_c64_t* ui);
-void ui_c64_after_exec(ui_c64_t* ui);
+void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -339,32 +338,34 @@ static const ui_chip_pin_t _ui_c64_cpu_pins[] = {
     { "D6",     6,      M6502_D6 },
     { "D7",     7,      M6502_D7 },
     { "RW",     9,      M6502_RW },
-    { "RDY",    10,     M6502_RDY },
-    { "AEC",    11,     M6510_AEC },
-    { "IRQ",    12,     M6502_IRQ },
-    { "NMI",    13,     M6502_NMI },
-    { "P0",     15,     M6510_P0 },
-    { "P1",     16,     M6510_P1 },
-    { "P2",     17,     M6510_P2 },
-    { "P3",     18,     M6510_P3 },
-    { "P4",     19,     M6510_P4 },
-    { "P5",     20,     M6510_P5 },
-    { "A0",     21,     M6502_A0 },
-    { "A1",     22,     M6502_A1 },
-    { "A2",     23,     M6502_A2 },
-    { "A3",     24,     M6502_A3 },
-    { "A4",     25,     M6502_A4 },
-    { "A5",     26,     M6502_A5 },
-    { "A6",     27,     M6502_A6 },
-    { "A7",     28,     M6502_A7 },
-    { "A8",     29,     M6502_A8 },
-    { "A9",     30,     M6502_A9 },
-    { "A10",    31,     M6502_A10 },
-    { "A11",    32,     M6502_A11 },
-    { "A12",    33,     M6502_A12 },
-    { "A13",    34,     M6502_A13 },
-    { "A14",    35,     M6502_A14 },
-    { "A15",    36,     M6502_A15 },
+    { "SYNC",   10,     M6502_SYNC },
+    { "RDY",    11,     M6502_RDY },
+    { "AEC",    12,     M6510_AEC },
+    { "IRQ",    13,     M6502_IRQ },
+    { "NMI",    14,     M6502_NMI },
+    { "RES",    15,     M6502_RES },
+    { "P0",     17,     M6510_P0 },
+    { "P1",     18,     M6510_P1 },
+    { "P2",     19,     M6510_P2 },
+    { "A0",     20,     M6502_A0 },
+    { "A1",     21,     M6502_A1 },
+    { "A2",     22,     M6502_A2 },
+    { "A3",     23,     M6502_A3 },
+    { "A4",     24,     M6502_A4 },
+    { "A5",     25,     M6502_A5 },
+    { "A6",     26,     M6502_A6 },
+    { "A7",     27,     M6502_A7 },
+    { "A8",     28,     M6502_A8 },
+    { "A9",     29,     M6502_A9 },
+    { "A10",    30,     M6502_A10 },
+    { "A11",    31,     M6502_A11 },
+    { "A12",    32,     M6502_A12 },
+    { "A13",    33,     M6502_A13 },
+    { "A14",    34,     M6502_A14 },
+    { "A15",    35,     M6502_A15 },
+    { "P3",     37,     M6510_P3 },
+    { "P4",     38,     M6510_P4 },
+    { "P5",     39,     M6510_P5 },
 };
 
 static const ui_chip_pin_t _ui_c64_cia_pins[] = {
@@ -489,7 +490,7 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         desc.h = 390;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6510", 42, _ui_c64_cpu_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6510", 40, _ui_c64_cpu_pins);
         ui_m6502_init(&ui->cpu, &desc);
     }
     x += dx; y += dy;
@@ -632,15 +633,19 @@ void ui_c64_draw(ui_c64_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-bool ui_c64_before_exec(ui_c64_t* ui) {
+void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
     CHIPS_ASSERT(ui && ui->c64);
-    return ui_dbg_before_exec(&ui->dbg);
+    uint32_t ticks_to_run = clk_us_to_ticks(C64_FREQUENCY, frame_time_us);
+    c64_t* c64 = ui->c64;
+    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
+        c64_tick(ui->c64);
+        if (c64->pins & M6502_SYNC) {
+            ui_dbg_after_instr(&ui->dbg, c64->pins, c64->cpu.ticks);
+        }
+    }
+    kbd_update(&ui->c64->kbd);
 }
 
-void ui_c64_after_exec(ui_c64_t* ui) {
-    CHIPS_ASSERT(ui && ui->c64);
-    ui_dbg_after_exec(&ui->dbg);
-}
 
 #ifdef __clang__
 #pragma clang diagnostic pop
