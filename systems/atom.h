@@ -202,7 +202,7 @@ static uint8_t _atom_via_in(int port_id, void* user_data);
 static void _atom_via_out(int port_id, uint8_t data, void* user_data);
 static void _atom_init_keymap(atom_t* sys);
 static void _atom_init_memorymap(atom_t* sys);
-static void _atom_osload(atom_t* sys);
+static uint64_t _atom_osload(atom_t* sys, uint64_t pins);
 
 #define _ATOM_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
 #define _ATOM_CLEAR(val) memset(&val, 0, sizeof(val))
@@ -471,7 +471,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
         const uint64_t trap_mask = M6502_SYNC|0xFFFF;
         const uint64_t trap_val  = M6502_SYNC|0xF96E;
         if ((pins & trap_mask) == trap_val) {
-            _atom_osload(sys);
+            pins = _atom_osload(sys, pins);
         }
     }
     return pins;
@@ -744,7 +744,7 @@ void atom_remove_tape(atom_t* sys) {
      - Data format:   <....data....>           ) 1 to #FF bytes
                       <Checksum>               ) LSB sum of all data byte
 */
-void _atom_osload(atom_t* sys) {
+uint64_t _atom_osload(atom_t* sys, uint64_t pins) {
     bool success = false;
 
     /* tape inserted? */
@@ -786,16 +786,17 @@ void _atom_osload(atom_t* sys) {
     if (success) {
         /* on success, continue with start of loaded code */
         sys->cpu.S += 2;
-        M6502_SET_ADDR(sys->pins, exec_addr);
-        M6502_SET_DATA(sys->pins, mem_rd(&sys->mem, exec_addr));
+        M6502_SET_ADDR(pins, exec_addr);
+        M6502_SET_DATA(pins, mem_rd(&sys->mem, exec_addr));
         m6502_set_pc(&sys->cpu, exec_addr);
     }
     else {
         /* otherwise just continue with an RTS */
-        M6502_SET_ADDR(sys->pins, 0xF9A1);
-        M6502_SET_DATA(sys->pins, mem_rd(&sys->mem, 0xF9A1));
+        M6502_SET_ADDR(pins, 0xF9A1);
+        M6502_SET_DATA(pins, mem_rd(&sys->mem, 0xF9A1));
         m6502_set_pc(&sys->cpu, 0xF9A1);
     }
+    return pins;
 }
 
 #endif /* CHIPS_IMPL */
