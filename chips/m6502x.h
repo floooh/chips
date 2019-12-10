@@ -50,8 +50,7 @@
     of full instructions.
 
     To initialize the emulator, fill out a m6502_desc_t structure with
-    initialization parameters. The required parameters depend on the
-    mode the CPU emulator should run in.
+    initialization parameters and then call m6502_init(). 
 
         ~~~C
         typedef struct {
@@ -64,9 +63,10 @@
          } m6502_desc_t;
          ~~~
 
-    At the end of m6502_init(), the CPU emulation will be in RESET state, and
-    the first 7 ticks will execute the reset sequence (loading the reset vector
-    at address 0xFFFC and continuing execution there.
+    At the end of m6502_init(), the CPU emulation will be at the start of
+    RESET state, and the first 7 ticks will execute the reset sequence
+    (loading the reset vector at address 0xFFFC and continuing execution
+    there.
 
     m6502_init() will return a 64-bit pin mask which must be the input argument
     to the first call of m6502_tick().
@@ -78,22 +78,22 @@
     After executing one tick, the pin mask must be inspected, a memory read
     or write operation must be performed, and the modified pin mask must be
     used for the next call to m6502_tick(). This 64-bit pin mask is how
-    the CPU emulation communicated with the outside world.
+    the CPU emulation communicates with the outside world.
 
     The simplest-possible execution loop would look like this:
 
         ~~~C
-        m6502_t cpu;
         // setup 64 kBytes of memory
         uint8_t mem[1<<16] = { ... };
         // initialize the CPU
+        m6502_t cpu;
         uint64_t pins = m6502_init(&cpu, &(m6502_desc_t){...});
         while (...) {
             // run the CPU emulation for one tick
             pins = m6502_tick(&cpu, pins);
             // extract 16-bit address from pin mask
             const uint16_t addr = M6502_GET_ADDR(pins);
-            // perform memory read or write access
+            // perform memory access
             if (pins & M6502_RW) {
                 // a memory read
                 M6502_SET_DATA(pins, mem[addr]);
@@ -105,25 +105,30 @@
         }
         ~~~
 
-    To start a reset sequence, set the M6502_RES bit in the pin mask. You
-    do NOT need to clear the M6502_RES bit, this will be cleared when
-    the reset sequence starts.
+    To start a reset sequence, set the M6502_RES bit in the pin mask and
+    continue calling the m6502_tick() function. At the start of the next
+    instruction, the CPU will initiate the 7-tick reset sequence. You do NOT
+    need to clear the M6502_RES bit, this will be cleared when the reset
+    sequence starts.
 
-    To request an interrupt, either set the M6502_IRQ or M6502_NMI bits in 
-    the pin mask, unlike the M6502_RES pin, you are also responsible
-    for clearing the interrupt bits (typically, the interrupt lines are
-    cleared by the chip which requested the interrupt once the CPU
-    reads a chip's interrupt status register to find out which chip
-    requested the interrupt).
+    To request an interrupt, set the M6502_IRQ or M6502_NMI bits in the pin
+    mask and continue calling the tick function. The interrupt sequence
+    will be initiated at the end of the current or next instruction
+    (depending on the exact cycle the interrupt pin has been set).
+    
+    Unlike the M6502_RES pin, you are also responsible for clearing the
+    interrupt pins (typically, the interrupt lines are cleared by the chip
+    which requested the interrupt once the CPU reads a chip's interrupt
+    status register to check which chip requested the interrupt).
 
     To find out whether a new instruction is about to start, check if the
     M6502_SYNC pin is set.
 
-    To "goto" a random address at any time, a 'prefetch' like this needs to
-    happen (this basically simulates a normal instruction fetch from address
-    'next_pc'). This is usually only needed in "trap code" which intercepts
-    operating system calls, executes some native code to emulate the
-    operating system call, and then continue execution somewhere else:
+    To "goto" a random address at any time, a 'prefetch' like this is
+    necessary (this basically simulates a normal instruction fetch from
+    address 'next_pc'). This is usually only needed in "trap code" which
+    intercepts operating system calls, executes some native code to emulate
+    the operating system call, and then continue execution somewhere else:
 
         ~~~C
         pins = M6502_SYNC;
@@ -136,21 +141,30 @@
     ~~~C
     uint64_t m6502_init(m6502_t* cpu, const m6502_desc_t* desc)
     ~~~
-        Initialize a m6502_t instance, the desc structure provides initialization
-        attributes:
+        Initialize a m6502_t instance, the desc structure provides
+        initialization attributes:
             ~~~C
             typedef struct {
                 bool bcd_disabled;              // set to true if BCD mode is disabled
-                m6510_in_t m6510_in_cb;         // optional port IO input callback (only on m6510)
-                m6510_out_t m6510_out_cb;       // optional port IO output callback (only on m6510)
-                void* m6510_user_data;          // optional callback user data
-                uint8_t m6510_io_pullup;        // IO port bits that are 1 when reading
-                uint8_t m6510_io_floating;      // unconnected IO port pins
+                m6510_in_t m6510_in_cb;         // m6510 only: optional port IO input callback
+                m6510_out_t m6510_out_cb;       // m6510 only: optional port IO output callback
+                void* m6510_user_data;          // m6510 only: optional callback user data
+                uint8_t m6510_io_pullup;        // m6510 only: IO port bits that are 1 when reading
+                uint8_t m6510_io_floating;      // m6510 only: unconnected IO port pins
             } m6502_desc_t;
             ~~~
 
-        To emulate a m6510 you must provide port IO callbacks in m6510_in_cb and m6510_out_cb,
-        and should initialize the m6510_io_pullup and m6510_io_floating members.
+        To emulate a m6510 you must provide port IO callbacks in m6510_in_cb
+        and m6510_out_cb, and should initialize the m6510_io_pullup and
+        m6510_io_floating members to indicate which of the IO pins are
+        connected or hardwired to a 1-state.
+
+    ~~~C
+    uint64_t m6502_tick(m6502_t* cpu, uint64_t pins)
+    ~~~
+        Tick the CPU for one clock cycle. The 'pins' argument and return value
+        is the current state of the CPU pins used to communicate with the
+        outside world (see the Overview section above for details).
 
     ~~~C
     uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins)
@@ -192,7 +206,7 @@
 extern "C" {
 #endif
 
-/* address lines */
+/* address bus pins */
 #define M6502_A0    (1ULL<<0)
 #define M6502_A1    (1ULL<<1)
 #define M6502_A2    (1ULL<<2)
@@ -210,7 +224,7 @@ extern "C" {
 #define M6502_A14   (1ULL<<14)
 #define M6502_A15   (1ULL<<15)
 
-/*--- data lines ------*/
+/* data bus pins */
 #define M6502_D0    (1ULL<<16)
 #define M6502_D1    (1ULL<<17)
 #define M6502_D2    (1ULL<<18)
@@ -220,16 +234,16 @@ extern "C" {
 #define M6502_D6    (1ULL<<22)
 #define M6502_D7    (1ULL<<23)
 
-/*--- control pins ---*/
-#define M6502_RW    (1ULL<<24)
-#define M6502_SYNC  (1ULL<<25)
-#define M6502_IRQ   (1ULL<<26)
-#define M6502_NMI   (1ULL<<27)
-#define M6502_RDY   (1ULL<<28)
-#define M6510_AEC   (1ULL<<29)
-#define M6502_RES   (1ULL<<30)
+/* control pins */
+#define M6502_RW    (1ULL<<24)      /* out: memory read or write access */
+#define M6502_SYNC  (1ULL<<25)      /* out: start of a new instruction */
+#define M6502_IRQ   (1ULL<<26)      /* in: maskable interrupt requested */
+#define M6502_NMI   (1ULL<<27)      /* in: non-maskable interrupt requested */
+#define M6502_RDY   (1ULL<<28)      /* in: freeze execution at next read cycle */
+#define M6510_AEC   (1ULL<<29)      /* in, m6510 only, put bus lines into tristate mode, not implemented */
+#define M6502_RES   (1ULL<<30)      /* request RESET */
 
-/*--- m6510 specific port pins ---*/
+/* m6510 IO port pins */
 #define M6510_P0    (1ULL<<32)
 #define M6510_P1    (1ULL<<33)
 #define M6510_P2    (1ULL<<34)
@@ -241,7 +255,7 @@ extern "C" {
 /* bit mask for all CPU pins (up to bit pos 40) */
 #define M6502_PIN_MASK ((1ULL<<40)-1)
 
-/*--- status indicator flags ---*/
+/* status indicator flags */
 #define M6502_CF    (1<<0)  /* carry */
 #define M6502_ZF    (1<<1)  /* zero */
 #define M6502_IF    (1<<2)  /* IRQ disable */
@@ -251,11 +265,12 @@ extern "C" {
 #define M6502_VF    (1<<6)  /* overflow */
 #define M6502_NF    (1<<7)  /* negative */
 
-/*--- internal BRK state flags */
+/* internal BRK state flags */
 #define M6502_BRK_IRQ   (1<<0)  /* IRQ was triggered */
 #define M6502_BRK_NMI   (1<<1)  /* NMI was triggered */
 #define M6502_BRK_RESET (1<<2)  /* RES was triggered */
 
+/* m6510 IO port callback prototypes */
 typedef void (*m6510_out_t)(uint8_t data, void* user_data);
 typedef uint8_t (*m6510_in_t)(void* user_data);
 
@@ -269,7 +284,7 @@ typedef struct {
     uint8_t m6510_io_floating;      /* unconnected IO port pins */
 } m6502_desc_t;
 
-/* M6502 CPU state */
+/* CPU state */
 typedef struct {
     uint16_t IR;        /* internal instruction register */
     uint16_t PC;        /* internal program counter register */
@@ -278,8 +293,9 @@ typedef struct {
     uint64_t PINS;      /* last stored pin state (do NOT modify) */
     uint16_t irq_pip;
     uint16_t nmi_pip;
-    uint8_t brk_flags;
+    uint8_t brk_flags;  /* M6502_BRK_* */
     uint8_t bcd_enabled;
+    uint64_t ticks;     /* tick counter (only for inspection) */
     /* 6510 IO port state */
     void* user_data;
     m6510_in_t in_cb;
@@ -307,7 +323,6 @@ void m6502_set_y(m6502_t* cpu, uint8_t v);
 void m6502_set_s(m6502_t* cpu, uint8_t v);
 void m6502_set_p(m6502_t* cpu, uint8_t v);
 void m6502_set_pc(m6502_t* cpu, uint16_t v);
-
 uint8_t m6502_a(m6502_t* cpu);
 uint8_t m6502_x(m6502_t* cpu);
 uint8_t m6502_y(m6502_t* cpu);
@@ -627,6 +642,7 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 #define _NZ(v) c->P=((c->P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
 uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
+    c->ticks++;
     if (pins & (M6502_SYNC|M6502_IRQ|M6502_NMI|M6502_RDY|M6502_RES)) {
         // RDY pin is only checked during read cycles
         if ((pins & (M6502_RW|M6502_RDY)) == (M6502_RW|M6502_RDY)) {

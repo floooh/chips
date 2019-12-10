@@ -21,6 +21,11 @@
     ## Functions
 
     ~~~C
+    uint32_t clk_us_to_ticks(uint64_t freq_hz, uint32_t micro_seconds)
+    ~~~
+        Convert micro-seconds to system ticks.
+
+    ~~~C
     void clk_init(clk_t* clk, uint32_t freq_hz)
     ~~~
         Initialize a clk_t instance with a frequency in Hz.
@@ -91,10 +96,10 @@ typedef struct {
     int overrun_ticks;
 } clk_t;
 
+/* helper func to convert micro_seconds into ticks */
+uint32_t clk_us_to_ticks(uint64_t freq_hz, uint32_t micro_seconds);
 /* setup a clock instance with a frequency in Hz */
 void clk_init(clk_t* clk, uint32_t freq_hz);
-/* helper func to convert micro_seconds into ticks */
-uint32_t clk_us_to_ticks(clk_t* clk, uint32_t micro_seconds);
 /* call once per frame to compute number of ticks to execute */
 uint32_t clk_ticks_to_run(clk_t* clk, uint32_t micro_seconds);
 /* call once per frame with actual number of executed ticks */
@@ -118,8 +123,9 @@ void clk_init(clk_t* clk, uint32_t freq_hz) {
     clk->freq_hz = freq_hz;
 }
 
-uint32_t clk_us_to_ticks(clk_t* clk, uint32_t micro_seconds) {
-    return (clk->freq_hz * micro_seconds) / 1000000;
+/* freq_hz being 64 bit is not a bug, needed to prevent a 32-bit overflow */
+uint32_t clk_us_to_ticks(uint64_t freq_hz, uint32_t micro_seconds) {
+    return (freq_hz * micro_seconds) / 1000000;
 }
 
 uint32_t clk_ticks_to_run(clk_t* clk, uint32_t micro_seconds) {

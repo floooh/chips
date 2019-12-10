@@ -129,7 +129,6 @@ typedef struct {
     uint8_t joy_joymask;        /* joystick mask from calls to atom_joystick() */
     uint8_t mmc_cmd;
     uint8_t mmc_latch;
-    clk_t clk;
     mem_t mem;
     kbd_t kbd;
     void* user_data;
@@ -225,7 +224,6 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     memcpy(&sys->rom_dosrom, desc->rom_dosrom, sizeof(sys->rom_dosrom));
 
     /* initialize the hardware */
-    clk_init(&sys->clk, _ATOM_FREQUENCY);
     sys->period_2_4khz = _ATOM_FREQUENCY / 4800;
 
     m6502_desc_t cpu_desc;
@@ -305,19 +303,9 @@ void atom_reset(atom_t* sys) {
 
 void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t num_ticks = clk_us_to_ticks(&sys->clk, micro_seconds);
-    const uint64_t trap_mask = M6502_SYNC|0xFFFF;
-    const uint64_t trap_val  = M6502_SYNC|0xF96E;
+    uint32_t num_ticks = clk_us_to_ticks(_ATOM_FREQUENCY, micro_seconds);
     for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
         sys->cpu_pins = _atom_tick(sys, sys->cpu_pins);
-        if (sys->tape_size > 0) {
-            if ((sys->cpu_pins & trap_mask) == trap_val) {
-                /* check if the trapped OSLoad function was hit to implement tape file loading
-                    http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis
-                */
-                _atom_osload(sys);
-            }
-        }
     }
     kbd_update(&sys->kbd);
 }
@@ -467,6 +455,17 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
         else {
             /* memory access */
             mem_wr(&sys->mem, addr, M6502_GET_DATA(pins));
+        }
+    }
+
+    /* check if the trapped OSLoad function was hit to implement tape file loading
+        http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis
+    */
+    if (sys->tape_size > 0) {
+        const uint64_t trap_mask = M6502_SYNC|0xFFFF;
+        const uint64_t trap_val  = M6502_SYNC|0xF96E;
+        if ((pins & trap_mask) == trap_val) {
+            _atom_osload(sys);
         }
     }
     return pins;

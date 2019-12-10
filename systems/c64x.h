@@ -35,8 +35,6 @@
 
     ## TODO:
 
-    - emulate separate joystick 1 and 2
-    - improve game fast loader compatibility
     - floppy disc support
 
     ## zlib/libpng license
@@ -64,6 +62,7 @@
 extern "C" {
 #endif
 
+#define C64_FREQUENCY (985248)              /* clock frequency in Hz */
 #define C64_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
 #define C64_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */ 
 #define C64_MAX_TAPE_SIZE (512*1024)        /* max size of cassette tape image */
@@ -74,8 +73,8 @@ typedef enum {
     C64_JOYSTICKTYPE_DIGITAL_1,
     C64_JOYSTICKTYPE_DIGITAL_2,
     C64_JOYSTICKTYPE_DIGITAL_12,    /* input routed to both joysticks */
-    C64_JOYSTICKTYPE_PADDLE_1,  /* FIXME: not emulated */
-    C64_JOYSTICKTYPE_PADDLE_2,  /* FIXME: not emulated */
+    C64_JOYSTICKTYPE_PADDLE_1,      /* FIXME: not emulated */
+    C64_JOYSTICKTYPE_PADDLE_2,      /* FIXME: not emulated */
 } c64_joystick_type_t;
 
 /* joystick mask bits */
@@ -108,7 +107,7 @@ typedef struct {
     /* audio output config (if you don't want audio, set audio_cb to zero) */
     c64_audio_callback_t audio_cb;  /* called when audio_num_samples are ready */
     int audio_num_samples;          /* default is C64_AUDIO_NUM_SAMPLES */
-    int audio_sample_rate;          /* playback sample rate, default is 44100 */
+    int audio_sample_rate;          /* playback sample rate in Hz, default is 44100 */
     float audio_sid_volume;         /* audio volume of the SID chip (0.0 .. 1.0), default is 1.0 */
     float audio_beeper_volume;      /* audio volume of the tape-beeper (0.0 .. 1.0), default is 0.1 */
     bool audio_tape_sound;          /* if true, tape loading is audible */
@@ -124,14 +123,13 @@ typedef struct {
 
 /* C64 emulator state */
 typedef struct {
-    uint64_t cpu_pins;
-    uint32_t ticks;
+    uint64_t pins;
     m6502_t cpu;
     m6526_t cia_1;
     m6526_t cia_2;
     m6569_t vic;
     m6581_t sid;
-    beeper_t beeper;            /* used for the tape-sound */
+    beeper_t beeper;            /* used for the optional tape-sound */
     
     bool valid;
     c64_joystick_type_t joystick_type;
@@ -144,10 +142,9 @@ typedef struct {
     uint8_t joy_joy2_mask;      /* current joystick-2 state from c64_joystick() */
     uint16_t vic_bank_select;   /* upper 4 address bits from CIA-2 port A */
 
-    clk_t clk;
-    kbd_t kbd;
-    mem_t mem_cpu;
-    mem_t mem_vic;
+    kbd_t kbd;                  /* keyboard matrix state */
+    mem_t mem_cpu;              /* CPU-visible memory mapping */
+    mem_t mem_vic;              /* VIC-visible memory mapping */
 
     void* user_data;
     uint32_t* pixel_buffer;
@@ -166,7 +163,7 @@ typedef struct {
     bool tape_button;   /* play button on tape pressed/unpressed */
     bool tape_sound;    /* true when tape is audible */
     int tape_size;      /* tape_size > 0: a tape is inserted */
-    int tape_pos;        
+    int tape_pos;
     int tape_tick_count;
     uint8_t tape_buf[C64_MAX_TAPE_SIZE];
 } c64_t;
@@ -187,7 +184,7 @@ int c64_display_height(c64_t* sys);
 void c64_reset(c64_t* sys);
 /* tick C64 instance for a given number of microseconds, also updates keyboard state */
 void c64_exec(c64_t* sys, uint32_t micro_seconds);
-/* tick the C64 instance once, does not update keyboard! */
+/* ...or optionally: tick the C64 instance once, does not update keyboard state! */
 void c64_tick(c64_t* sys);
 /* send a key-down event to the C64 */
 void c64_key_down(c64_t* sys, int key_code);
@@ -227,7 +224,6 @@ bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
 #define _C64_DBG_DISPLAY_WIDTH ((_M6569_HTOTAL+1)*8)
 #define _C64_DBG_DISPLAY_HEIGHT (_M6569_VTOTAL+1)
 #define _C64_DISPLAY_SIZE (_C64_DBG_DISPLAY_WIDTH*_C64_DBG_DISPLAY_HEIGHT*4)
-#define _C64_FREQUENCY (985248)
 #define _C64_DISPLAY_X (64)
 #define _C64_DISPLAY_Y (24)
 
@@ -267,7 +263,6 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     CHIPS_ASSERT(sys->num_samples <= C64_MAX_AUDIO_SAMPLES);
 
     /* initialize the hardware */
-    clk_init(&sys->clk, _C64_FREQUENCY);
     sys->cpu_port = 0xF7;       /* for initial memory mapping */
     sys->io_mapped = true;
     
@@ -278,7 +273,7 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     cpu_desc.m6510_io_pullup = 0x17;
     cpu_desc.m6510_io_floating = 0xC8;
     cpu_desc.m6510_user_data = sys;
-    sys->cpu_pins = m6502_init(&sys->cpu, &cpu_desc);
+    sys->pins = m6502_init(&sys->cpu, &cpu_desc);
 
     m6526_desc_t cia_desc;
     _C64_CLEAR(cia_desc);
@@ -307,12 +302,12 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     const float beeper_volume = _C64_DEFAULT(desc->audio_beeper_volume, 0.1f);
     m6581_desc_t sid_desc;
     _C64_CLEAR(sid_desc);
-    sid_desc.tick_hz = _C64_FREQUENCY;
+    sid_desc.tick_hz = C64_FREQUENCY;
     sid_desc.sound_hz = sound_hz;
     sid_desc.magnitude = sid_volume;
     m6581_init(&sys->sid, &sid_desc);
 
-    beeper_init(&sys->beeper, _C64_FREQUENCY, sound_hz, beeper_volume);
+    beeper_init(&sys->beeper, C64_FREQUENCY, sound_hz, beeper_volume);
 
     _c64_init_key_map(sys);
     _c64_init_memory_map(sys);
@@ -352,7 +347,7 @@ void c64_reset(c64_t* sys) {
     sys->joy_joy1_mask = sys->joy_joy2_mask = 0;
     sys->io_mapped = true;
     _c64_update_memory_map(sys);
-    sys->cpu_pins |= M6502_RES;
+    sys->pins |= M6502_RES;
     m6526_reset(&sys->cia_1);
     m6526_reset(&sys->cia_2);
     m6569_reset(&sys->vic);
@@ -366,17 +361,17 @@ void c64_reset(c64_t* sys) {
 }
 
 void c64_tick(c64_t* sys) {
-    sys->cpu_pins = _c64_tick(sys, sys->cpu_pins);
-    sys->ticks++;
+    sys->pins = _c64_tick(sys, sys->pins);
 }
 
 void c64_exec(c64_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t num_ticks = clk_ticks_to_run(&sys->clk, micro_seconds);
+    uint32_t num_ticks = clk_us_to_ticks(C64_FREQUENCY, micro_seconds);
+    uint64_t pins = sys->pins;
     for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-        sys->cpu_pins = _c64_tick(sys, sys->cpu_pins);
-        sys->ticks++;
+        pins = _c64_tick(sys, pins);
     }
+    sys->pins = pins;
     kbd_update(&sys->kbd);
 }
 
@@ -658,7 +653,6 @@ static uint8_t _c64_cia1_in(int port_id, void* user_data) {
             combined keyboard matrix columns and joystick 1
     */
     if (port_id == M6526_PORT_A) {
-        /* FIXME: currently use the same input for joystick 2 and joystick 1 */
         return ~(sys->kbd_joy2_mask | sys->joy_joy2_mask);
     }
     else {
@@ -760,6 +754,7 @@ static void _c64_update_memory_map(c64_t* sys) {
 }
 
 static void _c64_init_memory_map(c64_t* sys) {
+    /* seperate memory mapping for CPU and VIC-II */
     mem_init(&sys->mem_cpu);
     mem_init(&sys->mem_vic);
 
@@ -947,7 +942,6 @@ static bool _c64_tape_tick(c64_t* sys) {
     return false;
 }
 
-/* FIXME: add proper snapshot file formats */
 bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid);
     if (num_bytes < 2) {
