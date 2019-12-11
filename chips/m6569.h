@@ -1502,13 +1502,13 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
         case 11:
             break;
         case 12:
-            break;
         case 13:
         case 14:
             pins = _m6569_ba(vic, pins);
             break;
         case 15:
             pins = _m6569_ba(vic, pins);
+            pins = _m6569_aec(pins);
             _m6569_rs_rewind_vc_vmli_rc(vic);
             break;
         case 16:
@@ -1542,7 +1542,6 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             g_data = _m6569_g_i_access(vic);
             break;
         case 55:
-            pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_c_access(vic);

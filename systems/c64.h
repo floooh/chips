@@ -219,13 +219,6 @@
 
     vicii-timing:       FAIL (ref image doesn't match)
 
-
-
-
-
-
-    
-    
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
