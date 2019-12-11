@@ -1618,7 +1618,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     else {
         vic->reg.int_latch &= ~M6569_INT_IRQ;
     }
-    if (vic->reg.int_latch & (1<<7)) {
+    if (vic->reg.int_latch & M6569_INT_IRQ) {
         pins |= M6569_IRQ;
     }
 
