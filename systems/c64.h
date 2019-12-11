@@ -38,6 +38,34 @@
     - floppy disc support
 
     ## Tests Status
+    
+    In chips-test/tests/testsuite-2.15/bin
+
+        branchwrap:     ok
+        cia1pb6:        ok
+        cia1pb7:        ok
+        cia1ta:         FAIL (05 14 11 00 and following)
+        cia1tab:        ok
+        cia1tb:         FAIL (05 14 11 00 and following)
+        cia1tb123:      ok
+        cia2pb6:        ok
+        cia2pb7:        ok
+        cia2ta:         FAIL (05 14 11 00 and following)
+        cia2tb:         FAIL (05 15 11 00 and following)
+        cntdef:         ok
+        cnto2:          ok
+        cpuport:        ok
+        cputiming:      ok
+        flipos:         ok
+        icr01:          ok
+        imr:            FAIL (1 error at IMR=$81 NO IRQ IN CLOCK 3)
+        irq:            ok
+        loadth:         ok
+        mmu:            ok
+        mmufetch:       ok
+        nmi:            FAIL (1 error at 00/5)
+        oneshot:        ok
+        trap1..17:      ok
 
     In chips-test/tests/vice-tests/CIA:
     
@@ -106,6 +134,111 @@
     irqdummy/irqdummy.prg:  green
 
     irqnmi/irqnmi-old.prg: left (irq) green,right (nmi) red
+
+    VICII:
+
+    D011Test:                   TODO
+    banking/banking.prg:        ok
+    border:                     fail (border not opened)
+    colorram/test.prg:          ok
+    colorsplit/colorsplit.prg:  fail (horizontal offsets)
+    dentest:
+        den01-48-0.prg:         ok
+        den01-48-1.prg:         ok
+        den01-48-2.prg:         ok
+        den01-49-0.prg:         ok
+        den01-49-1.prg:         FAIL
+        den01-49-2.prg:         ok
+        den10-48-0.prg:         ok
+        den10-48-1.prg:         ok
+        den10-48-2.prg:         FAIL (flickering)
+        den10-51-0.prg:         FAIL (flickering)
+        den10-51-1.prg:         ok
+        den10-51-2.prg:         ok
+        den10-51-3.prg:         ok
+        denrsel-0.prg:          FAIL
+        denrsel-1.prg:          ok
+        denrsel-2.prg:          ok
+        denrsel-63.prg:         ok
+        denrsel-s0.prg:         ok
+        denrsel-s1.prg:         ok
+        denrsel-s2.prg:         ok
+        denrsel55.prg:          ok
+    dmadelay:
+        test1-2a-03.prg:        ok
+        test1-2a-04.prg:        FAIL (flickering)
+        test1-2a-10.prg:        ok
+        test1-2a-11.prg:        FAIL (1 char line off)
+        test1-2a-16.prg:        ok
+        test1-2a-17.prg:        FAIL (1 char line off)
+        test1-2a-18.prg:        FAIL (1 char line/col off)
+        test1.prg:              ??? (no reference image)
+        test2-28-05.prg:        ok
+        test2-28-06.prg:        FAIL (flickering)
+        test2-28-11.prg:        ok
+        test2-28-12.prg:        FAIL (one char line off)
+        test2-28-16.prg:        ok
+        test2-28-17.prg:        FAIL (one char line off)
+        test2-28-18.prg:        FAIL (one char line/col off)
+        test3-28-07.prg:        ok
+        test3-28-08.prg:        FAIL (one char line off)
+        test3-28-13.prg:        ok
+        test3-28-14.prg:        FAIL (one char line off)
+        test3-28-18.prg:        ok
+        test3-28-19.prg:        FAIL (one char line off)
+        test3-28-1a.prg:        FAIL (one char col off)
+
+    fldscroll:  broken
+    flibug/blackmail.prg:       reference image doesn't match
+
+    frodotests:
+        3fff.prg                ok
+        d011h3.prg              FAIL (???)
+        fld.prg                 ok
+        lrborder:               FAIL (???)
+        sprsync:                ok (???)
+        stretch:                ok (???)
+        tech-tech:              ok
+        text26:                 ok
+
+    gfxfetch/gfxfetch.prg:      FAIL (reference image doesn't match in boder)
+
+    greydot/greydot.prg:        FAIL (ref image doesn't match, color bars start one tick late)
+
+    lp-trigger:
+        test1.prg:              FAIL (flickering)
+        test2.prg:              FAIL
+
+    lplatency/lplatency.prg:    FAIL
+
+    movesplit:                  ????
+
+    phi1timing:                 FAIL
+
+    rasterirq:                  FAIL (reference image doesn't match)
+    
+    screenpos:                  FAIL (reference image doesn't match)
+
+    split-tests:
+        bascan          FAIL
+        fetchsplit      FAIL (flickering characters)
+        lightpen        FAIL
+        modesplit       FAIL (ref image doesn't match)
+        spritescan      FAIL
+
+    sprite0move         ???
+
+    spritebug           TODO
+    all other sprite tests: TODO
+
+    vicii-timing:       FAIL (ref image doesn't match)
+
+
+
+
+
+
+    
     
     ## zlib/libpng license
 
