@@ -44,21 +44,21 @@
         branchwrap:     ok
         cia1pb6:        ok
         cia1pb7:        ok
-        cia1ta:         FAIL (05 14 11 00 and following)
+        cia1ta:         FAIL (OK, CIA sysclock not implemented)
         cia1tab:        ok
-        cia1tb:         FAIL (05 14 11 00 and following)
+        cia1tb:         FAIL (OK, CIA sysclock not implemented)
         cia1tb123:      ok
         cia2pb6:        ok
         cia2pb7:        ok
-        cia2ta:         FAIL (05 14 11 00 and following)
-        cia2tb:         FAIL (05 15 11 00 and following)
+        cia2ta:         FAIL (OK, CIA sysclock not implemented)
+        cia2tb:         FAIL (OK, CIA sysclock not implemented)
         cntdef:         ok
         cnto2:          ok
         cpuport:        ok
         cputiming:      ok
         flipos:         ok
         icr01:          ok
-        imr:            FAIL (1 error at IMR=$81 NO IRQ IN CLOCK 3)
+        imr:            ok
         irq:            ok
         loadth:         ok
         mmu:            ok
@@ -73,7 +73,7 @@
         - all green, expect cia15.prg, which tests the CIA TOD clock,
           which isn't implemented
 
-    ciatimer/cia-timer-oldcias.prg:
+    cia-timer/cia-timer-oldcias.prg:
         - left side (CIA-1, IRQ) all green, right side (CIA-2, NMI) some red
 
     ciatimer/dd0dtest/dd0dtest.prg (NMI related):
@@ -103,8 +103,8 @@
         cia-icr-test-oneshot-old.prg: green
         cia-icr-test2-continues.prg: some red
         cia-icr-test2-oneshot.prg: some red
-        cia-sp-test-continues-old.prg: much red
-        cia-sp-test-oneshot-old.prg: much red
+        cia-sp-test-continues-old.prg: much red (ok, CIA SP not implemented)
+        cia-sp-test-oneshot-old.prg: much red (ok, CIA SP not implemented)
 
     timerbasics:
         test.prg:   green

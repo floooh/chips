@@ -406,6 +406,14 @@ static void _m6526_write_icr(m6526_t* c, uint8_t data) {
     else {
         c->intr.imr1 &= ~(data & 0x1F);
     }
+    /* from WLorenz Test Suite readme:
+        When a condition in the ICR is true, setting the corresponding bit in
+        the IMR must also set the interrupt. Clearing the bit in the IMR may
+        not clear the interrupt. Only reading the ICR may clear the interrupt.
+    */
+    if (c->intr.icr & c->intr.imr1) {
+        _M6526_PIP_SET(c->intr.pip_irq, 1, true);
+    }
 }
 
 static uint8_t _m6526_read_icr(m6526_t* c) {
