@@ -1502,6 +1502,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
         case 11:
             break;
         case 12:
+            break;
         case 13:
         case 14:
             pins = _m6569_ba(vic, pins);
