@@ -79,18 +79,7 @@
     ciatimer/dd0dtest/dd0dtest.prg (NMI related):
         - some errors
 
-    irqdelay:
-        - irqdelay-cia1-4-old.prg: green
-        - irqdelay-cia1-oneshot-4-old.prg: green
-        - irqdelay-cia1-oneshot.prg: green
-        - irqdelay-cia1.prg: green
-        - irqdelay-cia2-4.prg: green
-        - irqdelay-cia2-oneshot-4.prg: green
-        - irqdelay-cia2-oneshot.prg: green
-        - irqdelay-cia2.prg: green
-        - irqdelay-oneshot.prg: green
-        - irqdelay.prg: green
-        - irqdelay2.prg: green
+    irqdelay:   all green
 
     mirrors/ciamirrors.prg: green
 
@@ -106,10 +95,7 @@
         cia-sp-test-continues-old.prg: much red (ok, CIA SP not implemented)
         cia-sp-test-oneshot-old.prg: much red (ok, CIA SP not implemented)
 
-    timerbasics:
-        test.prg:   green
-        timer.prg:  green
-        timer_test1.prg:    green
+    timerbasics:    all green
 
     in chips-test/tests/vice-tests/interrupts:
 
