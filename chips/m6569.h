@@ -1427,7 +1427,6 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     vic->crt.x++;
     switch (vic->rs.h_count) {
         case 1:
-            _m6569_rs_check_irq(vic);
             _m6569_p_access(vic, 3);
             _m6569_s_access(vic, 3);
             pins = _m6569_sunit_dma_aec(vic, 3, pins);
@@ -1602,6 +1601,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             break;
         case 63:    /* HTOTAL */
             _m6569_rs_next_rasterline(vic);
+            _m6569_rs_check_irq(vic);
             g_data = _m6569_s_i_access(vic, 2);
             _m6569_s_access(vic, 2);
             pins = _m6569_sunit_dma_aec(vic, 2, pins);
