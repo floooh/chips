@@ -128,21 +128,23 @@
     border:                     fail (border not opened)
     colorram/test.prg:          ok
     colorsplit/colorsplit.prg:  fail (horizontal offsets)
-    dentest:
+    dentest:    (these were mostly fixed by moving the raster interrupt check
+                 in m6569.h to tick 63, which made the otherwise some tests
+                 were flickering because a second raster interrupt wasn't stable)
         den01-48-0.prg:         ok
         den01-48-1.prg:         ok
         den01-48-2.prg:         ok
         den01-49-0.prg:         ok
-        den01-49-1.prg:         FAIL
+        den01-49-1.prg:         ok
         den01-49-2.prg:         ok
         den10-48-0.prg:         ok
         den10-48-1.prg:         ok
-        den10-48-2.prg:         FAIL (flickering)
-        den10-51-0.prg:         FAIL (flickering)
+        den10-48-2.prg:         FAIL
+        den10-51-0.prg:         ok
         den10-51-1.prg:         ok
         den10-51-2.prg:         ok
         den10-51-3.prg:         ok
-        denrsel-0.prg:          FAIL
+        denrsel-0.prg:          ok
         denrsel-1.prg:          ok
         denrsel-2.prg:          ok
         denrsel-63.prg:         ok
