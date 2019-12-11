@@ -37,6 +37,76 @@
 
     - floppy disc support
 
+    ## Tests Status
+
+    In chips-test/tests/vice-tests/CIA:
+    
+    ciavarious:
+        - all green, expect cia15.prg, which tests the CIA TOD clock,
+          which isn't implemented
+
+    ciatimer/cia-timer-oldcias.prg:
+        - left side (CIA-1, IRQ) all green, right side (CIA-2, NMI) some red
+
+    ciatimer/dd0dtest/dd0dtest.prg (NMI related):
+        - some errors
+
+    irqdelay:
+        - irqdelay-cia1-4-old.prg: green
+        - irqdelay-cia1-oneshot-4-old.prg: green
+        - irqdelay-cia1-oneshot.prg: green
+        - irqdelay-cia1.prg: green
+        - irqdelay-cia2-4.prg: green
+        - irqdelay-cia2-oneshot-4.prg: green
+        - irqdelay-cia2-oneshot.prg: green
+        - irqdelay-cia2.prg: green
+        - irqdelay-oneshot.prg: green
+        - irqdelay.prg: green
+        - irqdelay2.prg: green
+
+    mirrors/ciamirrors.prg: green
+
+    reload0:
+        reload0a.prg:   red
+        reload0b.prg:   red
+
+    shiftregister:
+        cia-icr-test-continues-old.prg: green
+        cia-icr-test-oneshot-old.prg: green
+        cia-icr-test2-continues.prg: some red
+        cia-icr-test2-oneshot.prg: some red
+        cia-sp-test-continues-old.prg: much red
+        cia-sp-test-oneshot-old.prg: much red
+
+    timerbasics:
+        test.prg:   green
+        timer.prg:  green
+        timer_test1.prg:    green
+
+    in chips-test/tests/vice-tests/interrupts:
+
+    branchquirk:
+        branchquirk-old.prg:    green
+        branchquirk-nmiold.prg: red
+
+    cia-int:
+        cia-int-irq.prg:    green??
+        cia-int-nmi.prg:    green??
+
+    irq-ackn-bug:
+        cia1.prg:       green
+        cia2.prg:       green
+        irq-ack-vicii.prg:  red
+        irq-ackn_after_cli.prg: ???
+        irq-ackn_after_cli2.prg: ???
+
+    irqdma: (takes a long time)
+        all fail?
+
+    irqdummy/irqdummy.prg:  green
+
+    irqnmi/irqnmi-old.prg: left (irq) green,right (nmi) red
+    
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog

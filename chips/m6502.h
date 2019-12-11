@@ -181,6 +181,7 @@
     ~~~
         Set and get 6502 registers and flags.
 
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
@@ -644,10 +645,22 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
     c->ticks++;
     if (pins & (M6502_SYNC|M6502_IRQ|M6502_NMI|M6502_RDY|M6502_RES)) {
+        // interrupt detection also works in RDY phases, but only NMI is "sticky"
+        
+        // NMI is edge-triggered
+        if (0 != ((pins & (pins ^ c->PINS)) & M6502_NMI)) {
+            c->nmi_pip |= 1;
+        }
+        // IRQ test is level triggered
+        if ((pins & M6502_IRQ) && (0 == (c->P & M6502_IF))) {
+            c->irq_pip |= 1;
+        }
+        
         // RDY pin is only checked during read cycles
         if ((pins & (M6502_RW|M6502_RDY)) == (M6502_RW|M6502_RDY)) {
             M6510_SET_PORT(pins, c->io_pins);
             c->PINS = pins;
+            c->irq_pip <<= 1;
             return pins;
         }
         if (pins & M6502_SYNC) {
@@ -688,14 +701,6 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
             else {
                 c->PC++;
             }
-        }
-        // IRQ test is level triggered
-        if ((pins & M6502_IRQ) && (0 == (c->P & M6502_IF))) {
-            c->irq_pip |= 1;
-        }
-        // NMI is edge-triggered
-        if (0 != ((pins & (pins ^ c->PINS)) & M6502_NMI)) {
-            c->nmi_pip |= 1;
         }
     }
     // reads are default, writes are special
