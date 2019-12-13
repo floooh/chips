@@ -91,8 +91,7 @@ typedef struct {
 void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc);
 void ui_atom_discard(ui_atom_t* ui);
 void ui_atom_draw(ui_atom_t* ui, double time_ms);
-bool ui_atom_before_exec(ui_atom_t* ui);
-void ui_atom_after_exec(ui_atom_t* ui);
+void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -198,6 +197,7 @@ static const ui_chip_pin_t _ui_atom_cpu_pins[] = {
     { "IRQ",    11,     M6502_IRQ },
     { "NMI",    12,     M6502_NMI },
     { "RDY",    13,     M6502_RDY },
+    { "RES",    15,     M6502_RES },
     { "A0",     16,     M6502_A0 },
     { "A1",     17,     M6502_A1 },
     { "A2",     18,     M6502_A2 },
@@ -496,14 +496,17 @@ void ui_atom_draw(ui_atom_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-bool ui_atom_before_exec(ui_atom_t* ui) {
+void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us) {
     CHIPS_ASSERT(ui && ui->atom);
-    return ui_dbg_before_exec(&ui->dbg);
-}
-
-void ui_atom_after_exec(ui_atom_t* ui) {
-    CHIPS_ASSERT(ui && ui->atom);
-    ui_dbg_after_exec(&ui->dbg);
+    uint32_t ticks_to_run = clk_us_to_ticks(ATOM_FREQUENCY, frame_time_us);
+    atom_t* atom = ui->atom;
+    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
+        atom_tick(ui->atom);
+        if (atom->pins & M6502_SYNC) {
+            ui_dbg_after_instr(&ui->dbg, atom->pins, atom->cpu.ticks);
+        }
+    }
+    kbd_update(&ui->atom->kbd);
 }
 
 #ifdef __clang__

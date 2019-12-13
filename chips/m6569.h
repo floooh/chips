@@ -1418,6 +1418,7 @@ static inline uint64_t _m6569_aec(uint64_t pins) {
 
 /*=== TICK FUNCTION ==========================================================*/
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
+    pins &= ~M6569_BA;
     uint8_t g_data = 0x00;
     _m6569_rs_update_badline(vic);
 
@@ -1433,10 +1434,6 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 4, pins);
             break;
         case 2:
-            /* FIXME: raster interrupt should be checked in the first horizontal tick,
-               but moving it to the second seems to be more correct...
-            */
-            _m6569_rs_check_irq(vic);
             g_data = _m6569_s_i_access(vic, 3);
             _m6569_s_access(vic, 3);
             pins = _m6569_sunit_dma_aec(vic, 3, pins);
@@ -1510,6 +1507,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             break;
         case 15:
             pins = _m6569_ba(vic, pins);
+            pins = _m6569_aec(pins);
             _m6569_rs_rewind_vc_vmli_rc(vic);
             break;
         case 16:
@@ -1543,7 +1541,6 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             g_data = _m6569_g_i_access(vic);
             break;
         case 55:
-            pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_c_access(vic);
@@ -1604,6 +1601,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             break;
         case 63:    /* HTOTAL */
             _m6569_rs_next_rasterline(vic);
+            _m6569_rs_check_irq(vic);
             g_data = _m6569_s_i_access(vic, 2);
             _m6569_s_access(vic, 2);
             pins = _m6569_sunit_dma_aec(vic, 2, pins);
@@ -1620,7 +1618,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     else {
         vic->reg.int_latch &= ~M6569_INT_IRQ;
     }
-    if (vic->reg.int_latch & (1<<7)) {
+    if (vic->reg.int_latch & M6569_INT_IRQ) {
         pins |= M6569_IRQ;
     }
 
