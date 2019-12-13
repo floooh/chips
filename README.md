@@ -14,6 +14,17 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 
 ## What's New
 
+* **13-Dec-2019**: The new 'cycle-stepped' 6502/6510 emulator has been merged
+    to master. The new emulator has a slightly different programming model,
+    please see the updated [header
+    documentation](https://github.com/floooh/chips/blob/master/chips/m6502.h) and
+    [this blog
+    post](https://floooh.github.io/2019/12/13/cycle-stepped-6502.html). I have
+    created a [git tag](https://github.com/floooh/chips/tree/old-m6502) which
+    preserves the previous emulator. All the 6502-based system emulators on the
+    [Tiny Emulators page](https://floooh.github.io/tiny8bit/) have been updated
+    with the new cycle-stepped 6502.
+
 * **14-Oct-2019**: Improvements to the 6502 and C64 emulation:
     - All tests of the Wolfgang Lorenz test suite are passing now, except:
         - irq and nmi: the timing for interrupt requests is slightly off,
