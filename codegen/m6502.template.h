@@ -642,6 +642,11 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 /* set N and Z flags depending on value */
 #define _NZ(v) c->P=((c->P&~(M6502_NF|M6502_ZF))|((v&0xFF)?(v&M6502_NF):M6502_ZF))
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable:4244)   /* conversion from 'uint16_t' to 'uint8_t', possible loss of data */
+#endif
+
 uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
     c->ticks++;
     if (pins & (M6502_SYNC|M6502_IRQ|M6502_NMI|M6502_RDY|M6502_RES)) {
@@ -714,6 +719,10 @@ $decode_block
     c->nmi_pip <<= 1;
     return pins;
 }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
 #undef _SA
 #undef _SAD
 #undef _FETCH
