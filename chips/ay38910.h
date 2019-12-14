@@ -132,6 +132,8 @@ extern "C" {
 #define AY38910_FIXEDPOINT_SCALE (16)
 /* number of channels */
 #define AY38910_NUM_CHANNELS (3)
+/* DC adjustment buffer length */
+#define AY38910_DCADJ_BUFLEN (512)
 
 /* IO port names */
 #define AY38910_PORT_A (0)
@@ -231,6 +233,9 @@ typedef struct {
     int sample_counter;
     float mag;
     float sample;
+    float dcadj_sum;
+    uint32_t dcadj_pos;
+    float dcadj_buf[AY38910_DCADJ_BUFLEN];
 } ay38910_t;
 
 /* extract 8-bit data bus from 64-bit pins */
@@ -338,6 +343,19 @@ static const uint8_t _ay38910_shapes[16][32] = {
     /* 1 1 1 1 */
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
+
+/* DC adjustment filter from StSound, this moves an "offcenter"
+   signal back to the zero-line (e.g. the volume-level output
+   from the chip simulation which is >0.0 gets converted to
+   a +/- sample value)
+*/
+static float _ay38910_dcadjust(ay38910_t* ay, float s) {
+    ay->dcadj_sum -= ay->dcadj_buf[ay->dcadj_pos];
+    ay->dcadj_sum += s;
+    ay->dcadj_buf[ay->dcadj_pos] = s;
+    ay->dcadj_pos = (ay->dcadj_pos + 1) & (AY38910_DCADJ_BUFLEN-1);
+    return s - (ay->dcadj_sum / AY38910_DCADJ_BUFLEN);
+}
 
 /* update computed values after registers have been reprogrammed */
 static void _ay38910_update_values(ay38910_t* ay) {
@@ -454,10 +472,10 @@ bool ay38910_tick(ay38910_t* ay) {
     ay->sample_counter -= AY38910_FIXEDPOINT_SCALE;
     if (ay->sample_counter <= 0) {
         ay->sample_counter += ay->sample_period;
-        float vol = 0.0f;
         float sm = 0.0f;
         for (int i = 0; i < AY38910_NUM_CHANNELS; i++) {
             const ay38910_tone_t* chn = &ay->tone[i];
+            float vol;
             if (0 == (ay->reg[AY38910_REG_AMP_A+i] & (1<<4))) {
                 /* fixed amplitude */
                 vol = _ay38910_volumes[ay->reg[AY38910_REG_AMP_A+i] & 0x0F];
@@ -467,9 +485,11 @@ bool ay38910_tick(ay38910_t* ay) {
                 vol = _ay38910_volumes[ay->env.shape_state];
             }
             int vol_enable = (chn->bit|chn->tone_disable) & ((ay->noise.rng&1)|(chn->noise_disable));
-            sm += (vol_enable ? vol : -vol);
+            if (vol_enable) {
+                sm += vol;
+            }
         }
-        ay->sample = sm * ay->mag * 0.33333f;
+        ay->sample = _ay38910_dcadjust(ay, sm) * ay->mag;
         return true;    /* new sample is ready */
     }
     /* fallthrough: no new sample ready yet */
