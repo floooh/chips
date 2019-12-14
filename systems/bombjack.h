@@ -352,7 +352,7 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     psg_desc.type = AY38910_TYPE_8910;
     psg_desc.tick_hz = 1500000;
     psg_desc.sound_hz = _bombjack_def(desc->audio_sample_rate, 44100);
-    psg_desc.magnitude = 0.3f;
+    psg_desc.magnitude = 0.2f;
     for (int i = 0; i < 3; i++) {
         ay38910_init(&sys->soundboard.psg[i], &psg_desc);
     }

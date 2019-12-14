@@ -306,7 +306,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     psg_desc.out_cb = _cpc_psg_out;
     psg_desc.tick_hz = _CPC_FREQUENCY / 4;
     psg_desc.sound_hz = _CPC_DEFAULT(desc->audio_sample_rate, 44100);
-    psg_desc.magnitude = _CPC_DEFAULT(desc->audio_volume, 0.7f);
+    psg_desc.magnitude = _CPC_DEFAULT(desc->audio_volume, 0.5f);
     psg_desc.user_data = sys;
     ay38910_init(&sys->psg, &psg_desc);
 
