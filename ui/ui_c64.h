@@ -22,6 +22,7 @@
     ui_atom.h both for the declaration and implementation.
 
     - c64.h
+    - c1530.h
     - mem.h
     - ui_chip.h
     - ui_util.h
@@ -67,6 +68,7 @@ typedef void (*ui_c64_boot_cb)(c64_t* sys);
 /* setup params for ui_c64_init() */
 typedef struct {
     c64_t* c64;             /* pointer to c64_t instance to track */
+    c1530_t* c1530;         /* optional pointer to datasette instance */
     ui_c64_boot_cb boot_cb; /* reboot callback function */
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
@@ -76,6 +78,7 @@ typedef struct {
 
 typedef struct {
     c64_t* c64;
+    c1530_t* c1530;
     int dbg_scanline;
     ui_c64_boot_cb boot_cb;
     ui_m6502_t cpu;
@@ -459,6 +462,7 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->c64);
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->c64 = ui_desc->c64;
+    ui->c1530 = ui_desc->c1530;
     ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
     {
@@ -637,10 +641,24 @@ void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
     CHIPS_ASSERT(ui && ui->c64);
     uint32_t ticks_to_run = clk_us_to_ticks(C64_FREQUENCY, frame_time_us);
     c64_t* c64 = ui->c64;
-    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-        c64_tick(ui->c64);
-        if (c64->pins & M6502_SYNC) {
-            ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
+    c1530_t* c1530 = ui->c1530;
+    if (c1530) {
+        /* tick C64 and datasette */
+        for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
+            c64_tick(ui->c64);
+            c1530_tick(ui->c1530);
+            if (c64->pins & M6502_SYNC) {
+                ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
+            }
+        }
+    }
+    else {
+        /* no peripherals connected, only tick C64 */
+        for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
+            c64_tick(ui->c64);
+            if (c64->pins & M6502_SYNC) {
+                ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
+            }
         }
     }
     kbd_update(&ui->c64->kbd);

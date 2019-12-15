@@ -24,7 +24,6 @@
     - chips/m6526.h
     - chips/m6569.h
     - chips/m6581.h
-    - chips/beeper.h
     - chips/kbd.h
     - chips/mem.h
     - chips/clk.h
@@ -249,7 +248,6 @@ extern "C" {
 #define C64_FREQUENCY (985248)              /* clock frequency in Hz */
 #define C64_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
 #define C64_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */ 
-#define C64_MAX_TAPE_SIZE (512*1024)        /* max size of cassette tape image */
 
 /* C64 joystick types */
 typedef enum {
@@ -273,6 +271,12 @@ typedef enum {
 #define C64_CPUPORT_HIRAM (1<<1)
 #define C64_CPUPORT_CHAREN (1<<2)
 
+/* casette port bits, same as C1530_CASPORT_* */
+#define C64_CASPORT_MOTOR   (1<<0)  /* 1: motor off, 0: motor on */
+#define C64_CASPORT_READ    (1<<1)  /* 1: read signal from datasette */
+#define C64_CASPORT_WRITE   (1<<2)  /* not implemented */
+#define C64_CASPORT_SENSE   (1<<3)  /* 1: play button up, 0: play button down */
+
 /* audio sample data callback */
 typedef void (*c64_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
@@ -293,8 +297,6 @@ typedef struct {
     int audio_num_samples;          /* default is C64_AUDIO_NUM_SAMPLES */
     int audio_sample_rate;          /* playback sample rate in Hz, default is 44100 */
     float audio_sid_volume;         /* audio volume of the SID chip (0.0 .. 1.0), default is 1.0 */
-    float audio_beeper_volume;      /* audio volume of the tape-beeper (0.0 .. 1.0), default is 0.1 */
-    bool audio_tape_sound;          /* if true, tape loading is audible */
 
     /* ROM images */
     const void* rom_char;           /* 4 KByte character ROM dump */
@@ -313,12 +315,13 @@ typedef struct {
     m6526_t cia_2;
     m6569_t vic;
     m6581_t sid;
-    beeper_t beeper;            /* used for the optional tape-sound */
     
     bool valid;
     c64_joystick_type_t joystick_type;
     uint8_t joystick_active;
-    bool io_mapped;             /* true when D000..DFFF is has IO area mapped in */
+    bool io_mapped;             /* true when D000..DFFF has IO area mapped in */
+    uint8_t cas_port;           /* cassette port, shared with c1530_t if datasette is connected */
+    uint8_t iec_port;           /* IEC serial port, shared with c1541_t if connected */
     uint8_t cpu_port;           /* last state of CPU port (for memory mapping) */
     uint8_t kbd_joy1_mask;      /* current joystick-1 state from keyboard-joystick emulation */
     uint8_t kbd_joy2_mask;      /* current joystick-2 state from keyboard-joystick emulation */
@@ -342,14 +345,6 @@ typedef struct {
     uint8_t rom_char[0x1000];       /* 4 KB character ROM image */
     uint8_t rom_basic[0x2000];      /* 8 KB BASIC ROM image */
     uint8_t rom_kernal[0x2000];     /* 8 KB KERNAL V3 ROM image */
-
-    bool tape_motor;    /* tape motor on/off */
-    bool tape_button;   /* play button on tape pressed/unpressed */
-    bool tape_sound;    /* true when tape is audible */
-    int tape_size;      /* tape_size > 0: a tape is inserted */
-    int tape_pos;
-    int tape_tick_count;
-    uint8_t tape_buf[C64_MAX_TAPE_SIZE];
 } c64_t;
 
 /* initialize a new C64 instance */
@@ -380,15 +375,7 @@ void c64_set_joystick_type(c64_t* sys, c64_joystick_type_t type);
 c64_joystick_type_t c64_joystick_type(c64_t* sys);
 /* set joystick mask (combination of C64_JOYSTICK_*) */
 void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask);
-/* insert a tape file */
-bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
-/* remove tape file */
-void c64_remove_tape(c64_t* sys);
-/* start the tape (press the Play button) */
-void c64_start_tape(c64_t* sys);
-/* stop the tape (unpress the Play button */
-void c64_stop_tape(c64_t* sys);
-/* quickload a .bin file (only tested with wlorenz tests) */
+/* quickload a .bin file */
 bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
 
 #ifdef __cplusplus
@@ -422,7 +409,6 @@ static uint16_t _c64_vic_fetch(uint16_t addr, void* user_data);
 static void _c64_update_memory_map(c64_t* sys);
 static void _c64_init_key_map(c64_t* sys);
 static void _c64_init_memory_map(c64_t* sys);
-static bool _c64_tape_tick(c64_t* sys);
 
 #define _C64_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
 #define _C64_CLEAR(val) memset(&val, 0, sizeof(val))
@@ -434,7 +420,6 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     memset(sys, 0, sizeof(c64_t));
     sys->valid = true;
     sys->joystick_type = desc->joystick_type;
-    sys->tape_sound = desc->audio_tape_sound;
     CHIPS_ASSERT(desc->rom_char && (desc->rom_char_size == sizeof(sys->rom_char)));
     CHIPS_ASSERT(desc->rom_basic && (desc->rom_basic_size == sizeof(sys->rom_basic)));
     CHIPS_ASSERT(desc->rom_kernal && (desc->rom_kernal_size == sizeof(sys->rom_kernal)));
@@ -449,6 +434,7 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     /* initialize the hardware */
     sys->cpu_port = 0xF7;       /* for initial memory mapping */
     sys->io_mapped = true;
+    sys->cas_port = C64_CASPORT_MOTOR|C64_CASPORT_SENSE;
     
     m6502_desc_t cpu_desc;
     _C64_CLEAR(cpu_desc);
@@ -483,15 +469,12 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
 
     const int sound_hz = _C64_DEFAULT(desc->audio_sample_rate, 44100);
     const float sid_volume = _C64_DEFAULT(desc->audio_sid_volume, 1.0f);
-    const float beeper_volume = _C64_DEFAULT(desc->audio_beeper_volume, 0.1f);
     m6581_desc_t sid_desc;
     _C64_CLEAR(sid_desc);
     sid_desc.tick_hz = C64_FREQUENCY;
     sid_desc.sound_hz = sound_hz;
     sid_desc.magnitude = sid_volume;
     m6581_init(&sys->sid, &sid_desc);
-
-    beeper_init(&sys->beeper, C64_FREQUENCY, sound_hz, beeper_volume);
 
     _c64_init_key_map(sys);
     _c64_init_memory_map(sys);
@@ -530,18 +513,13 @@ void c64_reset(c64_t* sys) {
     sys->kbd_joy1_mask = sys->kbd_joy2_mask = 0;
     sys->joy_joy1_mask = sys->joy_joy2_mask = 0;
     sys->io_mapped = true;
+    sys->cas_port = C64_CASPORT_MOTOR|C64_CASPORT_SENSE;
     _c64_update_memory_map(sys);
     sys->pins |= M6502_RES;
     m6526_reset(&sys->cia_1);
     m6526_reset(&sys->cia_2);
     m6569_reset(&sys->vic);
     m6581_reset(&sys->sid);
-    beeper_reset(&sys->beeper);
-    sys->tape_motor = false;
-    sys->tape_button = false;
-    sys->tape_size = 0;
-    sys->tape_pos = 0;
-    sys->tape_tick_count = 0;
 }
 
 void c64_tick(c64_t* sys) {
@@ -647,33 +625,22 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
     pins = m6502_tick(&sys->cpu, pins);
     const uint16_t addr = M6502_GET_ADDR(pins);
 
-    /* tick the datasette, when the datasette output pulse
-       toggles, the FLAG input pin on CIA-1 will go active for 1 tick
-    */
-    uint64_t cia1_pins = pins;
-    if (_c64_tape_tick(sys)) {
-        cia1_pins |= M6526_FLAG;
-    }
-
-    /* if the tape should be audible, toggle the beeper */
-    if (sys->tape_sound) {
-        beeper_tick(&sys->beeper);
-    }
-
     /* tick the SID */
     if (m6581_tick(&sys->sid)) {
         /* new audio sample ready */
-        float sample = sys->sid.sample;
-        if (sys->tape_motor) {
-            sample += sys->beeper.sample;
-        }
-        sys->sample_buffer[sys->sample_pos++] = sample;
+        sys->sample_buffer[sys->sample_pos++] = sys->sid.sample;
         if (sys->sample_pos == sys->num_samples) {
             if (sys->audio_cb) {
                 sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
             }
             sys->sample_pos = 0;
         }
+    }
+
+    /* cassette port READ pin is connected to CIA-1 FLAG pin */
+    uint64_t cia1_pins = pins;
+    if (sys->cas_port & C64_CASPORT_READ) {
+        cia1_pins |= M6526_FLAG;
     }
 
     /* tick the CIAs:
@@ -781,7 +748,7 @@ static uint8_t _c64_cpu_port_in(void* user_data) {
         bit 4: [in] datasette button status (1: no button pressed)
     */
     uint8_t val = 7;
-    if (!sys->tape_button) {
+    if (sys->cas_port & C64_CASPORT_SENSE) {
         val |= (1<<4);
     }
     return val;
@@ -798,10 +765,12 @@ static void _c64_cpu_port_out(uint8_t data, void* user_data) {
         bit 5: [out] datasette motor control (1: motor off)
     */
     if (data & (1<<5)) {
-        sys->tape_motor = false;
+        /* motor off */
+        sys->cas_port |= C64_CASPORT_MOTOR;
     }
     else {
-        sys->tape_motor = true;
+        /* motor on */
+        sys->cas_port &= ~C64_CASPORT_MOTOR;
     }
     /* only update memory configuration if the relevant bits have changed */
     bool need_mem_update = 0 != ((sys->cpu_port ^ data) & 7);
@@ -1037,93 +1006,6 @@ static void _c64_init_key_map(c64_t* sys) {
     kbd_register_key(&sys->kbd, 0xF6, 6, 0, 1);
     kbd_register_key(&sys->kbd, 0xF7, 3, 0, 0);
     kbd_register_key(&sys->kbd, 0xF8, 3, 0, 1);
-}
-
-/*=== CASSETTE TAPE FILE LOADING =============================================*/
-
-/* C64 TAP file header */
-typedef struct {
-    uint8_t signature[12];  /* "C64-TAPE-RAW" */
-    uint8_t version;        /* 0x00 or 0x01 */
-    uint8_t pad[3];         /* reserved */
-    uint32_t size;          /* size of the following data */
-} _c64_tap_header;
-
-bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid && ptr);
-    c64_remove_tape(sys);
-    if (num_bytes <= (int) sizeof(_c64_tap_header)) {
-        return false;
-    }
-    const _c64_tap_header* hdr = (const _c64_tap_header*) ptr;
-    ptr += sizeof(_c64_tap_header);
-    const uint8_t sig[12] = { 'C','6','4','-','T','A','P','E','-','R','A','W'};
-    for (int i = 0; i < 12; i++) {
-        if (sig[i] != hdr->signature[i]) {
-            return false;
-        }
-    }
-    if (1 != hdr->version) {
-        return false;
-    }
-    if (num_bytes < (int)(hdr->size + sizeof(_c64_tap_header))) {
-        return false;
-    }
-    if (num_bytes > (int)sizeof(sys->tape_buf)) {
-        return false;
-    }
-    memcpy(sys->tape_buf, ptr, hdr->size);
-    sys->tape_size = hdr->size;
-    sys->tape_pos = 0;
-    sys->tape_tick_count = 0;
-    return true;
-}
-
-void c64_remove_tape(c64_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->tape_motor = false;
-    sys->tape_button = false;
-    sys->tape_size = 0;
-    sys->tape_pos = 0;
-    sys->tape_tick_count = 0;
-}
-
-void c64_start_tape(c64_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->tape_button = true;
-    sys->tape_motor = true;
-}
-
-void c64_stop_tape(c64_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->tape_button = false;
-    sys->tape_motor = false;
-}
-
-static bool _c64_tape_tick(c64_t* sys) {
-    if (sys->tape_motor && (sys->tape_size > 0) && (sys->tape_pos <= sys->tape_size)) {
-        if (sys->tape_tick_count == 0) {
-            if (sys->tape_sound) {
-                beeper_toggle(&sys->beeper);
-            }
-            uint8_t val = sys->tape_buf[sys->tape_pos++];
-            if (val == 0) {
-                uint8_t s[3];
-                for (int i = 0; i < 3; i++) {
-                    s[i] = sys->tape_buf[sys->tape_pos++];
-                }
-                sys->tape_tick_count = (s[2]<<16) | (s[1]<<8) | s[0];
-            }
-            else {
-                sys->tape_tick_count = val * 8;
-            }
-            return true;
-        }
-        else {
-            sys->tape_tick_count--;
-        }
-    }
-    return false;
 }
 
 bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
