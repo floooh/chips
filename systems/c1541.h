@@ -49,6 +49,13 @@
 extern "C" {
 #endif
 
+/* IEC port bits, same as C64_IECPORT_* */
+#define C1541_IECPORT_RESET (1<<0)
+#define C1541_IECPORT_SRQIN (1<<1)
+#define C1541_IECPORT_DATA  (1<<2)
+#define C1541_IECPORT_CLK   (1<<3)
+#define C1541_IECPORT_ATN   (1<<4)
+
 #define C1541_FREQUENCY (1000000)
 
 /* config params for c1541_init() */
@@ -100,7 +107,7 @@ void c1541_remove_disc(c1541_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void c1541_init(c1541_t* sys, c1541_desc_t* desc) {
+void c1541_init(c1541_t* sys, const c1541_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
 
     memset(sys, 0, sizeof(c1541_t));

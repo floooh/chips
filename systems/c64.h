@@ -273,9 +273,16 @@ typedef enum {
 
 /* casette port bits, same as C1530_CASPORT_* */
 #define C64_CASPORT_MOTOR   (1<<0)  /* 1: motor off, 0: motor on */
-#define C64_CASPORT_READ    (1<<1)  /* 1: read signal from datasette */
+#define C64_CASPORT_READ    (1<<1)  /* 1: read signal from datasette, connected to CIA-1 FLAG */
 #define C64_CASPORT_WRITE   (1<<2)  /* not implemented */
 #define C64_CASPORT_SENSE   (1<<3)  /* 1: play button up, 0: play button down */
+
+/* IEC port bits, same as C1541_IECPORT_* */
+#define C64_IECPORT_RESET   (1<<0)  /* 1: RESET, 0: no reset */
+#define C64_IECPORT_SRQIN   (1<<1)  /* connected to CIA-1 FLAG */
+#define C64_IECPORT_DATA    (1<<2)
+#define C64_IECPORT_CLK     (1<<3)
+#define C64_IECPORT_ATN     (1<<4)
 
 /* audio sample data callback */
 typedef void (*c64_audio_callback_t)(const float* samples, int num_samples, void* user_data);

@@ -23,6 +23,7 @@
 
     - c64.h
     - c1530.h
+    - c1541.h
     - mem.h
     - ui_chip.h
     - ui_util.h
@@ -69,6 +70,7 @@ typedef void (*ui_c64_boot_cb)(c64_t* sys);
 typedef struct {
     c64_t* c64;             /* pointer to c64_t instance to track */
     c1530_t* c1530;         /* optional pointer to datasette instance */
+    c1541_t* c1541;         /* optional pointer to 1541 instance (mutual exclusive with c1530) */
     ui_c64_boot_cb boot_cb; /* reboot callback function */
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
@@ -79,9 +81,11 @@ typedef struct {
 typedef struct {
     c64_t* c64;
     c1530_t* c1530;
+    c1541_t* c1541;
     int dbg_scanline;
     ui_c64_boot_cb boot_cb;
     ui_m6502_t cpu;
+    ui_m6502_t c1541_cpu;
     ui_m6526_t cia[2];
     ui_m6581_t sid;
     ui_m6569_t vic;
@@ -152,6 +156,12 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
             ImGui::MenuItem("MOS 6526 #2 (CIA)", 0, &ui->cia[1].open);
             ImGui::MenuItem("MOS 6581 (SID)", 0, &ui->sid.open);
             ImGui::MenuItem("MOS 6569 (VIC-II)", 0, &ui->vic.open);
+            if (ui->c1541) {
+                if (ImGui::BeginMenu("VC-1541 (Floppy Drive)")) {
+                    ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->c1541_cpu.open);
+                    ImGui::EndMenu();
+                }
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -331,7 +341,7 @@ static int _ui_c64_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t p
     return trap_id;
 }
 
-static const ui_chip_pin_t _ui_c64_cpu_pins[] = {
+static const ui_chip_pin_t _ui_c64_cpu6510_pins[] = {
     { "D0",     0,      M6502_D0 },
     { "D1",     1,      M6502_D1 },
     { "D2",     2,      M6502_D2 },
@@ -369,6 +379,39 @@ static const ui_chip_pin_t _ui_c64_cpu_pins[] = {
     { "P3",     37,     M6510_P3 },
     { "P4",     38,     M6510_P4 },
     { "P5",     39,     M6510_P5 },
+};
+
+static const ui_chip_pin_t _ui_c64_cpu6502_pins[] = {
+    { "D0",     0,      M6502_D0 },
+    { "D1",     1,      M6502_D1 },
+    { "D2",     2,      M6502_D2 },
+    { "D3",     3,      M6502_D3 },
+    { "D4",     4,      M6502_D4 },
+    { "D5",     5,      M6502_D5 },
+    { "D6",     6,      M6502_D6 },
+    { "D7",     7,      M6502_D7 },
+    { "RW",     9,      M6502_RW },
+    { "SYNC",   10,     M6502_SYNC },
+    { "RDY",    11,     M6502_RDY },
+    { "IRQ",    12,     M6502_IRQ },
+    { "NMI",    13,     M6502_NMI },
+    { "RES",    14,     M6502_RES },
+    { "A0",     16,     M6502_A0 },
+    { "A1",     17,     M6502_A1 },
+    { "A2",     18,     M6502_A2 },
+    { "A3",     19,     M6502_A3 },
+    { "A4",     20,     M6502_A4 },
+    { "A5",     21,     M6502_A5 },
+    { "A6",     22,     M6502_A6 },
+    { "A7",     23,     M6502_A7 },
+    { "A8",     24,     M6502_A8 },
+    { "A9",     25,     M6502_A9 },
+    { "A10",    26,     M6502_A10 },
+    { "A11",    27,     M6502_A11 },
+    { "A12",    28,     M6502_A12 },
+    { "A13",    29,     M6502_A13 },
+    { "A14",    30,     M6502_A14 },
+    { "A15",    31,     M6502_A15 },
 };
 
 static const ui_chip_pin_t _ui_c64_cia_pins[] = {
@@ -463,6 +506,7 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->c64 = ui_desc->c64;
     ui->c1530 = ui_desc->c1530;
+    ui->c1541 = ui_desc->c1541;
     ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
     {
@@ -494,8 +538,19 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         desc.h = 390;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6510", 40, _ui_c64_cpu_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6510", 40, _ui_c64_cpu6510_pins);
         ui_m6502_init(&ui->cpu, &desc);
+    }
+    if (ui->c1541) {
+        x += dx; y += dy;
+        ui_m6502_desc_t desc = {0};
+        desc.title = "MOS 6502 (1541 Floppy Drive)";
+        desc.cpu = &ui->c1541->cpu;
+        desc.x = x;
+        desc.y = y;
+        desc.h = 390;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 32, _ui_c64_cpu6502_pins);
+        ui_m6502_init(&ui->c1541_cpu, &desc);
     }
     x += dx; y += dy;
     {
@@ -602,6 +657,9 @@ void ui_c64_discard(ui_c64_t* ui) {
     CHIPS_ASSERT(ui && ui->c64);
     ui->c64 = 0;
     ui_m6502_discard(&ui->cpu);
+    if (ui->c1541) {
+        ui_m6502_discard(&ui->c1541_cpu);
+    }
     ui_m6526_discard(&ui->cia[0]);
     ui_m6526_discard(&ui->cia[1]);
     ui_m6581_discard(&ui->sid);
@@ -625,6 +683,9 @@ void ui_c64_draw(ui_c64_t* ui, double time_ms) {
     ui_audio_draw(&ui->audio, ui->c64->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
+    if (ui->c1541) {
+        ui_m6502_draw(&ui->c1541_cpu);
+    }
     ui_m6526_draw(&ui->cia[0]);
     ui_m6526_draw(&ui->cia[1]);
     ui_m6581_draw(&ui->sid);
@@ -642,11 +703,22 @@ void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
     uint32_t ticks_to_run = clk_us_to_ticks(C64_FREQUENCY, frame_time_us);
     c64_t* c64 = ui->c64;
     c1530_t* c1530 = ui->c1530;
+    c1541_t* c1541 = ui->c1541;
     if (c1530) {
         /* tick C64 and datasette */
         for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
             c64_tick(ui->c64);
             c1530_tick(ui->c1530);
+            if (c64->pins & M6502_SYNC) {
+                ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
+            }
+        }
+    }
+    else if (c1541) {
+        /* tick C64 and 1541 (FIXME: is it ok to tick both at the same speed?) */
+        for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
+            c64_tick(ui->c64);
+            c1541_tick(ui->c1541);
             if (c64->pins & M6502_SYNC) {
                 ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
             }
