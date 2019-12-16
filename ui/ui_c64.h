@@ -95,6 +95,7 @@ typedef struct {
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
+    ui_dbg_t c1541_dbg;
 } ui_c64_t;
 
 void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc);
@@ -128,10 +129,16 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
             if (ImGui::MenuItem("Reset")) {
                 c64_reset(ui->c64);
                 ui_dbg_reset(&ui->dbg);
+                if (ui->c1541) {
+                    ui_dbg_reset(&ui->c1541_dbg);
+                }
             }
             if (ImGui::MenuItem("Cold Boot")) {
                 ui->boot_cb(ui->c64);
                 ui_dbg_reboot(&ui->dbg);
+                if (ui->c1541) {
+                    ui_dbg_reboot(&ui->c1541_dbg);
+                }
             }
             if (ImGui::BeginMenu("Joystick")) {
                 if (ImGui::MenuItem("None", 0, ui->c64->joystick_type == C64_JOYSTICKTYPE_NONE)) {
@@ -183,30 +190,47 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
                 ImGui::MenuItem("Window #4", 0, &ui->dasm[3].open);
                 ImGui::EndMenu();
             }
+            if (ui->c1541) {
+                if (ImGui::BeginMenu("VC-1541 (Floppy Drive)")) {
+                    ImGui::MenuItem("CPU Debugger", 0, &ui->c1541_dbg.ui.open);
+                    ImGui::MenuItem("Breakpoints", 0, &ui->c1541_dbg.ui.show_breakpoints);
+                    ImGui::MenuItem("Execution History", 0, &ui->c1541_dbg.ui.show_history);
+                    ImGui::MenuItem("Memory Heatmap", 0, &ui->c1541_dbg.ui.show_heatmap);
+                    ImGui::EndMenu();
+                }
+            }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped || ui->c1541_dbg.dbg.stopped);
         ImGui::EndMainMenuBar();
     }
 }
 
-/* keep the layers with code at the start */
+/* keep disassembler layer at the start */
 #define _UI_C64_MEMLAYER_CPU    (0)     /* CPU visible mapping */
 #define _UI_C64_MEMLAYER_RAM    (1)     /* RAM blocks */
 #define _UI_C64_MEMLAYER_ROM    (2)     /* ROM blocks */
-#define _UI_C64_MEMLAYER_VIC    (3)     /* VIC visible mapping */
-#define _UI_C64_MEMLAYER_COLOR  (4)     /* special static color RAM */
-#define _UI_C64_CODELAYER_NUM   (3)     /* first 3 layers can contain code */
-#define _UI_C64_MEMLAYER_NUM    (5)
+#define _UI_C64_MEMLAYER_1541   (3)     /* optional 1541 floppy drive */
+#define _UI_C64_MEMLAYER_VIC    (4)     /* VIC visible mapping */
+#define _UI_C64_MEMLAYER_COLOR  (5)     /* special static color RAM */
+#define _UI_C64_CODELAYER_NUM   (4)     /* number of valid layers for disassembler */
+#define _UI_C64_MEMLAYER_NUM    (6)
 
 static const char* _ui_c64_memlayer_names[_UI_C64_MEMLAYER_NUM] = {
-    "CPU Mapped", "RAM Banks", "ROM Banks", "VIC Mapped", "Color RAM"
+    "CPU Mapped", "RAM Banks", "ROM Banks", "1541 Floppy", "VIC Mapped", "Color RAM"
 };
+
+static uint8_t _ui_c64_c1541_mem_read(int layer, uint16_t addr, void* user_data) {
+    ui_c64_t* ui = (ui_c64_t*) user_data;
+    CHIPS_ASSERT(ui && ui->c1541);
+    return mem_rd(&ui->c1541->mem, addr);
+}
 
 static uint8_t _ui_c64_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
     ui_c64_t* ui = (ui_c64_t*) user_data;
     c64_t* c64 = ui->c64;
+    c1541_t* c1541 = ui->c1541;
     switch (layer) {
         case _UI_C64_MEMLAYER_CPU:
             return mem_rd(&c64->mem_cpu, addr);
@@ -224,6 +248,14 @@ static uint8_t _ui_c64_mem_read(int layer, uint16_t addr, void* user_data) {
             else if (addr >= 0xE000) {
                 /* Kernal ROM */
                 return c64->rom_kernal[addr - 0xE000];
+            }
+            else {
+                return 0xFF;
+            }
+            break;
+        case _UI_C64_MEMLAYER_1541:
+            if (c1541) {
+                return mem_rd(&c1541->mem, addr);
             }
             else {
                 return 0xFF;
@@ -248,6 +280,7 @@ static void _ui_c64_mem_write(int layer, uint16_t addr, uint8_t data, void* user
     CHIPS_ASSERT(user_data);
     ui_c64_t* ui = (ui_c64_t*) user_data;
     c64_t* c64 = ui->c64;
+    c1541_t* c1541 = ui->c1541;
     switch (layer) {
         case _UI_C64_MEMLAYER_CPU:
             mem_wr(&c64->mem_cpu, addr, data);
@@ -267,6 +300,11 @@ static void _ui_c64_mem_write(int layer, uint16_t addr, uint8_t data, void* user
             else if (addr >= 0xE000) {
                 /* Kernal ROM */
                 c64->rom_kernal[addr - 0xE000] = data;
+            }
+            break;
+        case _UI_C64_MEMLAYER_1541:
+            if (c1541) {
+                mem_wr(&c1541->mem, addr, data);
             }
             break;
         case _UI_C64_MEMLAYER_VIC:
@@ -529,6 +567,20 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
         desc.user_breaktypes[2].label = "Next Badline";
         desc.user_breaktypes[3].label = "Next Frame";
         ui_dbg_init(&ui->dbg, &desc);
+        if (ui->c1541) {
+            x += dx; y += dy;
+            desc.title = "CPU Debugger (1541 Floppy)";
+            desc.m6502 = &ui->c1541->cpu;
+            desc.x = x;
+            desc.y = y;
+            desc.read_cb = _ui_c64_c1541_mem_read;
+            desc.break_cb = 0;
+            desc.user_breaktypes[0].label = 0;
+            desc.user_breaktypes[1].label = 0;
+            desc.user_breaktypes[2].label = 0;
+            desc.user_breaktypes[3].label = 0;
+            ui_dbg_init(&ui->c1541_dbg, &desc);
+        }
     }
     x += dx; y += dy;
     {
@@ -672,6 +724,9 @@ void ui_c64_discard(ui_c64_t* ui) {
         ui_dasm_discard(&ui->dasm[i]);
     }
     ui_dbg_discard(&ui->dbg);
+    if (ui->c1541) {
+        ui_dbg_discard(&ui->c1541_dbg);
+    }
 }
 
 void ui_c64_draw(ui_c64_t* ui, double time_ms) {
@@ -696,6 +751,9 @@ void ui_c64_draw(ui_c64_t* ui, double time_ms) {
         ui_dasm_draw(&ui->dasm[i]);
     }
     ui_dbg_draw(&ui->dbg);
+    if (ui->c1541) {
+        ui_dbg_draw(&ui->c1541_dbg);
+    }
 }
 
 void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
@@ -707,8 +765,8 @@ void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
     if (c1530) {
         /* tick C64 and datasette */
         for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-            c64_tick(ui->c64);
-            c1530_tick(ui->c1530);
+            c64_tick(c64);
+            c1530_tick(c1530);
             if (c64->pins & M6502_SYNC) {
                 ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
             }
@@ -716,18 +774,21 @@ void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
     }
     else if (c1541) {
         /* tick C64 and 1541 (FIXME: is it ok to tick both at the same speed?) */
-        for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-            c64_tick(ui->c64);
-            c1541_tick(ui->c1541);
+        for (uint32_t i = 0; (i < ticks_to_run) && !(ui->dbg.dbg.stopped || ui->c1541_dbg.dbg.stopped); i++) {
+            c64_tick(c64);
+            c1541_tick(c1541);
             if (c64->pins & M6502_SYNC) {
                 ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
+            }
+            if (c1541->pins & M6502_SYNC) {
+                ui_dbg_after_instr(&ui->c1541_dbg, c1541->pins, (uint32_t)c1541->cpu.ticks);
             }
         }
     }
     else {
         /* no peripherals connected, only tick C64 */
         for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-            c64_tick(ui->c64);
+            c64_tick(c64);
             if (c64->pins & M6502_SYNC) {
                 ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
             }
