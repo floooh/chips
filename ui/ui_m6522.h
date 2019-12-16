@@ -129,22 +129,23 @@ static void _ui_m6522_draw_state(ui_m6522_t* win) {
     ImGui::Text("Port B"); ImGui::NextColumn();
     ImGui::Separator();
     ImGui::Text("DDR"); ImGui::NextColumn();
-    ui_util_b8("", via->ddr_a); ImGui::NextColumn();
-    ui_util_b8("", via->ddr_b); ImGui::NextColumn();
+    ui_util_b8("", via->pa.ddr); ImGui::NextColumn();
+    ui_util_b8("", via->pb.ddr); ImGui::NextColumn();
     ImGui::Text("Output"); ImGui::NextColumn();
-    ui_util_b8("", via->out_a); ImGui::NextColumn();
-    ui_util_b8("", via->out_b); ImGui::NextColumn();
+    ui_util_b8("", via->pa.out); ImGui::NextColumn();
+    ui_util_b8("", via->pb.out); ImGui::NextColumn();
     ImGui::Text("Input"); ImGui::NextColumn();
-    ui_util_b8("", via->in_a); ImGui::NextColumn();
-    ui_util_b8("", via->in_b); ImGui::NextColumn();
+    ui_util_b8("", via->pa.inp); ImGui::NextColumn();
+    ui_util_b8("", via->pb.inp); ImGui::NextColumn();
     ImGui::Text("Pins"); ImGui::NextColumn();
-    ui_util_b8("", via->port_a); ImGui::NextColumn();
-    ui_util_b8("", via->port_b); ImGui::NextColumn();
+    ui_util_b8("", via->pa.port); ImGui::NextColumn();
+    ui_util_b8("", via->pb.port); ImGui::NextColumn();
     ImGui::Separator();
     ImGui::NextColumn();
-    ImGui::Text("Timer 1"); ImGui::NextColumn();
-    ImGui::Text("Timer 2"); ImGui::NextColumn();
+    ImGui::Text("Timer 1 (FIXME)"); ImGui::NextColumn();
+    ImGui::Text("Timer 2 (FIXME)"); ImGui::NextColumn();
     ImGui::Separator();
+    /*
     ImGui::Text("Active"); ImGui::NextColumn();
     ImGui::Text("%s", via->t1_active ? "YES":"NO"); ImGui::NextColumn();
     ImGui::Text("%s", via->t2_active ? "YES":"NO"); ImGui::NextColumn();
@@ -154,6 +155,7 @@ static void _ui_m6522_draw_state(ui_m6522_t* win) {
     ImGui::Text("Counter"); ImGui::NextColumn();
     ImGui::Text("%04X", via->t1); ImGui::NextColumn();
     ImGui::Text("%04X", via->t2); ImGui::NextColumn();
+    */
     ImGui::Separator();
     ImGui::Columns();
     ImGui::Text("ACR      %02X", via->acr);
