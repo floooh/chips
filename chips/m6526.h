@@ -479,17 +479,17 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
 */
 static void _m6526_tick_timer(m6526_t* c, m6526_timer_t* t) {
     /* decrement counter? */
-    if (_M6526_PIP_TEST(t->pip,M6526_PIP_TIMER_COUNT,0)) {
+    if (_M6526_PIP_TEST(t->pip, M6526_PIP_TIMER_COUNT, 0)) {
         t->counter--;
     }
 
     /* timer undeflow? */
     bool old_t_out = t->t_out;
-    t->t_out = (0 == t->counter) && _M6526_PIP_TEST(t->pip,M6526_PIP_TIMER_COUNT, 1);
+    t->t_out = (0 == t->counter) && _M6526_PIP_TEST(t->pip, M6526_PIP_TIMER_COUNT, 1);
     if (t->t_out) {
         t->t_bit = !t->t_bit;
         /* reset started flag if in one-shot mode */
-        if (M6526_RUNMODE_ONESHOT(t->cr) || _M6526_PIP_TEST(t->pip,M6526_PIP_TIMER_ONESHOT,0)) {
+        if (M6526_RUNMODE_ONESHOT(t->cr) || _M6526_PIP_TEST(t->pip, M6526_PIP_TIMER_ONESHOT, 0)) {
             t->cr &= ~(1<<0);
         }
         _M6526_PIP_SET(t->pip, M6526_PIP_TIMER_LOAD, 0);
