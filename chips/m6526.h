@@ -168,7 +168,7 @@ typedef void (*m6526_out_t)(int port_id, uint8_t data, void* user_data);
 #define M6526_PIP_TIMER_LOAD      (16)
 
 #define M6526_PIP_IRQ       (0)
-#define M6526_PIP_READ_ICR  (0)
+#define M6526_PIP_READ_ICR  (8)
 
 /* m6526 initialization parameters */
 typedef struct {
@@ -206,8 +206,11 @@ typedef struct {
     uint8_t imr;            /* interrupt mask */
     uint8_t imr1;           /* one cycle delay for imr updates */
     uint8_t icr;            /* interrupt control register */
-    uint8_t pip_irq;        /* 1-cycle delay pipeline to request irq */
-    uint8_t pip_read_icr;   /* timer B bug: remember reads from ICR */
+    /* merged delay pipelines:
+        1-cycle delay pipeline to request irq:  bits 0..7
+        timer B bug: remember reads from ICR:   bits 8..15
+    */
+    uint32_t pip;
     bool flag;              /* last state of flag bit, to detect edge */
 } m6526_int_t;
 
@@ -275,8 +278,7 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->imr = 0;
     intr->imr1 = 0;
     intr->icr = 0;
-    intr->pip_irq = 0;
-    intr->pip_read_icr = 0;
+    intr->pip = 0;
     intr->flag = false;
 }
 
@@ -422,7 +424,7 @@ static void _m6526_write_icr(m6526_t* c, uint8_t data) {
         not clear the interrupt. Only reading the ICR may clear the interrupt.
     */
     if (c->intr.icr & c->intr.imr1) {
-        _M6526_PIP_SET(c->intr.pip_irq, M6526_PIP_IRQ, 1);
+        _M6526_PIP_SET(c->intr.pip, M6526_PIP_IRQ, 1);
     }
 }
 
@@ -435,9 +437,9 @@ static uint8_t _m6526_read_icr(m6526_t* c) {
     uint8_t data = c->intr.icr;
     c->intr.icr = 0;
     /* cancel an interrupt pending in the pipeline */
-    _M6526_PIP_RESET(c->intr.pip_irq, M6526_PIP_IRQ)
+    _M6526_PIP_RESET(c->intr.pip, M6526_PIP_IRQ)
     /* remember reads from ICR to implement "Timer B Bug" */
-    _M6526_PIP_SET(c->intr.pip_read_icr, M6526_PIP_READ_ICR, 0);
+    _M6526_PIP_SET(c->intr.pip, M6526_PIP_READ_ICR, 0);
     return data;
 }
 
@@ -451,7 +453,7 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
     /* timer B underflow interrupt flag? */
     if (c->tb.t_out) {
         /* "Timer B Bug": reads from ICR block timer B interrupt generation */
-        if (!_M6526_PIP_TEST(c->intr.pip_read_icr, M6526_PIP_READ_ICR, 0)) {
+        if (!_M6526_PIP_TEST(c->intr.pip, M6526_PIP_READ_ICR, 0)) {
             c->intr.icr |= (1<<1);
         }
     }
@@ -464,7 +466,7 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
     /* FIXME: ALARM, SP interrupt conditions */
 
     /* handle main interrupt bit */
-    if (_M6526_PIP_TEST(c->intr.pip_irq, M6526_PIP_IRQ, 0)) {
+    if (_M6526_PIP_TEST(c->intr.pip, M6526_PIP_IRQ, 0)) {
         c->intr.icr |= (1<<7);
     }
 }
@@ -516,7 +518,6 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     if (M6526_RUNMODE_ONESHOT(c->ta.cr)) {
         _M6526_PIP_SET(c->ta.pip, M6526_PIP_TIMER_ONESHOT, 1);
     }
-    c->ta.pip = (c->ta.pip>>1) & 0x7F7F7F7F;
 
     /* timer B counter pipeline (FIMXE: CNT) */
     bool tb_active = false;
@@ -552,15 +553,17 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     if (M6526_RUNMODE_ONESHOT(c->tb.cr)) {
         _M6526_PIP_SET(c->tb.pip, M6526_PIP_TIMER_ONESHOT, 1);
     }    
-    c->tb.pip = (c->tb.pip >> 1) & 0x7F7F7F7F;
 
     /* interrupt pipeline */
     if (c->intr.icr & c->intr.imr) {
-        _M6526_PIP_SET(c->intr.pip_irq, M6526_PIP_IRQ, 1);
+        _M6526_PIP_SET(c->intr.pip, M6526_PIP_IRQ, 1);
     }
-    c->intr.pip_irq >>= 1;
     c->intr.imr = c->intr.imr1;
-    c->intr.pip_read_icr >>= 1;
+
+    /* tick pipelines forward */
+    c->ta.pip = (c->ta.pip>>1) & 0x7F7F7F7F;
+    c->tb.pip = (c->tb.pip >> 1) & 0x7F7F7F7F;
+    c->intr.pip = (c->intr.pip >> 1) & 0x7F7F7F7F;
 }
 
 uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
