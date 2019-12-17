@@ -561,7 +561,7 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     c->intr.imr = c->intr.imr1;
 
     /* tick pipelines forward */
-    c->ta.pip = (c->ta.pip>>1) & 0x7F7F7F7F;
+    c->ta.pip = (c->ta.pip >> 1) & 0x7F7F7F7F;
     c->tb.pip = (c->tb.pip >> 1) & 0x7F7F7F7F;
     c->intr.pip = (c->intr.pip >> 1) & 0x7F7F7F7F;
 }
