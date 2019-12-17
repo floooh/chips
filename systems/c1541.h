@@ -125,8 +125,8 @@ void c1541_init(c1541_t* sys, const c1541_desc_t* desc) {
     sys->pins = m6502_init(&sys->cpu, &cpu_desc);
     m6522_desc_t via_desc;
     memset(&via_desc, 0, sizeof(via_desc));
-    m6522_init(&sys->via_1, &via_desc);
-    m6522_init(&sys->via_2, &via_desc);
+//    m6522_init(&sys->via_1, &via_desc);
+//    m6522_init(&sys->via_2, &via_desc);
 
     /* setup memory map */
     mem_init(&sys->mem);
