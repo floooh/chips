@@ -477,13 +477,14 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
    (since this is different for timer A and B)
    check here for the details: https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
 */
-static void _m6526_tick_timer(m6526_timer_t* t) {
+static void _m6526_tick_timer(m6526_t* c, m6526_timer_t* t) {
     /* decrement counter? */
     if (_M6526_PIP_TEST(t->pip,M6526_PIP_TIMER_COUNT,0)) {
         t->counter--;
     }
 
     /* timer undeflow? */
+    bool old_t_out = t->t_out;
     t->t_out = (0 == t->counter) && _M6526_PIP_TEST(t->pip,M6526_PIP_TIMER_COUNT, 1);
     if (t->t_out) {
         t->t_bit = !t->t_bit;
@@ -492,6 +493,10 @@ static void _m6526_tick_timer(m6526_timer_t* t) {
             t->cr &= ~(1<<0);
         }
         _M6526_PIP_SET(t->pip, M6526_PIP_TIMER_LOAD, 0);
+    }
+    if (old_t_out != t->t_out) {
+        /* PB6/7 has changed */
+        _m6526_update_pb(c);
     }
 
     /* reload counter from latch? */
@@ -567,9 +572,8 @@ static void _m6526_tick_pipeline(m6526_t* c) {
 }
 
 uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
-    _m6526_tick_timer(&c->ta);
-    _m6526_tick_timer(&c->tb);
-    _m6526_update_pb(c);    /* state of PB6/PB7 might have changed */
+    _m6526_tick_timer(c, &c->ta);
+    _m6526_tick_timer(c, &c->tb);
     _m6526_update_irq(c, pins);
     _m6526_tick_pipeline(c);
     if (0 != (c->intr.icr & (1<<7))) {
