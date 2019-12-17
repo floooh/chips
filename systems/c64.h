@@ -382,7 +382,7 @@ void c64_set_joystick_type(c64_t* sys, c64_joystick_type_t type);
 c64_joystick_type_t c64_joystick_type(c64_t* sys);
 /* set joystick mask (combination of C64_JOYSTICK_*) */
 void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask);
-/* quickload a .bin file */
+/* quickload a .bin/.prg file */
 bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
 
 #ifdef __cplusplus
