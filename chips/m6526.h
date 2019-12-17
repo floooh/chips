@@ -307,7 +307,7 @@ void m6526_reset(m6526_t* c) {
     c->pins = 0;
 }
 
-/*--- delay-pipeline macros and functions ---*/
+/*--- delay-pipeline macros ---*/
 /* set or clear a new state at pipeline pos */
 #define _M6526_PIP_SET(pip,offset,pos) {pip|=(1<<(offset+pos));}
 #define _M6526_PIP_CLR(pip,offset,pos) {pip&=~(1<<(offset+pos));}
