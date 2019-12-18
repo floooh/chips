@@ -29,7 +29,12 @@
 
     ## The Commodore VIC-20
 
+
     TODO!
+
+    ## Links
+
+    http://blog.tynemouthsoftware.co.uk/2019/09/how-the-vic20-works.html
 
     ## zlib/libpng license
 
@@ -286,8 +291,8 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     mem_map_ram(&sys->mem_cpu, 0, 0x0000, 0x0400, sys->ram0);
     mem_map_ram(&sys->mem_cpu, 0, 0x1000, 0x1000, sys->ram1);
     mem_map_rom(&sys->mem_cpu, 0, 0x8000, 0x1000, sys->rom_char);
-    mem_map_rom(&sys->mem_cpu, 0, 0xC000, 0xDFFF, sys->rom_basic);
-    mem_map_rom(&sys->mem_cpu, 0, 0xE000, 0xFFFF, sys->rom_kernal);
+    mem_map_rom(&sys->mem_cpu, 0, 0xC000, 0x2000, sys->rom_basic);
+    mem_map_rom(&sys->mem_cpu, 0, 0xE000, 0x2000, sys->rom_kernal);
 }
 
 void vic20_discard(vic20_t* sys) {
@@ -425,7 +430,67 @@ void vic20_joystick(vic20_t* sys, uint8_t joy1_mask, uint8_t joy2_mask) {
 }
 
 static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
-    // FIXME
+
+    /* tick the CPU */
+    pins = m6502_tick(&sys->cpu, pins);
+    const uint16_t addr = M6502_GET_ADDR(pins);
+
+    /* tick VIAs
+        VIA-1 IRQ pin is connected to CPU NMI pin
+        VIA-2 IRQ pin is connected to CPU IRQ pin
+
+        NOTE: the IRQ/NMI mapping is reversed from the C64
+    */
+    if (m6522_tick(&sys->via_1, pins & ~M6502_IRQ) & M6502_IRQ) {
+        pins |= M6502_NMI;
+    }
+    else {
+        pins &= ~M6502_NMI;
+    }
+    if (m6522_tick(&sys->via_2, pins & ~M6502_IRQ) & M6502_IRQ) {
+        pins |= M6502_IRQ;
+    }
+    else {
+        pins &= ~M6502_IRQ;
+    }
+
+    // FIXME tick VIC
+
+    /* address decoding */
+    if ((addr & 0xFC00) == 0x9000) {
+        /* 9000..93FF: VIA and VIC IO area
+
+            A4+A5 low:  VIC (?)
+            A4 high:    VIA-1
+            A5 high:    VIA-2
+        */
+        if ((addr & (M6502_A4|M6502_A5)) == 0) {
+             /* VIC (hmm, no chip select? */
+             uint64_t vic_pins = (pins & M6502_PIN_MASK);
+             pins = m6561_iorq(&sys->vic, vic_pins) & M6502_PIN_MASK;
+        }
+        else {
+            if (addr & M6502_A4) {
+                /* VIA-1 */
+                uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
+                pins = m6522_iorq(&sys->via_1, via_pins) & M6502_PIN_MASK;
+            }
+            if (addr & M6502_A5) {
+                /* VIA-2 */
+                uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
+                pins = m6522_iorq(&sys->via_2, via_pins) & M6502_PIN_MASK;
+            }
+        }
+    }
+    else {
+        /* regular memory access */
+        if (pins & M6502_RW) {
+            M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
+        }
+        else {
+            mem_wr(&sys->mem_cpu, addr, M6502_GET_DATA(pins));
+        }
+    }
     return pins;
 }
 

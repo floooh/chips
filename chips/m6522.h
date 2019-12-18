@@ -400,6 +400,12 @@ static inline void _m6522_set_intr(m6522_t* c, uint8_t data) {
 
 static inline void _m6522_clear_intr(m6522_t* c, uint8_t data) {
     c->intr.ifr &= ~data;
+    /* clear main interrupt flag? */
+    if (0 == (c->intr.ifr & c->intr.ier & 0x7F)) {
+        c->intr.ifr &= 0x7F;
+        /* cancel any interrupts in the delay pipeline */
+        _M6522_PIP_RESET(c->intr.pip, M6522_PIP_IRQ);
+    }
 }
 
 static inline void _m6522_clear_pa_intr(m6522_t* c) {
@@ -459,6 +465,7 @@ void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
     /* reload timer from latch? */
     if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
         t->counter = t->latch;
+        t->active = true;
         _M6522_PIP_CLR(t->pip, M6522_PIP_TIMER_COUNT, 1);
     }
 }

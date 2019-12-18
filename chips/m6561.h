@@ -169,7 +169,7 @@ int m6561_display_width(m6561_t* vic) {
 
 int m6561_display_height(m6561_t* vic) {
     CHIPS_ASSERT(vic);
-    return 8 * (vic->debug_vis ? _M6561_VTOTAL : vic->crt.vis_h);
+    return vic->debug_vis ? _M6561_VTOTAL : vic->crt.vis_h;
 }
 
 uint32_t m6561_color(int i) {
