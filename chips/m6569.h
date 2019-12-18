@@ -221,7 +221,7 @@ typedef struct {
 
 /* CRT state tracking */
 typedef struct {
-    uint16_t x, y;              /* bream pos reset on crt_retrace_h/crt_retrace_v zero */
+    uint16_t x, y;              /* beam pos reset on crt_retrace_h/crt_retrace_v zero */
     uint16_t vis_x0, vis_y0, vis_x1, vis_y1;  /* the visible area */
     uint16_t vis_w, vis_h;      /* width of visible area */
     uint32_t* rgba8_buffer;
