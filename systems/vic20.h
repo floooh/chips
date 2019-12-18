@@ -504,12 +504,26 @@ static uint8_t _vic20_via1_in(int port_id, void* user_data) {
 }
 
 static void _vic20_via2_out(int port_id, uint8_t data, void* user_data) {
-    // FIXME
+    vic20_t* sys = (vic20_t*) user_data;
+    /*
+        Port B: write keyboard columns
+    */
+    if (port_id == M6522_PORT_B) {
+        kbd_set_active_columns(&sys->kbd, ~data);
+    }
 }
 
 static uint8_t _vic20_via2_in(int port_id, void* user_data) {
-    // FIXME
-    return ~0;
+    vic20_t* sys = (vic20_t*) user_data;
+    /*
+        Port A: read keyboard rows
+    */
+    if (port_id == M6522_PORT_A) {
+        return ~kbd_scan_lines(&sys->kbd);
+    }
+    else {
+        return 0xFF;
+    }
 }
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {
@@ -519,7 +533,60 @@ static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {
 
 static void _vic20_init_key_map(vic20_t* sys) {
     kbd_init(&sys->kbd, 1);
-    // FIXME
+    const char* keymap =
+    /* no shift */
+    //   01234567 (col)
+        "1     Q2"  // row 0
+        "3WA ZSE4"  // row 1
+        "5RDXCFT6"  // row 2
+        "7YGVBHU8"  // row 3
+        "9IJNMKO0"  // row 4
+        "+PL,.:@-"  // row 5
+        "~*;/ =  "  // row 6, ~ is british pound
+        "        "  // row 7
+
+        /* shift */
+        "!     q\""
+        "#wa zse$"
+        "%rdxcft^"
+        "&ygvbhu*"
+        "(ijnmko)"
+        " pl<>[  "
+        "$ ]?    "
+        "        ";
+    CHIPS_ASSERT(strlen(keymap) == 128);
+    /* shift is column 3, line 1 */
+    kbd_register_modifier(&sys->kbd, 0, 3, 1);
+    /* ctrl is column 2, line 0 */
+    kbd_register_modifier(&sys->kbd, 1, 2, 0);
+    for (int shift = 0; shift < 2; shift++) {
+        for (int column = 0; column < 8; column++) {
+            for (int line = 0; line < 8; line++) {
+                int c = keymap[shift*64 + line*8 + column];
+                if (c != 0x20) {
+                    kbd_register_key(&sys->kbd, c, column, line, shift?(1<<0):0);
+                }
+            }
+        }
+    }
+
+    /* special keys */
+    kbd_register_key(&sys->kbd, 0x20, 4, 0, 0);    /* space */
+    kbd_register_key(&sys->kbd, 0x08, 2, 7, 1);    /* cursor left */
+    kbd_register_key(&sys->kbd, 0x09, 2, 7, 0);    /* cursor right */
+    kbd_register_key(&sys->kbd, 0x0A, 3, 7, 0);    /* cursor down */
+    kbd_register_key(&sys->kbd, 0x0B, 3, 7, 1);    /* cursor up */
+    kbd_register_key(&sys->kbd, 0x01, 0, 7, 0);    /* delete */
+    kbd_register_key(&sys->kbd, 0x0D, 1, 7, 0);    /* return */
+    kbd_register_key(&sys->kbd, 0x03, 3, 0, 0);    /* stop */
+    kbd_register_key(&sys->kbd, 0xF1, 4, 7, 0);
+    kbd_register_key(&sys->kbd, 0xF2, 4, 7, 1);
+    kbd_register_key(&sys->kbd, 0xF3, 5, 7, 0);
+    kbd_register_key(&sys->kbd, 0xF4, 5, 7, 1);
+    kbd_register_key(&sys->kbd, 0xF5, 6, 7, 0);
+    kbd_register_key(&sys->kbd, 0xF6, 6, 7, 1);
+    kbd_register_key(&sys->kbd, 0xF7, 7, 7, 0);
+    kbd_register_key(&sys->kbd, 0xF8, 7, 7, 1);
 }
 
 bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
