@@ -79,7 +79,8 @@ typedef struct {
     ui_vic20_boot_cb boot_cb;
     ui_m6502_t cpu;
     ui_m6522_t via[2];
-    ui_m6561_t vic;
+    // FIXME
+    //ui_m6561_t vic;
     ui_audio_t audio;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
@@ -145,7 +146,8 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("MOS 6522 #1 (VIA)", 0, &ui->via[0].open);
             ImGui::MenuItem("MOS 6522 #2 (VIA)", 0, &ui->via[1].open);
-            ImGui::MenuItem("MOS 6561 (VIC-I)", 0, &ui->vic.open);
+            // FIXME
+            //ImGui::MenuItem("MOS 6561 (VIC-I)", 0, &ui->vic.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -235,7 +237,6 @@ static void _ui_vic20_mem_write(int layer, uint16_t addr, uint8_t data, void* us
 
 static void _ui_vic20_update_memmap(ui_vic20_t* ui) {
     CHIPS_ASSERT(ui && ui->vic20);
-    const vic20_t* vic20 = ui->vic20;
     ui_memmap_reset(&ui->memmap);
     ui_memmap_layer(&ui->memmap, "SYS");
         ui_memmap_region(&ui->memmap, "RAM0",   0x0000, 0x0400, true);
@@ -395,25 +396,25 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     {
         ui_m6502_desc_t desc = {0};
         desc.title = "MOS 6502";
-        desc.cpu = &ui->vic->cpu;
+        desc.cpu = &ui->vic20->cpu;
         desc.x = x;
         desc.y = y;
         desc.h = 390;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 40, _ui_via_cpu_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 40, _ui_vic20_cpu_pins);
         ui_m6502_init(&ui->cpu, &desc);
     }
     x += dx; y += dy;
     {
         ui_m6522_desc_t desc = {0};
         desc.title = "MOS 6522 #1 (VIA)";
-        desc.cia = &ui->vic20->via_1;
+        desc.via = &ui->vic20->via_1;
         desc.x = x;
         desc.y = y;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6522", 40, _ui_vic_cia_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6522", 40, _ui_vic20_via_pins);
         ui_m6522_init(&ui->via[0], &desc);
         x += dx; y += dy;
         desc.title = "MOS 6522 #2 (VIA)";
-        desc.cia = &ui->vic20->via_2;
+        desc.via = &ui->vic20->via_2;
         desc.x = x;
         desc.y = y;
         ui_m6522_init(&ui->via[1], &desc);
@@ -535,7 +536,7 @@ void ui_vic20_draw(ui_vic20_t* ui, double time_ms) {
 }
 
 void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us) {
-    CHIPS_ASSERT(ui && ui->c64);
+    CHIPS_ASSERT(ui && ui->vic20);
     uint32_t ticks_to_run = clk_us_to_ticks(VIC20_FREQUENCY, frame_time_us);
     vic20_t* vic20 = ui->vic20;
     for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
