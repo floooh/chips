@@ -288,7 +288,7 @@ int m6569_display_width(m6569_t* vic);
 int m6569_display_height(m6569_t* vic);
 /* read/write m6569 registers */
 uint64_t m6569_iorq(m6569_t* vic, uint64_t pins);
-/* tick the m6569_y instance */
+/* tick the m6569 instance */
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
 /* get 32-bit RGBA8 value from color index (0..15) */
 uint32_t m6569_color(int i);
@@ -370,8 +370,8 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
 };
 
 /* internal implementation constants */
-#define _M6569_HTOTAL               (62)    /* 63 cycles per line (PAL) */
-#define _M6569_VTOTAL               (311)   /* 312 lines total (PAL) */
+#define _M6569_HTOTAL               (63)    /* 63 cycles per line (PAL) */
+#define _M6569_VTOTAL               (312)   /* 312 lines total (PAL) */
 #define _M6569_VRETRACEPOS          (303)   /* start of vertical beam retrace */
 #define _M6569_RSEL1_BORDER_TOP     (51)    /* top border when RSEL=1 (25 rows) */
 #define _M6569_RSEL1_BORDER_BOTTOM  (251)   /* bottom border when RSEL=1 */
@@ -1184,7 +1184,7 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
 static inline void _m6569_rs_next_rasterline(m6569_t* vic) {
     vic->rs.h_count = 0;
     /* new scanline */
-    if (vic->rs.v_count == _M6569_VTOTAL) {
+    if (vic->rs.v_count == (_M6569_VTOTAL-1)) {
         vic->rs.v_count = 0;
         vic->rs.vc_base = 0;
     }
@@ -1628,7 +1628,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
         if (vic->debug_vis) {
             x = vic->rs.h_count;
             y = vic->rs.v_count;
-            w = _M6569_HTOTAL + 1;
+            w = _M6569_HTOTAL;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
             _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
         }
@@ -1651,12 +1651,12 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
 
 int m6569_display_width(m6569_t* vic) {
     CHIPS_ASSERT(vic);
-    return 8 * (vic->debug_vis ? (_M6569_HTOTAL+1) : vic->crt.vis_w);
+    return 8 * (vic->debug_vis ? _M6569_HTOTAL : vic->crt.vis_w);
 }
 
 int m6569_display_height(m6569_t* vic) {
     CHIPS_ASSERT(vic);
-    return vic->debug_vis ? (_M6569_VTOTAL+1) : vic->crt.vis_h;
+    return vic->debug_vis ? _M6569_VTOTAL : vic->crt.vis_h;
 }
 
 uint32_t m6569_color(int i) {
