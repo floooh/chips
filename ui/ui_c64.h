@@ -19,7 +19,7 @@
         your own assert macro (default: assert(c))
 
     Include the following headers (and their depenencies) before including
-    ui_atom.h both for the declaration and implementation.
+    ui_c64.h both for the declaration and implementation.
 
     - c64.h
     - c1530.h
@@ -517,7 +517,7 @@ static const ui_chip_pin_t _ui_c64_vic_pins[] = {
     { "DB5",    5,      M6569_D5 },
     { "DB6",    6,      M6569_D6 },
     { "DB7",    7,      M6569_D7 },
-    { "CS",     9,     M6569_CS },
+    { "CS",     9,      M6569_CS },
     { "RW",     10,     M6569_RW },
     { "IRQ",    11,     M6569_IRQ },
     { "BA",     12,     M6569_BA },
