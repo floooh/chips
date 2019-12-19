@@ -79,8 +79,7 @@ typedef struct {
     ui_vic20_boot_cb boot_cb;
     ui_m6502_t cpu;
     ui_m6522_t via[2];
-    // FIXME
-    //ui_m6561_t vic;
+    ui_m6561_t vic;
     ui_audio_t audio;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
@@ -146,8 +145,7 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("MOS 6522 #1 (VIA)", 0, &ui->via[0].open);
             ImGui::MenuItem("MOS 6522 #2 (VIA)", 0, &ui->via[1].open);
-            // FIXME
-            //ImGui::MenuItem("MOS 6561 (VIC-I)", 0, &ui->vic.open);
+            ImGui::MenuItem("MOS 6561 (VIC-I)", 0, &ui->vic.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -182,7 +180,6 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
 #define _UI_VIC20_MEMLAYER_COLOR  (2)     /* special static color RAM */
 #define _UI_VIC20_CODELAYER_NUM   (1)     /* number of valid layers for disassembler */
 #define _UI_VIC20_MEMLAYER_NUM    (3)
-
 
 static const char* _ui_vic20_memlayer_names[_UI_VIC20_MEMLAYER_NUM] = {
     "CPU Mapped", "VIC Mapped", "Color RAM"
@@ -329,8 +326,6 @@ static const ui_chip_pin_t _ui_vic20_via_pins[] = {
     { "CB2",    39,     M6522_CB2 },
 };
 
-// FIXME
-/*
 static const ui_chip_pin_t _ui_vic20_vic_pins[] = {
     { "DB0",    0,      M6561_D0 },
     { "DB1",    1,      M6561_D1 },
@@ -340,11 +335,7 @@ static const ui_chip_pin_t _ui_vic20_vic_pins[] = {
     { "DB5",    5,      M6561_D5 },
     { "DB6",    6,      M6561_D6 },
     { "DB7",    7,      M6561_D7 },
-    { "CS",     9,      M6561_CS },
-    { "RW",     10,     M6561_RW },
-    { "IRQ",    11,     M6561_IRQ },
-    { "BA",     12,     M6561_BA },
-    { "AEC",    13,     M6561_AEC },
+    { "RW",     9,      M6561_RW },
     { "A0",     14,     M6561_A0 },
     { "A1",     15,     M6561_A1 },
     { "A2",     16,     M6561_A2 },
@@ -360,7 +351,6 @@ static const ui_chip_pin_t _ui_vic20_vic_pins[] = {
     { "A12",    26,     M6561_A12 },
     { "A13",    27,     M6561_A13 }
 };
-*/
 
 void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
@@ -420,17 +410,15 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
         ui_m6522_init(&ui->via[1], &desc);
     }
     x += dx; y += dy;
-    /* FIXME
     {
         ui_m6561_desc_t desc = {0};
         desc.title = "MOS 6561 (VIC-I)";
-        desc.vic = &ui->vic->vic;
+        desc.vic = &ui->vic20->vic;
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6561", 28, _ui_vic20_vic_pins);
         ui_m6561_init(&ui->vic, &desc);
     }
-    */
     x += dx; y += dy;
     {
         ui_audio_desc_t desc = {0};
@@ -502,8 +490,7 @@ void ui_vic20_discard(ui_vic20_t* ui) {
     ui_m6502_discard(&ui->cpu);
     ui_m6522_discard(&ui->via[0]);
     ui_m6522_discard(&ui->via[1]);
-    // FIXME
-    // ui_m6561_discard(&ui->vic);
+    ui_m6561_discard(&ui->vic);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
     ui_memmap_discard(&ui->memmap);
@@ -525,8 +512,7 @@ void ui_vic20_draw(ui_vic20_t* ui, double time_ms) {
     ui_m6502_draw(&ui->cpu);
     ui_m6522_draw(&ui->via[0]);
     ui_m6522_draw(&ui->via[1]);
-    // FIXME
-    //ui_m6561_draw(&ui->vic);
+    ui_m6561_draw(&ui->vic);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);

@@ -203,12 +203,12 @@ bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes);
 #endif
 
 #define _VIC20_STD_DISPLAY_WIDTH (232)  /* actually 229, but rounded up to 8x */
-#define _VIC20_STD_DISPLAY_HEIGHT (304) /* actually 303, but rounded up to 8x */
-#define _VIC20_DBG_DISPLAY_WIDTH ((_M6561_HTOTAL+1)*8)
+#define _VIC20_STD_DISPLAY_HEIGHT (272)
+#define _VIC20_DBG_DISPLAY_WIDTH ((_M6561_HTOTAL+1)*4)
 #define _VIC20_DBG_DISPLAY_HEIGHT (_M6561_VTOTAL+1)
 #define _VIC20_DISPLAY_SIZE (_VIC20_DBG_DISPLAY_WIDTH*_VIC20_DBG_DISPLAY_HEIGHT*4)
-#define _VIC20_DISPLAY_X (64)
-#define _VIC20_DISPLAY_Y (24)
+#define _VIC20_DISPLAY_X (32)
+#define _VIC20_DISPLAY_Y (8)
 
 static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins);
 static void _vic20_via1_out(int port_id, uint8_t data, void* user_data);
@@ -454,7 +454,17 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         pins &= ~M6502_IRQ;
     }
 
-    // FIXME tick VIC
+    // tick VIC (returns true when new audio sample is ready)
+    if (m6561_tick(&sys->vic)) {
+        /* new audio sample ready */
+        sys->sample_buffer[sys->sample_pos++] = sys->vic.sound.sample;
+        if (sys->sample_pos == sys->num_samples) {
+            if (sys->audio_cb) {
+                sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+            }
+            sys->sample_pos = 0;
+        }
+    }
 
     /* address decoding */
     if ((addr & 0xFC00) == 0x9000) {
@@ -464,22 +474,20 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
             A4 high:    VIA-1
             A5 high:    VIA-2
         */
-        if ((addr & (M6502_A4|M6502_A5)) == 0) {
-             /* VIC (hmm, no chip select? */
+        if (M6561_SELECTED(pins)) {
+             /* VIC (no separate chip-select, instead specific address pin mask is checked) */
              uint64_t vic_pins = (pins & M6502_PIN_MASK);
              pins = m6561_iorq(&sys->vic, vic_pins) & M6502_PIN_MASK;
         }
-        else {
-            if (addr & M6502_A4) {
-                /* VIA-1 */
-                uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
-                pins = m6522_iorq(&sys->via_1, via_pins) & M6502_PIN_MASK;
-            }
-            if (addr & M6502_A5) {
-                /* VIA-2 */
-                uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
-                pins = m6522_iorq(&sys->via_2, via_pins) & M6502_PIN_MASK;
-            }
+        if (addr & M6502_A4) {
+            /* VIA-1 */
+            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
+            pins = m6522_iorq(&sys->via_1, via_pins) & M6502_PIN_MASK;
+        }
+        if (addr & M6502_A5) {
+            /* VIA-2 */
+            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
+            pins = m6522_iorq(&sys->via_2, via_pins) & M6502_PIN_MASK;
         }
     }
     else {

@@ -46,6 +46,60 @@
 extern "C" {
 #endif
 
+/* address pins (see control pins for chip-select condition) */
+#define M6561_A0    (1ULL<<0)
+#define M6561_A1    (1ULL<<1)
+#define M6561_A2    (1ULL<<2)
+#define M6561_A3    (1ULL<<3)
+#define M6561_A4    (1ULL<<4)
+#define M6561_A5    (1ULL<<5)
+#define M6561_A6    (1ULL<<6)
+#define M6561_A7    (1ULL<<7)
+#define M6561_A8    (1ULL<<8)
+#define M6561_A9    (1ULL<<9)
+#define M6561_A10   (1ULL<<10)
+#define M6561_A11   (1ULL<<11)
+#define M6561_A12   (1ULL<<12)
+#define M6561_A13   (1ULL<<13)
+
+/* data pins (the 4 additional color data pins are not emulated as pins) */
+#define M6561_D0    (1ULL<<16)
+#define M6561_D1    (1ULL<<17)
+#define M6561_D2    (1ULL<<18)
+#define M6561_D3    (1ULL<<19)
+#define M6561_D4    (1ULL<<20)
+#define M6561_D5    (1ULL<<21)
+#define M6561_D6    (1ULL<<22)
+#define M6561_D7    (1ULL<<23)
+
+/* control pins shared with CPU 
+    NOTE that there is no dedicated chip-select pin, instead
+    registers are read and written during the CPU's 'shared bus
+    half-cycle', and the following address bus pin mask is
+    active:
+
+    A13 A12 A11 A10 A9 A8
+      0   1   0   0  0  0
+
+    When this is true, the pins A3..A0 select the chip register.
+
+    Use the M6561_SELECTED() macro to decide whether to call
+    m6561_iorq()
+*/
+#define M6561_RW    (1ULL<<24)      /* same as M6502_RW */
+
+#define M6561_CS_MASK           (M6561_A13|M6561_A12|M6561_A11|M6561_A10|M6561_A9|M6561_A8)
+#define M6561_CS_VALUE          (M6561_A12)
+#define M6561_SELECTED(pins)    ((pins&M6561_CS_MASK)==M6561_CS_VALUE)
+
+#define M6561_NUM_REGS (16)
+#define M6561_REG_MASK (M6561_NUM_REGS-1)
+
+/* extract 8-bit data bus from 64-bit pins */
+#define M6561_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+/* merge 8-bit data bus value into 64-bit pins */
+#define M6561_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+
 /* memory fetch callback, used to feed pixel- and color-data into the m6561 */
 typedef uint16_t (*m6561_fetch_t)(uint16_t addr, void* user_data);
 
@@ -63,19 +117,43 @@ typedef struct {
     void* user_data;
 } m6561_desc_t;
 
+/* raster unit state */
+typedef struct {
+    uint8_t h_count;
+    uint8_t h_disp_start;
+    uint8_t h_disp_end;
+    uint8_t border;         /* if != 0, border area, otherwise display area */
+    uint8_t cell_count;     /* counts to 8 or 16 */
+    uint8_t row_count;      /* incremnets when cell-count overflows */
+    uint8_t cell_height;    /* 8 or 16 */
+    uint16_t v_count;
+    uint16_t v_disp_start;
+    uint16_t v_disp_end;
+    uint16_t fetch_count;
+    uint32_t border_color;
+} m6561_raster_unit_t;
+
 /* CRT state tracking */
 typedef struct {
-    uint16_t x, y;              /* beam pos reset on crt_retrace_h/crt_retrace_v zero */
+    uint16_t x, y;              /* beam pos */
     uint16_t vis_x0, vis_y0, vis_x1, vis_y1;  /* the visible area */
     uint16_t vis_w, vis_h;      /* width of visible area */
     uint32_t* rgba8_buffer;
 } m6561_crt_t;
 
+/* sound generator state */
+typedef struct {
+    float sample;
+} m6561_sound_t;
+
 /* the m6561_t state struct */
 typedef struct {
     // FIXME
     bool debug_vis;
+    uint8_t regs[M6561_NUM_REGS];
+    m6561_raster_unit_t rs;
     m6561_crt_t crt;
+    m6561_sound_t sound;
     uint64_t pins;
 } m6561_t;
 
@@ -89,8 +167,8 @@ int m6561_display_width(m6561_t* vic);
 int m6561_display_height(m6561_t* vic);
 /* read/write m6561 registers */
 uint64_t m6561_iorq(m6561_t* vic, uint64_t pins);
-/* tick the m6561 instance */
-uint64_t m6561_tick(m6561_t* vic, uint64_t pins);
+/* tick the m6561 instance, returns true when sound sample ready */
+bool m6561_tick(m6561_t* vic);
 /* get 32-bit RGBA8 value from color index (0..15) */
 uint32_t m6561_color(int i);
 
@@ -107,8 +185,13 @@ uint32_t m6561_color(int i);
 #endif
 
 /* internal constants */
-#define _M6561_HTOTAL   (71)
-#define _M6561_VTOTAL   (312)
+#define _M6561_HTOTAL       (71)
+#define _M6561_VTOTAL       (312)
+#define _M6561_VRETRACEPOS  (303)
+#define _M6561_PIXELS_PER_TICK  (4)
+
+#define _M6561_HBORDER (1<<0)
+#define _M6561_VBORDER (1<<1)
 
 #define _M6561_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
 
@@ -137,9 +220,9 @@ static void _m6561_init_crt(m6561_crt_t* crt, const m6561_desc_t* desc) {
     CHIPS_ASSERT((desc->vis_x & 7) == 0);
     CHIPS_ASSERT((desc->vis_w & 7) == 0);
     crt->rgba8_buffer = desc->rgba8_buffer;
-    crt->vis_x0 = desc->vis_x/8;
+    crt->vis_x0 = desc->vis_x/_M6561_PIXELS_PER_TICK;
     crt->vis_y0 = desc->vis_y;
-    crt->vis_w = desc->vis_w/8;
+    crt->vis_w = desc->vis_w/_M6561_PIXELS_PER_TICK;
     crt->vis_h = desc->vis_h;
     crt->vis_x1 = crt->vis_x0 + crt->vis_w;
     crt->vis_y1 = crt->vis_y0 + crt->vis_h;
@@ -150,6 +233,7 @@ void m6561_init(m6561_t* vic, const m6561_desc_t* desc) {
     CHIPS_ASSERT((0 == desc->rgba8_buffer) || (desc->rgba8_buffer_size >= (_M6561_HTOTAL*8*_M6561_VTOTAL*sizeof(uint32_t))));
     memset(vic, 0, sizeof(*vic));
     _m6561_init_crt(&vic->crt, desc);
+    vic->rs.border = _M6561_HBORDER|_M6561_VBORDER;
 }
 
 static void _m6561_reset_crt(m6561_crt_t* c) {
@@ -158,13 +242,15 @@ static void _m6561_reset_crt(m6561_crt_t* c) {
 
 void m6561_reset(m6561_t* vic) {
     CHIPS_ASSERT(vic);
+    memset(&vic->regs, 0, sizeof(vic->regs));
+    memset(&vic->rs, 0, sizeof(vic->rs));
     _m6561_reset_crt(&vic->crt);
-    // FIXME
+    vic->rs.border = _M6561_HBORDER|_M6561_VBORDER;
 }
 
 int m6561_display_width(m6561_t* vic) {
     CHIPS_ASSERT(vic);
-    return 8 * (vic->debug_vis ? _M6561_HTOTAL : vic->crt.vis_w);
+    return _M6561_PIXELS_PER_TICK * (vic->debug_vis ? _M6561_HTOTAL : vic->crt.vis_w);
 }
 
 int m6561_display_height(m6561_t* vic) {
@@ -177,14 +263,156 @@ uint32_t m6561_color(int i) {
     return _m6561_colors[i];
 }
 
+/* update precomputed values when disp-related registers changed */
+static void _m6561_rs_dirty(m6561_t* vic) {
+    /* each column is 2 ticks */
+    vic->rs.h_disp_start = vic->regs[0] & 0x7F;
+    vic->rs.h_disp_end = vic->rs.h_disp_start + (vic->regs[2] & 0x7F) * 2;
+    vic->rs.v_disp_start = vic->regs[1];
+    vic->rs.v_disp_end = vic->rs.v_disp_start + ((vic->regs[3]>>1) & 0x3F) * 8;
+    vic->rs.cell_height = (vic->regs[3] & 1) ? 16 : 8;
+    vic->rs.border_color = _m6561_colors[vic->regs[15] & 7];
+}
+
 uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
-    // FIXME
+    CHIPS_ASSERT(vic);
+    uint8_t addr = pins & M6561_REG_MASK;
+    if (pins & M6561_RW) {
+        /* read */
+        uint8_t data;
+        switch (addr) {
+            case 3:
+                data = ((vic->rs.v_count & 1)<<7) | (vic->regs[addr] & 0x7F);
+                break;
+            case 4:
+                data = (vic->rs.v_count>>1) & 0xFF;
+                break;
+            /* not implemented: light pen and potentiometers */
+            default:
+                data = vic->regs[addr];
+                break;
+        }
+        M6561_SET_DATA(pins, data);
+    }
+    else {
+        /* write */
+        const uint8_t data = M6561_GET_DATA(pins);
+        vic->regs[addr] = data;
+
+        /* update precomputed values */
+        switch (addr) {
+            case 0:
+            case 1:
+            case 2:
+            case 3:
+                _m6561_rs_dirty(vic);
+                break;
+        }
+    }
     return pins;
 }
 
-uint64_t m6561_tick(m6561_t* vic, uint64_t pins) {
-    // FIXME
-    return pins;
+static inline void _m6561_crt_next_scanline(m6561_t* vic) {
+    vic->crt.x = 0;
+    if (vic->rs.v_count == _M6561_VRETRACEPOS) {
+        vic->crt.y = 0;
+    }
+    else {
+        vic->crt.y++;
+    }
+}
+
+bool m6561_tick(m6561_t* vic) {
+
+    /* decode pixels, each tick is 4 pixels */
+    if (vic->crt.rgba8_buffer) {
+        int x, y, w;
+        if (vic->debug_vis) {
+            x = vic->rs.h_count;
+            y = vic->rs.v_count;
+            w = _M6561_HTOTAL;
+            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * _M6561_PIXELS_PER_TICK;
+            // FIXME
+            for (int i = 0; i < _M6561_PIXELS_PER_TICK; i++) {
+                *dst++ = 0xFF00FF00;
+            }
+        }
+        else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
+                 (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
+        {
+            const int x = vic->crt.x - vic->crt.vis_x0;
+            const int y = vic->crt.y - vic->crt.vis_y0;
+            const int w = vic->crt.vis_w;
+            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * _M6561_PIXELS_PER_TICK;
+            if (vic->rs.border) {
+                /* border area */
+                for (int i = 0; i < _M6561_PIXELS_PER_TICK; i++) {
+                    *dst++ = vic->rs.border_color;
+                }
+            }
+            else {
+                // FIXME
+                for (int i = 0; i < 4; i++) {
+                    *dst++ = 0xFFFF0000;
+                }
+            }
+        }
+    }
+
+    /* display-enabled area? */
+    if (vic->rs.h_count == vic->rs.h_disp_start) {
+        /* FIXME: enable fetching, but border still active for 1 tick */
+    }
+    if (vic->rs.h_count == (vic->rs.h_disp_start+1)) {
+        /* switch off horizontal border */
+        vic->rs.border &= ~_M6561_HBORDER;
+    }
+    if (vic->rs.h_count == (vic->rs.h_disp_end+1)) {
+        /* switch on horizontal border */
+        vic->rs.border |= _M6561_HBORDER;
+        /* FIXME: switch off fetching */
+    }
+
+    /* fetch data */
+    if (!vic->rs.border) {
+        if (vic->rs.fetch_count & 1) {
+            /* fetch character code */
+        }
+        else {
+            /* fetch character pixels */
+        }
+        vic->rs.fetch_count++;
+    }
+
+    /* tick horizontal and vertical counters */
+    vic->rs.h_count++;
+    vic->crt.x++;
+    if (vic->rs.h_count == _M6561_HTOTAL) {
+        vic->rs.h_count = 0;
+        vic->rs.v_count++;
+        vic->rs.cell_count++;
+        if (vic->rs.cell_count == vic->rs.cell_height) {
+            vic->rs.cell_count = 0;
+            vic->rs.row_count++;
+        }
+        _m6561_crt_next_scanline(vic);
+        if (vic->rs.v_count == vic->rs.v_disp_start) {
+            vic->rs.border &= ~_M6561_VBORDER;
+            vic->rs.fetch_count = 0;
+        }
+        if (vic->rs.v_count == vic->rs.v_disp_end) {
+            vic->rs.border |= _M6561_VBORDER;
+        }
+        if (vic->rs.v_count == _M6561_VTOTAL) {
+            vic->rs.v_count = 0;
+            vic->rs.cell_count = 0;
+            vic->rs.row_count = 0;
+        }
+    }
+
+    /* FIXME: sound generation */
+
+    return false;
 }
 
 #endif

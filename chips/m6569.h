@@ -1629,7 +1629,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             x = vic->rs.h_count;
             y = vic->rs.v_count;
             w = _M6569_HTOTAL;
-            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
+            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;
             _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
         }
         else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
@@ -1638,7 +1638,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
             const int x = vic->crt.x - vic->crt.vis_x0;
             const int y = vic->crt.y - vic->crt.vis_y0;
             const int w = vic->crt.vis_w;
-            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;;
+            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;
             _m6569_decode_pixels(vic, g_data, dst, vic->rs.h_count);
         }
     }
