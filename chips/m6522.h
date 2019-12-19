@@ -409,11 +409,11 @@ static inline void _m6522_clear_intr(m6522_t* c, uint8_t data) {
 }
 
 static inline void _m6522_clear_pa_intr(m6522_t* c) {
-    _m6522_clear_intr(c, M6522_IRQ_CA1 | M6522_PCR_CA2_IND_IRQ(c) ? 0 : M6522_IRQ_CA2);
+    _m6522_clear_intr(c, M6522_IRQ_CA1 | (M6522_PCR_CA2_IND_IRQ(c) ? 0 : M6522_IRQ_CA2));
 }
 
 static inline void _m6522_clear_pb_intr(m6522_t* c) {
-    _m6522_clear_intr(c, M6522_IRQ_CB1 | M6522_PCR_CB2_IND_IRQ(c) ? 0 : M6522_IRQ_CB2);
+    _m6522_clear_intr(c, M6522_IRQ_CB1 | (M6522_PCR_CB2_IND_IRQ(c) ? 0 : M6522_IRQ_CB2));
 }
 
 static inline void _m6522_write_ier(m6522_t* c, uint8_t data) {
