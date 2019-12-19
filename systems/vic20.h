@@ -143,6 +143,7 @@ typedef struct {
 
     kbd_t kbd;                  /* keyboard matrix state */
     mem_t mem_cpu;              /* CPU-visible memory mapping */
+    mem_t mem_vic;              /* VIC-visible memory mapping */
 
     void* user_data;
     uint32_t* pixel_buffer;
@@ -151,6 +152,7 @@ typedef struct {
     int sample_pos;
     float sample_buffer[VIC20_MAX_AUDIO_SAMPLES];
 
+    uint8_t color_ram[0x0400];      /* special color RAM */
     uint8_t ram0[0x0400];           /* 1 KB zero page, stack, system work area */
     uint8_t ram1[0x1000];           /* 4 KB main RAM */
     uint8_t ram_exp[3][0x2000];     /* optional expansion RAM areas */
@@ -268,7 +270,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     _vic20_init_key_map(sys);
     
     /*
-        VIC-20 memory map:
+        VIC-20 CPU memory map:
 
         0000..0400      zero-page, stack, system area
         [unused]
@@ -279,7 +281,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
         8000..8FFF      4 KB Character ROM
         9000..900F      VIC Registers
         9110..911F      VIA #1 Registers
-        9120..912F      VIA #2 Regusters
+        9120..912F      VIA #2 Registers
         9400..97FF      1Kx4 bit color ram (either at 9600 or 9400)
         [9800..9BFF]    1 KB I/O Expansion 2
         [9C00..9FFF]    1 KB I/O Expansion 3
@@ -291,8 +293,27 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     mem_map_ram(&sys->mem_cpu, 0, 0x0000, 0x0400, sys->ram0);
     mem_map_ram(&sys->mem_cpu, 0, 0x1000, 0x1000, sys->ram1);
     mem_map_rom(&sys->mem_cpu, 0, 0x8000, 0x1000, sys->rom_char);
+    mem_map_ram(&sys->mem_cpu, 0, 0x9400, 0x0400, sys->color_ram);
     mem_map_rom(&sys->mem_cpu, 0, 0xC000, 0x2000, sys->rom_basic);
     mem_map_rom(&sys->mem_cpu, 0, 0xE000, 0x2000, sys->rom_kernal);
+
+    /*
+        VIC-I memory map:
+
+        0x0000..0x0FFF  character ROM
+        0x1000..0x13FF  VIC and VIA registers
+        0x1400..0x17FF  color RAM
+        0x1800..0x1BFF  exp 1
+        0x1C00..0x1FFF  exp 2
+        0x2000..0x23FF  system RAM (CPU: 0x0000..0x0400)
+        0x2400..0x2FFF  expansion RAM
+        0x3000..0x3FFF  user RAM (CPU: 0x1000..0x1FFF)
+    */
+    mem_init(&sys->mem_vic);
+    mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);
+    mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);
+    mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);
+    mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);
 }
 
 void vic20_discard(vic20_t* sys) {
@@ -535,8 +556,9 @@ static uint8_t _vic20_via2_in(int port_id, void* user_data) {
 }
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {
-    // FIXME
-    return 0xFFFF;
+    vic20_t* sys = (vic20_t*) user_data;
+    uint16_t data = (sys->color_ram[addr & 0x03FF]<<8) | mem_rd(&sys->mem_vic, addr);
+    return data;
 }
 
 static void _vic20_init_key_map(vic20_t* sys) {

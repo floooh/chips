@@ -147,6 +147,8 @@ static void _ui_m6561_draw_raster_unit(const ui_m6561_t* win) {
         const m6561_raster_unit_t* rs = &win->vic->rs;
         ImGui::Text("h_count: %d", rs->h_count);
         ImGui::Text("v_count: %d", rs->v_count);
+        ImGui::Text("vm_index: %d", rs->vm_index);
+        ImGui::Text("vm_base:  %d", rs->vm_base);
         ImGui::Text("cell_count: %d", rs->cell_count);
         ImGui::Text("row_count:  %d", rs->row_count);
         ImGui::Text("h_disp_start: %d", rs->h_disp_start);
@@ -155,6 +157,7 @@ static void _ui_m6561_draw_raster_unit(const ui_m6561_t* win) {
         ImGui::Text("v_disp_end:   %d", rs->v_disp_end);
         ImGui::Text("cell_height:  %d", rs->cell_height);
         ImGui::Text("border:  %d", rs->border);
+        ImGui::Text("fetch disable: %d", rs->fetch_disable);
     }
 }
 

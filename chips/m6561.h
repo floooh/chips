@@ -123,13 +123,17 @@ typedef struct {
     uint8_t h_disp_start;
     uint8_t h_disp_end;
     uint8_t border;         /* if != 0, border area, otherwise display area */
+    uint8_t fetch_disable;  /* if 0, fetching is enabled */
     uint8_t cell_count;     /* counts to 8 or 16 */
     uint8_t row_count;      /* incremnets when cell-count overflows */
     uint8_t cell_height;    /* 8 or 16 */
+    uint16_t char_code;     /* last fetched character code + color */
+    uint16_t pixels;        /* last fetched pixels (8 pixels + color) */
+    uint16_t vm_index;      /* current video-matrix index */
+    uint16_t vm_base;       /* video-matrix at start of line */
     uint16_t v_count;
     uint16_t v_disp_start;
     uint16_t v_disp_end;
-    uint16_t fetch_count;
     uint32_t border_color;
 } m6561_raster_unit_t;
 
@@ -153,6 +157,8 @@ typedef struct {
     uint8_t regs[M6561_NUM_REGS];
     m6561_raster_unit_t rs;
     m6561_crt_t crt;
+    m6561_fetch_t fetch_cb;
+    void* user_data;
     m6561_sound_t sound;
     uint64_t pins;
 } m6561_t;
@@ -192,6 +198,8 @@ uint32_t m6561_color(int i);
 
 #define _M6561_HBORDER (1<<0)
 #define _M6561_VBORDER (1<<1)
+#define _M6561_HFETCH_DISABLE (1<<0)
+#define _M6561_VFETCH_DISABLE (1<<1)
 
 #define _M6561_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
 
@@ -229,11 +237,13 @@ static void _m6561_init_crt(m6561_crt_t* crt, const m6561_desc_t* desc) {
 }
 
 void m6561_init(m6561_t* vic, const m6561_desc_t* desc) {
-    CHIPS_ASSERT(vic && desc);
+    CHIPS_ASSERT(vic && desc && desc->fetch_cb);
     CHIPS_ASSERT((0 == desc->rgba8_buffer) || (desc->rgba8_buffer_size >= (_M6561_HTOTAL*8*_M6561_VTOTAL*sizeof(uint32_t))));
     memset(vic, 0, sizeof(*vic));
     _m6561_init_crt(&vic->crt, desc);
     vic->rs.border = _M6561_HBORDER|_M6561_VBORDER;
+    vic->fetch_cb = desc->fetch_cb;
+    vic->user_data = desc->user_data;
 }
 
 static void _m6561_reset_crt(m6561_crt_t* c) {
@@ -361,7 +371,9 @@ bool m6561_tick(m6561_t* vic) {
 
     /* display-enabled area? */
     if (vic->rs.h_count == vic->rs.h_disp_start) {
-        /* FIXME: enable fetching, but border still active for 1 tick */
+        /* enable fetching, but border still active for 1 tick */
+        vic->rs.fetch_disable &= ~_M6561_HFETCH_DISABLE;
+        vic->rs.vm_index = vic->rs.vm_base;
     }
     if (vic->rs.h_count == (vic->rs.h_disp_start+1)) {
         /* switch off horizontal border */
@@ -370,18 +382,26 @@ bool m6561_tick(m6561_t* vic) {
     if (vic->rs.h_count == (vic->rs.h_disp_end+1)) {
         /* switch on horizontal border */
         vic->rs.border |= _M6561_HBORDER;
-        /* FIXME: switch off fetching */
+        vic->rs.fetch_disable |= _M6561_HFETCH_DISABLE;
     }
 
     /* fetch data */
-    if (!vic->rs.border) {
-        if (vic->rs.fetch_count & 1) {
-            /* fetch character code */
+    if (!vic->rs.fetch_disable) {
+        if (vic->rs.vm_index & 1) {
+            /* fetch character pixels from existing character code */
+            uint16_t addr = ((vic->regs[5] & 0xF)<<10) |    // A13..A10
+                            ((vic->rs.char_code & 0xFF) * vic->rs.cell_height) |
+                            vic->rs.cell_count;
+            vic->rs.pixels = vic->fetch_cb(addr, vic->user_data);
         }
         else {
-            /* fetch character pixels */
+            /* fetch character code + color */
+            uint16_t addr = (((vic->regs[5]>>4)&0xF)<<10) | // A13..A10
+                            (((vic->regs[2]>>7)&1)<<9) |    // A9
+                            (vic->rs.vm_index>>1);
+            vic->rs.char_code = vic->fetch_cb(addr, vic->user_data);
         }
-        vic->rs.fetch_count++;
+        vic->rs.vm_index++;
     }
 
     /* tick horizontal and vertical counters */
@@ -394,14 +414,18 @@ bool m6561_tick(m6561_t* vic) {
         if (vic->rs.cell_count == vic->rs.cell_height) {
             vic->rs.cell_count = 0;
             vic->rs.row_count++;
+            vic->rs.vm_base = vic->rs.vm_index;
         }
         _m6561_crt_next_scanline(vic);
         if (vic->rs.v_count == vic->rs.v_disp_start) {
             vic->rs.border &= ~_M6561_VBORDER;
-            vic->rs.fetch_count = 0;
+            vic->rs.fetch_disable &= ~_M6561_VFETCH_DISABLE;
         }
         if (vic->rs.v_count == vic->rs.v_disp_end) {
             vic->rs.border |= _M6561_VBORDER;
+            vic->rs.fetch_disable |= _M6561_VFETCH_DISABLE;
+            vic->rs.vm_index = 0;
+            vic->rs.vm_base = 0;
         }
         if (vic->rs.v_count == _M6561_VTOTAL) {
             vic->rs.v_count = 0;
