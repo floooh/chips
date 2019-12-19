@@ -127,14 +127,16 @@ typedef struct {
     uint8_t cell_count;     /* counts to 8 or 16 */
     uint8_t row_count;      /* incremnets when cell-count overflows */
     uint8_t cell_height;    /* 8 or 16 */
+    uint8_t pixels;         /* last fetched pixels (8 pixels + color) */
+    uint8_t color_code;     /* last fetched color code */
     uint16_t char_code;     /* last fetched character code + color */
-    uint16_t pixels;        /* last fetched pixels (8 pixels + color) */
     uint16_t vm_index;      /* current video-matrix index */
     uint16_t vm_base;       /* video-matrix at start of line */
     uint16_t v_count;
     uint16_t v_disp_start;
     uint16_t v_disp_end;
     uint32_t border_color;
+    uint32_t bg_color;
 } m6561_raster_unit_t;
 
 /* CRT state tracking */
@@ -274,14 +276,18 @@ uint32_t m6561_color(int i) {
 }
 
 /* update precomputed values when disp-related registers changed */
-static void _m6561_rs_dirty(m6561_t* vic) {
+static void _m6561_rs_region_dirty(m6561_t* vic) {
     /* each column is 2 ticks */
     vic->rs.h_disp_start = vic->regs[0] & 0x7F;
     vic->rs.h_disp_end = vic->rs.h_disp_start + (vic->regs[2] & 0x7F) * 2;
     vic->rs.v_disp_start = vic->regs[1];
     vic->rs.v_disp_end = vic->rs.v_disp_start + ((vic->regs[3]>>1) & 0x3F) * 8;
     vic->rs.cell_height = (vic->regs[3] & 1) ? 16 : 8;
+}
+
+static void _m6561_rs_colors_dirty(m6561_t* vic) {
     vic->rs.border_color = _m6561_colors[vic->regs[15] & 7];
+    vic->rs.bg_color = _m6561_colors[(vic->regs[15]>>4) & 0xF];
 }
 
 uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
@@ -315,7 +321,10 @@ uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
             case 1:
             case 2:
             case 3:
-                _m6561_rs_dirty(vic);
+                _m6561_rs_region_dirty(vic);
+                break;
+            case 15:
+                _m6561_rs_colors_dirty(vic);
                 break;
         }
     }
@@ -356,14 +365,28 @@ bool m6561_tick(m6561_t* vic) {
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * _M6561_PIXELS_PER_TICK;
             if (vic->rs.border) {
                 /* border area */
-                for (int i = 0; i < _M6561_PIXELS_PER_TICK; i++) {
-                    *dst++ = vic->rs.border_color;
-                }
+                uint32_t border_color = vic->rs.border_color;
+                *dst++ = border_color;
+                *dst++ = border_color;
+                *dst++ = border_color;
+                *dst++ = border_color;
             }
             else {
-                // FIXME
-                for (int i = 0; i < 4; i++) {
-                    *dst++ = 0xFFFF0000;
+                /* upper or lower nibble of last fetch pixel data */
+                uint8_t p = vic->rs.pixels;
+                uint32_t bg = vic->rs.bg_color;
+                uint32_t fg = _m6561_colors[vic->rs.color_code & 7];
+                if (vic->rs.vm_index&1) {
+                    *dst++ = (p & (1<<3)) ? fg : bg;
+                    *dst++ = (p & (1<<2)) ? fg : bg;
+                    *dst++ = (p & (1<<1)) ? fg : bg;
+                    *dst++ = (p & (1<<0)) ? fg : bg;
+                }
+                else {
+                    *dst++ = (p & (1<<7)) ? fg : bg;
+                    *dst++ = (p & (1<<6)) ? fg : bg;
+                    *dst++ = (p & (1<<5)) ? fg : bg;
+                    *dst++ = (p & (1<<4)) ? fg : bg;
                 }
             }
         }
@@ -392,7 +415,8 @@ bool m6561_tick(m6561_t* vic) {
             uint16_t addr = ((vic->regs[5] & 0xF)<<10) |    // A13..A10
                             ((vic->rs.char_code & 0xFF) * vic->rs.cell_height) |
                             vic->rs.cell_count;
-            vic->rs.pixels = vic->fetch_cb(addr, vic->user_data);
+            vic->rs.pixels = (uint8_t) vic->fetch_cb(addr, vic->user_data);
+            vic->rs.color_code = (vic->rs.char_code>>8) & 0xF;
         }
         else {
             /* fetch character code + color */
@@ -414,23 +438,23 @@ bool m6561_tick(m6561_t* vic) {
         if (vic->rs.cell_count == vic->rs.cell_height) {
             vic->rs.cell_count = 0;
             vic->rs.row_count++;
-            vic->rs.vm_base = vic->rs.vm_index;
+            vic->rs.vm_base = vic->rs.vm_index & 0xFFFE;
         }
         _m6561_crt_next_scanline(vic);
         if (vic->rs.v_count == vic->rs.v_disp_start) {
             vic->rs.border &= ~_M6561_VBORDER;
             vic->rs.fetch_disable &= ~_M6561_VFETCH_DISABLE;
+            vic->rs.vm_index = 0;
+            vic->rs.vm_base = 0;
+            vic->rs.row_count = 0;
+            vic->rs.cell_count = 0;
         }
         if (vic->rs.v_count == vic->rs.v_disp_end) {
             vic->rs.border |= _M6561_VBORDER;
             vic->rs.fetch_disable |= _M6561_VFETCH_DISABLE;
-            vic->rs.vm_index = 0;
-            vic->rs.vm_base = 0;
         }
         if (vic->rs.v_count == _M6561_VTOTAL) {
             vic->rs.v_count = 0;
-            vic->rs.cell_count = 0;
-            vic->rs.row_count = 0;
         }
     }
 

@@ -247,11 +247,38 @@ static void _ui_vic20_update_memmap(ui_vic20_t* ui) {
 }
 
 static int _ui_vic20_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
-    //CHIPS_ASSERT(user_data);
-    //ui_vic20_t* ui = (ui_vic20_t*) user_data;
-    //vic20_t* vic20 = ui->vic20;
-    // FIXME
-    return 0;
+    CHIPS_ASSERT(user_data);
+    ui_vic20_t* ui = (ui_vic20_t*) user_data;
+    vic20_t* vic20 = ui->vic20;
+    int scanline = vic20->vic.rs.v_count;
+    int trap_id = 0;
+    for (int i = 0; (i < dbg_win->dbg.num_breakpoints) && (trap_id == 0); i++) {
+        const ui_dbg_breakpoint_t* bp = &dbg_win->dbg.breakpoints[i];
+        if (bp->enabled) {
+            switch (bp->type) {
+                /* scanline number */
+                case UI_DBG_BREAKTYPE_USER+0:
+                    if ((ui->dbg_scanline != scanline) && (scanline == bp->val)) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* next scanline */
+                case UI_DBG_BREAKTYPE_USER+1:
+                    if (ui->dbg_scanline != scanline) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* next frame */
+                case UI_DBG_BREAKTYPE_USER+2:
+                    if ((ui->dbg_scanline != scanline) && (scanline == 0)) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+            }
+        }
+    }
+    ui->dbg_scanline = scanline;
+    return trap_id;
 }
 
 static const ui_chip_pin_t _ui_vic20_cpu_pins[] = {
@@ -373,13 +400,10 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui;
         /* custom breakpoint types */
-        /* FIXME
         desc.user_breaktypes[0].label = "Scanline at";
         desc.user_breaktypes[0].show_val16 = true;
         desc.user_breaktypes[1].label = "Next Scanline";
-        desc.user_breaktypes[2].label = "Next Badline";
-        desc.user_breaktypes[3].label = "Next Frame";
-        */
+        desc.user_breaktypes[2].label = "Next Frame";
         ui_dbg_init(&ui->dbg, &desc);
     }
     x += dx; y += dy;
