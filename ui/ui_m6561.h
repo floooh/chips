@@ -143,29 +143,60 @@ static void _ui_m6561_draw_registers(const ui_m6561_t* win) {
 }
 
 static void _ui_m6561_draw_raster_unit(const ui_m6561_t* win) {
-    if (ImGui::CollapsingHeader("Raster Unit")) {
+    if (ImGui::CollapsingHeader("Raster Unit", ImGuiTreeNodeFlags_DefaultOpen)) {
         const m6561_raster_unit_t* rs = &win->vic->rs;
-        ImGui::Text("h_count: %d", rs->h_count);
-        ImGui::Text("v_count: %d", rs->v_count);
-        ImGui::Text("vm_index: %d", rs->vm_index);
-        ImGui::Text("vm_base:  %d", rs->vm_base);
-        ImGui::Text("cell_count: %d", rs->cell_count);
-        ImGui::Text("row_count:  %d", rs->row_count);
-        ImGui::Text("h_disp_start: %d", rs->h_disp_start);
-        ImGui::Text("h_disp_end:   %d", rs->h_disp_end);
-        ImGui::Text("v_disp_start: %d", rs->v_disp_start);
-        ImGui::Text("v_disp_end:   %d", rs->v_disp_end);
-        ImGui::Text("cell_height:  %d", rs->cell_height);
-        ImGui::Text("border:  %d", rs->border);
-        ImGui::Text("fetch disable: %d", rs->fetch_disable);
+        ImGui::Text("h_count: %02X", rs->h_count);
+        ImGui::Text("v_count: %03X", rs->v_count);
+        ImGui::Text("vc:          %03X", rs->vc);
+        ImGui::Text("vc_base:     %03X", rs->vc_base);
+        ImGui::Text("vc_disabled: %d", rs->vc_disabled);
+        ImGui::Text("rc:          %d", rs->rc);
+        ImGui::Text("row_height:  %d", rs->row_height);
+        ImGui::Text("row_count:   %02X", rs->row_count);
+    }
+}
+
+static void _ui_m6561_draw_memory_unit(const ui_m6561_t* win) {
+    if (ImGui::CollapsingHeader("Memory Unit", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const m6561_memory_unit_t* mem = &win->vic->mem;
+        ImGui::Text("c_addr_base: %04X", mem->c_addr_base);
+        ImGui::Text("g_addr_base: %04X", mem->g_addr_base);
+        ImGui::Text("c_value: %03X", mem->c_value);
+    }
+}
+
+static void _ui_m6561_draw_rgb(const char* label, uint32_t val) {
+    ImGui::Text("%s", label); ImGui::SameLine();
+    ImGui::ColorButton("##rgbclr", ImColor(val | 0xFF000000), ImGuiColorEditFlags_NoAlpha, ImVec2(12,12));
+}
+
+static void _ui_m6561_draw_graphics_unit(const ui_m6561_t* win) {
+    if (ImGui::CollapsingHeader("Graphics Unit", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const m6561_graphics_unit_t* gu = &win->vic->gunit;
+        ImGui::Text("shift: %02X", gu->shift);
+        ImGui::Text("color: %02X", gu->color);
+        _ui_m6561_draw_rgb("bg_color:", gu->bg_color);
+    }
+}
+
+static void _ui_m6561_draw_border_unit(const ui_m6561_t* win) {
+    if (ImGui::CollapsingHeader("Border Unit", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const m6561_border_unit_t* b = &win->vic->border;
+        ImGui::Text("left:   %02X", b->left);
+        ImGui::Text("right:  %02X", b->right);
+        ImGui::Text("top:    %02X", b->top);
+        ImGui::Text("bottom: %02X", b->bottom);
+        _ui_m6561_draw_rgb("color", b->color);
+        ImGui::Text("enabled: %d", b->enabled);
     }
 }
 
 static void _ui_m6561_draw_crt(const ui_m6561_t* win) {
-    if (ImGui::CollapsingHeader("CRT")) {
+    if (ImGui::CollapsingHeader("CRT", ImGuiTreeNodeFlags_DefaultOpen)) {
         const m6561_crt_t* crt = &win->vic->crt;
         ImGui::Text("x: %3d  y: %3d", crt->x, crt->y);
-        ImGui::Text("vis x(%d=>%d) y(%d=>%d)", crt->vis_x0, crt->vis_x1, crt->vis_y0, crt->vis_y1);
+        ImGui::Text("vis x: %d=>%d", crt->vis_x0, crt->vis_x1);
+        ImGui::Text("vis y: %d=>%d", crt->vis_y0, crt->vis_y1);
     }
 }
 
@@ -199,6 +230,9 @@ void ui_m6561_draw(ui_m6561_t* win) {
         _ui_m6561_draw_hwcolors(win);
         _ui_m6561_draw_registers(win);
         _ui_m6561_draw_raster_unit(win);
+        _ui_m6561_draw_memory_unit(win);
+        _ui_m6561_draw_graphics_unit(win);
+        _ui_m6561_draw_border_unit(win);
         _ui_m6561_draw_crt(win);
         ImGui::EndChild();
     }
