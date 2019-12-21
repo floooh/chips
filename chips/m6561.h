@@ -358,7 +358,29 @@ uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
     return pins;
 }
 
-static inline void _m6561_crt_next_scanline(m6561_t* vic) {
+static inline void _m6561_decode_pixels(m6561_t* vic, uint32_t* dst) {
+    if (vic->border.enabled) {
+        for (int i = 0; i < 4; i++) {
+            *dst++ = vic->border.color;
+        }
+    }
+    else {
+        uint32_t bg, fg;
+        if (vic->gunit.inv_color) {
+            bg = _m6561_colors[vic->gunit.color & 7];
+            fg = vic->gunit.bg_color;
+        }
+        else {
+            bg = vic->gunit.bg_color;
+            fg = _m6561_colors[vic->gunit.color & 7];
+        }
+        uint8_t p = vic->gunit.shift;
+        dst[0] = (p & (1<<7)) ? fg : bg;
+        dst[1] = (p & (1<<6)) ? fg : bg;
+        dst[2] = (p & (1<<5)) ? fg : bg;
+        dst[3] = (p & (1<<4)) ? fg : bg;
+        vic->gunit.shift = p<<4;
+    }
 }
 
 bool m6561_tick(m6561_t* vic) {
@@ -371,10 +393,7 @@ bool m6561_tick(m6561_t* vic) {
             y = vic->rs.v_count;
             w = _M6561_HTOTAL;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * _M6561_PIXELS_PER_TICK;
-            // FIXME
-            for (int i = 0; i < _M6561_PIXELS_PER_TICK; i++) {
-                *dst++ = 0xFF00FF00;
-            }
+            _m6561_decode_pixels(vic, dst);
         }
         else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
                  (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
@@ -383,32 +402,7 @@ bool m6561_tick(m6561_t* vic) {
             const int y = vic->crt.y - vic->crt.vis_y0;
             const int w = vic->crt.vis_w;
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * _M6561_PIXELS_PER_TICK;
-            if (vic->border.enabled) {
-                /* border area */
-                uint32_t border_color = vic->border.color;
-                *dst++ = border_color;
-                *dst++ = border_color;
-                *dst++ = border_color;
-                *dst++ = border_color;
-            }
-            else {
-                /* upper or lower nibble of last fetch pixel data */
-                uint8_t p = vic->gunit.shift;
-                uint32_t bg, fg;
-                if (vic->gunit.inv_color) {
-                    bg = _m6561_colors[vic->gunit.color & 7];
-                    fg = vic->gunit.bg_color;
-                }
-                else {
-                    bg = vic->gunit.bg_color;
-                    fg = _m6561_colors[vic->gunit.color & 7];
-                }
-                *dst++ = (p & (1<<7)) ? fg : bg;
-                *dst++ = (p & (1<<6)) ? fg : bg;
-                *dst++ = (p & (1<<5)) ? fg : bg;
-                *dst++ = (p & (1<<4)) ? fg : bg;
-                vic->gunit.shift = p<<4;
-            }
+            _m6561_decode_pixels(vic, dst);
         }
     }
 
