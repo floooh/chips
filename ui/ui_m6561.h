@@ -137,7 +137,7 @@ static void _ui_m6561_draw_hwcolors(ui_m6561_t* win) {
 static void _ui_m6561_draw_registers(const ui_m6561_t* win) {
     if (ImGui::CollapsingHeader("Registers")) {
         for (int i = 0; i < M6561_NUM_REGS; i++) {
-            ImGui::Text("CR%X: %02X", i, win->vic->regs[i]);
+            ImGui::Text("CR%X ($%04X/%5d): %02X", i, 0x9000+i, 0x9000+i, win->vic->regs[i]);
         }
     }
 }

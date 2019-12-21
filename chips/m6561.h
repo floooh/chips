@@ -142,6 +142,7 @@ typedef struct {
 typedef struct {
     uint8_t shift;          /* current pixel shifter */
     uint8_t color;          /* last fetched color value */
+    bool inv_color;         /* true when bit 3 of CRF is clear */
     uint32_t bg_color;      /* cached RGBA background color */
 } m6561_graphics_unit_t;
 
@@ -319,6 +320,7 @@ static void _m6561_regs_dirty(m6561_t* vic) {
     vic->border.top = vic->regs[1];
     vic->border.bottom = vic->border.top + ((vic->regs[3]>>1) & 0x3F) * vic->rs.row_height;
     vic->border.color = _m6561_colors[vic->regs[15] & 7];
+    vic->gunit.inv_color = (vic->regs[15] & 8) == 0;
     vic->gunit.bg_color = _m6561_colors[(vic->regs[15]>>4) & 0xF];
     vic->mem.g_addr_base = ((vic->regs[5] & 0xF)<<10);  // A13..A10
     vic->mem.c_addr_base = (((vic->regs[5]>>4)&0xF)<<10) | // A13..A10
@@ -326,6 +328,8 @@ static void _m6561_regs_dirty(m6561_t* vic) {
 }
 
 uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
+    // FIXME: read from 'unmapped' areas returns last
+    // fetched graphics data
     CHIPS_ASSERT(vic);
     uint8_t addr = pins & M6561_REG_MASK;
     if (pins & M6561_RW) {
@@ -390,8 +394,15 @@ bool m6561_tick(m6561_t* vic) {
             else {
                 /* upper or lower nibble of last fetch pixel data */
                 uint8_t p = vic->gunit.shift;
-                uint32_t bg = vic->gunit.bg_color;
-                uint32_t fg = _m6561_colors[vic->gunit.color & 7];
+                uint32_t bg, fg;
+                if (vic->gunit.inv_color) {
+                    bg = _m6561_colors[vic->gunit.color & 7];
+                    fg = vic->gunit.bg_color;
+                }
+                else {
+                    bg = vic->gunit.bg_color;
+                    fg = _m6561_colors[vic->gunit.color & 7];
+                }
                 *dst++ = (p & (1<<7)) ? fg : bg;
                 *dst++ = (p & (1<<6)) ? fg : bg;
                 *dst++ = (p & (1<<5)) ? fg : bg;
@@ -418,20 +429,20 @@ bool m6561_tick(m6561_t* vic) {
     }
 
     /* fetch data */
+    if (vic->rs.vc & 1) {
+        /* a g-access (graphics data) into pixel shifter */
+        uint16_t addr = vic->mem.g_addr_base |
+                        ((vic->mem.c_value & 0xFF) * vic->rs.row_height) |
+                        vic->rs.rc;
+        vic->gunit.shift = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
+        vic->gunit.color = (vic->mem.c_value>>8) & 0xF;
+    }
+    else {
+        /* a c-access (character code and color) */
+        uint16_t addr = vic->mem.c_addr_base | (vic->rs.vc>>1);
+        vic->mem.c_value = vic->mem.fetch_cb(addr, vic->mem.user_data);
+    }
     if (!vic->rs.vc_disabled) {
-        if (vic->rs.vc & 1) {
-            /* a g-access (graphics data) into pixel shifter */
-            uint16_t addr = vic->mem.g_addr_base |
-                            ((vic->mem.c_value & 0xFF) * vic->rs.row_height) |
-                            vic->rs.rc;
-            vic->gunit.shift = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
-            vic->gunit.color = (vic->mem.c_value>>8) & 0xF;
-        }
-        else {
-            /* a c-access (character code and color) */
-            uint16_t addr = vic->mem.c_addr_base | (vic->rs.vc>>1);
-            vic->mem.c_value = vic->mem.fetch_cb(addr, vic->mem.user_data);
-        }
         vic->rs.vc = (vic->rs.vc + 1) & ((1<<11)-1);
     }
 
