@@ -18,7 +18,7 @@
     ~~~
         your own assert macro (default: assert(c))
 
-    You need to include the following headers before including c64.h:
+    You need to include the following headers before including vic20.h:
 
     - chips/m6502.h
     - chips/m6522.h
@@ -73,6 +73,15 @@ typedef enum {
     VIC20_JOYSTICKTYPE_DIGITAL_12,    /* input routed to both joysticks */
 } vic20_joystick_type_t;
 
+/* memory configuration (used in vic20_desc_t.mem_config) */
+typedef enum {
+    VIC20_MEMCONFIG_STANDARD,       /* unexpanded */
+    VIC20_MEMCONFIG_8K,             /* Block 1 */
+    VIC20_MEMCONFIG_16K,            /* Block 1+2 */
+    VIC20_MEMCONFIG_24K,            /* Block 1+2+3 */
+    VIC20_MEMCONFIG_32K             /* Block 1+2+3+5 (note that BASIC can only use blocks 1+2+3) */
+} vic20_memory_config_t;
+
 /* joystick mask bits */
 #define VIC20_JOYSTICK_UP    (1<<0)
 #define VIC20_JOYSTICK_DOWN  (1<<1)
@@ -96,9 +105,10 @@ typedef enum {
 /* audio sample data callback */
 typedef void (*vic20_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
-/* config parameters for c64_init() */
+/* config parameters for vic20_init() */
 typedef struct {
-    vic20_joystick_type_t joystick_type;  /* default is VIC20_JOYSTICK_NONE */
+    vic20_joystick_type_t joystick_type;    /* default is VIC20_JOYSTICK_NONE */
+    vic20_memory_config_t mem_config;       /* default is VIC20_MEMCONFIG_STANDARD */
 
     /* video output config (if you don't want video decoding, set these to 0) */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer,
@@ -138,8 +148,8 @@ typedef struct {
     uint8_t iec_port;           /* IEC serial port, shared with c1541_t if connected */
     uint8_t kbd_joy1_mask;      /* current joystick-1 state from keyboard-joystick emulation */
     uint8_t kbd_joy2_mask;      /* current joystick-2 state from keyboard-joystick emulation */
-    uint8_t joy_joy1_mask;      /* current joystick-1 state from c64_joystick() */
-    uint8_t joy_joy2_mask;      /* current joystick-2 state from c64_joystick() */
+    uint8_t joy_joy1_mask;      /* current joystick-1 state from vic20_joystick() */
+    uint8_t joy_joy2_mask;      /* current joystick-2 state from vic20_joystick() */
 
     kbd_t kbd;                  /* keyboard matrix state */
     mem_t mem_cpu;              /* CPU-visible memory mapping */
@@ -155,10 +165,10 @@ typedef struct {
     uint8_t color_ram[0x0400];      /* special color RAM */
     uint8_t ram0[0x0400];           /* 1 KB zero page, stack, system work area */
     uint8_t ram1[0x1000];           /* 4 KB main RAM */
-    uint8_t ram_exp[3][0x2000];     /* optional expansion RAM areas */
     uint8_t rom_char[0x1000];       /* 4 KB character ROM image */
     uint8_t rom_basic[0x2000];      /* 8 KB BASIC ROM image */
     uint8_t rom_kernal[0x2000];     /* 8 KB KERNAL V3 ROM image */
+    uint8_t ram_exp[4][0x2000];     /* optional expansion RAM areas */
 } vic20_t;
 
 /* initialize a new VIC-20 instance */
@@ -285,15 +295,27 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
         9400..97FF      1Kx4 bit color ram (either at 9600 or 9400)
         [9800..9BFF]    1 KB I/O Expansion 2
         [9C00..9FFF]    1 KB I/O Expansion 3
-        [A000..BFFF]    8 KB Expansion Block 5 (usuall ROM cartrisges)
+        [A000..BFFF]    8 KB Expansion Block 5 (usually ROM cartridges)
         C000..DFFF      8 KB BASIC ROM
         E000..FFFF      8 KB KERNAL ROM
     */
     mem_init(&sys->mem_cpu);
     mem_map_ram(&sys->mem_cpu, 0, 0x0000, 0x0400, sys->ram0);
     mem_map_ram(&sys->mem_cpu, 0, 0x1000, 0x1000, sys->ram1);
+    if (desc->mem_config >= VIC20_MEMCONFIG_8K) {
+        mem_map_ram(&sys->mem_cpu, 0, 0x2000, 0x2000, sys->ram_exp[0]);
+    }
+    if (desc->mem_config >= VIC20_MEMCONFIG_16K) {
+        mem_map_ram(&sys->mem_cpu, 0, 0x4000, 0x2000, sys->ram_exp[1]);
+    }
+    if (desc->mem_config >= VIC20_MEMCONFIG_24K) {
+        mem_map_ram(&sys->mem_cpu, 0, 0x6000, 0x2000, sys->ram_exp[2]);
+    }
     mem_map_rom(&sys->mem_cpu, 0, 0x8000, 0x1000, sys->rom_char);
     mem_map_ram(&sys->mem_cpu, 0, 0x9400, 0x0400, sys->color_ram);
+    if (desc->mem_config >= VIC20_MEMCONFIG_32K) {
+        mem_map_ram(&sys->mem_cpu, 0, 0xA000, 0x2000, sys->ram_exp[3]);
+    }
     mem_map_rom(&sys->mem_cpu, 0, 0xC000, 0x2000, sys->rom_basic);
     mem_map_rom(&sys->mem_cpu, 0, 0xE000, 0x2000, sys->rom_kernal);
 
@@ -313,6 +335,9 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);
     mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);
     mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);
+    if (desc->mem_config >= VIC20_MEMCONFIG_8K) {
+        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x1C00, sys->ram_exp[0]);
+    }
     mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);
 }
 
