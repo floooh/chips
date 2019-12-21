@@ -473,6 +473,7 @@ bool m6561_tick(m6561_t* vic) {
         }
         if (vic->rs.v_count == _M6561_VTOTAL) {
             vic->rs.v_count = 0;
+            vic->border.enabled |= _M6561_VBORDER;
         }
     }
 
