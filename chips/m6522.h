@@ -580,15 +580,6 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
             /* FIXME: pulse output */
             break;
         
-        case M6522_REG_RA_NOH:
-            if (M6522_ACR_PA_LATCH_ENABLE(c)) {
-                data = c->pa.inpr;
-            }
-            else {
-                data = _m6522_input_pa(c);
-            }
-            break;
-
         case M6522_REG_DDRB:
             data = c->pb.ddr;
             break;
@@ -627,20 +618,29 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
             /* FIXME */
             break;
 
+        case M6522_REG_ACR:
+            data = c->acr;
+            break;
+
         case M6522_REG_PCR:
             data = c->pcr;
             break;
 
-        case M6522_REG_ACR:
-            data = c->acr;
+        case M6522_REG_IFR:
+            data = c->intr.ifr;
             break;
 
         case M6522_REG_IER:
             data = c->intr.ier | 0x80;
             break;
 
-        case M6522_REG_IFR:
-            data = c->intr.ifr;
+        case M6522_REG_RA_NOH:
+            if (M6522_ACR_PA_LATCH_ENABLE(c)) {
+                data = c->pa.inpr;
+            }
+            else {
+                data = _m6522_input_pa(c);
+            }
             break;
     }
     return data;
@@ -661,11 +661,6 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             _m6522_clear_pa_intr(c);
             /* FIXME: handshake */
             /* FIXME: pulse output */
-            break;
-        
-        case M6522_REG_RA_NOH:
-            c->pa.outr = data;
-            _m6522_output_pa(c);
             break;
         
         case M6522_REG_DDRB:
@@ -712,11 +707,6 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             /* FIXME */
             break;
 
-        case M6522_REG_PCR:
-            c->pcr = data;
-            /* FIXME: CA2, CB2 */
-            break;
-
         case M6522_REG_ACR:
             c->acr = data;
             _m6522_output_pb(c);
@@ -728,13 +718,24 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             }
             break;
 
-        case M6522_REG_IER:
-            _m6522_write_ier(c, data);
+        case M6522_REG_PCR:
+            c->pcr = data;
+            /* FIXME: CA2, CB2 */
             break;
 
         case M6522_REG_IFR:
             _m6522_write_ifr(c, data);
             break;
+
+        case M6522_REG_IER:
+            _m6522_write_ier(c, data);
+            break;
+
+        case M6522_REG_RA_NOH:
+            c->pa.outr = data;
+            _m6522_output_pa(c);
+            break;
+
     }
 }
 

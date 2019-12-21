@@ -129,7 +129,7 @@ typedef struct {
     uint8_t row_count;      /* character row count */
 } m6561_raster_unit_t;
 
-/* memory unit  state */
+/* memory unit state */
 typedef struct {
     uint16_t c_addr_base;   /* character access base address */
     uint16_t g_addr_base;   /* graphics access base address */

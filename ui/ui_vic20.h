@@ -422,6 +422,7 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
         ui_m6522_desc_t desc = {0};
         desc.title = "MOS 6522 #1 (VIA)";
         desc.via = &ui->vic20->via_1;
+        desc.regs_base = 0x9110;
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6522", 40, _ui_vic20_via_pins);
@@ -429,6 +430,7 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
         x += dx; y += dy;
         desc.title = "MOS 6522 #2 (VIA)";
         desc.via = &ui->vic20->via_2;
+        desc.regs_base = 0x9120;
         desc.x = x;
         desc.y = y;
         ui_m6522_init(&ui->via[1], &desc);
@@ -438,6 +440,7 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
         ui_m6561_desc_t desc = {0};
         desc.title = "MOS 6561 (VIC-I)";
         desc.vic = &ui->vic20->vic;
+        desc.regs_base = 0x9000;
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6561", 28, _ui_vic20_vic_pins);

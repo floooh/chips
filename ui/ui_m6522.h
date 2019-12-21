@@ -62,6 +62,7 @@ extern "C" {
 typedef struct ui_m6522_desc_t {
     const char* title;          /* window title */
     m6522_t* via;               /* m6522_t instance to track */
+    uint16_t regs_base;         /* register bank base address (e.g. 9110 or 9120 on VIC-20) */
     int x, y;                   /* initial window pos */
     int w, h;                   /* initial window size (or 0 for default size) */
     bool open;                  /* initial window open state */
@@ -71,6 +72,7 @@ typedef struct ui_m6522_desc_t {
 typedef struct ui_m6522_t {
     const char* title;
     m6522_t* via;
+    uint16_t regs_base;
     float init_x, init_y;
     float init_w, init_h;
     bool open;
@@ -104,9 +106,10 @@ void ui_m6522_init(ui_m6522_t* win, const ui_m6522_desc_t* desc) {
     memset(win, 0, sizeof(ui_m6522_t));
     win->title = desc->title;
     win->via = desc->via;
+    win->regs_base = desc->regs_base;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
-    win->init_w = (float) ((desc->w == 0) ? 420 : desc->w);
+    win->init_w = (float) ((desc->w == 0) ? 440 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 380 : desc->h);
     win->open = desc->open;
     win->valid = true;
@@ -118,46 +121,45 @@ void ui_m6522_discard(ui_m6522_t* win) {
     win->valid = false;
 }
 
-static void _ui_m6522_draw_state(ui_m6522_t* win) {
-    const m6522_t* via = win->via;
-    ImGui::Columns(3, "##via_columns", false);
-    ImGui::SetColumnWidth(0, 64);
-    ImGui::SetColumnWidth(1, 80);
-    ImGui::SetColumnWidth(2, 80);
-    ImGui::NextColumn();
-    ImGui::Text("Port A"); ImGui::NextColumn();
-    ImGui::Text("Port B"); ImGui::NextColumn();
-    ImGui::Separator();
-    ImGui::Text("DDR"); ImGui::NextColumn();
-    ui_util_b8("", via->pa.ddr); ImGui::NextColumn();
-    ui_util_b8("", via->pb.ddr); ImGui::NextColumn();
-    ImGui::Text("Output"); ImGui::NextColumn();
-    ui_util_b8("", via->pa.outr); ImGui::NextColumn();
-    ui_util_b8("", via->pb.outr); ImGui::NextColumn();
-    ImGui::Text("Input"); ImGui::NextColumn();
-    ui_util_b8("", via->pa.inpr); ImGui::NextColumn();
-    ui_util_b8("", via->pb.inpr); ImGui::NextColumn();
-    ImGui::Text("Pins"); ImGui::NextColumn();
-    ui_util_b8("", via->pa.port); ImGui::NextColumn();
-    ui_util_b8("", via->pb.port); ImGui::NextColumn();
-    ImGui::Separator();
-    ImGui::NextColumn();
-    ImGui::Text("Timer 1"); ImGui::NextColumn();
-    ImGui::Text("Timer 2"); ImGui::NextColumn();
-    ImGui::Separator();
-    ImGui::Text("Active"); ImGui::NextColumn();
-    ImGui::Text("%s", via->t1.active ? "YES":"NO"); ImGui::NextColumn();
-    ImGui::Text("%s", via->t2.active ? "YES":"NO"); ImGui::NextColumn();
-    ImGui::Text("Latch"); ImGui::NextColumn();
-    ImGui::Text("%04X", via->t1.latch); ImGui::NextColumn();
-    ImGui::Text("%04X", via->t2.latch); ImGui::NextColumn();
-    ImGui::Text("Counter"); ImGui::NextColumn();
-    ImGui::Text("%04X", via->t1.counter); ImGui::NextColumn();
-    ImGui::Text("%04X", via->t2.counter); ImGui::NextColumn();
-    ImGui::Separator();
-    ImGui::Columns();
-    ImGui::Text("ACR      %02X", via->acr);
-    ImGui::Text("PCR      %02X", via->pcr);
+static void _ui_m6522_draw_registers(ui_m6522_t* win) {
+    if (ImGui::CollapsingHeader("Registers", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const m6522_t* via = win->via;
+        uint16_t rb = win->regs_base;
+        ImGui::Text("RB I/O   ($%04X/%5d): %02X/%02X", rb+0, rb+0, via->pb.inpr, via->pb.outr);
+        ImGui::Text("RA I/O   ($%04X/%5d): %02X/%02X", rb+1, rb+1, via->pa.inpr, via->pa.outr);
+        ImGui::Text("DDRB     ($%04X/%5d): %02X", rb+2, rb+2, via->pb.ddr);
+        ImGui::Text("DDRA     ($%04X/%5d): %02X", rb+3, rb+3, via->pa.ddr);
+        ImGui::Text("T1CL     ($%04X/%5d): %02X", rb+4, rb+4, via->t1.counter & 0xFF);
+        ImGui::Text("T1CH     ($%04X/%5d): %02X", rb+5, rb+5, (via->t1.counter>>8) & 0xFF);
+        ImGui::Text("T1LL     ($%04X/%5d): %02X", rb+6, rb+6, via->t1.latch & 0xFF);
+        ImGui::Text("T1LH     ($%04X/%5d): %02X", rb+7, rb+7, (via->t1.latch>>8) & 0xFF);
+        ImGui::Text("T2CL C/L ($%04X/%5d): %02X/%02X", rb+8, rb+8, via->t2.counter & 0xFF, via->t2.latch & 0xFF);
+        ImGui::Text("T2CH C/L ($%04X/%5d): %02X/%02X", rb+9, rb+9, (via->t2.counter>>8) & 0xFF, (via->t2.latch>>8) & 0xFF);
+        ImGui::Text("SR       ($%04X/%5d): ??", rb+10, rb+10);
+        ImGui::Text("ACR      ($%04X/%5d): %02X", rb+11, rb+11, via->acr);
+        ImGui::Text("PCR      ($%04X/%5d): %02X", rb+12, rb+12, via->pcr);
+        ImGui::Text("IFR      ($%04X/%5d): %02X", rb+13, rb+13, via->intr.ifr);
+        ImGui::Text("IER      ($%04X/%5d): %02X", rb+14, rb+14, via->intr.ier);
+        ImGui::Text("RA_N I/O ($%04X/%5d): %02X/%02X", rb+15, rb+15, via->pa.inpr, via->pa.outr);
+    }
+}
+
+static void _ui_m6522_draw_ports(ui_m6522_t* win) {
+    if (ImGui::CollapsingHeader("Ports"), ImGuiTreeNodeFlags_DefaultOpen) {
+        ImGui::Text("FIXME");
+    }
+}
+
+static void _ui_m6522_draw_counters(ui_m6522_t* win) {
+    if (ImGui::CollapsingHeader("Counters"), ImGuiTreeNodeFlags_DefaultOpen) {
+        ImGui::Text("FIXME");
+    }
+}
+
+static void _ui_m6522_draw_int_ctrl(ui_m6522_t* win) {
+    if (ImGui::CollapsingHeader("Interrupts & Control"), ImGuiTreeNodeFlags_DefaultOpen) {
+        ImGui::Text("FIXME");
+    }
 }
 
 void ui_m6522_draw(ui_m6522_t* win) {
@@ -173,7 +175,10 @@ void ui_m6522_draw(ui_m6522_t* win) {
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##m6522_state", ImVec2(0, 0), true);
-        _ui_m6522_draw_state(win);
+        _ui_m6522_draw_registers(win);
+        _ui_m6522_draw_ports(win);
+        _ui_m6522_draw_counters(win);
+        _ui_m6522_draw_int_ctrl(win);
         ImGui::EndChild();
     }
     ImGui::End();

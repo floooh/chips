@@ -62,6 +62,7 @@ extern "C" {
 typedef struct ui_m6561_desc_t {
     const char* title;          /* window title */
     m6561_t* vic;               /* pointer to m6561_t instance to track */
+    uint16_t regs_base;         /* register bank base address (e.g. 0x9000 in VIC-20) */
     int x, y;                   /* initial window pos */
     int w, h;                   /* initial window size (default size if 0) */
     bool open;                  /* initial open state */
@@ -71,6 +72,7 @@ typedef struct ui_m6561_desc_t {
 typedef struct ui_m6561_t {
     const char* title;
     m6561_t* vic;
+    uint16_t regs_base;
     float init_x, init_y;
     float init_w, init_h;
     bool open;
@@ -104,9 +106,10 @@ void ui_m6561_init(ui_m6561_t* win, const ui_m6561_desc_t* desc) {
     memset(win, 0, sizeof(ui_m6561_t));
     win->title = desc->title;
     win->vic = desc->vic;
+    win->regs_base = desc->regs_base;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
-    win->init_w = (float) ((desc->w == 0) ? 496 : desc->w);
+    win->init_w = (float) ((desc->w == 0) ? 440 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 416 : desc->h);
     win->open = desc->open;
     win->valid = true;
@@ -119,7 +122,7 @@ void ui_m6561_discard(ui_m6561_t* win) {
 }
 
 static void _ui_m6561_draw_hwcolors(ui_m6561_t* win) {
-    if (ImGui::CollapsingHeader("Hardware Colors")) {
+    if (ImGui::CollapsingHeader("Hardware Colors", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImVec4 c;
         const ImVec2 size(18,18);
         for (int i = 0; i < 16; i++) {
@@ -135,9 +138,9 @@ static void _ui_m6561_draw_hwcolors(ui_m6561_t* win) {
 }
 
 static void _ui_m6561_draw_registers(const ui_m6561_t* win) {
-    if (ImGui::CollapsingHeader("Registers")) {
+    if (ImGui::CollapsingHeader("Registers", ImGuiTreeNodeFlags_DefaultOpen)) {
         for (int i = 0; i < M6561_NUM_REGS; i++) {
-            ImGui::Text("CR%X ($%04X/%5d): %02X", i, 0x9000+i, 0x9000+i, win->vic->regs[i]);
+            ImGui::Text("CR%X ($%04X/%5d): %02X", i, win->regs_base+i, win->regs_base+i, win->vic->regs[i]);
         }
     }
 }
