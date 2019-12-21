@@ -355,13 +355,6 @@ uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
 }
 
 static inline void _m6561_crt_next_scanline(m6561_t* vic) {
-    vic->crt.x = 0;
-    if (vic->rs.v_count == _M6561_VRETRACEPOS) {
-        vic->crt.y = 0;
-    }
-    else {
-        vic->crt.y++;
-    }
 }
 
 bool m6561_tick(m6561_t* vic) {
@@ -447,6 +440,7 @@ bool m6561_tick(m6561_t* vic) {
     vic->crt.x++;
     if (vic->rs.h_count == _M6561_HTOTAL) {
         vic->rs.h_count = 0;
+        vic->crt.x = 0;
         vic->rs.v_count++;
         vic->rs.rc++;
         if (vic->rs.rc == vic->rs.row_height) {
@@ -454,7 +448,6 @@ bool m6561_tick(m6561_t* vic) {
             vic->rs.row_count++;
             vic->rs.vc_base = vic->rs.vc & 0xFFFE;
         }
-        _m6561_crt_next_scanline(vic);
         if (vic->rs.v_count == vic->border.top) {
             vic->border.enabled &= ~_M6561_VBORDER;
             vic->rs.vc_disabled &= ~_M6561_VVC_DISABLE;
@@ -466,6 +459,12 @@ bool m6561_tick(m6561_t* vic) {
         if (vic->rs.v_count == vic->border.bottom) {
             vic->border.enabled |= _M6561_VBORDER;
             vic->rs.vc_disabled |= _M6561_VVC_DISABLE;
+        }
+        if (vic->rs.v_count == _M6561_VRETRACEPOS) {
+            vic->crt.y = 0;
+        }
+        else {
+            vic->crt.y++;
         }
         if (vic->rs.v_count == _M6561_VTOTAL) {
             vic->rs.v_count = 0;
