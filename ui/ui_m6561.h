@@ -173,9 +173,11 @@ static void _ui_m6561_draw_rgb(const char* label, uint32_t val) {
 static void _ui_m6561_draw_graphics_unit(const ui_m6561_t* win) {
     if (ImGui::CollapsingHeader("Graphics Unit", ImGuiTreeNodeFlags_DefaultOpen)) {
         const m6561_graphics_unit_t* gu = &win->vic->gunit;
-        ImGui::Text("shift: %02X", gu->shift);
-        ImGui::Text("color: %02X", gu->color);
+        ImGui::Text("shifter: %02X", gu->shift);
+        ImGui::Text("color:   %02X", gu->color);
         _ui_m6561_draw_rgb("bg_color:", gu->bg_color);
+        _ui_m6561_draw_rgb("brd_color", gu->brd_color);
+        _ui_m6561_draw_rgb("aux_color", gu->aux_color);
     }
 }
 
@@ -186,7 +188,6 @@ static void _ui_m6561_draw_border_unit(const ui_m6561_t* win) {
         ImGui::Text("right:  %02X", b->right);
         ImGui::Text("top:    %02X", b->top);
         ImGui::Text("bottom: %02X", b->bottom);
-        _ui_m6561_draw_rgb("color", b->color);
         ImGui::Text("enabled: %d", b->enabled);
     }
 }

@@ -143,14 +143,15 @@ typedef struct {
     uint8_t shift;          /* current pixel shifter */
     uint8_t color;          /* last fetched color value */
     bool inv_color;         /* true when bit 3 of CRF is clear */
-    uint32_t bg_color;      /* cached RGBA background color */
+    uint32_t bg_color;      /* current background color RGBA */
+    uint32_t brd_color;     /* border color RGBA */
+    uint32_t aux_color;     /* auxiliary color RGBA */
 } m6561_graphics_unit_t;
 
 /* border unit state */
 typedef struct {
     uint8_t left, right;
     uint16_t top, bottom;
-    uint32_t color;         /* cached RGBA border color */
     uint8_t enabled;        /* if != 0, in border area */
 } m6561_border_unit_t;
 
@@ -319,9 +320,10 @@ static void _m6561_regs_dirty(m6561_t* vic) {
     vic->border.right = vic->border.left + (vic->regs[2] & 0x7F) * 2;
     vic->border.top = vic->regs[1];
     vic->border.bottom = vic->border.top + ((vic->regs[3]>>1) & 0x3F) * vic->rs.row_height;
-    vic->border.color = _m6561_colors[vic->regs[15] & 7];
     vic->gunit.inv_color = (vic->regs[15] & 8) == 0;
     vic->gunit.bg_color = _m6561_colors[(vic->regs[15]>>4) & 0xF];
+    vic->gunit.brd_color = _m6561_colors[vic->regs[15] & 7];
+    vic->gunit.aux_color = _m6561_colors[(vic->regs[14]>>4) & 0xF];
     vic->mem.g_addr_base = ((vic->regs[5] & 0xF)<<10);  // A13..A10
     vic->mem.c_addr_base = (((vic->regs[5]>>4)&0xF)<<10) | // A13..A10
                            (((vic->regs[2]>>7)&1)<<9);    // A9
@@ -361,24 +363,43 @@ uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
 static inline void _m6561_decode_pixels(m6561_t* vic, uint32_t* dst) {
     if (vic->border.enabled) {
         for (int i = 0; i < 4; i++) {
-            *dst++ = vic->border.color;
+            *dst++ = vic->gunit.brd_color;
         }
     }
     else {
-        uint32_t bg, fg;
-        if (vic->gunit.inv_color) {
-            bg = _m6561_colors[vic->gunit.color & 7];
-            fg = vic->gunit.bg_color;
+        uint8_t p = vic->gunit.shift;
+        if (vic->gunit.color & 8) {
+            /* multi-color mode */
+            uint32_t fg_color = _m6561_colors[vic->gunit.color & 7];
+            switch (p & 0xC0) {
+                case 0x00: dst[0] = dst[1] = vic->gunit.bg_color; break;
+                case 0x40: dst[0] = dst[1] = vic->gunit.brd_color; break;
+                case 0x80: dst[0] = dst[1] = fg_color; break;
+                case 0xC0: dst[0] = dst[1] = vic->gunit.aux_color; break;
+            }
+            switch (p & 0x30) {
+                case 0x00: dst[2] = dst[3] = vic->gunit.bg_color; break;
+                case 0x10: dst[2] = dst[3] = vic->gunit.brd_color; break;
+                case 0x20: dst[2] = dst[3] = fg_color; break;
+                case 0x30: dst[2] = dst[3] = vic->gunit.aux_color; break;
+            }
         }
         else {
-            bg = vic->gunit.bg_color;
-            fg = _m6561_colors[vic->gunit.color & 7];
+            /* hires mode */
+            uint32_t bg, fg;
+            if (vic->gunit.inv_color) {
+                bg = _m6561_colors[vic->gunit.color & 7];
+                fg = vic->gunit.bg_color;
+            }
+            else {
+                bg = vic->gunit.bg_color;
+                fg = _m6561_colors[vic->gunit.color & 7];
+            }
+            dst[0] = (p & (1<<7)) ? fg : bg;
+            dst[1] = (p & (1<<6)) ? fg : bg;
+            dst[2] = (p & (1<<5)) ? fg : bg;
+            dst[3] = (p & (1<<4)) ? fg : bg;
         }
-        uint8_t p = vic->gunit.shift;
-        dst[0] = (p & (1<<7)) ? fg : bg;
-        dst[1] = (p & (1<<6)) ? fg : bg;
-        dst[2] = (p & (1<<5)) ? fg : bg;
-        dst[3] = (p & (1<<4)) ? fg : bg;
         vic->gunit.shift = p<<4;
     }
 }
