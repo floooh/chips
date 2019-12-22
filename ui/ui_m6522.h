@@ -171,7 +171,7 @@ void ui_m6522_draw(ui_m6522_t* win) {
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##m6522_chip", ImVec2(176, 0), true);
-        ui_chip_draw(&win->chip, win->via->pins);
+        ui_chip_draw(&win->chip, win->via->iorq_pins);
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##m6522_state", ImVec2(0, 0), true);

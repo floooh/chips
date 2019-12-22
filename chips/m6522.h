@@ -216,7 +216,6 @@ typedef struct {
     uint16_t latch;     /* 16-bit initial value latch */
     uint16_t counter;   /* 16-bit counter */
     uint8_t cr;         /* control register */
-    bool active;        /* timer currently active */
     bool t_bit;         /* toggles between true and false when counter underflows */
     bool t_out;         /* true for 1 cycle when counter underflow */
     /* merged delay-pipelines:
@@ -249,7 +248,8 @@ typedef struct {
     m6522_int_t intr;
     uint8_t acr;        /* auxilary control register */
     uint8_t pcr;        /* peripheral control register */
-    uint64_t pins;
+    uint64_t tick_pins; /* pin state after last m6522_tick() */
+    uint64_t iorq_pins; /* pin state after last m6522_iorq() */
     m6522_in_t in_cb;
     m6522_out_t out_cb;
     void* user_data;
@@ -299,7 +299,6 @@ static void _m6522_init_port(m6522_port_t* p) {
 static void _m6522_init_timer(m6522_timer_t* t) {
     t->latch = 0xFFFF;
     t->counter = 0;
-    t->active = false;
     t->t_bit = false;
     t->t_out = false;
     t->pip = 0;
@@ -343,7 +342,8 @@ void m6522_reset(m6522_t* c) {
     _m6522_init_interrupt(&c->intr);
     c->acr = 0;
     c->pcr = 0;
-    c->pins = 0;
+    c->tick_pins = 0;
+    c->iorq_pins = 0;
 }
 
 /*--- delay-pipeline macros ---*/
@@ -449,13 +449,18 @@ void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
         if (M6522_ACR_T1_CONTINUOUS(c)) {
             /* continuous */
             t->t_bit = !t->t_bit;
-            /* reload timer from latch */
+            /* trigger T1 interrupt on each underflow */
+            _m6522_set_intr(c, M6522_IRQ_T1);
+            /* reload T1 from latch */
             _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 0);
         }
         else {
             /* oneshot */
-            t->t_bit = true;
-            t->active = false;
+            if (!t->t_bit) {
+                /* trigger T1 only once */
+                _m6522_set_intr(c, M6522_IRQ_T1);
+                t->t_bit = true;
+            }
         }
     }
     if (old_t_out != t->t_out) {
@@ -465,7 +470,6 @@ void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
     /* reload timer from latch? */
     if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
         t->counter = t->latch;
-        t->active = true;
         _M6522_PIP_CLR(t->pip, M6522_PIP_TIMER_COUNT, 1);
     }
 }
@@ -474,9 +478,10 @@ void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
 void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
     m6522_timer_t* t = &c->t2;
 
-    /* decrement counter on PB6 or because it's active? */
+    /* either decrement on PB6, or on tick */
     if (M6522_ACR_T2_COUNT_PB6(c)) {
-        if (pins & M6522_PB6) {
+        /* count falling edge of PB6 */
+        if (M6522_PB6 & (~pins & (pins ^ c->tick_pins))) {
             t->counter--;
         }
     }
@@ -484,31 +489,33 @@ void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
         t->counter--;
     }
 
-    /* timer underflow? */
+    /* timer underflow? note that T2 simply keeps on counting, it will not reload
+        from its latch on underflow, loading from latch only happens once when the timer
+        is set up with a new value
+    */
     t->t_out = (0 == t->counter) && _M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_COUNT, 1);
     if (t->t_out) {
         /* t2 is always oneshot */
-        /* FIXME: t_out and t_bit are not actually used */
-        t->t_bit = true;
-        t->active = false;
+        if (!t->t_bit) {
+            /* FIXME: 6526-style "Timer B Bug"? */
+            _m6522_set_intr(c, M6522_IRQ_T2);
+            t->t_bit = true;
+        }
     }
 
-    /* reload timer from latch? */
+    /* reload timer from latch? this only happens when T2 is
+        explicitly loaded, not on wrap-around
+     */
     if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
         t->counter = t->latch;
-        t->active = true;
         _M6522_PIP_CLR(t->pip, M6522_PIP_TIMER_COUNT, 1);
     }
 }
 
 void _m6522_tick_pipeline(m6522_t* c) {
-    /* feed counter pipelines */
-    if (c->t1.active) {
-        _M6522_PIP_SET(c->t1.pip, M6522_PIP_TIMER_COUNT, 2);
-    }
-    if (c->t2.active) {
-        _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_COUNT, 2);
-    }
+    /* feed counter pipelines, both counters are always counting */
+    _M6522_PIP_SET(c->t1.pip, M6522_PIP_TIMER_COUNT, 2);
+    _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_COUNT, 2);
 
     /* interrupt pipeline */
     if (c->intr.ifr & c->intr.ier) {
@@ -522,15 +529,6 @@ void _m6522_tick_pipeline(m6522_t* c) {
 }
 
 void _m6522_update_irq(m6522_t* c, uint64_t pins) {
-    /* timer 1 and 2 underflows */
-    if (c->t1.t_out) {
-        _m6522_set_intr(c, M6522_IRQ_T1);
-    }
-    if (c->t2.t_out) {
-        /* FIXME: 6526-style "Timer B Bug"? */
-        _m6522_set_intr(c, M6522_IRQ_T2);
-    }
-
     /* FIXME interrupts for CA1, CA2, CB1, CB2, SR */
 
     /* main interrupt bit (delayed by pip) */
@@ -546,12 +544,13 @@ uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
     _m6522_tick_pipeline(c);
     if (0 != (c->intr.ifr & (1<<7))) {
         pins |= M6522_IRQ;
-        c->pins |= M6522_IRQ;
+        c->iorq_pins |= M6522_IRQ;
     }
     else {
         pins &= ~M6522_IRQ;
-        c->pins &= ~M6522_IRQ;
+        c->iorq_pins &= ~M6522_IRQ;
     }
+    c->tick_pins = pins;
     return pins;
 }
 
@@ -678,11 +677,6 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             c->t1.latch = (c->t1.latch & 0xFF00) | data;
             break;
 
-        case M6522_REG_T1LH:
-            c->t1.latch = (data << 8) | (c->t1.latch & 0x00FF);
-            _m6522_clear_intr(c, M6522_IRQ_T1);
-            break;
-
         case M6522_REG_T1CH:
             c->t1.latch = (data << 8) | (c->t1.latch & 0x00FF);
             _m6522_clear_intr(c, M6522_IRQ_T1);
@@ -693,6 +687,11 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             _M6522_PIP_SET(c->t1.pip, M6522_PIP_TIMER_LOAD, 1);
             break;
 
+        case M6522_REG_T1LH:
+            c->t1.latch = (data << 8) | (c->t1.latch & 0x00FF);
+            _m6522_clear_intr(c, M6522_IRQ_T1);
+            break;
+
         case M6522_REG_T2CL:
             c->t2.latch = (c->t2.latch & 0xFF00) | data;
             break;
@@ -700,6 +699,7 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
         case M6522_REG_T2CH:
             c->t2.latch = (data << 8) | (c->t2.latch & 0x00FF);
             _m6522_clear_intr(c, M6522_IRQ_T2);
+            c->t2.t_bit = false;
             _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_LOAD, 1);
             break;
 
@@ -735,7 +735,6 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             c->pa.outr = data;
             _m6522_output_pa(c);
             break;
-
     }
 }
 
@@ -753,7 +752,7 @@ uint64_t m6522_iorq(m6522_t* c, uint64_t pins) {
             _m6522_write(c, addr, data);
         }
         M6522_SET_PAB(pins, c->pa.port, c->pb.port);
-        c->pins = pins;
+        c->iorq_pins = pins;
     }
     return pins;
 }
