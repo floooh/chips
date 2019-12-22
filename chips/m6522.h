@@ -215,21 +215,20 @@ typedef struct {
 typedef struct {
     uint16_t latch;     /* 16-bit initial value latch */
     uint16_t counter;   /* 16-bit counter */
-    uint8_t cr;         /* control register */
     bool t_bit;         /* toggles between true and false when counter underflows */
     bool t_out;         /* true for 1 cycle when counter underflow */
     /* merged delay-pipelines:
         2-cycle 'counter active':   bits 0..7
         1-cycle 'force load':       bits 8..16
     */
-    uint32_t pip;
+    uint16_t pip;
 } m6522_timer_t;
 
 /* interrupt state (same as m6522_int_t) */
 typedef struct {
     uint8_t ier;            /* interrupt enable register */
     uint8_t ifr;            /* interrupt flag register */
-    uint32_t pip;
+    uint16_t pip;
 } m6522_int_t;
 
 /* m6522 initialization parameters */
@@ -523,9 +522,9 @@ void _m6522_tick_pipeline(m6522_t* c) {
     }
 
     /* tick pipelines forward */
-    c->t1.pip = (c->t1.pip >> 1) & 0x7F7F7F7F;
-    c->t2.pip = (c->t2.pip >> 1) & 0x7F7F7F7F;
-    c->intr.pip = (c->intr.pip >> 1) & 0x7F7F7F7F;
+    c->t1.pip = (c->t1.pip >> 1) & 0x7F7F;
+    c->t2.pip = (c->t2.pip >> 1) & 0x7F7F;
+    c->intr.pip = (c->intr.pip >> 1) & 0x7F7F;
 }
 
 void _m6522_update_irq(m6522_t* c, uint64_t pins) {
