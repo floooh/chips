@@ -184,7 +184,8 @@ typedef struct {
     uint16_t count;
     uint16_t load;
     uint32_t shift;
-    bool enabled;
+    uint8_t bit;
+    uint8_t enabled;
 } m6561_noise_t;
 
 typedef struct {
@@ -193,6 +194,8 @@ typedef struct {
     uint8_t volume;
     int sample_period;
     int sample_counter;
+    float sample_accum;
+    float sample_accum_count;
     float sample_mag;
     float sample;
     float dcadj_sum;
@@ -300,7 +303,7 @@ void m6561_init(m6561_t* vic, const m6561_desc_t* desc) {
     vic->sound.sample_period = (desc->tick_hz * _M6561_FIXEDPOINT_SCALE) / desc->sound_hz;
     vic->sound.sample_counter = vic->sound.sample_period;
     vic->sound.sample_mag = desc->sound_magnitude;
-    vic->sound.noise.shift = 0x7FFFF8;
+    vic->sound.noise.shift = 0x7FFFFC;
 }
 
 static void _m6561_reset_crt(m6561_t* vic) {
@@ -371,13 +374,13 @@ static void _m6561_regs_dirty(m6561_t* vic) {
     vic->mem.c_addr_base = (((vic->regs[5]>>4)&0xF)<<10) | // A13..A10
                            (((vic->regs[2]>>7)&1)<<9);    // A9
     vic->sound.voice[0].enabled = 0 != (vic->regs[10] & 0x80);
-    vic->sound.voice[0].load = 0x100 * (0x80 - (vic->regs[10] & 0x7F));
+    vic->sound.voice[0].load = 0x80 * (0x80 - (vic->regs[10] & 0x7F));
     vic->sound.voice[1].enabled = 0 != (vic->regs[11] & 0x80);
-    vic->sound.voice[1].load = 0x80 * (0x80 - (vic->regs[11] & 0x7F));
+    vic->sound.voice[1].load = 0x40 * (0x80 - (vic->regs[11] & 0x7F));
     vic->sound.voice[2].enabled = 0 != (vic->regs[12] & 0x80);
-    vic->sound.voice[2].load = 0x40 * (0x80 - (vic->regs[12] & 0x7F));
+    vic->sound.voice[2].load = 0x20 * (0x80 - (vic->regs[12] & 0x7F));
     vic->sound.noise.enabled = 0 != (vic->regs[13] & 0x80);
-    vic->sound.noise.load = 0x20 * (0x80 - (vic->regs[13] & 0x7F));
+    vic->sound.noise.load = 0x40 * (0x80 - (vic->regs[13] & 0x7F));
     vic->sound.volume = vic->regs[14] & 0xF;
 }
 
@@ -457,43 +460,18 @@ static inline void _m6561_decode_pixels(m6561_t* vic, uint32_t* dst) {
     }
 }
 
-/* audio helpers (noise code is same as m6581) */
-static inline void _m6561_tick_voice(m6561_sound_t* snd, int i) {
-    m6561_voice_t* voice = &snd->voice[i];
-    if (voice->count == 0) {
-        voice->count = voice->load;
-        voice->bit = !voice->bit;
-    }
-    else {
-        voice->count--;
-    }
-}
-
-static inline void _m6561_tick_noise(m6561_sound_t* snd) {
-    m6561_noise_t* noise = &snd->noise;
-    if (noise->count == 0) {
-        noise->count = noise->load;
-        uint32_t s = noise->shift;
-        uint32_t new_bit = ((s>>22)^(s>>17)) & 1;
-        noise->shift = ((s<<1)|new_bit) & 0x007FFFFF;
-    }
-    else {
-        noise->count--;
-    }
-}
-
-/* returns a 12-bit "noice amplitude" */
+/* returns 8-bit "noice amplitude" */
 #define _M6561_BIT(val,bitnr) ((val>>bitnr)&1)
 static inline uint16_t _m6561_noise_ampl(m6561_sound_t* snd) {
     uint32_t s = snd->noise.shift;
-    return (_M6561_BIT(s,22)<<11) |
-           (_M6561_BIT(s,20)<<10) |
-           (_M6561_BIT(s,16)<<9) |
-           (_M6561_BIT(s,13)<<8) |
-           (_M6561_BIT(s,11)<<7) |
-           (_M6561_BIT(s,7)<<6) |
-           (_M6561_BIT(s,4)<<5) |
-           (_M6561_BIT(s,2)<<4);
+    return (_M6561_BIT(s,22)<<7) |
+           (_M6561_BIT(s,20)<<6) |
+           (_M6561_BIT(s,16)<<5) |
+           (_M6561_BIT(s,13)<<4) |
+           (_M6561_BIT(s,11)<<3) |
+           (_M6561_BIT(s,7)<<2) |
+           (_M6561_BIT(s,4)<<1) |
+           (_M6561_BIT(s,2)<<0);
 }
 
 /* center positive volume value around zero */
@@ -505,21 +483,57 @@ static inline float _m6561_dcadjust(m6561_sound_t* snd, float s) {
     return s - (snd->dcadj_sum / M6561_DCADJ_BUFLEN);
 }
 
-static inline bool _m6561_gen_sample(m6561_sound_t* snd) {
+/* tick the audio engine, return true if a new sample if ready */
+static inline bool _m6561_tick_audio(m6561_t* vic) {
+    m6561_sound_t* snd = &vic->sound;
+    /* tick tone voices */
+    for (int i = 0; i < 3; i++) {
+        m6561_voice_t* voice = &snd->voice[i];
+        if (voice->count == 0) {
+            voice->count = voice->load;
+            voice->bit = !voice->bit;
+        }
+        else {
+            voice->count--;
+        }
+    }
+    /* tick noice channel */
+    {
+        m6561_noise_t* noise = &snd->noise;
+        if (noise->count == 0) {
+            noise->count = noise->load;
+            noise->bit = !noise->bit;
+            if (noise->bit) {
+                uint32_t s = noise->shift;
+                /* FIXME: m6581 uses (s>>17), MAME is (s>>13) */
+                uint32_t new_bit = ((s>>22)^(s>>13)) & 1;
+                noise->shift = ((s<<1)|new_bit) & 0x007FFFFF;
+            }
+        }
+        else {
+            noise->count--;
+        }
+    }
+
+    /* generate new sample if ready */
+    float sm = 0.0f;
+    for (int i = 0; i < 3; i++) {
+        if (snd->voice[i].enabled && snd->voice[i].bit) {
+            sm += 1.0f;
+        }
+    }
+    if (snd->noise.enabled && snd->noise.bit) {
+        sm += ((float)_m6561_noise_ampl(snd)) / 256.0f;
+    }
+    snd->sample_accum += sm;
+    snd->sample_accum_count += 1.0f;
     snd->sample_counter -= _M6561_FIXEDPOINT_SCALE;
     if (snd->sample_counter <= 0) {
         snd->sample_counter += snd->sample_period;
-        float sm = 0.0f;
-        for (int i = 0; i < 3; i++) {
-            if ((snd->voice[i].enabled) && (snd->voice[i].bit)) {
-                sm += 1.0f;
-            }
-        }
-        if (snd->noise.enabled) {
-            sm += (_m6561_noise_ampl(snd) / (float)(1<<12));
-        }
-        sm *= snd->volume / 15.0f;
-        snd->sample = _m6561_dcadjust(snd, sm) * snd->sample_mag;
+        float sample = (snd->sample_accum / snd->sample_accum_count) * (snd->volume / 15.0f);
+        snd->sample_accum = 0.0f;
+        snd->sample_accum_count = 1.0f;
+        snd->sample = _m6561_dcadjust(snd, sample) * snd->sample_mag;
         return true;
     }
     else {
@@ -623,12 +637,7 @@ bool m6561_tick(m6561_t* vic) {
     }
 
     /* sound generation */
-    for (int i = 0; i < 3; i++) {
-        _m6561_tick_voice(&vic->sound, i);
-    }
-    _m6561_tick_noise(&vic->sound);
-    bool sample_ready = _m6561_gen_sample(&vic->sound);
-    return sample_ready;
+    return _m6561_tick_audio(vic);
 }
 
 #endif
