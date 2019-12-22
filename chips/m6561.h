@@ -472,6 +472,7 @@ static inline void _m6561_tick_voice(m6561_sound_t* snd, int i) {
 static inline void _m6561_tick_noise(m6561_sound_t* snd) {
     m6561_noise_t* noise = &snd->noise;
     if (noise->count == 0) {
+        noise->count = noise->load;
         uint32_t s = noise->shift;
         uint32_t new_bit = ((s>>22)^(s>>17)) & 1;
         noise->shift = ((s<<1)|new_bit) & 0x007FFFFF;
@@ -515,9 +516,10 @@ static inline bool _m6561_gen_sample(m6561_sound_t* snd) {
             }
         }
         if (snd->noise.enabled) {
-            sm += _m6561_noise_ampl(snd) / (float)(0x0FFF);
+            sm += (_m6561_noise_ampl(snd) / (float)(1<<12));
         }
-        snd->sample = _m6561_dcadjust(snd, sm) * snd->sample_mag * (snd->volume / 15.0f);
+        sm *= snd->volume / 15.0f;
+        snd->sample = _m6561_dcadjust(snd, sm) * snd->sample_mag;
         return true;
     }
     else {
