@@ -120,7 +120,7 @@ typedef struct {
     vic20_audio_callback_t audio_cb;  /* called when audio_num_samples are ready */
     int audio_num_samples;          /* default is VIC20_AUDIO_NUM_SAMPLES */
     int audio_sample_rate;          /* playback sample rate in Hz, default is 44100 */
-    float audio_sid_volume;         /* audio volume of the VIC chip (0.0 .. 1.0), default is 1.0 */
+    float audio_volume;             /* audio volume of the VIC chip (0.0 .. 1.0), default is 1.0 */
 
     /* ROM images */
     const void* rom_char;           /* 4 KByte character ROM dump */
@@ -271,6 +271,9 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     vic_desc.vis_w = _VIC20_STD_DISPLAY_WIDTH;
     vic_desc.vis_h = _VIC20_STD_DISPLAY_HEIGHT;
     vic_desc.user_data = sys;
+    vic_desc.tick_hz = VIC20_FREQUENCY;
+    vic_desc.sound_hz = _VIC20_DEFAULT(desc->audio_sample_rate, 44100);
+    vic_desc.sound_magnitude = _VIC20_DEFAULT(desc->audio_volume, 1.0f);
     m6561_init(&sys->vic, &vic_desc);
 
     _vic20_init_key_map(sys);

@@ -95,6 +95,9 @@ extern "C" {
 #define M6561_NUM_REGS (16)
 #define M6561_REG_MASK (M6561_NUM_REGS-1)
 
+/* sound DC adjustment buffer length */
+#define M6561_DCADJ_BUFLEN (512)
+
 /* extract 8-bit data bus from 64-bit pins */
 #define M6561_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
@@ -115,6 +118,12 @@ typedef struct {
     m6561_fetch_t fetch_cb;
     /* optional user-data for fetch callback */
     void* user_data;
+    /* frequency at which the tick function is called (for audio generation) */
+    int tick_hz;
+    /* sound sample frequency */
+    int sound_hz;
+    /* sound sample magnitude/volume (0.0..1.0)*/
+    float sound_magnitude;
 } m6561_desc_t;
 
 /* raster unit state */
@@ -165,12 +174,35 @@ typedef struct {
 
 /* sound generator state */
 typedef struct {
+    uint16_t count;     /* count down with clock frequency */
+    uint16_t load;      /* counter reload value */
+    uint8_t bit;        /* toggled between 0 and 1 */
+    uint8_t enabled;    /* 1 if enabled */
+} m6561_voice_t;
+
+typedef struct {
+    uint16_t count;
+    uint16_t load;
+    uint32_t shift;
+    bool enabled;
+} m6561_noise_t;
+
+typedef struct {
+    m6561_voice_t voice[3];
+    m6561_noise_t noise;
+    uint8_t volume;
+    int sample_period;
+    int sample_counter;
+    float sample_mag;
     float sample;
+    float dcadj_sum;
+    uint32_t dcadj_pos;
+    float dcadj_buf[M6561_DCADJ_BUFLEN];
 } m6561_sound_t;
 
 /* the m6561_t state struct */
 typedef struct {
-    // FIXME
+    uint64_t pins;
     bool debug_vis;
     uint8_t regs[M6561_NUM_REGS];
     m6561_raster_unit_t rs;
@@ -179,7 +211,6 @@ typedef struct {
     m6561_graphics_unit_t gunit;
     m6561_crt_t crt;
     m6561_sound_t sound;
-    uint64_t pins;
 } m6561_t;
 
 /* initialize a new m6561_t instance */
@@ -219,6 +250,9 @@ uint32_t m6561_color(int i);
 #define _M6561_VBORDER (1<<1)
 #define _M6561_HVC_DISABLE (1<<0)
 #define _M6561_VVC_DISABLE (1<<1)
+
+/* fixed point precision for audio sample period */
+#define _M6561_FIXEDPOINT_SCALE (16)
 
 #define _M6561_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
 
@@ -263,10 +297,14 @@ void m6561_init(m6561_t* vic, const m6561_desc_t* desc) {
     vic->border.enabled = _M6561_HBORDER|_M6561_VBORDER;
     vic->mem.fetch_cb = desc->fetch_cb;
     vic->mem.user_data = desc->user_data;
+    vic->sound.sample_period = (desc->tick_hz * _M6561_FIXEDPOINT_SCALE) / desc->sound_hz;
+    vic->sound.sample_counter = vic->sound.sample_period;
+    vic->sound.sample_mag = desc->sound_magnitude;
+    vic->sound.noise.shift = 0x7FFFF8;
 }
 
-static void _m6561_reset_crt(m6561_crt_t* c) {
-    c->x = c->y = 0;
+static void _m6561_reset_crt(m6561_t* vic) {
+    vic->crt.x = vic->crt.y = 0;
 }
 
 static void _m6561_reset_raster_unit(m6561_t* vic) {
@@ -286,6 +324,11 @@ static void _m6561_reset_graphics_unit(m6561_t* vic) {
     memset(&vic->gunit, 0, sizeof(vic->gunit));
 }
 
+static void _m6561_reset_audio(m6561_t* vic) {
+    memset(&vic->sound, 0, sizeof(vic->sound));
+    vic->sound.noise.shift = 0x7FFFF8;
+}
+
 void m6561_reset(m6561_t* vic) {
     CHIPS_ASSERT(vic);
     memset(&vic->regs, 0, sizeof(vic->regs));
@@ -293,8 +336,8 @@ void m6561_reset(m6561_t* vic) {
     _m6561_reset_border_unit(vic);
     _m6561_reset_memory_unit(vic);
     _m6561_reset_graphics_unit(vic);
-    _m6561_reset_crt(&vic->crt);
-    // FIXME: reset audio unit
+    _m6561_reset_crt(vic);
+    _m6561_reset_audio(vic);
 }
 
 int m6561_display_width(m6561_t* vic) {
@@ -327,6 +370,15 @@ static void _m6561_regs_dirty(m6561_t* vic) {
     vic->mem.g_addr_base = ((vic->regs[5] & 0xF)<<10);  // A13..A10
     vic->mem.c_addr_base = (((vic->regs[5]>>4)&0xF)<<10) | // A13..A10
                            (((vic->regs[2]>>7)&1)<<9);    // A9
+    vic->sound.voice[0].enabled = 0 != (vic->regs[10] & 0x80);
+    vic->sound.voice[0].load = 0x100 * (0x80 - (vic->regs[10] & 0x7F));
+    vic->sound.voice[1].enabled = 0 != (vic->regs[11] & 0x80);
+    vic->sound.voice[1].load = 0x80 * (0x80 - (vic->regs[11] & 0x7F));
+    vic->sound.voice[2].enabled = 0 != (vic->regs[12] & 0x80);
+    vic->sound.voice[2].load = 0x40 * (0x80 - (vic->regs[12] & 0x7F));
+    vic->sound.noise.enabled = 0 != (vic->regs[13] & 0x80);
+    vic->sound.noise.load = 0x20 * (0x80 - (vic->regs[13] & 0x7F));
+    vic->sound.volume = vic->regs[14] & 0xF;
 }
 
 uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
@@ -357,6 +409,7 @@ uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
         vic->regs[addr] = data;
         _m6561_regs_dirty(vic);
     }
+    vic->pins = pins;
     return pins;
 }
 
@@ -404,6 +457,75 @@ static inline void _m6561_decode_pixels(m6561_t* vic, uint32_t* dst) {
     }
 }
 
+/* audio helpers (noise code is same as m6581) */
+static inline void _m6561_tick_voice(m6561_sound_t* snd, int i) {
+    m6561_voice_t* voice = &snd->voice[i];
+    if (voice->count == 0) {
+        voice->count = voice->load;
+        voice->bit = !voice->bit;
+    }
+    else {
+        voice->count--;
+    }
+}
+
+static inline void _m6561_tick_noise(m6561_sound_t* snd) {
+    m6561_noise_t* noise = &snd->noise;
+    if (noise->count == 0) {
+        uint32_t s = noise->shift;
+        uint32_t new_bit = ((s>>22)^(s>>17)) & 1;
+        noise->shift = ((s<<1)|new_bit) & 0x007FFFFF;
+    }
+    else {
+        noise->count--;
+    }
+}
+
+/* returns a 12-bit "noice amplitude" */
+#define _M6561_BIT(val,bitnr) ((val>>bitnr)&1)
+static inline uint16_t _m6561_noise_ampl(m6561_sound_t* snd) {
+    uint32_t s = snd->noise.shift;
+    return (_M6561_BIT(s,22)<<11) |
+           (_M6561_BIT(s,20)<<10) |
+           (_M6561_BIT(s,16)<<9) |
+           (_M6561_BIT(s,13)<<8) |
+           (_M6561_BIT(s,11)<<7) |
+           (_M6561_BIT(s,7)<<6) |
+           (_M6561_BIT(s,4)<<5) |
+           (_M6561_BIT(s,2)<<4);
+}
+
+/* center positive volume value around zero */
+static inline float _m6561_dcadjust(m6561_sound_t* snd, float s) {
+    snd->dcadj_sum -= snd->dcadj_buf[snd->dcadj_pos];
+    snd->dcadj_sum += s;
+    snd->dcadj_buf[snd->dcadj_pos] = s;
+    snd->dcadj_pos = (snd->dcadj_pos + 1) & (M6561_DCADJ_BUFLEN-1);
+    return s - (snd->dcadj_sum / M6561_DCADJ_BUFLEN);
+}
+
+static inline bool _m6561_gen_sample(m6561_sound_t* snd) {
+    snd->sample_counter -= _M6561_FIXEDPOINT_SCALE;
+    if (snd->sample_counter <= 0) {
+        snd->sample_counter += snd->sample_period;
+        float sm = 0.0f;
+        for (int i = 0; i < 3; i++) {
+            if ((snd->voice[i].enabled) && (snd->voice[i].bit)) {
+                sm += 1.0f;
+            }
+        }
+        if (snd->noise.enabled) {
+            sm += _m6561_noise_ampl(snd) / (float)(0x0FFF);
+        }
+        snd->sample = _m6561_dcadjust(snd, sm) * snd->sample_mag * (snd->volume / 15.0f);
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+/* tick function (for graphics and audio) */
 bool m6561_tick(m6561_t* vic) {
 
     /* decode pixels, each tick is 4 pixels */
@@ -498,9 +620,13 @@ bool m6561_tick(m6561_t* vic) {
         }
     }
 
-    /* FIXME: sound generation */
-
-    return false;
+    /* sound generation */
+    for (int i = 0; i < 3; i++) {
+        _m6561_tick_voice(&vic->sound, i);
+    }
+    _m6561_tick_noise(&vic->sound);
+    bool sample_ready = _m6561_gen_sample(&vic->sound);
+    return sample_ready;
 }
 
 #endif
