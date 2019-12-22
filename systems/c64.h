@@ -325,7 +325,6 @@ typedef struct {
     
     bool valid;
     c64_joystick_type_t joystick_type;
-    uint8_t joystick_active;
     bool io_mapped;             /* true when D000..DFFF has IO area mapped in */
     uint8_t cas_port;           /* cassette port, shared with c1530_t if datasette is connected */
     uint8_t iec_port;           /* IEC serial port, shared with c1541_t if connected */
