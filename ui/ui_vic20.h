@@ -124,15 +124,13 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
                 ui->boot_cb(ui->vic20);
                 ui_dbg_reboot(&ui->dbg);
             }
+
             if (ImGui::BeginMenu("Joystick")) {
                 if (ImGui::MenuItem("None", 0, ui->vic20->joystick_type == VIC20_JOYSTICKTYPE_NONE)) {
                     ui->vic20->joystick_type = VIC20_JOYSTICKTYPE_NONE;
                 }
-                if (ImGui::MenuItem("Digital #1", 0, ui->vic20->joystick_type == VIC20_JOYSTICKTYPE_DIGITAL_1)) {
-                    ui->vic20->joystick_type = VIC20_JOYSTICKTYPE_DIGITAL_1;
-                }
-                if (ImGui::MenuItem("Digital #2", 0, ui->vic20->joystick_type == VIC20_JOYSTICKTYPE_DIGITAL_2)) {
-                    ui->vic20->joystick_type = VIC20_JOYSTICKTYPE_DIGITAL_2;
+                if (ImGui::MenuItem("Digital", 0, ui->vic20->joystick_type == VIC20_JOYSTICKTYPE_DIGITAL)) {
+                    ui->vic20->joystick_type = VIC20_JOYSTICKTYPE_DIGITAL;
                 }
                 ImGui::EndMenu();
             }
