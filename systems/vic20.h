@@ -478,8 +478,11 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         pins &= ~M6502_IRQ;
     }
 
-    // tick VIC (returns true when new audio sample is ready)
-    if (m6561_tick(&sys->vic)) {
+    /* tick VIC to generate video */
+    m6561_tick_video(&sys->vic);
+
+    /* tick VIC to generate audio */
+    if (m6561_tick_audio(&sys->vic)) {
         /* new audio sample ready */
         sys->sample_buffer[sys->sample_pos++] = sys->vic.sound.sample;
         if (sys->sample_pos == sys->num_samples) {

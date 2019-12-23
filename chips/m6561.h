@@ -175,14 +175,14 @@ typedef struct {
 /* sound generator state */
 typedef struct {
     uint16_t count;     /* count down with clock frequency */
-    uint16_t load;      /* counter reload value */
+    uint16_t period;    /* counter reload value */
     uint8_t bit;        /* toggled between 0 and 1 */
     uint8_t enabled;    /* 1 if enabled */
 } m6561_voice_t;
 
 typedef struct {
     uint16_t count;
-    uint16_t load;
+    uint16_t period;
     uint32_t shift;
     uint8_t bit;
     uint8_t enabled;
@@ -226,8 +226,10 @@ int m6561_display_width(m6561_t* vic);
 int m6561_display_height(m6561_t* vic);
 /* read/write m6561 registers */
 uint64_t m6561_iorq(m6561_t* vic, uint64_t pins);
-/* tick the m6561 instance, returns true when sound sample ready */
-bool m6561_tick(m6561_t* vic);
+/* tick the m6561_t instance to generate video output */
+void m6561_tick_video(m6561_t* vic);
+/* tick the m6561_t instance to generate audio, returns true when sample is ready */
+bool m6561_tick_audio(m6561_t* vic);
 /* get 32-bit RGBA8 value from color index (0..15) */
 uint32_t m6561_color(int i);
 
@@ -374,13 +376,14 @@ static void _m6561_regs_dirty(m6561_t* vic) {
     vic->mem.c_addr_base = (((vic->regs[5]>>4)&0xF)<<10) | // A13..A10
                            (((vic->regs[2]>>7)&1)<<9);    // A9
     vic->sound.voice[0].enabled = 0 != (vic->regs[10] & 0x80);
-    vic->sound.voice[0].load = 0x80 * (0x80 - (vic->regs[10] & 0x7F));
+    vic->sound.voice[0].period = 0x80 * (0x80 - (vic->regs[10] & 0x7F));
     vic->sound.voice[1].enabled = 0 != (vic->regs[11] & 0x80);
-    vic->sound.voice[1].load = 0x40 * (0x80 - (vic->regs[11] & 0x7F));
+    vic->sound.voice[1].period = 0x40 * (0x80 - (vic->regs[11] & 0x7F));
     vic->sound.voice[2].enabled = 0 != (vic->regs[12] & 0x80);
-    vic->sound.voice[2].load = 0x20 * (0x80 - (vic->regs[12] & 0x7F));
+    vic->sound.voice[2].period = 0x20 * (0x80 - (vic->regs[12] & 0x7F));
     vic->sound.noise.enabled = 0 != (vic->regs[13] & 0x80);
-    vic->sound.noise.load = 0x40 * (0x80 - (vic->regs[13] & 0x7F));
+    /* 0x40 factor is not a bug, tweaked to 'sound right' */
+    vic->sound.noise.period = 0x40 * (0x80 - (vic->regs[13] & 0x7F));
     vic->sound.volume = vic->regs[14] & 0xF;
 }
 
@@ -460,89 +463,8 @@ static inline void _m6561_decode_pixels(m6561_t* vic, uint32_t* dst) {
     }
 }
 
-/* returns 8-bit "noice amplitude" */
-#define _M6561_BIT(val,bitnr) ((val>>bitnr)&1)
-static inline uint16_t _m6561_noise_ampl(m6561_sound_t* snd) {
-    uint32_t s = snd->noise.shift;
-    return (_M6561_BIT(s,22)<<7) |
-           (_M6561_BIT(s,20)<<6) |
-           (_M6561_BIT(s,16)<<5) |
-           (_M6561_BIT(s,13)<<4) |
-           (_M6561_BIT(s,11)<<3) |
-           (_M6561_BIT(s,7)<<2) |
-           (_M6561_BIT(s,4)<<1) |
-           (_M6561_BIT(s,2)<<0);
-}
-
-/* center positive volume value around zero */
-static inline float _m6561_dcadjust(m6561_sound_t* snd, float s) {
-    snd->dcadj_sum -= snd->dcadj_buf[snd->dcadj_pos];
-    snd->dcadj_sum += s;
-    snd->dcadj_buf[snd->dcadj_pos] = s;
-    snd->dcadj_pos = (snd->dcadj_pos + 1) & (M6561_DCADJ_BUFLEN-1);
-    return s - (snd->dcadj_sum / M6561_DCADJ_BUFLEN);
-}
-
-/* tick the audio engine, return true if a new sample if ready */
-static inline bool _m6561_tick_audio(m6561_t* vic) {
-    m6561_sound_t* snd = &vic->sound;
-    /* tick tone voices */
-    for (int i = 0; i < 3; i++) {
-        m6561_voice_t* voice = &snd->voice[i];
-        if (voice->count == 0) {
-            voice->count = voice->load;
-            voice->bit = !voice->bit;
-        }
-        else {
-            voice->count--;
-        }
-    }
-    /* tick noice channel */
-    {
-        m6561_noise_t* noise = &snd->noise;
-        if (noise->count == 0) {
-            noise->count = noise->load;
-            noise->bit = !noise->bit;
-            if (noise->bit) {
-                uint32_t s = noise->shift;
-                /* FIXME: m6581 uses (s>>17), MAME is (s>>13) */
-                uint32_t new_bit = ((s>>22)^(s>>13)) & 1;
-                noise->shift = ((s<<1)|new_bit) & 0x007FFFFF;
-            }
-        }
-        else {
-            noise->count--;
-        }
-    }
-
-    /* generate new sample if ready */
-    float sm = 0.0f;
-    for (int i = 0; i < 3; i++) {
-        if (snd->voice[i].enabled && snd->voice[i].bit) {
-            sm += 1.0f;
-        }
-    }
-    if (snd->noise.enabled && snd->noise.bit) {
-        sm += ((float)_m6561_noise_ampl(snd)) / 256.0f;
-    }
-    snd->sample_accum += sm;
-    snd->sample_accum_count += 1.0f;
-    snd->sample_counter -= _M6561_FIXEDPOINT_SCALE;
-    if (snd->sample_counter <= 0) {
-        snd->sample_counter += snd->sample_period;
-        float sample = (snd->sample_accum / snd->sample_accum_count) * (snd->volume / 15.0f);
-        snd->sample_accum = 0.0f;
-        snd->sample_accum_count = 1.0f;
-        snd->sample = _m6561_dcadjust(snd, sample) * snd->sample_mag;
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
-/* tick function (for graphics and audio) */
-bool m6561_tick(m6561_t* vic) {
+/* tick function for video output */
+void m6561_tick_video(m6561_t* vic) {
 
     /* decode pixels, each tick is 4 pixels */
     if (vic->crt.rgba8_buffer) {
@@ -635,9 +557,82 @@ bool m6561_tick(m6561_t* vic) {
             vic->border.enabled |= _M6561_VBORDER;
         }
     }
-
-    /* sound generation */
-    return _m6561_tick_audio(vic);
 }
 
+/*--- audio engine code ---*/
+#define _M6561_BIT(val,bitnr) ((val>>bitnr)&1)
+static inline float _m6561_noise_ampl(uint32_t noise_shift) {
+    uint32_t amp = (_M6561_BIT(noise_shift,22)<<7) |
+                   (_M6561_BIT(noise_shift,20)<<6) |
+                   (_M6561_BIT(noise_shift,16)<<5) |
+                   (_M6561_BIT(noise_shift,13)<<4) |
+                   (_M6561_BIT(noise_shift,11)<<3) |
+                   (_M6561_BIT(noise_shift,7)<<2) |
+                   (_M6561_BIT(noise_shift,4)<<1) |
+                   (_M6561_BIT(noise_shift,2)<<0);
+    return ((float)amp) / 256.0f;
+}
+
+/* center positive volume value around zero */
+static inline float _m6561_dcadjust(m6561_sound_t* snd, float s) {
+    snd->dcadj_sum -= snd->dcadj_buf[snd->dcadj_pos];
+    snd->dcadj_sum += s;
+    snd->dcadj_buf[snd->dcadj_pos] = s;
+    snd->dcadj_pos = (snd->dcadj_pos + 1) & (M6561_DCADJ_BUFLEN-1);
+    return s - (snd->dcadj_sum / M6561_DCADJ_BUFLEN);
+}
+
+/* tick the audio engine, return true if a new sample if ready */
+bool m6561_tick_audio(m6561_t* vic) {
+    m6561_sound_t* snd = &vic->sound;
+    /* tick tone voices */
+    for (int i = 0; i < 3; i++) {
+        m6561_voice_t* voice = &snd->voice[i];
+        if (voice->count == 0) {
+            voice->count = voice->period;
+            voice->bit = !voice->bit;
+        }
+        else {
+            voice->count--;
+        }
+        if (voice->bit && voice->enabled) {
+            snd->sample_accum += 1.0f;
+        }
+    }
+    /* tick noice channel */
+    {
+        m6561_noise_t* noise = &snd->noise;
+        if (noise->count == 0) {
+            noise->count = noise->period;
+            noise->bit = !noise->bit;
+            if (noise->bit) {
+                uint32_t s = noise->shift;
+                /* FIXME(?): m6581 uses (s>>17), MAME is (s>>13) */
+                uint32_t new_bit = ((s>>22)^(s>>13)) & 1;
+                noise->shift = ((s<<1)|new_bit) & 0x007FFFFF;
+            }
+        }
+        else {
+            noise->count--;
+        }
+        if (noise->bit && noise->enabled) {
+            snd->sample_accum += _m6561_noise_ampl(noise->shift);
+        }
+    }
+    snd->sample_accum_count += 1.0f;
+
+    /* output a new sample */
+    snd->sample_counter -= _M6561_FIXEDPOINT_SCALE;
+    if (snd->sample_counter <= 0) {
+        snd->sample_counter += snd->sample_period;
+        float sm = (snd->sample_accum / snd->sample_accum_count) * (snd->volume / 15.0f);
+        snd->sample_accum = 0.0f;
+        snd->sample_accum_count = 0.0f;
+        snd->sample = _m6561_dcadjust(snd, sm) * snd->sample_mag;
+        return true;
+    }
+    else {
+        return false;
+    }
+}
 #endif
