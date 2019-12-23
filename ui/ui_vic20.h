@@ -120,6 +120,9 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
                 vic20_reset(ui->vic20);
                 ui_dbg_reset(&ui->dbg);
             }
+            if (ImGui::MenuItem("Remove Cartridge")) {
+                vic20_remove_rom_cartridge(ui->vic20);
+            }
             if (ImGui::MenuItem("Cold Boot")) {
                 ui->boot_cb(ui->vic20);
                 ui_dbg_reboot(&ui->dbg);

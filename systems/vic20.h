@@ -165,6 +165,8 @@ typedef struct {
     uint8_t rom_basic[0x2000];      /* 8 KB BASIC ROM image */
     uint8_t rom_kernal[0x2000];     /* 8 KB KERNAL V3 ROM image */
     uint8_t ram_exp[4][0x2000];     /* optional expansion RAM areas */
+
+    mem_t mem_cart;                 /* special ROM cartridge memory mapping helper */
 } vic20_t;
 
 /* initialize a new VIC-20 instance */
@@ -197,6 +199,10 @@ vic20_joystick_type_t vic20_joystick_type(vic20_t* sys);
 void vic20_joystick(vic20_t* sys, uint8_t joy_mask);
 /* quickload a .prg/.bin file */
 bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+/* load a .prg/.bin file as ROM cartridge */
+bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+/* remove current ROM cartridge */
+void vic20_remove_rom_cartridge(vic20_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -297,26 +303,29 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
         [A000..BFFF]    8 KB Expansion Block 5 (usually ROM cartridges)
         C000..DFFF      8 KB BASIC ROM
         E000..FFFF      8 KB KERNAL ROM
+
+        NOTE: use mem layer 1 for the standard RAM/ROM, so that
+        the higher-priority layer 0 can be used for ROM cartridges
     */
     mem_init(&sys->mem_cpu);
-    mem_map_ram(&sys->mem_cpu, 0, 0x0000, 0x0400, sys->ram0);
-    mem_map_ram(&sys->mem_cpu, 0, 0x1000, 0x1000, sys->ram1);
+    mem_map_ram(&sys->mem_cpu, 1, 0x0000, 0x0400, sys->ram0);
+    mem_map_ram(&sys->mem_cpu, 1, 0x1000, 0x1000, sys->ram1);
     if (desc->mem_config >= VIC20_MEMCONFIG_8K) {
-        mem_map_ram(&sys->mem_cpu, 0, 0x2000, 0x2000, sys->ram_exp[0]);
+        mem_map_ram(&sys->mem_cpu, 1, 0x2000, 0x2000, sys->ram_exp[0]);
     }
     if (desc->mem_config >= VIC20_MEMCONFIG_16K) {
-        mem_map_ram(&sys->mem_cpu, 0, 0x4000, 0x2000, sys->ram_exp[1]);
+        mem_map_ram(&sys->mem_cpu, 1, 0x4000, 0x2000, sys->ram_exp[1]);
     }
     if (desc->mem_config >= VIC20_MEMCONFIG_24K) {
-        mem_map_ram(&sys->mem_cpu, 0, 0x6000, 0x2000, sys->ram_exp[2]);
+        mem_map_ram(&sys->mem_cpu, 1, 0x6000, 0x2000, sys->ram_exp[2]);
     }
-    mem_map_rom(&sys->mem_cpu, 0, 0x8000, 0x1000, sys->rom_char);
-    mem_map_ram(&sys->mem_cpu, 0, 0x9400, 0x0400, sys->color_ram);
+    mem_map_rom(&sys->mem_cpu, 1, 0x8000, 0x1000, sys->rom_char);
+    mem_map_ram(&sys->mem_cpu, 1, 0x9400, 0x0400, sys->color_ram);
     if (desc->mem_config >= VIC20_MEMCONFIG_32K) {
-        mem_map_ram(&sys->mem_cpu, 0, 0xA000, 0x2000, sys->ram_exp[3]);
+        mem_map_ram(&sys->mem_cpu, 1, 0xA000, 0x2000, sys->ram_exp[3]);
     }
-    mem_map_rom(&sys->mem_cpu, 0, 0xC000, 0x2000, sys->rom_basic);
-    mem_map_rom(&sys->mem_cpu, 0, 0xE000, 0x2000, sys->rom_kernal);
+    mem_map_rom(&sys->mem_cpu, 1, 0xC000, 0x2000, sys->rom_basic);
+    mem_map_rom(&sys->mem_cpu, 1, 0xE000, 0x2000, sys->rom_kernal);
 
     /*
         VIC-I memory map:
@@ -338,6 +347,18 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
         mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x1C00, sys->ram_exp[0]);
     }
     mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);
+
+    /*
+        A special memory mapping used to copy ROM cartridge PRG files
+        into the VIC-20. Those PRG files may be merged from several files
+        and have gaps in them. The data in those gaps must not
+        scribble over the VIC-20's RAM, ROM or IO regions.
+    */
+    mem_init(&sys->mem_cart);
+    mem_map_ram(&sys->mem_cart, 0, 0x2000, 0x2000, sys->ram_exp[0]);
+    mem_map_ram(&sys->mem_cart, 0, 0x4000, 0x2000, sys->ram_exp[1]);
+    mem_map_ram(&sys->mem_cart, 0, 0x6000, 0x2000, sys->ram_exp[2]);
+    mem_map_ram(&sys->mem_cart, 0, 0xA000, 0x2000, sys->ram_exp[3]);
 }
 
 void vic20_discard(vic20_t* sys) {
@@ -666,6 +687,46 @@ bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
         mem_wr(&sys->mem_cpu, addr++, *ptr++);
     }
     return true;
+}
+
+bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid && ptr && (num_bytes > 0));
+    if (num_bytes < 2) {
+        return false;
+    }
+
+    /* the cartridge ROM may be a special merged PRG with a gap between the
+       two memory regions with valid data, we cannot scribble over memory
+       in that gap, so use a temporary memory mapping
+    */
+    const uint16_t start_addr = ptr[1]<<8 | ptr[0];
+    ptr += 2;
+    const uint16_t end_addr = start_addr + (num_bytes - 2);
+    uint16_t addr = start_addr;
+    while (addr < end_addr) {
+        mem_wr(&sys->mem_cart, addr++, *ptr++);
+    }
+
+    /* map the ROM cartridge into the CPU's memory layer 0 */
+    mem_unmap_layer(&sys->mem_cpu, 0);
+    if (start_addr == 0x2000) {
+        mem_map_rom(&sys->mem_cpu, 0, 0x2000, 0x2000, sys->ram_exp[0]);
+    }
+    else if (start_addr == 0x4000) {
+        mem_map_rom(&sys->mem_cpu, 0, 0x4000, 0x2000, sys->ram_exp[1]);
+    }
+    else if (start_addr == 0x6000) {
+        mem_map_rom(&sys->mem_cpu, 0, 0x6000, 0x2000, sys->ram_exp[2]);
+    }
+    mem_map_rom(&sys->mem_cpu, 0, 0xA000, 0x2000, sys->ram_exp[3]);
+    sys->pins |= M6502_RES;
+    return true;
+}
+
+void vic20_remove_rom_cartridge(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    mem_unmap_layer(&sys->mem_cpu, 0);
+    sys->pins |= M6502_RES;
 }
 
 #endif /* CHIPS_IMPL */
