@@ -204,6 +204,36 @@ static void _ui_m6561_draw_crt(const ui_m6561_t* win) {
     }
 }
 
+static void _ui_m6561_draw_sound(const ui_m6561_t* win) {
+    if (ImGui::CollapsingHeader("Sound Unit", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const m6561_sound_t* snd = &win->vic->sound;
+        ImGui::Text("Volume: %02X", snd->volume);
+        ImGui::Separator();
+        for (int i = 0; i < 3; i++) {
+            const m6561_voice_t* v = &snd->voice[i];
+            ImGui::Text("Voice %d:", i);
+            ImGui::Text("  Enabled: %s", v->enabled ? "YES":"NO");
+            ImGui::Text("  Count:   %04X", v->count);
+            ImGui::Text("  Period:  %04X", v->period);
+            ImGui::Text("  Bit:     %s", v->bit ? "ON":"OFF");
+            ImGui::Separator();
+        }
+        const m6561_noise_t* n = &snd->noise;
+        ImGui::Text("Noise:");
+        ImGui::Text("  Enabled: %s", n->enabled ? "YES":"NO");
+        ImGui::Text("  Count:   %04X", n->count);
+        ImGui::Text("  Period:  %04X", n->period);
+        ImGui::Text("  Bit:     %s", n->bit ? "ON":"OFF");
+        ui_util_b24("  Shift:   ", n->shift);
+        ImGui::Separator();
+        ImGui::Text("Sample Output");
+        ImGui::Text("  Count:   %04X", snd->sample_counter);
+        ImGui::Text("  Period:  %04X", snd->sample_period);
+        ImGui::Text("  Volume:  %.4f", snd->sample_mag);
+        ImGui::Text("  Sample:  %.4f", snd->sample);
+    }
+}
+
 static void _ui_m6561_tint_framebuffer(ui_m6561_t* win) {
     uint32_t* ptr = win->vic->crt.rgba8_buffer;
     if (ptr) {
@@ -238,6 +268,7 @@ void ui_m6561_draw(ui_m6561_t* win) {
         _ui_m6561_draw_graphics_unit(win);
         _ui_m6561_draw_border_unit(win);
         _ui_m6561_draw_crt(win);
+        _ui_m6561_draw_sound(win);
         ImGui::EndChild();
     }
     ImGui::End();
