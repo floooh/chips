@@ -366,6 +366,7 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
         ui_m6522_desc_t desc = {0};
         desc.title = "MOS 6522";
         desc.via = &ui->atom->via;
+        desc.regs_base = 0xB800;
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "6522", 40, _ui_atom_via_pins);
