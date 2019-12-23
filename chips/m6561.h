@@ -143,8 +143,6 @@ typedef struct {
     uint16_t c_addr_base;   /* character access base address */
     uint16_t g_addr_base;   /* graphics access base address */
     uint16_t c_value;       /* last fetched character access value */
-    m6561_fetch_t fetch_cb; /* memory fetch callback */
-    void* user_data;        /* memory fetch callback user data */
 } m6561_memory_unit_t;
 
 /* graphics unit state */
@@ -206,6 +204,8 @@ typedef struct {
 /* the m6561_t state struct */
 typedef struct {
     uint64_t pins;
+    m6561_fetch_t fetch_cb; /* memory fetch callback */
+    void* user_data;        /* memory fetch callback user data */
     bool debug_vis;
     uint8_t regs[M6561_NUM_REGS];
     m6561_raster_unit_t rs;
@@ -300,8 +300,8 @@ void m6561_init(m6561_t* vic, const m6561_desc_t* desc) {
     memset(vic, 0, sizeof(*vic));
     _m6561_init_crt(&vic->crt, desc);
     vic->border.enabled = _M6561_HBORDER|_M6561_VBORDER;
-    vic->mem.fetch_cb = desc->fetch_cb;
-    vic->mem.user_data = desc->user_data;
+    vic->fetch_cb = desc->fetch_cb;
+    vic->user_data = desc->user_data;
     vic->sound.sample_period = (desc->tick_hz * _M6561_FIXEDPOINT_SCALE) / desc->sound_hz;
     vic->sound.sample_counter = vic->sound.sample_period;
     vic->sound.sample_mag = desc->sound_magnitude;
@@ -330,7 +330,11 @@ static void _m6561_reset_graphics_unit(m6561_t* vic) {
 }
 
 static void _m6561_reset_audio(m6561_t* vic) {
-    memset(&vic->sound, 0, sizeof(vic->sound));
+    for (int i = 0; i < 3; i++) {
+        memset(&vic->sound.voice[i], 0, sizeof(m6561_voice_t));
+    }
+    memset(&vic->sound.noise, 0, sizeof(m6561_noise_t));
+    vic->sound.volume = 0;
     vic->sound.noise.shift = 0x7FFFF8;
 }
 
@@ -509,13 +513,13 @@ void m6561_tick_video(m6561_t* vic) {
         uint16_t addr = vic->mem.g_addr_base |
                         ((vic->mem.c_value & 0xFF) * vic->rs.row_height) |
                         vic->rs.rc;
-        vic->gunit.shift = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
+        vic->gunit.shift = (uint8_t) vic->fetch_cb(addr, vic->user_data);
         vic->gunit.color = (vic->mem.c_value>>8) & 0xF;
     }
     else {
         /* a c-access (character code and color) */
         uint16_t addr = vic->mem.c_addr_base | (vic->rs.vc>>1);
-        vic->mem.c_value = vic->mem.fetch_cb(addr, vic->mem.user_data);
+        vic->mem.c_value = vic->fetch_cb(addr, vic->user_data);
     }
     if (!vic->rs.vc_disabled) {
         vic->rs.vc = (vic->rs.vc + 1) & ((1<<11)-1);
