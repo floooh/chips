@@ -58,6 +58,10 @@ void ui_util_u8(const char* label, uint8_t val);
 void ui_util_u16(const char* label, uint16_t val);
 /* draw an 8-bit binary label/value text */
 void ui_util_b8(const char* label, uint8_t val);
+/* draw a 24-bit binary label/value text */
+void ui_util_b24(const char* label, uint32_t val);
+/* draw a 32-bit binary label/value text */
+void ui_util_b32(const char* label, uint32_t val);
 /* get an ImGui style color (ImGuiCol_*) with overall alpha applied */
 uint32_t ui_util_color(int imgui_color);
 /* inject the common options menu */
@@ -133,6 +137,15 @@ void ui_util_b8(const char* label, uint8_t val) {
         str[i] = (val & (1<<(7-i))) ? '1':'0';
     }
     str[8] = 0;
+    ImGui::Text("%s%s", label, str);
+}
+
+void ui_util_b24(const char* label, uint32_t val) {
+    char str[25];
+    for (int i = 0; i < 24; i++) {
+        str[i] = (val & (1<<(23-i))) ? '1':'0';
+    }
+    str[24] = 0;
     ImGui::Text("%s%s", label, str);
 }
 

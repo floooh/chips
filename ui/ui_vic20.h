@@ -1,8 +1,8 @@
 #pragma once
 /*#
-    # ui_atom.h
+    # ui_vic20.h
 
-    Integrated debugging UI for atom.h
+    Integrated debugging UI for vic20.h
 
     Do this:
     ~~~C
@@ -19,16 +19,15 @@
         your own assert macro (default: assert(c))
 
     Include the following headers (and their depenencies) before including
-    ui_atom.h both for the declaration and implementation.
+    ui_c64.h both for the declaration and implementation.
 
-    - atom.h
+    - vic20.h
     - mem.h
     - ui_chip.h
     - ui_util.h
     - ui_m6502.h
-    - ui_mc6847.h
-    - ui_i8255.h
     - ui_m6522.h
+    - ui_m6561.h
     - ui_audio.h
     - ui_dasm.h
     - ui_dbg.h
@@ -62,36 +61,37 @@ extern "C" {
 #endif
 
 /* reboot callback */
-typedef void (*ui_atom_boot_cb)(atom_t* sys);
+typedef void (*ui_vic20_boot_cb)(vic20_t* sys);
 
+/* setup params for ui_c64_init() */
 typedef struct {
-    atom_t* atom;
-    ui_atom_boot_cb boot_cb;
+    vic20_t* vic20;             /* pointer to vic20_t instance to track */
+    ui_vic20_boot_cb boot_cb;   /* reboot callback function */
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
     ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
-} ui_atom_desc_t;
+} ui_vic20_desc_t;
 
 typedef struct {
-    atom_t* atom;
-    ui_atom_boot_cb boot_cb;
+    vic20_t* vic20;
+    int dbg_scanline;
+    ui_vic20_boot_cb boot_cb;
     ui_m6502_t cpu;
-    ui_i8255_t ppi;
-    ui_m6522_t via;
-    ui_mc6847_t vdg;
+    ui_m6522_t via[2];
+    ui_m6561_t vic;
     ui_audio_t audio;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
-} ui_atom_t;
+} ui_vic20_t;
 
-void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc);
-void ui_atom_discard(ui_atom_t* ui);
-void ui_atom_draw(ui_atom_t* ui, double time_ms);
-void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us);
+void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* desc);
+void ui_vic20_discard(ui_vic20_t* ui);
+void ui_vic20_draw(ui_vic20_t* ui, double time_ms);
+void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -112,24 +112,28 @@ void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
-    CHIPS_ASSERT(ui && ui->atom && ui->boot_cb);
+static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
+    CHIPS_ASSERT(ui && ui->vic20 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reset")) {
-                atom_reset(ui->atom);
+                vic20_reset(ui->vic20);
                 ui_dbg_reset(&ui->dbg);
             }
+            if (ImGui::MenuItem("Remove Cartridge")) {
+                vic20_remove_rom_cartridge(ui->vic20);
+            }
             if (ImGui::MenuItem("Cold Boot")) {
-                ui->boot_cb(ui->atom);
+                ui->boot_cb(ui->vic20);
                 ui_dbg_reboot(&ui->dbg);
             }
+
             if (ImGui::BeginMenu("Joystick")) {
-                if (ImGui::MenuItem("None", 0, (ui->atom->joystick_type == ATOM_JOYSTICKTYPE_NONE))) {
-                    ui->atom->joystick_type = ATOM_JOYSTICKTYPE_NONE;
+                if (ImGui::MenuItem("None", 0, ui->vic20->joystick_type == VIC20_JOYSTICKTYPE_NONE)) {
+                    ui->vic20->joystick_type = VIC20_JOYSTICKTYPE_NONE;
                 }
-                if (ImGui::MenuItem("MMC", 0, (ui->atom->joystick_type == ATOM_JOYSTICKTYPE_MMC))) {
-                    ui->atom->joystick_type = ATOM_JOYSTICKTYPE_MMC;
+                if (ImGui::MenuItem("Digital", 0, ui->vic20->joystick_type == VIC20_JOYSTICKTYPE_DIGITAL)) {
+                    ui->vic20->joystick_type = VIC20_JOYSTICKTYPE_DIGITAL;
                 }
                 ImGui::EndMenu();
             }
@@ -140,9 +144,9 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
-            ImGui::MenuItem("MOS 6522 (VIA)", 0, &ui->via.open);
-            ImGui::MenuItem("MC6847 (VDG)", 0, &ui->vdg.open);
-            ImGui::MenuItem("i8255 (PPI)", 0, &ui->ppi.open);
+            ImGui::MenuItem("MOS 6522 #1 (VIA)", 0, &ui->via[0].open);
+            ImGui::MenuItem("MOS 6522 #2 (VIA)", 0, &ui->via[1].open);
+            ImGui::MenuItem("MOS 6561 (VIC-I)", 0, &ui->vic.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -171,19 +175,114 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
     }
 }
 
-static uint8_t _ui_atom_mem_read(int layer, uint16_t addr, void* user_data) {
+/* keep disassembler layer at the start */
+#define _UI_VIC20_MEMLAYER_CPU    (0)     /* CPU visible mapping */
+#define _UI_VIC20_MEMLAYER_VIC    (1)     /* VIC visible mapping */
+#define _UI_VIC20_MEMLAYER_COLOR  (2)     /* special static color RAM */
+#define _UI_VIC20_CODELAYER_NUM   (1)     /* number of valid layers for disassembler */
+#define _UI_VIC20_MEMLAYER_NUM    (3)
+
+static const char* _ui_vic20_memlayer_names[_UI_VIC20_MEMLAYER_NUM] = {
+    "CPU Mapped", "VIC Mapped", "Color RAM"
+};
+
+static uint8_t _ui_vic20_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
-    atom_t* atom = (atom_t*) user_data;
-    return mem_rd(&atom->mem, addr);
+    ui_vic20_t* ui = (ui_vic20_t*) user_data;
+    vic20_t* vic20 = ui->vic20;
+    switch (layer) {
+        case _UI_VIC20_MEMLAYER_CPU:
+            return mem_rd(&vic20->mem_cpu, addr);
+        case _UI_VIC20_MEMLAYER_VIC:
+            // FIXME
+            //return mem_rd(&vic20->mem_vic, addr);
+            return 0xFF;
+        case _UI_VIC20_MEMLAYER_COLOR:
+            // FIXME
+            //if ((addr >= 0xD800) && (addr < 0xDC00)) {
+                /* static COLOR RAM */
+            //    return c64->color_ram[addr - 0xD800];
+            //}
+            //else {
+                return 0xFF;
+            //}
+        default:
+            return 0xFF;
+    }
 }
 
-static void _ui_atom_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+static void _ui_vic20_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
     CHIPS_ASSERT(user_data);
-    atom_t* atom = (atom_t*) user_data;
-    mem_wr(&atom->mem, addr, data);
+    ui_vic20_t* ui = (ui_vic20_t*) user_data;
+    vic20_t* vic20 = ui->vic20;
+    switch (layer) {
+        case _UI_VIC20_MEMLAYER_CPU:
+            mem_wr(&vic20->mem_cpu, addr, data);
+            break;
+        case _UI_VIC20_MEMLAYER_VIC:
+            // FIXME
+            //mem_wr(&vic20->mem_vic, addr, data);
+            break;
+        case _UI_VIC20_MEMLAYER_COLOR:
+            // FIXME
+            //if ((addr >= 0xD800) && (addr < 0xDC00)) {
+                /* static COLOR RAM */
+            //    c64->color_ram[addr - 0xD800] = data;
+            //}
+            break;
+    }
 }
 
-static const ui_chip_pin_t _ui_atom_cpu_pins[] = {
+static void _ui_vic20_update_memmap(ui_vic20_t* ui) {
+    CHIPS_ASSERT(ui && ui->vic20);
+    ui_memmap_reset(&ui->memmap);
+    ui_memmap_layer(&ui->memmap, "SYS");
+        ui_memmap_region(&ui->memmap, "RAM0",   0x0000, 0x0400, true);
+        ui_memmap_region(&ui->memmap, "RAM1",   0x1000, 0x1000, true);
+        ui_memmap_region(&ui->memmap, "CHAR",   0x8000, 0x1000, true);
+        ui_memmap_region(&ui->memmap, "IO",     0x9000, 0x0200, true);
+        // FIXME: color ram at variable address
+        ui_memmap_region(&ui->memmap, "COLOR",  0x9400, 0x0800, true);
+        ui_memmap_region(&ui->memmap, "BASIC",  0xC000, 0x2000, true);
+        ui_memmap_region(&ui->memmap, "KERNAL", 0xE000, 0x2000, true);
+}
+
+static int _ui_vic20_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
+    CHIPS_ASSERT(user_data);
+    ui_vic20_t* ui = (ui_vic20_t*) user_data;
+    vic20_t* vic20 = ui->vic20;
+    int scanline = vic20->vic.rs.v_count;
+    int trap_id = 0;
+    for (int i = 0; (i < dbg_win->dbg.num_breakpoints) && (trap_id == 0); i++) {
+        const ui_dbg_breakpoint_t* bp = &dbg_win->dbg.breakpoints[i];
+        if (bp->enabled) {
+            switch (bp->type) {
+                /* scanline number */
+                case UI_DBG_BREAKTYPE_USER+0:
+                    if ((ui->dbg_scanline != scanline) && (scanline == bp->val)) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* next scanline */
+                case UI_DBG_BREAKTYPE_USER+1:
+                    if (ui->dbg_scanline != scanline) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+                /* next frame */
+                case UI_DBG_BREAKTYPE_USER+2:
+                    if ((ui->dbg_scanline != scanline) && (scanline == 0)) {
+                        trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                    }
+                    break;
+            }
+        }
+    }
+    ui->dbg_scanline = scanline;
+    return trap_id;
+}
+
+static const ui_chip_pin_t _ui_vic20_cpu_pins[] = {
     { "D0",     0,      M6502_D0 },
     { "D1",     1,      M6502_D1 },
     { "D2",     2,      M6502_D2 },
@@ -194,10 +293,10 @@ static const ui_chip_pin_t _ui_atom_cpu_pins[] = {
     { "D7",     7,      M6502_D7 },
     { "RW",     9,      M6502_RW },
     { "SYNC",   10,     M6502_SYNC },
-    { "IRQ",    11,     M6502_IRQ },
-    { "NMI",    12,     M6502_NMI },
-    { "RDY",    13,     M6502_RDY },
-    { "RES",    15,     M6502_RES },
+    { "RDY",    11,     M6502_RDY },
+    { "IRQ",    12,     M6502_IRQ },
+    { "NMI",    13,     M6502_NMI },
+    { "RES",    14,     M6502_RES },
     { "A0",     16,     M6502_A0 },
     { "A1",     17,     M6502_A1 },
     { "A2",     18,     M6502_A2 },
@@ -216,47 +315,8 @@ static const ui_chip_pin_t _ui_atom_cpu_pins[] = {
     { "A15",    31,     M6502_A15 },
 };
 
-static const ui_chip_pin_t _ui_atom_ppi_pins[] = {
-    { "D0",     0,      I8255_D0 },
-    { "D1",     1,      I8255_D1 },
-    { "D2",     2,      I8255_D2 },
-    { "D3",     3,      I8255_D3 },
-    { "D4",     4,      I8255_D4 },
-    { "D5",     5,      I8255_D5 },
-    { "D6",     6,      I8255_D6 },
-    { "D7",     7,      I8255_D7 },
-    { "CS",     9,      I8255_CS },
-    { "RD",    10,      I8255_RD },
-    { "WR",    11,      I8255_WR },
-    { "A0",    12,      I8255_A0 },
-    { "A1",    13,      I8255_A1 },
-    { "PC0",   16,      I8255_PC0 },
-    { "PC1",   17,      I8255_PC1 },
-    { "PC2",   18,      I8255_PC2 },
-    { "PC3",   19,      I8255_PC3 },
-    { "PA0",   20,      I8255_PA0 },
-    { "PA1",   21,      I8255_PA1 },
-    { "PA2",   22,      I8255_PA2 },
-    { "PA3",   23,      I8255_PA3 },
-    { "PA4",   24,      I8255_PA4 },
-    { "PA5",   25,      I8255_PA5 },
-    { "PA6",   26,      I8255_PA6 },
-    { "PA7",   27,      I8255_PA7 },
-    { "PB0",   28,      I8255_PB0 },
-    { "PB1",   29,      I8255_PB1 },
-    { "PB2",   30,      I8255_PB2 },
-    { "PB3",   31,      I8255_PB3 },
-    { "PB4",   32,      I8255_PB4 },
-    { "PB5",   33,      I8255_PB5 },
-    { "PB6",   34,      I8255_PB6 },
-    { "PB7",   35,      I8255_PB7 },
-    { "PC4",   36,      I8255_PC4 },
-    { "PC5",   37,      I8255_PC5 },
-    { "PC6",   38,      I8255_PC6 },
-    { "PC7",   39,      I8255_PC7 },
-};
-
-static const ui_chip_pin_t _ui_atom_via_pins[] = {
+// FIXME
+static const ui_chip_pin_t _ui_vic20_via_pins[] = {
     { "D0",     0,      M6522_D0 },
     { "D1",     1,      M6522_D1 },
     { "D2",     2,      M6522_D2 },
@@ -294,47 +354,37 @@ static const ui_chip_pin_t _ui_atom_via_pins[] = {
     { "CB2",    39,     M6522_CB2 },
 };
 
-static const ui_chip_pin_t _ui_atom_vdg_pins[] = {
-    { "D0",     0,      MC6847_D0 },
-    { "D1",     1,      MC6847_D1 },
-    { "D2",     2,      MC6847_D2 },
-    { "D3",     3,      MC6847_D3 },
-    { "D4",     4,      MC6847_D4 },
-    { "D5",     5,      MC6847_D5 },
-    { "D6",     6,      MC6847_D6 },
-    { "D7",     7,      MC6847_D7 },
-    { "A/G",    9,      MC6847_AG },
-    { "A/S",    10,     MC6847_AS },
-    { "I/X",    11,     MC6847_INTEXT },
-    { "INV",    12,     MC6847_INV },
-    { "CSS",    13,     MC6847_CSS },
-    { "GM0",    14,     MC6847_GM0 },
-    { "GM1",    15,     MC6847_GM0 },
-    { "GM2",    16,     MC6847_GM0 },
-    { "GM3",    17,     MC6847_GM0 },
-    { "A0",     18,     MC6847_A0 },
-    { "A1",     19,     MC6847_A1 },
-    { "A2",     20,     MC6847_A2 },
-    { "A3",     21,     MC6847_A3 },
-    { "A4",     22,     MC6847_A4 },
-    { "A5",     23,     MC6847_A5 },
-    { "A6",     24,     MC6847_A6 },
-    { "A7",     25,     MC6847_A7 },
-    { "A8",     26,     MC6847_A8 },
-    { "A9",     27,     MC6847_A9 },
-    { "A10",    28,     MC6847_A10 },
-    { "A11",    29,     MC6847_A11 },
-    { "A12",    30,     MC6847_A12 },
-    { "FS",     32,     MC6847_FS },
-    { "HS",     33,     MC6847_HS },
-    { "RP",     34,     MC6847_RP }
+static const ui_chip_pin_t _ui_vic20_vic_pins[] = {
+    { "DB0",    0,      M6561_D0 },
+    { "DB1",    1,      M6561_D1 },
+    { "DB2",    2,      M6561_D2 },
+    { "DB3",    3,      M6561_D3 },
+    { "DB4",    4,      M6561_D4 },
+    { "DB5",    5,      M6561_D5 },
+    { "DB6",    6,      M6561_D6 },
+    { "DB7",    7,      M6561_D7 },
+    { "RW",     9,      M6561_RW },
+    { "A0",     14,     M6561_A0 },
+    { "A1",     15,     M6561_A1 },
+    { "A2",     16,     M6561_A2 },
+    { "A3",     17,     M6561_A3 },
+    { "A4",     18,     M6561_A4 },
+    { "A5",     19,     M6561_A5 },
+    { "A6",     20,     M6561_A6 },
+    { "A7",     21,     M6561_A7 },
+    { "A8",     22,     M6561_A8 },
+    { "A9",     23,     M6561_A9 },
+    { "A10",    24,     M6561_A10 },
+    { "A11",    25,     M6561_A11 },
+    { "A12",    26,     M6561_A12 },
+    { "A13",    27,     M6561_A13 }
 };
 
-void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
+void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
-    CHIPS_ASSERT(ui_desc->atom);
+    CHIPS_ASSERT(ui_desc->vic20);
     CHIPS_ASSERT(ui_desc->boot_cb);
-    ui->atom = ui_desc->atom;
+    ui->vic20 = ui_desc->vic20;
     ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
     {
@@ -342,62 +392,67 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
         desc.title = "CPU Debugger";
         desc.x = x;
         desc.y = y;
-        desc.m6502 = &ui->atom->cpu;
-        desc.read_cb = _ui_atom_mem_read;
+        desc.m6502 = &ui->vic20->cpu;
+        desc.read_cb = _ui_vic20_mem_read;
+        desc.break_cb = _ui_vic20_eval_bp;
         desc.create_texture_cb = ui_desc->create_texture_cb;
         desc.update_texture_cb = ui_desc->update_texture_cb;
         desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
         desc.keys = ui_desc->dbg_keys;
-        desc.user_data = ui->atom;
+        desc.user_data = ui;
+        /* custom breakpoint types */
+        desc.user_breaktypes[0].label = "Scanline at";
+        desc.user_breaktypes[0].show_val16 = true;
+        desc.user_breaktypes[1].label = "Next Scanline";
+        desc.user_breaktypes[2].label = "Next Frame";
         ui_dbg_init(&ui->dbg, &desc);
     }
     x += dx; y += dy;
     {
         ui_m6502_desc_t desc = {0};
         desc.title = "MOS 6502";
-        desc.cpu = &ui->atom->cpu;
+        desc.cpu = &ui->vic20->cpu;
         desc.x = x;
         desc.y = y;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 32, _ui_atom_cpu_pins);
+        desc.h = 390;
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 40, _ui_vic20_cpu_pins);
         ui_m6502_init(&ui->cpu, &desc);
     }
     x += dx; y += dy;
     {
         ui_m6522_desc_t desc = {0};
-        desc.title = "MOS 6522";
-        desc.via = &ui->atom->via;
-        desc.regs_base = 0xB800;
+        desc.title = "MOS 6522 #1 (VIA)";
+        desc.via = &ui->vic20->via_1;
+        desc.regs_base = 0x9110;
         desc.x = x;
         desc.y = y;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6522", 40, _ui_atom_via_pins);
-        ui_m6522_init(&ui->via, &desc);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6522", 40, _ui_vic20_via_pins);
+        ui_m6522_init(&ui->via[0], &desc);
+        x += dx; y += dy;
+        desc.title = "MOS 6522 #2 (VIA)";
+        desc.via = &ui->vic20->via_2;
+        desc.regs_base = 0x9120;
+        desc.x = x;
+        desc.y = y;
+        ui_m6522_init(&ui->via[1], &desc);
     }
     x += dx; y += dy;
     {
-        ui_mc6847_desc_t desc = {0};
-        desc.title = "MC6847";
-        desc.mc6847 = &ui->atom->vdg;
+        ui_m6561_desc_t desc = {0};
+        desc.title = "MOS 6561 (VIC-I)";
+        desc.vic = &ui->vic20->vic;
+        desc.regs_base = 0x9000;
         desc.x = x;
         desc.y = y;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6847", 36, _ui_atom_vdg_pins);
-        ui_mc6847_init(&ui->vdg, &desc);
-    }
-    x += dx; y += dy;
-    {
-        ui_i8255_desc_t desc = {0};
-        desc.title = "i8255";
-        desc.i8255 = &ui->atom->ppi;
-        desc.x = x;
-        desc.y = y;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "i8255", 40, _ui_atom_ppi_pins);
-        ui_i8255_init(&ui->ppi, &desc);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6561", 28, _ui_vic20_vic_pins);
+        ui_m6561_init(&ui->vic, &desc);
     }
     x += dx; y += dy;
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->atom->sample_buffer;
-        desc.num_samples = ui->atom->num_samples;
+        desc.sample_buffer = ui->vic20->sample_buffer;
+        desc.num_samples = ui->vic20->num_samples;
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->audio, &desc);
@@ -406,7 +461,7 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
     {
         ui_kbd_desc_t desc = {0};
         desc.title = "Keyboard Matrix";
-        desc.kbd = &ui->atom->kbd;
+        desc.kbd = &ui->vic20->kbd;
         desc.layers[0] = "None";
         desc.layers[1] = "Shift";
         desc.layers[2] = "Ctrl";
@@ -417,10 +472,12 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
     x += dx; y += dy;
     {
         ui_memedit_desc_t desc = {0};
-        desc.layers[0] = "System";
-        desc.read_cb = _ui_atom_mem_read;
-        desc.write_cb = _ui_atom_mem_write;
-        desc.user_data = ui->atom;
+        for (int i = 0; i < _UI_VIC20_MEMLAYER_NUM; i++) {
+            desc.layers[i] = _ui_vic20_memlayer_names[i];
+        }
+        desc.read_cb = _ui_vic20_mem_read;
+        desc.write_cb = _ui_vic20_mem_write;
+        desc.user_data = ui;
         static const char* titles[] = { "Memory Editor #1", "Memory Editor #2", "Memory Editor #3", "Memory Editor #4" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
@@ -435,25 +492,17 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         ui_memmap_init(&ui->memmap, &desc);
-        /* the memory map is static */
-        ui_memmap_layer(&ui->memmap, "System");
-        ui_memmap_region(&ui->memmap, "RAM", 0x0000, 0x3000, true);
-        ui_memmap_region(&ui->memmap, "EXT RAM", 0x3000, 0x5000, true);
-        ui_memmap_region(&ui->memmap, "VIDEO RAM", 0x8000, 0x2000, true);
-        ui_memmap_region(&ui->memmap, "IO AREA", 0xB000, 0x1000, true);
-        ui_memmap_region(&ui->memmap, "BASIC ROM 0", 0xC000, 0x1000, true);
-        ui_memmap_region(&ui->memmap, "FP ROM", 0xD000, 0x1000, true);
-        ui_memmap_region(&ui->memmap, "DOS ROM", 0xE000, 0x1000, true);
-        ui_memmap_region(&ui->memmap, "BASIC ROM 1", 0xF000, 0x1000, true);
     }
     x += dx; y += dy;
     {
         ui_dasm_desc_t desc = {0};
-        desc.layers[0] = "System";
+        for (int i = 0; i < _UI_VIC20_CODELAYER_NUM; i++) {
+            desc.layers[i] = _ui_vic20_memlayer_names[i];
+        }
         desc.cpu_type = UI_DASM_CPUTYPE_M6502;
-        desc.start_addr = mem_rd16(&ui->atom->mem, 0xFFFC);
-        desc.read_cb = _ui_atom_mem_read;
-        desc.user_data = ui->atom;
+        desc.start_addr = mem_rd16(&ui->vic20->mem_cpu, 0xFFFC);
+        desc.read_cb = _ui_vic20_mem_read;
+        desc.user_data = ui;
         static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
@@ -463,13 +512,13 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
     }
 }
 
-void ui_atom_discard(ui_atom_t* ui) {
-    CHIPS_ASSERT(ui && ui->atom);
-    ui->atom = 0;
+void ui_vic20_discard(ui_vic20_t* ui) {
+    CHIPS_ASSERT(ui && ui->vic20);
+    ui->vic20 = 0;
     ui_m6502_discard(&ui->cpu);
-    ui_m6522_discard(&ui->via);
-    ui_mc6847_discard(&ui->vdg);
-    ui_i8255_discard(&ui->ppi);
+    ui_m6522_discard(&ui->via[0]);
+    ui_m6522_discard(&ui->via[1]);
+    ui_m6561_discard(&ui->vic);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
     ui_memmap_discard(&ui->memmap);
@@ -480,15 +529,18 @@ void ui_atom_discard(ui_atom_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_atom_draw(ui_atom_t* ui, double time_ms) {
-    CHIPS_ASSERT(ui && ui->atom);
-    _ui_atom_draw_menu(ui, time_ms);
-    ui_audio_draw(&ui->audio, ui->atom->sample_pos);
+void ui_vic20_draw(ui_vic20_t* ui, double time_ms) {
+    CHIPS_ASSERT(ui && ui->vic20);
+    _ui_vic20_draw_menu(ui, time_ms);
+    if (ui->memmap.open) {
+        _ui_vic20_update_memmap(ui);
+    }
+    ui_audio_draw(&ui->audio, ui->vic20->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
-    ui_m6522_draw(&ui->via);
-    ui_mc6847_draw(&ui->vdg);
-    ui_i8255_draw(&ui->ppi);
+    ui_m6522_draw(&ui->via[0]);
+    ui_m6522_draw(&ui->via[1]);
+    ui_m6561_draw(&ui->vic);
     ui_memmap_draw(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);
@@ -497,20 +549,23 @@ void ui_atom_draw(ui_atom_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us) {
-    CHIPS_ASSERT(ui && ui->atom);
-    uint32_t ticks_to_run = clk_us_to_ticks(ATOM_FREQUENCY, frame_time_us);
-    atom_t* atom = ui->atom;
+void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us) {
+    CHIPS_ASSERT(ui && ui->vic20);
+    uint32_t ticks_to_run = clk_us_to_ticks(VIC20_FREQUENCY, frame_time_us);
+    vic20_t* vic20 = ui->vic20;
     for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-        atom_tick(ui->atom);
-        if (atom->pins & M6502_SYNC) {
-            ui_dbg_after_instr(&ui->dbg, atom->pins, (uint32_t)atom->cpu.ticks);
+        vic20_tick(vic20);
+        if (vic20->pins & M6502_SYNC) {
+            ui_dbg_after_instr(&ui->dbg, vic20->pins, (uint32_t)vic20->cpu.ticks);
         }
     }
-    kbd_update(&ui->atom->kbd);
+    kbd_update(&ui->vic20->kbd);
 }
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 #endif /* CHIPS_IMPL */
+
+
+
