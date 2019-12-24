@@ -35,6 +35,7 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
       they can be called in each emulated tick
     - various other minor cleanups and optimizations in m6526.h (CIA)
       and m6569.h (VIC-II)
+      
     I will experiment next with more radical changes to the VIA emulation, idea
     is to merge the currently separate m6522_iorq() function (which handles
     reads and writes to the VIA registers) into the regular m6522_tick() function.
