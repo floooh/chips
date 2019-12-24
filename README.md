@@ -14,6 +14,34 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 
 ## What's New
 
+* **24-Dec-2019**: A small "inbetween merge" because the feature branch I
+    was working on became too unfocused: The plan was to add 1541 floppy
+    support to the C64 emulation, but I soon realized that the VIA emulation
+    would essentially need to be rewritten for this. To help getting the
+    VIA emulation right, I started with a VIC-20 system emulation. Here's
+    what's new:
+        - a new VIC-20 system emulation, still quite WIP
+        - started to rewrite the 6522 VIA emulation from scratch, it's still
+          very WIP, but works "at least as good" as the previous implementation
+        - a new VIC-I PAL (MOS 6561) emulation (used by the VIC-20)
+        - moved the datasette emulation out of c64.h into its own header
+          (c1530.h), for attaching peripheral devices the c64.h emulation
+          now emulates the interface ports (IEC and CASPORT) instead, which
+          the peripheral device emulations "connect to"
+        - started with a 1541 floppy drive emulation in the header c1541.h,
+          not functional yet
+        - various optimizations in kbd.h with the goal to make the
+          frequently called keyboard matrix scanning functions so cheap that
+          they can be called in each emulated tick
+        - various other minor cleanups and optimizations in m6526.h (CIA)
+          and m6569.h (VIC-II)
+    I will experiment next with more radical changes to the VIA emulation, idea
+    is to merge the currently separate m6522_iorq() function (which handles
+    reads and writes to the VIA registers) into the regular m6522_tick() function.
+    If those experiments are successful, other chips will use the same
+    model in the future, starting with the IO/timer chips (m6526, i8255,
+    z80pio and z80ctc).
+
 * **13-Dec-2019**: The new 'cycle-stepped' 6502/6510 emulator has been merged
     to master. The new emulator has a slightly different programming model,
     please see the updated [header
