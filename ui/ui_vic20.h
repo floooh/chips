@@ -415,7 +415,7 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         desc.h = 390;
-        UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 40, _ui_vic20_cpu_pins);
+        UI_CHIP_INIT_DESC(&desc.chip_desc, "6502", 32, _ui_vic20_cpu_pins);
         ui_m6502_init(&ui->cpu, &desc);
     }
     x += dx; y += dy;

@@ -197,7 +197,7 @@ static const ui_chip_pin_t _ui_atom_cpu_pins[] = {
     { "IRQ",    11,     M6502_IRQ },
     { "NMI",    12,     M6502_NMI },
     { "RDY",    13,     M6502_RDY },
-    { "RES",    15,     M6502_RES },
+    { "RES",    14,     M6502_RES },
     { "A0",     16,     M6502_A0 },
     { "A1",     17,     M6502_A1 },
     { "A2",     18,     M6502_A2 },
