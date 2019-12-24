@@ -141,6 +141,7 @@ typedef struct {
     
     bool valid;
     vic20_joystick_type_t joystick_type;
+    vic20_memory_config_t mem_config;
     uint8_t joystick_active;
     uint8_t cas_port;           /* cassette port, shared with c1530_t if datasette is connected */
     uint8_t iec_port;           /* IEC serial port, shared with c1541_t if connected */
@@ -242,6 +243,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     memset(sys, 0, sizeof(vic20_t));
     sys->valid = true;
     sys->joystick_type = desc->joystick_type;
+    sys->mem_config = desc->mem_config;
     CHIPS_ASSERT(desc->rom_char && (desc->rom_char_size == sizeof(sys->rom_char)));
     CHIPS_ASSERT(desc->rom_basic && (desc->rom_basic_size == sizeof(sys->rom_basic)));
     CHIPS_ASSERT(desc->rom_kernal && (desc->rom_kernal_size == sizeof(sys->rom_kernal)));
