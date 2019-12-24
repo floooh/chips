@@ -369,6 +369,7 @@ void kbd_key_up(kbd_t* kbd, int key) {
 /* scan keyboard matrix lines by column mask */
 uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask) {
     if (column_mask != kbd->cur_column_mask) {
+        kbd->cur_column_mask = column_mask;
         kbd->cur_scanout_line_mask = 0;
         for (int col = 0; col < KBD_MAX_COLUMNS; col++) {
             if (column_mask & (1<<col)) {
@@ -382,6 +383,7 @@ uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask) {
 /* scan keyboard matrix lines by column mask */
 uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask) {
     if (line_mask != kbd->cur_line_mask) {
+        kbd->cur_line_mask = line_mask;
         kbd->cur_scanout_column_mask = 0;
         for (int line = 0; line < KBD_MAX_COLUMNS; line++) {
             if (line_mask & (1<<line)) {
