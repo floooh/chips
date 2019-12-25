@@ -152,10 +152,10 @@ static void _ui_m6522_draw_ports(ui_m6522_t* win) {
         ui_util_b8("PA Out:  ", via->pa.outr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pa.outr);
         ui_util_b8("PA Port: ", via->pa.port); ImGui::SameLine(); ImGui::Text("(%02X)", via->pa.port);
         ImGui::Separator();
-        ui_util_b8("PA DDR:  ", via->pb.ddr);  ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.ddr);
-        ui_util_b8("PA Inp:  ", via->pb.inpr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.inpr);
-        ui_util_b8("PA Out:  ", via->pb.outr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.outr);
-        ui_util_b8("PA Port: ", via->pb.port); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.port);
+        ui_util_b8("PB DDR:  ", via->pb.ddr);  ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.ddr);
+        ui_util_b8("PB Inp:  ", via->pb.inpr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.inpr);
+        ui_util_b8("PB Out:  ", via->pb.outr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.outr);
+        ui_util_b8("PB Port: ", via->pb.port); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.port);
     }
 }
 
