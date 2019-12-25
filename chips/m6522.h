@@ -40,11 +40,9 @@
     *           +-----------+           *
     *************************************
     
-    ## NOT EMULATED
+    ## How to use
 
-    Currently this just contains the minimal required functionality to make
-    some games on the Acorn Atom work (basically just timers, and even those
-    or likely not correct). 
+    TODO!
 
     ## zlib/libpng license
 
@@ -72,53 +70,63 @@ extern "C" {
 #endif
 
 /* register select same as lower 4 shared address bus bits */
-#define M6522_RS0   (1ULL<<0)
-#define M6522_RS1   (1ULL<<1)
-#define M6522_RS2   (1ULL<<2)
-#define M6522_RS3   (1ULL<<3)
-#define M6522_RS    (M6522_RS3|M6522_RS2|M6522_RS1|M6522_RS0)
+#define M6522_RS0       (1ULL<<0)
+#define M6522_RS1       (1ULL<<1)
+#define M6522_RS2       (1ULL<<2)
+#define M6522_RS3       (1ULL<<3)
+#define M6522_RS_PINS   (0x0FULL)
 
 /* data bus pins shared with CPU */
-#define M6522_D0    (1ULL<<16)
-#define M6522_D1    (1ULL<<17)
-#define M6522_D2    (1ULL<<18)
-#define M6522_D3    (1ULL<<19)
-#define M6522_D4    (1ULL<<20)
-#define M6522_D5    (1ULL<<21)
-#define M6522_D6    (1ULL<<22)
-#define M6522_D7    (1ULL<<23)
+#define M6522_D0        (1ULL<<16)
+#define M6522_D1        (1ULL<<17)
+#define M6522_D2        (1ULL<<18)
+#define M6522_D3        (1ULL<<19)
+#define M6522_D4        (1ULL<<20)
+#define M6522_D5        (1ULL<<21)
+#define M6522_D6        (1ULL<<22)
+#define M6522_D7        (1ULL<<23)
+#define M6522_DB_PINS   (0xFF0000ULL)
 
 /* control pins shared with CPU */
-#define M6522_RW    (1ULL<<24)      /* same as M6502_RW */
-#define M6522_IRQ   (1ULL<<26)      /* same as M6502_IRQ */
+#define M6522_RW        (1ULL<<24)      /* same as M6502_RW */
+#define M6522_IRQ       (1ULL<<26)      /* same as M6502_IRQ */
 
 /* control pins */
-#define M6522_CS1   (1ULL<<40)      /* chip-select 1, to select: CS1 high, CS2 low */
-#define M6522_CS2   (1ULL<<41)      /* chip-select 2 */
-#define M6522_CA1   (1ULL<<42)      /* peripheral A control 1 */
-#define M6522_CA2   (1ULL<<43)      /* peripheral A control 2 */
-#define M6522_CB1   (1ULL<<44)      /* peripheral B control 1 */
-#define M6522_CB2   (1ULL<<45)      /* peripheral B control 2 */
+#define M6522_CS1       (1ULL<<40)      /* chip-select 1, to select: CS1 high, CS2 low */
+#define M6522_CS2       (1ULL<<41)      /* chip-select 2 */
+
+#define M6522_CA1       (1ULL<<42)      /* peripheral A control 1 */
+#define M6522_CA2       (1ULL<<43)      /* peripheral A control 2 */
+#define M6522_CB1       (1ULL<<44)      /* peripheral B control 1 */
+#define M6522_CB2       (1ULL<<45)      /* peripheral B control 2 */
+#define M6522_CA_PINS   (M6522_CA1|M6522_CA2)
+#define M6522_CB_PINS   (M6522_CB1|M6522_CB2)
 
 /* peripheral A port */
-#define M6522_PA0   (1ULL<<48)
-#define M6522_PA1   (1ULL<<49)
-#define M6522_PA2   (1ULL<<50)
-#define M6522_PA3   (1ULL<<51)
-#define M6522_PA4   (1ULL<<52)
-#define M6522_PA5   (1ULL<<53)
-#define M6522_PA6   (1ULL<<54)
-#define M6522_PA7   (1ULL<<55)
+#define M6522_PA0       (1ULL<<48)
+#define M6522_PA1       (1ULL<<49)
+#define M6522_PA2       (1ULL<<50)
+#define M6522_PA3       (1ULL<<51)
+#define M6522_PA4       (1ULL<<52)
+#define M6522_PA5       (1ULL<<53)
+#define M6522_PA6       (1ULL<<54)
+#define M6522_PA7       (1ULL<<55)
+#define M6522_PA_PINS   (M6522_PA0|M6522_PA1|M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5|M6522_PA6|M6522_PA7)
 
 /* peripheral B port */
-#define M6522_PB0   (1ULL<<56)
-#define M6522_PB1   (1ULL<<57)
-#define M6522_PB2   (1ULL<<58)
-#define M6522_PB3   (1ULL<<59)
-#define M6522_PB4   (1ULL<<60)
-#define M6522_PB5   (1ULL<<61)
-#define M6522_PB6   (1ULL<<62)
-#define M6522_PB7   (1ULL<<63)
+#define M6522_PB0       (1ULL<<56)
+#define M6522_PB1       (1ULL<<57)
+#define M6522_PB2       (1ULL<<58)
+#define M6522_PB3       (1ULL<<59)
+#define M6522_PB4       (1ULL<<60)
+#define M6522_PB5       (1ULL<<61)
+#define M6522_PB6       (1ULL<<62)
+#define M6522_PB7       (1ULL<<63)
+#define M6522_PB_PINS   (M6522_PB0|M6522_PB1|M6522_PB2|M6522_PB3|M6522_PB4|M6522_PB5|M6522_PB6|M6522_PB7)
+
+/* pin-group-masks for m6522_tick() and m6522_iorq() */
+#define M6522_TICK_PIN_MASK     (M6522_IRQ|M6522_PA_PINS|M6522_PB_PINS|M6522_CA_PINS|M6522_CB_PINS)
+#define M6522_IORQ_PIN_MASK     (M6522_RS_PINS|M6522_DB_PINS|M6522_RW|M6522_CS1|M6522_CS2)
 
 /* register indices */
 #define M6522_REG_RB        (0)     /* input/output register B */
@@ -197,12 +205,6 @@ extern "C" {
 #define M6522_PIP_TIMER_LOAD    (8)
 #define M6522_PIP_IRQ           (0)
 
-/* port in/out callbacks */
-#define M6522_PORT_A (0)
-#define M6522_PORT_B (1)
-typedef uint8_t (*m6522_in_t)(int port_id, void* user_data);
-typedef void (*m6522_out_t)(int port_id, uint8_t data, void* user_data);
-
 /* I/O port state */
 typedef struct {
     uint8_t inpr;
@@ -231,13 +233,6 @@ typedef struct {
     uint16_t pip;
 } m6522_int_t;
 
-/* m6522 initialization parameters */
-typedef struct {
-    m6522_in_t in_cb;
-    m6522_out_t out_cb;
-    void* user_data;
-} m6522_desc_t;
-
 /* m6522 state */
 typedef struct {
     m6522_port_t pa;
@@ -247,11 +242,7 @@ typedef struct {
     m6522_int_t intr;
     uint8_t acr;        /* auxilary control register */
     uint8_t pcr;        /* peripheral control register */
-    uint64_t tick_pins; /* pin state after last m6522_tick() */
-    uint64_t iorq_pins; /* pin state after last m6522_iorq() */
-    m6522_in_t in_cb;
-    m6522_out_t out_cb;
-    void* user_data;
+    uint64_t pins;
 } m6522_t;
 
 /* extract 8-bit data bus from 64-bit pins */
@@ -260,6 +251,10 @@ typedef struct {
 #define M6522_SET_DATA(p,d) {p=((p&~0xFF0000)|(((d)&0xFF)<<16));}
 /* merge 4-bit address into 64-bit pins */
 #define M6522_SET_ADDR(p,d) {p=((p&~0xF)|((d)&0xF));}
+/* extract port A pins */
+#define M6522_GET_PA(p) ((uint8_t)(p>>48))
+/* extract port B pins */
+#define M6522_GET_PB(p) ((uint8_t)(p>>56))
 /* merge port A pins into pin mask */
 #define M6522_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
 /* merge port B pins into pin mask */
@@ -268,7 +263,7 @@ typedef struct {
 #define M6522_SET_PAB(p,a,b) {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
 /* initialize a new 6522 instance */
-void m6522_init(m6522_t* m6522, const m6522_desc_t* desc);
+void m6522_init(m6522_t* m6522);
 /* reset an existing 6522 instance */
 void m6522_reset(m6522_t* m6522);
 /* perform an IO request */
@@ -309,12 +304,9 @@ static void _m6522_init_interrupt(m6522_int_t* intr) {
     intr->pip = 0;
 }
 
-void m6522_init(m6522_t* c, const m6522_desc_t* desc) {
-    CHIPS_ASSERT(c && desc && desc->in_cb && desc->out_cb);
+void m6522_init(m6522_t* c) {
+    CHIPS_ASSERT(c);
     memset(c, 0, sizeof(*c));
-    c->in_cb = desc->in_cb;
-    c->out_cb = desc->out_cb;
-    c->user_data = desc->user_data;
     _m6522_init_port(&c->pa);
     _m6522_init_port(&c->pb);
     _m6522_init_timer(&c->t1);
@@ -341,8 +333,7 @@ void m6522_reset(m6522_t* c) {
     _m6522_init_interrupt(&c->intr);
     c->acr = 0;
     c->pcr = 0;
-    c->tick_pins = 0;
-    c->iorq_pins = 0;
+    c->pins = 0;
 }
 
 /*--- delay-pipeline macros ---*/
@@ -355,6 +346,48 @@ void m6522_reset(m6522_t* c) {
 #define _M6522_PIP_TEST(pip,offset,pos) (0!=(pip&(1<<(offset+pos))))
 
 /*--- port implementation ---*/
+static inline bool _m6522_ca1_triggered(m6522_t* c, uint64_t pins) {
+    if (M6522_PCR_CA1_LOW_TO_HIGH(c)) {
+        /* check for CA1 rising edge */
+        return (M6522_CA1 & (pins & (pins ^ c->pins)));
+    }
+    else {
+        /* check for CA1 falling edge */
+        return (M6522_CA1 & (~pins & (pins ^ c->pins)));
+    }
+}
+
+static inline bool _m6522_cb1_triggered(m6522_t* c, uint64_t pins) {
+    if (M6522_PCR_CB1_LOW_TO_HIGH(c)) {
+        /* check for CA1 rising edge */
+        return (M6522_CB1 & (pins & (pins ^ c->pins)));
+    }
+    else {
+        /* check for CA1 falling edge */
+        return (M6522_CB1 & (~pins & (pins ^ c->pins)));
+    }
+}
+
+static inline void _m6522_read_port_pins(m6522_t* c, uint64_t pins) {
+    /* with latching enabled, only update input register when CA1 / CB1 goes active */
+    if (M6522_ACR_PA_LATCH_ENABLE(c)) {
+        if (_m6522_ca1_triggered(c, pins)) {
+            c->pa.inpr = M6522_GET_PA(pins);
+        }
+    }
+    else {
+        c->pa.inpr = M6522_GET_PA(pins);
+    }
+    if (M6522_ACR_PB_LATCH_ENABLE(c)) {
+        if (_m6522_cb1_triggered(c, pins)) {
+            c->pb.inpr = M6522_GET_PB(pins);
+        }
+    }
+    else {
+        c->pb.inpr = M6522_GET_PB(pins);
+    }
+}
+
 static inline uint8_t _m6522_merge_pb7(m6522_t* c, uint8_t data) {
     if (M6522_ACR_T1_SET_PB7(c)) {
         data &= ~(1<<7);
@@ -365,32 +398,11 @@ static inline uint8_t _m6522_merge_pb7(m6522_t* c, uint8_t data) {
     return data;
 }
 
-static inline void _m6522_output_pa(m6522_t* c) {
-    uint8_t data = (c->pa.outr & c->pa.ddr) | ~c->pa.ddr;
-    c->out_cb(M6522_PORT_A, data, c->user_data);
-    c->pa.port = data;
-}
-
-static inline void _m6522_output_pb(m6522_t* c) {
-    uint8_t data = (c->pb.outr & c->pb.ddr) | ~c->pb.ddr;
-    data = _m6522_merge_pb7(c, data);
-    c->out_cb(M6522_PORT_B, data, c->user_data);
-    c->pb.port = data;
-}
-
-static inline uint8_t _m6522_input_pa(m6522_t* c) {
-    c->pa.inpr = c->in_cb(M6522_PORT_A, c->user_data);
-    uint8_t data = (c->pa.inpr & ~c->pa.ddr) | (c->pa.outr & c->pa.ddr);
-    c->pa.port = data;
-    return data;
-}
-
-static inline uint8_t _m6522_input_pb(m6522_t* c) {
-    c->pb.inpr = c->in_cb(M6522_PORT_B, c->user_data);
-    uint8_t data = (c->pb.inpr & ~c->pb.ddr) | (c->pb.outr & c->pb.ddr);
-    data = _m6522_merge_pb7(c, data);
-    c->pb.port = data;
-    return data;
+static inline uint64_t _m6522_write_port_pins(m6522_t* c, uint64_t pins) {
+    c->pa.port = (c->pa.inpr & ~c->pa.ddr) | (c->pa.outr & c->pa.ddr);
+    c->pb.port = _m6522_merge_pb7(c, (c->pb.inpr & ~c->pb.ddr) | (c->pb.outr & c->pb.ddr));
+    M6522_SET_PAB(pins, c->pa.port, c->pb.port);
+    return pins;
 }
 
 static inline void _m6522_set_intr(m6522_t* c, uint8_t data) {
@@ -441,7 +453,6 @@ void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
     }
 
     /* timer underflow? */
-    bool old_t_out = t->t_out;
     t->t_out = (0 == t->counter) && _M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_COUNT, 1);
     if (t->t_out) {
         /* continuous or oneshot mode? */
@@ -462,9 +473,6 @@ void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
             }
         }
     }
-    if (old_t_out != t->t_out) {
-        _m6522_output_pb(c);
-    }
 
     /* reload timer from latch? */
     if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
@@ -480,7 +488,7 @@ void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
     /* either decrement on PB6, or on tick */
     if (M6522_ACR_T2_COUNT_PB6(c)) {
         /* count falling edge of PB6 */
-        if (M6522_PB6 & (~pins & (pins ^ c->tick_pins))) {
+        if (M6522_PB6 & (~pins & (pins ^ c->pins))) {
             t->counter--;
         }
     }
@@ -527,29 +535,42 @@ void _m6522_tick_pipeline(m6522_t* c) {
     c->intr.pip = (c->intr.pip >> 1) & 0x7F7F;
 }
 
-void _m6522_update_irq(m6522_t* c, uint64_t pins) {
+uint64_t _m6522_update_irq(m6522_t* c, uint64_t pins) {
     /* FIXME interrupts for CA1, CA2, CB1, CB2, SR */
 
     /* main interrupt bit (delayed by pip) */
     if (_M6522_PIP_TEST(c->intr.pip, M6522_PIP_IRQ, 0)) {
         c->intr.ifr |= (1<<7);
     }
-}
 
-uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
-    _m6522_tick_t1(c, pins);
-    _m6522_tick_t2(c, pins);
-    _m6522_update_irq(c, pins);
-    _m6522_tick_pipeline(c);
+    /* merge IRQ bit */
     if (0 != (c->intr.ifr & (1<<7))) {
         pins |= M6522_IRQ;
-        c->iorq_pins |= M6522_IRQ;
     }
     else {
         pins &= ~M6522_IRQ;
-        c->iorq_pins &= ~M6522_IRQ;
     }
-    c->tick_pins = pins;
+    return pins;
+}
+
+uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
+    /* process input pins */
+    _m6522_read_port_pins(c, pins);
+
+    /* tick timers */
+    _m6522_tick_t1(c, pins);
+    _m6522_tick_t2(c, pins);
+
+    /* update interrupt bits */
+    pins = _m6522_update_irq(c, pins);
+
+    /* merge port output pins */
+    pins = _m6522_write_port_pins(c, pins);
+
+    /* tick internal delay-pipelines forward */
+    _m6522_tick_pipeline(c);
+
+    c->pins = (c->pins & ~M6522_TICK_PIN_MASK) | (pins & M6522_TICK_PIN_MASK);
     return pins;
 }
 
@@ -561,7 +582,7 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
                 data = c->pb.inpr;
             }
             else {
-                data = _m6522_input_pb(c);
+                data = c->pb.port;
             }
             _m6522_clear_pb_intr(c);
             break;
@@ -571,7 +592,7 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
                 data = c->pa.inpr;
             }
             else {
-                data = _m6522_input_pa(c);
+                data = c->pa.port;
             }
             _m6522_clear_pa_intr(c);
             /* FIXME: handshake */
@@ -637,7 +658,7 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
                 data = c->pa.inpr;
             }
             else {
-                data = _m6522_input_pa(c);
+                data = c->pa.port;
             }
             break;
     }
@@ -648,14 +669,12 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
     switch (addr) {
         case M6522_REG_RB:
             c->pb.outr = data;
-            _m6522_output_pb(c);
             _m6522_clear_pb_intr(c);
             /* FIXME: handshake */
             break;
         
         case M6522_REG_RA:
             c->pa.outr = data;
-            _m6522_output_pa(c);
             _m6522_clear_pa_intr(c);
             /* FIXME: handshake */
             /* FIXME: pulse output */
@@ -663,12 +682,10 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
         
         case M6522_REG_DDRB:
             c->pb.ddr = data;
-            _m6522_output_pb(c);
             break;
     
         case M6522_REG_DDRA:
             c->pa.ddr = data;
-            _m6522_output_pa(c);
             break;
 
         case M6522_REG_T1CL:
@@ -680,9 +697,6 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             c->t1.latch = (data << 8) | (c->t1.latch & 0x00FF);
             _m6522_clear_intr(c, M6522_IRQ_T1);
             c->t1.t_bit = false;
-            if (M6522_ACR_T1_SET_PB7(c)) {
-                _m6522_output_pb(c);
-            }
             _M6522_PIP_SET(c->t1.pip, M6522_PIP_TIMER_LOAD, 1);
             break;
 
@@ -708,7 +722,6 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
 
         case M6522_REG_ACR:
             c->acr = data;
-            _m6522_output_pb(c);
             /* FIXME: shift timer */
             if (M6522_ACR_T1_CONTINUOUS(c)) {
                 /* add counter delay */
@@ -732,14 +745,13 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
 
         case M6522_REG_RA_NOH:
             c->pa.outr = data;
-            _m6522_output_pa(c);
             break;
     }
 }
 
 uint64_t m6522_iorq(m6522_t* c, uint64_t pins) {
     if ((pins & (M6522_CS1|M6522_CS2)) == M6522_CS1) {
-        uint8_t addr = pins & M6522_RS;
+        uint8_t addr = pins & M6522_RS_PINS;
         if (pins & M6522_RW) {
             /* a read operation */
             uint8_t data = _m6522_read(c, addr);
@@ -750,8 +762,7 @@ uint64_t m6522_iorq(m6522_t* c, uint64_t pins) {
             uint8_t data = M6522_GET_DATA(pins);
             _m6522_write(c, addr, data);
         }
-        M6522_SET_PAB(pins, c->pa.port, c->pb.port);
-        c->iorq_pins = pins;
+        c->pins = (c->pins & ~M6522_IORQ_PIN_MASK) | (pins & M6522_IORQ_PIN_MASK);
     }
     return pins;
 }

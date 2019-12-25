@@ -226,10 +226,6 @@ void vic20_remove_rom_cartridge(vic20_t* sys);
 #define _VIC20_DISPLAY_Y (8)
 
 static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins);
-static void _vic20_via1_out(int port_id, uint8_t data, void* user_data);
-static uint8_t _vic20_via1_in(int port_id, void* user_data);
-static void _vic20_via2_out(int port_id, uint8_t data, void* user_data);
-static uint8_t _vic20_via2_in(int port_id, void* user_data);
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data);
 static void _vic20_init_key_map(vic20_t* sys);
 
@@ -259,15 +255,8 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     _VIC20_CLEAR(cpu_desc);
     sys->pins = m6502_init(&sys->cpu, &cpu_desc);
 
-    m6522_desc_t via_desc;
-    _VIC20_CLEAR(via_desc);
-    via_desc.user_data = sys;
-    via_desc.in_cb = _vic20_via1_in;
-    via_desc.out_cb = _vic20_via1_out;
-    m6522_init(&sys->via_1, &via_desc);
-    via_desc.in_cb = _vic20_via2_in;
-    via_desc.out_cb = _vic20_via2_out;
-    m6522_init(&sys->via_2, &via_desc);
+    m6522_init(&sys->via_1);
+    m6522_init(&sys->via_2);
 
     m6561_desc_t vic_desc;
     _VIC20_CLEAR(vic_desc);
@@ -482,23 +471,76 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
     pins = m6502_tick(&sys->cpu, pins);
     const uint16_t addr = M6502_GET_ADDR(pins);
 
-    /* tick VIAs
-        VIA-1 IRQ pin is connected to CPU NMI pin
-        VIA-2 IRQ pin is connected to CPU IRQ pin
+    /* tick VIA1
+
+        VIA1 IRQ pin is connected to CPU NMI pin
+
+        VIA1 Port A input:
+            PA0:    Serial CLK (FIXME)
+            PA1:    Serial DATA (FIXME)
+            PA2:    JOY0 (up)
+            PA3:    JOY1 (down)
+            PA4:    JOY2 (left)
+            PA5:    PEN/BTN (fire)
+            PA6:    CASS SWITCH(???)
+            PA7:    SERIAL ATN OUT (???)
+
+        VIA1 Port B input:
+            all connected to USR port
 
         NOTE: the IRQ/NMI mapping is reversed from the C64
     */
-    if (m6522_tick(&sys->via_1, pins & ~M6502_IRQ) & M6502_IRQ) {
-        pins |= M6502_NMI;
+    {
+        uint64_t via1_pins = pins & M6522_TICK_PIN_MASK;
+        uint8_t jm_inp = sys->joy_joy_mask | sys->kbd_joy_mask;
+        uint8_t jm = ((jm_inp & VIC20_JOYSTICK_UP)   ? (1<<2):0) |
+                     ((jm_inp & VIC20_JOYSTICK_DOWN) ? (1<<3):0) |
+                     ((jm_inp & VIC20_JOYSTICK_LEFT) ? (1<<4):0) |
+                     ((jm_inp & VIC20_JOYSTICK_BTN)  ? (1<<5):0);
+        uint8_t via1_pa = ~jm;
+        uint8_t via1_pb = 0xFF;
+        M6522_SET_PAB(via1_pins, via1_pa, via1_pb);
+        via1_pins = m6522_tick(&sys->via_1, via1_pins);
+        if (via1_pins & M6522_IRQ) {
+            pins |= M6502_NMI;
+        }
+        else {
+            pins &= ~M6502_NMI;
+        }
     }
-    else {
-        pins &= ~M6502_NMI;
-    }
-    if (m6522_tick(&sys->via_2, pins & ~M6502_IRQ) & M6502_IRQ) {
-        pins |= M6502_IRQ;
-    }
-    else {
-        pins &= ~M6502_IRQ;
+
+    /* tick VIA2
+
+        VIA2 IRQ pin is connected to CPU IRQ pin
+
+        VIA2 Port A input:
+            read keyboard matrix rows
+
+        VIA2 Port B input:
+            PB7:    JOY3 (Right)
+
+        VIA2 Port A output:
+            ---(???)
+
+        VIA2 Port B output:
+            write keyboard matrix columns
+    */
+    {
+        uint64_t via2_pins = pins & M6522_TICK_PIN_MASK;
+        uint8_t via2_pa = ~kbd_scan_lines(&sys->kbd);
+        uint8_t jm_inp = sys->joy_joy_mask | sys->kbd_joy_mask;
+        uint8_t jm = (jm_inp & VIC20_JOYSTICK_RIGHT) ? (1<<7):0;
+        uint8_t via2_pb = ~jm;
+        M6522_SET_PAB(via2_pins, via2_pa, via2_pb);
+        via2_pins = m6522_tick(&sys->via_2, via2_pins);
+        if (via2_pins & M6522_IRQ) {
+            pins |= M6522_IRQ;
+        }
+        else {
+            pins &= ~M6522_IRQ;
+        }
+        via2_pb = M6522_GET_PB(via2_pins);
+        kbd_set_active_columns(&sys->kbd, ~via2_pb);
     }
 
     /* tick VIC to generate video */
@@ -531,12 +573,12 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         }
         if (addr & M6502_A4) {
             /* VIA-1 */
-            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
+            uint64_t via_pins = (pins & M6522_IORQ_PIN_MASK)|M6522_CS1;
             pins = m6522_iorq(&sys->via_1, via_pins) & M6502_PIN_MASK;
         }
         if (addr & M6502_A5) {
             /* VIA-2 */
-            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
+            uint64_t via_pins = (pins & M6522_IORQ_PIN_MASK)|M6522_CS1;
             pins = m6522_iorq(&sys->via_2, via_pins) & M6502_PIN_MASK;
         }
     }
@@ -550,66 +592,6 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         }
     }
     return pins;
-}
-
-static void _vic20_via1_out(int port_id, uint8_t data, void* user_data) {
-    // FIXME
-}
-
-static uint8_t _vic20_via1_in(int port_id, void* user_data) {
-    vic20_t* sys = (vic20_t*) user_data;
-    if (port_id == M6522_PORT_A) {
-        /* VIA1 Port A input:
-            PA0:    Serial CLK (FIXME)
-            PA1:    Serial DATA (FIXME)
-            PA2:    JOY0 (up)
-            PA3:    JOY1 (down)
-            PA4:    JOY2 (left)
-            PA5:    PEN/BTN (fire)
-            PA6:    CASS SWITCH(???)
-            PA7:    SERIAL ATN OUT (???)
-        */
-        uint8_t jm_inp = sys->joy_joy_mask | sys->kbd_joy_mask;
-        uint8_t jm_out = ((jm_inp & VIC20_JOYSTICK_UP)   ? (1<<2):0) |
-                         ((jm_inp & VIC20_JOYSTICK_DOWN) ? (1<<3):0) |
-                         ((jm_inp & VIC20_JOYSTICK_LEFT) ? (1<<4):0) |
-                         ((jm_inp & VIC20_JOYSTICK_BTN)  ? (1<<5):0);
-        return ~jm_out;
-    }
-    else {
-        /* VIA1 Port B input:
-            all pins connected to user port
-        */
-        return 0xFF;
-    }
-}
-
-static void _vic20_via2_out(int port_id, uint8_t data, void* user_data) {
-    vic20_t* sys = (vic20_t*) user_data;
-    if (port_id == M6522_PORT_B) {
-        /* VIA2 Port B output :
-            PB0..PB7: write keyboard columns
-        */
-        kbd_set_active_columns(&sys->kbd, ~data);
-    }
-}
-
-static uint8_t _vic20_via2_in(int port_id, void* user_data) {
-    vic20_t* sys = (vic20_t*) user_data;
-    if (port_id == M6522_PORT_A) {
-        /* VIA2 Port A input:
-            PBA0..7: read keyboard rows
-        */
-        return ~kbd_scan_lines(&sys->kbd);
-    }
-    else {
-        /* VIA2 Port B input:
-            PB7: JOY3 (Right)
-        */
-        uint8_t jm_inp = sys->joy_joy_mask | sys->kbd_joy_mask;
-        uint8_t jm_out = (jm_inp & VIC20_JOYSTICK_RIGHT) ? (1<<7):0;
-        return ~jm_out;
-    }
 }
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {
