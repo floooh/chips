@@ -198,8 +198,6 @@ static uint64_t _atom_tick(atom_t* sys, uint64_t pins);
 static uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data);
 static uint8_t _atom_ppi_in(int port_id, void* user_data);
 static uint64_t _atom_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data);
-static uint8_t _atom_via_in(int port_id, void* user_data);
-static void _atom_via_out(int port_id, uint8_t data, void* user_data);
 static void _atom_init_keymap(atom_t* sys);
 static void _atom_init_memorymap(atom_t* sys);
 static uint64_t _atom_osload(atom_t* sys, uint64_t pins);
@@ -248,12 +246,7 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     ppi_desc.user_data = sys;
     i8255_init(&sys->ppi, &ppi_desc);
 
-    m6522_desc_t via_desc;
-    _ATOM_CLEAR(via_desc);
-    via_desc.in_cb = _atom_via_in;
-    via_desc.out_cb = _atom_via_out;
-    via_desc.user_data = sys;
-    m6522_init(&sys->via, &via_desc);
+    m6522_init(&sys->via);
 
     const int audio_hz = _ATOM_DEFAULT(desc->audio_sample_rate, 44100);
     const float audio_vol = _ATOM_DEFAULT(desc->audio_volume, 0.5f);
@@ -596,15 +589,6 @@ uint8_t _atom_ppi_in(int port_id, void* user_data) {
         }
     }
     return data;
-}
-
-static void _atom_via_out(int port_id, uint8_t data, void* user_data) {
-    /* FIXME */
-}
-
-static uint8_t _atom_via_in(int port_id, void* user_data) {
-    /* FIXME */
-    return 0x00;
 }
 
 static void _atom_init_keymap(atom_t* sys) {
