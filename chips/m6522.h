@@ -124,10 +124,6 @@ extern "C" {
 #define M6522_PB7       (1ULL<<63)
 #define M6522_PB_PINS   (M6522_PB0|M6522_PB1|M6522_PB2|M6522_PB3|M6522_PB4|M6522_PB5|M6522_PB6|M6522_PB7)
 
-/* pin-group-masks for m6522_tick() and m6522_iorq() */
-#define M6522_TICK_PIN_MASK     (M6522_IRQ|M6522_PA_PINS|M6522_PB_PINS|M6522_CA_PINS|M6522_CB_PINS)
-#define M6522_IORQ_PIN_MASK     (M6522_RS_PINS|M6522_DB_PINS|M6522_RW|M6522_CS1|M6522_CS2)
-
 /* register indices */
 #define M6522_REG_RB        (0)     /* input/output register B */
 #define M6522_REG_RA        (1)     /* input/output register A */
@@ -553,6 +549,7 @@ uint64_t _m6522_update_irq(m6522_t* c, uint64_t pins) {
     return pins;
 }
 
+#define _M6522_TICK_PIN_MASK (M6522_IRQ|M6522_PA_PINS|M6522_PB_PINS|M6522_CA_PINS|M6522_CB_PINS)
 uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
     /* process input pins */
     _m6522_read_port_pins(c, pins);
@@ -570,7 +567,7 @@ uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
     /* tick internal delay-pipelines forward */
     _m6522_tick_pipeline(c);
 
-    c->pins = (c->pins & ~M6522_TICK_PIN_MASK) | (pins & M6522_TICK_PIN_MASK);
+    c->pins = (c->pins & ~_M6522_TICK_PIN_MASK) | (pins & _M6522_TICK_PIN_MASK);
     return pins;
 }
 
@@ -749,6 +746,7 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
     }
 }
 
+#define _M6522_IORQ_PIN_MASK (M6522_RS_PINS|M6522_DB_PINS|M6522_RW|M6522_CS1|M6522_CS2)
 uint64_t m6522_iorq(m6522_t* c, uint64_t pins) {
     if ((pins & (M6522_CS1|M6522_CS2)) == M6522_CS1) {
         uint8_t addr = pins & M6522_RS_PINS;
@@ -762,7 +760,7 @@ uint64_t m6522_iorq(m6522_t* c, uint64_t pins) {
             uint8_t data = M6522_GET_DATA(pins);
             _m6522_write(c, addr, data);
         }
-        c->pins = (c->pins & ~M6522_IORQ_PIN_MASK) | (pins & M6522_IORQ_PIN_MASK);
+        c->pins = (c->pins & ~_M6522_IORQ_PIN_MASK) | (pins & _M6522_IORQ_PIN_MASK);
     }
     return pins;
 }
