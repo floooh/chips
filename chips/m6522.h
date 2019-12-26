@@ -210,7 +210,7 @@ typedef struct {
     uint8_t inpr;
     uint8_t outr;
     uint8_t ddr;
-    uint8_t port;
+    uint8_t pins;
 } m6522_port_t;
 
 /* timer state */
@@ -287,7 +287,7 @@ static void _m6522_init_port(m6522_port_t* p) {
     p->inpr = 0xFF;
     p->outr = 0;
     p->ddr = 0;
-    p->port = 0;
+    p->pins = 0;
 }
 
 static void _m6522_init_timer(m6522_timer_t* t) {
@@ -399,9 +399,9 @@ static inline uint8_t _m6522_merge_pb7(m6522_t* c, uint8_t data) {
 }
 
 static inline uint64_t _m6522_write_port_pins(m6522_t* c, uint64_t pins) {
-    c->pa.port = (c->pa.inpr & ~c->pa.ddr) | (c->pa.outr & c->pa.ddr);
-    c->pb.port = _m6522_merge_pb7(c, (c->pb.inpr & ~c->pb.ddr) | (c->pb.outr & c->pb.ddr));
-    M6522_SET_PAB(pins, c->pa.port, c->pb.port);
+    c->pa.pins = (c->pa.inpr & ~c->pa.ddr) | (c->pa.outr & c->pa.ddr);
+    c->pb.pins = _m6522_merge_pb7(c, (c->pb.inpr & ~c->pb.ddr) | (c->pb.outr & c->pb.ddr));
+    M6522_SET_PAB(pins, c->pa.pins, c->pb.pins);
     return pins;
 }
 
@@ -582,7 +582,7 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
                 data = c->pb.inpr;
             }
             else {
-                data = c->pb.port;
+                data = c->pb.pins;
             }
             _m6522_clear_pb_intr(c);
             break;
@@ -592,7 +592,7 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
                 data = c->pa.inpr;
             }
             else {
-                data = c->pa.port;
+                data = c->pa.pins;
             }
             _m6522_clear_pa_intr(c);
             /* FIXME: handshake */
@@ -658,7 +658,7 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
                 data = c->pa.inpr;
             }
             else {
-                data = c->pa.port;
+                data = c->pa.pins;
             }
             break;
     }
