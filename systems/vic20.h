@@ -435,12 +435,7 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         uint8_t via2_pb = ~jm;
         M6522_SET_PAB(via2_pins, via2_pa, via2_pb);
         via2_pins = m6522_tick(&sys->via_2, via2_pins);
-        if (via2_pins & M6522_IRQ) {
-            pins |= M6522_IRQ;
-        }
-        else {
-            pins &= ~M6522_IRQ;
-        }
+        pins = (pins & ~M6502_IRQ) | (via2_pins & M6522_IRQ);
         uint8_t kbd_cols = ~M6522_GET_PB(via2_pins);
         kbd_set_active_columns(&sys->kbd, kbd_cols);
     }
