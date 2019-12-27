@@ -151,11 +151,15 @@ static void _ui_m6522_draw_ports(ui_m6522_t* win) {
         ui_util_b8("PA Inp:  ", via->pa.inpr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pa.inpr);
         ui_util_b8("PA Out:  ", via->pa.outr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pa.outr);
         ui_util_b8("PA Pins: ", via->pa.pins); ImGui::SameLine(); ImGui::Text("(%02X)", via->pa.pins);
+        ImGui::Text("PA C1:   in=%s, out=%s", via->pa.c1_in?"ON ":"OFF", via->pa.c1_out?"ON ":"OFF");
+        ImGui::Text("PA C2:   in=%s, out=%s", via->pa.c2_in?"ON ":"OFF", via->pa.c2_out?"ON ":"OFF");
         ImGui::Separator();
         ui_util_b8("PB DDR:  ", via->pb.ddr);  ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.ddr);
         ui_util_b8("PB Inp:  ", via->pb.inpr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.inpr);
         ui_util_b8("PB Out:  ", via->pb.outr); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.outr);
         ui_util_b8("PB Pins: ", via->pb.pins); ImGui::SameLine(); ImGui::Text("(%02X)", via->pb.pins);
+        ImGui::Text("PB C1:   in=%s, out=%s", via->pb.c1_in?"ON ":"OFF", via->pb.c1_out?"ON ":"OFF");
+        ImGui::Text("PB C2:   in=%s, out=%s", via->pb.c2_in?"ON ":"OFF", via->pb.c2_out?"ON ":"OFF");
     }
 }
 
