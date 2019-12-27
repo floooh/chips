@@ -21,7 +21,7 @@
     ## Emulated Pins
     *************************************
     *           +-----------+           *
-    *   RS0 --->|           |<--> CA1   *
+    *   RS0 --->|           |<--- CA1   *
     *        ...|           |<--> CA2   *
     *   RS3 --->|           |           *
     *           |           |<--> PA0   *
@@ -299,6 +299,12 @@ typedef struct {
     uint8_t outr;
     uint8_t ddr;
     uint8_t pins;
+    bool c1_in;
+    bool c1_out;
+    bool c1_triggered;
+    bool c2_in;
+    bool c2_out;
+    bool c2_triggered;
 } m6522_port_t;
 
 /* timer state */
@@ -374,12 +380,21 @@ static void _m6522_init_port(m6522_port_t* p) {
     p->outr = 0;
     p->ddr = 0;
     p->pins = 0;
+    p->c1_in = false;
+    p->c1_out = true;
+    p->c1_triggered = false;
+    p->c2_in = false;
+    p->c2_out = true;
+    p->c2_triggered = false;
 }
 
-static void _m6522_init_timer(m6522_timer_t* t) {
-    t->latch = 0xFFFF;
-    t->counter = 0;
-    t->t_bit = false;
+static void _m6522_init_timer(m6522_timer_t* t, bool is_reset) {
+    /* counters and latches are not initialized at reset */
+    if (!is_reset) {
+        t->latch = 0xFFFF;
+        t->counter = 0;
+        t->t_bit = false;
+    }
     t->t_out = false;
     t->pip = 0;
 }
@@ -395,8 +410,8 @@ void m6522_init(m6522_t* c) {
     memset(c, 0, sizeof(*c));
     _m6522_init_port(&c->pa);
     _m6522_init_port(&c->pb);
-    _m6522_init_timer(&c->t1);
-    _m6522_init_timer(&c->t2);
+    _m6522_init_timer(&c->t1, false);
+    _m6522_init_timer(&c->t2, false);
     _m6522_init_interrupt(&c->intr);
     c->acr = 0;
     c->pcr = 0;
@@ -414,8 +429,8 @@ void m6522_reset(m6522_t* c) {
     CHIPS_ASSERT(c);
     _m6522_init_port(&c->pa);
     _m6522_init_port(&c->pb);
-    _m6522_init_timer(&c->t1);
-    _m6522_init_timer(&c->t2);
+    _m6522_init_timer(&c->t1, true);
+    _m6522_init_timer(&c->t2, true);
     _m6522_init_interrupt(&c->intr);
     c->acr = 0;
     c->pcr = 0;
@@ -432,32 +447,24 @@ void m6522_reset(m6522_t* c) {
 #define _M6522_PIP_TEST(pip,offset,pos) (0!=(pip&(1<<(offset+pos))))
 
 /*--- port implementation ---*/
-static inline bool _m6522_ca1_triggered(m6522_t* c, uint64_t pins) {
-    if (M6522_PCR_CA1_LOW_TO_HIGH(c)) {
-        /* check for CA1 rising edge */
-        return (M6522_CA1 & (pins & (pins ^ c->pins)));
-    }
-    else {
-        /* check for CA1 falling edge */
-        return (M6522_CA1 & (~pins & (pins ^ c->pins)));
-    }
-}
-
-static inline bool _m6522_cb1_triggered(m6522_t* c, uint64_t pins) {
-    if (M6522_PCR_CB1_LOW_TO_HIGH(c)) {
-        /* check for CA1 rising edge */
-        return (M6522_CB1 & (pins & (pins ^ c->pins)));
-    }
-    else {
-        /* check for CA1 falling edge */
-        return (M6522_CB1 & (~pins & (pins ^ c->pins)));
-    }
-}
-
 static inline void _m6522_read_port_pins(m6522_t* c, uint64_t pins) {
+    /* check CA1/CA2/CB1/CB2 triggered */
+    bool new_ca1 = 0 != (pins & M6522_CA1);
+    bool new_ca2 = 0 != (pins & M6522_CA2);
+    bool new_cb1 = 0 != (pins & M6522_CB1);
+    bool new_cb2 = 0 != (pins & M6522_CB2);
+    c->pa.c1_triggered = (c->pa.c1_in != new_ca1) && ((new_ca1 && M6522_PCR_CA1_LOW_TO_HIGH(c)) || (!new_ca1 && M6522_PCR_CA1_HIGH_TO_LOW(c)));
+    c->pa.c2_triggered = (c->pa.c2_in != new_ca2) && ((new_ca2 && M6522_PCR_CA2_LOW_TO_HIGH(c)) || (!new_ca2 && M6522_PCR_CA2_HIGH_TO_LOW(c)));
+    c->pb.c1_triggered = (c->pb.c1_in != new_cb1) && ((new_cb1 && M6522_PCR_CB1_LOW_TO_HIGH(c)) || (!new_ca1 && M6522_PCR_CB1_HIGH_TO_LOW(c)));
+    c->pb.c2_triggered = (c->pb.c2_in != new_cb2) && ((new_cb2 && M6522_PCR_CB2_LOW_TO_HIGH(c)) || (!new_ca2 && M6522_PCR_CB2_HIGH_TO_LOW(c)));
+    c->pa.c1_in = new_ca1;
+    c->pa.c2_in = new_cb2;
+    c->pb.c1_in = new_cb1;
+    c->pb.c2_in = new_cb2;
+
     /* with latching enabled, only update input register when CA1 / CB1 goes active */
     if (M6522_ACR_PA_LATCH_ENABLE(c)) {
-        if (_m6522_ca1_triggered(c, pins)) {
+        if (c->pa.c1_triggered) {
             c->pa.inpr = M6522_GET_PA(pins);
         }
     }
@@ -465,7 +472,7 @@ static inline void _m6522_read_port_pins(m6522_t* c, uint64_t pins) {
         c->pa.inpr = M6522_GET_PA(pins);
     }
     if (M6522_ACR_PB_LATCH_ENABLE(c)) {
-        if (_m6522_cb1_triggered(c, pins)) {
+        if (c->pb.c1_triggered) {
             c->pb.inpr = M6522_GET_PB(pins);
         }
     }
@@ -488,6 +495,20 @@ static inline uint64_t _m6522_write_port_pins(m6522_t* c, uint64_t pins) {
     c->pa.pins = (c->pa.inpr & ~c->pa.ddr) | (c->pa.outr & c->pa.ddr);
     c->pb.pins = _m6522_merge_pb7(c, (c->pb.inpr & ~c->pb.ddr) | (c->pb.outr & c->pb.ddr));
     M6522_SET_PAB(pins, c->pa.pins, c->pb.pins);
+    /* NOTE: CA1 actually is an input-only pin */
+    pins &= ~(M6522_CA1|M6522_CA2|M6522_CB1|M6522_CB2);
+    if (c->pa.c1_out) {
+        pins |= M6522_CA1;
+    }
+    if (c->pa.c2_out) {
+        pins |= M6522_CA2;
+    }
+    if (c->pb.c1_out) {
+        pins |= M6522_CB1;
+    }
+    if (c->pb.c2_out) {
+        pins |= M6522_CB2;
+    }
     return pins;
 }
 
@@ -529,7 +550,7 @@ static inline void _m6522_write_ifr(m6522_t* c, uint8_t data) {
     _m6522_clear_intr(c, data);
 }
 
-void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
+static void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
     m6522_timer_t* t = &c->t1;
 
     /* decrement counter? */
@@ -567,7 +588,7 @@ void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
 }
 
 
-void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
+static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
     m6522_timer_t* t = &c->t2;
 
     /* either decrement on PB6, or on tick */
@@ -604,7 +625,7 @@ void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
     }
 }
 
-void _m6522_tick_pipeline(m6522_t* c) {
+static void _m6522_tick_pipeline(m6522_t* c) {
     /* feed counter pipelines, both counters are always counting */
     _M6522_PIP_SET(c->t1.pip, M6522_PIP_TIMER_COUNT, 2);
     _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_COUNT, 2);
@@ -620,8 +641,29 @@ void _m6522_tick_pipeline(m6522_t* c) {
     c->intr.pip = (c->intr.pip >> 1) & 0x7F7F;
 }
 
-uint64_t _m6522_update_irq(m6522_t* c, uint64_t pins) {
-    /* FIXME interrupts for CA1, CA2, CB1, CB2, SR */
+static void _m6522_update_cab(m6522_t* c, uint64_t pins) {
+    if (c->pa.c1_triggered) {
+        _m6522_set_intr(c, M6522_IRQ_CA1);
+        if (M6522_PCR_CA2_AUTO_HS(c)) {
+            c->pa.c2_out = true;
+        }
+    }
+    if (c->pa.c2_triggered && M6522_PCR_CA2_INPUT(c)) {
+        _m6522_set_intr(c, M6522_IRQ_CA2);
+    }
+    if (c->pb.c1_triggered) {
+        _m6522_set_intr(c, M6522_IRQ_CB1);
+        if (M6522_PCR_CB2_AUTO_HS(c)) {
+            c->pb.c2_out = true;
+        }
+    }
+    // FIXME: shift-in/out on CB1
+    if (c->pb.c2_triggered && M6522_PCR_CB2_INPUT(c)) {
+        _m6522_set_intr(c, M6522_IRQ_CB2);
+    }
+}
+
+static uint64_t _m6522_update_irq(m6522_t* c, uint64_t pins) {
 
     /* main interrupt bit (delayed by pip) */
     if (_M6522_PIP_TEST(c->intr.pip, M6522_PIP_IRQ, 0)) {
@@ -643,11 +685,14 @@ uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
     /* process input pins */
     _m6522_read_port_pins(c, pins);
 
+    /* handle CA1,CA2,CB1,CB2 pins */
+    _m6522_update_cab(c, pins);
+
     /* tick timers */
     _m6522_tick_t1(c, pins);
     _m6522_tick_t2(c, pins);
 
-    /* update interrupt bits */
+    /* update main interrupt */
     pins = _m6522_update_irq(c, pins);
 
     /* merge port output pins */
@@ -681,8 +726,12 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
                 data = c->pa.pins;
             }
             _m6522_clear_pa_intr(c);
-            /* FIXME: handshake */
-            /* FIXME: pulse output */
+            if (M6522_PCR_CA2_PULSE_OUTPUT(c) || M6522_PCR_CA2_AUTO_HS(c)) {
+                c->pa.c2_out = false;
+            }
+            if (M6522_PCR_CA2_PULSE_OUTPUT(c)) {
+                /* FIXME: pulse output delay pipeline */
+            }
             break;
         
         case M6522_REG_DDRB:
@@ -756,14 +805,20 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
         case M6522_REG_RB:
             c->pb.outr = data;
             _m6522_clear_pb_intr(c);
-            /* FIXME: handshake */
+            if (M6522_PCR_CB2_AUTO_HS(c)) {
+                c->pb.c2_out = false;
+            }
             break;
         
         case M6522_REG_RA:
             c->pa.outr = data;
             _m6522_clear_pa_intr(c);
-            /* FIXME: handshake */
-            /* FIXME: pulse output */
+            if (M6522_PCR_CA2_PULSE_OUTPUT(c) || M6522_PCR_CA2_AUTO_HS(c)) {
+                c->pa.c2_out = false;
+            }
+            if (M6522_PCR_CA2_PULSE_OUTPUT(c)) {
+                /* FIXME: pulse output delay pipeline */
+            }
             break;
         
         case M6522_REG_DDRB:
@@ -818,7 +873,12 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
 
         case M6522_REG_PCR:
             c->pcr = data;
-            /* FIXME: CA2, CB2 */
+            if (M6522_PCR_CA2_FIX_OUTPUT(c)) {
+                c->pa.c2_out = M6522_PCR_CA2_OUTPUT_LEVEL(c);
+            }
+            if (M6522_PCR_CB2_FIX_OUTPUT(c)) {
+                c->pb.c2_out = M6522_PCR_CB2_OUTPUT_LEVEL(c);
+            }
             break;
 
         case M6522_REG_IFR:
