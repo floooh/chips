@@ -21,28 +21,122 @@
     ## Emulated Pins
     *************************************
     *           +-----------+           *
-    *   CA1 --->|           |<--- RS0   *
-    *   CA2 --->|           |...        *
-    *   CB1 --->|           |<--- RS3   *
-    *   CB2 --->|           |           *
+    *   RS0 --->|           |<--> CA1   *
+    *        ...|           |<--> CA2   *
+    *   RS3 --->|           |           *
     *           |           |<--> PA0   *
     *   CS1 --->|           |...        *
     *   CS2 --->|           |<--> PA7   *
     *           |           |           *
-    *    RW --->|   m6522   |           *
-    * RESET --->|           |<--> PB0   *
+    *    D0 <-->|           |           *
+    *        ...|   m6522   |<--> CB1   *
+    *    D7 <-->|           |<--> CB2   *
+    *           |           |           *
+    *    RW --->|           |<--> PB0   *
     *   IRQ <---|           |...        *
     *           |           |<--> PB7   *
     *           |           |           *
-    *           |           |<--> D0    *
-    *           |           |...        *
-    *           |           |<--> D7    *
     *           +-----------+           *
     *************************************
     
     ## How to use
 
-    TODO!
+    Call m6522_init() to initialize a new m6522_t instance (note that
+    there is no m6522_desc_t struct:
+
+    ~~~C
+    m6522_t via;
+    m6522_init(&via);
+    ~~~
+
+    In your emulated system's tick function, call m6522_tick() in
+    each emulated tick, and m6522_iorq() when VIA registers are
+    written to or read from.
+
+    The m6522_tick() function inspects the following pins:
+
+    - the port A I/O pins PA0..PA7
+    - the port A control pins CA1 and CA2
+    - the port B I/O pins PB0..PB7
+    - the port B control pins CB1 and CB2
+
+    On return m6522_tick() returns a modified pin mask where the following
+    pins might have changed state:
+
+    - the IRQ pin
+    - the port A I/O pins PA0..PA7
+    - the port A control pins CA1 and CA2
+    - the port B I/O pins PB0..PB7
+    - the port B control pins CB1 and CB2
+
+    Here's a simple example of m6522_tick() where the VIA chip acts as
+    a keyboard controller for a 8x8 "active-low" keyboard matrix.
+
+    All VIA port A pins have been configured as inputs and are connected
+    to the keyboard matrix lines, and all VIA port B are set as
+    outputs and are connected to the keyboard matrix columns. The keyboard
+    handler code in the operating system would write to the port B register
+    and then read from the port A register.
+
+    The m6522_tick() function call would look like this:
+
+    ~~~C
+    // extract shared CPU/VIA pins and initialize the port A
+    // input pins with the current keyboard matrix row status
+    uint64_t via_pins = cpu_pins & M6502_PINS;
+    uint8_t via_pa = ~kbd_scan_lines(&sys->kbd);
+    M6522_SET_PA(via_pins, via_pa);
+    // call the VIA tick function
+    via_pins = m6522_tick(&sys->via, via_pins);
+    // forward the PB output pins to the keyboard matrix for the next tick
+    uint8_t kbd_cols = ~M6522_GET_PB(via_pins);
+    kbs_set_active_columns(&sys->kbd, kbd_cols);
+    // while at it, forward the IRQ pin state to the cpu pins
+    cpu_pins = (cpu_pins & ~M6502_IRQ) | (via_pins & M6522_IRQ);
+    ~~~
+
+    Elsewhere in the same tick function, call m6522_iorq() when VIA registers
+    must be read or written.
+
+    The relevant pins for the m6522_iorq() call are:
+
+    - register select pins RS0..RS3, these are shared with the
+      first 4 address bus pins, since that's the usual configuration
+    - the chip select pins CS1 and CS2 (CS1 must be active and CS2
+      inactive for the chip to respond)
+    - the RW pin (usually connected to the CPU's RW pin) to select
+      between a register write and register read
+    - the data bus pins DB0..DB7, these are usually shared with the
+      CPU's data bus pins.
+
+    The m6522_iorq() function returns a new pin mask where only the
+    data bus pins DB0..DB7 might have changed (in case of a register
+    read access).
+
+    Since most pin positions are shared with the CPU the m6522_iorq()
+    call usually looks very simple. For instance here's how it looks for
+    the VIA-2 on a VIC-20 computer:
+
+    ~~~C
+    // address decoding
+    const uint16_t addr = M6502_GET_ADDR(cpu_pins);
+    if ((addr & 0xFC00) == 0x9000) {
+        // we're in the system's memory-mapped IO area, VIA-2
+        // is selected when the A5 address pin is active:
+        if (addr & M6502_A5) {
+            // build shared pin mask for VIA and set the CS1 pin
+            uint64_t via_pins = (cpu_pins & M6502_PIN_MASK) | M6522_CS1;
+            // the returned pin mask can be assigned back to the CPU pins:
+            cpu_pins = m6522_iorq(&sys->via_2, via_pins) & M6502_PIN_MASK;
+        }
+    }
+    ~~~
+
+    Finally, to reset a m6522_t instance, call m6522_reset():
+
+    ~~~C
+    m6522_reset(&sys->via);
+    ~~~
 
     ## zlib/libpng license
 
@@ -143,8 +237,6 @@ extern "C" {
 #define M6522_REG_RA_NOH    (15)    /* input/output A without handshake */
 #define M6522_NUM_REGS      (16)
 
-#define M6522_NUM_PORTS (2)
-
 /* PCR test macros (MAME naming) */
 #define M6522_PCR_CA1_LOW_TO_HIGH(c)   (c->pcr & 0x01)
 #define M6522_PCR_CA1_HIGH_TO_LOW(c)   (!(c->pcr & 0x01))
@@ -171,7 +263,7 @@ extern "C" {
 #define M6522_PCR_CB2_FIX_OUTPUT(c)    ((c->pcr & 0xc0) == 0xc0)
 #define M6522_PCR_CB2_OUTPUT_LEVEL(c)  ((c->pcr & 0x20) >> 5)
 
-/* ACT test macros (MAME naming) */
+/* ACR test macros (MAME naming) */
 #define M6522_ACR_PA_LATCH_ENABLE(c)      (c->acr & 0x01)
 #define M6522_ACR_PB_LATCH_ENABLE(c)      (c->acr & 0x02)
 #define M6522_ACR_SR_DISABLED(c)          (!(c->acr & 0x1c))
@@ -245,8 +337,6 @@ typedef struct {
 #define M6522_GET_DATA(p) ((uint8_t)(p>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define M6522_SET_DATA(p,d) {p=((p&~0xFF0000)|(((d)&0xFF)<<16));}
-/* merge 4-bit address into 64-bit pins */
-#define M6522_SET_ADDR(p,d) {p=((p&~0xF)|((d)&0xF));}
 /* extract port A pins */
 #define M6522_GET_PA(p) ((uint8_t)(p>>48))
 /* extract port B pins */
@@ -439,7 +529,6 @@ static inline void _m6522_write_ifr(m6522_t* c, uint8_t data) {
     _m6522_clear_intr(c, data);
 }
 
-/* timer tick functions, also see m6526.h */
 void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
     m6522_timer_t* t = &c->t1;
 
@@ -492,7 +581,7 @@ void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
         t->counter--;
     }
 
-    /* timer underflow? note that T2 simply keeps on counting, it will not reload
+    /* timer underflow? note that T2 simply keeps counting, it will not reload
         from its latch on underflow, loading from latch only happens once when the timer
         is set up with a new value
     */
