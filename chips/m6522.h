@@ -577,6 +577,8 @@ static void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
                 _m6522_set_intr(c, M6522_IRQ_T1);
                 t->t_bit = true;
             }
+            /* reload T1 from latch */
+            _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 0);
         }
     }
 
@@ -606,7 +608,7 @@ static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
         from its latch on underflow, loading from latch only happens once when the timer
         is set up with a new value
     */
-    t->t_out = (0 == t->counter) && _M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_COUNT, 1);
+    t->t_out = (0 == t->counter) && (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_COUNT, 1) || M6522_ACR_T2_COUNT_PB6(c));
     if (t->t_out) {
         /* t2 is always oneshot */
         if (!t->t_bit) {
@@ -614,6 +616,8 @@ static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
             _m6522_set_intr(c, M6522_IRQ_T2);
             t->t_bit = true;
         }
+        /* reload T1 from latch */
+        _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 0);
     }
 
     /* reload timer from latch? this only happens when T2 is
@@ -864,10 +868,17 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
         case M6522_REG_ACR:
             c->acr = data;
             /* FIXME: shift timer */
+            /*
             if (M6522_ACR_T1_CONTINUOUS(c)) {
-                /* add counter delay */
+                // FIXME: continuous counter delay?
                 _M6522_PIP_CLR(c->t1.pip, M6522_PIP_TIMER_COUNT, 0);
                 _M6522_PIP_CLR(c->t1.pip, M6522_PIP_TIMER_COUNT, 1);
+            }
+            */
+            /* FIXME(?) this properly transitions T2 from counting PB6 to clock counter mode */
+            if (!M6522_ACR_T2_COUNT_PB6(c)) {
+                _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_COUNT, 0)
+                _M6522_PIP_CLR(c->t2.pip, M6522_PIP_TIMER_COUNT, 1)
             }
             break;
 
