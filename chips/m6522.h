@@ -573,7 +573,7 @@ static void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
     }
 
     /* timer underflow? */
-    t->t_out = (0 == t->counter) && _M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_COUNT, 1);
+    t->t_out = (0xFFFF == t->counter);
     if (t->t_out) {
         /* continuous or oneshot mode? */
         if (M6522_ACR_T1_CONTINUOUS(c)) {
@@ -588,16 +588,15 @@ static void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
                 t->t_bit = true;
             }
         }
-        /* reload T1 from latch each time when hitting zero,
+        /* reload T1 from latch on each underflow,
            this happens both in oneshot and continous mode
         */
-        _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 0);
+        _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 1);
     }
 
     /* reload timer from latch? */
     if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
         t->counter = t->latch;
-        _M6522_PIP_CLR(t->pip, M6522_PIP_TIMER_COUNT, 1);
     }
 }
 
@@ -616,7 +615,8 @@ static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
         t->counter--;
     }
 
-    t->t_out = (0 == t->counter) && (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_COUNT, 1) || M6522_ACR_T2_COUNT_PB6(c));
+    /* underflow? */
+    t->t_out = (0xFFFF == t->counter);
     if (t->t_out) {
         /* t2 is always oneshot */
         if (!t->t_bit) {
@@ -630,7 +630,6 @@ static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
     /* reload timer from latch? this only happens when T2 is explicitly loaded, not on wrap-around */
     if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
         t->counter = t->latch;
-        _M6522_PIP_CLR(t->pip, M6522_PIP_TIMER_COUNT, 1);
     }
 }
 
@@ -847,7 +846,7 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             c->t1.latch = (data << 8) | (c->t1.latch & 0x00FF);
             _m6522_clear_intr(c, M6522_IRQ_T1);
             c->t1.t_bit = false;
-            _M6522_PIP_SET(c->t1.pip, M6522_PIP_TIMER_LOAD, 1);
+            _M6522_PIP_SET(c->t1.pip, M6522_PIP_TIMER_LOAD, 3);
             break;
 
         case M6522_REG_T1LH:
@@ -863,7 +862,7 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             c->t2.latch = (data << 8) | (c->t2.latch & 0x00FF);
             _m6522_clear_intr(c, M6522_IRQ_T2);
             c->t2.t_bit = false;
-            _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_LOAD, 1);
+            _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_LOAD, 3);
             break;
 
         case M6522_REG_SR:
@@ -882,8 +881,7 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             */
             /* FIXME(?) this properly transitions T2 from counting PB6 to clock counter mode */
             if (!M6522_ACR_T2_COUNT_PB6(c)) {
-                _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_COUNT, 0)
-                _M6522_PIP_CLR(c->t2.pip, M6522_PIP_TIMER_COUNT, 1)
+                _M6522_PIP_CLR(c->t2.pip, M6522_PIP_TIMER_COUNT, 0)
             }
             break;
 
