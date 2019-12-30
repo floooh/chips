@@ -628,9 +628,12 @@ static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
     }
 
     /* reload timer from latch? this only happens when T2 is explicitly loaded, not on wrap-around */
+    /* NOTE: since writing the high-latch immediately reloads the timers, no delay-pipeline
+       is needed for T2
     if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
         t->counter = t->latch;
     }
+    */
 }
 
 static void _m6522_tick_pipeline(m6522_t* c) {
@@ -846,7 +849,7 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             c->t1.latch = (data << 8) | (c->t1.latch & 0x00FF);
             _m6522_clear_intr(c, M6522_IRQ_T1);
             c->t1.t_bit = false;
-            _M6522_PIP_SET(c->t1.pip, M6522_PIP_TIMER_LOAD, 3);
+            c->t1.counter = c->t1.latch;
             break;
 
         case M6522_REG_T1LH:
@@ -862,7 +865,7 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
             c->t2.latch = (data << 8) | (c->t2.latch & 0x00FF);
             _m6522_clear_intr(c, M6522_IRQ_T2);
             c->t2.t_bit = false;
-            _M6522_PIP_SET(c->t2.pip, M6522_PIP_TIMER_LOAD, 3);
+            c->t2.counter = c->t2.latch;
             break;
 
         case M6522_REG_SR:
