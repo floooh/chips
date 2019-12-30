@@ -138,6 +138,12 @@
     m6522_reset(&sys->via);
     ~~~
 
+    ## LINKS
+
+    On timer behaviour when hitting zero:
+
+    http://forum.6502.org/viewtopic.php?f=4&t=2901
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
@@ -309,7 +315,7 @@ typedef struct {
 
 /* timer state */
 typedef struct {
-    uint16_t latch;     /* 16-bit initial value latch */
+    uint16_t latch;     /* 16-bit initial value latch, NOTE: T2 only has an 8-bit latch */
     uint16_t counter;   /* 16-bit counter */
     bool t_bit;         /* toggles between true and false when counter underflows */
     bool t_out;         /* true for 1 cycle when counter underflow */
@@ -550,6 +556,14 @@ static inline void _m6522_write_ifr(m6522_t* c, uint8_t data) {
     _m6522_clear_intr(c, data);
 }
 
+/*
+    On timer behaviour:
+
+    http://forum.6502.org/viewtopic.php?f=4&t=2901
+
+    (essentially: T1 is always reloaded from latch, both in continuous
+    and oneshot mode, while T2 is never reloaded)
+*/
 static void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
     m6522_timer_t* t = &c->t1;
 
@@ -563,23 +577,21 @@ static void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
     if (t->t_out) {
         /* continuous or oneshot mode? */
         if (M6522_ACR_T1_CONTINUOUS(c)) {
-            /* continuous */
             t->t_bit = !t->t_bit;
             /* trigger T1 interrupt on each underflow */
             _m6522_set_intr(c, M6522_IRQ_T1);
-            /* reload T1 from latch */
-            _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 0);
         }
         else {
-            /* oneshot */
             if (!t->t_bit) {
                 /* trigger T1 only once */
                 _m6522_set_intr(c, M6522_IRQ_T1);
                 t->t_bit = true;
             }
-            /* reload T1 from latch */
-            _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 0);
         }
+        /* reload T1 from latch each time when hitting zero,
+           this happens both in oneshot and continous mode
+        */
+        _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 0);
     }
 
     /* reload timer from latch? */
@@ -604,10 +616,6 @@ static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
         t->counter--;
     }
 
-    /* timer underflow? note that T2 simply keeps counting, it will not reload
-        from its latch on underflow, loading from latch only happens once when the timer
-        is set up with a new value
-    */
     t->t_out = (0 == t->counter) && (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_COUNT, 1) || M6522_ACR_T2_COUNT_PB6(c));
     if (t->t_out) {
         /* t2 is always oneshot */
@@ -616,13 +624,10 @@ static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
             _m6522_set_intr(c, M6522_IRQ_T2);
             t->t_bit = true;
         }
-        /* reload T1 from latch */
-        _M6522_PIP_SET(t->pip, M6522_PIP_TIMER_LOAD, 0);
+        /* NOTE: T2 never reloads from latch on hitting zero */
     }
 
-    /* reload timer from latch? this only happens when T2 is
-        explicitly loaded, not on wrap-around
-     */
+    /* reload timer from latch? this only happens when T2 is explicitly loaded, not on wrap-around */
     if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
         t->counter = t->latch;
         _M6522_PIP_CLR(t->pip, M6522_PIP_TIMER_COUNT, 1);
