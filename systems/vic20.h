@@ -88,14 +88,14 @@ typedef enum {
 #define VIC20_JOYSTICK_BTN   (1<<4)
 
 /* casette port bits, same as C1530_CASPORT_* */
-#define VIC20_CASPORT_MOTOR   (1<<0)  /* 1: motor off, 0: motor on */
-#define VIC20_CASPORT_READ    (1<<1)  /* 1: read signal from datasette, connected to CIA-1 FLAG */
-#define VIC20_CASPORT_WRITE   (1<<2)  /* not implemented */
-#define VIC20_CASPORT_SENSE   (1<<3)  /* 1: play button up, 0: play button down */
+#define VIC20_CASPORT_MOTOR   (1<<0)
+#define VIC20_CASPORT_READ    (1<<1)
+#define VIC20_CASPORT_WRITE   (1<<2)
+#define VIC20_CASPORT_SENSE   (1<<3)
 
 /* IEC port bits, same as C1541_IECPORT_* */
-#define VIC20_IECPORT_RESET   (1<<0)  /* 1: RESET, 0: no reset */
-#define VIC20_IECPORT_SRQIN   (1<<1)  /* connected to CIA-1 FLAG */
+#define VIC20_IECPORT_RESET   (1<<0)
+#define VIC20_IECPORT_SRQIN   (1<<1)
 #define VIC20_IECPORT_DATA    (1<<2)
 #define VIC20_IECPORT_CLK     (1<<3)
 #define VIC20_IECPORT_ATN     (1<<4)
@@ -252,6 +252,9 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     sys->num_samples = _VIC20_DEFAULT(desc->audio_num_samples, VIC20_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= VIC20_MAX_AUDIO_SAMPLES);
 
+    /* motor off, no key pressed */
+    sys->cas_port = VIC20_CASPORT_MOTOR|VIC20_CASPORT_SENSE;
+
     m6502_desc_t cpu_desc;
     _VIC20_CLEAR(cpu_desc);
     sys->pins = m6502_init(&sys->cpu, &cpu_desc);
@@ -364,6 +367,7 @@ void vic20_reset(vic20_t* sys) {
     sys->joy_joy_mask = 0;
     sys->joy_mask = 0;
     sys->pins |= M6502_RES;
+    sys->cas_port = VIC20_CASPORT_MOTOR|VIC20_CASPORT_SENSE;
     m6522_reset(&sys->via_1);
     m6522_reset(&sys->via_2);
     m6561_reset(&sys->vic);
@@ -382,12 +386,15 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         VIA1 Port A input:
             PA0:    Serial CLK (FIXME)
             PA1:    Serial DATA (FIXME)
-            PA2:    JOY0 (up)
-            PA3:    JOY1 (down)
-            PA4:    JOY2 (left)
-            PA5:    PEN/BTN (fire)
-            PA6:    CASS SWITCH(???)
+            PA2:    in: JOY0 (up)
+            PA3:    in: JOY1 (down)
+            PA4:    in: JOY2 (left)
+            PA5:    in: PEN/BTN (fire)
+            PA6:    in: CASS SENSE
             PA7:    SERIAL ATN OUT (???)
+
+            CA1:    in: RESTORE KEY(???)
+            CA2:    out: CASS MOTOR
 
         VIA1 Port B input:
             all connected to USR port
@@ -400,15 +407,25 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
                      ((sys->joy_mask & VIC20_JOYSTICK_DOWN) << 2) |
                      ((sys->joy_mask & VIC20_JOYSTICK_LEFT) << 2) |
                      ((sys->joy_mask & VIC20_JOYSTICK_BTN)  << 1);
-        uint8_t via1_pa = ~jm;
-        uint8_t via1_pb = 0xFF;
+        uint8_t via1_pa = ~jm & 0x3C;
+        if (sys->cas_port & VIC20_CASPORT_SENSE) {
+            via1_pa |= (1<<6);
+        }
+        uint8_t via1_pb = 0;
         M6522_SET_PAB(via1_pins, via1_pa, via1_pb);
+        // FIXME: RESTORE key to M6522_CA1
         via1_pins = m6522_tick(&sys->via_1, via1_pins);
         if (via1_pins & M6522_IRQ) {
             pins |= M6502_NMI;
         }
         else {
             pins &= ~M6502_NMI;
+        }
+        if (via1_pins & M6522_CA2) {
+            sys->cas_port |= VIC20_CASPORT_MOTOR;
+        }
+        else {
+            sys->cas_port &= ~VIC20_CASPORT_MOTOR;
         }
     }
 
@@ -419,6 +436,8 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         VIA2 Port A input:
             read keyboard matrix rows
 
+            CA1: in: CASS READ
+
         VIA2 Port B input:
             PB7:    JOY3 (Right)
 
@@ -427,6 +446,7 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
 
         VIA2 Port B output:
             write keyboard matrix columns
+            PB3 -> CASS WRITE
     */
     {
         uint64_t via2_pins = pins & M6502_PIN_MASK;
@@ -434,10 +454,19 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         uint8_t jm = (sys->joy_mask & VIC20_JOYSTICK_RIGHT)<<4;
         uint8_t via2_pb = ~jm;
         M6522_SET_PAB(via2_pins, via2_pa, via2_pb);
+        if (sys->cas_port & VIC20_CASPORT_READ) {
+            via2_pins |= M6522_CA1;
+        }
         via2_pins = m6522_tick(&sys->via_2, via2_pins);
         pins = (pins & ~M6502_IRQ) | (via2_pins & M6522_IRQ);
         uint8_t kbd_cols = ~M6522_GET_PB(via2_pins);
         kbd_set_active_columns(&sys->kbd, kbd_cols);
+        if (pins & M6522_PB3) {
+            sys->cas_port |= VIC20_CASPORT_WRITE;
+        }
+        else {
+            sys->cas_port &= ~VIC20_CASPORT_WRITE;
+        }
     }
 
     /* tick VIC to generate video */
