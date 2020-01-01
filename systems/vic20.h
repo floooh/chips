@@ -337,7 +337,8 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     */
     mem_init(&sys->mem_vic);
     mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);       /* CPU: 8000..8FFF */
-    mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);      /* CPU: 9400..97FF */
+    // FIXME: can the VIC read the color RAM as data?
+    //mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);      /* CPU: 9400..97FF */
     mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);           /* CPU: 0000..03FF */
     if (desc->mem_config == VIC20_MEMCONFIG_MAX) {
         mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_3k);     /* CPU: 0400..0FFF */
