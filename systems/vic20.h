@@ -77,7 +77,8 @@ typedef enum {
     VIC20_MEMCONFIG_8K,             /* Block 1 */
     VIC20_MEMCONFIG_16K,            /* Block 1+2 */
     VIC20_MEMCONFIG_24K,            /* Block 1+2+3 */
-    VIC20_MEMCONFIG_32K             /* Block 1+2+3+5 (note that BASIC can only use blocks 1+2+3) */
+    VIC20_MEMCONFIG_32K,            /* Block 1+2+3+5 (note that BASIC can only use blocks 1+2+3) */
+    VIC20_MEMCONFIG_MAX             /* 32K + 3KB at 0400..0FFF */
 } vic20_memory_config_t;
 
 /* joystick mask bits */
@@ -162,11 +163,12 @@ typedef struct {
 
     uint8_t color_ram[0x0400];      /* special color RAM */
     uint8_t ram0[0x0400];           /* 1 KB zero page, stack, system work area */
+    uint8_t ram_3k[0x0C00];         /* optional 3K exp RAM */
     uint8_t ram1[0x1000];           /* 4 KB main RAM */
     uint8_t rom_char[0x1000];       /* 4 KB character ROM image */
     uint8_t rom_basic[0x2000];      /* 8 KB BASIC ROM image */
     uint8_t rom_kernal[0x2000];     /* 8 KB KERNAL V3 ROM image */
-    uint8_t ram_exp[4][0x2000];     /* optional expansion RAM areas */
+    uint8_t ram_exp[4][0x2000];     /* optional expansion 8K RAM blocks */
 
     mem_t mem_cart;                 /* special ROM cartridge memory mapping helper */
 } vic20_t;
@@ -282,8 +284,8 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     /*
         VIC-20 CPU memory map:
 
-        0000..0400      zero-page, stack, system area
-        [unused]
+        0000..03FF      zero-page, stack, system area
+        [unused]        usable with memconfig 'max'
         1000..1FFF      4 KB Main RAM (block 0)
         [2000..3FFF]    8 KB Expansion Block 1
         [4000..5FFF]    8 KB Expansion Block 2
@@ -304,6 +306,9 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     */
     mem_init(&sys->mem_cpu);
     mem_map_ram(&sys->mem_cpu, 1, 0x0000, 0x0400, sys->ram0);
+    if (desc->mem_config == VIC20_MEMCONFIG_MAX) {
+        mem_map_ram(&sys->mem_cpu, 1, 0x0400, 0x0C00, sys->ram_3k);
+    }
     mem_map_ram(&sys->mem_cpu, 1, 0x1000, 0x1000, sys->ram1);
     if (desc->mem_config >= VIC20_MEMCONFIG_8K) {
         mem_map_ram(&sys->mem_cpu, 1, 0x2000, 0x2000, sys->ram_exp[0]);
@@ -339,7 +344,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);
     mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);
     if (desc->mem_config >= VIC20_MEMCONFIG_8K) {
-        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x1C00, sys->ram_exp[0]);
+        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_exp[0]);
     }
     mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);
 

@@ -22,7 +22,9 @@
     ui_c64.h both for the declaration and implementation.
 
     - vic20.h
+    - c1530.h
     - mem.h
+    - ui_c1530.h
     - ui_chip.h
     - ui_util.h
     - ui_m6502.h
@@ -76,7 +78,11 @@ typedef struct {
 
 typedef struct {
     vic20_t* vic20;
-    c1530_t* c1530;
+    struct {
+        bool valid;
+        c1530_t* sys;
+        ui_c1530_t ui;
+    } c1530;
     int dbg_scanline;
     ui_vic20_boot_cb boot_cb;
     ui_m6502_t cpu;
@@ -151,6 +157,9 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
             ImGui::MenuItem("MOS 6522 #1 (VIA)", 0, &ui->via[0].open);
             ImGui::MenuItem("MOS 6522 #2 (VIA)", 0, &ui->via[1].open);
             ImGui::MenuItem("MOS 6561 (VIC-I)", 0, &ui->vic.open);
+            if (ui->c1530.valid) {
+                ImGui::MenuItem("C1530 (Datassette)", 0, &ui->c1530.ui.open);
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -390,7 +399,10 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->vic20);
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->vic20 = ui_desc->vic20;
-    ui->c1530 = ui_desc->c1530;
+    if (ui_desc->c1530) {
+        ui->c1530.valid = true;
+        ui->c1530.sys = ui_desc->c1530;
+    }
     ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
     {
@@ -412,6 +424,15 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
         desc.user_breaktypes[1].label = "Next Scanline";
         desc.user_breaktypes[2].label = "Next Frame";
         ui_dbg_init(&ui->dbg, &desc);
+    }
+    if (ui->c1530.valid) {
+        x += dx; y += dy;
+        ui_c1530_desc_t desc = {0};
+        desc.title = "C1530 Datassette";
+        desc.x = x;
+        desc.y = y;
+        desc.c1530 = ui->c1530.sys;
+        ui_c1530_init(&ui->c1530.ui, &desc);
     }
     x += dx; y += dy;
     {
@@ -521,6 +542,11 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
 void ui_vic20_discard(ui_vic20_t* ui) {
     CHIPS_ASSERT(ui && ui->vic20);
     ui->vic20 = 0;
+    if (ui->c1530.valid) {
+        ui_c1530_discard(&ui->c1530.ui);
+        ui->c1530.sys = 0;
+        ui->c1530.valid = false;
+    }
     ui_m6502_discard(&ui->cpu);
     ui_m6522_discard(&ui->via[0]);
     ui_m6522_discard(&ui->via[1]);
@@ -549,6 +575,7 @@ void ui_vic20_draw_system(ui_vic20_t* ui) {
             case VIC20_MEMCONFIG_16K:       mem_config = "+16K RAM"; break;
             case VIC20_MEMCONFIG_24K:       mem_config = "+24K RAM"; break;
             case VIC20_MEMCONFIG_32K:       mem_config = "+32K RAM"; break;
+            case VIC20_MEMCONFIG_MAX:       mem_config = "MAX RAM"; break;
         }
         ImGui::Text("Memory Config: %s", mem_config);
         if (ImGui::CollapsingHeader("Cassette Port", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -575,6 +602,9 @@ void ui_vic20_draw(ui_vic20_t* ui, double time_ms) {
         _ui_vic20_update_memmap(ui);
     }
     ui_vic20_draw_system(ui);
+    if (ui->c1530.valid) {
+        ui_c1530_draw(&ui->c1530.ui);
+    }
     ui_audio_draw(&ui->audio, ui->vic20->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
@@ -593,7 +623,7 @@ void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us) {
     CHIPS_ASSERT(ui && ui->vic20);
     uint32_t ticks_to_run = clk_us_to_ticks(VIC20_FREQUENCY, frame_time_us);
     vic20_t* vic20 = ui->vic20;
-    c1530_t* c1530 = ui->c1530;
+    c1530_t* c1530 = ui->c1530.sys;
     if (c1530) {
         /* tick VIC20 and datasette */
         for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
