@@ -207,18 +207,10 @@ static uint8_t _ui_vic20_mem_read(int layer, uint16_t addr, void* user_data) {
         case _UI_VIC20_MEMLAYER_CPU:
             return mem_rd(&vic20->mem_cpu, addr);
         case _UI_VIC20_MEMLAYER_VIC:
-            // FIXME
-            //return mem_rd(&vic20->mem_vic, addr);
-            return 0xFF;
+            return mem_rd(&vic20->mem_vic, addr);
         case _UI_VIC20_MEMLAYER_COLOR:
-            // FIXME
-            //if ((addr >= 0xD800) && (addr < 0xDC00)) {
-                /* static COLOR RAM */
-            //    return c64->color_ram[addr - 0xD800];
-            //}
-            //else {
-                return 0xFF;
-            //}
+            /* static COLOR RAM */
+            return vic20->color_ram[addr & 0x3FF];
         default:
             return 0xFF;
     }
@@ -233,29 +225,31 @@ static void _ui_vic20_mem_write(int layer, uint16_t addr, uint8_t data, void* us
             mem_wr(&vic20->mem_cpu, addr, data);
             break;
         case _UI_VIC20_MEMLAYER_VIC:
-            // FIXME
-            //mem_wr(&vic20->mem_vic, addr, data);
+            mem_wr(&vic20->mem_vic, addr, data);
             break;
         case _UI_VIC20_MEMLAYER_COLOR:
-            // FIXME
-            //if ((addr >= 0xD800) && (addr < 0xDC00)) {
-                /* static COLOR RAM */
-            //    c64->color_ram[addr - 0xD800] = data;
-            //}
+            /* static COLOR RAM */
+            vic20->color_ram[addr & 0x3FF] = data;
             break;
     }
 }
 
 static void _ui_vic20_update_memmap(ui_vic20_t* ui) {
     CHIPS_ASSERT(ui && ui->vic20);
+    const vic20_memory_config_t cfg = ui->vic20->mem_config;
     ui_memmap_reset(&ui->memmap);
     ui_memmap_layer(&ui->memmap, "SYS");
-        ui_memmap_region(&ui->memmap, "RAM0",   0x0000, 0x0400, true);
-        ui_memmap_region(&ui->memmap, "RAM1",   0x1000, 0x1000, true);
+        ui_memmap_region(&ui->memmap, "RAM0",  0x0000, 0x0400, true);
+        ui_memmap_region(&ui->memmap, "RAM3K", 0x0400, 0x0C00, cfg == VIC20_MEMCONFIG_MAX);
+        ui_memmap_region(&ui->memmap, "RAM1",  0x1000, 0x1000, true);
+        ui_memmap_region(&ui->memmap, "EXP1",  0x2000, 0x2000, cfg >= VIC20_MEMCONFIG_8K);
+        ui_memmap_region(&ui->memmap, "EXP2",  0x4000, 0x2000, cfg >= VIC20_MEMCONFIG_16K);
+        ui_memmap_region(&ui->memmap, "EXP3",  0x6000, 0x2000, cfg >= VIC20_MEMCONFIG_24K);
         ui_memmap_region(&ui->memmap, "CHAR",   0x8000, 0x1000, true);
         ui_memmap_region(&ui->memmap, "IO",     0x9000, 0x0200, true);
         // FIXME: color ram at variable address
         ui_memmap_region(&ui->memmap, "COLOR",  0x9400, 0x0800, true);
+        ui_memmap_region(&ui->memmap, "EXP4",   0xA000, 0x2000, cfg >= VIC20_MEMCONFIG_32K);
         ui_memmap_region(&ui->memmap, "BASIC",  0xC000, 0x2000, true);
         ui_memmap_region(&ui->memmap, "KERNAL", 0xE000, 0x2000, true);
 }
