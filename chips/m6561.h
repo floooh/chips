@@ -392,8 +392,7 @@ static void _m6561_regs_dirty(m6561_t* vic) {
 }
 
 uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
-    // FIXME: read from 'unmapped' areas returns last
-    // fetched graphics data
+    // FIXME: read from 'unmapped' areas returns last fetched graphics data
     CHIPS_ASSERT(vic);
     uint8_t addr = pins & M6561_REG_MASK;
     if (pins & M6561_RW) {
@@ -510,15 +509,15 @@ void m6561_tick_video(m6561_t* vic) {
     /* fetch data */
     if (vic->rs.vc & 1) {
         /* a g-access (graphics data) into pixel shifter */
-        uint16_t addr = vic->mem.g_addr_base |
-                        ((vic->mem.c_value & 0xFF) * vic->rs.row_height) |
+        uint16_t addr = vic->mem.g_addr_base +
+                        ((vic->mem.c_value & 0xFF) * vic->rs.row_height) +
                         vic->rs.rc;
         vic->gunit.shift = (uint8_t) vic->fetch_cb(addr, vic->user_data);
         vic->gunit.color = (vic->mem.c_value>>8) & 0xF;
     }
     else {
         /* a c-access (character code and color) */
-        uint16_t addr = vic->mem.c_addr_base | (vic->rs.vc>>1);
+        uint16_t addr = vic->mem.c_addr_base + (vic->rs.vc>>1);
         vic->mem.c_value = vic->fetch_cb(addr, vic->user_data);
     }
     if (!vic->rs.vc_disabled) {
