@@ -2,7 +2,7 @@
 /*#
     # c1530.h
 
-    The Commodore datasette tape drive in a header.
+    The Commodore datasette tape drive in a header for loading .TAP files.
 
     Do this:
     ~~~C
@@ -19,6 +19,53 @@
         your own assert macro (default: assert(c))
 
     You need to include the following headers before including c64.h:
+
+    ## Howto
+
+    The C1530 can be used with system emulators with support for the
+    Commodore cassette port (so far vic20.h and c64.h). The system
+    emulators expose the cassette port through a byte called 'cas_port'. The
+    C1530 emulators 'connects' to this cassette port through a pointer
+    to this cas_port byte, so that this byte becomes shared between
+    the computer emulator and the C1530 emulator.
+
+    To setup a c1530_t instance, call c1530_init() and provide a pointer
+    to the shared cassette port byte of the computer system:
+
+    ~~~C
+    c1530_init(&c1530, &(c1530_desc_t){
+        .cas_port = &c64.cas_port
+    });
+    ~~~
+
+    For each computer system tick, call the c1530_tick() function once too:
+
+    ~~~C
+    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+        c64_tick(&c64);
+        c1530_tick(&c1530);
+    }
+    ~~~
+
+    Use the following functions to insert and remove a tape, with a .TAP
+    file loading into memory:
+
+    ~~~C
+    bool c1530_insert_tape(c1530_t* sys, const uint8_t* ptr, int num_bytes);
+    void c1530_remove_tape(c1530_t* sys);
+    ~~~
+
+    Call the following functions to control the tape motor (press the Play
+    or Stop buttons), and check if the motor is on.
+
+    ~~~C
+    void c1530_play(c1530_t* sys);
+    void c1530_stop(c1530_t* sys);
+    bool c1530_is_motor_on(c1530_t* sys);
+    ~~~
+    
+    The motor may also be switched on/off by the computer system through
+    the cassette port's MOTOR pin.
 
     ## zlib/libpng license
 
@@ -83,9 +130,9 @@ bool c1530_insert_tape(c1530_t* sys, const uint8_t* ptr, int num_bytes);
 /* remove tape file */
 void c1530_remove_tape(c1530_t* sys);
 /* start the tape (press the Play button) */
-void c1530_start_tape(c1530_t* sys);
+void c1530_play(c1530_t* sys);
 /* stop the tape (unpress the Play button */
-void c1530_stop_tape(c1530_t* sys);
+void c1530_stop(c1530_t* sys);
 /* return true if tape motor is on */
 bool c1530_is_motor_on(c1530_t* sys);
 
@@ -160,13 +207,13 @@ bool c1530_insert_tape(c1530_t* sys, const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-void c1530_start_tape(c1530_t* sys) {
+void c1530_play(c1530_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     /* motor on, play button down */
     *sys->cas_port &= ~(C1530_CASPORT_MOTOR|C1530_CASPORT_SENSE);
 }
 
-void c1530_stop_tape(c1530_t* sys) {
+void c1530_stop(c1530_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     /* motor off, play button up */
     *sys->cas_port |= (C1530_CASPORT_MOTOR|C1530_CASPORT_SENSE);
@@ -179,7 +226,7 @@ bool c1530_is_motor_on(c1530_t* sys) {
 
 void c1530_remove_tape(c1530_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    c1530_stop_tape(sys);
+    c1530_stop(sys);
     sys->size = 0;
     sys->pos = 0;
     sys->tick_count = 0;
