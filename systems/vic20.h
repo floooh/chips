@@ -330,23 +330,19 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     /*
         VIC-I memory map:
 
-        0x0000..0x0FFF  character ROM
-        0x1000..0x13FF  VIC and VIA registers
-        0x1400..0x17FF  color RAM
-        0x1800..0x1BFF  exp 1
-        0x1C00..0x1FFF  exp 2
-        0x2000..0x23FF  system RAM (CPU: 0x0000..0x0400)
-        0x2400..0x2FFF  expansion RAM
-        0x3000..0x3FFF  user RAM (CPU: 0x1000..0x1FFF)
+        The VIC-I has 14 address bus bits VA0..VA13, for 16 KB of
+        addressable memory. Bits VA0..VA12 are identical with the
+        lower 13 CPU address bus pins, VA13 is the inverted BLK4
+        address decoding bit.
     */
     mem_init(&sys->mem_vic);
-    mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);
-    mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);
-    mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);
-    if (desc->mem_config >= VIC20_MEMCONFIG_8K) {
-        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_exp[0]);
+    mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);       /* CPU: 8000..8FFF */
+    mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);      /* CPU: 9400..97FF */
+    mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);           /* CPU: 0000..03FF */
+    if (desc->mem_config == VIC20_MEMCONFIG_MAX) {
+        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_3k);     /* CPU: 0400..0FFF */
     }
-    mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);
+    mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);           /* CPU: 1000..1FFF */
 
     /*
         A special memory mapping used to copy ROM cartridge PRG files
