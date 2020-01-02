@@ -377,9 +377,41 @@ void vic20_reset(vic20_t* sys) {
 
 static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
 
-    /* tick the CPU */
-    pins = m6502_tick(&sys->cpu, pins);
-    const uint16_t addr = M6502_GET_ADDR(pins);
+    /* tick the CPU (IRQ and NMI pins will be set as needed each tick) */
+    pins = m6502_tick(&sys->cpu, pins) & ~(M6502_IRQ|M6502_NMI);
+
+    /* address decoding and memory access */
+    uint64_t via1_pins = pins & M6502_PIN_MASK;
+    uint64_t via2_pins = pins & M6502_PIN_MASK;
+    if ((pins & 0xFC00) == 0x9000) {
+        /* 9000..93FF: VIA and VIC IO area
+
+            A4+A5 low:  VIC (?)
+            A4 high:    VIA-1
+            A5 high:    VIA-2
+        */
+        if (M6561_SELECTED(pins)) {
+             /* VIC (no separate chip-select, instead specific address pin mask is checked) */
+             uint64_t vic_pins = (pins & M6502_PIN_MASK);
+             pins = m6561_iorq(&sys->vic, vic_pins) & M6502_PIN_MASK;
+        }
+        if (pins & M6502_A4) {
+            via1_pins |= M6522_CS1;
+        }
+        if (pins & M6502_A5) {
+            via2_pins |= M6522_CS1;
+        }
+    }
+    else {
+        /* regular memory access */
+        const uint16_t addr = M6502_GET_ADDR(pins);
+        if (pins & M6502_RW) {
+            M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
+        }
+        else {
+            mem_wr(&sys->mem_cpu, addr, M6502_GET_DATA(pins));
+        }
+    }
 
     /* tick VIA1
 
@@ -404,30 +436,28 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         NOTE: the IRQ/NMI mapping is reversed from the C64
     */
     {
-        uint64_t via1_pins = pins & M6502_PIN_MASK;
         uint8_t jm = ((sys->joy_mask & VIC20_JOYSTICK_UP)   << 2) |
                      ((sys->joy_mask & VIC20_JOYSTICK_DOWN) << 2) |
                      ((sys->joy_mask & VIC20_JOYSTICK_LEFT) << 2) |
                      ((sys->joy_mask & VIC20_JOYSTICK_BTN)  << 1);
-        uint8_t via1_pa = ~jm & 0x3C;
+        uint8_t via1_pa = (~jm & 0x3C);
+        M6522_SET_PA(via1_pins, via1_pa);
         if (sys->cas_port & VIC20_CASPORT_SENSE) {
-            via1_pa |= (1<<6);
+            via1_pins |= M6522_PA6;
         }
-        uint8_t via1_pb = 0;
-        M6522_SET_PAB(via1_pins, via1_pa, via1_pb);
         // FIXME: RESTORE key to M6522_CA1
         via1_pins = m6522_tick(&sys->via_1, via1_pins);
-        if (via1_pins & M6522_IRQ) {
-            pins |= M6502_NMI;
-        }
-        else {
-            pins &= ~M6502_NMI;
-        }
         if (via1_pins & M6522_CA2) {
             sys->cas_port |= VIC20_CASPORT_MOTOR;
         }
         else {
             sys->cas_port &= ~VIC20_CASPORT_MOTOR;
+        }
+        if (via1_pins & M6522_IRQ) {
+            pins |= M6502_NMI;
+        }
+        if ((via1_pins & (M6522_CS1|M6522_RW)) == (M6522_CS1|M6522_RW)) {
+            pins = M6502_COPY_DATA(pins, via1_pins);
         }
     }
 
@@ -448,26 +478,23 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
 
         VIA2 Port B output:
             write keyboard matrix columns
-            PB3 -> CASS WRITE
+            PB3 -> CASS WRITE (not implemented)
     */
     {
-        uint64_t via2_pins = pins & M6502_PIN_MASK;
         uint8_t via2_pa = ~kbd_scan_lines(&sys->kbd);
-        uint8_t jm = (sys->joy_mask & VIC20_JOYSTICK_RIGHT)<<4;
-        uint8_t via2_pb = ~jm;
-        M6522_SET_PAB(via2_pins, via2_pa, via2_pb);
+        uint8_t joy_mask = (sys->joy_mask & VIC20_JOYSTICK_RIGHT)<<4;
+        M6522_SET_PAB(via2_pins, via2_pa, ~joy_mask);
         if (sys->cas_port & VIC20_CASPORT_READ) {
             via2_pins |= M6522_CA1;
         }
         via2_pins = m6522_tick(&sys->via_2, via2_pins);
-        pins = (pins & ~M6502_IRQ) | (via2_pins & M6522_IRQ);
         uint8_t kbd_cols = ~M6522_GET_PB(via2_pins);
         kbd_set_active_columns(&sys->kbd, kbd_cols);
-        if (pins & M6522_PB3) {
-            sys->cas_port |= VIC20_CASPORT_WRITE;
+        if (via2_pins & M6522_IRQ) {
+            pins |= M6502_IRQ;
         }
-        else {
-            sys->cas_port &= ~VIC20_CASPORT_WRITE;
+        if ((via2_pins & (M6522_CS1|M6522_RW)) == (M6522_CS1|M6522_RW)) {
+            pins = M6502_COPY_DATA(pins, via2_pins);
         }
     }
 
@@ -486,39 +513,6 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         }
     }
 
-    /* address decoding */
-    if ((addr & 0xFC00) == 0x9000) {
-        /* 9000..93FF: VIA and VIC IO area
-
-            A4+A5 low:  VIC (?)
-            A4 high:    VIA-1
-            A5 high:    VIA-2
-        */
-        if (M6561_SELECTED(pins)) {
-             /* VIC (no separate chip-select, instead specific address pin mask is checked) */
-             uint64_t vic_pins = (pins & M6502_PIN_MASK);
-             pins = m6561_iorq(&sys->vic, vic_pins) & M6502_PIN_MASK;
-        }
-        if (addr & M6502_A4) {
-            /* VIA-1 */
-            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
-            pins = m6522_iorq(&sys->via_1, via_pins) & M6502_PIN_MASK;
-        }
-        if (addr & M6502_A5) {
-            /* VIA-2 */
-            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
-            pins = m6522_iorq(&sys->via_2, via_pins) & M6502_PIN_MASK;
-        }
-    }
-    else {
-        /* regular memory access */
-        if (pins & M6502_RW) {
-            M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
-        }
-        else {
-            mem_wr(&sys->mem_cpu, addr, M6502_GET_DATA(pins));
-        }
-    }
     return pins;
 }
 

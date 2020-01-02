@@ -364,8 +364,6 @@ typedef struct {
 void m6522_init(m6522_t* m6522);
 /* reset an existing 6522 instance */
 void m6522_reset(m6522_t* m6522);
-/* perform an IO request */
-uint64_t m6522_iorq(m6522_t* m6522, uint64_t pins);
 /* tick the m6522 */
 uint64_t m6522_tick(m6522_t* m6522, uint64_t pins);
 
@@ -626,14 +624,6 @@ static void _m6522_tick_t2(m6522_t* c, uint64_t pins) {
         }
         /* NOTE: T2 never reloads from latch on hitting zero */
     }
-
-    /* reload timer from latch? this only happens when T2 is explicitly loaded, not on wrap-around */
-    /* NOTE: since writing the high-latch immediately reloads the timers, no delay-pipeline
-       is needed for T2
-    if (_M6522_PIP_TEST(t->pip, M6522_PIP_TIMER_LOAD, 0)) {
-        t->counter = t->latch;
-    }
-    */
 }
 
 static void _m6522_tick_pipeline(m6522_t* c) {
@@ -691,31 +681,19 @@ static uint64_t _m6522_update_irq(m6522_t* c, uint64_t pins) {
     return pins;
 }
 
-#define _M6522_TICK_PIN_MASK (M6522_IRQ|M6522_PA_PINS|M6522_PB_PINS|M6522_CA_PINS|M6522_CB_PINS)
-uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
-    /* process input pins */
+/* perform a tick */
+static uint64_t _m6522_tick(m6522_t* c, uint64_t pins) {
     _m6522_read_port_pins(c, pins);
-
-    /* handle CA1,CA2,CB1,CB2 pins */
     _m6522_update_cab(c, pins);
-
-    /* tick timers */
     _m6522_tick_t1(c, pins);
     _m6522_tick_t2(c, pins);
-
-    /* update main interrupt */
     pins = _m6522_update_irq(c, pins);
-
-    /* merge port output pins */
     pins = _m6522_write_port_pins(c, pins);
-
-    /* tick internal delay-pipelines forward */
     _m6522_tick_pipeline(c);
-
-    c->pins = (c->pins & ~_M6522_TICK_PIN_MASK) | (pins & _M6522_TICK_PIN_MASK);
     return pins;
 }
 
+/* read a register */
 static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
     uint8_t data = 0;
     switch (addr) {
@@ -811,6 +789,7 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
     return data;
 }
 
+/* write a register */
 static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
     switch (addr) {
         case M6522_REG_RB:
@@ -912,22 +891,20 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
     }
 }
 
-#define _M6522_IORQ_PIN_MASK (M6522_RS_PINS|M6522_DB_PINS|M6522_RW|M6522_CS1|M6522_CS2)
-uint64_t m6522_iorq(m6522_t* c, uint64_t pins) {
+uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
+    pins = _m6522_tick(c, pins);
     if ((pins & (M6522_CS1|M6522_CS2)) == M6522_CS1) {
         uint8_t addr = pins & M6522_RS_PINS;
         if (pins & M6522_RW) {
-            /* a read operation */
             uint8_t data = _m6522_read(c, addr);
             M6522_SET_DATA(pins, data);
         }
         else {
-            /* a write operation */
             uint8_t data = M6522_GET_DATA(pins);
             _m6522_write(c, addr, data);
         }
-        c->pins = (c->pins & ~_M6522_IORQ_PIN_MASK) | (pins & _M6522_IORQ_PIN_MASK);
     }
+    c->pins = pins;
     return pins;
 }
 
