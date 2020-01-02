@@ -840,7 +840,6 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
 }
 
 uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
-    pins = _m6522_tick(c, pins);
     if ((pins & (M6522_CS1|M6522_CS2)) == M6522_CS1) {
         uint8_t addr = pins & M6522_RS_PINS;
         if (pins & M6522_RW) {
@@ -852,6 +851,7 @@ uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
             _m6522_write(c, addr, data);
         }
     }
+    pins = _m6522_tick(c, pins);
     c->pins = pins;
     return pins;
 }
