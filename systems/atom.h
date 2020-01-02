@@ -371,14 +371,6 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
     /* tick the video chip */
     mc6847_tick(&sys->vdg);
 
-    /* tick the 6522 VIA */
-    if (m6522_tick(&sys->via, pins & ~M6502_IRQ) & M6502_IRQ) {
-        pins |= M6502_IRQ;
-    }
-    else {
-        pins &= ~M6502_IRQ;
-    }
-
     /* tick the 2.4khz counter */
     sys->counter_2_4khz++;
     if (sys->counter_2_4khz >= sys->period_2_4khz) {
@@ -398,8 +390,9 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
         }
     }
 
-    /* decode address for memory-mapped IO and memory read/write */
+    /* address decoding */
     const uint16_t addr = M6502_GET_ADDR(pins);
+    uint64_t via_pins = pins & M6502_PIN_MASK;
     if ((addr >= 0xB000) && (addr < 0xC000)) {
         /* memory-mapped IO area */
         if ((addr >= 0xB000) && (addr < 0xB400)) {
@@ -439,9 +432,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
         } 
         else if ((addr >= 0xB800) && (addr < 0xBC00)) {
             /* 6522 VIA: http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_6522.htm */
-            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
-            /* NOTE: M6522_RW pin is identical with M6502_RW) */
-            pins = m6522_iorq(&sys->via, via_pins) & M6502_PIN_MASK;
+            via_pins |= M6522_CS1;
         }
         else {
             /* remaining IO space is for expansion devices */
@@ -461,6 +452,13 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
             mem_wr(&sys->mem, addr, M6502_GET_DATA(pins));
         }
     }
+
+    /* tick the VIA */
+    via_pins = m6522_tick(&sys->via, via_pins);
+    if ((via_pins & (M6522_RW|M6522_CS1)) == (M6522_RW|M6522_CS1)) {
+        pins = M6502_COPY_DATA(pins, via_pins);
+    }
+    pins = (pins & ~M6502_IRQ) | (via_pins & M6502_IRQ);
 
     /* check if the trapped OSLoad function was hit to implement tape file loading
         http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis
