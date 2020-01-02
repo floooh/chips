@@ -49,90 +49,38 @@
     m6522_init(&via);
     ~~~
 
-    In your emulated system's tick function, call m6522_tick() in
-    each emulated tick, and m6522_iorq() when VIA registers are
-    written to or read from.
+    In each system tick, call the m6522_tick() function, this takes
+    an input pin mask, and returns a (potentially modified) output
+    pin mask.
 
-    The m6522_tick() function inspects the following pins:
+    Depending on the emulated system, the I/O and control pins
+    PA0..PA7, PB0..PB7, CA1, CA2, CB1 and CB2 must be set as needed
+    in the input pin mask (these are often connected to the keyboard
+    matrix or peripheral devices).
 
-    - the port A I/O pins PA0..PA7
-    - the port A control pins CA1 and CA2
-    - the port B I/O pins PB0..PB7
-    - the port B control pins CB1 and CB2
+    If the CPU wants to read or write VIA registers, set the CS1 pin
+    to 1 (keep CS2 at 0), and set the RW pin depening on whether it's
+    a register read (RW=1 means read, RW=0 means write, just like
+    on the M6502 CPU), and the RS0..RS3 register select pin
+    (usually identical with the shared address bus pins A0..A4).
+
+    Note that the pin positions for RS0..RS3 and RW are shared with the
+    respective M6502 pins.
 
     On return m6522_tick() returns a modified pin mask where the following
     pins might have changed state:
 
-    - the IRQ pin
+    - the IRQ pin (same bit position as M6502_IRQ)
     - the port A I/O pins PA0..PA7
     - the port A control pins CA1 and CA2
     - the port B I/O pins PB0..PB7
     - the port B control pins CB1 and CB2
+    - data bus pins D0..D7 if this was a register write function.
 
-    Here's a simple example of m6522_tick() where the VIA chip acts as
-    a keyboard controller for a 8x8 "active-low" keyboard matrix.
+    For an example VIA ticking code, checkout the _vic20_tick() function
+    in systems/vic20.h
 
-    All VIA port A pins have been configured as inputs and are connected
-    to the keyboard matrix lines, and all VIA port B are set as
-    outputs and are connected to the keyboard matrix columns. The keyboard
-    handler code in the operating system would write to the port B register
-    and then read from the port A register.
-
-    The m6522_tick() function call would look like this:
-
-    ~~~C
-    // extract shared CPU/VIA pins and initialize the port A
-    // input pins with the current keyboard matrix row status
-    uint64_t via_pins = cpu_pins & M6502_PINS;
-    uint8_t via_pa = ~kbd_scan_lines(&sys->kbd);
-    M6522_SET_PA(via_pins, via_pa);
-    // call the VIA tick function
-    via_pins = m6522_tick(&sys->via, via_pins);
-    // forward the PB output pins to the keyboard matrix for the next tick
-    uint8_t kbd_cols = ~M6522_GET_PB(via_pins);
-    kbs_set_active_columns(&sys->kbd, kbd_cols);
-    // while at it, forward the IRQ pin state to the cpu pins
-    cpu_pins = (cpu_pins & ~M6502_IRQ) | (via_pins & M6522_IRQ);
-    ~~~
-
-    Elsewhere in the same tick function, call m6522_iorq() when VIA registers
-    must be read or written.
-
-    The relevant pins for the m6522_iorq() call are:
-
-    - register select pins RS0..RS3, these are shared with the
-      first 4 address bus pins, since that's the usual configuration
-    - the chip select pins CS1 and CS2 (CS1 must be active and CS2
-      inactive for the chip to respond)
-    - the RW pin (usually connected to the CPU's RW pin) to select
-      between a register write and register read
-    - the data bus pins DB0..DB7, these are usually shared with the
-      CPU's data bus pins.
-
-    The m6522_iorq() function returns a new pin mask where only the
-    data bus pins DB0..DB7 might have changed (in case of a register
-    read access).
-
-    Since most pin positions are shared with the CPU the m6522_iorq()
-    call usually looks very simple. For instance here's how it looks for
-    the VIA-2 on a VIC-20 computer:
-
-    ~~~C
-    // address decoding
-    const uint16_t addr = M6502_GET_ADDR(cpu_pins);
-    if ((addr & 0xFC00) == 0x9000) {
-        // we're in the system's memory-mapped IO area, VIA-2
-        // is selected when the A5 address pin is active:
-        if (addr & M6502_A5) {
-            // build shared pin mask for VIA and set the CS1 pin
-            uint64_t via_pins = (cpu_pins & M6502_PIN_MASK) | M6522_CS1;
-            // the returned pin mask can be assigned back to the CPU pins:
-            cpu_pins = m6522_iorq(&sys->via_2, via_pins) & M6502_PIN_MASK;
-        }
-    }
-    ~~~
-
-    Finally, to reset a m6522_t instance, call m6522_reset():
+    To reset a m6522_t instance, call m6522_reset():
 
     ~~~C
     m6522_reset(&sys->via);
