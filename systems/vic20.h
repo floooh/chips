@@ -381,19 +381,18 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
     pins = m6502_tick(&sys->cpu, pins) & ~(M6502_IRQ|M6502_NMI);
 
     /* address decoding and memory access */
+    uint64_t vic_pins  = pins & M6502_PIN_MASK;
     uint64_t via1_pins = pins & M6502_PIN_MASK;
     uint64_t via2_pins = pins & M6502_PIN_MASK;
     if ((pins & 0xFC00) == 0x9000) {
         /* 9000..93FF: VIA and VIC IO area
 
-            A4+A5 low:  VIC (?)
+            A4+A5 low:  VIC (real VIC has no chip-select pin, but emulation has a 'virtual pin')
             A4 high:    VIA-1
             A5 high:    VIA-2
         */
-        if (M6561_SELECTED(pins)) {
-             /* VIC (no separate chip-select, instead specific address pin mask is checked) */
-             uint64_t vic_pins = (pins & M6502_PIN_MASK);
-             pins = m6561_iorq(&sys->vic, vic_pins) & M6502_PIN_MASK;
+        if (M6561_SELECTED_ADDR(pins)) {
+            vic_pins |= M6561_CS;
         }
         if (pins & M6502_A4) {
             via1_pins |= M6522_CS1;
@@ -498,18 +497,20 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         }
     }
 
-    /* tick VIC to generate video */
-    m6561_tick_video(&sys->vic);
-
-    /* tick VIC to generate audio */
-    if (m6561_tick_audio(&sys->vic)) {
-        /* new audio sample ready */
-        sys->sample_buffer[sys->sample_pos++] = sys->vic.sound.sample;
-        if (sys->sample_pos == sys->num_samples) {
-            if (sys->audio_cb) {
-                sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+    /* tick the VIC */
+    {
+        vic_pins = m6561_tick(&sys->vic, vic_pins);
+        if ((vic_pins & (M6561_CS|M6561_RW)) == (M6561_CS|M6561_RW)) {
+            pins = M6502_COPY_DATA(pins, vic_pins);
+        }
+        if (vic_pins & M6561_SAMPLE) {
+            sys->sample_buffer[sys->sample_pos++] = sys->vic.sound.sample;
+            if (sys->sample_pos == sys->num_samples) {
+                if (sys->audio_cb) {
+                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+                }
+                sys->sample_pos = 0;
             }
-            sys->sample_pos = 0;
         }
     }
 
