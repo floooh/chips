@@ -14,6 +14,36 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 
 ## What's New
 
+* **03-Jan-2020**: Another VIA- and VIC-20 related update:
+    - The VIA (m6522.h) API has been simplified: the separate m6522_iorq()
+      function to read and write chip registers has been merged into
+      the m6522_tick() function, and all IO callbacks have been removed.
+      Instead of handling the VIA IO ports through callbacks, the port input 
+      pins are now set before calling m6522_tick(),
+      and the port outputs are inspected in the pin mask returned by
+      m6522_tick(). Similar, if chip registers should be read or written,
+      the chip-select and RW pin must be set on the input pin mask
+      for m6522_tick(). This 'API streamlining' makes writing system
+      tick functions more straightforward. System schematics now translate
+      more directly into code which sets and inspects pin
+      bit masks, instead of handling the address decoding, register
+      reads/write, and IO through completely different code (such as
+      IO callbacks).
+    - The same API change (merging the iorq function into the tick function
+      has been implemented for the VIC emulation (m6561.h). In the future
+      the other chip emulations will follow too. See the ```_vic20_tick()```
+      function in the ```systems/vic20.h``` header for a code example of how
+      the new VIA and VIC APIs are used in a system's tick function.
+    - The VIA emulation is now more feature complete and accurate, but
+      not yet complete:
+        - the entire shift-register functionality is not implemented
+        - timers and interrupts are not cycle accurate in some situations
+    - The VIC-20 emulation is now good enough to support TAP-file loading
+      through c1530.h datassette emulation (this depends mostly on somewhat
+      accurate VIA timers and interrupts). Also, the first modern demo-scene
+      demos are now running in the VIC-20 emulation, although with glitches
+      here and there.
+
 * **24-Dec-2019**: A small "inbetween merge" because the feature branch I
     was working on became too unfocused: The plan was to add 1541 floppy
     support to the C64 emulation, but I soon realized that the VIA emulation
