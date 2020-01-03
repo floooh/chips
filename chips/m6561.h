@@ -73,7 +73,7 @@ extern "C" {
 #define M6561_D7    (1ULL<<23)
 
 /* control pins shared with CPU 
-    NOTE that there is no dedicated chip-select pin, instead
+    NOTE that a real VIC has no dedicated chip-select pin, instead
     registers are read and written during the CPU's 'shared bus
     half-cycle', and the following address bus pin mask is
     active:
@@ -83,14 +83,23 @@ extern "C" {
 
     When this is true, the pins A3..A0 select the chip register.
 
-    Use the M6561_SELECTED() macro to decide whether to call
-    m6561_iorq()
+    To simplify the emulated address decoding logic, we define
+    a 'virtual' chip select pin, this must be set when a
+    memory access is in the general 'IO region', and in addition,
+    the M6561_SELECT_ADDR(pins) macro returns true:
+
+    uint64_t vic_pins = pins & M6502_PIN_MASK;
+    if (M6561_SELECTED_ADDR(pins)) {
+        vic_pins |= M6561_CS;
+    }
 */
 #define M6561_RW    (1ULL<<24)      /* same as M6502_RW */
 
-#define M6561_CS_MASK           (M6561_A13|M6561_A12|M6561_A11|M6561_A10|M6561_A9|M6561_A8)
-#define M6561_CS_VALUE          (M6561_A12)
-#define M6561_SELECTED(pins)    ((pins&M6561_CS_MASK)==M6561_CS_VALUE)
+#define M6561_CS        (1ULL<<40)      /* virtual chip-select pin */
+#define M6561_SAMPLE    (1ULL<<41)      /* virtual 'audio sample ready' pin */
+
+/* use this macro to check whether the address bus pins are in the right chip-select state */
+#define M6561_SELECTED_ADDR(pins) ((pins&(M6561_A13|M6561_A12|M6561_A11|M6561_A10|M6561_A9|M6561_A8))==M6561_A12)
 
 #define M6561_NUM_REGS (16)
 #define M6561_REG_MASK (M6561_NUM_REGS-1)
@@ -220,16 +229,12 @@ typedef struct {
 void m6561_init(m6561_t* vic, const m6561_desc_t* desc);
 /* reset a m6561_t instance */
 void m6561_reset(m6561_t* vic);
+/* tick the m6561_t instance */
+uint64_t m6561_tick(m6561_t* vic, uint64_t pins);
 /* get the visible display width in pixels */
 int m6561_display_width(m6561_t* vic);
 /* get the visible display height in pixels */
 int m6561_display_height(m6561_t* vic);
-/* read/write m6561 registers */
-uint64_t m6561_iorq(m6561_t* vic, uint64_t pins);
-/* tick the m6561_t instance to generate video output */
-void m6561_tick_video(m6561_t* vic);
-/* tick the m6561_t instance to generate audio, returns true when sample is ready */
-bool m6561_tick_audio(m6561_t* vic);
 /* get 32-bit RGBA8 value from color index (0..15) */
 uint32_t m6561_color(int i);
 
@@ -391,38 +396,6 @@ static void _m6561_regs_dirty(m6561_t* vic) {
     vic->sound.volume = vic->regs[14] & 0xF;
 }
 
-uint64_t m6561_iorq(m6561_t* vic, uint64_t pins) {
-    // FIXME: read from 'unmapped' areas returns last
-    // fetched graphics data
-    CHIPS_ASSERT(vic);
-    uint8_t addr = pins & M6561_REG_MASK;
-    if (pins & M6561_RW) {
-        /* read */
-        uint8_t data;
-        switch (addr) {
-            case 3:
-                data = ((vic->rs.v_count & 1)<<7) | (vic->regs[addr] & 0x7F);
-                break;
-            case 4:
-                data = (vic->rs.v_count>>1) & 0xFF;
-                break;
-            /* not implemented: light pen and potentiometers */
-            default:
-                data = vic->regs[addr];
-                break;
-        }
-        M6561_SET_DATA(pins, data);
-    }
-    else {
-        /* write */
-        const uint8_t data = M6561_GET_DATA(pins);
-        vic->regs[addr] = data;
-        _m6561_regs_dirty(vic);
-    }
-    vic->pins = pins;
-    return pins;
-}
-
 static inline void _m6561_decode_pixels(m6561_t* vic, uint32_t* dst) {
     if (vic->border.enabled) {
         for (int i = 0; i < 4; i++) {
@@ -468,7 +441,7 @@ static inline void _m6561_decode_pixels(m6561_t* vic, uint32_t* dst) {
 }
 
 /* tick function for video output */
-void m6561_tick_video(m6561_t* vic) {
+static void _m6561_tick_video(m6561_t* vic) {
 
     /* decode pixels, each tick is 4 pixels */
     if (vic->crt.rgba8_buffer) {
@@ -510,15 +483,15 @@ void m6561_tick_video(m6561_t* vic) {
     /* fetch data */
     if (vic->rs.vc & 1) {
         /* a g-access (graphics data) into pixel shifter */
-        uint16_t addr = vic->mem.g_addr_base |
-                        ((vic->mem.c_value & 0xFF) * vic->rs.row_height) |
+        uint16_t addr = vic->mem.g_addr_base +
+                        ((vic->mem.c_value & 0xFF) * vic->rs.row_height) +
                         vic->rs.rc;
         vic->gunit.shift = (uint8_t) vic->fetch_cb(addr, vic->user_data);
         vic->gunit.color = (vic->mem.c_value>>8) & 0xF;
     }
     else {
         /* a c-access (character code and color) */
-        uint16_t addr = vic->mem.c_addr_base | (vic->rs.vc>>1);
+        uint16_t addr = vic->mem.c_addr_base + (vic->rs.vc>>1);
         vic->mem.c_value = vic->fetch_cb(addr, vic->user_data);
     }
     if (!vic->rs.vc_disabled) {
@@ -587,7 +560,7 @@ static inline float _m6561_dcadjust(m6561_sound_t* snd, float s) {
 }
 
 /* tick the audio engine, return true if a new sample if ready */
-bool m6561_tick_audio(m6561_t* vic) {
+static bool _m6561_tick_audio(m6561_t* vic) {
     m6561_sound_t* snd = &vic->sound;
     /* tick tone voices */
     for (int i = 0; i < 3; i++) {
@@ -639,4 +612,48 @@ bool m6561_tick_audio(m6561_t* vic) {
         return false;
     }
 }
+
+/* chip-selected macro (A12 must be active in A8..A13) */
+uint64_t m6561_tick(m6561_t* vic, uint64_t pins) {
+
+    /* perform register read/write */
+    if (pins & M6561_CS) {
+        // FIXME: read from 'unmapped' areas returns last fetched graphics data
+        uint8_t addr = pins & M6561_REG_MASK;
+        if (pins & M6561_RW) {
+            /* read */
+            uint8_t data;
+            switch (addr) {
+                case 3:
+                    data = ((vic->rs.v_count & 1)<<7) | (vic->regs[addr] & 0x7F);
+                    break;
+                case 4:
+                    data = (vic->rs.v_count>>1) & 0xFF;
+                    break;
+                /* not implemented: light pen and potentiometers */
+                default:
+                    data = vic->regs[addr];
+                    break;
+            }
+            M6561_SET_DATA(pins, data);
+        }
+        else {
+            /* write */
+            const uint8_t data = M6561_GET_DATA(pins);
+            vic->regs[addr] = data;
+            _m6561_regs_dirty(vic);
+        }
+    }
+
+    /* perform per-tick actions */
+    _m6561_tick_video(vic);
+    pins &= ~M6561_SAMPLE;
+    if (_m6561_tick_audio(vic)) {
+        pins |= M6561_SAMPLE;
+    }
+    vic->pins = pins;
+    return pins;
+}
+
+
 #endif

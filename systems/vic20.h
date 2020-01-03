@@ -77,7 +77,8 @@ typedef enum {
     VIC20_MEMCONFIG_8K,             /* Block 1 */
     VIC20_MEMCONFIG_16K,            /* Block 1+2 */
     VIC20_MEMCONFIG_24K,            /* Block 1+2+3 */
-    VIC20_MEMCONFIG_32K             /* Block 1+2+3+5 (note that BASIC can only use blocks 1+2+3) */
+    VIC20_MEMCONFIG_32K,            /* Block 1+2+3+5 (note that BASIC can only use blocks 1+2+3) */
+    VIC20_MEMCONFIG_MAX             /* 32K + 3KB at 0400..0FFF */
 } vic20_memory_config_t;
 
 /* joystick mask bits */
@@ -88,14 +89,14 @@ typedef enum {
 #define VIC20_JOYSTICK_BTN   (1<<4)
 
 /* casette port bits, same as C1530_CASPORT_* */
-#define VIC20_CASPORT_MOTOR   (1<<0)  /* 1: motor off, 0: motor on */
-#define VIC20_CASPORT_READ    (1<<1)  /* 1: read signal from datasette, connected to CIA-1 FLAG */
-#define VIC20_CASPORT_WRITE   (1<<2)  /* not implemented */
-#define VIC20_CASPORT_SENSE   (1<<3)  /* 1: play button up, 0: play button down */
+#define VIC20_CASPORT_MOTOR   (1<<0)
+#define VIC20_CASPORT_READ    (1<<1)
+#define VIC20_CASPORT_WRITE   (1<<2)
+#define VIC20_CASPORT_SENSE   (1<<3)
 
 /* IEC port bits, same as C1541_IECPORT_* */
-#define VIC20_IECPORT_RESET   (1<<0)  /* 1: RESET, 0: no reset */
-#define VIC20_IECPORT_SRQIN   (1<<1)  /* connected to CIA-1 FLAG */
+#define VIC20_IECPORT_RESET   (1<<0)
+#define VIC20_IECPORT_SRQIN   (1<<1)
 #define VIC20_IECPORT_DATA    (1<<2)
 #define VIC20_IECPORT_CLK     (1<<3)
 #define VIC20_IECPORT_ATN     (1<<4)
@@ -142,11 +143,12 @@ typedef struct {
     bool valid;
     vic20_joystick_type_t joystick_type;
     vic20_memory_config_t mem_config;
-    uint8_t joystick_active;
     uint8_t cas_port;           /* cassette port, shared with c1530_t if datasette is connected */
     uint8_t iec_port;           /* IEC serial port, shared with c1541_t if connected */
     uint8_t kbd_joy_mask;       /* current joystick state from keyboard-joystick emulation */
     uint8_t joy_joy_mask;       /* current joystick state from vic20_joystick() */
+    uint64_t via1_joy_mask;     /* merged keyboard/joystick mask ready for or-ing with VIA1 input pins */
+    uint64_t via2_joy_mask;     /* merged keyboard/joystick mask ready for or-ing with VIA2 input pins */
 
     kbd_t kbd;                  /* keyboard matrix state */
     mem_t mem_cpu;              /* CPU-visible memory mapping */
@@ -161,11 +163,12 @@ typedef struct {
 
     uint8_t color_ram[0x0400];      /* special color RAM */
     uint8_t ram0[0x0400];           /* 1 KB zero page, stack, system work area */
+    uint8_t ram_3k[0x0C00];         /* optional 3K exp RAM */
     uint8_t ram1[0x1000];           /* 4 KB main RAM */
     uint8_t rom_char[0x1000];       /* 4 KB character ROM image */
     uint8_t rom_basic[0x2000];      /* 8 KB BASIC ROM image */
     uint8_t rom_kernal[0x2000];     /* 8 KB KERNAL V3 ROM image */
-    uint8_t ram_exp[4][0x2000];     /* optional expansion RAM areas */
+    uint8_t ram_exp[4][0x2000];     /* optional expansion 8K RAM blocks */
 
     mem_t mem_cart;                 /* special ROM cartridge memory mapping helper */
 } vic20_t;
@@ -226,10 +229,6 @@ void vic20_remove_rom_cartridge(vic20_t* sys);
 #define _VIC20_DISPLAY_Y (8)
 
 static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins);
-static void _vic20_via1_out(int port_id, uint8_t data, void* user_data);
-static uint8_t _vic20_via1_in(int port_id, void* user_data);
-static void _vic20_via2_out(int port_id, uint8_t data, void* user_data);
-static uint8_t _vic20_via2_in(int port_id, void* user_data);
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data);
 static void _vic20_init_key_map(vic20_t* sys);
 
@@ -244,6 +243,9 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     sys->valid = true;
     sys->joystick_type = desc->joystick_type;
     sys->mem_config = desc->mem_config;
+    sys->via1_joy_mask = M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5;
+    sys->via2_joy_mask = M6522_PB7;
+
     CHIPS_ASSERT(desc->rom_char && (desc->rom_char_size == sizeof(sys->rom_char)));
     CHIPS_ASSERT(desc->rom_basic && (desc->rom_basic_size == sizeof(sys->rom_basic)));
     CHIPS_ASSERT(desc->rom_kernal && (desc->rom_kernal_size == sizeof(sys->rom_kernal)));
@@ -255,19 +257,15 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     sys->num_samples = _VIC20_DEFAULT(desc->audio_num_samples, VIC20_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->num_samples <= VIC20_MAX_AUDIO_SAMPLES);
 
+    /* datasette: motor off, no buttons pressed */
+    sys->cas_port = VIC20_CASPORT_MOTOR|VIC20_CASPORT_SENSE;
+
     m6502_desc_t cpu_desc;
     _VIC20_CLEAR(cpu_desc);
     sys->pins = m6502_init(&sys->cpu, &cpu_desc);
 
-    m6522_desc_t via_desc;
-    _VIC20_CLEAR(via_desc);
-    via_desc.user_data = sys;
-    via_desc.in_cb = _vic20_via1_in;
-    via_desc.out_cb = _vic20_via1_out;
-    m6522_init(&sys->via_1, &via_desc);
-    via_desc.in_cb = _vic20_via2_in;
-    via_desc.out_cb = _vic20_via2_out;
-    m6522_init(&sys->via_2, &via_desc);
+    m6522_init(&sys->via_1);
+    m6522_init(&sys->via_2);
 
     m6561_desc_t vic_desc;
     _VIC20_CLEAR(vic_desc);
@@ -289,8 +287,8 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     /*
         VIC-20 CPU memory map:
 
-        0000..0400      zero-page, stack, system area
-        [unused]
+        0000..03FF      zero-page, stack, system area
+        [unused]        usable with memconfig 'max'
         1000..1FFF      4 KB Main RAM (block 0)
         [2000..3FFF]    8 KB Expansion Block 1
         [4000..5FFF]    8 KB Expansion Block 2
@@ -311,6 +309,9 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     */
     mem_init(&sys->mem_cpu);
     mem_map_ram(&sys->mem_cpu, 1, 0x0000, 0x0400, sys->ram0);
+    if (desc->mem_config == VIC20_MEMCONFIG_MAX) {
+        mem_map_ram(&sys->mem_cpu, 1, 0x0400, 0x0C00, sys->ram_3k);
+    }
     mem_map_ram(&sys->mem_cpu, 1, 0x1000, 0x1000, sys->ram1);
     if (desc->mem_config >= VIC20_MEMCONFIG_8K) {
         mem_map_ram(&sys->mem_cpu, 1, 0x2000, 0x2000, sys->ram_exp[0]);
@@ -332,23 +333,20 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     /*
         VIC-I memory map:
 
-        0x0000..0x0FFF  character ROM
-        0x1000..0x13FF  VIC and VIA registers
-        0x1400..0x17FF  color RAM
-        0x1800..0x1BFF  exp 1
-        0x1C00..0x1FFF  exp 2
-        0x2000..0x23FF  system RAM (CPU: 0x0000..0x0400)
-        0x2400..0x2FFF  expansion RAM
-        0x3000..0x3FFF  user RAM (CPU: 0x1000..0x1FFF)
+        The VIC-I has 14 address bus bits VA0..VA13, for 16 KB of
+        addressable memory. Bits VA0..VA12 are identical with the
+        lower 13 CPU address bus pins, VA13 is the inverted BLK4
+        address decoding bit.
     */
     mem_init(&sys->mem_vic);
-    mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);
-    mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);
-    mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);
-    if (desc->mem_config >= VIC20_MEMCONFIG_8K) {
-        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x1C00, sys->ram_exp[0]);
+    mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);       /* CPU: 8000..8FFF */
+    // FIXME: can the VIC read the color RAM as data?
+    //mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);      /* CPU: 9400..97FF */
+    mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);           /* CPU: 0000..03FF */
+    if (desc->mem_config == VIC20_MEMCONFIG_MAX) {
+        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_3k);     /* CPU: 0400..0FFF */
     }
-    mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);
+    mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);           /* CPU: 1000..1FFF */
 
     /*
         A special memory mapping used to copy ROM cartridge PRG files
@@ -368,36 +366,168 @@ void vic20_discard(vic20_t* sys) {
     sys->valid = false;
 }
 
-int vic20_std_display_width(void) {
-    return _VIC20_STD_DISPLAY_WIDTH;
-}
-
-int vic20_std_display_height(void) {
-    return _VIC20_STD_DISPLAY_HEIGHT;
-}
-
-int vic20_max_display_size(void) {
-    return _VIC20_DISPLAY_SIZE;
-}
-
-int vic20_display_width(vic20_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return m6561_display_width(&sys->vic);
-}
-
-int vic20_display_height(vic20_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return m6561_display_height(&sys->vic);
-}
-
 void vic20_reset(vic20_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->kbd_joy_mask = 0;
     sys->joy_joy_mask = 0;
+    sys->via1_joy_mask = M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5;
+    sys->via2_joy_mask = M6522_PB7;
     sys->pins |= M6502_RES;
+    sys->cas_port = VIC20_CASPORT_MOTOR|VIC20_CASPORT_SENSE;
     m6522_reset(&sys->via_1);
     m6522_reset(&sys->via_2);
     m6561_reset(&sys->vic);
+}
+
+static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
+
+    /* tick the CPU */
+    pins = m6502_tick(&sys->cpu, pins);
+
+    /* the IRQ and NMI pins will be set by the VIAs each tick */
+    pins &= ~(M6502_IRQ|M6502_NMI);
+
+    /* VIC+VIAs address decoding and memory access */
+    uint64_t vic_pins  = pins & M6502_PIN_MASK;
+    uint64_t via1_pins = pins & M6502_PIN_MASK;
+    uint64_t via2_pins = pins & M6502_PIN_MASK;
+    if ((pins & 0xFC00) == 0x9000) {
+        /* 9000..93FF: VIA and VIC IO area
+
+            A4 high:    VIA-1
+            A5 high:    VIA-2
+
+            The VIC has no chip-select pin instead it's directly snooping
+            the address bus for a specific pin state:
+
+            A8,9,10,11,13 low, A12 high
+
+            (FIXME: why is the VIC only access on address 9000 (A15=1, A14=0),
+            and not on 5000 (A15=0, A14=1) and D000 (A15=1, A14=1)???)
+
+            NOTE: Unlike a real VIC, the VIC emulation has a traditional
+            chip-select pin.
+        */
+        if (M6561_SELECTED_ADDR(pins)) {
+            vic_pins |= M6561_CS;
+        }
+        if (pins & M6502_A4) {
+            via1_pins |= M6522_CS1;
+        }
+        if (pins & M6502_A5) {
+            via2_pins |= M6522_CS1;
+        }
+    }
+    else {
+        /* regular memory access */
+        const uint16_t addr = M6502_GET_ADDR(pins);
+        if (pins & M6502_RW) {
+            M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
+        }
+        else {
+            mem_wr(&sys->mem_cpu, addr, M6502_GET_DATA(pins));
+        }
+    }
+
+    /* tick VIA1
+
+        VIA1 IRQ pin is connected to CPU NMI pin
+
+        VIA1 Port A input:
+            PA0:    Serial CLK (FIXME)
+            PA1:    Serial DATA (FIXME)
+            PA2:    in: JOY0 (up)
+            PA3:    in: JOY1 (down)
+            PA4:    in: JOY2 (left)
+            PA5:    in: PEN/BTN (fire)
+            PA6:    in: CASS SENSE
+            PA7:    SERIAL ATN OUT (???)
+
+            CA1:    in: RESTORE KEY(???)
+            CA2:    out: CASS MOTOR
+
+        VIA1 Port B input:
+            all connected to USR port
+
+        NOTE: the IRQ/NMI mapping is reversed from the C64
+    */
+    {
+        // FIXME: SERIAL PORT
+        // FIXME: RESTORE key to M6522_CA1
+        via1_pins |= sys->via1_joy_mask | (M6522_PA0|M6522_PA1|M6522_PA7);
+        if (sys->cas_port & VIC20_CASPORT_SENSE) {
+            via1_pins |= M6522_PA6;
+        }
+        via1_pins = m6522_tick(&sys->via_1, via1_pins);
+        if (via1_pins & M6522_CA2) {
+            sys->cas_port |= VIC20_CASPORT_MOTOR;
+        }
+        else {
+            sys->cas_port &= ~VIC20_CASPORT_MOTOR;
+        }
+        if (via1_pins & M6522_IRQ) {
+            pins |= M6502_NMI;
+        }
+        if ((via1_pins & (M6522_CS1|M6522_RW)) == (M6522_CS1|M6522_RW)) {
+            pins = M6502_COPY_DATA(pins, via1_pins);
+        }
+    }
+
+    /* tick VIA2
+
+        VIA2 IRQ pin is connected to CPU IRQ pin
+
+        VIA2 Port A input:
+            read keyboard matrix rows
+
+            CA1: in: CASS READ
+
+        VIA2 Port B input:
+            PB7:    JOY3 (Right)
+
+        VIA2 Port A output:
+            ---(???)
+
+        VIA2 Port B output:
+            write keyboard matrix columns
+            PB3 -> CASS WRITE (not implemented)
+    */
+    {
+        uint8_t kbd_lines = ~kbd_scan_lines(&sys->kbd);
+        M6522_SET_PA(via2_pins, kbd_lines);
+        via2_pins |= sys->via2_joy_mask;
+        if (sys->cas_port & VIC20_CASPORT_READ) {
+            via2_pins |= M6522_CA1;
+        }
+        via2_pins = m6522_tick(&sys->via_2, via2_pins);
+        uint8_t kbd_cols = ~M6522_GET_PB(via2_pins);
+        kbd_set_active_columns(&sys->kbd, kbd_cols);
+        if (via2_pins & M6522_IRQ) {
+            pins |= M6502_IRQ;
+        }
+        if ((via2_pins & (M6522_CS1|M6522_RW)) == (M6522_CS1|M6522_RW)) {
+            pins = M6502_COPY_DATA(pins, via2_pins);
+        }
+    }
+
+    /* tick the VIC */
+    {
+        vic_pins = m6561_tick(&sys->vic, vic_pins);
+        if ((vic_pins & (M6561_CS|M6561_RW)) == (M6561_CS|M6561_RW)) {
+            pins = M6502_COPY_DATA(pins, vic_pins);
+        }
+        if (vic_pins & M6561_SAMPLE) {
+            sys->sample_buffer[sys->sample_pos++] = sys->vic.sound.sample;
+            if (sys->sample_pos == sys->num_samples) {
+                if (sys->audio_cb) {
+                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+                }
+                sys->sample_pos = 0;
+            }
+        }
+    }
+
+    return pins;
 }
 
 void vic20_tick(vic20_t* sys) {
@@ -413,203 +543,6 @@ void vic20_exec(vic20_t* sys, uint32_t micro_seconds) {
     }
     sys->pins = pins;
     kbd_update(&sys->kbd);
-}
-
-void vic20_key_down(vic20_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    if (sys->joystick_type == VIC20_JOYSTICKTYPE_NONE) {
-        kbd_key_down(&sys->kbd, key_code);
-    }
-    else {
-        uint8_t m = 0;
-        switch (key_code) {
-            case 0x20: m = VIC20_JOYSTICK_BTN; break;
-            case 0x08: m = VIC20_JOYSTICK_LEFT; break;
-            case 0x09: m = VIC20_JOYSTICK_RIGHT; break;
-            case 0x0A: m = VIC20_JOYSTICK_DOWN; break;
-            case 0x0B: m = VIC20_JOYSTICK_UP; break;
-            default: kbd_key_down(&sys->kbd, key_code); break;
-        }
-        if (m != 0) {
-            if (sys->joystick_type == VIC20_JOYSTICKTYPE_DIGITAL) {
-                sys->kbd_joy_mask |= m;
-            }
-        }
-    }
-}
-
-void vic20_key_up(vic20_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    if (sys->joystick_type == VIC20_JOYSTICKTYPE_NONE) {
-        kbd_key_up(&sys->kbd, key_code);
-    }
-    else {
-        uint8_t m = 0;
-        switch (key_code) {
-            case 0x20: m = VIC20_JOYSTICK_BTN; break;
-            case 0x08: m = VIC20_JOYSTICK_LEFT; break;
-            case 0x09: m = VIC20_JOYSTICK_RIGHT; break;
-            case 0x0A: m = VIC20_JOYSTICK_DOWN; break;
-            case 0x0B: m = VIC20_JOYSTICK_UP; break;
-            default: kbd_key_up(&sys->kbd, key_code); break;
-        }
-        if (m != 0) {
-            if (sys->joystick_type == VIC20_JOYSTICKTYPE_DIGITAL) {
-                sys->kbd_joy_mask &= ~m;
-            }
-        }
-    }
-}
-
-void vic20_set_joystick_type(vic20_t* sys, vic20_joystick_type_t type) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->joystick_type = type;
-}
-
-vic20_joystick_type_t vic20_joystick_type(vic20_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->joystick_type;
-}
-
-void vic20_joystick(vic20_t* sys, uint8_t joy_mask) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->joy_joy_mask = joy_mask;
-}
-
-static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
-
-    /* tick the CPU */
-    pins = m6502_tick(&sys->cpu, pins);
-    const uint16_t addr = M6502_GET_ADDR(pins);
-
-    /* tick VIAs
-        VIA-1 IRQ pin is connected to CPU NMI pin
-        VIA-2 IRQ pin is connected to CPU IRQ pin
-
-        NOTE: the IRQ/NMI mapping is reversed from the C64
-    */
-    if (m6522_tick(&sys->via_1, pins & ~M6502_IRQ) & M6502_IRQ) {
-        pins |= M6502_NMI;
-    }
-    else {
-        pins &= ~M6502_NMI;
-    }
-    if (m6522_tick(&sys->via_2, pins & ~M6502_IRQ) & M6502_IRQ) {
-        pins |= M6502_IRQ;
-    }
-    else {
-        pins &= ~M6502_IRQ;
-    }
-
-    /* tick VIC to generate video */
-    m6561_tick_video(&sys->vic);
-
-    /* tick VIC to generate audio */
-    if (m6561_tick_audio(&sys->vic)) {
-        /* new audio sample ready */
-        sys->sample_buffer[sys->sample_pos++] = sys->vic.sound.sample;
-        if (sys->sample_pos == sys->num_samples) {
-            if (sys->audio_cb) {
-                sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
-            }
-            sys->sample_pos = 0;
-        }
-    }
-
-    /* address decoding */
-    if ((addr & 0xFC00) == 0x9000) {
-        /* 9000..93FF: VIA and VIC IO area
-
-            A4+A5 low:  VIC (?)
-            A4 high:    VIA-1
-            A5 high:    VIA-2
-        */
-        if (M6561_SELECTED(pins)) {
-             /* VIC (no separate chip-select, instead specific address pin mask is checked) */
-             uint64_t vic_pins = (pins & M6502_PIN_MASK);
-             pins = m6561_iorq(&sys->vic, vic_pins) & M6502_PIN_MASK;
-        }
-        if (addr & M6502_A4) {
-            /* VIA-1 */
-            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
-            pins = m6522_iorq(&sys->via_1, via_pins) & M6502_PIN_MASK;
-        }
-        if (addr & M6502_A5) {
-            /* VIA-2 */
-            uint64_t via_pins = (pins & M6502_PIN_MASK)|M6522_CS1;
-            pins = m6522_iorq(&sys->via_2, via_pins) & M6502_PIN_MASK;
-        }
-    }
-    else {
-        /* regular memory access */
-        if (pins & M6502_RW) {
-            M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
-        }
-        else {
-            mem_wr(&sys->mem_cpu, addr, M6502_GET_DATA(pins));
-        }
-    }
-    return pins;
-}
-
-static void _vic20_via1_out(int port_id, uint8_t data, void* user_data) {
-    // FIXME
-}
-
-static uint8_t _vic20_via1_in(int port_id, void* user_data) {
-    vic20_t* sys = (vic20_t*) user_data;
-    if (port_id == M6522_PORT_A) {
-        /* VIA1 Port A input:
-            PA0:    Serial CLK (FIXME)
-            PA1:    Serial DATA (FIXME)
-            PA2:    JOY0 (up)
-            PA3:    JOY1 (down)
-            PA4:    JOY2 (left)
-            PA5:    PEN/BTN (fire)
-            PA6:    CASS SWITCH(???)
-            PA7:    SERIAL ATN OUT (???)
-        */
-        uint8_t jm_inp = sys->joy_joy_mask | sys->kbd_joy_mask;
-        uint8_t jm_out = ((jm_inp & VIC20_JOYSTICK_UP)   ? (1<<2):0) |
-                         ((jm_inp & VIC20_JOYSTICK_DOWN) ? (1<<3):0) |
-                         ((jm_inp & VIC20_JOYSTICK_LEFT) ? (1<<4):0) |
-                         ((jm_inp & VIC20_JOYSTICK_BTN)  ? (1<<5):0);
-        return ~jm_out;
-    }
-    else {
-        /* VIA1 Port B input:
-            all pins connected to user port
-        */
-        return 0xFF;
-    }
-}
-
-static void _vic20_via2_out(int port_id, uint8_t data, void* user_data) {
-    vic20_t* sys = (vic20_t*) user_data;
-    if (port_id == M6522_PORT_B) {
-        /* VIA2 Port B output :
-            PB0..PB7: write keyboard columns
-        */
-        kbd_set_active_columns(&sys->kbd, ~data);
-    }
-}
-
-static uint8_t _vic20_via2_in(int port_id, void* user_data) {
-    vic20_t* sys = (vic20_t*) user_data;
-    if (port_id == M6522_PORT_A) {
-        /* VIA2 Port A input:
-            PBA0..7: read keyboard rows
-        */
-        return ~kbd_scan_lines(&sys->kbd);
-    }
-    else {
-        /* VIA2 Port B input:
-            PB7: JOY3 (Right)
-        */
-        uint8_t jm_inp = sys->joy_joy_mask | sys->kbd_joy_mask;
-        uint8_t jm_out = (jm_inp & VIC20_JOYSTICK_RIGHT) ? (1<<7):0;
-        return ~jm_out;
-    }
 }
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {
@@ -729,6 +662,114 @@ void vic20_remove_rom_cartridge(vic20_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     mem_unmap_layer(&sys->mem_cpu, 0);
     sys->pins |= M6502_RES;
+}
+
+int vic20_std_display_width(void) {
+    return _VIC20_STD_DISPLAY_WIDTH;
+}
+
+int vic20_std_display_height(void) {
+    return _VIC20_STD_DISPLAY_HEIGHT;
+}
+
+int vic20_max_display_size(void) {
+    return _VIC20_DISPLAY_SIZE;
+}
+
+int vic20_display_width(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return m6561_display_width(&sys->vic);
+}
+
+int vic20_display_height(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return m6561_display_height(&sys->vic);
+}
+
+/* generate precomputed VIA-1 and VIA-2 joystick port masks */
+static void _vic20_update_joymasks(vic20_t* sys) {
+    uint8_t jm = sys->kbd_joy_mask | sys->joy_joy_mask;
+    sys->via1_joy_mask = M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5;
+    sys->via2_joy_mask = M6522_PB7;
+    if (jm & VIC20_JOYSTICK_LEFT) {
+        sys->via1_joy_mask &= ~M6522_PA2;
+    }
+    if (jm & VIC20_JOYSTICK_DOWN) {
+        sys->via1_joy_mask &= ~M6522_PA3;
+    }
+    if (jm & VIC20_JOYSTICK_LEFT) {
+        sys->via1_joy_mask &= ~M6522_PA4;
+    }
+    if (jm & VIC20_JOYSTICK_BTN) {
+        sys->via1_joy_mask &= ~M6522_PA5;
+    }
+    if (jm & VIC20_JOYSTICK_RIGHT) {
+        sys->via2_joy_mask &= ~M6522_PB7;
+    }
+}
+
+void vic20_key_down(vic20_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (sys->joystick_type == VIC20_JOYSTICKTYPE_NONE) {
+        kbd_key_down(&sys->kbd, key_code);
+    }
+    else {
+        uint8_t m = 0;
+        switch (key_code) {
+            case 0x20: m = VIC20_JOYSTICK_BTN; break;
+            case 0x08: m = VIC20_JOYSTICK_LEFT; break;
+            case 0x09: m = VIC20_JOYSTICK_RIGHT; break;
+            case 0x0A: m = VIC20_JOYSTICK_DOWN; break;
+            case 0x0B: m = VIC20_JOYSTICK_UP; break;
+            default: kbd_key_down(&sys->kbd, key_code); break;
+        }
+        if (m != 0) {
+            if (sys->joystick_type == VIC20_JOYSTICKTYPE_DIGITAL) {
+                sys->kbd_joy_mask |= m;
+                _vic20_update_joymasks(sys);
+            }
+        }
+    }
+}
+
+void vic20_key_up(vic20_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    if (sys->joystick_type == VIC20_JOYSTICKTYPE_NONE) {
+        kbd_key_up(&sys->kbd, key_code);
+    }
+    else {
+        uint8_t m = 0;
+        switch (key_code) {
+            case 0x20: m = VIC20_JOYSTICK_BTN; break;
+            case 0x08: m = VIC20_JOYSTICK_LEFT; break;
+            case 0x09: m = VIC20_JOYSTICK_RIGHT; break;
+            case 0x0A: m = VIC20_JOYSTICK_DOWN; break;
+            case 0x0B: m = VIC20_JOYSTICK_UP; break;
+            default: kbd_key_up(&sys->kbd, key_code); break;
+        }
+        if (m != 0) {
+            if (sys->joystick_type == VIC20_JOYSTICKTYPE_DIGITAL) {
+                sys->kbd_joy_mask &= ~m;
+                _vic20_update_joymasks(sys);
+            }
+        }
+    }
+}
+
+void vic20_set_joystick_type(vic20_t* sys, vic20_joystick_type_t type) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joystick_type = type;
+}
+
+vic20_joystick_type_t vic20_joystick_type(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->joystick_type;
+}
+
+void vic20_joystick(vic20_t* sys, uint8_t joy_mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joy_joy_mask = joy_mask;
+    _vic20_update_joymasks(sys);
 }
 
 #endif /* CHIPS_IMPL */

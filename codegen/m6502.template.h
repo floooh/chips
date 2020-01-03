@@ -339,6 +339,8 @@ uint16_t m6502_pc(m6502_t* cpu);
 #define M6502_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define M6502_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+/* copy data bus value from other pin mask */
+#define M6502_COPY_DATA(p0,p1) (((p0)&~0xFF0000ULL)|((p1)&0xFF0000ULL))
 /* return a pin mask with control-pins, address and data bus */
 #define M6502_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
 /* set the port bits on the 64-bit pin mask */

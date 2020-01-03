@@ -22,7 +22,9 @@
     ui_c64.h both for the declaration and implementation.
 
     - vic20.h
+    - c1530.h
     - mem.h
+    - ui_c1530.h
     - ui_chip.h
     - ui_util.h
     - ui_m6502.h
@@ -66,6 +68,7 @@ typedef void (*ui_vic20_boot_cb)(vic20_t* sys);
 /* setup params for ui_c64_init() */
 typedef struct {
     vic20_t* vic20;             /* pointer to vic20_t instance to track */
+    c1530_t* c1530;             /* optional pointer to datasette instance */
     ui_vic20_boot_cb boot_cb;   /* reboot callback function */
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
@@ -75,6 +78,11 @@ typedef struct {
 
 typedef struct {
     vic20_t* vic20;
+    struct {
+        bool valid;
+        c1530_t* sys;
+        ui_c1530_t ui;
+    } c1530;
     int dbg_scanline;
     ui_vic20_boot_cb boot_cb;
     ui_m6502_t cpu;
@@ -86,6 +94,7 @@ typedef struct {
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
+    bool system_window_open;
 } ui_vic20_t;
 
 void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* desc);
@@ -140,6 +149,7 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Hardware")) {
+            ImGui::MenuItem("System", 0, &ui->system_window_open);
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
@@ -147,6 +157,9 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
             ImGui::MenuItem("MOS 6522 #1 (VIA)", 0, &ui->via[0].open);
             ImGui::MenuItem("MOS 6522 #2 (VIA)", 0, &ui->via[1].open);
             ImGui::MenuItem("MOS 6561 (VIC-I)", 0, &ui->vic.open);
+            if (ui->c1530.valid) {
+                ImGui::MenuItem("C1530 (Datassette)", 0, &ui->c1530.ui.open);
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -194,18 +207,10 @@ static uint8_t _ui_vic20_mem_read(int layer, uint16_t addr, void* user_data) {
         case _UI_VIC20_MEMLAYER_CPU:
             return mem_rd(&vic20->mem_cpu, addr);
         case _UI_VIC20_MEMLAYER_VIC:
-            // FIXME
-            //return mem_rd(&vic20->mem_vic, addr);
-            return 0xFF;
+            return mem_rd(&vic20->mem_vic, addr);
         case _UI_VIC20_MEMLAYER_COLOR:
-            // FIXME
-            //if ((addr >= 0xD800) && (addr < 0xDC00)) {
-                /* static COLOR RAM */
-            //    return c64->color_ram[addr - 0xD800];
-            //}
-            //else {
-                return 0xFF;
-            //}
+            /* static COLOR RAM */
+            return vic20->color_ram[addr & 0x3FF];
         default:
             return 0xFF;
     }
@@ -220,29 +225,31 @@ static void _ui_vic20_mem_write(int layer, uint16_t addr, uint8_t data, void* us
             mem_wr(&vic20->mem_cpu, addr, data);
             break;
         case _UI_VIC20_MEMLAYER_VIC:
-            // FIXME
-            //mem_wr(&vic20->mem_vic, addr, data);
+            mem_wr(&vic20->mem_vic, addr, data);
             break;
         case _UI_VIC20_MEMLAYER_COLOR:
-            // FIXME
-            //if ((addr >= 0xD800) && (addr < 0xDC00)) {
-                /* static COLOR RAM */
-            //    c64->color_ram[addr - 0xD800] = data;
-            //}
+            /* static COLOR RAM */
+            vic20->color_ram[addr & 0x3FF] = data;
             break;
     }
 }
 
 static void _ui_vic20_update_memmap(ui_vic20_t* ui) {
     CHIPS_ASSERT(ui && ui->vic20);
+    const vic20_memory_config_t cfg = ui->vic20->mem_config;
     ui_memmap_reset(&ui->memmap);
     ui_memmap_layer(&ui->memmap, "SYS");
-        ui_memmap_region(&ui->memmap, "RAM0",   0x0000, 0x0400, true);
-        ui_memmap_region(&ui->memmap, "RAM1",   0x1000, 0x1000, true);
+        ui_memmap_region(&ui->memmap, "RAM0",  0x0000, 0x0400, true);
+        ui_memmap_region(&ui->memmap, "RAM3K", 0x0400, 0x0C00, cfg == VIC20_MEMCONFIG_MAX);
+        ui_memmap_region(&ui->memmap, "RAM1",  0x1000, 0x1000, true);
+        ui_memmap_region(&ui->memmap, "EXP1",  0x2000, 0x2000, cfg >= VIC20_MEMCONFIG_8K);
+        ui_memmap_region(&ui->memmap, "EXP2",  0x4000, 0x2000, cfg >= VIC20_MEMCONFIG_16K);
+        ui_memmap_region(&ui->memmap, "EXP3",  0x6000, 0x2000, cfg >= VIC20_MEMCONFIG_24K);
         ui_memmap_region(&ui->memmap, "CHAR",   0x8000, 0x1000, true);
         ui_memmap_region(&ui->memmap, "IO",     0x9000, 0x0200, true);
         // FIXME: color ram at variable address
         ui_memmap_region(&ui->memmap, "COLOR",  0x9400, 0x0800, true);
+        ui_memmap_region(&ui->memmap, "EXP4",   0xA000, 0x2000, cfg >= VIC20_MEMCONFIG_32K);
         ui_memmap_region(&ui->memmap, "BASIC",  0xC000, 0x2000, true);
         ui_memmap_region(&ui->memmap, "KERNAL", 0xE000, 0x2000, true);
 }
@@ -332,6 +339,7 @@ static const ui_chip_pin_t _ui_vic20_via_pins[] = {
     { "RW",     14,     M6522_RW },
     { "CS1",    15,     M6522_CS1 },
     { "CS2",    16,     M6522_CS2 },
+    { "IRQ",    17,     M6522_IRQ },
     { "PA0",    20,     M6522_PA0 },
     { "PA1",    21,     M6522_PA1 },
     { "PA2",    22,     M6522_PA2 },
@@ -385,6 +393,10 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->vic20);
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->vic20 = ui_desc->vic20;
+    if (ui_desc->c1530) {
+        ui->c1530.valid = true;
+        ui->c1530.sys = ui_desc->c1530;
+    }
     ui->boot_cb = ui_desc->boot_cb;
     int x = 20, y = 20, dx = 10, dy = 10;
     {
@@ -406,6 +418,15 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
         desc.user_breaktypes[1].label = "Next Scanline";
         desc.user_breaktypes[2].label = "Next Frame";
         ui_dbg_init(&ui->dbg, &desc);
+    }
+    if (ui->c1530.valid) {
+        x += dx; y += dy;
+        ui_c1530_desc_t desc = {0};
+        desc.title = "C1530 Datassette";
+        desc.x = x;
+        desc.y = y;
+        desc.c1530 = ui->c1530.sys;
+        ui_c1530_init(&ui->c1530.ui, &desc);
     }
     x += dx; y += dy;
     {
@@ -515,6 +536,11 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
 void ui_vic20_discard(ui_vic20_t* ui) {
     CHIPS_ASSERT(ui && ui->vic20);
     ui->vic20 = 0;
+    if (ui->c1530.valid) {
+        ui_c1530_discard(&ui->c1530.ui);
+        ui->c1530.sys = 0;
+        ui->c1530.valid = false;
+    }
     ui_m6502_discard(&ui->cpu);
     ui_m6522_discard(&ui->via[0]);
     ui_m6522_discard(&ui->via[1]);
@@ -529,11 +555,49 @@ void ui_vic20_discard(ui_vic20_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
+void ui_vic20_draw_system(ui_vic20_t* ui) {
+    if (!ui->system_window_open) {
+        return;
+    }
+    vic20_t* sys = ui->vic20;
+    ImGui::SetNextWindowSize({ 200, 250}, ImGuiCond_Once);
+    if (ImGui::Begin("VIC-20 System", &ui->system_window_open)) {
+        const char* mem_config = "???";
+        switch (sys->mem_config) {
+            case VIC20_MEMCONFIG_STANDARD:  mem_config = "standard"; break;
+            case VIC20_MEMCONFIG_8K:        mem_config = "+8K RAM"; break;
+            case VIC20_MEMCONFIG_16K:       mem_config = "+16K RAM"; break;
+            case VIC20_MEMCONFIG_24K:       mem_config = "+24K RAM"; break;
+            case VIC20_MEMCONFIG_32K:       mem_config = "+32K RAM"; break;
+            case VIC20_MEMCONFIG_MAX:       mem_config = "MAX RAM"; break;
+        }
+        ImGui::Text("Memory Config: %s", mem_config);
+        if (ImGui::CollapsingHeader("Cassette Port", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("MOTOR: %d", (sys->cas_port & VIC20_CASPORT_MOTOR) ? 1:0);
+            ImGui::Text("WRITE: %d", (sys->cas_port & VIC20_CASPORT_WRITE) ? 1:0);
+            ImGui::Text("READ:  %d", (sys->cas_port & VIC20_CASPORT_READ) ? 1:0);
+            ImGui::Text("SENSE: %d", (sys->cas_port & VIC20_CASPORT_SENSE) ? 1:0);
+        }
+        if (ImGui::CollapsingHeader("IEC Port", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("RESET: %d", (sys->iec_port & VIC20_IECPORT_RESET) ? 1:0);
+            ImGui::Text("SRQIN: %d", (sys->iec_port & VIC20_IECPORT_SRQIN) ? 1:0);
+            ImGui::Text("DATA:  %d", (sys->iec_port & VIC20_IECPORT_DATA) ? 1:0);
+            ImGui::Text("CLK:   %d", (sys->iec_port & VIC20_IECPORT_CLK) ? 1:0);
+            ImGui::Text("ATN:   %d", (sys->iec_port & VIC20_IECPORT_ATN) ? 1:0);
+        }
+    }
+    ImGui::End();
+}
+
 void ui_vic20_draw(ui_vic20_t* ui, double time_ms) {
     CHIPS_ASSERT(ui && ui->vic20);
     _ui_vic20_draw_menu(ui, time_ms);
     if (ui->memmap.open) {
         _ui_vic20_update_memmap(ui);
+    }
+    ui_vic20_draw_system(ui);
+    if (ui->c1530.valid) {
+        ui_c1530_draw(&ui->c1530.ui);
     }
     ui_audio_draw(&ui->audio, ui->vic20->sample_pos);
     ui_kbd_draw(&ui->kbd);
@@ -553,10 +617,24 @@ void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us) {
     CHIPS_ASSERT(ui && ui->vic20);
     uint32_t ticks_to_run = clk_us_to_ticks(VIC20_FREQUENCY, frame_time_us);
     vic20_t* vic20 = ui->vic20;
-    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-        vic20_tick(vic20);
-        if (vic20->pins & M6502_SYNC) {
-            ui_dbg_after_instr(&ui->dbg, vic20->pins, (uint32_t)vic20->cpu.ticks);
+    c1530_t* c1530 = ui->c1530.sys;
+    if (c1530) {
+        /* tick VIC20 and datasette */
+        for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
+            vic20_tick(vic20);
+            c1530_tick(c1530);
+            if (vic20->pins & M6502_SYNC) {
+                ui_dbg_after_instr(&ui->dbg, vic20->pins, (uint32_t)vic20->cpu.ticks);
+            }
+        }
+    }
+    else {
+        /* no peripherals connected, only tick VIC20 */
+        for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
+            vic20_tick(vic20);
+            if (vic20->pins & M6502_SYNC) {
+                ui_dbg_after_instr(&ui->dbg, vic20->pins, (uint32_t)vic20->cpu.ticks);
+            }
         }
     }
     kbd_update(&ui->vic20->kbd);
