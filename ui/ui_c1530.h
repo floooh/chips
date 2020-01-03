@@ -95,7 +95,7 @@ void ui_c1530_init(ui_c1530_t* win, const ui_c1530_desc_t* desc) {
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 200 : desc->w);
-    win->init_h = (float) ((desc->h == 0) ? 200 : desc->h);
+    win->init_h = (float) ((desc->h == 0) ? 220 : desc->h);
     win->open = desc->open;
     win->valid = true;
 }
