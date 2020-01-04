@@ -228,7 +228,6 @@ void vic20_remove_rom_cartridge(vic20_t* sys);
 #define _VIC20_DISPLAY_X (32)
 #define _VIC20_DISPLAY_Y (8)
 
-static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins);
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data);
 static void _vic20_init_key_map(vic20_t* sys);
 
@@ -288,7 +287,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
         VIC-20 CPU memory map:
 
         0000..03FF      zero-page, stack, system area
-        [unused]        usable with memconfig 'max'
+        [0400..0FFF]    3 KB Expansion RAM
         1000..1FFF      4 KB Main RAM (block 0)
         [2000..3FFF]    8 KB Expansion Block 1
         [4000..5FFF]    8 KB Expansion Block 2

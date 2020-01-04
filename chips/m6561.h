@@ -86,15 +86,14 @@ extern "C" {
     To simplify the emulated address decoding logic, we define
     a 'virtual' chip select pin, this must be set when a
     memory access is in the general 'IO region', and in addition,
-    the M6561_SELECT_ADDR(pins) macro returns true:
+    the M6561_SELECTED_ADDR(pins) macro returns true:
 
     uint64_t vic_pins = pins & M6502_PIN_MASK;
     if (M6561_SELECTED_ADDR(pins)) {
         vic_pins |= M6561_CS;
     }
 */
-#define M6561_RW    (1ULL<<24)      /* same as M6502_RW */
-
+#define M6561_RW        (1ULL<<24)      /* same as M6502_RW */
 #define M6561_CS        (1ULL<<40)      /* virtual chip-select pin */
 #define M6561_SAMPLE    (1ULL<<41)      /* virtual 'audio sample ready' pin */
 

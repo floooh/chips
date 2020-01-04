@@ -59,9 +59,9 @@
     matrix or peripheral devices).
 
     If the CPU wants to read or write VIA registers, set the CS1 pin
-    to 1 (keep CS2 at 0), and set the RW pin depening on whether it's
+    to 1 (keep CS2 at 0), and set the RW pin depending on whether it's
     a register read (RW=1 means read, RW=0 means write, just like
-    on the M6502 CPU), and the RS0..RS3 register select pin
+    on the M6502 CPU), and the RS0..RS3 register select pins
     (usually identical with the shared address bus pins A0..A4).
 
     Note that the pin positions for RS0..RS3 and RW are shared with the
@@ -75,7 +75,7 @@
     - the port A control pins CA1 and CA2
     - the port B I/O pins PB0..PB7
     - the port B control pins CB1 and CB2
-    - data bus pins D0..D7 if this was a register write function.
+    - data bus pins D0..D7 if this was a register read function.
 
     For an example VIA ticking code, checkout the _vic20_tick() function
     in systems/vic20.h
