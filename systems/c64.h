@@ -27,6 +27,9 @@
     - chips/kbd.h
     - chips/mem.h
     - chips/clk.h
+    - systems/c1530.h
+    - chips/m6522.h
+    - systems/c1541.h
 
     ## The Commodore C64
 
@@ -289,6 +292,8 @@ typedef void (*c64_audio_callback_t)(const float* samples, int num_samples, void
 
 /* config parameters for c64_init() */
 typedef struct {
+    bool c1530_enabled;     /* true to enable the C1530 datassette emulation */
+    bool c1541_enabled;     /* true to enable the C1541 floppy drive emulation */
     c64_joystick_type_t joystick_type;  /* default is C64_JOYSTICK_NONE */
 
     /* video output config (if you don't want video decoding, set these to 0) */
@@ -312,6 +317,12 @@ typedef struct {
     int rom_char_size;
     int rom_basic_size;
     int rom_kernal_size;
+
+    /* optional C1541 ROM images */
+    const void* c1541_rom_c000_dfff;
+    const void* c1541_rom_e000_ffff;
+    int c1541_rom_c000_dfff_size;
+    int c1541_rom_e000_ffff_size;
 } c64_desc_t;
 
 /* C64 emulator state */
@@ -351,6 +362,9 @@ typedef struct {
     uint8_t rom_char[0x1000];       /* 4 KB character ROM image */
     uint8_t rom_basic[0x2000];      /* 8 KB BASIC ROM image */
     uint8_t rom_kernal[0x2000];     /* 8 KB KERNAL V3 ROM image */
+
+    c1530_t c1530;      /* optional datassette */
+    c1541_t c1541;      /* optional floppy drive */
 } c64_t;
 
 /* initialize a new C64 instance */
@@ -383,6 +397,18 @@ c64_joystick_type_t c64_joystick_type(c64_t* sys);
 void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask);
 /* quickload a .bin/.prg file */
 bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
+/* insert tape as .TAP file (c1530 must be enabled) */
+bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
+/* remove tape file */
+void c64_remove_tape(c64_t* sys);
+/* return true if a tape is currently inserted */
+bool c64_tape_inserted(c64_t* sys);
+/* start the tape (press the Play button) */
+void c64_tape_play(c64_t* sys);
+/* stop the tape (unpress the Play button */
+void c64_tape_stop(c64_t* sys);
+/* return true if tape motor is on */
+bool c64_is_tape_motor_on(c64_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -484,11 +510,34 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
 
     _c64_init_key_map(sys);
     _c64_init_memory_map(sys);
+
+    if (desc->c1530_enabled) {
+        c1530_desc_t c1530_desc;
+        _C64_CLEAR(c1530_desc);
+        c1530_desc.cas_port = &sys->cas_port;
+        c1530_init(&sys->c1530, &c1530_desc);
+    }
+    if (desc->c1541_enabled) {
+        c1541_desc_t c1541_desc;
+        _C64_CLEAR(c1541_desc);
+        c1541_desc.iec_port = &sys->iec_port;
+        c1541_desc.rom_c000_dfff = desc->c1541_rom_c000_dfff;
+        c1541_desc.rom_e000_ffff = desc->c1541_rom_e000_ffff;
+        c1541_desc.rom_c000_dfff_size = desc->c1541_rom_c000_dfff_size;
+        c1541_desc.rom_e000_ffff_size = desc->c1541_rom_e000_ffff_size;
+        c1541_init(&sys->c1541, &c1541_desc);
+    }
 }
 
 void c64_discard(c64_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
+    if (sys->c1530.valid) {
+        c1530_discard(&sys->c1530);
+    }
+    if (sys->c1541.valid) {
+        c1541_discard(&sys->c1541);
+    }
 }
 
 int c64_std_display_width(void) {
@@ -626,6 +675,14 @@ void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask) {
 }
 
 static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
+
+    /* FIXME: move datasette and floppy tick to end */
+    if (sys->c1530.valid) {
+        c1530_tick(&sys->c1530);
+    }
+    if (sys->c1541.valid) {
+        c1541_tick(&sys->c1541);
+    }
 
     /* tick the CPU */
     pins = m6502_tick(&sys->cpu, pins);
@@ -1028,4 +1085,35 @@ bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
     }
     return true;
 }
+
+bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    return c1530_insert_tape(&sys->c1530, ptr, num_bytes);
+}
+
+void c64_remove_tape(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    c1530_remove_tape(&sys->c1530);
+}
+
+bool c64_tape_inserted(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    return c1530_tape_inserted(&sys->c1530);
+}
+
+void c64_tape_play(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    c1530_play(&sys->c1530);
+}
+
+void c64_tape_stop(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    c1530_stop(&sys->c1530);
+}
+
+bool c64_is_tape_motor_on(c64_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    return c1530_is_motor_on(&sys->c1530);
+}
+
 #endif /* CHIPS_IMPL */
