@@ -608,9 +608,7 @@ void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us) {
     vic20_t* vic20 = ui->vic20;
     for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
         vic20_tick(vic20);
-        if (vic20->pins & M6502_SYNC) {
-            ui_dbg_after_instr(&ui->dbg, vic20->pins, (uint32_t)vic20->cpu.ticks);
-        }
+        ui_dbg_tick(&ui->dbg, vic20->pins);
     }
     kbd_update(&ui->vic20->kbd);
 }

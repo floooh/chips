@@ -754,9 +754,7 @@ void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
     c64_t* c64 = ui->c64;
     for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
         c64_tick(c64);
-        if (c64->pins & M6502_SYNC) {
-            ui_dbg_after_instr(&ui->dbg, c64->pins, (uint32_t)c64->cpu.ticks);
-        }
+        ui_dbg_tick(&ui->dbg, c64->pins);
     }
     kbd_update(&ui->c64->kbd);
 }

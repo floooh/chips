@@ -503,9 +503,7 @@ void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us) {
     atom_t* atom = ui->atom;
     for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
         atom_tick(ui->atom);
-        if (atom->pins & M6502_SYNC) {
-            ui_dbg_after_instr(&ui->dbg, atom->pins, (uint32_t)atom->cpu.ticks);
-        }
+        ui_dbg_tick(&ui->dbg, atom->pins);
     }
     kbd_update(&ui->atom->kbd);
 }

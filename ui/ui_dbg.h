@@ -64,9 +64,10 @@ extern "C" {
 
 /* NOTE: keep all MAX and NUM values 2^N */
 #define UI_DBG_MAX_BREAKPOINTS (32)
-#define UI_DBG_MAX_USER_BREAKTYPES (8)              /* max number of user breakpoint types */
-#define UI_DBG_STEP_TRAPID (128)                    /* special trap id when step-mode active */
-#define UI_DBG_BP_BASE_TRAPID (UI_DBG_STEP_TRAPID+1)   /* first CPU trap-id used for breakpoints */
+#define UI_DBG_MAX_USER_BREAKTYPES (8)  /* max number of user breakpoint types */
+#define UI_DBG_STEP_TRAPID (128)        /* special trap id when step-mode active */
+#define UI_DBG_TICK_TRAPID (129)        /* special trap id when cycle-stepping */
+#define UI_DBG_BP_BASE_TRAPID (UI_DBG_TICK_TRAPID+1)   /* first CPU trap-id used for breakpoints */
 #define UI_DBG_MAX_STRLEN (32)
 #define UI_DBG_MAX_BINLEN (16)
 #define UI_DBG_NUM_LINES (256)
@@ -103,6 +104,7 @@ enum {
     UI_DBG_STEPMODE_NONE = 0,
     UI_DBG_STEPMODE_INTO,
     UI_DBG_STEPMODE_OVER,
+    UI_DBG_STEPMODE_TICK,
 };
 
 /* a breakpoint description */
@@ -143,11 +145,13 @@ typedef struct ui_dbg_keydesc_t {
     int break_keycode;
     int step_over_keycode;
     int step_into_keycode;
+    int step_tick_keycode;
     int toggle_breakpoint_keycode;
     const char* continue_name;
     const char* break_name;
     const char* step_over_name;
     const char* step_into_name;
+    const char* step_tick_name;
     const char* toggle_breakpoint_name;
 } ui_dbg_keydesc_t;
 
@@ -266,6 +270,7 @@ typedef struct ui_dbg_history_t {
 
 typedef struct ui_dbg_t {
     bool valid;
+    uint32_t cpu_ticks;
     ui_dbg_read_t read_cb;
     int read_layer;
     ui_dbg_user_break_t break_cb;
@@ -290,8 +295,8 @@ void ui_dbg_draw(ui_dbg_t* win);
 bool ui_dbg_before_exec(ui_dbg_t* win);
 /* only z80: call after executing system ticks */
 void ui_dbg_after_exec(ui_dbg_t* win);
-/* only m6502: call after each finished instruction */
-void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins, uint32_t ticks);
+/* only m6502: call after ticking the system */
+void ui_dbg_tick(ui_dbg_t* win, uint64_t pins);
 /* call when resetting the emulated machine (re-initializes some data structures) */
 void ui_dbg_reset(ui_dbg_t* win);
 /* call when rebooting the emulated machine (re-initializes some data structures) */
@@ -510,6 +515,12 @@ static void _ui_dbg_step_over(ui_dbg_t* win) {
     else {
         win->dbg.step_mode = UI_DBG_STEPMODE_INTO;
     }
+}
+
+static void _ui_dbg_step_tick(ui_dbg_t* win) {
+    win->dbg.stopped = false;
+    win->dbg.step_mode = UI_DBG_STEPMODE_TICK;
+    win->ui.request_scroll = true;
 }
 
 /*== HISTORY =================================================================*/
@@ -1398,6 +1409,9 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
             if (ImGui::MenuItem("Step Into", win->ui.keys.step_into_name, false, win->dbg.stopped)) {
                 _ui_dbg_step_into(win);
             }
+            if (ImGui::MenuItem("Tick", win->ui.keys.step_tick_name, false, win->dbg.stopped)) {
+                _ui_dbg_step_tick(win);
+            }
             ImGui::MenuItem("Install CPU Debug Hook", 0, &win->dbg.install_trap_cb);
             ImGui::EndMenu();
         }
@@ -1532,15 +1546,28 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
 static void _ui_dbg_handle_input(ui_dbg_t* win) {
     /* unused hotkeys are defined as 0 and will never be triggered */
     if (win->dbg.stopped) {
-        if (ImGui::IsKeyPressed(win->ui.keys.continue_keycode)) {
-            _ui_dbg_continue(win);
+        if (0 != win->ui.keys.continue_keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.continue_keycode)) {
+                _ui_dbg_continue(win);
+            }
         }
-        if (ImGui::IsKeyPressed(win->ui.keys.step_over_keycode)) {
-            _ui_dbg_step_over(win);
+        if (0 != win->ui.keys.step_over_keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_over_keycode)) {
+                _ui_dbg_step_over(win);
+            }
         }
-        if (ImGui::IsKeyPressed(win->ui.keys.step_into_keycode)) {
-            _ui_dbg_step_into(win);
+        if (0 != win->ui.keys.step_into_keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_into_keycode)) {
+                _ui_dbg_step_into(win);
+            }
         }
+        #if defined(UI_DBG_USE_M6502)
+        if (0 != win->ui.keys.step_tick_keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_tick_keycode)) {
+                _ui_dbg_step_tick(win);
+            }
+        }
+        #endif
     }
     else {
         if (ImGui::IsKeyPressed(win->ui.keys.break_keycode)) {
@@ -1563,15 +1590,22 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
             _ui_dbg_continue(win);
         }
         ImGui::SameLine();
-        snprintf(str, sizeof(str), "Step Over (%s)", _ui_dbg_str_or_def(win->ui.keys.step_over_name, "-"));
+        snprintf(str, sizeof(str), "Over (%s)", _ui_dbg_str_or_def(win->ui.keys.step_over_name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_over(win);
         }
         ImGui::SameLine();
-        snprintf(str, sizeof(str), "Step Into (%s)", _ui_dbg_str_or_def(win->ui.keys.step_into_name, "-"));
+        snprintf(str, sizeof(str), "Into (%s)", _ui_dbg_str_or_def(win->ui.keys.step_into_name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_into(win);
         }
+        ImGui::SameLine();
+        #if defined(UI_DBG_USE_M6502)
+        snprintf(str, sizeof(str), "Tick (%s)", _ui_dbg_str_or_def(win->ui.keys.step_tick_name, "-"));
+        if (ImGui::Button(str)) {
+            _ui_dbg_step_tick(win);
+        }
+        #endif
     }
     else {
         snprintf(str, sizeof(str), "Break (%s)", _ui_dbg_str_or_def(win->ui.keys.break_name, "-"));
@@ -1932,16 +1966,23 @@ void ui_dbg_after_exec(ui_dbg_t* win) {
     #endif
 }
 
-void ui_dbg_after_instr(ui_dbg_t* win, uint64_t pins, uint32_t ticks) {
+void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
     #if defined(UI_DBG_USE_M6502)
-    uint16_t pc = M6502_GET_ADDR(pins);
-    win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, ticks, pins, win);
-    if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
+    if (win->dbg.step_mode == UI_DBG_STEPMODE_TICK) {
         win->dbg.stopped = true;
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
-        ImGui::SetWindowFocus(win->ui.title);
-        win->ui.open = true;
     }
+    if (pins & M6502_SYNC) {
+        uint16_t pc = M6502_GET_ADDR(pins);
+        win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, win->cpu_ticks, pins, win);
+        if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
+            win->dbg.stopped = true;
+            win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
+            ImGui::SetWindowFocus(win->ui.title);
+            win->ui.open = true;
+        }
+    }
+    win->cpu_ticks++;
     #endif
 }
 
