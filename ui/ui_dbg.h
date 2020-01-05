@@ -271,6 +271,7 @@ typedef struct ui_dbg_history_t {
 typedef struct ui_dbg_t {
     bool valid;
     uint32_t cpu_ticks;
+    uint32_t op_ticks;
     ui_dbg_read_t read_cb;
     int read_layer;
     ui_dbg_user_break_t break_cb;
@@ -1830,12 +1831,25 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         }
 
         /* tick count */
-        x += glyph_width * 20; 
+        #if defined(UI_DBG_USE_M6502)
+        x += glyph_width * (is_pc_line ? 18:20);
+        #else
+        x += glyph_width * 20;
+        #endif
         if (win->ui.show_ticks) {
             int ticks = win->heatmap.items[start_addr].ticks;
             ImGui::SameLine(x);
             if (ticks > 0) {
+                #if defined(UI_DBG_USE_M6502)
+                if (is_pc_line) {
+                    ImGui::Text("%d/%d", win->op_ticks, ticks);
+                }
+                else {
+                    ImGui::Text("%d", ticks);
+                }
+                #else
                 ImGui::Text("%d", ticks);
+                #endif
             }
             else if (show_dasm) {
                 ImGui::Text("?");
@@ -1973,6 +1987,7 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
     }
     if (pins & M6502_SYNC) {
+        win->op_ticks = 0;
         uint16_t pc = M6502_GET_ADDR(pins);
         win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, win->cpu_ticks, pins, win);
         if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
@@ -1983,6 +1998,7 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
         }
     }
     win->cpu_ticks++;
+    win->op_ticks++;
     #endif
 }
 
