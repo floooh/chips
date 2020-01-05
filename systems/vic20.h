@@ -26,6 +26,7 @@
     - chips/kbd.h
     - chips/mem.h
     - chips/clk.h
+    - systems/c1530.h
 
     ## The Commodore VIC-20
 
@@ -106,6 +107,7 @@ typedef void (*vic20_audio_callback_t)(const float* samples, int num_samples, vo
 
 /* config parameters for vic20_init() */
 typedef struct {
+    bool c1530_enabled;         /* set to true to enable C1530 datassette emulation */
     vic20_joystick_type_t joystick_type;    /* default is VIC20_JOYSTICK_NONE */
     vic20_memory_config_t mem_config;       /* default is VIC20_MEMCONFIG_STANDARD */
 
@@ -170,6 +172,8 @@ typedef struct {
     uint8_t rom_kernal[0x2000];     /* 8 KB KERNAL V3 ROM image */
     uint8_t ram_exp[4][0x2000];     /* optional expansion 8K RAM blocks */
 
+    c1530_t c1530;                  /* c1530.valid = true if enabled */
+
     mem_t mem_cart;                 /* special ROM cartridge memory mapping helper */
 } vic20_t;
 
@@ -207,6 +211,18 @@ bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes);
 bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes);
 /* remove current ROM cartridge */
 void vic20_remove_rom_cartridge(vic20_t* sys);
+/* insert tape as .TAP file (c1530 must be enabled) */
+bool vic20_insert_tape(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+/* remove tape file */
+void vic20_remove_tape(vic20_t* sys);
+/* return true if a tape is currently inserted */
+bool vic20_tape_inserted(vic20_t* sys);
+/* start the tape (press the Play button) */
+void vic20_tape_play(vic20_t* sys);
+/* stop the tape (unpress the Play button */
+void vic20_tape_stop(vic20_t* sys);
+/* return true if tape motor is on */
+bool vic20_is_tape_motor_on(vic20_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -358,10 +374,21 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     mem_map_ram(&sys->mem_cart, 0, 0x4000, 0x2000, sys->ram_exp[1]);
     mem_map_ram(&sys->mem_cart, 0, 0x6000, 0x2000, sys->ram_exp[2]);
     mem_map_ram(&sys->mem_cart, 0, 0xA000, 0x2000, sys->ram_exp[3]);
+
+    /* optionally setup C1530 datasette drive */
+    if (desc->c1530_enabled) {
+        c1530_desc_t c1530_desc;
+        _VIC20_CLEAR(c1530_desc);
+        c1530_desc.cas_port = &sys->cas_port;
+        c1530_init(&sys->c1530, &c1530_desc);
+    }
 }
 
 void vic20_discard(vic20_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
+    if (sys->c1530.valid) {
+        c1530_discard(&sys->c1530);
+    }
     sys->valid = false;
 }
 
@@ -376,6 +403,9 @@ void vic20_reset(vic20_t* sys) {
     m6522_reset(&sys->via_1);
     m6522_reset(&sys->via_2);
     m6561_reset(&sys->vic);
+    if (sys->c1530.valid) {
+        c1530_reset(&sys->c1530);
+    }
 }
 
 static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
@@ -524,6 +554,11 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
                 sys->sample_pos = 0;
             }
         }
+    }
+
+    /* optionally tick the C1530 datassette */
+    if (sys->c1530.valid) {
+        c1530_tick(&sys->c1530);
     }
 
     return pins;
@@ -769,6 +804,36 @@ void vic20_joystick(vic20_t* sys, uint8_t joy_mask) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->joy_joy_mask = joy_mask;
     _vic20_update_joymasks(sys);
+}
+
+bool vic20_insert_tape(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    return c1530_insert_tape(&sys->c1530, ptr, num_bytes);
+}
+
+void vic20_remove_tape(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    c1530_remove_tape(&sys->c1530);
+}
+
+bool vic20_tape_inserted(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    return c1530_tape_inserted(&sys->c1530);
+}
+
+void vic20_tape_play(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    c1530_play(&sys->c1530);
+}
+
+void vic20_tape_stop(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    c1530_stop(&sys->c1530);
+}
+
+bool vic20_is_tape_motor_on(vic20_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
+    return c1530_is_motor_on(&sys->c1530);
 }
 
 #endif /* CHIPS_IMPL */
