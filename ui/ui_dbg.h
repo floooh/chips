@@ -1852,7 +1852,16 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
                 #endif
             }
             else if (show_dasm) {
+                #if defined(UI_DBG_USE_M6502)
+                if (is_pc_line) {
+                    ImGui::Text("%d/?", win->op_ticks);
+                }
+                else {
+                    ImGui::Text("?");
+                }
+                #else
                 ImGui::Text("?");
+                #endif
             }
             else {
                 ImGui::Text(" ");
