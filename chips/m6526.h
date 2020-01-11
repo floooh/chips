@@ -91,6 +91,7 @@ extern "C" {
 #define M6526_D5    (1ULL<<21)
 #define M6526_D6    (1ULL<<22)
 #define M6526_D7    (1ULL<<23)
+#define M6526_DB_PINS (0xFF0000ULL)
 
 /* control pins shared with CPU */
 #define M6526_RW    (1ULL<<24)      /* same as M6502_RW */
@@ -113,6 +114,7 @@ extern "C" {
 #define M6526_PA5   (1ULL<<53)
 #define M6526_PA6   (1ULL<<54)
 #define M6526_PA7   (1ULL<<55)
+#define M6526_PA_PINS   (M6526_PA0|M6526_PA1|M6526_PA2|M6526_PA3|M6526_PA4|M6526_PA5|M6526_PA6|M6526_PA7)
 
 #define M6526_PB0   (1ULL<<56)
 #define M6526_PB1   (1ULL<<57)
@@ -122,6 +124,7 @@ extern "C" {
 #define M6526_PB5   (1ULL<<61)
 #define M6526_PB6   (1ULL<<62)
 #define M6526_PB7   (1ULL<<63)
+#define M6526_PB_PINS   (M6526_PB0|M6526_PB1|M6526_PB2|M6526_PB3|M6526_PB4|M6526_PB5|M6526_PB6|M6526_PB7)
 
 /* register indices */
 #define M6526_REG_PRA       (0)     /* peripheral data reg A */
@@ -140,12 +143,6 @@ extern "C" {
 #define M6526_REG_ICR       (13)    /* interrupt control register */
 #define M6526_REG_CRA       (14)    /* control register A */
 #define M6526_REG_CRB       (15)    /* control register B */
-
-/* port in/out callbacks */
-#define M6526_PORT_A (0)
-#define M6526_PORT_B (1)
-typedef uint8_t (*m6526_in_t)(int port_id, void* user_data);
-typedef void (*m6526_out_t)(int port_id, uint8_t data, void* user_data);
 
 /*--- control-register flag testing macros ---*/
 #define M6526_TIMER_STARTED(cr)     (0!=((cr)&(1<<0)))
@@ -169,13 +166,6 @@ typedef void (*m6526_out_t)(int port_id, uint8_t data, void* user_data);
 
 #define M6526_PIP_IRQ       (0)
 #define M6526_PIP_READ_ICR  (8)
-
-/* m6526 initialization parameters */
-typedef struct {
-    m6526_in_t in_cb;
-    m6526_out_t out_cb;
-    void* user_data;
-} m6526_desc_t;
 
 /* I/O port state */
 typedef struct {
@@ -222,9 +212,6 @@ typedef struct {
     m6526_timer_t tb;
     m6526_int_t intr;
     uint64_t pins;
-    m6526_in_t in_cb;
-    m6526_out_t out_cb;
-    void* user_data;
 } m6526_t;
 
 /* extract 8-bit data bus from 64-bit pins */
@@ -237,12 +224,10 @@ typedef struct {
 #define M6526_SET_PAB(p,a,b) {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
 /* initialize a new m6526_t instance */
-void m6526_init(m6526_t* c, const m6526_desc_t* desc);
+void m6526_init(m6526_t* c);
 /* reset an existing m6526_t instance */
 void m6526_reset(m6526_t* c);
-/* perform an IO request */
-uint64_t m6526_iorq(m6526_t* c, uint64_t pins);
-/* tick the m6526_t instance, return true if interrupt requested */
+/* tick the m6526_t instance */
 uint64_t m6526_tick(m6526_t* c, uint64_t pins);
 
 #ifdef __cplusplus
@@ -282,12 +267,9 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->flag = false;
 }
 
-void m6526_init(m6526_t* c, const m6526_desc_t* desc) {
+void m6526_init(m6526_t* c) {
     CHIPS_ASSERT(c && desc && desc->in_cb && desc->out_cb);
     memset(c, 0, sizeof(*c));
-    c->in_cb = desc->in_cb;
-    c->out_cb = desc->out_cb;
-    c->user_data = desc->user_data;
     _m6526_init_port(&c->pa);
     _m6526_init_port(&c->pb);
     _m6526_init_timer(&c->ta);
@@ -443,7 +425,7 @@ static uint8_t _m6526_read_icr(m6526_t* c) {
     return data;
 }
 
-static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
+static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
     /* see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html */
 
     /* timer A underflow interrupt? */
@@ -469,6 +451,15 @@ static void _m6526_update_irq(m6526_t* c, uint64_t pins) {
     if (_M6526_PIP_TEST(c->intr.pip, M6526_PIP_IRQ, 0)) {
         c->intr.icr |= (1<<7);
     }
+    
+    /* update IRQ pin */
+    if (0 != (c->intr.icr & (1<<7))) {
+        pins |= M6526_IRQ;
+    }
+    else {
+        pins &= ~M6526_IRQ;
+    }
+    return pins;
 }
 
 /*--- timer implementation ---*/
@@ -571,19 +562,13 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     c->intr.pip = (c->intr.pip >> 1) & 0x7F7F7F7F;
 }
 
-uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
+static uint64_t _m6526_tick(m6526_t* c, uint64_t pins) {
+    _m6526_read_port_pins(c, pins);
     _m6526_tick_timer(c, &c->ta);
     _m6526_tick_timer(c, &c->tb);
-    _m6526_update_irq(c, pins);
+    pins = _m6526_update_irq(c, pins);
+    pins = _m6526_write_port_pins(c, pins);
     _m6526_tick_pipeline(c);
-    if (0 != (c->intr.icr & (1<<7))) {
-        pins |= M6526_IRQ;
-        c->pins |= M6526_IRQ;
-    }
-    else {
-        pins &= ~M6526_IRQ;
-        c->pins &= ~M6526_IRQ;
-    }
     return pins;
 }
 
@@ -691,22 +676,20 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
     return data;
 }
 
-uint64_t m6526_iorq(m6526_t* c, uint64_t pins) {
+uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
     if (pins & M6526_CS) {
         uint8_t addr = pins & M6526_RS;
         if (pins & M6526_RW) {
-            /* a read request */
             uint8_t data = _m6526_read(c, addr);
             M6526_SET_DATA(pins, data);
         }
         else {
-            /* a write request */
             uint8_t data = M6526_GET_DATA(pins);
             _m6526_write(c, addr, data);
         }
-        M6526_SET_PAB(pins, c->pa.port, c->pb.port);
-        c->pins = pins;
     }
+    pins = _m6526_tick(c, pins);
+    c->pins = pins;
     return pins;
 }
 
