@@ -169,11 +169,10 @@ extern "C" {
 
 /* I/O port state */
 typedef struct {
-    uint8_t reg;        /* port register */
-    uint8_t ddr;        /* data direction register */
-    uint8_t inp;        /* input latch */
-    uint8_t out;        /* last output value */
-    uint8_t port;       /* current port pin state */
+    uint8_t inpr;
+    uint8_t outr;
+    uint8_t ddr;
+    uint8_t pins;
 } m6526_port_t;
 
 /* timer state */
@@ -218,9 +217,15 @@ typedef struct {
 #define M6526_GET_DATA(p) ((uint8_t)(p>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define M6526_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
-/* merge 4-bit register-select address into 64-bit pins */
-#define M6526_SET_ADDR(p,d) {p=((p&~0xF)|(d&0xF));}
-/* set port A/B pins in bitmask */
+/* extract port A pins */
+#define M6526_GET_PA(p) ((uint8_t)(p>>48))
+/* extract port B pins */
+#define M6526_GET_PB(p) ((uint8_t)(p>>56))
+/* merge port A pins into pin mask */
+#define M6526_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
+/* merge port B pins into pin mask */
+#define M6526_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
+/* merge port A and B pins into pin mask */
 #define M6526_SET_PAB(p,a,b) {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
 /* initialize a new m6526_t instance */
@@ -243,11 +248,10 @@ uint64_t m6526_tick(m6526_t* c, uint64_t pins);
 #endif
 
 static void _m6526_init_port(m6526_port_t* p) {
-    p->reg = 0;
+    p->inpr = 0xFF;
+    p->outr = 0;
     p->ddr = 0;
-    p->inp = 0;
-    p->out = 0xFF;
-    p->port = 0;
+    p->pins = 0;
 }
 
 static void _m6526_init_timer(m6526_timer_t* t) {
@@ -268,7 +272,7 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
 }
 
 void m6526_init(m6526_t* c) {
-    CHIPS_ASSERT(c && desc && desc->in_cb && desc->out_cb);
+    CHIPS_ASSERT(c);
     memset(c, 0, sizeof(*c));
     _m6526_init_port(&c->pa);
     _m6526_init_port(&c->pb);
@@ -299,6 +303,11 @@ void m6526_reset(m6526_t* c) {
 #define _M6526_PIP_TEST(pip,offset,pos) (0!=(pip&(1<<(offset+pos))))
 
 /*--- port implementation ---*/
+static inline void _m6526_read_port_pins(m6526_t* c, uint64_t pins) {
+    c->pa.inpr = M6526_GET_PA(pins);
+    c->pb.inpr = M6526_GET_PB(pins);
+}
+
 static inline uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
     /* merge timer state bits into data byte */
     if (M6526_PBON(c->ta.cr)) {
@@ -334,56 +343,11 @@ static inline uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
     return data;
 }
 
-static inline void _m6526_update_pa(m6526_t* c) {
-    /* FIXME: is this correct? (using reg without ddr mask) */
-    uint8_t data = c->pa.reg;
-    data |= c->pa.inp & ~c->pa.ddr;
-    if (data != c->pa.out) {
-        c->pa.out = data;
-        c->out_cb(M6526_PORT_A, data, c->user_data);
-    }
-    c->pa.port = (c->pa.out & c->pa.ddr) | (c->pa.inp & ~c->pa.ddr);
-}
-
-static inline void _m6526_update_pb(m6526_t* c) {
-    /* FIXME: is this correct? (using reg without ddr mask) */
-    uint8_t data = c->pb.reg;
-    data |= c->pb.inp & ~c->pb.ddr;
-    data = _m6526_merge_pb67(c, data);
-    if (data != c->pb.out) {
-        c->pb.out = data;
-        c->out_cb(M6526_PORT_B, data, c->user_data);
-    }
-    c->pb.port = (c->pb.out & c->pb.ddr) | (c->pb.inp & ~c->pb.ddr);
-}
-
-static inline uint8_t _m6526_read_pa(m6526_t* c) {
-    /* datasheet: "On a READ, the PR reflects the information present
-       on the actual port pins (PA0-PA7, PB0-PB7) for both input and output bits.
-    */
-    /* the input callback should put a 1 into all unconnected pins */
-    if (c->pa.ddr != 0xFF) {
-        c->pa.inp = (c->in_cb(M6526_PORT_A, c->user_data) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
-    }
-    else {
-        c->pa.inp = c->in_cb(M6526_PORT_A, c->user_data) & c->pa.reg;
-    }
-    c->pa.port = (c->pa.out & c->pa.ddr) | (c->pa.inp & ~c->pa.ddr);
-    return c->pa.inp;
-}
-
-static uint8_t _m6526_read_pb(m6526_t* c) {
-    uint8_t data;
-    if (c->pb.ddr != 0xFF) {
-        data = (c->in_cb(M6526_PORT_B, c->user_data) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);
-    }
-    else {
-        data = c->in_cb(M6526_PORT_B, c->user_data) & c->pb.reg;
-    }
-    c->pb.inp = data;
-    data = _m6526_merge_pb67(c, data);
-    c->pb.port = (c->pb.out & c->pb.ddr) | (c->pb.inp & ~c->pb.ddr);
-    return data;
+static inline uint64_t _m6526_write_port_pins(m6526_t* c, uint64_t pins) {
+    c->pa.pins = (c->pa.inpr & ~c->pa.ddr) | (c->pa.outr & c->pa.ddr);
+    c->pb.pins = _m6526_merge_pb67(c, (c->pb.inpr & ~c->pb.ddr)) | (c->pb.outr & c->pb.ddr);
+    M6526_SET_PAB(pins, c->pa.pins, c->pb.pins);
+    return pins;
 }
 
 /*--- interrupt implementation ---*/
@@ -475,7 +439,6 @@ static void _m6526_tick_timer(m6526_t* c, m6526_timer_t* t) {
     }
 
     /* timer undeflow? */
-    bool old_t_out = t->t_out;
     t->t_out = (0 == t->counter) && _M6526_PIP_TEST(t->pip, M6526_PIP_TIMER_COUNT, 1);
     if (t->t_out) {
         t->t_bit = !t->t_bit;
@@ -484,10 +447,6 @@ static void _m6526_tick_timer(m6526_t* c, m6526_timer_t* t) {
             t->cr &= ~(1<<0);
         }
         _M6526_PIP_SET(t->pip, M6526_PIP_TIMER_LOAD, 0);
-    }
-    if (old_t_out != t->t_out) {
-        /* PB6/7 has changed */
-        _m6526_update_pb(c);
     }
 
     /* reload counter from latch? */
@@ -572,76 +531,23 @@ static uint64_t _m6526_tick(m6526_t* c, uint64_t pins) {
     return pins;
 }
 
-static void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
-
+static inline void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
     /* if the start bit goes from 0 to 1, set the current toggle-bit-state to 1 */
     if (!M6526_TIMER_STARTED(t->cr) && M6526_TIMER_STARTED(data)) {
         t->t_bit = true;
     }
     t->cr = data;
-
-    /* state of port B output might be changed because of PB6/PB7 */
-    _m6526_update_pb(c);
 }
 
-static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
-    switch (addr) {
-        case M6526_REG_PRA:
-            c->pa.reg = data;
-            _m6526_update_pa(c);
-            break;
-        case M6526_REG_PRB:
-            c->pb.reg = data;
-            _m6526_update_pb(c);
-            break;
-        case M6526_REG_DDRA:
-            c->pa.ddr = data;
-            _m6526_update_pa(c);
-            break;
-        case M6526_REG_DDRB:
-            c->pb.ddr = data;
-            _m6526_update_pb(c);
-            break;
-        case M6526_REG_TALO:
-            c->ta.latch = (c->ta.latch & 0xFF00) | data;
-            break;
-        case M6526_REG_TAHI:
-            c->ta.latch = (data<<8) | (c->ta.latch & 0x00FF);
-            /* if timer is not running, writing hi-byte load counter form latch */
-            if (!M6526_TIMER_STARTED(c->ta.cr)) {
-                _M6526_PIP_SET(c->ta.pip, M6526_PIP_TIMER_LOAD, 1);
-            }
-            break;
-        case M6526_REG_TBLO:
-            c->tb.latch = (c->tb.latch & 0xFF00) | data;
-            break;
-        case M6526_REG_TBHI:
-            c->tb.latch = (data<<8) | (c->tb.latch & 0x00FF);
-            /* if timer is not running, writing hi-byte writes latch */
-            if (!M6526_TIMER_STARTED(c->tb.cr)) {
-                _M6526_PIP_SET(c->tb.pip, M6526_PIP_TIMER_LOAD, 1);
-            }
-            break;
-        case M6526_REG_ICR:
-            _m6526_write_icr(c, data);
-            break;
-        case M6526_REG_CRA:
-            _m6526_write_cr(c, &c->ta, data);
-            break;
-        case M6526_REG_CRB:
-            _m6526_write_cr(c, &c->tb, data);
-            break;
-    }
-}
-
+/* read a register */
 static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
     uint8_t data = 0xFF;
     switch (addr) {
         case M6526_REG_PRA:
-            data = _m6526_read_pa(c);
+            data = c->pa.pins;
             break;
         case M6526_REG_PRB:
-            data = _m6526_read_pb(c);
+            data = c->pb.pins;
             break;
         case M6526_REG_DDRA:
             data = c->pa.ddr;
@@ -676,7 +582,54 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
     return data;
 }
 
+static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
+    switch (addr) {
+        case M6526_REG_PRA:
+            c->pa.outr = data;
+            break;
+        case M6526_REG_PRB:
+            c->pb.outr = data;
+            break;
+        case M6526_REG_DDRA:
+            c->pa.ddr = data;
+            break;
+        case M6526_REG_DDRB:
+            c->pb.ddr = data;
+            break;
+        case M6526_REG_TALO:
+            c->ta.latch = (c->ta.latch & 0xFF00) | data;
+            break;
+        case M6526_REG_TAHI:
+            c->ta.latch = (data<<8) | (c->ta.latch & 0x00FF);
+            /* if timer is not running, writing hi-byte load counter form latch */
+            if (!M6526_TIMER_STARTED(c->ta.cr)) {
+                _M6526_PIP_SET(c->ta.pip, M6526_PIP_TIMER_LOAD, 1);
+            }
+            break;
+        case M6526_REG_TBLO:
+            c->tb.latch = (c->tb.latch & 0xFF00) | data;
+            break;
+        case M6526_REG_TBHI:
+            c->tb.latch = (data<<8) | (c->tb.latch & 0x00FF);
+            /* if timer is not running, writing hi-byte writes latch */
+            if (!M6526_TIMER_STARTED(c->tb.cr)) {
+                _M6526_PIP_SET(c->tb.pip, M6526_PIP_TIMER_LOAD, 1);
+            }
+            break;
+        case M6526_REG_ICR:
+            _m6526_write_icr(c, data);
+            break;
+        case M6526_REG_CRA:
+            _m6526_write_cr(c, &c->ta, data);
+            break;
+        case M6526_REG_CRB:
+            _m6526_write_cr(c, &c->tb, data);
+            break;
+    }
+}
+
 uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
+    pins = _m6526_tick(c, pins);
     if (pins & M6526_CS) {
         uint8_t addr = pins & M6526_RS;
         if (pins & M6526_RW) {
@@ -688,7 +641,6 @@ uint64_t m6526_tick(m6526_t* c, uint64_t pins) {
             _m6526_write(c, addr, data);
         }
     }
-    pins = _m6526_tick(c, pins);
     c->pins = pins;
     return pins;
 }
