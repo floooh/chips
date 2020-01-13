@@ -169,10 +169,10 @@ extern "C" {
 
 /* I/O port state */
 typedef struct {
-    uint8_t inpr;
-    uint8_t outr;
-    uint8_t ddr;
-    uint8_t pins;
+    uint8_t reg;    /* port register */
+    uint8_t ddr;    /* data direction register */
+    uint8_t inp;    /* input latch */
+    uint8_t pins;   /* current port pin state */
 } m6526_port_t;
 
 /* timer state */
@@ -248,9 +248,9 @@ uint64_t m6526_tick(m6526_t* c, uint64_t pins);
 #endif
 
 static void _m6526_init_port(m6526_port_t* p) {
-    p->inpr = 0xFF;
-    p->outr = 0;
+    p->reg = 0;
     p->ddr = 0;
+    p->inp = 0;
     p->pins = 0;
 }
 
@@ -304,8 +304,8 @@ void m6526_reset(m6526_t* c) {
 
 /*--- port implementation ---*/
 static inline void _m6526_read_port_pins(m6526_t* c, uint64_t pins) {
-    c->pa.inpr = M6526_GET_PA(pins);
-    c->pb.inpr = M6526_GET_PB(pins);
+    c->pa.inp = (M6526_GET_PA(pins) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
+    c->pb.inp = (M6526_GET_PB(pins) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);
 }
 
 static inline uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
@@ -344,8 +344,8 @@ static inline uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
 }
 
 static inline uint64_t _m6526_write_port_pins(m6526_t* c, uint64_t pins) {
-    c->pa.pins = (c->pa.inpr & ~c->pa.ddr) | (c->pa.outr & c->pa.ddr);
-    c->pb.pins = _m6526_merge_pb67(c, (c->pb.inpr & ~c->pb.ddr)) | (c->pb.outr & c->pb.ddr);
+    c->pa.pins = c->pa.reg | (c->pa.inp & ~c->pa.ddr);
+    c->pb.pins = _m6526_merge_pb67(c, c->pb.reg | (c->pb.inp & ~c->pb.ddr));
     M6526_SET_PAB(pins, c->pa.pins, c->pb.pins);
     return pins;
 }
@@ -544,10 +544,10 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
     uint8_t data = 0xFF;
     switch (addr) {
         case M6526_REG_PRA:
-            data = c->pa.pins;
+            data = c->pa.inp;
             break;
         case M6526_REG_PRB:
-            data = c->pb.pins;
+            data = _m6526_merge_pb67(c, c->pb.inp);
             break;
         case M6526_REG_DDRA:
             data = c->pa.ddr;
@@ -585,10 +585,10 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
 static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
     switch (addr) {
         case M6526_REG_PRA:
-            c->pa.outr = data;
+            c->pa.reg = data;
             break;
         case M6526_REG_PRB:
-            c->pb.outr = data;
+            c->pb.reg = data;
             break;
         case M6526_REG_DDRA:
             c->pa.ddr = data;
