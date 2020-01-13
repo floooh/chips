@@ -762,7 +762,7 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         /* FIXME: precompute merged joystick mask like in vic20.h */
         const uint8_t pa = ~(sys->kbd_joy2_mask|sys->joy_joy2_mask);
         const uint8_t pb = ~(kbd_scan_columns(&sys->kbd) | sys->kbd_joy1_mask | sys->joy_joy1_mask);
-        M6526_SET_PAB(pins, pa, pb);
+        M6526_SET_PAB(cia1_pins, pa, pb);
         if (sys->cas_port & C64_CASPORT_READ) {
             cia1_pins |= M6526_FLAG;
         }
