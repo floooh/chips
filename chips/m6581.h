@@ -627,7 +627,7 @@ static inline int _m6581_filter_output(m6581_filter_t* f, int vi) {
 }
 
 /* tick the sound generation, return true when new sample ready */
-static bool _m6581_tick(m6581_t* sid) {
+static uint64_t _m6581_tick(m6581_t* sid, uint64_t pins) {
     /* decay the last written register value */
     if (sid->bus_decay > 0) {
         if (--sid->bus_decay == 0) {
@@ -675,11 +675,12 @@ static bool _m6581_tick(m6581_t* sid) {
         sid->sample = sid->sample_mag * s;
         sid->sample_accum = 0.0f;
         sid->sample_accum_count = 0.0f;
-        return true;
+        pins |= M6581_SAMPLE;
     }
     else {
-        return false;
+        pins &= ~M6581_SAMPLE;
     }
+    return pins;
 }
 
 /* read a register */
@@ -800,10 +801,7 @@ uint64_t m6581_tick(m6581_t* sid, uint64_t pins) {
     CHIPS_ASSERT(sid);
 
     /* first perform the regular per-tick actions */
-    if (_m6581_tick(sid)) {
-        /* new audio sample is ready */
-        pins |= M6581_SAMPLE;
-    }
+    pins = _m6581_tick(sid, pins);
 
     /* register read/write */
     if (pins & M6581_CS) {
