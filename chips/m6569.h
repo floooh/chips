@@ -282,14 +282,12 @@ typedef struct {
 void m6569_init(m6569_t* vic, const m6569_desc_t* desc);
 /* reset a m6569_t instance */
 void m6569_reset(m6569_t* vic);
+/* tick the m6569 instance */
+uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
 /* get the visible display width in pixels */
 int m6569_display_width(m6569_t* vic);
 /* get the visible display height in pixels */
 int m6569_display_height(m6569_t* vic);
-/* read/write m6569 registers */
-uint64_t m6569_iorq(m6569_t* vic, uint64_t pins);
-/* tick the m6569 instance */
-uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
 /* get 32-bit RGBA8 value from color index (0..15) */
 uint32_t m6569_color(int i);
 
@@ -464,7 +462,7 @@ void m6569_reset(m6569_t* vic) {
     _m6569_reset_sprite_unit(&vic->sunit);
 }
 
-/*--- I/O requests -----------------------------------------------------------*/
+/*--- register read/writes ---------------------------------------------------*/
 
 /* update the raster-interrupt line from ctrl_1 and raster register updates */
 static inline void _m6569_io_update_irq_line(m6569_raster_unit_t* rs, uint8_t ctrl_1, uint8_t rast) {
@@ -542,180 +540,177 @@ static void _m6569_io_update_sunit(m6569_t* vic, int i, uint8_t mx, uint8_t my, 
     }
 }
 
-/* perform an I/O request on the VIC-II */
-uint64_t m6569_iorq(m6569_t* vic, uint64_t pins) {
-    if (pins & M6569_CS) {
-        uint8_t r_addr = pins & M6569_REG_MASK;
-        m6569_registers_t* r = &vic->reg;
-        if (pins & M6569_RW) {
-            /* read register, with some special cases */
-            const m6569_raster_unit_t* rs = &vic->rs;
-            uint8_t data;
-            switch (r_addr) {
-                case 0x11:
-                    /* bit 7 of 0x11 is bit 8 of the current raster counter */
-                    data = (r->ctrl_1 & 0x7F) | ((rs->v_count & 0x100)>>1);
-                    break;
-                case 0x12:
-                    /* reading 0x12 returns bits 0..7 of current raster position */
-                    data = (uint8_t)rs->v_count;
-                    break;
-                case 0x1E:
-                case 0x1F:
-                    /* registers 0x1E and 0x1F (mob collisions) are cleared on reading */
-                    data = r->regs[r_addr];
-                    r->regs[r_addr] = 0;
-                    break;
-                default:
-                    /* unconnected bits are returned as 1 */
-                    data = r->regs[r_addr] | ~_m6569_reg_mask[r_addr];
-                    break;
-            }
-            M6569_SET_DATA(pins, data);
-        }
-        else {
-            /* write register, with special cases */
-            const uint8_t data = M6569_GET_DATA(pins) & _m6569_reg_mask[r_addr];
-            bool write = true;
-            switch (r_addr) {
-                case 0x00:  /* m0x */
-                    _m6569_io_update_sunit(vic, 0, data, r->mxy[0][1], r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x01:  /* m0y */
-                    _m6569_io_update_sunit(vic, 0, r->mxy[0][0], data, r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x02:  /* m1x */
-                    _m6569_io_update_sunit(vic, 1, data, r->mxy[1][1], r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x03:  /* m1y */
-                    _m6569_io_update_sunit(vic, 1, r->mxy[1][0], data, r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x04:  /* m2x */
-                    _m6569_io_update_sunit(vic, 2, data, r->mxy[2][1], r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x05:  /* m2y */
-                    _m6569_io_update_sunit(vic, 2, r->mxy[2][0], data, r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x06:  /* m3x */
-                    _m6569_io_update_sunit(vic, 3, data, r->mxy[3][1], r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x07:  /* m3y */
-                    _m6569_io_update_sunit(vic, 3, r->mxy[3][0], data, r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x08:  /* m4x */
-                    _m6569_io_update_sunit(vic, 4, data, r->mxy[4][1], r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x09:  /* m4y */
-                    _m6569_io_update_sunit(vic, 4, r->mxy[4][0], data, r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x0A:  /* m5x */
-                    _m6569_io_update_sunit(vic, 5, data, r->mxy[5][1], r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x0B:  /* m5y */
-                    _m6569_io_update_sunit(vic, 5, r->mxy[5][0], data, r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x0C:  /* m6x */
-                    _m6569_io_update_sunit(vic, 6, data, r->mxy[6][1], r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x0D:  /* m6y */
-                    _m6569_io_update_sunit(vic, 6, r->mxy[6][0], data, r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x0E:  /* m7x */
-                    _m6569_io_update_sunit(vic, 7, data, r->mxy[7][1], r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x0F:  /* m7y */
-                    _m6569_io_update_sunit(vic, 7, r->mxy[7][0], data, r->mx8, r->mxe, r->mye);
-                    break;
-                case 0x10:  /* mx8 */
-                    for (int i = 0; i < 8; i++) {
-                        _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], data, r->mxe, r->mye);
-                    }
-                    break;
-                case 0x11:  /* ctrl_1 */
-                    /* update raster interrupt line */
-                    _m6569_io_update_irq_line(&vic->rs, data, r->raster);
-                    /* update border top/bottom from RSEL flag */
-                    _m6569_io_update_border_rsel(&vic->brd, data);
-                    /* ECM bit updates the precomputed fetch address masks */
-                    _m6569_io_update_memory_unit(&vic->mem, r->mem_ptrs, data);
-                    /* update the graphics mode */
-                    _m6569_io_update_gunit_mode(&vic->gunit, data, r->ctrl_2);
-                    break;
-                case 0x12:
-                    /* raster irq value lower 8 bits */
-                    _m6569_io_update_irq_line(&vic->rs, r->ctrl_1, data);
-                    break;
-                case 0x16: /* ctrl_2 */
-                    /* update border left/right from CSEL flag */
-                    _m6569_io_update_border_csel(&vic->brd, data);
-                    /* update the graphics mode */
-                    _m6569_io_update_gunit_mode(&vic->gunit, r->ctrl_1, data);
-                    break;
-                case 0x17:  /* mye */
-                    for (int i = 0; i < 8; i++) {
-                        _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, r->mxe, data);
-                    }
-                    break;
-                case 0x18:
-                    /* memory-ptrs register , update precomputed fetch address masks */
-                    _m6569_io_update_memory_unit(&vic->mem, data, r->ctrl_1);
-                    break;
-                case 0x19:
-                    /* interrupt latch: to clear a bit in the latch, a 1-bit
-                       must be written to the latch!
-                    */
-                    r->int_latch = (r->int_latch & ~data) & _m6569_reg_mask[0x19];
-                    write = false;
-                    break;
-                case 0x1D:  /* mxe */
-                    for (int i = 0; i < 8; i++) {
-                        _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, data, r->mye);
-                    }
-                    break;
-                case 0x1E: case 0x1F:
-                    /* mob collision registers cannot be written */
-                    write = false;
-                    break;
-                case 0x20:
-                    /* border color */
-                    vic->brd.bc_index = data & 0xF;
-                    vic->brd.bc_rgba8 = _m6569_colors[data & 0xF];
-                    break;
-                case 0x21: case 0x22:
-                    /* background colors (alpha bits 0 because these count as MCM BG colors) */
-                    vic->gunit.bg_index[r_addr-0x21] = data & 0xF;
-                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
-                    break;
-                case 0x23: case 0x24:
-                    /* background colors (alpha bits 1 because these count as MCM FG colors) */
-                    vic->gunit.bg_index[r_addr-0x21] = data & 0xF;
-                    vic->gunit.bg_rgba8[r_addr-0x21] = _m6569_colors[data & 0xF];
-                    break;
-                case 0x25:
-                    /* sprite multicolor 0 */
-                    for (int i = 0; i < 8; i++) {
-                        vic->sunit.colors[i][1] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
-                    }
-                    break;
-                case 0x26:
-                    /* sprite multicolor 1*/
-                    for (int i = 0; i < 8; i++) {
-                        vic->sunit.colors[i][3] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
-                    }
-                    break;
-                case 0x27: case 0x28: case 0x29: case 0x2A: 
-                case 0x2B: case 0x2C: case 0x2D: case 0x2E:
-                    /* sprite main color */
-                    vic->sunit.colors[r_addr-0x27][2] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
-                    break;
-            }
-            if (write) {
-                r->regs[r_addr] = data;
-            }
-        }
-        vic->pins = (vic->pins & (M6569_BA|M6569_AEC|M6569_IRQ)) | (pins & ~(M6569_BA|M6569_AEC|M6569_IRQ));
+/* read chip registers */
+static uint64_t _m6569_read(m6569_t* vic, uint64_t pins) {
+    m6569_registers_t* r = &vic->reg;
+    const m6569_raster_unit_t* rs = &vic->rs;
+    uint8_t r_addr = pins & M6569_REG_MASK;
+    uint8_t data;
+    switch (r_addr) {
+        case 0x11:
+            /* bit 7 of 0x11 is bit 8 of the current raster counter */
+            data = (r->ctrl_1 & 0x7F) | ((rs->v_count & 0x100)>>1);
+            break;
+        case 0x12:
+            /* reading 0x12 returns bits 0..7 of current raster position */
+            data = (uint8_t)rs->v_count;
+            break;
+        case 0x1E:
+        case 0x1F:
+            /* registers 0x1E and 0x1F (mob collisions) are cleared on reading */
+            data = r->regs[r_addr];
+            r->regs[r_addr] = 0;
+            break;
+        default:
+            /* unconnected bits are returned as 1 */
+            data = r->regs[r_addr] | ~_m6569_reg_mask[r_addr];
+            break;
     }
+    M6569_SET_DATA(pins, data);
     return pins;
+}
+
+/* write chip registers */
+static void _m6569_write(m6569_t* vic, uint64_t pins) {
+    m6569_registers_t* r = &vic->reg;
+    uint8_t r_addr = pins & M6569_REG_MASK;
+    const uint8_t data = M6569_GET_DATA(pins) & _m6569_reg_mask[r_addr];
+    bool write = true;
+    switch (r_addr) {
+        case 0x00:  /* m0x */
+            _m6569_io_update_sunit(vic, 0, data, r->mxy[0][1], r->mx8, r->mxe, r->mye);
+            break;
+        case 0x01:  /* m0y */
+            _m6569_io_update_sunit(vic, 0, r->mxy[0][0], data, r->mx8, r->mxe, r->mye);
+            break;
+        case 0x02:  /* m1x */
+            _m6569_io_update_sunit(vic, 1, data, r->mxy[1][1], r->mx8, r->mxe, r->mye);
+            break;
+        case 0x03:  /* m1y */
+            _m6569_io_update_sunit(vic, 1, r->mxy[1][0], data, r->mx8, r->mxe, r->mye);
+            break;
+        case 0x04:  /* m2x */
+            _m6569_io_update_sunit(vic, 2, data, r->mxy[2][1], r->mx8, r->mxe, r->mye);
+            break;
+        case 0x05:  /* m2y */
+            _m6569_io_update_sunit(vic, 2, r->mxy[2][0], data, r->mx8, r->mxe, r->mye);
+            break;
+        case 0x06:  /* m3x */
+            _m6569_io_update_sunit(vic, 3, data, r->mxy[3][1], r->mx8, r->mxe, r->mye);
+            break;
+        case 0x07:  /* m3y */
+            _m6569_io_update_sunit(vic, 3, r->mxy[3][0], data, r->mx8, r->mxe, r->mye);
+            break;
+        case 0x08:  /* m4x */
+            _m6569_io_update_sunit(vic, 4, data, r->mxy[4][1], r->mx8, r->mxe, r->mye);
+            break;
+        case 0x09:  /* m4y */
+            _m6569_io_update_sunit(vic, 4, r->mxy[4][0], data, r->mx8, r->mxe, r->mye);
+            break;
+        case 0x0A:  /* m5x */
+            _m6569_io_update_sunit(vic, 5, data, r->mxy[5][1], r->mx8, r->mxe, r->mye);
+            break;
+        case 0x0B:  /* m5y */
+            _m6569_io_update_sunit(vic, 5, r->mxy[5][0], data, r->mx8, r->mxe, r->mye);
+            break;
+        case 0x0C:  /* m6x */
+            _m6569_io_update_sunit(vic, 6, data, r->mxy[6][1], r->mx8, r->mxe, r->mye);
+            break;
+        case 0x0D:  /* m6y */
+            _m6569_io_update_sunit(vic, 6, r->mxy[6][0], data, r->mx8, r->mxe, r->mye);
+            break;
+        case 0x0E:  /* m7x */
+            _m6569_io_update_sunit(vic, 7, data, r->mxy[7][1], r->mx8, r->mxe, r->mye);
+            break;
+        case 0x0F:  /* m7y */
+            _m6569_io_update_sunit(vic, 7, r->mxy[7][0], data, r->mx8, r->mxe, r->mye);
+            break;
+        case 0x10:  /* mx8 */
+            for (int i = 0; i < 8; i++) {
+                _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], data, r->mxe, r->mye);
+            }
+            break;
+        case 0x11:  /* ctrl_1 */
+            /* update raster interrupt line */
+            _m6569_io_update_irq_line(&vic->rs, data, r->raster);
+            /* update border top/bottom from RSEL flag */
+            _m6569_io_update_border_rsel(&vic->brd, data);
+            /* ECM bit updates the precomputed fetch address masks */
+            _m6569_io_update_memory_unit(&vic->mem, r->mem_ptrs, data);
+            /* update the graphics mode */
+            _m6569_io_update_gunit_mode(&vic->gunit, data, r->ctrl_2);
+            break;
+        case 0x12:
+            /* raster irq value lower 8 bits */
+            _m6569_io_update_irq_line(&vic->rs, r->ctrl_1, data);
+            break;
+        case 0x16: /* ctrl_2 */
+            /* update border left/right from CSEL flag */
+            _m6569_io_update_border_csel(&vic->brd, data);
+            /* update the graphics mode */
+            _m6569_io_update_gunit_mode(&vic->gunit, r->ctrl_1, data);
+            break;
+        case 0x17:  /* mye */
+            for (int i = 0; i < 8; i++) {
+                _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, r->mxe, data);
+            }
+            break;
+        case 0x18:
+            /* memory-ptrs register , update precomputed fetch address masks */
+            _m6569_io_update_memory_unit(&vic->mem, data, r->ctrl_1);
+            break;
+        case 0x19:
+            /* interrupt latch: to clear a bit in the latch, a 1-bit
+               must be written to the latch!
+            */
+            r->int_latch = (r->int_latch & ~data) & _m6569_reg_mask[0x19];
+            write = false;
+            break;
+        case 0x1D:  /* mxe */
+            for (int i = 0; i < 8; i++) {
+                _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, data, r->mye);
+            }
+            break;
+        case 0x1E: case 0x1F:
+            /* mob collision registers cannot be written */
+            write = false;
+            break;
+        case 0x20:
+            /* border color */
+            vic->brd.bc_index = data & 0xF;
+            vic->brd.bc_rgba8 = _m6569_colors[data & 0xF];
+            break;
+        case 0x21: case 0x22:
+            /* background colors (alpha bits 0 because these count as MCM BG colors) */
+            vic->gunit.bg_index[r_addr-0x21] = data & 0xF;
+            vic->gunit.bg_rgba8[r_addr-0x21] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
+            break;
+        case 0x23: case 0x24:
+            /* background colors (alpha bits 1 because these count as MCM FG colors) */
+            vic->gunit.bg_index[r_addr-0x21] = data & 0xF;
+            vic->gunit.bg_rgba8[r_addr-0x21] = _m6569_colors[data & 0xF];
+            break;
+        case 0x25:
+            /* sprite multicolor 0 */
+            for (int i = 0; i < 8; i++) {
+                vic->sunit.colors[i][1] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
+            }
+            break;
+        case 0x26:
+            /* sprite multicolor 1*/
+            for (int i = 0; i < 8; i++) {
+                vic->sunit.colors[i][3] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
+            }
+            break;
+        case 0x27: case 0x28: case 0x29: case 0x2A:
+        case 0x2B: case 0x2C: case 0x2D: case 0x2E:
+            /* sprite main color */
+            vic->sunit.colors[r_addr-0x27][2] = _m6569_colors[data & 0xF] & 0x00FFFFFF;
+            break;
+    }
+    if (write) {
+        r->regs[r_addr] = data;
+    }
 }
 
 /*--- graphics sequencer helpers ---------------------------------------------*/
@@ -1416,8 +1411,8 @@ static inline uint64_t _m6569_aec(uint64_t pins) {
     return pins | M6569_AEC;
 }
 
-/*=== TICK FUNCTION ==========================================================*/
-uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
+/* internal tick function */
+static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     pins &= ~M6569_BA;
     uint8_t g_data = 0x00;
     _m6569_rs_update_badline(vic);
@@ -1643,9 +1638,24 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
         }
     }
     vic->vm.vmli = vic->vm.next_vmli;
+    return pins;
+}
 
-    /*--- set CPU pins -------------------------------------------------------*/
-    vic->pins = (vic->pins & ~(M6569_BA|M6569_AEC|M6569_IRQ)) | (pins & (M6569_BA|M6569_AEC|M6569_IRQ));
+/* all-in-one tick function */
+uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
+    /* per-tick actions */
+    pins = _m6569_tick(vic, pins);
+
+    /* register read/writes */
+    if (pins & M6569_CS) {
+        if (pins & M6569_RW) {
+            pins = _m6569_read(vic, pins);
+        }
+        else {
+            _m6569_write(vic, pins);
+        }
+    }
+    vic->pins = pins;
     return pins;
 }
 

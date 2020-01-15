@@ -132,19 +132,16 @@ static void _ui_m6526_draw_state(ui_m6526_t* win) {
     ImGui::Text("DDR"); ImGui::NextColumn();
     ui_util_b8("", cia->pa.ddr); ImGui::NextColumn();
     ui_util_b8("", cia->pb.ddr); ImGui::NextColumn();
-    ImGui::Text("Register"); ImGui::NextColumn();
+    ImGui::Text("Reg"); ImGui::NextColumn();
     ui_util_b8("", cia->pa.reg); ImGui::NextColumn();
     ui_util_b8("", cia->pb.reg); ImGui::NextColumn();
-    ImGui::Text("Input"); ImGui::NextColumn();
+    ImGui::Text("Inp"); ImGui::NextColumn();
     ui_util_b8("", cia->pa.inp); ImGui::NextColumn();
     ui_util_b8("", cia->pb.inp); ImGui::NextColumn();
-    ImGui::Text("Output"); ImGui::NextColumn();
-    ui_util_b8("", cia->pa.out); ImGui::NextColumn();
-    ui_util_b8("", cia->pb.out); ImGui::NextColumn();
     ImGui::Text("Pins"); ImGui::NextColumn();
-    ui_util_b8("", cia->pa.port); ImGui::NextColumn();
-    ui_util_b8("", cia->pb.port); ImGui::NextColumn();
-    
+    ui_util_b8("", cia->pa.pins); ImGui::NextColumn();
+    ui_util_b8("", cia->pb.pins); ImGui::NextColumn();
+
     /* timers */
     ImGui::Separator();
     ImGui::NextColumn();

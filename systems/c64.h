@@ -433,10 +433,6 @@ bool c64_is_tape_motor_on(c64_t* sys);
 static uint64_t _c64_tick(c64_t* sys, uint64_t pins);
 static uint8_t _c64_cpu_port_in(void* user_data);
 static void _c64_cpu_port_out(uint8_t data, void* user_data);
-static void _c64_cia1_out(int port_id, uint8_t data, void* user_data);
-static uint8_t _c64_cia1_in(int port_id, void* user_data);
-static void _c64_cia2_out(int port_id, uint8_t data, void* user_data);
-static uint8_t _c64_cia2_in(int port_id, void* user_data);
 static uint16_t _c64_vic_fetch(uint16_t addr, void* user_data);
 static void _c64_update_memory_map(c64_t* sys);
 static void _c64_init_key_map(c64_t* sys);
@@ -477,15 +473,8 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     cpu_desc.m6510_user_data = sys;
     sys->pins = m6502_init(&sys->cpu, &cpu_desc);
 
-    m6526_desc_t cia_desc;
-    _C64_CLEAR(cia_desc);
-    cia_desc.user_data = sys;
-    cia_desc.in_cb = _c64_cia1_in;
-    cia_desc.out_cb = _c64_cia1_out;
-    m6526_init(&sys->cia_1, &cia_desc);
-    cia_desc.in_cb = _c64_cia2_in;
-    cia_desc.out_cb = _c64_cia2_out;
-    m6526_init(&sys->cia_2, &cia_desc);
+    m6526_init(&sys->cia_1);
+    m6526_init(&sys->cia_2);
 
     m6569_desc_t vic_desc;
     _C64_CLEAR(vic_desc);
@@ -688,40 +677,135 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
     pins = m6502_tick(&sys->cpu, pins);
     const uint16_t addr = M6502_GET_ADDR(pins);
 
-    /* tick the SID */
-    if (m6581_tick(&sys->sid)) {
-        /* new audio sample ready */
-        sys->sample_buffer[sys->sample_pos++] = sys->sid.sample;
-        if (sys->sample_pos == sys->num_samples) {
-            if (sys->audio_cb) {
-                sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+    /* those pins are set each tick by the CIAs and VIC */
+    pins &= ~(M6502_IRQ|M6502_NMI|M6502_RDY|M6510_AEC);
+
+    /*  address decoding
+
+        When the RDY pin is active (during bad lines), no CPU/chip
+        communication takes place starting with the first read access.
+    */
+    bool cpu_io_access = false;
+    bool color_ram_access = false;
+    bool mem_access = false;
+    uint64_t vic_pins = pins & M6502_PIN_MASK;
+    uint64_t cia1_pins = pins & M6502_PIN_MASK;
+    uint64_t cia2_pins = pins & M6502_PIN_MASK;
+    uint64_t sid_pins = pins & M6502_PIN_MASK;
+    if ((pins & (M6502_RDY|M6502_RW)) != (M6502_RDY|M6502_RW)) {
+        if (M6510_CHECK_IO(pins)) {
+            cpu_io_access = true;
+        }
+        else {
+            if (sys->io_mapped && ((addr & 0xF000) == 0xD000)) {
+                if (addr < 0xD400) {
+                    /* VIC-II (D000..D3FF) */
+                    vic_pins |= M6569_CS;
+                }
+                else if (addr < 0xD800) {
+                    /* SID (D400..D7FF) */
+                    sid_pins |= M6581_CS;
+                }
+                else if (addr < 0xDC00) {
+                    /* read or write the special color Static-RAM bank (D800..DBFF) */
+                    color_ram_access = true;
+                }
+                else if (addr < 0xDD00) {
+                    /* CIA-1 (DC00..DCFF) */
+                    cia1_pins |= M6526_CS;
+                }
+                else if (addr < 0xDE00) {
+                    /* CIA-2 (DD00..DDFF) */
+                    cia2_pins |= M6526_CS;
+                }
             }
-            sys->sample_pos = 0;
+            else {
+                mem_access = true;
+            }
         }
     }
 
-    /* cassette port READ pin is connected to CIA-1 FLAG pin */
-    uint64_t cia1_pins = pins;
-    if (sys->cas_port & C64_CASPORT_READ) {
-        cia1_pins |= M6526_FLAG;
+    /* tick the SID */
+    {
+        sid_pins = m6581_tick(&sys->sid, sid_pins);
+        if (sid_pins & M6581_SAMPLE) {
+            /* new audio sample ready */
+            sys->sample_buffer[sys->sample_pos++] = sys->sid.sample;
+            if (sys->sample_pos == sys->num_samples) {
+                if (sys->audio_cb) {
+                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+                }
+                sys->sample_pos = 0;
+            }
+        }
+        if ((sid_pins & (M6581_CS|M6581_RW)) == (M6581_CS|M6581_RW)) {
+            pins = M6502_COPY_DATA(pins, sid_pins);
+        }
     }
 
-    /* tick the CIAs:
-        - CIA-1 gets the FLAG pin from the datasette
-        - the CIA-1 IRQ pin is connected to the CPU IRQ pin
-        - the CIA-2 IRQ pin is connected to the CPU NMI pin
+    /* tick CIA-1:
+
+        In Port A:
+            joystick 2 input
+        In Port B:
+            combined keyboard matrix columns and joystick 1
+        Cas Port Read => Flag pin
+
+        Out Port A:
+            write keyboard matrix lines
+
+        IRQ pin is connected to the CPU IRQ pin
     */
-    if (m6526_tick(&sys->cia_1, cia1_pins & ~M6502_IRQ) & M6502_IRQ) {
-        pins |= M6502_IRQ;
+    {
+        /* cassette port READ pin is connected to CIA-1 FLAG pin */
+        const uint8_t pa = ~(sys->kbd_joy2_mask|sys->joy_joy2_mask);
+        const uint8_t pb = ~(kbd_scan_columns(&sys->kbd) | sys->kbd_joy1_mask | sys->joy_joy1_mask);
+        M6526_SET_PAB(cia1_pins, pa, pb);
+        if (sys->cas_port & C64_CASPORT_READ) {
+            cia1_pins |= M6526_FLAG;
+        }
+        cia1_pins = m6526_tick(&sys->cia_1, cia1_pins);
+        const uint8_t kbd_lines = ~M6526_GET_PA(cia1_pins);
+        kbd_set_active_lines(&sys->kbd, kbd_lines);
+        if (cia1_pins & M6502_IRQ) {
+            pins |= M6502_IRQ;
+        }
+        if ((cia1_pins & (M6526_CS|M6526_RW)) == (M6526_CS|M6526_RW)) {
+            pins = M6502_COPY_DATA(pins, cia1_pins);
+        }
     }
-    else {
-        pins &= ~M6502_IRQ;
-    }
-    if (m6526_tick(&sys->cia_2, pins & ~M6502_IRQ) & M6502_IRQ) {
-        pins |= M6502_NMI;
-    }
-    else {
-        pins &= ~M6502_NMI;
+
+    /* tick CIA-2
+        In Port A:
+            bits 0..5: output (see cia2_out)
+            bits 6..7: serial bus input, not implemented
+        In Port B:
+            RS232 / user functionality (not implemented)
+
+        Out Port A:
+            bits 0..1: VIC-II bank select:
+                00: bank 3 C000..FFFF
+                01: bank 2 8000..BFFF
+                10: bank 1 4000..7FFF
+                11: bank 0 0000..3FFF
+            bit 2: RS-232 TXD Outout (not implemented)
+            bit 3..5: serial bus output (not implemented)
+            bit 6..7: input (see cia2_in)
+        Out Port B:
+            RS232 / user functionality (not implemented)
+
+        CIA-2 IRQ pin connected to CPU NMI pin
+    */
+    {
+        M6526_SET_PAB(cia2_pins, 0xFF, 0xFF);
+        cia2_pins = m6526_tick(&sys->cia_2, cia2_pins);
+        sys->vic_bank_select = ((~M6526_GET_PA(cia2_pins))&3)<<14;
+        if (cia2_pins & M6502_IRQ) {
+            pins |= M6502_NMI;
+        }
+        if ((cia2_pins & (M6526_CS|M6526_RW)) == (M6526_CS|M6526_RW)) {
+            pins = M6502_COPY_DATA(pins, cia2_pins);
+        }
     }
 
     /* tick the VIC-II display chip:
@@ -732,72 +816,37 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         - the VIC-II AEC pin is connected to the CPU AEC pin, currently
         this goes active during a badline, but is not checked
     */
-    pins = m6569_tick(&sys->vic, pins);
-
-    /* Special handling when the VIC-II asks the CPU to stop during a
-        'badline' via the BA=>RDY pin. If the RDY pin is active, the
-        CPU will 'loop' on the tick callback during the next READ access
-        until the RDY pin goes inactive. The tick callback must make sure
-        that only a single READ access happens during the entire RDY period.
-        Currently this happens on the very last tick when RDY goes from
-        active to inactive (I haven't found definitive documentation if
-        this is the right behaviour, but it made the Boulderdash fast loader work).
-    */
-    if ((pins & (M6502_RDY|M6502_RW)) == (M6502_RDY|M6502_RW)) {
-        return pins;
+    {
+        vic_pins = m6569_tick(&sys->vic, vic_pins);
+        pins |= (vic_pins & (M6502_IRQ|M6502_RDY|M6510_AEC));
+        if ((vic_pins & (M6569_CS|M6569_RW)) == (M6569_CS|M6569_RW)) {
+            pins = M6502_COPY_DATA(pins, vic_pins);
+        }
     }
 
-    /* handle IO requests */
-    if (M6510_CHECK_IO(pins)) {
+    /* remaining CPU IO and memory accesses, those don't fit into the
+       "universal tick model" (yet?)
+    */
+    if (cpu_io_access) {
         /* ...the integrated IO port in the M6510 CPU at addresses 0 and 1 */
         pins = m6510_iorq(&sys->cpu, pins);
     }
-    else {
-        /* ...the memory-mapped IO area from 0xD000 to 0xDFFF */
-        if (sys->io_mapped && ((addr & 0xF000) == 0xD000)) {
-            if (addr < 0xD400) {
-                /* VIC-II (D000..D3FF) */
-                uint64_t vic_pins = (pins & M6502_PIN_MASK)|M6569_CS;
-                pins = m6569_iorq(&sys->vic, vic_pins) & M6502_PIN_MASK;
-            }
-            else if (addr < 0xD800) {
-                /* SID (D400..D7FF) */
-                uint64_t sid_pins = (pins & M6502_PIN_MASK)|M6581_CS;
-                pins = m6581_iorq(&sys->sid, sid_pins) & M6502_PIN_MASK;
-            }
-            else if (addr < 0xDC00) {
-                /* read or write the special color Static-RAM bank (D800..DBFF) */
-                if (pins & M6502_RW) {
-                    M6502_SET_DATA(pins, sys->color_ram[addr & 0x03FF]);
-                }
-                else {
-                    sys->color_ram[addr & 0x03FF] = M6502_GET_DATA(pins);
-                }
-            }
-            else if (addr < 0xDD00) {
-                /* CIA-1 (DC00..DCFF) */
-                uint64_t cia_pins = (pins & M6502_PIN_MASK)|M6526_CS;
-                pins = m6526_iorq(&sys->cia_1, cia_pins) & M6502_PIN_MASK;
-            }
-            else if (addr < 0xDE00) {
-                /* CIA-2 (DD00..DDFF) */
-                uint64_t cia_pins = (pins & M6502_PIN_MASK)|M6526_CS;
-                pins = m6526_iorq(&sys->cia_2, cia_pins) & M6502_PIN_MASK;
-            }
-            else {
-                /* FIXME: expansion system (not implemented) */
-            }
+    else if (color_ram_access) {
+        if (pins & M6502_RW) {
+            M6502_SET_DATA(pins, sys->color_ram[addr & 0x03FF]);
         }
         else {
-            /* a regular memory access */
-            if (pins & M6502_RW) {
-                /* memory read */
-                M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
-            }
-            else {
-                /* memory write */
-                mem_wr(&sys->mem_cpu, addr, M6502_GET_DATA(pins));
-            }
+            sys->color_ram[addr & 0x03FF] = M6502_GET_DATA(pins);
+        }
+    }
+    else if (mem_access) {
+        if (pins & M6502_RW) {
+            /* memory read */
+            M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
+        }
+        else {
+            /* memory write */
+            mem_wr(&sys->mem_cpu, addr, M6502_GET_DATA(pins));
         }
     }
     return pins;
@@ -841,75 +890,6 @@ static void _c64_cpu_port_out(uint8_t data, void* user_data) {
     if (need_mem_update) {
         _c64_update_memory_map(sys);
     }
-}
-
-static void _c64_cia1_out(int port_id, uint8_t data, void* user_data) {
-    c64_t* sys = (c64_t*) user_data;
-    /*
-        Write CIA-1 ports:
-
-        port A:
-            write keyboard matrix lines
-        port B:
-            ---
-    */
-    if (port_id == M6526_PORT_A) {
-        kbd_set_active_lines(&sys->kbd, ~data);
-    }
-}
-
-static uint8_t _c64_cia1_in(int port_id, void* user_data) {
-    c64_t* sys = (c64_t*) user_data;
-    /*
-        Read CIA-1 ports:
-
-        Port A:
-            joystick 2 input
-        Port B:
-            combined keyboard matrix columns and joystick 1
-    */
-    if (port_id == M6526_PORT_A) {
-        return ~(sys->kbd_joy2_mask | sys->joy_joy2_mask);
-    }
-    else {
-        /* read keyboard matrix columns */
-        return ~(kbd_scan_columns(&sys->kbd) | sys->kbd_joy1_mask | sys->joy_joy1_mask);
-    }
-}
-
-static void _c64_cia2_out(int port_id, uint8_t data, void* user_data) {
-    c64_t* sys = (c64_t*) user_data;
-    /*
-        Write CIA-2 ports:
-
-        Port A:
-            bits 0..1: VIC-II bank select:
-                00: bank 3 C000..FFFF
-                01: bank 2 8000..BFFF
-                10: bank 1 4000..7FFF
-                11: bank 0 0000..3FFF
-            bit 2: RS-232 TXD Outout (not implemented)
-            bit 3..5: serial bus output (not implemented)
-            bit 6..7: input (see cia2_in)
-        Port B:
-            RS232 / user functionality (not implemented)
-    */
-    if (port_id == M6526_PORT_A) {
-        sys->vic_bank_select = ((~data)&3)<<14;
-    }
-}
-
-static uint8_t _c64_cia2_in(int port_id, void* user_data) {
-    /*
-        Read CIA-2 ports:
-
-        Port A:
-            bits 0..5: output (see cia2_out)
-            bits 6..7: serial bus input, not implemented
-        Port B:
-            RS232 / user functionality (not implemented)
-    */
-    return ~0;
 }
 
 static uint16_t _c64_vic_fetch(uint16_t addr, void* user_data) {

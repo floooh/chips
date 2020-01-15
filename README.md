@@ -14,6 +14,13 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 
 ## What's New
 
+* **15-Jan-2020**: The CIA (m6526.h), VIC-II (m6569.h), SID (m6581.h) chip
+    emulators have merged their *_iorq() functions for reading
+    and writing chip registers into the regular *_tick() functions,
+    and the C64 emulation in systems/c64.h has been updated accordingly
+    (this API change started with the chips in the vic20.h and will continue for 
+    the other chip emulators).
+
 * **03-Jan-2020**: Another VIA- and VIC-20 related update:
     - The VIA (m6522.h) API has been simplified: the separate m6522_iorq()
       function to read and write chip registers has been merged into

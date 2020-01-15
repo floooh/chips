@@ -30,10 +30,11 @@
     *           |           |...      *
     *           |           |<--> D7  *
     *           |           |         *
-    *           +-----------+         *§
+    *           +-----------+         *
     ***********************************
 
-    TODO: Documentation
+    The emulation has an additional "virtual pin" which is set to active
+    whenever a new sample is ready (M6581_SAMPLE).
 
     ## Links
 
@@ -86,7 +87,8 @@ extern "C" {
 #define M6581_RW    (1ULL<<24)      /* same as M6502_RW */
 
 /* chip-specific pins */
-#define M6581_CS    (1ULL<<40)      /* chip-select */
+#define M6581_CS        (1ULL<<40)      /* chip-select */
+#define M6581_SAMPLE    (1ULL<<41)      /* virtual "audio sample ready" pin */
 
 /* registers */
 #define M6581_V1_FREQ_LO    (0)
@@ -226,10 +228,8 @@ typedef struct {
 void m6581_init(m6581_t* sid, const m6581_desc_t* desc);
 /* reset a m6581_t instance */
 void m6581_reset(m6581_t* sid);
-/* read/write m6581_t registers */
-uint64_t m6581_iorq(m6581_t* sid, uint64_t pins);
-/* tick a m6581_t instance, returns true when new sample is ready */
-bool m6581_tick(m6581_t* sid);
+/* tick a m6581_t instance */
+uint64_t m6581_tick(m6581_t* sid, uint64_t pins);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -626,10 +626,8 @@ static inline int _m6581_filter_output(m6581_filter_t* f, int vi) {
     return vf * (1<<7);
 }
 
-/*--- TICK FUNCTION ----------------------------------------------------------*/
-bool m6581_tick(m6581_t* sid) {
-    CHIPS_ASSERT(sid);
-
+/* tick the sound generation, return true when new sample ready */
+static uint64_t _m6581_tick(m6581_t* sid, uint64_t pins) {
     /* decay the last written register value */
     if (sid->bus_decay > 0) {
         if (--sid->bus_decay == 0) {
@@ -677,126 +675,145 @@ bool m6581_tick(m6581_t* sid) {
         sid->sample = sid->sample_mag * s;
         sid->sample_accum = 0.0f;
         sid->sample_accum_count = 0.0f;
-        return true;
+        pins |= M6581_SAMPLE;
     }
     else {
-        return false;
-    }
-}
-
-uint64_t m6581_iorq(m6581_t* sid, uint64_t pins) {
-    CHIPS_ASSERT(sid);
-    if (pins & M6581_CS) {
-        uint8_t addr = pins & M6581_ADDR_MASK;
-        if (pins & M6581_RW) {
-            uint8_t data;
-            switch (addr) {
-                case M6581_POT_X:
-                case M6581_POT_Y:
-                    /* FIXME: potentiometers */
-                    data = 0;
-                    sid->bus_value = 0;
-                    break;
-                case M6581_OSC3RAND:
-                    /* FIXME */
-                    sid->bus_value = 0;
-                    data = sid->voice[2].wav_output >> 4;
-                    break;
-                case M6581_ENV3:
-                    sid->bus_value = 0;
-                    data = sid->voice[2].env_cur_level;
-                    break;
-                default:
-                    data = sid->bus_value;
-                    break;
-            }
-            M6581_SET_DATA(pins, data);
-        }
-        else {
-            /* write access (only voice and filter regs) */
-            uint8_t data = M6581_GET_DATA(pins);
-            sid->bus_value = data;
-            sid->bus_decay = 0x2000;
-            switch (addr) {
-                case M6581_V1_FREQ_LO:
-                    _m6581_set_freq_lo(&sid->voice[0], data);
-                    break;
-                case M6581_V1_FREQ_HI:
-                    _m6581_set_freq_hi(&sid->voice[0], data);
-                    break;
-                case M6581_V1_PW_LO:
-                    _m6581_set_pw_lo(&sid->voice[0], data);
-                    break;
-                case M6581_V1_PW_HI:
-                    _m6581_set_pw_hi(&sid->voice[0], data);
-                    break;
-                case M6581_V1_CTRL:
-                    _m6581_set_ctrl(&sid->voice[0], data);
-                    break;
-                case M6581_V1_ATKDEC:
-                    _m6581_set_atkdec(&sid->voice[0], data);
-                    break;
-                case M6581_V1_SUSREL:
-                    _m6581_set_susrel(&sid->voice[0], data);
-                    break;
-                case M6581_V2_FREQ_LO:
-                    _m6581_set_freq_lo(&sid->voice[1], data);
-                    break;
-                case M6581_V2_FREQ_HI:
-                    _m6581_set_freq_hi(&sid->voice[1], data);
-                    break;
-                case M6581_V2_PW_LO:
-                    _m6581_set_pw_lo(&sid->voice[1], data);
-                    break;
-                case M6581_V2_PW_HI:
-                    _m6581_set_pw_hi(&sid->voice[1], data);
-                    break;
-                case M6581_V2_CTRL:
-                    _m6581_set_ctrl(&sid->voice[1], data);
-                    break;
-                case M6581_V2_ATKDEC:
-                    _m6581_set_atkdec(&sid->voice[1], data);
-                    break;
-                case M6581_V2_SUSREL:
-                    _m6581_set_susrel(&sid->voice[1], data);
-                    break;
-                case M6581_V3_FREQ_LO:
-                    _m6581_set_freq_lo(&sid->voice[2], data);
-                    break;
-                case M6581_V3_FREQ_HI:
-                    _m6581_set_freq_hi(&sid->voice[2], data);
-                    break;
-                case M6581_V3_PW_LO:
-                    _m6581_set_pw_lo(&sid->voice[2], data);
-                    break;
-                case M6581_V3_PW_HI:
-                    _m6581_set_pw_hi(&sid->voice[2], data);
-                    break;
-                case M6581_V3_CTRL:
-                    _m6581_set_ctrl(&sid->voice[2], data);
-                    break;
-                case M6581_V3_ATKDEC:
-                    _m6581_set_atkdec(&sid->voice[2], data);
-                    break;
-                case M6581_V3_SUSREL:
-                    _m6581_set_susrel(&sid->voice[2], data);
-                    break;
-                case M6581_FC_LO:
-                    _m6581_set_cutoff_lo(&sid->filter, data);
-                    break;
-                case M6581_FC_HI:
-                    _m6581_set_cutoff_hi(&sid->filter, data);
-                    break;
-                case M6581_RES_FILT:
-                    _m6581_set_resfilt(&sid->filter, data);
-                    break;
-                case M6581_MODE_VOL:
-                    _m6581_set_modevol(sid, data);
-                    break;
-            }
-        }
-        sid->pins = pins;
+        pins &= ~M6581_SAMPLE;
     }
     return pins;
 }
+
+/* read a register */
+static uint64_t _m6581_read(m6581_t* sid, uint64_t pins) {
+    uint8_t reg = pins & M6581_ADDR_MASK;
+    uint8_t data;
+    switch (reg) {
+        case M6581_POT_X:
+        case M6581_POT_Y:
+            /* FIXME: potentiometers */
+            data = 0;
+            sid->bus_value = 0;
+            break;
+        case M6581_OSC3RAND:
+            /* FIXME */
+            sid->bus_value = 0;
+            data = sid->voice[2].wav_output >> 4;
+            break;
+        case M6581_ENV3:
+            sid->bus_value = 0;
+            data = sid->voice[2].env_cur_level;
+            break;
+        default:
+            data = sid->bus_value;
+            break;
+    }
+    M6581_SET_DATA(pins, data);
+    return pins;
+}
+
+/* write a register */
+static void _m6581_write(m6581_t* sid, uint64_t pins) {
+    uint8_t reg = pins & M6581_ADDR_MASK;
+    uint8_t data = M6581_GET_DATA(pins);
+    sid->bus_value = data;
+    sid->bus_decay = 0x2000;
+    switch (reg) {
+        case M6581_V1_FREQ_LO:
+            _m6581_set_freq_lo(&sid->voice[0], data);
+            break;
+        case M6581_V1_FREQ_HI:
+            _m6581_set_freq_hi(&sid->voice[0], data);
+            break;
+        case M6581_V1_PW_LO:
+            _m6581_set_pw_lo(&sid->voice[0], data);
+            break;
+        case M6581_V1_PW_HI:
+            _m6581_set_pw_hi(&sid->voice[0], data);
+            break;
+        case M6581_V1_CTRL:
+            _m6581_set_ctrl(&sid->voice[0], data);
+            break;
+        case M6581_V1_ATKDEC:
+            _m6581_set_atkdec(&sid->voice[0], data);
+            break;
+        case M6581_V1_SUSREL:
+            _m6581_set_susrel(&sid->voice[0], data);
+            break;
+        case M6581_V2_FREQ_LO:
+            _m6581_set_freq_lo(&sid->voice[1], data);
+            break;
+        case M6581_V2_FREQ_HI:
+            _m6581_set_freq_hi(&sid->voice[1], data);
+            break;
+        case M6581_V2_PW_LO:
+            _m6581_set_pw_lo(&sid->voice[1], data);
+            break;
+        case M6581_V2_PW_HI:
+            _m6581_set_pw_hi(&sid->voice[1], data);
+            break;
+        case M6581_V2_CTRL:
+            _m6581_set_ctrl(&sid->voice[1], data);
+            break;
+        case M6581_V2_ATKDEC:
+            _m6581_set_atkdec(&sid->voice[1], data);
+            break;
+        case M6581_V2_SUSREL:
+            _m6581_set_susrel(&sid->voice[1], data);
+            break;
+        case M6581_V3_FREQ_LO:
+            _m6581_set_freq_lo(&sid->voice[2], data);
+            break;
+        case M6581_V3_FREQ_HI:
+            _m6581_set_freq_hi(&sid->voice[2], data);
+            break;
+        case M6581_V3_PW_LO:
+            _m6581_set_pw_lo(&sid->voice[2], data);
+            break;
+        case M6581_V3_PW_HI:
+            _m6581_set_pw_hi(&sid->voice[2], data);
+            break;
+        case M6581_V3_CTRL:
+            _m6581_set_ctrl(&sid->voice[2], data);
+            break;
+        case M6581_V3_ATKDEC:
+            _m6581_set_atkdec(&sid->voice[2], data);
+            break;
+        case M6581_V3_SUSREL:
+            _m6581_set_susrel(&sid->voice[2], data);
+            break;
+        case M6581_FC_LO:
+            _m6581_set_cutoff_lo(&sid->filter, data);
+            break;
+        case M6581_FC_HI:
+            _m6581_set_cutoff_hi(&sid->filter, data);
+            break;
+        case M6581_RES_FILT:
+            _m6581_set_resfilt(&sid->filter, data);
+            break;
+        case M6581_MODE_VOL:
+            _m6581_set_modevol(sid, data);
+            break;
+    }
+}
+
+/* the all-in-one tick function */
+uint64_t m6581_tick(m6581_t* sid, uint64_t pins) {
+    CHIPS_ASSERT(sid);
+
+    /* first perform the regular per-tick actions */
+    pins = _m6581_tick(sid, pins);
+
+    /* register read/write */
+    if (pins & M6581_CS) {
+        if (pins & M6581_RW) {
+            pins = _m6581_read(sid, pins);
+        }
+        else {
+            _m6581_write(sid, pins);
+        }
+    }
+    sid->pins = pins;
+    return pins;
+}
+
 #endif /* CHIPS_IMPL */

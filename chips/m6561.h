@@ -559,7 +559,7 @@ static inline float _m6561_dcadjust(m6561_sound_t* snd, float s) {
 }
 
 /* tick the audio engine, return true if a new sample if ready */
-static bool _m6561_tick_audio(m6561_t* vic) {
+static uint64_t _m6561_tick_audio(m6561_t* vic, uint64_t pins) {
     m6561_sound_t* snd = &vic->sound;
     /* tick tone voices */
     for (int i = 0; i < 3; i++) {
@@ -605,11 +605,12 @@ static bool _m6561_tick_audio(m6561_t* vic) {
         snd->sample_accum = 0.0f;
         snd->sample_accum_count = 0.0f;
         snd->sample = _m6561_dcadjust(snd, sm) * snd->sample_mag;
-        return true;
+        pins |= M6561_SAMPLE;
     }
     else {
-        return false;
+        pins &= ~M6561_SAMPLE;
     }
+    return pins;
 }
 
 /* chip-selected macro (A12 must be active in A8..A13) */
@@ -646,10 +647,7 @@ uint64_t m6561_tick(m6561_t* vic, uint64_t pins) {
 
     /* perform per-tick actions */
     _m6561_tick_video(vic);
-    pins &= ~M6561_SAMPLE;
-    if (_m6561_tick_audio(vic)) {
-        pins |= M6561_SAMPLE;
-    }
+    pins = _m6561_tick_audio(vic, pins);
     vic->pins = pins;
     return pins;
 }

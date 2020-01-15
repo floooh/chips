@@ -851,6 +851,7 @@ uint64_t m6522_tick(m6522_t* c, uint64_t pins) {
             _m6522_write(c, addr, data);
         }
     }
+    /* FIXME: move tick above read/write? */
     pins = _m6522_tick(c, pins);
     c->pins = pins;
     return pins;
