@@ -817,17 +817,17 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         - the VIC-II AEC pin is connected to the CPU AEC pin, currently
         this goes active during a badline, but is not checked
     */
-    vic_pins = m6569_tick(&sys->vic, vic_pins);
-    pins |= (vic_pins & (M6502_IRQ|M6502_RDY|M6510_AEC));
-    /* FIXME: merge with tick */
-    if (vic_pins & M6569_CS) {
-        vic_pins = m6569_iorq(&sys->vic, vic_pins);
-        if (vic_pins & M6569_RW) {
+    {
+        vic_pins = m6569_tick(&sys->vic, vic_pins);
+        pins |= (vic_pins & (M6502_IRQ|M6502_RDY|M6510_AEC));
+        if ((vic_pins & (M6569_CS|M6569_RW)) == (M6569_CS|M6569_RW)) {
             pins = M6502_COPY_DATA(pins, vic_pins);
         }
     }
 
-    /* FIXME */
+    /* remaining CPU IO and memory accesses, those don't fit into the
+       "universal tick model" (yet?)
+    */
     if (cpu_io_access) {
         /* ...the integrated IO port in the M6510 CPU at addresses 0 and 1 */
         pins = m6510_iorq(&sys->cpu, pins);
