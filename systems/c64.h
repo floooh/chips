@@ -683,7 +683,7 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
     /*  address decoding
 
         When the RDY pin is active (during bad lines), no CPU/chip
-        communication takes place.
+        communication takes place starting with the first read access.
     */
     bool cpu_io_access = false;
     bool color_ram_access = false;
@@ -726,20 +726,19 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
     }
 
     /* tick the SID */
-    if (m6581_tick(&sys->sid)) {
-        /* new audio sample ready */
-        sys->sample_buffer[sys->sample_pos++] = sys->sid.sample;
-        if (sys->sample_pos == sys->num_samples) {
-            if (sys->audio_cb) {
-                sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+    {
+        sid_pins = m6581_tick(&sys->sid, sid_pins);
+        if (sid_pins & M6581_SAMPLE) {
+            /* new audio sample ready */
+            sys->sample_buffer[sys->sample_pos++] = sys->sid.sample;
+            if (sys->sample_pos == sys->num_samples) {
+                if (sys->audio_cb) {
+                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+                }
+                sys->sample_pos = 0;
             }
-            sys->sample_pos = 0;
         }
-    }
-    /* FIXME: merge with tick */
-    if (sid_pins & M6581_CS) {
-        sid_pins = m6581_iorq(&sys->sid, sid_pins);
-        if (sid_pins & M6581_RW) {
+        if ((sid_pins & (M6581_CS|M6581_RW)) == (M6581_CS|M6581_RW)) {
             pins = M6502_COPY_DATA(pins, sid_pins);
         }
     }
