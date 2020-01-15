@@ -758,7 +758,6 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
     */
     {
         /* cassette port READ pin is connected to CIA-1 FLAG pin */
-        /* FIXME: precompute merged joystick mask like in vic20.h */
         const uint8_t pa = ~(sys->kbd_joy2_mask|sys->joy_joy2_mask);
         const uint8_t pb = ~(kbd_scan_columns(&sys->kbd) | sys->kbd_joy1_mask | sys->joy_joy1_mask);
         M6526_SET_PAB(cia1_pins, pa, pb);
