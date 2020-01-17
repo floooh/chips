@@ -123,8 +123,6 @@ typedef struct {
     int counter_2_4khz;
     int period_2_4khz;
     bool state_2_4khz;
-    bool out_cass0;
-    bool out_cass1;
     atom_joystick_type_t joystick_type;
     uint8_t kbd_joymask;        /* joystick mask from keyboard-joystick-emulation */
     uint8_t joy_joymask;        /* joystick mask from calls to atom_joystick() */
@@ -196,8 +194,6 @@ void atom_remove_tape(atom_t* sys);
 
 static uint64_t _atom_tick(atom_t* sys, uint64_t pins);
 static uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data);
-static uint8_t _atom_ppi_in(int port_id, void* user_data);
-static uint64_t _atom_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data);
 static void _atom_init_keymap(atom_t* sys);
 static void _atom_init_memorymap(atom_t* sys);
 static uint64_t _atom_osload(atom_t* sys, uint64_t pins);
@@ -239,12 +235,7 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     vdg_desc.user_data = sys;
     mc6847_init(&sys->vdg, &vdg_desc);
 
-    i8255_desc_t ppi_desc;
-    _ATOM_CLEAR(ppi_desc);
-    ppi_desc.in_cb = _atom_ppi_in;
-    ppi_desc.out_cb = _atom_ppi_out;
-    ppi_desc.user_data = sys;
-    i8255_init(&sys->ppi, &ppi_desc);
+    i8255_init(&sys->ppi);
 
     m6522_init(&sys->via);
 
@@ -292,8 +283,6 @@ void atom_reset(atom_t* sys) {
     mc6847_reset(&sys->vdg);
     beeper_reset(&sys->beeper);
     sys->state_2_4khz = false;
-    sys->out_cass0 = false;
-    sys->out_cass1 = false;
 }
 
 void atom_tick(atom_t* sys) {
@@ -393,17 +382,12 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
     /* address decoding */
     const uint16_t addr = M6502_GET_ADDR(pins);
     uint64_t via_pins = pins & M6502_PIN_MASK;
+    uint64_t ppi_pins = (pins & M6502_PIN_MASK) & ~(I8255_RD|I8255_WR|I8255_PA_PINS);
     if ((addr >= 0xB000) && (addr < 0xC000)) {
         /* memory-mapped IO area */
         if ((addr >= 0xB000) && (addr < 0xB400)) {
-            /* i8255 PPI: http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_8255.htm */
-            uint64_t ppi_pins = (pins & M6502_PIN_MASK) | I8255_CS;
-            if (pins & M6502_RW) { ppi_pins |= I8255_RD; }  /* PPI read access */
-            else { ppi_pins |= I8255_WR; }                  /* PPI write access */
-            if (pins & M6502_A0) { ppi_pins |= I8255_A0; }  /* PPI has 4 addresses (port A,B,C or control word */
-            if (pins & M6502_A1) { ppi_pins |= I8255_A1; }
-            pins = i8255_iorq(&sys->ppi, ppi_pins) & M6502_PIN_MASK;
-        }       
+            ppi_pins |= I8255_CS;
+        }
         else if ((addr >= 0xB400) && (addr < 0xB800)) {
             /* extensions (only rudimentary)
                 FIXME: implement a proper AtoMMC emulation, for now just
@@ -453,12 +437,61 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
         }
     }
 
-    /* tick the VIA */
-    via_pins = m6522_tick(&sys->via, via_pins);
-    if ((via_pins & (M6522_RW|M6522_CS1)) == (M6522_RW|M6522_CS1)) {
-        pins = M6502_COPY_DATA(pins, via_pins);
+    /* tick the PPI
+        http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_8255.htm
+
+        Port inputs:
+            PB0..PB7:   keyboard matrix rows
+            PC4:        2400 Hz tick
+            PC5:        cassette input (FIXME: not emulated)
+            PC6:        keyboard repeat (FIXME: not emulated)
+            PC7:        MC6847 FSYNC
+
+        Port output:
+            PA0..PA3:   keyboard matrix column nr.
+            PA4..PA7:   MC6847 graphics mode (4: A/G, 5..7: GM0..2)
+            PC0:        cassette output (FIXME: not emulated)
+            PC1:        enable 2.4kHz to cassette output
+            PC2:        beeper
+            PC3:        MC6847 CSS
+
+        The port C output lines, bits O to 3, may be used for user
+        applications when the cassette interface is not being used.
+    */
+    {
+        ppi_pins |= (pins & M6502_RW) ? I8255_RD : I8255_WR;
+        I8255_SET_PB(ppi_pins, ~kbd_scan_lines(&sys->kbd));
+        if (sys->state_2_4khz) {
+            ppi_pins |= I8255_PC4;
+        }
+        ppi_pins |= I8255_PC6;
+        if (0 == (sys->vdg.pins & MC6847_FS)) {
+            ppi_pins |= I8255_PC7;
+        }
+        ppi_pins = i8255_tick(&sys->ppi, ppi_pins);
+        kbd_set_active_columns(&sys->kbd, 1<<(I8255_GET_PA(ppi_pins) & 0x0F));
+        /* FIXME FIXME FIXME: remove mc6847_ctrl() */
+        uint64_t vdg_pins = 0;
+        uint64_t vdg_mask = MC6847_AG|MC6847_GM0|MC6847_GM1|MC6847_GM2|MC6847_CSS;
+        if (ppi_pins & I8255_PA4) { vdg_pins |= MC6847_AG; }
+        if (ppi_pins & I8255_PA5) { vdg_pins |= MC6847_GM0; }
+        if (ppi_pins & I8255_PA6) { vdg_pins |= MC6847_GM1; }
+        if (ppi_pins & I8255_PA7) { vdg_pins |= MC6847_GM2; }
+        beeper_set(&sys->beeper, 0 == (ppi_pins & I8255_PC2));
+        if (ppi_pins & I8255_PC3) {
+            vdg_pins |= MC6847_CSS;
+        }
+        mc6847_ctrl(&sys->vdg, vdg_pins, vdg_mask);
     }
-    pins = (pins & ~M6502_IRQ) | (via_pins & M6502_IRQ);
+
+    /* tick the VIA */
+    {
+        via_pins = m6522_tick(&sys->via, via_pins);
+        if ((via_pins & (M6522_RW|M6522_CS1)) == (M6522_RW|M6522_CS1)) {
+            pins = M6502_COPY_DATA(pins, via_pins);
+        }
+        pins = (pins & ~M6502_IRQ) | (via_pins & M6502_IRQ);
+    }
 
     /* check if the trapped OSLoad function was hit to implement tape file loading
         http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis
@@ -490,103 +523,6 @@ uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data) {
     if (data & (1<<6)) { pins |= (MC6847_AS|MC6847_INTEXT); }
     else               { pins &= ~(MC6847_AS|MC6847_INTEXT); }
     return pins;
-}
-
-uint64_t _atom_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data) {
-    atom_t* sys = (atom_t*) user_data;
-    /*
-        FROM Atom Theory and Praxis (and MAME)
-        The  8255  Programmable  Peripheral  Interface  Adapter  contains  three
-        8-bit ports, and all but one of these lines is used by the ATOM.
-        Port A - #B000
-               Output bits:      Function:
-                    O -- 3     Keyboard column
-                    4 -- 7     Graphics mode (4: A/G, 5..7: GM0..2)
-        Port B - #B001
-               Input bits:       Function:
-                    O -- 5     Keyboard row
-                      6        CTRL key (low when pressed)
-                      7        SHIFT keys {low when pressed)
-        Port C - #B002
-               Output bits:      Function:
-                    O          Tape output
-                    1          Enable 2.4 kHz to cassette output
-                    2          Loudspeaker
-                    3          Not used (??? see below)
-               Input bits:       Function:
-                    4          2.4 kHz input
-                    5          Cassette input
-                    6          REPT key (low when pressed)
-                    7          60 Hz sync signal (low during flyback)
-        The port C output lines, bits O to 3, may be used for user
-        applications when the cassette interface is not being used.
-    */
-    if (I8255_PORT_A == port_id) {
-        /* PPI port A
-            0..3:   keyboard matrix column to scan next
-            4:      MC6847 A/G
-            5:      MC6847 GM0
-            6:      MC6847 GM1
-            7:      MC6847 GM2
-        */
-        kbd_set_active_columns(&sys->kbd, 1<<(data & 0x0F));
-        uint64_t vdg_pins = 0;
-        uint64_t vdg_mask = MC6847_AG|MC6847_GM0|MC6847_GM1|MC6847_GM2;
-        if (data & (1<<4)) { vdg_pins |= MC6847_AG; }
-        if (data & (1<<5)) { vdg_pins |= MC6847_GM0; }
-        if (data & (1<<6)) { vdg_pins |= MC6847_GM1; }
-        if (data & (1<<7)) { vdg_pins |= MC6847_GM2; }
-        mc6847_ctrl(&sys->vdg, vdg_pins, vdg_mask);
-    }
-    else if (I8255_PORT_C == port_id) {
-        /* PPI port C output:
-            0:  output: cass 0
-            1:  output: cass 1
-            2:  output: speaker
-            3:  output: MC6847 CSS
-
-            NOTE: only the MC6847 CSS pin is emulated here
-        */
-        sys->out_cass0 = 0 == (data & (1<<0));
-        sys->out_cass1 = 0 == (data & (1<<1));
-        beeper_set(&sys->beeper, 0 == (data & (1<<2)));
-        uint64_t vdg_pins = 0;
-        uint64_t vdg_mask = MC6847_CSS;
-        if (data & (1<<3)) {
-            vdg_pins |= MC6847_CSS;
-        }
-        mc6847_ctrl(&sys->vdg, vdg_pins, vdg_mask);
-    }
-    return pins;
-}
-
-uint8_t _atom_ppi_in(int port_id, void* user_data) {
-    atom_t* sys = (atom_t*) user_data;
-    uint8_t data = 0;
-    if (I8255_PORT_B == port_id) {
-        /* keyboard row state */
-        data = ~kbd_scan_lines(&sys->kbd);
-    }
-    else if (I8255_PORT_C == port_id) {
-        /*  PPI port C input:
-            4:  input: 2400 Hz
-            5:  input: cassette
-            6:  input: keyboard repeat
-            7:  input: MC6847 FSYNC
-
-            NOTE: only the 2400 Hz oscillator and FSYNC pins is emulated here
-        */
-        if (sys->state_2_4khz) {
-            data |= (1<<4);
-        }
-        /* FIXME: always send REPEAT key as 'not pressed' */
-        data |= (1<<6);
-        /* vblank pin (cleared during vblank) */
-        if (0 == (sys->vdg.pins & MC6847_FS)) {
-            data |= (1<<7);
-        }
-    }
-    return data;
 }
 
 static void _atom_init_keymap(atom_t* sys) {
