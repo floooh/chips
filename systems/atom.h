@@ -357,9 +357,6 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
     /* tick the CPU */
     cpu_pins = m6502_tick(&sys->cpu, cpu_pins);
 
-    /* tick the video chip */
-    mc6847_tick(&sys->vdg);
-
     /* tick the 2.4khz counter */
     sys->counter_2_4khz++;
     if (sys->counter_2_4khz >= sys->period_2_4khz) {
@@ -383,6 +380,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
     const uint16_t addr = M6502_GET_ADDR(cpu_pins);
     uint64_t via_pins = cpu_pins & M6502_PIN_MASK;
     uint64_t ppi_pins = cpu_pins & M6502_PIN_MASK & ~(I8255_RD|I8255_WR|I8255_PC_PINS);
+    uint64_t vdg_pins = 0;
     if ((addr >= 0xB000) && (addr < 0xC000)) {
         /* memory-mapped IO area */
         if ((addr >= 0xB000) && (addr < 0xB400)) {
@@ -472,9 +470,6 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
         ppi_pins = i8255_tick(&sys->ppi, ppi_pins);
         const uint16_t kbd_column = 1<<(I8255_GET_PA(ppi_pins) & 0x0F);
         kbd_set_active_columns(&sys->kbd, kbd_column);
-        /* FIXME FIXME FIXME: remove mc6847_ctrl() */
-        uint64_t vdg_pins = 0;
-        uint64_t vdg_mask = MC6847_AG|MC6847_GM0|MC6847_GM1|MC6847_GM2|MC6847_CSS;
         if (ppi_pins & I8255_PA4) { vdg_pins |= MC6847_AG; }
         if (ppi_pins & I8255_PA5) { vdg_pins |= MC6847_GM0; }
         if (ppi_pins & I8255_PA6) { vdg_pins |= MC6847_GM1; }
@@ -483,7 +478,6 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
         if (ppi_pins & I8255_PC3) {
             vdg_pins |= MC6847_CSS;
         }
-        mc6847_ctrl(&sys->vdg, vdg_pins, vdg_mask);
         if((ppi_pins & (I8255_RD|I8255_CS)) == (I8255_RD|I8255_CS)) {
             cpu_pins = M6502_COPY_DATA(cpu_pins, ppi_pins);
         }
@@ -497,6 +491,12 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
         }
         cpu_pins = (cpu_pins & ~M6502_IRQ) | (via_pins & M6502_IRQ);
     }
+
+    /* tick the VDG, we'll need the HS pin in the next tick as input
+       to the VIA, but we can get this directly from sys->vdg.pins,
+       so no point in looking at the returned pin mask
+    */
+    mc6847_tick(&sys->vdg, vdg_pins);
 
     /* check if the trapped OSLoad function was hit to implement tape file loading
         http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis

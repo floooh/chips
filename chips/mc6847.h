@@ -16,7 +16,7 @@
                   +-----------+
             FS <--|           |--> A0
             HS <--|           |...
-            RP <--|           |--> A12
+          (RP) <--|           |--> A12
                   |           |
             AG -->|           |
             AS -->|  MC6847   |
@@ -139,7 +139,7 @@ extern "C" {
 /* synchronization output pins */
 #define MC6847_FS   (1ULL<<40)      /* field sync */
 #define MC6847_HS   (1ULL<<41)      /* horizontal sync */
-#define MC6847_RP   (1ULL<<42)      /* row preset */
+#define MC6847_RP   (1ULL<<42)      /* row preset (not emulated) */
 
 /* mode-select input pins */
 #define MC6847_AG       (1ULL<<43)      /* graphics mode enable */
@@ -211,12 +211,8 @@ typedef struct {
 
 /* the mc6847 state struct */
 typedef struct {
-    /* current pin state */
+    /* last pin state */
     uint64_t pins;
-    /* pins that transitioned from inactive-to-active during last tick */
-    uint64_t on;
-    /* pins that transitioned from active-to-inactive during last tick */
-    uint64_t off;
     /* the graphics mode color palette (RGBA8) */
     uint32_t palette[8];
     /* the black color as RGBA8 */
@@ -234,6 +230,9 @@ typedef struct {
     int h_period;
     int l_count;
 
+    /* true during field-sync */
+    bool fs;
+
     /* the fetch callback function */
     mc6847_fetch_t fetch_cb;
     /* optional user-data for the fetch-callback */
@@ -246,10 +245,8 @@ typedef struct {
 void mc6847_init(mc6847_t* vdg, const mc6847_desc_t* desc);
 /* reset a mc6847_t instance */
 void mc6847_reset(mc6847_t* vdg);
-/* set or clear control-pins */
-void mc6847_ctrl(mc6847_t* vdg, uint64_t pins, uint64_t mask);
 /* tick the mc6847_t instance, this will call the fetch_cb and generate the image */
-void mc6847_tick(mc6847_t* vdg);
+uint64_t mc6847_tick(mc6847_t* vdg, uint64_t pins);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -336,11 +333,6 @@ void mc6847_reset(mc6847_t* vdg) {
     CHIPS_ASSERT(vdg);
     vdg->h_count = 0;
     vdg->l_count = 0;
-}
-
-void mc6847_ctrl(mc6847_t* vdg, uint64_t pins, uint64_t mask) {
-    CHIPS_ASSERT(vdg);
-    vdg->pins = (vdg->pins & ~(mask & MC6847_CTRL_PINS)) | pins;
 }
 
 /*
@@ -582,23 +574,23 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
     return pins;
 }
 
-void mc6847_tick(mc6847_t* vdg) {
-    uint64_t prev_pins = vdg->pins;
-    uint64_t pins = vdg->pins;
-    vdg->h_count += MC6847_FIXEDPOINT_SCALE;
+uint64_t mc6847_tick(mc6847_t* vdg, uint64_t pins) {
 
-    /* horizontal and field sync */
+    /* output pins will be set each tick */
+    pins &= ~(MC6847_HS|MC6847_FS);
+
+    /* horizontal and vertical field sync */
+    vdg->h_count += MC6847_FIXEDPOINT_SCALE;
     if ((vdg->h_count >= vdg->h_sync_start) && (vdg->h_count < vdg->h_sync_end)) {
         /* horizontal sync on */
         pins |= MC6847_HS;
         if (vdg->l_count == MC6847_FSYNC_START) {
             /* switch field sync on */
-            pins |= MC6847_FS;
+            vdg->fs = true;
         }
     }
-    else {
-        /* horizontal sync off */
-        pins &= ~MC6847_HS;
+    if (vdg->fs) {
+        pins |= MC6847_FS;
     }
 
     /* rewind horizontal counter? */
@@ -608,7 +600,7 @@ void mc6847_tick(mc6847_t* vdg) {
         if (vdg->l_count >= MC6847_ALL_LINES) {
             /* rewind line counter, field sync off */
             vdg->l_count = 0;
-            pins &= ~MC6847_FS;
+            vdg->fs = false;
         }
         if (vdg->l_count < MC6847_VBLANK_LINES) {
             /* inside vblank area, nothing to do */
@@ -629,11 +621,8 @@ void mc6847_tick(mc6847_t* vdg) {
             _mc6847_decode_border(vdg, pins, y);
         }
     }
-
-    /* raising/falling edge transitions */
-    vdg->on  = pins & (pins ^ prev_pins);
-    vdg->off = ~pins & (pins ^ prev_pins);
     vdg->pins = pins;
+    return pins;
 }
 
 # endif /* CHIPS_IMPL */
