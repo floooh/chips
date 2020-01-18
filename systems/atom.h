@@ -352,10 +352,10 @@ void atom_joystick(atom_t* sys, uint8_t mask) {
 }
 
 /* CPU tick callback */
-uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
+uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
 
     /* tick the CPU */
-    pins = m6502_tick(&sys->cpu, pins);
+    cpu_pins = m6502_tick(&sys->cpu, cpu_pins);
 
     /* tick the video chip */
     mc6847_tick(&sys->vdg);
@@ -380,9 +380,9 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
     }
 
     /* address decoding */
-    const uint16_t addr = M6502_GET_ADDR(pins);
-    uint64_t via_pins = pins & M6502_PIN_MASK;
-    uint64_t ppi_pins = (pins & M6502_PIN_MASK) & ~(I8255_RD|I8255_WR|I8255_PA_PINS);
+    const uint16_t addr = M6502_GET_ADDR(cpu_pins);
+    uint64_t via_pins = cpu_pins & M6502_PIN_MASK;
+    uint64_t ppi_pins = cpu_pins & M6502_PIN_MASK & ~(I8255_RD|I8255_WR|I8255_PC_PINS);
     if ((addr >= 0xB000) && (addr < 0xC000)) {
         /* memory-mapped IO area */
         if ((addr >= 0xB000) && (addr < 0xB400)) {
@@ -393,24 +393,24 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
                 FIXME: implement a proper AtoMMC emulation, for now just
                 a quick'n'dirty hack for joystick input
             */
-            if (pins & M6502_RW) {
+            if (cpu_pins & M6502_RW) {
                 /* read from MMC extension */
                 if (addr == 0xB400) {
                     /* reading from 0xB400 returns a status/error code, the important
                         ones are STATUS_OK=0x3F, and STATUS_BUSY=0x80, STATUS_COMPLETE
                         together with an error code is used to communicate errors
                     */
-                    M6502_SET_DATA(pins, 0x3F);
+                    M6502_SET_DATA(cpu_pins, 0x3F);
                 }
                 else if ((addr == 0xB401) && (sys->mmc_cmd == 0xA2)) {
                     /* read MMC joystick */
-                    M6502_SET_DATA(pins, ~(sys->kbd_joymask | sys->joy_joymask));
+                    M6502_SET_DATA(cpu_pins, ~(sys->kbd_joymask | sys->joy_joymask));
                 }
             }
             else {
                 /* write to MMC extension */
                 if (addr == 0xB400) {
-                    sys->mmc_cmd = M6502_GET_DATA(pins);
+                    sys->mmc_cmd = M6502_GET_DATA(cpu_pins);
                 }
             }
         } 
@@ -420,20 +420,20 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
         }
         else {
             /* remaining IO space is for expansion devices */
-            if (pins & M6502_RW) {
-                M6502_SET_DATA(pins, 0x00);
+            if (cpu_pins & M6502_RW) {
+                M6502_SET_DATA(cpu_pins, 0x00);
             }
         }
     }
     else {
         /* regular memory access */
-        if (pins & M6502_RW) {
+        if (cpu_pins & M6502_RW) {
             /* memory read */
-            M6502_SET_DATA(pins, mem_rd(&sys->mem, addr));
+            M6502_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
         }
         else {
             /* memory access */
-            mem_wr(&sys->mem, addr, M6502_GET_DATA(pins));
+            mem_wr(&sys->mem, addr, M6502_GET_DATA(cpu_pins));
         }
     }
 
@@ -455,12 +455,13 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
             PC2:        beeper
             PC3:        MC6847 CSS
 
-        The port C output lines, bits O to 3, may be used for user
+        The port C output lines (PC0 to PC3) may be used for user
         applications when the cassette interface is not being used.
     */
     {
-        ppi_pins |= (pins & M6502_RW) ? I8255_RD : I8255_WR;
-        I8255_SET_PB(ppi_pins, ~kbd_scan_lines(&sys->kbd));
+        ppi_pins |= (cpu_pins & M6502_RW) ? I8255_RD : I8255_WR;
+        const uint8_t kbd_lines = kbd_scan_lines(&sys->kbd);
+        I8255_SET_PB(ppi_pins, ~kbd_lines);
         if (sys->state_2_4khz) {
             ppi_pins |= I8255_PC4;
         }
@@ -469,7 +470,8 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
             ppi_pins |= I8255_PC7;
         }
         ppi_pins = i8255_tick(&sys->ppi, ppi_pins);
-        kbd_set_active_columns(&sys->kbd, 1<<(I8255_GET_PA(ppi_pins) & 0x0F));
+        const uint16_t kbd_column = 1<<(I8255_GET_PA(ppi_pins) & 0x0F);
+        kbd_set_active_columns(&sys->kbd, kbd_column);
         /* FIXME FIXME FIXME: remove mc6847_ctrl() */
         uint64_t vdg_pins = 0;
         uint64_t vdg_mask = MC6847_AG|MC6847_GM0|MC6847_GM1|MC6847_GM2|MC6847_CSS;
@@ -482,15 +484,18 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
             vdg_pins |= MC6847_CSS;
         }
         mc6847_ctrl(&sys->vdg, vdg_pins, vdg_mask);
+        if((ppi_pins & (I8255_RD|I8255_CS)) == (I8255_RD|I8255_CS)) {
+            cpu_pins = M6502_COPY_DATA(cpu_pins, ppi_pins);
+        }
     }
 
     /* tick the VIA */
     {
         via_pins = m6522_tick(&sys->via, via_pins);
         if ((via_pins & (M6522_RW|M6522_CS1)) == (M6522_RW|M6522_CS1)) {
-            pins = M6502_COPY_DATA(pins, via_pins);
+            cpu_pins = M6502_COPY_DATA(cpu_pins, via_pins);
         }
-        pins = (pins & ~M6502_IRQ) | (via_pins & M6502_IRQ);
+        cpu_pins = (cpu_pins & ~M6502_IRQ) | (via_pins & M6502_IRQ);
     }
 
     /* check if the trapped OSLoad function was hit to implement tape file loading
@@ -499,11 +504,11 @@ uint64_t _atom_tick(atom_t* sys, uint64_t pins) {
     if (sys->tape_size > 0) {
         const uint64_t trap_mask = M6502_SYNC|0xFFFF;
         const uint64_t trap_val  = M6502_SYNC|0xF96E;
-        if ((pins & trap_mask) == trap_val) {
-            pins = _atom_osload(sys, pins);
+        if ((cpu_pins & trap_mask) == trap_val) {
+            cpu_pins = _atom_osload(sys, cpu_pins);
         }
     }
-    return pins;
+    return cpu_pins;
 }
 
 uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data) {

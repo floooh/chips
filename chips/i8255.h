@@ -125,7 +125,10 @@ extern "C" {
 #define I8255_PB7       (1ULL<<63)
 #define I8255_PB_PINS   (I8255_PB0|I8255_PB1|I8255_PB2|I8255_PB3|I8255_PB4|I8255_PB5|I8255_PB6|I8255_PB7)
 
-/* port C pins, NOTE: these overlap with address bus pins A8..A15, because there's no room left */
+/* port C pins, NOTE: these overlap with address bus pins A8..A15!
+   don't forget to clear upper 8 address bus pins when reusing the
+   CPU pin mask for the i8255!
+*/
 #define I8255_PC0       (1ULL<<8)
 #define I8255_PC1       (1ULL<<9)
 #define I8255_PC2       (1ULL<<10)
@@ -227,7 +230,7 @@ typedef struct {
 #define I8255_GET_PC(p) ((uint8_t)(p>>8))
 /* set port pins into pin mask */
 #define I8255_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFF)|((a&0xFFUL)<<48);}
-#define I8255_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFF)|((b&0xFFUL)<<58);}
+#define I8255_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFF)|((b&0xFFUL)<<56);}
 #define I8255_SET_PCHI(p,c) {p=(p&0xFFFFFFFFFFFF0FFF)|((c&0xF0UL)<<8);}
 #define I8255_SET_PCLO(p,c) {p=(p&0xFFFFFFFFFFFFF0FF)|((c&0x0FUL)<<8);}
 
