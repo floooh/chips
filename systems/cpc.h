@@ -231,10 +231,7 @@ bool cpc_video_debugging_enabled(cpc_t* cpc);
 #define _CPC_FREQUENCY (4000000)
 
 static uint64_t _cpc_tick(int num, uint64_t pins, void* user_data);
-static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins);
 static uint64_t _cpc_cclk(void* user_data);
-static uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data);
-static uint8_t _cpc_ppi_in(int port_id, void* user_data);
 static void _cpc_psg_out(int port_id, uint8_t data, void* user_data);
 static uint8_t _cpc_psg_in(int port_id, void* user_data);
 static void _cpc_init_keymap(cpc_t* sys);
@@ -292,12 +289,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     cpu_desc.user_data = sys;
     z80_init(&sys->cpu, &cpu_desc);
 
-    i8255_desc_t ppi_desc;
-    _CPC_CLEAR(ppi_desc);
-    ppi_desc.in_cb = _cpc_ppi_in;
-    ppi_desc.out_cb = _cpc_ppi_out;
-    ppi_desc.user_data = sys;
-    i8255_init(&sys->ppi, &ppi_desc);
+    i8255_init(&sys->ppi);
 
     ay38910_desc_t psg_desc;
     _CPC_CLEAR(psg_desc);
@@ -479,23 +471,141 @@ bool cpc_video_debugging_enabled(cpc_t* sys) {
 }
 
 /* the CPU tick callback */
-static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
+static uint64_t _cpc_tick(int num_ticks, uint64_t cpu_pins, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
 
     /* memory and IO requests */
-    if (pins & Z80_MREQ) {
+    if (cpu_pins & Z80_MREQ) {
         /* CPU MEMORY REQUEST */
-        const uint16_t addr = Z80_GET_ADDR(pins);
-        if (pins & Z80_RD) {
-            Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
+        const uint16_t addr = Z80_GET_ADDR(cpu_pins);
+        if (cpu_pins & Z80_RD) {
+            Z80_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
         }
-        else if (pins & Z80_WR) {
-            mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
+        else if (cpu_pins & Z80_WR) {
+            mem_wr(&sys->mem, addr, Z80_GET_DATA(cpu_pins));
         }
     }
-    else if ((pins & Z80_IORQ) && (pins & (Z80_RD|Z80_WR))) {
-        /* CPU IO REQUEST */
-        pins = _cpc_cpu_iorq(sys, pins);
+    else if ((cpu_pins & Z80_IORQ) && (cpu_pins & (Z80_RD|Z80_WR))) {
+        /* CPU IO address decoding
+
+            For address decoding, see the main board schematics!
+            also: http://cpcwiki.eu/index.php/Default_I/O_Port_Summary
+        */
+
+        /*
+            Z80 to i8255 PPI pin connections:
+                ~A11 -> CS (CS is active-low)
+                    A8 -> A0
+                    A9 -> A1
+                    RD -> RD
+                    WR -> WR
+                D0..D7 -> D0..D7
+
+            i8255 PPI to AY-3-8912 PSG pin connections:
+                PA0..PA7    -> D0..D7
+                     PC7    -> BDIR
+                     PC6    -> BC1
+
+            i8255 Port B:
+                 Bit 7: cassette data input
+                 Bit 6: printer port ready (1=not ready, 0=ready)
+                 Bit 5: expansion port /EXP pin
+                 Bit 4: screen refresh rate (1=50Hz, 0=60Hz)
+                 Bit 3..1: distributor id (shown in start screen)
+                     0: Isp
+                     1: Triumph
+                     2: Saisho
+                     3: Solavox
+                     4: Awa
+                     5: Schneider
+                     6: Orion
+                     7: Amstrad
+                 Bit 0: vsync
+
+            i8255 Port C:
+                PC0..PC3: select keyboard matrix line
+        */
+        if ((cpu_pins & Z80_A11) == 0) {
+            /* i8255 in/out */
+            uint64_t ppi_pins = (cpu_pins & Z80_PIN_MASK & ~(I8255_PC_PINS|I8255_A1|I8255_A0)) | I8255_CS;
+            if (cpu_pins & Z80_A9) { ppi_pins |= I8255_A1; }
+            if (cpu_pins & Z80_A8) { ppi_pins |= I8255_A0; }
+            if ((sys->ppi.pins & (I8255_PC7|I8255_PC6)) != 0) {
+                uint64_t ay_pins = 0;
+                if (sys->ppi.pins & I8255_PC7) { ay_pins |= AY38910_BDIR; }
+                if (sys->ppi.pins & I8255_PC6) { ay_pins |= AY38910_BC1; }
+                const uint8_t ay_data = I8255_GET_PA(sys->ppi.pins);
+                AY38910_SET_DATA(ay_pins, ay_data);
+                ay_pins = ay38910_iorq(&sys->psg, ay_pins);
+                I8255_SET_PA(ppi_pins, AY38910_DATA(ay_pins));
+            }
+            ppi_pins |= I8255_PB1|I8255_PB2|I8255_PB3;  /* Amstrad */
+            ppi_pins |= I8255_PB4;  /* PAL (50Hz) */
+            if (sys->crtc.vs) {
+                ppi_pins |= I8255_PB0;   /* VSYNC */
+            }
+            ppi_pins = i8255_tick(&sys->ppi, ppi_pins);
+            /* copy data bus value to cpu pins */
+            if ((ppi_pins & (I8255_CS|I8255_RD)) == (I8255_CS|I8255_RD)) {
+                Z80_SET_DATA(cpu_pins, I8255_GET_DATA(ppi_pins));
+            }
+            /* update PSG state */
+            if ((ppi_pins & (I8255_PC7|I8255_PC6)) != 0) {
+                uint64_t ay_pins = 0;
+                if (ppi_pins & I8255_PC7) { ay_pins |= AY38910_BDIR; }
+                if (ppi_pins & I8255_PC6) { ay_pins |= AY38910_BC1; }
+                const uint8_t ay_data = I8255_GET_PA(ppi_pins);
+                AY38910_SET_DATA(ay_pins, ay_data);
+                ay38910_iorq(&sys->psg, ay_pins);
+            }
+            /* PC0..PC3: select keyboard matrix line*/
+            uint16_t col_mask = 1<<(I8255_GET_PC(ppi_pins) & 0x0F);
+            kbd_set_active_columns(&sys->kbd, col_mask);
+            /* FIXME: cassette write data */
+            /* FIXME: cassette deck motor control */
+        }
+        /*
+            Gate Array Function and upper rom select
+            (only writing to the gate array
+            is possible, but the gate array doesn't check the
+            CPU R/W pins, so each access is a write).
+
+            This is used by the Arnold Acid test "OnlyInc", which
+            access the PPI and gate array in the same IO operation
+            to move data directly from the PPI into the gate array.
+
+            Because of this the gate array must be ticker *after* the PPI
+            and use the returned pins from the PPI as input.
+        */
+        am40010_iorq(&sys->ga, cpu_pins);
+        /*
+            Z80 to MC6845 pin connections:
+
+                ~A14 -> CS (CS is active low)
+                A9  -> RW (high: read, low: write)
+                A8  -> RS
+            D0..D7  -> D0..D7
+        */
+        if ((cpu_pins & Z80_A14) == 0) {
+            /* 6845 in/out */
+            uint64_t crtc_pins = (cpu_pins & Z80_PIN_MASK)|MC6845_CS;
+            if (cpu_pins & Z80_A9) { crtc_pins |= MC6845_RW; }
+            if (cpu_pins & Z80_A8) { crtc_pins |= MC6845_RS; }
+            cpu_pins = mc6845_iorq(&sys->crtc, crtc_pins) & Z80_PIN_MASK;
+        }
+        /*
+            Floppy Disk Interface
+        */
+        if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == 0) {
+            if (cpu_pins & Z80_WR) {
+                fdd_motor(&sys->fdd, 0 != (Z80_GET_DATA(cpu_pins) & 1));
+            }
+        }
+        else if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
+            /* floppy controller status/data register */
+            uint64_t fdc_pins = UPD765_CS | (cpu_pins & Z80_PIN_MASK);
+            cpu_pins = upd765_iorq(&sys->fdc, fdc_pins) & Z80_PIN_MASK;
+        }
     }
 
     /* Tick the gate array, this will in turn tick the
@@ -504,8 +614,8 @@ static uint64_t _cpc_tick(int num_ticks, uint64_t pins, void* user_data) {
        has been updated with the necessary WAIT states to inject, and
        the INT pin when the gate array requests an interrupt
     */
-    pins = am40010_tick(&sys->ga, num_ticks, pins) & Z80_PIN_MASK;
-    return pins;
+    cpu_pins = am40010_tick(&sys->ga, num_ticks, cpu_pins) & Z80_PIN_MASK;
+    return cpu_pins;
 }
 
 /* called when a new sample is ready from the sound chip */
@@ -533,160 +643,6 @@ static uint64_t _cpc_cclk(void* user_data) {
     /* tick the CRTC and return its pin mask */
     uint64_t crtc_pins = mc6845_tick(&sys->crtc);
     return crtc_pins;
-}
-
-/* handle an IO request from the CPU, called form the _cpc_tick function */
-static uint64_t _cpc_cpu_iorq(cpc_t* sys, uint64_t pins) {
-    /*
-        CPU IO REQUEST
-
-        For address decoding, see the main board schematics!
-        also: http://cpcwiki.eu/index.php/Default_I/O_Port_Summary
-    */
-
-    /*
-        Z80 to i8255 PPI pin connections:
-            ~A11 -> CS (CS is active-low)
-                A8 -> A0
-                A9 -> A1
-                RD -> RD
-                WR -> WR
-            D0..D7 -> D0..D7
-    */
-    if ((pins & Z80_A11) == 0) {
-        /* i8255 in/out */
-        uint64_t ppi_pins = (pins & Z80_PIN_MASK)|I8255_CS;
-        if (pins & Z80_A9) { ppi_pins |= I8255_A1; }
-        if (pins & Z80_A8) { ppi_pins |= I8255_A0; }
-        if (pins & Z80_RD) { ppi_pins |= I8255_RD; }
-        if (pins & Z80_WR) { ppi_pins |= I8255_WR; }
-        pins = i8255_iorq(&sys->ppi, ppi_pins) & Z80_PIN_MASK;
-    }
-    /*
-        Gate Array Function and upper rom select 
-        (only writing to the gate array
-        is possible, but the gate array doesn't check the
-        CPU R/W pins, so each access is a write).
-
-        This is used by the Arnold Acid test "OnlyInc", which
-        access the PPI and gate array in the same IO operation
-        to move data directly from the PPI into the gate array.
-        
-        Because of this the gate array must be ticker *after* the PPI
-        and use the returned pins from the PPI as input.
-    */
-    am40010_iorq(&sys->ga, pins);
-    /*
-        Z80 to MC6845 pin connections:
-
-            ~A14 -> CS (CS is active low)
-            A9  -> RW (high: read, low: write)
-            A8  -> RS
-        D0..D7  -> D0..D7
-    */
-    if ((pins & Z80_A14) == 0) {
-        /* 6845 in/out */
-        uint64_t crtc_pins = (pins & Z80_PIN_MASK)|MC6845_CS;
-        if (pins & Z80_A9) { crtc_pins |= MC6845_RW; }
-        if (pins & Z80_A8) { crtc_pins |= MC6845_RS; }
-        pins = mc6845_iorq(&sys->crtc, crtc_pins) & Z80_PIN_MASK;
-    }
-    /*
-        Floppy Disk Interface
-    */
-    if ((pins & (Z80_A10|Z80_A8|Z80_A7)) == 0) {
-        if (pins & Z80_WR) {
-            fdd_motor(&sys->fdd, 0 != (Z80_GET_DATA(pins) & 1));
-        }
-    }
-    else if ((pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
-        /* floppy controller status/data register */
-        uint64_t fdc_pins = UPD765_CS | (pins & Z80_PIN_MASK);
-        pins = upd765_iorq(&sys->fdc, fdc_pins) & Z80_PIN_MASK;
-    }
-    return pins;
-}
-
-/* PPI OUT callback  (write to PSG, select keyboard matrix line and cassette tape control) */
-static uint64_t _cpc_ppi_out(int port_id, uint64_t pins, uint8_t data, void* user_data) {
-    cpc_t* sys = (cpc_t*) user_data;
-    /*
-        i8255 PPI to AY-3-8912 PSG pin connections:
-            PA0..PA7    -> D0..D7
-                 PC7    -> BDIR
-                 PC6    -> BC1
-    */
-    if ((I8255_PORT_A == port_id) || (I8255_PORT_C == port_id)) {
-        const uint8_t ay_ctrl = sys->ppi.output[I8255_PORT_C] & ((1<<7)|(1<<6));
-        if (ay_ctrl) {
-            uint64_t ay_pins = 0;
-            if (ay_ctrl & (1<<7)) { ay_pins |= AY38910_BDIR; }
-            if (ay_ctrl & (1<<6)) { ay_pins |= AY38910_BC1; }
-            const uint8_t ay_data = sys->ppi.output[I8255_PORT_A];
-            AY38910_SET_DATA(ay_pins, ay_data);
-            ay38910_iorq(&sys->psg, ay_pins);
-        }
-    }
-    if (I8255_PORT_C == port_id) {
-        /* bits 0..3: select keyboard matrix line */
-        kbd_set_active_columns(&sys->kbd, 1<<(data & 0x0F));
-
-        /* FIXME: cassette write data */
-        /* FIXME: cassette deck motor control */
-        if (data & (1<<4)) {
-            // tape_start_motor();
-        }
-        else {
-            // tape_stop_motor();
-        }
-    }
-    return pins;
-}
-
-/* PPI IN callback (read from PSG, and misc stuff) */
-static uint8_t _cpc_ppi_in(int port_id, void* user_data) {
-    cpc_t* sys = (cpc_t*) user_data;
-    if (I8255_PORT_A == port_id) {
-        /* AY-3-8912 PSG function (indirectly this may also trigger
-            a read of the keyboard matrix via the AY's IO port
-        */
-        uint64_t ay_pins = 0;
-        uint8_t ay_ctrl = sys->ppi.output[I8255_PORT_C];
-        if (ay_ctrl & (1<<7)) ay_pins |= AY38910_BDIR;
-        if (ay_ctrl & (1<<6)) ay_pins |= AY38910_BC1;
-        uint8_t ay_data = sys->ppi.output[I8255_PORT_A];
-        AY38910_SET_DATA(ay_pins, ay_data);
-        ay_pins = ay38910_iorq(&sys->psg, ay_pins);
-        return AY38910_GET_DATA(ay_pins);
-    }
-    else if (I8255_PORT_B == port_id) {
-        /*
-            Bit 7: cassette data input
-            Bit 6: printer port ready (1=not ready, 0=ready)
-            Bit 5: expansion port /EXP pin
-            Bit 4: screen refresh rate (1=50Hz, 0=60Hz)
-            Bit 3..1: distributor id (shown in start screen)
-                0: Isp
-                1: Triumph
-                2: Saisho
-                3: Solavox
-                4: Awa
-                5: Schneider
-                6: Orion
-                7: Amstrad
-            Bit 0: vsync
-        */
-        uint8_t val = (1<<4) | (7<<1);    // 50Hz refresh rate, Amstrad
-        /* PPI Port B Bit 0 is directly wired to the 6845 VSYNC pin (see schematics) */
-        if (sys->crtc.vs) {
-            val |= (1<<0);
-        }
-        return val;
-    }
-    else {
-        /* shouldn't happen */
-        return 0xFF;
-    }
 }
 
 /* PSG OUT callback (nothing to do here) */
@@ -945,9 +901,9 @@ static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     }
     sys->crtc.sel = hdr->crtc_selected;
 
-    sys->ppi.output[I8255_PORT_A] = hdr->ppi_a;
-    sys->ppi.output[I8255_PORT_B] = hdr->ppi_b;
-    sys->ppi.output[I8255_PORT_C] = hdr->ppi_c;
+    sys->ppi.pa.outp = hdr->ppi_a;
+    sys->ppi.pb.outp = hdr->ppi_b;
+    sys->ppi.pc.outp = hdr->ppi_c;
     sys->ppi.control = hdr->ppi_control;
 
     for (int i = 0; i < 16; i++) {
