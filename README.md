@@ -14,6 +14,13 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 
 ## What's New
 
+* **20-Jan-2020**: The i8255 and MC6847 chips emulations have been changed
+    to a 'tick-only API', continuing the 'API streamlining' that started
+    with the 6522 VIA chip. The Atom system emulation has been updated 
+    accordingly, and the minimal necessary changes to the CPC emulation
+    have been added (but only as a quick hack, the other CPC support
+    chips haven't had their API updated yet).
+
 * **15-Jan-2020**: The CIA (m6526.h), VIC-II (m6569.h), SID (m6581.h) chip
     emulators have merged their *_iorq() functions for reading
     and writing chip registers into the regular *_tick() functions,
