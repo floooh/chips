@@ -35,7 +35,6 @@
 
     ## TODO
 
-    - VIA emulation is currently only minimal
     - handle shift key (some games use this as jump button)
     - AtomMMC is very incomplete (only what's needed for joystick)
 
@@ -236,7 +235,6 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     mc6847_init(&sys->vdg, &vdg_desc);
 
     i8255_init(&sys->ppi);
-
     m6522_init(&sys->via);
 
     const int audio_hz = _ATOM_DEFAULT(desc->audio_sample_rate, 44100);

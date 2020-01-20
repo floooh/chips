@@ -229,11 +229,11 @@ typedef struct {
 #define I8255_GET_PB(p) ((uint8_t)(p>>56))
 #define I8255_GET_PC(p) ((uint8_t)(p>>8))
 /* set port pins into pin mask */
-#define I8255_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFF)|((a&0xFFUL)<<48);}
-#define I8255_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFF)|((b&0xFFUL)<<56);}
-#define I8255_SET_PC(p,c) {p=(p&0xFFFFFFFFFFFF00FF)|((c&0xFFUL)<<8);}
-#define I8255_SET_PCHI(p,c) {p=(p&0xFFFFFFFFFFFF0FFF)|((c&0xF0UL)<<8);}
-#define I8255_SET_PCLO(p,c) {p=(p&0xFFFFFFFFFFFFF0FF)|((c&0x0FUL)<<8);}
+#define I8255_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFFULL)|((a&0xFFULL)<<48);}
+#define I8255_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFFULL)|((b&0xFFULL)<<56);}
+#define I8255_SET_PC(p,c) {p=(p&0xFFFFFFFFFFFF00FFULL)|((c&0xFFULL)<<8);}
+#define I8255_SET_PCHI(p,c) {p=(p&0xFFFFFFFFFFFF0FFFULL)|((c&0xF0ULL)<<8);}
+#define I8255_SET_PCLO(p,c) {p=(p&0xFFFFFFFFFFFFF0FFULL)|((c&0x0FULL)<<8);}
 
 /* initialize a new i8255_t instance */
 void i8255_init(i8255_t* ppi);
