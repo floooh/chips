@@ -21,6 +21,11 @@
 
     TODO: Documentation
 
+    ## Links
+
+    http://sleepingelephant.com/ipw-web/bulletin/bb/viewtopic.php?f=11&t=8733&sid=59d3d281086e98689f6d1f95c4a1c4a9
+
+
     ## zlib/libpng license
 
     Copyright (c) 2019 Andre Weissflog

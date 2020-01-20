@@ -142,15 +142,10 @@ static void _ui_i8255_draw_state(ui_i8255_t* win) {
     ImGui::Text("%s", ((ppi->control & I8255_CTRL_CHI) == I8255_CTRL_CHI_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
     ImGui::Text("%s", ((ppi->control & I8255_CTRL_CLO) == I8255_CTRL_CLO_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
     ImGui::Text("Output"); ImGui::NextColumn();
-    ImGui::Text("%02X", ppi->output[I8255_PORT_A]); ImGui::NextColumn();
-    ImGui::Text("%02X", ppi->output[I8255_PORT_B]); ImGui::NextColumn();
-    ImGui::Text("%X", ppi->output[I8255_PORT_C] >> 4); ImGui::NextColumn();
-    ImGui::Text("%X", ppi->output[I8255_PORT_C] & 0xF); ImGui::NextColumn();
-    ImGui::Text("Port"); ImGui::NextColumn();
-    ImGui::Text("%02X", ppi->port[I8255_PORT_A]); ImGui::NextColumn();
-    ImGui::Text("%02X", ppi->port[I8255_PORT_B]); ImGui::NextColumn();
-    ImGui::Text("%X", ppi->port[I8255_PORT_C] >> 4); ImGui::NextColumn();
-    ImGui::Text("%X", ppi->port[I8255_PORT_C] & 0xF); ImGui::NextColumn();
+    ImGui::Text("%02X", ppi->pa.outp); ImGui::NextColumn();
+    ImGui::Text("%02X", ppi->pb.outp); ImGui::NextColumn();
+    ImGui::Text("%X", ppi->pc.outp >> 4); ImGui::NextColumn();
+    ImGui::Text("%X", ppi->pc.outp & 0xF); ImGui::NextColumn();
     ImGui::Columns(); ImGui::Separator();
     ImGui::Text("Control: %02X", ppi->control);
 }
