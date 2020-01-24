@@ -456,7 +456,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
     */
     {
         ppi_pins |= (cpu_pins & M6502_RW) ? I8255_RD : I8255_WR;
-        const uint8_t kbd_lines = kbd_scan_lines(&sys->kbd);
+        const uint8_t kbd_lines = (uint8_t) kbd_scan_lines(&sys->kbd);
         I8255_SET_PB(ppi_pins, ~kbd_lines);
         if (sys->state_2_4khz) {
             ppi_pins |= I8255_PC4;
