@@ -949,22 +949,24 @@ $decode_block
                 }
             }
         }
-        /* call track evaluation callback if set */
-        if (trap) {
-            int trap_id = trap(pc,ticks,pins,cpu->trap_user_data);
-            if (trap_id) {
-                cpu->trap_id=trap_id;
-                break;
-            }
-        }
         /* clear state bits for next instruction */
         map_bits &= ~_BITS_USE_IXIY;
-        pins &= ~Z80_INT;
         /* delay-enable interrupt flags */
         if (r2 & _BIT_EI) {
             r2 &= ~_BIT_EI;
             r2 |= (_BIT_IFF1 | _BIT_IFF2);
         }
+
+        /* call track evaluation callback if set */
+        if (trap) {
+            int trap_id = trap(pc,ticks,pins,cpu->trap_user_data);
+            if (trap_id) {
+                cpu->trap_id=trap_id;
+                pins &= ~Z80_INT;
+                break;
+            }
+        }
+        pins &= ~Z80_INT;
         pre_pins = pins;
     } while (ticks < num_ticks);
     /* flush local state back to persistent CPU state before leaving */
