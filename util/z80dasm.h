@@ -372,7 +372,7 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                     switch (p) {
                         case 0: _STR("RET"); break;
                         case 1: _STR("EXX"); break;
-                        case 2: _STR("JP "); _STR(rp[2]); break;
+                        case 2: _STR("JP "); _CHR('('); _STR(rp[2]); _CHR(')'); break;
                         case 3: _STR("LD SP,"); _STR(rp[2]); break;
                     }
                 }
