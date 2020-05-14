@@ -246,7 +246,7 @@ static inline uint64_t _z80ctc_counter_zero(z80ctc_t* ctc, z80ctc_channel_t* chn
         chn->int_state |= Z80CTC_INT_NEEDED;
     }
     /* last channel doesn't have a ZCTO pin */
-    if (chn_id < 4) {
+    if (chn_id < 3) {
         /* set the zcto pin */
         pins |= Z80CTC_ZCTO0<<chn_id;
         ctc->pins = pins;
