@@ -330,7 +330,7 @@ void zx_exec(zx_t* sys, uint32_t micro_seconds) {
     uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
     uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
     clk_ticks_executed(&sys->clk, ticks_executed);
-    kbd_update(&sys->kbd);
+    kbd_update(&sys->kbd, micro_seconds);
 }
 
 void zx_key_down(zx_t* sys, int key_code) {

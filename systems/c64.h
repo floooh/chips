@@ -578,7 +578,7 @@ void c64_exec(c64_t* sys, uint32_t micro_seconds) {
         pins = _c64_tick(sys, pins);
     }
     sys->pins = pins;
-    kbd_update(&sys->kbd);
+    kbd_update(&sys->kbd, micro_seconds);
 }
 
 void c64_key_down(c64_t* sys, int key_code) {

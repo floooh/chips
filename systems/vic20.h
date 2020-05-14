@@ -576,7 +576,7 @@ void vic20_exec(vic20_t* sys, uint32_t micro_seconds) {
         pins = _vic20_tick(sys, pins);
     }
     sys->pins = pins;
-    kbd_update(&sys->kbd);
+    kbd_update(&sys->kbd, micro_seconds);
 }
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {

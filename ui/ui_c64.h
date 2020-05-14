@@ -756,7 +756,7 @@ void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
         c64_tick(c64);
         ui_dbg_tick(&ui->dbg, c64->pins);
     }
-    kbd_update(&ui->c64->kbd);
+    kbd_update(&ui->c64->kbd, frame_time_us);
 }
 
 #ifdef __clang__

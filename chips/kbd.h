@@ -93,18 +93,18 @@ typedef struct {
     /* mask bit layout is 8-bits modifier, and 12-bits each columns and lines */
     /* |SSSSSSSS|CCCCCCCCCCCC|LLLLLLLLLLLL| */
     uint32_t mask;
-    /* the frame-count when the key was pressed down */
-    uint32_t pressed_frame;
-    /* the frame-count when the key was released, 0 if not yet released */
-    uint32_t released_frame;
+    /* timestamp when the key was pressed down */
+    uint64_t pressed_time;
+    /* true if the key has been released */
+    bool released;
 } key_state_t;
 
 /* keyboard matrix state */
 typedef struct {
-    /* current frame counter, bumped by kbd_update() */
-    uint32_t frame_count;
+    /* current time stamp, bumped by kbd_update() */
+    uint64_t cur_time;
     /* number of frames a key will at least remain pressed */
-    int sticky_count;
+    uint32_t sticky_time;
     /* currently active columns */
     uint16_t active_columns;
     /* currently active lines */
@@ -125,10 +125,10 @@ typedef struct {
     uint16_t cur_scanout_column_mask;
 } kbd_t;
 
-/* initialize a keyboard matrix instance */
-void kbd_init(kbd_t* kbd, int sticky_count);
-/* update keyboard matrix state (releases sticky keys), usually call once per frame */
-void kbd_update(kbd_t* kbd);
+/* initialize a keyboard matrix instance, provide key-sticky duration in number of 60Hz frames */
+void kbd_init(kbd_t* kbd, int sticky_frames);
+/* update keyboard matrix state (releases sticky keys), call once per frame with frame time in micro-seconds */
+void kbd_update(kbd_t* kbd, uint32_t frame_time_us);
 /* register a modifier key, layers are between from 0 to KBD_MAX_MOD_KEYS-1 */
 void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line);
 /* register a modifier key where the modifier is mapped to an entire keyboard line */
@@ -172,16 +172,15 @@ uint16_t kbd_scan_columns(kbd_t* kbd);
     Initialize a kbd instance:
 
     kbd             -- pointer to kbd_t instance
-    sticky_count    -- number of calls to kbd_update a key will
-                       at least remain pressed even when calling kbd_key_up()
+    sticky_frames   -- number of 60Hz frames a key will at least remain
+                       pressed even when calling kbd_key_up()
                        to give emulated system enough time to sample the
                        keyboard matrix
 */
-void kbd_init(kbd_t* kbd, int sticky_count) {
+void kbd_init(kbd_t* kbd, int sticky_frames) {
     CHIPS_ASSERT(kbd);
     memset(kbd, 0, sizeof(*kbd));
-    kbd->frame_count = 1;
-    kbd->sticky_count = sticky_count;
+    kbd->sticky_time = sticky_frames * 16667;
 }
 
 void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line) {
@@ -309,18 +308,20 @@ static void _kbd_update_scanout_masks(kbd_t* kbd) {
     kbd->cur_scanout_column_mask = 0;
 }
 
-void kbd_update(kbd_t* kbd) {
+void kbd_update(kbd_t* kbd, uint32_t frame_time_us) {
     CHIPS_ASSERT(kbd);
-    kbd->frame_count++;
+    kbd->cur_time += frame_time_us;
     /* check for sticky keys that should be released */
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
         key_state_t* k = &kbd->key_buffer[i];
-        if (k->released_frame != 0) {
-            if (kbd->frame_count > (k->pressed_frame + kbd->sticky_count)) {
+        if (k->released) {
+            /* properly handle cur_time wraparound */
+            if ((kbd->cur_time < k->pressed_time) ||
+                (kbd->cur_time > (k->pressed_time + kbd->sticky_time))) {
                 k->mask = 0;
                 k->key = 0;
-                k->pressed_frame = 0;
-                k->released_frame = 0;
+                k->pressed_time = 0;
+                k->released = false;
             }
         }
     }
@@ -336,7 +337,7 @@ void kbd_key_down(kbd_t* kbd, int key) {
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
         key_state_t* k = &kbd->key_buffer[i];
         if (k->key == key) {
-            k->pressed_frame = kbd->frame_count;
+            k->pressed_time = kbd->cur_time;
             _kbd_update_scanout_masks(kbd);
             return;
         }
@@ -346,8 +347,8 @@ void kbd_key_down(kbd_t* kbd, int key) {
         if (0 == k->mask) {
             k->key = key;
             k->mask = kbd->key_masks[key];
-            k->pressed_frame = kbd->frame_count;
-            k->released_frame = 0;
+            k->pressed_time = kbd->cur_time;
+            k->released = false;
             _kbd_update_scanout_masks(kbd);
             return;
         }
@@ -360,7 +361,7 @@ void kbd_key_up(kbd_t* kbd, int key) {
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
         key_state_t* k = &kbd->key_buffer[i];
         if (key == k->key) {
-            k->released_frame = kbd->frame_count;
+            k->released = true;
         }
     }
     _kbd_update_scanout_masks(kbd);

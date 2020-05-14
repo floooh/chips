@@ -293,7 +293,7 @@ void atom_exec(atom_t* sys, uint32_t micro_seconds) {
     for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
         sys->pins = _atom_tick(sys, sys->pins);
     }
-    kbd_update(&sys->kbd);
+    kbd_update(&sys->kbd, micro_seconds);
 }
 
 void atom_key_down(atom_t* sys, int key_code) {

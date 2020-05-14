@@ -408,7 +408,7 @@ void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
         }
     }
     clk_ticks_executed(&sys->clk, ticks_executed);
-    kbd_update(&sys->kbd);
+    kbd_update(&sys->kbd, micro_seconds);
 }
 
 void cpc_key_down(cpc_t* sys, int key_code) {

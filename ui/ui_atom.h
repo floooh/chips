@@ -505,7 +505,7 @@ void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us) {
         atom_tick(ui->atom);
         ui_dbg_tick(&ui->dbg, atom->pins);
     }
-    kbd_update(&ui->atom->kbd);
+    kbd_update(&ui->atom->kbd, frame_time_us);
 }
 
 #ifdef __clang__

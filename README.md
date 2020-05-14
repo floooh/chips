@@ -14,6 +14,13 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
 
 ## What's New
 
+* **14-May-2020**: A small breaking change in kbd.h: the function ```kbd_update()```
+    now takes a new argument ```uint32_t frame_time_us``` which is the
+    current frame time (duration) in microseconds. This is necessary to 
+    make the sticky-key handling frame rate independent. The ```sticky_frames```
+    initialization parameter in ```kbd_init()``` remains unchanged. This
+    is the number of **60Hz frames** a key press should remain sticky.
+
 * **20-Jan-2020**: The i8255 and MC6847 chips emulations have been changed
     to a 'tick-only API', continuing the 'API streamlining' that started
     with the 6522 VIA chip. The Atom system emulation has been updated 

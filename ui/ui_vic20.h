@@ -610,7 +610,7 @@ void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us) {
         vic20_tick(vic20);
         ui_dbg_tick(&ui->dbg, vic20->pins);
     }
-    kbd_update(&ui->vic20->kbd);
+    kbd_update(&ui->vic20->kbd, frame_time_us);
 }
 
 #ifdef __clang__
