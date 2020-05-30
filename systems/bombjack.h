@@ -424,10 +424,12 @@ int bombjack_display_size(void) {
 }
 
 int bombjack_display_width(bombjack_t* sys) {
+    (void)sys;
     return _BOMBJACK_DISPLAY_WIDTH;
 }
 
 int bombjack_display_height(bombjack_t* sys) {
+    (void)sys;
     return _BOMBJACK_DISPLAY_HEIGHT;
 }
 

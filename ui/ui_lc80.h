@@ -494,6 +494,7 @@ static void _ui_lc80_draw_hovered_wire(ui_lc80_t* ui) {
 }
 
 static void _ui_lc80_draw_ctrl_wires(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    (void)c;
     auto& mb = ui->mb;
     for (int i = 0; i < 8; i++) {
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_CTRL;
@@ -539,6 +540,7 @@ static void _ui_lc80_draw_ctrl_wires(ui_lc80_t* ui, const _ui_lc80_mb_config& c)
 }
 
 static void _ui_lc80_draw_data_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    (void)c;
     auto& mb = ui->mb;
     for (int i = 0; i < 8; i++) {
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_DATA;
@@ -563,6 +565,7 @@ static void _ui_lc80_draw_data_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
 }
 
 static void _ui_lc80_draw_addr_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    (void)c;
     auto& mb = ui->mb;
     for (int i = 0; i < 16; i++) {
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_ADDR;
@@ -615,6 +618,7 @@ static void _ui_lc80_draw_addr_bus(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
 }
 
 static void _ui_lc80_draw_chip_select(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    (void)c;
     auto& mb = ui->mb;
     _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_SELECT;
     {
@@ -629,6 +633,7 @@ static void _ui_lc80_draw_chip_select(ui_lc80_t* ui, const _ui_lc80_mb_config& c
 }
 
 static void _ui_lc80_draw_display_wires(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    (void)c;
     auto& mb = ui->mb;
     for (int i = 0; i < 8; i++) {
         _ui_lc80_wire_type_t type = _UI_LC80_WIRETYPE_DISPLAY;
@@ -652,6 +657,7 @@ static void _ui_lc80_draw_display_wires(ui_lc80_t* ui, const _ui_lc80_mb_config&
 }
 
 static void _ui_lc80_draw_led_wires(ui_lc80_t* ui, const _ui_lc80_mb_config& c) {
+    (void)c;
     auto& mb = ui->mb;
     ui_chip_vec2_t p0 = _ui_lc80_pin_pos(&mb.pio_sys, Z80PIO_PB1);
     ui_chip_vec2_t p1 = { 656, 384 };
@@ -1013,6 +1019,7 @@ static void _ui_lc80_init_motherboard(ui_lc80_t* ui) {
 }
 
 static uint8_t _ui_lc80_mem_read(int layer, uint16_t addr, void* user_data) {
+    (void)layer;
     CHIPS_ASSERT(user_data);
     lc80_t* sys = (lc80_t*) user_data;
     if (addr < 0x0800) {
@@ -1027,6 +1034,7 @@ static uint8_t _ui_lc80_mem_read(int layer, uint16_t addr, void* user_data) {
 }
 
 void _ui_lc80_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+    (void)layer;
     CHIPS_ASSERT(user_data);
     lc80_t* sys = (lc80_t*) user_data;
     if (addr < 0x0800) {

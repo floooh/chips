@@ -325,7 +325,7 @@ static void _am40010_init_video(am40010_t* ga) {
 }
 
 /* initialize the crt init */
-static void _am40010_init_crt(am40010_t* ga, const am40010_desc_t* desc) {
+static void _am40010_init_crt(am40010_t* ga) {
     memset(&ga->crt, 0, sizeof(ga->crt));
 }
 
@@ -372,7 +372,7 @@ void am40010_init(am40010_t* ga, const am40010_desc_t* desc) {
     ga->user_data = desc->user_data;
     _am40010_init_regs(ga);
     _am40010_init_video(ga);
-    _am40010_init_crt(ga, desc);
+    _am40010_init_crt(ga);
     _am40010_init_colors(ga);
     ga->bankswitch_cb(ga->ram_config, ga->regs.config, ga->rom_select, ga->user_data);
 }
@@ -787,7 +787,7 @@ static inline void _am40010_do_cclk(am40010_t* ga, uint64_t crtc_pins) {
     with a clock cycle where the CPU samples the WAIT pin, the
     CPU will be stopped until the READY pin goes inactive again.
 */
-static inline int _am40010_wait_scan_tick(am40010_t* ga, int num_ticks, uint64_t pins) {
+static inline int _am40010_wait_scan_tick(uint64_t pins) {
     int wait_scan_tick = -1;
     /* NOTE: these offsets are important for proper computation of the CCLK clock */
     if (pins & Z80_MREQ) {
@@ -810,7 +810,7 @@ static inline int _am40010_wait_scan_tick(am40010_t* ga, int num_ticks, uint64_t
 /* the tick function must be called at 4 MHz */
 uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t pins) {
     /* determine at what clock cycle the CPU samples the WAIT pin */
-    int wait_scan_tick = _am40010_wait_scan_tick(ga, num_ticks, pins);
+    int wait_scan_tick = _am40010_wait_scan_tick(pins);
 
     /* for each 4 MHz tick... */
     uint32_t wait_cycles = 0;

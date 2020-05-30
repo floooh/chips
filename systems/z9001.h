@@ -397,10 +397,12 @@ int z9001_max_display_size(void) {
 }
 
 int z9001_display_width(z9001_t* sys) {
+    (void)sys;
     return _Z9001_DISPLAY_WIDTH;
 }
 
 int z9001_display_height(z9001_t* sys) {
+    (void)sys;
     return _Z9001_DISPLAY_HEIGHT;
 }
 
@@ -542,10 +544,12 @@ static uint64_t _z9001_tick(int num_ticks, uint64_t pins, void* user_data) {
 
 
 static uint8_t _z9001_pio1_in(int port_id, void* user_data) {
+    (void)port_id; (void)user_data;
     return 0x00;
 }
 
 static void _z9001_pio1_out(int port_id, uint8_t data, void* user_data) {
+    (void)data; (void)user_data;
     if (Z80PIO_PORT_A == port_id) {
         /*
             PIO1-A bits:
@@ -707,7 +711,7 @@ static bool _z9001_is_valid_kcc(const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-static bool _z9001_load_kcc(z9001_t* sys, const uint8_t* ptr, int num_bytes) {
+static bool _z9001_load_kcc(z9001_t* sys, const uint8_t* ptr) {
     const _z9001_kcc_header* hdr = (_z9001_kcc_header*) ptr;
     uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
     uint16_t end_addr  = hdr->end_addr_h<<8 | hdr->end_addr_l;
@@ -759,7 +763,7 @@ static bool _z9001_is_valid_kctap(const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-static bool _z9001_load_kctap(z9001_t* sys, const uint8_t* ptr, int num_bytes) {
+static bool _z9001_load_kctap(z9001_t* sys, const uint8_t* ptr) {
     const _z9001_kctap_header* hdr = (const _z9001_kctap_header*) ptr;
     uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
     uint16_t end_addr  = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
@@ -782,10 +786,10 @@ bool z9001_quickload(z9001_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid && ptr);
     /* first check for KC TAP, since this can be properly identified */
     if (_z9001_is_valid_kctap(ptr, num_bytes)) {
-        return _z9001_load_kctap(sys, ptr, num_bytes);
+        return _z9001_load_kctap(sys, ptr);
     }
     else if (_z9001_is_valid_kcc(ptr, num_bytes)) {
-        return _z9001_load_kcc(sys, ptr, num_bytes);
+        return _z9001_load_kcc(sys, ptr);
     }
     else {
         /* not a known file type, or not enough data */

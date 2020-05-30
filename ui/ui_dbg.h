@@ -464,6 +464,7 @@ static bool _ui_dbg_is_controlflow_op(uint8_t opcode0, uint8_t opcode1) {
                 return false;
         }
     #elif defined(UI_DBG_USE_M6502)
+        (void)opcode1;
         switch (opcode0) {
             /* BRK */
             case 0x00:
@@ -1124,7 +1125,7 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
 }
 
 /*== HEATMAP =================================================================*/
-static void _ui_dbg_heatmap_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
+static void _ui_dbg_heatmap_init(ui_dbg_t* win) {
     win->heatmap.tex_width = 256;
     win->heatmap.tex_height = 256;
     win->heatmap.tex_width_uicombo_state = 4;
@@ -1911,7 +1912,7 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     win->user_data = desc->user_data;
     _ui_dbg_dbgstate_init(win, desc);
     _ui_dbg_uistate_init(win, desc);
-    _ui_dbg_heatmap_init(win, desc);
+    _ui_dbg_heatmap_init(win);
 }
 
 void ui_dbg_discard(ui_dbg_t* win) {
@@ -2008,6 +2009,9 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
     }
     win->cpu_ticks++;
     win->op_ticks++;
+    #else
+    (void)win;
+    (void)pins;
     #endif
 }
 

@@ -525,6 +525,7 @@ static inline void _m6569_io_update_gunit_mode(m6569_graphics_unit_t* gu, uint8_
 
 /* update sprite unit positions and sizes when updating registers */
 static void _m6569_io_update_sunit(m6569_t* vic, int i, uint8_t mx, uint8_t my, uint8_t mx8, uint8_t mxe, uint8_t mye) {
+    (void)my;   // FIXME: my is really unused?
     m6569_sprite_unit_t* su = &vic->sunit;
     /* mxb: MSB for each xpos */
     uint16_t xpos = ((mx8 & (1<<i))<<(8-i)) | mx;

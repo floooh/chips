@@ -218,7 +218,7 @@ static void _ui_kbd_draw_plane_combo(ui_kbd_t* win) {
     ImGui::PopItemWidth();
 }
 
-static void _ui_kbd_draw_matrix(ui_kbd_t* win, const ImVec2& canvas_pos, const ImVec2& canvas_size, uint32_t mask) {
+static void _ui_kbd_draw_matrix(ui_kbd_t* win, const ImVec2& canvas_pos, uint32_t mask) {
     const uint32_t line_bits = _ui_kbd_line_bits(mask);
     const uint32_t column_bits = _ui_kbd_column_bits(mask);
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -279,7 +279,6 @@ void ui_kbd_draw(ui_kbd_t* win) {
     if (ImGui::Begin(win->title, &win->open)) {
         _ui_kbd_draw_plane_combo(win);
         const ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
-        const ImVec2 canvas_size = ImGui::GetContentRegionAvail();
         uint32_t mask = 0;
         for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
             mask |= win->kbd->key_buffer[i].mask;
@@ -291,7 +290,7 @@ void ui_kbd_draw(ui_kbd_t* win) {
         if (win->last_key_mask && (win->last_key_frame_count++ > 30)) {
             win->last_key_mask = 0;
         }
-        _ui_kbd_draw_matrix(win, canvas_pos, canvas_size, win->last_key_mask);
+        _ui_kbd_draw_matrix(win, canvas_pos, win->last_key_mask);
     }
     ImGui::End();
 }

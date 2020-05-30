@@ -613,10 +613,12 @@ int kc85_max_display_size(void) {
 }
 
 int kc85_display_width(kc85_t* sys) {
+    (void)sys;
     return _KC85_DISPLAY_WIDTH;
 }
 
 int kc85_display_height(kc85_t* sys) {
+    (void)sys;
     return _KC85_DISPLAY_HEIGHT;
 }
 
@@ -1012,6 +1014,8 @@ static uint64_t _kc85_tick(int num_ticks, uint64_t pins, void* user_data) {
 }
 
 static uint8_t _kc85_pio_in(int port_id, void* user_data) {
+    (void)port_id;
+    (void)user_data;
     return 0xFF;
 }
 
@@ -1201,6 +1205,7 @@ static void _kc85_exp_init(kc85_t* sys) {
 }
 
 static void _kc85_exp_reset(kc85_t* sys) {
+    (void)sys;
     /* FIXME? */
 }
 
@@ -1573,7 +1578,7 @@ static bool _kc85_is_valid_kcc(const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-static bool _kc85_load_kcc(kc85_t* sys, const uint8_t* ptr, int num_bytes) {
+static bool _kc85_load_kcc(kc85_t* sys, const uint8_t* ptr) {
     const _kc85_kcc_header* hdr = (_kc85_kcc_header*) ptr;
     uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
     uint16_t end_addr  = hdr->end_addr_h<<8 | hdr->end_addr_l;
@@ -1630,7 +1635,7 @@ static bool _kc85_is_valid_kctap(const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-static bool _kc85_load_kctap(kc85_t* sys, const uint8_t* ptr, int num_bytes) {
+static bool _kc85_load_kctap(kc85_t* sys, const uint8_t* ptr) {
     const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) ptr;
     uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
     uint16_t end_addr  = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
@@ -1654,10 +1659,10 @@ bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes) {
     CHIPS_ASSERT(sys && sys->valid && ptr);
     /* first check for KC-TAP format, since this can be properly identified */
     if (_kc85_is_valid_kctap(ptr, num_bytes)) {
-        return _kc85_load_kctap(sys, ptr, num_bytes);
+        return _kc85_load_kctap(sys, ptr);
     }
     else if (_kc85_is_valid_kcc(ptr, num_bytes)) {
-        return _kc85_load_kcc(sys, ptr, num_bytes);
+        return _kc85_load_kcc(sys, ptr);
     }
     else {
         /* not a known file type, or not enough data */

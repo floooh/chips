@@ -294,10 +294,12 @@ int zx_max_display_size(void) {
 }
 
 int zx_display_width(zx_t* sys) {
+    (void)sys;
     return _ZX_DISPLAY_WIDTH;
 }
 
 int zx_display_height(zx_t* sys) {
+    (void)sys;
     return _ZX_DISPLAY_HEIGHT;
 }
 

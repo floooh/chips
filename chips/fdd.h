@@ -241,6 +241,8 @@ int fdd_seek_track(fdd_t* fdd, int track) {
 int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
     CHIPS_ASSERT(fdd);
     CHIPS_ASSERT(h < FDD_MAX_SIDES);
+    (void)c; // FIXME (?)
+    (void)n; // FIXME (?)
     if (fdd->has_disc && fdd->motor_on) {
         fdd->cur_side = h;
         const fdd_track_t* track = &fdd->disc.tracks[h][fdd->cur_track_index];

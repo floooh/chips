@@ -217,6 +217,7 @@ static const char* _ui_c64_memlayer_names[_UI_C64_MEMLAYER_NUM] = {
 };
 
 static uint8_t _ui_c64_c1541_mem_read(int layer, uint16_t addr, void* user_data) {
+    (void)layer;
     ui_c64_t* ui = (ui_c64_t*) user_data;
     CHIPS_ASSERT(ui && ui->c64->c1541.valid);
     return mem_rd(&ui->c64->c1541.mem, addr);
@@ -333,6 +334,9 @@ static void _ui_c64_update_memmap(ui_c64_t* ui) {
 }
 
 static int _ui_c64_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
+    (void)pc;
+    (void)ticks;
+    (void)pins;
     CHIPS_ASSERT(user_data);
     ui_c64_t* ui = (ui_c64_t*) user_data;
     c64_t* c64 = ui->c64;

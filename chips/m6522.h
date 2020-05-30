@@ -510,7 +510,7 @@ static inline void _m6522_write_ifr(m6522_t* c, uint8_t data) {
     (essentially: T1 is always reloaded from latch, both in continuous
     and oneshot mode, while T2 is never reloaded)
 */
-static void _m6522_tick_t1(m6522_t* c, uint64_t pins) {
+static void _m6522_tick_t1(m6522_t* c) {
     m6522_timer_t* t = &c->t1;
 
     /* decrement counter? */
@@ -590,7 +590,7 @@ static void _m6522_tick_pipeline(m6522_t* c) {
     c->intr.pip = (c->intr.pip >> 1) & 0x7F7F;
 }
 
-static void _m6522_update_cab(m6522_t* c, uint64_t pins) {
+static void _m6522_update_cab(m6522_t* c) {
     if (c->pa.c1_triggered) {
         _m6522_set_intr(c, M6522_IRQ_CA1);
         if (M6522_PCR_CA2_AUTO_HS(c)) {
@@ -632,8 +632,8 @@ static uint64_t _m6522_update_irq(m6522_t* c, uint64_t pins) {
 /* perform a tick */
 static uint64_t _m6522_tick(m6522_t* c, uint64_t pins) {
     _m6522_read_port_pins(c, pins);
-    _m6522_update_cab(c, pins);
-    _m6522_tick_t1(c, pins);
+    _m6522_update_cab(c);
+    _m6522_tick_t1(c);
     _m6522_tick_t2(c, pins);
     pins = _m6522_update_irq(c, pins);
     pins = _m6522_write_port_pins(c, pins);

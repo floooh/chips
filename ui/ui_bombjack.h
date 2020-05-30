@@ -434,6 +434,7 @@ static uint8_t _ui_bombjack_set_bits(uint8_t val, uint8_t mask, uint8_t bits) {
 }
 
 static uint8_t _ui_bombjack_toggle_bits(uint8_t val, uint8_t mask, uint8_t bits) {
+    (void)mask;
     return val ^ bits;
 }
 

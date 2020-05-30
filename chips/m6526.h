@@ -432,7 +432,7 @@ static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
    (since this is different for timer A and B)
    check here for the details: https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
 */
-static void _m6526_tick_timer(m6526_t* c, m6526_timer_t* t) {
+static void _m6526_tick_timer(m6526_timer_t* t) {
     /* decrement counter? */
     if (_M6526_PIP_TEST(t->pip, M6526_PIP_TIMER_COUNT, 0)) {
         t->counter--;
@@ -523,15 +523,15 @@ static void _m6526_tick_pipeline(m6526_t* c) {
 
 static uint64_t _m6526_tick(m6526_t* c, uint64_t pins) {
     _m6526_read_port_pins(c, pins);
-    _m6526_tick_timer(c, &c->ta);
-    _m6526_tick_timer(c, &c->tb);
+    _m6526_tick_timer(&c->ta);
+    _m6526_tick_timer(&c->tb);
     pins = _m6526_update_irq(c, pins);
     pins = _m6526_write_port_pins(c, pins);
     _m6526_tick_pipeline(c);
     return pins;
 }
 
-static inline void _m6526_write_cr(m6526_t* c, m6526_timer_t* t, uint8_t data) {
+static inline void _m6526_write_cr(m6526_timer_t* t, uint8_t data) {
     /* if the start bit goes from 0 to 1, set the current toggle-bit-state to 1 */
     if (!M6526_TIMER_STARTED(t->cr) && M6526_TIMER_STARTED(data)) {
         t->t_bit = true;
@@ -620,10 +620,10 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             _m6526_write_icr(c, data);
             break;
         case M6526_REG_CRA:
-            _m6526_write_cr(c, &c->ta, data);
+            _m6526_write_cr(&c->ta, data);
             break;
         case M6526_REG_CRB:
-            _m6526_write_cr(c, &c->tb, data);
+            _m6526_write_cr(&c->tb, data);
             break;
     }
 }

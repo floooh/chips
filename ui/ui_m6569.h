@@ -118,7 +118,7 @@ void ui_m6569_discard(ui_m6569_t* win) {
     win->valid = false;
 }
 
-static void _ui_m6569_draw_hwcolors(ui_m6569_t* win) {
+static void _ui_m6569_draw_hwcolors(void) {
     if (ImGui::CollapsingHeader("Hardware Colors")) {
         ImVec4 c;
         const ImVec2 size(18,18);
@@ -315,7 +315,7 @@ void ui_m6569_draw(ui_m6569_t* win) {
         if (ImGui::Button("Tint Framebuffer")) {
             _ui_m6569_tint_framebuffer(win);
         }
-        _ui_m6569_draw_hwcolors(win);
+        _ui_m6569_draw_hwcolors();
         _ui_m6569_draw_registers(win);
         _ui_m6569_draw_raster_unit(win);
         _ui_m6569_draw_memory_unit(win);

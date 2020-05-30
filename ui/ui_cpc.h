@@ -356,6 +356,9 @@ static void _ui_cpc_mem_write(int layer, uint16_t addr, uint8_t data, void* user
 }
 
 static int _ui_cpc_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
+    (void)pc;
+    (void)ticks;
+    (void)pins;
     CHIPS_ASSERT(user_data);
     ui_cpc_t* ui_cpc = (ui_cpc_t*) user_data;
     cpc_t* cpc = ui_cpc->cpc;

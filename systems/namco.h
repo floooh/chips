@@ -912,10 +912,12 @@ int namco_std_display_height(void) {
 }
 
 int namco_display_width(namco_t* sys) {
+    (void)sys;
     return NAMCO_DISPLAY_WIDTH;
 }
 
 int namco_display_height(namco_t* sys) {
+    (void)sys;
     return NAMCO_DISPLAY_HEIGHT;
 }
 

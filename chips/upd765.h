@@ -555,6 +555,8 @@ static uint8_t _upd765_exec_rd(upd765_t* upd) {
 /* called when a byte is written during the exec phase */
 static void _upd765_exec_wr(upd765_t* upd, uint8_t data) {
     // FIXME
+    (void)upd;
+    (void)data;
 }
 
 /* write a data byte to the upd765 */

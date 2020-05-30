@@ -648,6 +648,9 @@ static uint64_t _cpc_cclk(void* user_data) {
 /* PSG OUT callback (nothing to do here) */
 static void _cpc_psg_out(int port_id, uint8_t data, void* user_data) {
     /* this shouldn't be called */
+    (void)port_id;
+    (void)data;
+    (void)user_data;
 }
 
 /* PSG IN callback (read keyboard matrix and joystick port) */
@@ -933,14 +936,14 @@ typedef struct {
     uint8_t pad_5[0x60];
 } _cpc_bin_header;
 
-static bool _cpc_is_valid_bin(const uint8_t* ptr, int num_bytes) {
+static bool _cpc_is_valid_bin(int num_bytes) {
     if (num_bytes <= (int)sizeof(_cpc_bin_header)) {
         return false;
     }
     return true;
 }
 
-static bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+static bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr) {
     const _cpc_bin_header* hdr = (const _cpc_bin_header*) ptr;
     ptr += sizeof(_cpc_bin_header);
     const uint16_t load_addr = (hdr->load_addr_h<<8)|hdr->load_addr_l;
@@ -961,8 +964,8 @@ bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     if (_cpc_is_valid_sna(ptr, num_bytes)) {
         return _cpc_load_sna(sys, ptr, num_bytes);
     }
-    else if (_cpc_is_valid_bin(ptr, num_bytes)) {
-        return _cpc_load_bin(sys, ptr, num_bytes);
+    else if (_cpc_is_valid_bin(num_bytes)) {
+        return _cpc_load_bin(sys, ptr);
     }
     else {
         /* not a known file type, or not enough data */
@@ -973,6 +976,8 @@ bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
 /*=== CASSETTE TAPE FILE LOADING =============================================*/
 /* CPU trap handler to check for casread */
 static int _cpc_trap_cb(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data) {
+    (void)ticks;
+    (void)pins;
     cpc_t* sys = (cpc_t*) user_data;
     return (pc == sys->casread_trap) ? 1 : 0;
 }

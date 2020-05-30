@@ -173,12 +173,14 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
 
 static uint8_t _ui_atom_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
+    (void)layer;
     atom_t* atom = (atom_t*) user_data;
     return mem_rd(&atom->mem, addr);
 }
 
 static void _ui_atom_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
     CHIPS_ASSERT(user_data);
+    (void)layer;
     atom_t* atom = (atom_t*) user_data;
     mem_wr(&atom->mem, addr, data);
 }

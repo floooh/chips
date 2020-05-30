@@ -162,10 +162,14 @@ void c1541_tick(c1541_t* sys) {
 
 void c1541_insert_disc(c1541_t* sys, const uint8_t* ptr, int num_bytes) {
     // FIXME
+    (void)sys;
+    (void)ptr;
+    (void)num_bytes;
 }
 
 void c1541_remove_disc(c1541_t* sys) {
     // FIXME
+    (void)sys;
 }
 
 #endif /* CHIPS_IMPL */

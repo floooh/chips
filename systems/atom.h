@@ -265,11 +265,13 @@ int atom_max_display_size(void) {
 
 int atom_display_width(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
+    (void)sys;
     return MC6847_DISPLAY_WIDTH;
 }
 
 int atom_display_height(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
+    (void)sys;
     return MC6847_DISPLAY_HEIGHT;
 }
 

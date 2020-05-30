@@ -291,12 +291,14 @@ static const ui_chip_pin_t _ui_z9001_ctc_pins[] = {
 };
 
 static uint8_t _ui_z9001_mem_read(int layer, uint16_t addr, void* user_data) {
+    (void)layer;
     CHIPS_ASSERT(user_data);
     z9001_t* z9001 = (z9001_t*) user_data;
     return mem_rd(&z9001->mem, addr);
 }
 
 void _ui_z9001_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+    (void)layer;
     CHIPS_ASSERT(user_data);
     z9001_t* z9001 = (z9001_t*) user_data;
     mem_wr(&z9001->mem, addr, data);

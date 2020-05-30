@@ -572,6 +572,8 @@ static uint32_t _lc80_vqe23_write(uint32_t vqe23, int digit, uint8_t data) {
 }
 
 uint8_t _lc80_pio_sys_in(int port_id, void* user_data) {
+    (void)port_id;
+    (void)user_data;
     // FIXME: TAPE IN
     return 0xFF;
 }
@@ -651,6 +653,9 @@ uint8_t _lc80_pio_usr_in(int port_id, void* user_data) {
 
 void _lc80_pio_usr_out(int port_id, uint8_t data, void* user_data) {
     // FIXME
+    (void)port_id;
+    (void)data;
+    (void)user_data;
 }
 
 #endif /* CHIPS_IMPL */

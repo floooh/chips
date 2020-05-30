@@ -250,6 +250,7 @@ static void _ui_vic20_update_memmap(ui_vic20_t* ui) {
 }
 
 static int _ui_vic20_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
+    (void)pc; (void)ticks; (void)pins;
     CHIPS_ASSERT(user_data);
     ui_vic20_t* ui = (ui_vic20_t*) user_data;
     vic20_t* vic20 = ui->vic20;

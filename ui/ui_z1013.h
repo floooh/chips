@@ -253,12 +253,14 @@ static const ui_chip_pin_t _ui_z1013_pio_pins[] = {
 };
 
 static uint8_t _ui_z1013_mem_read(int layer, uint16_t addr, void* user_data) {
+    (void)layer;
     CHIPS_ASSERT(user_data);
     z1013_t* z1013 = (z1013_t*) user_data;
     return mem_rd(&z1013->mem, addr);
 }
 
 void _ui_z1013_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+    (void)layer;
     CHIPS_ASSERT(user_data);
     z1013_t* z1013 = (z1013_t*) user_data;
     mem_wr(&z1013->mem, addr, data);
