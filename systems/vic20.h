@@ -630,7 +630,8 @@ static void _vic20_init_key_map(vic20_t* sys) {
     kbd_register_key(&sys->kbd, 0x09, 2, 7, 0);    /* cursor right */
     kbd_register_key(&sys->kbd, 0x0A, 3, 7, 0);    /* cursor down */
     kbd_register_key(&sys->kbd, 0x0B, 3, 7, 1);    /* cursor up */
-    kbd_register_key(&sys->kbd, 0x01, 0, 7, 0);    /* delete */
+    kbd_register_key(&sys->kbd, 0x07, 0, 7, 1);    /* inst */
+    kbd_register_key(&sys->kbd, 0x01, 0, 7, 0);    /* del */
     kbd_register_key(&sys->kbd, 0x0D, 1, 7, 0);    /* return */
     kbd_register_key(&sys->kbd, 0x03, 3, 0, 0);    /* stop */
     kbd_register_key(&sys->kbd, 0x04, 1, 0, 0);    /* left arrow */
