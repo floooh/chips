@@ -596,15 +596,15 @@ static void _vic20_init_key_map(vic20_t* sys) {
         "7YGVBHU8"  // row 3
         "9IJNMKO0"  // row 4
         "+PL,.:@-"  // row 5
-        "~*;/ =  "  // row 6, ~ is british pound
+        "~*;/ =^ "  // row 6, ~ is british pound
         "        "  // row 7
 
         /* shift */
         "!     q\""
         "#wa zse$"
-        "%rdxcft^"
-        "&ygvbhu*"
-        "(ijnmko)"
+        "%rdxcft&"
+        "'ygvbhu("
+        ")ijnmko "
         " pl<>[  "
         "$ ]?    "
         "        ";
@@ -633,6 +633,11 @@ static void _vic20_init_key_map(vic20_t* sys) {
     kbd_register_key(&sys->kbd, 0x01, 0, 7, 0);    /* delete */
     kbd_register_key(&sys->kbd, 0x0D, 1, 7, 0);    /* return */
     kbd_register_key(&sys->kbd, 0x03, 3, 0, 0);    /* stop */
+    kbd_register_key(&sys->kbd, 0x04, 1, 0, 0);    /* left arrow */
+    kbd_register_key(&sys->kbd, 0x05, 7, 6, 0);    /* home */
+    kbd_register_key(&sys->kbd, 0x06, 7, 6, 1);    /* clr */
+    kbd_register_key(&sys->kbd, 0x0E, 2, 0, 0);    /* ctrl */
+    kbd_register_key(&sys->kbd, 0x0F, 5, 0, 0);    /* C= key */
     kbd_register_key(&sys->kbd, 0xF1, 4, 7, 0);
     kbd_register_key(&sys->kbd, 0xF2, 4, 7, 1);
     kbd_register_key(&sys->kbd, 0xF3, 5, 7, 0);
