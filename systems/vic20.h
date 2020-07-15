@@ -63,8 +63,6 @@ extern "C" {
 #endif
 
 #define VIC20_FREQUENCY (1108404)
-#define VIC20_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
-#define VIC20_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */ 
 
 /* VIC-20 joystick types (only one joystick supported) */
 typedef enum {
@@ -121,7 +119,8 @@ typedef struct {
 
     /* audio output config (if you don't want audio, set audio_cb to zero) */
     vic20_audio_callback_t audio_cb;  /* called when audio_num_samples are ready */
-    int audio_num_samples;          /* default is VIC20_AUDIO_NUM_SAMPLES */
+    float *audio_buffer;            /* buffer containing audio samples */
+    int audio_num_samples;          /* size of the audio buffer */
     int audio_sample_rate;          /* playback sample rate in Hz, default is 44100 */
     float audio_volume;             /* audio volume of the VIC chip (0.0 .. 1.0), default is 1.0 */
 
@@ -161,7 +160,7 @@ typedef struct {
     vic20_audio_callback_t audio_cb;
     int num_samples;
     int sample_pos;
-    float sample_buffer[VIC20_MAX_AUDIO_SAMPLES];
+    float* sample_buffer;
 
     uint8_t color_ram[0x0400];      /* special color RAM */
     uint8_t ram0[0x0400];           /* 1 KB zero page, stack, system work area */
@@ -269,8 +268,8 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     memcpy(sys->rom_kernal, desc->rom_kernal, sizeof(sys->rom_kernal));
     sys->user_data = desc->user_data;
     sys->audio_cb = desc->audio_cb;
-    sys->num_samples = _VIC20_DEFAULT(desc->audio_num_samples, VIC20_DEFAULT_AUDIO_SAMPLES);
-    CHIPS_ASSERT(sys->num_samples <= VIC20_MAX_AUDIO_SAMPLES);
+    sys->sample_buffer = desc->audio_buffer;
+    sys->num_samples = desc->audio_num_samples;
 
     /* datasette: motor off, no buttons pressed */
     sys->cas_port = VIC20_CASPORT_MOTOR|VIC20_CASPORT_SENSE;
