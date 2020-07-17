@@ -362,6 +362,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
         mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_3k);     /* CPU: 0400..0FFF */
     }
     mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);           /* CPU: 1000..1FFF */
+    mem_map_rom(&sys->mem_vic, 0, 0x4000, 0x1000, sys->rom_char);       /* CPU: 8000..8FFF */
 
     /*
         A special memory mapping used to copy ROM cartridge PRG files
