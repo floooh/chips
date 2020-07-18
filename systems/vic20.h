@@ -737,7 +737,7 @@ static void _vic20_update_joymasks(vic20_t* sys) {
     uint8_t jm = sys->kbd_joy_mask | sys->joy_joy_mask;
     sys->via1_joy_mask = M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5;
     sys->via2_joy_mask = M6522_PB7;
-    if (jm & VIC20_JOYSTICK_LEFT) {
+    if (jm & VIC20_JOYSTICK_UP) {
         sys->via1_joy_mask &= ~M6522_PA2;
     }
     if (jm & VIC20_JOYSTICK_DOWN) {
