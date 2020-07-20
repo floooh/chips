@@ -75,6 +75,7 @@ typedef enum {
 /* memory configuration (used in vic20_desc_t.mem_config) */
 typedef enum {
     VIC20_MEMCONFIG_STANDARD,       /* unexpanded */
+    VIC20_MEMCONFIG_3K,             /* Block 0 (3KB at 0400..0FFF) */
     VIC20_MEMCONFIG_8K,             /* Block 1 */
     VIC20_MEMCONFIG_16K,            /* Block 1+2 */
     VIC20_MEMCONFIG_24K,            /* Block 1+2+3 */
@@ -324,7 +325,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     */
     mem_init(&sys->mem_cpu);
     mem_map_ram(&sys->mem_cpu, 1, 0x0000, 0x0400, sys->ram0);
-    if (desc->mem_config == VIC20_MEMCONFIG_MAX) {
+    if (desc->mem_config == VIC20_MEMCONFIG_3K || desc->mem_config == VIC20_MEMCONFIG_MAX) {
         mem_map_ram(&sys->mem_cpu, 1, 0x0400, 0x0C00, sys->ram_3k);
     }
     mem_map_ram(&sys->mem_cpu, 1, 0x1000, 0x1000, sys->ram1);
