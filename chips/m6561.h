@@ -385,7 +385,7 @@ static void _m6561_regs_dirty(m6561_t* vic) {
     vic->rs.row_height = (vic->regs[3] & 1) ? 16 : 8;
     vic->border.left = vic->regs[0] & 0x7F;
     vic->border.right = vic->border.left + (vic->regs[2] & 0x7F) * 2;
-    vic->border.top = vic->regs[1];
+    vic->border.top = vic->regs[1] * 2;
     vic->border.bottom = vic->border.top + ((vic->regs[3]>>1) & 0x3F) * vic->rs.row_height;
     vic->gunit.inv_color = (vic->regs[15] & 8) == 0;
     vic->gunit.bg_color = _m6561_colors[(vic->regs[15]>>4) & 0xF];
