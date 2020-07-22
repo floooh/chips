@@ -479,7 +479,7 @@ static void _m6561_tick_video(m6561_t* vic) {
         /* switch off horizontal border */
         vic->border.enabled &= ~_M6561_HBORDER;
     }
-    if (vic->rs.h_count == (vic->border.right+1)) {
+    if (vic->rs.h_count == (vic->border.right+1) || vic->rs.h_count == _M6561_HTOTAL - 1) {
         /* switch on horizontal border */
         vic->border.enabled |= _M6561_HBORDER;
         vic->rs.vc_disabled |= _M6561_HVC_DISABLE;
@@ -514,7 +514,7 @@ static void _m6561_tick_video(m6561_t* vic) {
         if (vic->rs.rc == vic->rs.row_height) {
             vic->rs.rc = 0;
             vic->rs.row_count++;
-            vic->rs.vc_base = vic->rs.vc & 0xFFFE;
+            vic->rs.vc_base = vic->rs.row_count*((vic->regs[2] & 0x7F) * 2);
         }
         if (vic->rs.v_count == vic->border.top) {
             vic->border.enabled &= ~_M6561_VBORDER;
