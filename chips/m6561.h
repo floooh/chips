@@ -441,7 +441,6 @@ static inline void _m6561_decode_pixels(m6561_t* vic, uint32_t* dst) {
             dst[2] = (p & (1<<5)) ? fg : bg;
             dst[3] = (p & (1<<4)) ? fg : bg;
         }
-        vic->gunit.shift = p<<4;
     }
 }
 
@@ -467,6 +466,7 @@ static void _m6561_tick_video(m6561_t* vic) {
             uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * _M6561_PIXELS_PER_TICK;
             _m6561_decode_pixels(vic, dst);
         }
+        vic->gunit.shift = vic->gunit.shift<<4;
     }
 
     /* display-enabled area? */
