@@ -559,7 +559,9 @@ static void _ui_dbg_history_draw(ui_dbg_t* win) {
         const float glyph_width = ImGui::CalcTextSize("F").x;
         const float cell_width = 3 * glyph_width;
 
-        ImGuiListClipper clipper(UI_DBG_NUM_LINES, line_height);
+        ImGuiListClipper clipper;
+        clipper.Begin(UI_DBG_NUM_LINES, line_height);
+        clipper.Step();
         for (int line_i = 0; line_i < UI_DBG_NUM_LINES; line_i++) {
 
             /* skip rendering if not in visible area */
@@ -1708,7 +1710,9 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
 
     /* make sure the PC line is visible, but only when not stopped or stepping */
     const int safe_lines = 5;
-    ImGuiListClipper clipper(UI_DBG_NUM_LINES, line_height);
+    ImGuiListClipper clipper;
+    clipper.Begin(UI_DBG_NUM_LINES, line_height);
+    clipper.Step();
     for (int line_i = 0; line_i < UI_DBG_NUM_LINES; line_i++) {
         uint16_t addr = win->ui.line_array[line_i].addr;
         bool in_safe_area = (line_i >= (clipper.DisplayStart+safe_lines)) && (line_i <= (clipper.DisplayEnd-safe_lines));

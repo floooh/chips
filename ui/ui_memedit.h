@@ -328,7 +328,9 @@ struct MemoryEditor
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
         const int line_total_count = (int)((mem_size + Rows - 1) / Rows);
-        ImGuiListClipper clipper(line_total_count, s.LineHeight);
+        ImGuiListClipper clipper;
+        clipper.Begin(line_total_count, s.LineHeight);
+        clipper.Step();
         const size_t visible_start_addr = clipper.DisplayStart * Rows;
         const size_t visible_end_addr = clipper.DisplayEnd * Rows;
 

@@ -346,7 +346,9 @@ static void _ui_dasm_draw_disasm(ui_dasm_t* win) {
     const float line_height = ImGui::GetTextLineHeight();
     const float glyph_width = ImGui::CalcTextSize("F").x;
     const float cell_width = 3 * glyph_width;
-    ImGuiListClipper clipper(UI_DASM_NUM_LINES, line_height);
+    ImGuiListClipper clipper;
+    clipper.Begin(UI_DASM_NUM_LINES, line_height);
+    clipper.Step();
 
     /* skip hidden lines */
     win->cur_addr = win->start_addr;
