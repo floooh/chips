@@ -715,8 +715,7 @@ static inline void _namco_8x4(
 {
     uint32_t xor_x = flip_x ? 3 : 0;
     uint32_t xor_y = flip_y ? 7 : 0;
-    int tile_index = char_code*tile_stride + tile_offset;
-    for (uint32_t yy = 0; yy < 8; yy++, tile_index++) {
+    for (uint32_t yy = 0; yy < 8; yy++) {
         uint32_t y = py + (yy ^ xor_y);
         if (y >= NAMCO_DISPLAY_HEIGHT) {
             continue;
