@@ -270,7 +270,7 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
             _STR(")");
             return pc;
         }
-        pre = op;
+        pc++;
         /* if prefixed op, use register tables that replace HL with IX/IY */
         if (pre == 0xDD) {
             r  = _z80dasm_rix;
