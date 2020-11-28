@@ -262,15 +262,14 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
     /* prefixed op? */
     if ((0xFD == op) || (0xDD == op)) {
         pre = op;
-        op = in_cb(user_data);
+        _FETCH_U8(op);
         if ((_z80dasm_pre_valid[op / 32] & (UINT32_C(1) << (op & 31))) == 0) {
             /* if the next instruction doesn't use the prefix, report it as a NOP */
             _STR("NOP (");
             _STR(pre == 0xFD ? "FD" : "DD");
             _STR(")");
-            return pc;
+            return pc - 1;
         }
-        pc++;
         /* if prefixed op, use register tables that replace HL with IX/IY */
         if (pre == 0xDD) {
             r  = _z80dasm_rix;
