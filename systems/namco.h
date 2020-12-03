@@ -1010,7 +1010,7 @@ static void _namco_sound_tick(namco_t* sys, int num_ticks) {
                 sm += snd->voice[i].sample;
             }
         }
-        sm *= snd->volume;// * 0.33333f;
+        sm *= snd->volume * 0.33333f;
         snd->sample_buffer[snd->sample_pos++] = sm;
         if (snd->sample_pos == snd->num_samples) {
             if (snd->callback) {
