@@ -1101,6 +1101,14 @@ bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
     while (addr < end_addr) {
         mem_wr(&sys->mem_cpu, addr++, *ptr++);
     }
+
+    // update the BASIC pointers
+	mem_write_word(sys, 0x2d, end_addr);
+	mem_write_word(sys, 0x2f, end_addr);
+	mem_write_word(sys, 0x31, end_addr);
+	mem_write_word(sys, 0x33, end_addr);
+	mem_write_word(sys, 0xae, end_addr);
+
     return true;
 }
 
