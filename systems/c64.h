@@ -287,6 +287,32 @@ typedef enum {
 #define C64_IECPORT_CLK     (1<<3)
 #define C64_IECPORT_ATN     (1<<4)
 
+/* special keyboard keys */
+#define C64_KEY_SPACE    (0x20)     /* space */
+#define C64_KEY_CSRLEFT  (0x08)     /* cursor left (shift+cursor right)*/
+#define C64_KEY_CSRRIGHT (0x09)     /* cursor right */
+#define C64_KEY_CSRDOWN  (0x0A)     /* cursor down */
+#define C64_KEY_CSRUP    (0x0B)     /* cursor up (shift+cursor down)*/
+#define C64_KEY_DEL      (0x01)     /* delete */
+#define C64_KEY_INST     (0x10)     /* inst (shift+del)*/
+#define C64_KEY_HOME     (0x0C)     /* home */
+#define C64_KEY_CLR      (0x02)     /* clear (shift+home) */
+#define C64_KEY_RETURN   (0x0D)     /* return */
+#define C64_KEY_RESTORE  (0xFF)     /* restore (connected to the NMI line) */
+#define C64_KEY_CTRL     (0x0E)     /* ctrl */
+#define C64_KEY_CBM      (0x0F)     /* C= commodore key */
+#define C64_KEY_STOP     (0x03)     /* run stop */
+#define C64_KEY_RUN      (0x07)     /* run (shift+run stop) */
+#define C64_KEY_LEFT     (0x04)     /* left arrow symbol */
+#define C64_KEY_F1       (0xF1)     /* F1 */
+#define C64_KEY_F2       (0xF2)     /* F2 */
+#define C64_KEY_F3       (0xF3)     /* F3 */
+#define C64_KEY_F4       (0xF4)     /* F4 */
+#define C64_KEY_F5       (0xF5)     /* F5 */
+#define C64_KEY_F6       (0xF6)     /* F6 */
+#define C64_KEY_F7       (0xF7)     /* F7 */
+#define C64_KEY_F8       (0xF8)     /* F8 */
+
 /* audio sample data callback */
 typedef void (*c64_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
@@ -1032,23 +1058,30 @@ static void _c64_init_key_map(c64_t* sys) {
     }
 
     /* special keys */
-    kbd_register_key(&sys->kbd, 0x20, 4, 7, 0);    /* space */
-    kbd_register_key(&sys->kbd, 0x08, 2, 0, 1);    /* cursor left */
-    kbd_register_key(&sys->kbd, 0x09, 2, 0, 0);    /* cursor right */
-    kbd_register_key(&sys->kbd, 0x0A, 7, 0, 0);    /* cursor down */
-    kbd_register_key(&sys->kbd, 0x0B, 7, 0, 1);    /* cursor up */
-    kbd_register_key(&sys->kbd, 0x01, 0, 0, 0);    /* delete */
-    kbd_register_key(&sys->kbd, 0x0C, 3, 6, 1);    /* clear */
-    kbd_register_key(&sys->kbd, 0x0D, 1, 0, 0);    /* return */
-    kbd_register_key(&sys->kbd, 0x03, 7, 7, 0);    /* stop */
-    kbd_register_key(&sys->kbd, 0xF1, 4, 0, 0);
-    kbd_register_key(&sys->kbd, 0xF2, 4, 0, 1);
-    kbd_register_key(&sys->kbd, 0xF3, 5, 0, 0);
-    kbd_register_key(&sys->kbd, 0xF4, 5, 0, 1);
-    kbd_register_key(&sys->kbd, 0xF5, 6, 0, 0);
-    kbd_register_key(&sys->kbd, 0xF6, 6, 0, 1);
-    kbd_register_key(&sys->kbd, 0xF7, 3, 0, 0);
-    kbd_register_key(&sys->kbd, 0xF8, 3, 0, 1);
+    kbd_register_key(&sys->kbd, C64_KEY_SPACE   , 4, 7, 0);    /* space */
+    kbd_register_key(&sys->kbd, C64_KEY_CSRLEFT , 2, 0, 1);    /* cursor left (shift+cursor right)*/
+    kbd_register_key(&sys->kbd, C64_KEY_CSRRIGHT, 2, 0, 0);    /* cursor right */
+    kbd_register_key(&sys->kbd, C64_KEY_CSRDOWN , 7, 0, 0);    /* cursor down */
+    kbd_register_key(&sys->kbd, C64_KEY_CSRUP   , 7, 0, 1);    /* cursor up (shift+cursor down)*/
+    kbd_register_key(&sys->kbd, C64_KEY_DEL     , 0, 0, 0);    /* delete */
+    kbd_register_key(&sys->kbd, C64_KEY_INST    , 0, 0, 1);    /* inst (shift+del)*/
+    kbd_register_key(&sys->kbd, C64_KEY_HOME    , 3, 6, 0);    /* home */
+    kbd_register_key(&sys->kbd, C64_KEY_CLR     , 3, 6, 1);    /* clear (shift+home) */
+    kbd_register_key(&sys->kbd, C64_KEY_RETURN  , 1, 0, 0);    /* return */
+    kbd_register_key(&sys->kbd, C64_KEY_CTRL    , 2, 7, 0);    /* restore (connected to the NMI line) */
+    kbd_register_key(&sys->kbd, C64_KEY_CBM     , 5, 7, 0);    /* ctrl */
+    kbd_register_key(&sys->kbd, C64_KEY_RESTORE , 0, 8, 0);    /* C= commodore key */
+    kbd_register_key(&sys->kbd, C64_KEY_STOP    , 7, 7, 0);    /* run stop */
+    kbd_register_key(&sys->kbd, C64_KEY_RUN     , 7, 7, 1);    /* run (shift+run stop) */
+    kbd_register_key(&sys->kbd, C64_KEY_LEFT    , 1, 7, 0);    /* left arrow symbol */
+    kbd_register_key(&sys->kbd, C64_KEY_F1      , 4, 0, 0);    /* F1 */
+    kbd_register_key(&sys->kbd, C64_KEY_F2      , 4, 0, 1);    /* F2 */
+    kbd_register_key(&sys->kbd, C64_KEY_F3      , 5, 0, 0);    /* F3 */
+    kbd_register_key(&sys->kbd, C64_KEY_F4      , 5, 0, 1);    /* F4 */
+    kbd_register_key(&sys->kbd, C64_KEY_F5      , 6, 0, 0);    /* F5 */
+    kbd_register_key(&sys->kbd, C64_KEY_F6      , 6, 0, 1);    /* F6 */
+    kbd_register_key(&sys->kbd, C64_KEY_F7      , 3, 0, 0);    /* F7 */
+    kbd_register_key(&sys->kbd, C64_KEY_F8      , 3, 0, 1);    /* F8 */
 }
 
 bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
