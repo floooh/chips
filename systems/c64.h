@@ -834,6 +834,11 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         }
     }
 
+    // the RESTORE key, along with CIA-2 IRQ, is connected to the NMI line,
+    if(sys->kbd.scanout_column_masks[8] & 1) {
+        pins |= M6502_NMI;
+    }
+
     /* tick the VIC-II display chip:
         - the VIC-II IRQ pin is connected to the CPU IRQ pin and goes
         active when the VIC-II requests a rasterline interrupt
