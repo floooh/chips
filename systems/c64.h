@@ -298,9 +298,9 @@ typedef enum {
 #define C64_KEY_HOME     (0x0C)     /* home */
 #define C64_KEY_CLR      (0x02)     /* clear (shift+home) */
 #define C64_KEY_RETURN   (0x0D)     /* return */
-#define C64_KEY_RESTORE  (0xFF)     /* restore (connected to the NMI line) */
 #define C64_KEY_CTRL     (0x0E)     /* ctrl */
 #define C64_KEY_CBM      (0x0F)     /* C= commodore key */
+#define C64_KEY_RESTORE  (0xFF)     /* restore (connected to the NMI line) */
 #define C64_KEY_STOP     (0x03)     /* run stop */
 #define C64_KEY_RUN      (0x07)     /* run (shift+run stop) */
 #define C64_KEY_LEFT     (0x04)     /* left arrow symbol */
@@ -1073,9 +1073,9 @@ static void _c64_init_key_map(c64_t* sys) {
     kbd_register_key(&sys->kbd, C64_KEY_HOME    , 3, 6, 0);    /* home */
     kbd_register_key(&sys->kbd, C64_KEY_CLR     , 3, 6, 1);    /* clear (shift+home) */
     kbd_register_key(&sys->kbd, C64_KEY_RETURN  , 1, 0, 0);    /* return */
-    kbd_register_key(&sys->kbd, C64_KEY_CTRL    , 2, 7, 0);    /* restore (connected to the NMI line) */
-    kbd_register_key(&sys->kbd, C64_KEY_CBM     , 5, 7, 0);    /* ctrl */
-    kbd_register_key(&sys->kbd, C64_KEY_RESTORE , 0, 8, 0);    /* C= commodore key */
+    kbd_register_key(&sys->kbd, C64_KEY_CTRL    , 2, 7, 0);    /* ctrl */
+    kbd_register_key(&sys->kbd, C64_KEY_CBM     , 5, 7, 0);    /* C= commodore key */
+    kbd_register_key(&sys->kbd, C64_KEY_RESTORE , 0, 8, 0);    /* restore (connected to the NMI line) */
     kbd_register_key(&sys->kbd, C64_KEY_STOP    , 7, 7, 0);    /* run stop */
     kbd_register_key(&sys->kbd, C64_KEY_RUN     , 7, 7, 1);    /* run (shift+run stop) */
     kbd_register_key(&sys->kbd, C64_KEY_LEFT    , 1, 7, 0);    /* left arrow symbol */
