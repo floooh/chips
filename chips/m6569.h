@@ -216,7 +216,7 @@ typedef struct {
     bool main;          /* main border flip-flop */
     bool vert;          /* vertical border flip flop */
     uint8_t bc_index;   /* border color as palette index (not used, but may be useful for outside code) */
-    uint32_t bc_rgba8;  /* border color as RGBA8, udpated when border color register is updated */
+    uint32_t bc_rgba8;  /* border color as RGBA8, updated when border color register is updated */
 } m6569_border_unit_t;
 
 /* CRT state tracking */
