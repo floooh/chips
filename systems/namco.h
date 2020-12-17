@@ -1005,9 +1005,9 @@ static void _namco_sound_tick(namco_t* sys, int num_ticks) {
         float sm = 0.0f;
         for (int i = 0; i < 3; i++) {
             if (snd->voice[i].sample_div > 0.0f) {
-                snd->voice[i].sample /= snd->voice[i].sample_div;
-                snd->voice[i].sample_div = 128.0f;
-                sm += snd->voice[i].sample;
+                sm += snd->voice[i].sample / snd->voice[i].sample_div;
+                snd->voice[i].sample = 0.0f;
+                snd->voice[i].sample_div = 0.0f;
             }
         }
         sm *= snd->volume * 0.33333f;
