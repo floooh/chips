@@ -497,101 +497,102 @@ bool ay38910_tick(ay38910_t* ay) {
 }
 
 uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
-    if (pins & (AY38910_BDIR|AY38910_BC1)) {
-        if (pins & AY38910_BDIR) {
-            const uint8_t data = AY38910_DATA(pins);
-            if (pins & AY38910_BC1) {
-                /* latch address */
-                ay->addr = data;
-            }
-            else {
-                /* Write to register using the currently latched address.
-                   The whole 8-bit address is considered, the low 4 bits
-                   are the register index, and the upper bits are burned
-                   into the chip as a 'chip select' and are usually 0
-                   (this emulator assumes they are 0, so addresses greater
-                   are ignored for reading and writing)
-                */
-                if (ay->addr < AY38910_NUM_REGISTERS) {
-                    /* write register content, and update dependent values */
-                    ay->reg[ay->addr] = data & _ay38910_reg_mask[ay->addr];
-                    _ay38910_update_values(ay);
-                    if (ay->addr == AY38910_REG_ENV_SHAPE_CYCLE) {
-                        _ay38910_restart_env_shape(ay);
-                    }
-                    /* Handle port output:
-
-                        If port A or B is in output mode, call the
-                        port output callback to notify the outer world
-                        about the new register value.
-
-                        input/output mode is defined by bits 6 and 7 of
-                        the 'enable' register
-                            bit6 = 1: port A in output mode
-                            bit7 = 1: port B in output mode
-                    */
-                    else if (ay->addr == AY38910_REG_IO_PORT_A) {
-                        if (ay->enable & (1<<6)) {
-                            if (ay->out_cb) {
-                                ay->out_cb(AY38910_PORT_A, ay->port_a, ay->user_data);
-                            }
-                        }
-                    }
-                    else if (ay->addr == AY38910_REG_IO_PORT_B) {
-                        if (ay->enable & (1<<7)) {
-                            if (ay->out_cb) {
-                                ay->out_cb(AY38910_PORT_B, ay->port_b, ay->user_data);
-                            }
-                        }
-                    }
-                }
-            }
+    if (pins & AY38910_BDIR) {
+        const uint8_t data = AY38910_DATA(pins);
+        if (pins & AY38910_BC1) {
+            /* latch address */
+            ay->addr = data;
         }
         else {
-            /* Read from register using the currently latched address.
-               See 'write' for why the latched address must be in the
-               valid register range to have an effect.
+            /* Write to register using the currently latched address.
+                The whole 8-bit address is considered, the low 4 bits
+                are the register index, and the upper bits are burned
+                into the chip as a 'chip select' and are usually 0
+                (this emulator assumes they are 0, so addresses greater
+                are ignored for reading and writing)
             */
             if (ay->addr < AY38910_NUM_REGISTERS) {
-                /* Handle port input:
+                /* write register content, and update dependent values */
+                ay->reg[ay->addr] = data & _ay38910_reg_mask[ay->addr];
+                _ay38910_update_values(ay);
 
-                    If port A or B is in input mode, first call the port
-                    input callback to update the port register content.
+                if (ay->addr == AY38910_REG_ENV_SHAPE_CYCLE) {
+                    _ay38910_restart_env_shape(ay);
+                }
+                /* Handle port output:
+
+                    If port A or B is in output mode, call the
+                    port output callback to notify the outer world
+                    about the new register value.
 
                     input/output mode is defined by bits 6 and 7 of
-                    the 'enable' register:
-                        bit6 = 0: port A in input mode
-                        bit7 = 0: port B in input mode
+                    the 'enable' register
+                        bit6 = 1: port A in output mode
+                        bit7 = 1: port B in output mode
                 */
-                if (ay->addr == AY38910_REG_IO_PORT_A) {
-                    if ((ay->enable & (1<<6)) == 0) {
-                        if (ay->in_cb) {
-                            ay->port_a = ay->in_cb(AY38910_PORT_A, ay->user_data);
-                        }
-                        else {
-                            ay->port_a = 0xFF;
+                else if (ay->addr == AY38910_REG_IO_PORT_A) {
+                    if (ay->enable & (1<<6)) {
+                        if (ay->out_cb) {
+                            ay->out_cb(AY38910_PORT_A, ay->port_a, ay->user_data);
                         }
                     }
                 }
                 else if (ay->addr == AY38910_REG_IO_PORT_B) {
-                    if ((ay->enable & (1<<7)) == 0) {
-                        if (ay->in_cb) {
-                            ay->port_b = ay->in_cb(AY38910_PORT_B, ay->user_data);
-                        }
-                        else {
-                            ay->port_b = 0xFF;
+                    if (ay->enable & (1<<7)) {
+                        if (ay->out_cb) {
+                            ay->out_cb(AY38910_PORT_B, ay->port_b, ay->user_data);
                         }
                     }
                 }
-                /* read register content into data pins */
-                const uint8_t data = ay->reg[ay->addr];
-                AY38910_SET_DATA(pins, data);
             }
         }
-        AY38910_SET_PA(pins, ay->port_a);
-        AY38910_SET_PB(pins, ay->port_b);
-        ay->pins = pins;
     }
+    else {
+        /* Read from register using the currently latched address.
+            See 'write' for why the latched address must be in the
+            valid register range to have an effect.
+        */
+        if (ay->addr < AY38910_NUM_REGISTERS) {
+            /* Handle port input:
+
+                If port A or B is in input mode, first call the port
+                input callback to update the port register content.
+
+                input/output mode is defined by bits 6 and 7 of
+                the 'enable' register:
+                    bit6 = 0: port A in input mode
+                    bit7 = 0: port B in input mode
+            */
+            if (ay->addr == AY38910_REG_IO_PORT_A) {
+                if ((ay->enable & (1<<6)) == 0) {
+                    if (ay->in_cb) {
+                        ay->port_a = ay->in_cb(AY38910_PORT_A, ay->user_data);
+                    }
+                    else {
+                        ay->port_a = 0xFF;
+                    }
+                }
+            }
+            else if (ay->addr == AY38910_REG_IO_PORT_B) {
+                if ((ay->enable & (1<<7)) == 0) {
+                    if (ay->in_cb) {
+                        ay->port_b = ay->in_cb(AY38910_PORT_B, ay->user_data);
+                    }
+                    else {
+                        ay->port_b = 0xFF;
+                    }
+                }
+            }
+            /* read register content into data pins */
+            const uint8_t data = ay->reg[ay->addr];
+            AY38910_SET_DATA(pins, data);
+
+            AY38910_SET_PA(pins, ay->port_a);
+            AY38910_SET_PB(pins, ay->port_b);
+            ay->pins = pins;
+        }
+    }
+
     return pins;
 }
 
