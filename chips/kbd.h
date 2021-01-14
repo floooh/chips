@@ -311,7 +311,6 @@ static void _kbd_update_scanout_masks(kbd_t* kbd) {
 
 void kbd_update(kbd_t* kbd, uint32_t frame_time_us) {
     CHIPS_ASSERT(kbd);
-    kbd->cur_time += frame_time_us;
     /* check for sticky keys that should be released */
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
         key_state_t* k = &kbd->key_buffer[i];
@@ -326,6 +325,7 @@ void kbd_update(kbd_t* kbd, uint32_t frame_time_us) {
             }
         }
     }
+    kbd->cur_time += frame_time_us;
     _kbd_update_scanout_masks(kbd);
 }
 

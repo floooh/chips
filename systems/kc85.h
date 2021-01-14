@@ -589,7 +589,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
        serial encoding/decoding isn't emulated (it wasn't very reliable
        anyway and required slow typing).
     */
-    kbd_init(&sys->kbd, 1);
+    kbd_init(&sys->kbd, 2);
 
     /* execution on power-up starts at 0xF000 */
     z80_set_pc(&sys->cpu, 0xF000);
