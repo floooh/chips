@@ -1391,11 +1391,9 @@ uint32_t z80_exec(z80_t* cpu, uint32_t num_ticks) {
             int trap_id = trap(pc,ticks,pins,cpu->trap_user_data);
             if (trap_id) {
                 cpu->trap_id=trap_id;
-                pins &= ~Z80_INT;
                 break;
             }
         }
-        pins &= ~Z80_INT;
         pre_pins = pins;
     } while (ticks < num_ticks);
     /* flush local state back to persistent CPU state before leaving */
