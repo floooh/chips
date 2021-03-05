@@ -170,6 +170,7 @@ extern "C" {
 #define MC6847_BOTTOM_BORDER_LINES  (26)    /* 26 lines bottom border */
 #define MC6847_VRETRACE_LINES       (6)     /* 6 'lines' for vertical retrace */
 #define MC6847_ALL_LINES            (262)   /* all of the above */
+#define MC6847_TICKS_PER_SCANLINE   (228)   /* number of ticks per scan line */
 #define MC6847_DISPLAY_START        (MC6847_VBLANK_LINES+MC6847_TOP_BORDER_LINES)
 #define MC6847_DISPLAY_END          (MC6847_DISPLAY_START+MC6847_DISPLAY_LINES)
 #define MC6847_BOTTOM_BORDER_END    (MC6847_DISPLAY_END+MC6847_BOTTOM_BORDER_LINES)
@@ -186,8 +187,8 @@ extern "C" {
 /* horizontal border width */
 #define MC6847_BORDER_PIXELS ((MC6847_DISPLAY_WIDTH-MC6847_IMAGE_WIDTH)/2)
 
-/* the MC6847 is always clocked at 3.579 MHz */
-#define MC6847_TICK_HZ (3579545)
+/* the MC6847 is normally clocked at 3.579 MHz */
+#define MC6847_STANDARD_TICK_HZ (3579545)
 
 /* fixed point precision for more precise error accumulation */
 #define MC6847_FIXEDPOINT_SCALE (16)
@@ -199,6 +200,8 @@ typedef uint64_t (*mc6847_fetch_t)(uint64_t pins, void* user_data);
 typedef struct {
     /* the CPU tick rate in hz */
     int tick_hz;
+    /* the MC6847 tick rate in hz */
+    int mc6847_tick_hz;
     /* pointer to an RGBA8 framebuffer where video image is written to */
     uint32_t* rgba8_buffer;
     /* size of rgba8_buffer in bytes (must be at least 320*244*4=312320 bytes) */
@@ -273,26 +276,22 @@ void mc6847_init(mc6847_t* vdg, const mc6847_desc_t* desc) {
     CHIPS_ASSERT(desc->rgba8_buffer);
     CHIPS_ASSERT(desc->rgba8_buffer_size >= (MC6847_DISPLAY_WIDTH*MC6847_DISPLAY_HEIGHT*sizeof(uint32_t)));
     CHIPS_ASSERT(desc->fetch_cb);
-    CHIPS_ASSERT((desc->tick_hz > 0) && (desc->tick_hz < MC6847_TICK_HZ));
+    CHIPS_ASSERT(desc->tick_hz > 0);
+    CHIPS_ASSERT(desc->mc6847_tick_hz > 0);
 
     memset(vdg, 0, sizeof(*vdg));
     vdg->rgba8_buffer = desc->rgba8_buffer;
     vdg->fetch_cb = desc->fetch_cb;
     vdg->user_data = desc->user_data;
 
-    /* compute counter periods, the MC6847 is always clocked at 3.579 MHz,
-       and the frequency of how the tick function is called must be 
-       communicated to the init function
-
-       one scanline is 228 3.5 MC6847 ticks
-    */
-    int64_t tmp = (228LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / MC6847_TICK_HZ;
+    /* compute counter periods */
+    int64_t tmp = (((int64_t) MC6847_TICKS_PER_SCANLINE) * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / desc->mc6847_tick_hz;
     vdg->h_period = (int) tmp;
     /* hsync starts at tick 10 of a scanline */
-    tmp = (10LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / MC6847_TICK_HZ;
+    tmp = (10LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / desc->mc6847_tick_hz;
     vdg->h_sync_start = (int) tmp;
     /* hsync is 16 ticks long */
-    tmp = (26LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / MC6847_TICK_HZ;
+    tmp = (26LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / desc->mc6847_tick_hz;
     vdg->h_sync_end = (int) tmp;
 
     /* the default graphics mode color palette
