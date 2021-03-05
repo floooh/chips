@@ -223,6 +223,9 @@ typedef struct {
     uint32_t alnum_orange;
     uint32_t alnum_dark_orange;
 
+    /* border color, picked only at end of active area */
+    uint32_t border_color;
+
     /* internal counters */
     int h_count;
     int h_sync_start;
@@ -420,20 +423,20 @@ static inline uint32_t _mc6847_border_color(mc6847_t* vdg, uint64_t pins) {
 
 static void _mc6847_decode_border(mc6847_t* vdg, uint64_t pins, int y) {
     uint32_t* dst = &(vdg->rgba8_buffer[y * MC6847_DISPLAY_WIDTH]);
-    uint32_t c = _mc6847_border_color(vdg, pins);
     for (int x = 0; x < MC6847_DISPLAY_WIDTH; x++) {
-        *dst++ = c;
+        *dst++ = vdg->border_color;
     }
 }
 
 static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
     uint32_t* dst = &(vdg->rgba8_buffer[(y+MC6847_TOP_BORDER_LINES) * MC6847_DISPLAY_WIDTH]);
-    uint32_t bc = _mc6847_border_color(vdg, pins);
+    vdg->border_color = _mc6847_border_color(vdg, pins);
+
     void* ud = vdg->user_data;
 
     /* left border */
     for (int i = 0; i < MC6847_BORDER_PIXELS; i++) {
-        *dst++ = bc;
+        *dst++ = vdg->border_color;
     }
 
     /* visible scanline */
@@ -568,7 +571,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
 
     /* right border */
     for (int i = 0; i < MC6847_BORDER_PIXELS; i++) {
-        *dst++ = bc;
+        *dst++ = vdg->border_color;
     }
 
     return pins;
