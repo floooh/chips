@@ -232,6 +232,7 @@ typedef struct {
     int h_sync_end;
     int h_period;
     int l_count;
+    int h_fetchpos;
 
     /* true during field-sync */
     bool fs;
@@ -458,6 +459,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
             uint32_t fg_color = (pins & MC6847_CSS) ? vdg->palette[4] : vdg->palette[0];
             for (int x = 0; x < bytes_per_row; x++) {
                 MC6847_SET_ADDR(pins, addr++);
+                vdg->h_fetchpos = x;
                 pins = vdg->fetch_cb(pins, ud);
                 uint8_t m = MC6847_GET_DATA(pins);
                 for (int p = 7; p >= 0; p--) {
@@ -484,6 +486,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
             uint16_t addr = (y / row_height) * bytes_per_row;
             for (int x = 0; x < bytes_per_row; x++) {
                 MC6847_SET_ADDR(pins, addr++);
+                vdg->h_fetchpos = x;
                 pins = vdg->fetch_cb(pins, ud);
                 uint8_t m = MC6847_GET_DATA(pins);
                 for (int p = 6; p >= 0; p -= 2) {
@@ -509,6 +512,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
         uint32_t alnum_bg = (pins & MC6847_CSS) ? vdg->alnum_dark_orange : vdg->alnum_dark_green;
         for (int x = 0; x < 32; x++) {
             MC6847_SET_ADDR(pins, addr++);
+            vdg->h_fetchpos = x;
             pins = vdg->fetch_cb(pins, ud);
             uint8_t chr = MC6847_GET_DATA(pins);
             if (pins & MC6847_AS) {
