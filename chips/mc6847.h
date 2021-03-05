@@ -204,6 +204,7 @@ typedef struct {
     /* size of rgba8_buffer in bytes (must be at least 320*244*4=312320 bytes) */
     uint32_t rgba8_buffer_size;
     /* memory-fetch callback */
+    uint32_t *palette;
     mc6847_fetch_t fetch_cb;
     /* optional user-data for the fetch callback */
     void* user_data;
@@ -316,21 +317,33 @@ void mc6847_init(mc6847_t* vdg, const mc6847_desc_t* desc) {
 
         color intensities are slightly boosted
     */
-    vdg->palette[0] = _MC6847_RGBA(19, 146, 11);      /* green */
-    vdg->palette[1] = _MC6847_RGBA(155, 150, 10);     /* yellow */
-    vdg->palette[2] = _MC6847_RGBA(2, 22, 175);       /* blue */
-    vdg->palette[3] = _MC6847_RGBA(155, 22, 7);       /* red */
-    vdg->palette[4] = _MC6847_RGBA(141, 150, 154);    /* buff */
-    vdg->palette[5] = _MC6847_RGBA(15, 143, 155);     /* cyan */
-    vdg->palette[6] = _MC6847_RGBA(139, 39, 155);     /* cyan */
-    vdg->palette[7] = _MC6847_RGBA(140, 31, 11);      /* orange */
+    if(desc->palette == NULL) {
+      vdg->palette[0] = _MC6847_RGBA(19, 146, 11);      /* green */
+      vdg->palette[1] = _MC6847_RGBA(155, 150, 10);     /* yellow */
+      vdg->palette[2] = _MC6847_RGBA(2, 22, 175);       /* blue */
+      vdg->palette[3] = _MC6847_RGBA(155, 22, 7);       /* red */
+      vdg->palette[4] = _MC6847_RGBA(141, 150, 154);    /* buff */
+      vdg->palette[5] = _MC6847_RGBA(15, 143, 155);     /* cyan */
+      vdg->palette[6] = _MC6847_RGBA(139, 39, 155);     /* cyan */
+      vdg->palette[7] = _MC6847_RGBA(140, 31, 11);      /* orange */
 
-    /* black level color, and alpha-numeric display mode colors */
-    vdg->black = 0xFF111111;
-    vdg->alnum_green = _MC6847_RGBA(19, 146, 11);
-    vdg->alnum_dark_green = 0xFF002400;
-    vdg->alnum_orange = _MC6847_RGBA(140, 31, 11);
-    vdg->alnum_dark_orange = 0xFF000E22;
+      /* black level color, and alpha-numeric display mode colors */
+      vdg->black = 0xFF111111;
+      vdg->alnum_green = _MC6847_RGBA(19, 146, 11);
+      vdg->alnum_dark_green = 0xFF002400;
+      vdg->alnum_orange = _MC6847_RGBA(140, 31, 11);
+      vdg->alnum_dark_orange = 0xFF000E22;
+    } else {
+      /* custom palette */ 
+      for(int i=0; i<8; i++) { 
+         vdg->palette[i] = desc->palette[i];
+      }
+      vdg->black = desc->palette[8];
+      vdg->alnum_green = desc->palette[9];
+      vdg->alnum_dark_green = desc->palette[10];
+      vdg->alnum_orange = desc->palette[11];
+      vdg->alnum_dark_orange = desc->palette[12];
+    }  
 }
 
 void mc6847_reset(mc6847_t* vdg) {
