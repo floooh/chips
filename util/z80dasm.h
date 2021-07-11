@@ -189,6 +189,11 @@ static const char* _z80dasm_oct = "01234567";
 static const char* _z80dasm_dec = "0123456789";
 static const char* _z80dasm_hex = "0123456789ABCDEF";
 
+static const uint32_t _z80dasm_pre_valid[8] = {
+    UINT32_C(0x02000200), UINT32_C(0x02707e7e), UINT32_C(0x70707070), UINT32_C(0x70b7ffff),
+    UINT32_C(0x70707070), UINT32_C(0x70707070), UINT32_C(0x00800800), UINT32_C(0x0200022a)
+};
+
 /* output a string */
 static void _z80dasm_str(const char* str, z80dasm_output_t out_cb, void* user_data) {
     if (out_cb) {
@@ -258,8 +263,12 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
     if ((0xFD == op) || (0xDD == op)) {
         pre = op;
         _FETCH_U8(op);
-        if (op == 0xED) {
-            pre = 0; /* an ED following a prefix cancels the prefix */
+        if ((_z80dasm_pre_valid[op / 32] & (UINT32_C(1) << (op & 31))) == 0) {
+            /* if the next instruction doesn't use the prefix, report it as a NOP */
+            _STR("NOP (");
+            _STR(pre == 0xFD ? "FD" : "DD");
+            _STR(")");
+            return pc - 1;
         }
         /* if prefixed op, use register tables that replace HL with IX/IY */
         if (pre == 0xDD) {
@@ -423,8 +432,6 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
                 else {
                     switch (p) {
                         case 0: _STR("CALL "); _IMM16(); break;
-                        case 1: _STR("DBL PREFIX"); break;
-                        case 3: _STR("DBL PREFIX"); break;
                         case 2: /* ED prefix */
                             _FETCH_U8(op);
                             x = (op >> 6) & 3;
