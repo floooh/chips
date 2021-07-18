@@ -711,8 +711,8 @@ static inline void _kc85_decode_8pixels(uint32_t* ptr, uint8_t pixels, uint8_t c
     */
     const uint8_t bg_index = colors & 0x7;
     const uint8_t fg_index = (colors>>3)&0xF;
-    const unsigned int bg = _kc85_bg_pal[bg_index];
-    const unsigned int fg = force_bg ? bg : _kc85_fg_pal[fg_index];
+    const uint32_t bg = _kc85_bg_pal[bg_index];
+    const uint32_t fg = force_bg ? bg : _kc85_fg_pal[fg_index];
     ptr[0] = pixels & 0x80 ? fg : bg;
     ptr[1] = pixels & 0x40 ? fg : bg;
     ptr[2] = pixels & 0x20 ? fg : bg;
