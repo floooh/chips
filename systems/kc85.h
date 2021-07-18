@@ -724,7 +724,7 @@ static inline void _kc85_decode_8pixels(uint32_t* ptr, uint8_t pixels, uint8_t c
 }
 
 static uint64_t _kc85_video_kc85_2_3(kc85_t* sys, int num_cpu_ticks, uint64_t cpu_pins) {
-    /* emulate display needing on KC85/2 and /3, this happens when the
+    /* emulate display needling on KC85/2 and /3, this happens when the
        CPU accesses video memory, which will force the background color
        a short duration
 
