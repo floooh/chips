@@ -130,7 +130,7 @@ typedef struct {
 void kbd_init(kbd_t* kbd, int sticky_frames);
 /* update keyboard matrix state (releases sticky keys), call once per frame with frame time in micro-seconds */
 void kbd_update(kbd_t* kbd, uint32_t frame_time_us);
-/* register a modifier key, layers are between from 0 to KBD_MAX_MOD_KEYS-1 */
+/* register a modifier key, layers are from 0 to KBD_MAX_MOD_KEYS-1 */
 void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line);
 /* register a modifier key where the modifier is mapped to an entire keyboard line */
 void kbd_register_modifier_line(kbd_t* kbd, int layer, int line);
