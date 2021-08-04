@@ -75,6 +75,7 @@ typedef enum {
 /* memory configuration (used in vic20_desc_t.mem_config) */
 typedef enum {
     VIC20_MEMCONFIG_STANDARD,       /* unexpanded */
+    VIC20_MEMCONFIG_3K,             /* Block 0 (3KB at 0400..0FFF) */
     VIC20_MEMCONFIG_8K,             /* Block 1 */
     VIC20_MEMCONFIG_16K,            /* Block 1+2 */
     VIC20_MEMCONFIG_24K,            /* Block 1+2+3 */
@@ -324,7 +325,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     */
     mem_init(&sys->mem_cpu);
     mem_map_ram(&sys->mem_cpu, 1, 0x0000, 0x0400, sys->ram0);
-    if (desc->mem_config == VIC20_MEMCONFIG_MAX) {
+    if (desc->mem_config == VIC20_MEMCONFIG_3K || desc->mem_config == VIC20_MEMCONFIG_MAX) {
         mem_map_ram(&sys->mem_cpu, 1, 0x0400, 0x0C00, sys->ram_3k);
     }
     mem_map_ram(&sys->mem_cpu, 1, 0x1000, 0x1000, sys->ram1);
@@ -362,6 +363,7 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
         mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_3k);     /* CPU: 0400..0FFF */
     }
     mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);           /* CPU: 1000..1FFF */
+    mem_map_rom(&sys->mem_vic, 0, 0x4000, 0x1000, sys->rom_char);       /* CPU: 8000..8FFF */
 
     /*
         A special memory mapping used to copy ROM cartridge PRG files
@@ -472,7 +474,7 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
             PA6:    in: CASS SENSE
             PA7:    SERIAL ATN OUT (???)
 
-            CA1:    in: RESTORE KEY(???)
+            CA1:    in: RESTORE KEY
             CA2:    out: CASS MOTOR
 
         VIA1 Port B input:
@@ -482,10 +484,12 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
     */
     {
         // FIXME: SERIAL PORT
-        // FIXME: RESTORE key to M6522_CA1
         via1_pins |= sys->via1_joy_mask | (M6522_PA0|M6522_PA1|M6522_PA7);
         if (sys->cas_port & VIC20_CASPORT_SENSE) {
             via1_pins |= M6522_PA6;
+        }
+        if(sys->kbd.scanout_column_masks[8] & 1) {
+            via1_pins |= M6522_CA1;  /* RESTORE key is pressed */
         }
         via1_pins = m6522_tick(&sys->via_1, via1_pins);
         if (via1_pins & M6522_CA2) {
@@ -596,15 +600,15 @@ static void _vic20_init_key_map(vic20_t* sys) {
         "7YGVBHU8"  // row 3
         "9IJNMKO0"  // row 4
         "+PL,.:@-"  // row 5
-        "~*;/ =  "  // row 6, ~ is british pound
+        "~*;/ =^ "  // row 6, ~ is british pound
         "        "  // row 7
 
         /* shift */
         "!     q\""
         "#wa zse$"
-        "%rdxcft^"
-        "&ygvbhu*"
-        "(ijnmko)"
+        "%rdxcft&"
+        "'ygvbhu("
+        ")ijnmko "
         " pl<>[  "
         "$ ]?    "
         "        ";
@@ -630,9 +634,15 @@ static void _vic20_init_key_map(vic20_t* sys) {
     kbd_register_key(&sys->kbd, 0x09, 2, 7, 0);    /* cursor right */
     kbd_register_key(&sys->kbd, 0x0A, 3, 7, 0);    /* cursor down */
     kbd_register_key(&sys->kbd, 0x0B, 3, 7, 1);    /* cursor up */
-    kbd_register_key(&sys->kbd, 0x01, 0, 7, 0);    /* delete */
+    kbd_register_key(&sys->kbd, 0x07, 0, 7, 1);    /* inst */
+    kbd_register_key(&sys->kbd, 0x01, 0, 7, 0);    /* del */
     kbd_register_key(&sys->kbd, 0x0D, 1, 7, 0);    /* return */
     kbd_register_key(&sys->kbd, 0x03, 3, 0, 0);    /* stop */
+    kbd_register_key(&sys->kbd, 0x04, 1, 0, 0);    /* left arrow */
+    kbd_register_key(&sys->kbd, 0x05, 7, 6, 0);    /* home */
+    kbd_register_key(&sys->kbd, 0x06, 7, 6, 1);    /* clr */
+    kbd_register_key(&sys->kbd, 0x0E, 2, 0, 0);    /* ctrl */
+    kbd_register_key(&sys->kbd, 0x0F, 5, 0, 0);    /* C= key */
     kbd_register_key(&sys->kbd, 0xF1, 4, 7, 0);
     kbd_register_key(&sys->kbd, 0xF2, 4, 7, 1);
     kbd_register_key(&sys->kbd, 0xF3, 5, 7, 0);
@@ -641,6 +651,9 @@ static void _vic20_init_key_map(vic20_t* sys) {
     kbd_register_key(&sys->kbd, 0xF6, 6, 7, 1);
     kbd_register_key(&sys->kbd, 0xF7, 7, 7, 0);
     kbd_register_key(&sys->kbd, 0xF8, 7, 7, 1);
+
+    kbd_register_key(&sys->kbd, 0xFF, 0, 8, 0);   /* restore key is mapped on a separate line outside  */
+                                                  /* the keyboard matrix and routed to VIA1 pin CA1 */
 }
 
 bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
@@ -725,7 +738,7 @@ static void _vic20_update_joymasks(vic20_t* sys) {
     uint8_t jm = sys->kbd_joy_mask | sys->joy_joy_mask;
     sys->via1_joy_mask = M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5;
     sys->via2_joy_mask = M6522_PB7;
-    if (jm & VIC20_JOYSTICK_LEFT) {
+    if (jm & VIC20_JOYSTICK_UP) {
         sys->via1_joy_mask &= ~M6522_PA2;
     }
     if (jm & VIC20_JOYSTICK_DOWN) {
