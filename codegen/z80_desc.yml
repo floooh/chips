@@ -1,0 +1,53 @@
+#
+# Toplevel:
+#   - op: opcode bit pattern condition which triggers this instruction group:
+#       x: 11_000_000
+#       y: 00_111_000
+#       z: 00_000_111
+#       p: 00_110_000
+#       q: 00_001_000
+#
+#   - m1[len]: a machine m1..m6 where [len] is the length in cycles
+#       - t1..t6  clock cycle within machine cycle
+#           
+#       
+#
+#   - overlapped: the special m1:t2 clock cycle of the next instruction 
+#                 which is overlapped with the fetch machine cycle
+#
+# Action Keywords:
+#     m1 mreq wr rd iorq...: set CPU pin
+#     abus=..: write address bus pins
+#     dbus=..: write data bus pins
+#     ..=dbus: read data bus pins
+#     r8[y|z]: 8-bit register indexed with opcode y or z index
+#     a,f,b,c,d,e,h,l:  explicit 8-bit register
+#     bc,de,hl: explicit 16 bit register
+#
+HALT:
+  op: (x == 1) and (y == 6) and (z == 6)
+  m1[4]:
+  overlapped: halt
+
+LD (HL),r:
+  op: (x == 1) and (y == 6) and (z != 6)
+  m1[4]:
+  m2[3]:
+    t2: mreq wr abus=hl dbus=r8[z]
+
+LD r,(HL):
+  op: (x == 1) and (y != 6) and (z == 6)
+  m1[4]:
+  m2[3]:
+    t1: mreq rd abus=hl
+    t2: dlatch=dbus
+  overlapped: r8[z]=dlatch
+
+LD r,r':
+  op: (x == 1) and (y != 6) and (z != 6)
+  m1[4]:
+  overlapped: r8[y]=r8[z]
+
+ 
+
+
