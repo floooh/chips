@@ -1,53 +1,103 @@
 #
-# Toplevel:
-#   - op: opcode bit pattern condition which triggers this instruction group:
-#       x: 11_000_000
-#       y: 00_111_000
-#       z: 00_000_111
-#       p: 00_110_000
-#       q: 00_001_000
+# cond:       the instruction byte pattern (TODO: prefix bytes)
+# fetch[N]:   fetch machine-cycle (optional)
+# mread[N]:   memory read machine cycle
+# mwrite[N]:  memory write machine cycle
+# ioread[N]:  io read machine cycle
+# iowrite[N]: io write machine cycle
+# generic[N]: a generic machine cycle
+# overlapped: overlapped fetch/execyte 'half machine cycle' (optional)
 #
-#   - m1[len]: a machine m1..m6 where [len] is the length in cycles
-#       - t1..t6  clock cycle within machine cycle
-#           
-#       
-#
-#   - overlapped: the special m1:t2 clock cycle of the next instruction 
-#                 which is overlapped with the fetch machine cycle
-#
-# Action Keywords:
-#     m1 mreq wr rd iorq...: set CPU pin
-#     abus=..: write address bus pins
-#     dbus=..: write data bus pins
-#     ..=dbus: read data bus pins
-#     r8[y|z]: 8-bit register indexed with opcode y or z index
-#     a,f,b,c,d,e,h,l:  explicit 8-bit register
-#     bc,de,hl: explicit 16 bit register
+# The [N] is optional for fetch (def=4), mread/mwrite (def=3) and 
+# ioread/iowrite (def=4).
 #
 HALT:
-  op: (x == 1) and (y == 6) and (z == 6)
-  m1[4]:
+  cond: (x == 1) and (y == 6) and (z == 6)
   overlapped: halt
 
-LD (HL),r:
-  op: (x == 1) and (y == 6) and (z != 6)
-  m1[4]:
-  m2[3]:
-    t2: mreq wr abus=hl dbus=r8[z]
+LD (HL),r8z:
+  cond: (x == 1) and (y == 6) and (z != 6)
+  mwrite: addr=hl, dbus=r8z
 
-LD r,(HL):
-  op: (x == 1) and (y != 6) and (z == 6)
-  m1[4]:
-  m2[3]:
-    t1: mreq rd abus=hl
-    t2: dlatch=dbus
-  overlapped: r8[z]=dlatch
+LD r8y,(HL):
+  cond: (x == 1) and (y != 6) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: r8y=dlatch
 
-LD r,r':
-  op: (x == 1) and (y != 6) and (z != 6)
-  m1[4]:
-  overlapped: r8[y]=r8[z]
+LD r8z,r8y:
+  cond: (x == 1) and (y != 6) and (z != 6)
+  overlapped: r8y=r8z
 
- 
+ADD (HL):
+  cond: (x == 2) and (y == 0) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: func=add(dlatch)
+
+ADD r8z:
+  cond: (x == 2) and (y == 0) and (z != 6)
+  overlapped: func=add(r8z)
+
+ADC (HL):
+  cond: (x == 2) and (y == 1) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: func=adc(dlatch)
+
+ADC r8z:
+  cond: (x == 2) and (y == 1) and (z != 6)
+  overlapped: func=adc(r8z)
+
+SUB (HL):
+  cond: (x == 2) and (y == 2) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: func=sub(dlatch)
+
+SUB r8z:
+  cond: (x == 2) and (y == 2) and (z != 6)
+  overlapped: func=sub(r8z)
+
+SBC (HL):
+  cond: (x == 2) and (y == 3) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: func=sbc(dlatch)
+
+SBC r8z:
+  cond: (x == 2) and (y == 3) and (z != 6)
+  overlapped: func=sbc(r8z)
+
+AND (HL):
+  cond: (x == 2) and (y == 4) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: func=and(dlatch)
+
+AND r8z:
+  cond: (x == 2) and (y == 4) and (z != 6)
+  overlapped: func=and(r8z)
+
+XOR (HL):
+  cond: (x == 2) and (y == 5) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: func=xor(dlatch)
+
+XOR r8z:
+  cond: (x == 2) and (y == 5) and (z != 6)
+  overlapped: func=xor(r8z)
+
+OR (HL):
+  cond: (x == 2) and (y == 6) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: func=or(dlatch)
+
+OR r8z:
+  cond: (x == 2) and (y == 6) and (z != 6)
+  overlapped: func=or(r8z)
+
+CP (HL):
+  cond: (x == 2) and (y == 7) and (z == 6)
+  mread: addr=hl, dest=dlatch
+  overlapped: func=cp(dlatch)
+
+CP r8z:
+  cond: (x == 2) and (y == 7) and (z != 6)
+  overlapped: func=cp(r8z)
 
 
