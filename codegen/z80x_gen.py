@@ -1,6 +1,16 @@
-import yaml, pprint
+import yaml, pprint, copy
 
-OPS = []
+# these are essentially opcode patterns
+OP_PATTERNS = []
+# these are stamped out opcode descriptions
+OPS = [None for i in range(0,256)]
+
+# register mapping tables, see: http://www.z80.info/decoding.htm
+r_human = [ 'B', 'C', 'D', 'E', 'H', 'L', '(HL)', 'A' ]
+rp_human = [ 'BC', 'DE', 'HL', 'SP' ]
+rp2_human = [ 'BC', 'DE', 'HL', 'AF' ]
+alu_human = [ 'ADD', 'ADC', 'SUB', 'SBC', 'AND', 'XOR', 'OR', 'CP' ]
+cc_human = [ 'NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -15,7 +25,19 @@ class Op:
     def __init__(self, name:str, cond:str):
         self.name = name
         self.cond = cond
+        self.cond_compiled = compile(cond, '<string>', 'eval')
         self.mcycles: list[MCycle] = []
+
+def map_regs_human(inp: str, y: int, z: int, p: int, q:int) -> str:
+    return inp\
+        .replace('r[y]', r_human[y])\
+        .replace('r[z]', r_human[z])\
+        .replace('alu[y]', alu_human[y])\
+        .replace('rp[p]', rp_human[p])\
+        .replace('rp2[p]', rp2_human[p])\
+        .replace('cc[y-4]', cc_human[y-4])\
+        .replace('cc[y]', cc_human[y])\
+        .replace('y*8', f'{y*8:X}h')
 
 def parse_mcycle_name(name: str) -> tuple[str, int]:
     tokens = name.replace('[',' ').replace(']',' ').split(' ')
@@ -57,7 +79,7 @@ def parse_mc_items(mc_desc: str):
                 res.append(token.strip())
     return res
 
-def parse():
+def parse_opdescs():
     with open('z80_desc.yml') as fp:
         desc = yaml.load(fp, Loader=yaml.FullLoader)
         for (op_name, op_desc) in desc.items():
@@ -79,16 +101,41 @@ def parse():
                 op.mcycles.insert(0, MCycle('fetch', 2, []))
             if num_overlapped == 0:
                 op.mcycles.append(MCycle('overlapped', 2, []))
-            OPS.append(op)
+            OP_PATTERNS.append(op)
+
+def expand_ops():
+    for opcode in range(0,256):
+        #  76 543 210
+        # |xx|yyy|zzz|
+        #    |ppq|
+        x = opcode >> 6
+        y = (opcode >> 3) & 7
+        z = opcode & 7
+        p = y >> 1
+        q = y & 1
+        for op_desc_index,op_desc in enumerate(OP_PATTERNS):
+            if eval(op_desc.cond_compiled):
+                if OPS[opcode] is not None:
+                    err(f"Condition collision for opcode {op_desc_index:02X} and '{op_desc.name}'")
+                op = copy.deepcopy(OP_PATTERNS[op_desc_index])
+                op.name = map_regs_human(op.name, y, z, p, q)
+                OPS[opcode] = op
 
 def dump():
-    for op in OPS:
-        print(f"\nop(name='{op.name}', cond='{op.cond}'):")
-        for mc in op.mcycles:
+    for op_desc in OP_PATTERNS:
+        print(f"\nop(name='{op_desc.name}', cond='{op_desc.cond}'):")
+        for mc in op_desc.mcycles:
             print(f'  mcycle(type={mc.type}, tcycles={mc.tcycles})')
             for item in mc.items:
                 print(f'    {item}')
+    print('\n')
+    for i,op in enumerate(OPS):
+        op_name = '??'
+        if op is not None:
+            op_name = op.name
+        print(f"{i:02X}: {op_name}")
 
 if __name__=='__main__':
-    parse()
+    parse_opdescs()
+    expand_ops()
     dump()
