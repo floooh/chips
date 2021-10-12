@@ -5,6 +5,14 @@ OP_PATTERNS = []
 # these are stamped out opcode descriptions
 OPS = [None for i in range(0,256)]
 
+# a fetch machine cycle is processed as 2 parts because it overlaps
+# with the 'action' of the previous instruction
+FETCH_TCYCLES = 3
+OVERLAPPED_TCYCLES = 1
+MEM_TCYCLES = 3
+IO_TCYCLES = 4
+IO_TCYCLES = 4
+
 # register mapping tables, see: http://www.z80.info/decoding.htm
 r_human = [ 'B', 'C', 'D', 'E', 'H', 'L', '(HL)', 'A' ]
 rp_human = [ 'BC', 'DE', 'HL', 'SP' ]
@@ -15,17 +23,26 @@ cc_human = [ 'NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M' ]
 def err(msg: str):
     raise BaseException(msg)
 
+# append a source code line
+out_lines = ''
+def l(s) :
+    global out_lines
+    out_lines += s + '\n'
+
+# a machine cycle description
 class MCycle:
     def __init__(self, type: str, tcycles: int, items: list[str]):
         self.type = type
         self.tcycles = tcycles
         self.items = items
 
+# an opcode description
 class Op:
     def __init__(self, name:str, cond:str):
         self.name = name
         self.cond = cond
         self.cond_compiled = compile(cond, '<string>', 'eval')
+        self.opcode = -1
         self.mcycles: list[MCycle] = []
 
 def map_regs_human(inp: str, y: int, z: int, p: int, q:int) -> str:
@@ -51,20 +68,20 @@ def parse_mcycle_name(name: str) -> tuple[str, int]:
         # standard machine cycle lengths
         if type == 'fetch':
             # not a bug (because of overlapped execute/fetch)
-            tcycles = 2
+            tcycles = FETCH_TCYCLES
         elif type in ['mread', 'mwrite']:
-            tcycles = 3
+            tcycles = MEM_TCYCLES
         elif type in ['ioread', 'iowrite']:
-            tcycles = 4
+            tcycles = IO_TCYCLES
         elif type == 'generic':
             err(f'generic mcycles must have an explicit length')
         elif type == 'overlapped':
-            tcycles = 2
+            tcycles = OVERLAPPED_TCYCLES
     else:
         tcycles = int(tokens[1])
         if type == 'fetch':
             # fix overlapped fetch tcycle length 
-            tcycles -= 2
+            tcycles -= OVERLAPPED_TCYCLES
     if (tcycles < 1) or (tcycles > 6):
         err(f'invalid mcycle len: {tcycles}')
     return type, tcycles
@@ -98,12 +115,12 @@ def parse_opdescs():
                     mc = MCycle(mc_type, mc_tcycles, parse_mc_items(mc_desc))
                     op.mcycles.append(mc)
             if num_fetch == 0:
-                op.mcycles.insert(0, MCycle('fetch', 2, []))
+                op.mcycles.insert(0, MCycle('fetch', FETCH_TCYCLES, []))
             if num_overlapped == 0:
-                op.mcycles.append(MCycle('overlapped', 2, []))
+                op.mcycles.append(MCycle('overlapped', OVERLAPPED_TCYCLES, []))
             OP_PATTERNS.append(op)
 
-def expand_ops():
+def expand_optable():
     for opcode in range(0,256):
         #  76 543 210
         # |xx|yyy|zzz|
@@ -119,7 +136,97 @@ def expand_ops():
                     err(f"Condition collision for opcode {op_desc_index:02X} and '{op_desc.name}'")
                 op = copy.deepcopy(OP_PATTERNS[op_desc_index])
                 op.name = map_regs_human(op.name, y, z, p, q)
+                op.opcode = opcode
                 OPS[opcode] = op
+
+# build the 'active tcycle' bit mask for an opcode
+def build_tcycle_mask(op: Op) -> int:
+    tc = 0
+    pos = 0
+    actions = []
+
+    def set():
+        nonlocal tc,pos
+        tc |= (1<<pos)
+        pos = pos + 1
+    def clr():
+        nonlocal pos
+        pos = pos + 1
+    def extra(num: int):
+        nonlocal pos
+        pos = pos + num
+
+    for mcycle in op.mcycles:
+        if mcycle.type == 'fetch':
+            # 'half-fetch' first tcycle loads next tcycle mask and initiates refresh cycle
+            set()
+            set()
+            extra(mcycle.tcycles - 2)
+        elif mcycle.type == 'mread':
+            # memory read cycle needs one tcycle to initiate read, and next tcycle to store result
+            set()
+            set()
+            clr()
+            extra(mcycle.tcycles - MEM_TCYCLES)
+        elif mcycle.type == 'mwrite':
+            # memory write 
+            clr()
+            set()
+            clr()
+            extra(mcycle.tcycles - MEM_TCYCLES)
+        elif mcycle.type == 'ioread':
+            clr()
+            set()
+            set()
+            clr()
+            extra(mcycle.tcycles - IO_TCYCLES)
+        elif mcycle.type == 'iowrite':
+            # same as memory write, but one extra cycle
+            clr()
+            set()
+            clr()
+            clr()
+            extra(mcycle.tcycles - IO_TYCLES)
+        elif mcycle.type == 'generic':
+            set()
+            extra(mcycle.tcycles - 1)
+        elif mcycle.type == 'overlapped':
+            set()
+    return tc
+
+# generate code for one op
+def gen_op(op: Op):
+    tcycle_mask = build_tcycle_mask(op)
+    # build execution pipeline mask (bit 1 is the LOAD_IR bit)
+    pip_mask = (tcycle_mask<<2) | (1<<1)
+
+    step = 0
+    action = ''
+
+    def add(action):
+        nonlocal step
+        l(f'case {op.opcode:02X}|(1<<{step}): {action} break;')
+        step += 1
+
+    l(f'// {op.name}')
+    for mcycle in op.mcycles:
+        if mcycle.type == 'fetch':
+            # initialize next tcycle mask
+            add(f'c->pip=0x{pip_mask:X};')
+            # refresh cycle
+            add('_RFSH();')
+        elif mcycle.type == 'mread':
+            add('_SAX(0xFFFF,Z80_MREQ|Z80_RD);/*FIXME: address!*/')
+            add('/*FIXME: read data bus*/')
+        elif mcycle.type == 'write':
+            add('_SADX(0xFFFF,0xFF,Z80_MREQ|Z80_WR);/*FIXME: address and data!*/')
+        elif mcycle.type == 'ioread':
+            add('_SAX(0xFFFF,Z80_IOREQ|Z80_RD);/*FIXME: address!*/')
+            add('/*FIXME: read data bus*/')
+        elif mcycle.type == 'generic':
+            add('/*FIXME*/')
+        elif mcycle.type == 'overlapped':
+            add('_FETCH();/*FIXME: overlapped action!*/')
 
 def dump():
     for op_desc in OP_PATTERNS:
@@ -129,13 +236,17 @@ def dump():
             for item in mc.items:
                 print(f'    {item}')
     print('\n')
-    for i,op in enumerate(OPS):
+    for op in OPS:
         op_name = '??'
         if op is not None:
             op_name = op.name
-        print(f"{i:02X}: {op_name}")
+        print(f"{op.opcode:02X}: {op_name}")
+
+    print(out_lines)
 
 if __name__=='__main__':
     parse_opdescs()
-    expand_ops()
+    expand_optable()
+    for op in OPS:
+        gen_op(op)
     dump()
