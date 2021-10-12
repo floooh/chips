@@ -2,7 +2,6 @@
 #   m6502_decoder.py
 #   Generate instruction decoder for m6502.h emulator.
 #-------------------------------------------------------------------------------
-import sys
 from string import Template
 
 InpPath = 'm6502.template.h'

@@ -7,7 +7,6 @@
 #       http://www.z80.info/zip/z80-documented.pdf
 #       https://www.omnimaga.org/asm-language/bit-n-(hl)-flags/5/?wap2
 #-------------------------------------------------------------------------------
-import sys
 from string import Template
 
 TabWidth = 4
