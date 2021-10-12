@@ -139,94 +139,97 @@ def expand_optable():
                 op.opcode = opcode
                 OPS[opcode] = op
 
-# build the 'active tcycle' bit mask for an opcode
-def build_tcycle_mask(op: Op) -> int:
-    tc = 0
-    pos = 0
-    actions = []
+# build the execution pipeline bitmask for a given machine cycle
+def build_pip(mcycle: MCycle) -> int:
+    pip = 0
 
-    def set():
-        nonlocal tc,pos
-        tc |= (1<<pos)
-        pos = pos + 1
-    def clr():
-        nonlocal pos
-        pos = pos + 1
-    def extra(num: int):
-        nonlocal pos
-        pos = pos + num
+    def tcycles(tc: int, bits: list[int], total: int) -> int:
+        pos = 0
+        for pos in range(0,total):
+            if pos < len(bits):
+                if bits[pos] != 0:
+                    tc |=  (1<<pos)
+        # this triggers the next machine cycle
+        tc |= (1<<total)
+        if tc >= 256:
+            err('tcycle overflow!')
+        return tc
 
-    for mcycle in op.mcycles:
-        if mcycle.type == 'fetch':
-            # 'half-fetch' first tcycle loads next tcycle mask and initiates refresh cycle
-            set()
-            set()
-            extra(mcycle.tcycles - 2)
-        elif mcycle.type == 'mread':
-            # memory read cycle needs one tcycle to initiate read, and next tcycle to store result
-            set()
-            set()
-            clr()
-            extra(mcycle.tcycles - MEM_TCYCLES)
-        elif mcycle.type == 'mwrite':
-            # memory write 
-            clr()
-            set()
-            clr()
-            extra(mcycle.tcycles - MEM_TCYCLES)
-        elif mcycle.type == 'ioread':
-            clr()
-            set()
-            set()
-            clr()
-            extra(mcycle.tcycles - IO_TCYCLES)
-        elif mcycle.type == 'iowrite':
-            # same as memory write, but one extra cycle
-            clr()
-            set()
-            clr()
-            clr()
-            extra(mcycle.tcycles - IO_TYCLES)
-        elif mcycle.type == 'generic':
-            set()
-            extra(mcycle.tcycles - 1)
-        elif mcycle.type == 'overlapped':
-            set()
-    return tc
+    def sample_wait(tc: int, pos: int) -> int:
+        return (tc | (1<<(pos + 16)))
+
+    def loadir(tc: int) -> int:
+        return (tc |(1<<9))
+        
+    if mcycle.type == 'fetch':
+        # 3-cycle 'part-fetch' because of overlapped execute/fetch
+        pip = tcycles(pip, [1,1], mcycle.tcycles)
+    elif mcycle.type == 'mread':
+        # memory read cycle needs one tcycle to initiate read, and next tcycle to store result
+        pip = tcycles(pip, [1,1,0], mcycle.tcycles)
+        pip = sample_wait(pip, 1)
+    elif mcycle.type == 'mwrite':
+        # memory write 
+        pip = tcycles(pip, [1,1,0], mcycle.tcycles)
+        pip = sample_wait(pip, 1)
+    elif mcycle.type == 'ioread':
+        pip = tcycles(pip, [1,1,1,0], mcycle.tcycles)
+        pip = sample_wait(pip, 2)
+    elif mcycle.type == 'iowrite':
+        # same as memory write, but one extra cycle
+        pip = tcycles(pip, [1,1,0,0], mcycle.tcycles)
+        pip = sample_wait(pip, 2)
+    elif mcycle.type == 'generic':
+        pip = tcycles(pip, [1], mcycle.tcycles)
+    elif mcycle.type == 'overlapped':
+        pip = tcycles(pip, [1], mcycle.tcycles)
+        pip = sample_wait(pip, 1)
+        pip = loadir(pip)
+    return pip
 
 # generate code for one op
-def gen_op(op: Op):
-    tcycle_mask = build_tcycle_mask(op)
-    # build execution pipeline mask (bit 1 is the LOAD_IR bit)
-    pip_mask = (tcycle_mask<<2) | (1<<1)
+def gen_decoder():
+    for op in OPS:
 
-    step = 0
-    action = ''
+        step = 0
+        action = ''
 
-    def add(action):
-        nonlocal step
-        l(f'case {op.opcode:02X}|(1<<{step}): {action} break;')
-        step += 1
+        def add(action):
+            nonlocal step
+            l(f'case 0x{op.opcode:02X}|(1<<{step}): {action} break;')
+            step += 1
 
-    l(f'// {op.name}')
-    for mcycle in op.mcycles:
-        if mcycle.type == 'fetch':
-            # initialize next tcycle mask
-            add(f'c->pip=0x{pip_mask:X};')
-            # refresh cycle
-            add('_RFSH();')
-        elif mcycle.type == 'mread':
-            add('_SAX(0xFFFF,Z80_MREQ|Z80_RD);/*FIXME: address!*/')
-            add('/*FIXME: read data bus*/')
-        elif mcycle.type == 'write':
-            add('_SADX(0xFFFF,0xFF,Z80_MREQ|Z80_WR);/*FIXME: address and data!*/')
-        elif mcycle.type == 'ioread':
-            add('_SAX(0xFFFF,Z80_IOREQ|Z80_RD);/*FIXME: address!*/')
-            add('/*FIXME: read data bus*/')
-        elif mcycle.type == 'generic':
-            add('/*FIXME*/')
-        elif mcycle.type == 'overlapped':
-            add('_FETCH();/*FIXME: overlapped action!*/')
+        for i,mcycle in enumerate(op.mcycles):
+            # execution mask for the current machine cycle
+            pip = build_pip(mcycle)
+            if mcycle.type == 'fetch':
+                l(f'// {op.name}: M1')
+            elif mcycle.type == 'overlapped':
+                l(f'// {op.name}: OVERLAP')
+            else:
+                l(f'// {op.name}: M{i+1}')
+            if mcycle.type == 'fetch':
+                # initialize next tcycle mask
+                add(f'c->pip=0x{pip:X}/*{pip:08b}*/')
+                # refresh cycle
+                add('_RFSH();')
+            elif mcycle.type == 'mread':
+                add(f'c->pip=0x{pip:X}/*{pip:08b}*/;_SAX(0xFFFF,Z80_MREQ|Z80_RD);/*FIXME: address!*/')
+                add('/*FIXME: read data bus*/')
+            elif mcycle.type == 'write':
+                add(f'c->pip=0x{pip:X}/*{pip:08b}*/')
+                add('_SADX(0xFFFF,0xFF,Z80_MREQ|Z80_WR);/*FIXME: address and data!*/')
+            elif mcycle.type == 'ioread':
+                add(f'c->pip=0x{pip:X}/*{pip:08b}*/;')
+                add('_SAX(0xFFFF,Z80_IOREQ|Z80_RD);/*FIXME: address!*/')
+                add('/*FIXME: read data bus*/')
+            elif mcycle.type == 'iowrite':
+                add(f'c->pip=0x{pip:X}/*{pip:08b}*/;')
+                add('_SADX(0xFFFF,0xFF,Z80_IORQ|Z80_WR);/*FIXME: address and data!*/')
+            elif mcycle.type == 'generic':
+                add(f'c->pip=0x{pip:X}/*{pip:08b}*/;/*FIXME: action*/')
+            elif mcycle.type == 'overlapped':
+                add(f'c->pip=0x{pip:X}/*{pip:08b}*/;_FETCH();/*FIXME: overlapped action!*/')
 
 def dump():
     for op_desc in OP_PATTERNS:
@@ -247,6 +250,5 @@ def dump():
 if __name__=='__main__':
     parse_opdescs()
     expand_optable()
-    for op in OPS:
-        gen_op(op)
+    gen_decoder()
     dump()

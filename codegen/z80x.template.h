@@ -52,6 +52,7 @@ extern "C" {
 #define Z80_INT   (1ULL<<30)        // interrupt request
 #define Z80_NMI   (1ULL<<31)        // non-maskable interrupt
 #define Z80_RES   (1ULL<<33)        // reset requested
+#define Z80_WAIT  (1ULL<<34)        // wait requested
 
 // virtual pins (for interrupt daisy chain protocol)
 #define Z80_IEIO    (1ULL<<37)      // unified daisy chain 'Interrupt Enable In+Out'
@@ -70,25 +71,18 @@ extern "C" {
 #define Z80_ZF (1<<6)           // zero
 #define Z80_SF (1<<7)           // sign
 
-/* The 'execution pipeline' is a single 64-bit mask which is shifted right with
-   each tcycle and which controls execution of various 'parts' of the CPU
-   emulation.
+// machine cycle execution pipeline bits (TODO: explain this stuff)
+#define Z80_PIP_BIT_STEP        (1<<0)  // step the instruction decoder forward
+#define Z80_PIP_BIT_LOADIR      (1<<8)  // load the next opcode from data bus
+#define Z80_PIP_BIT_WAIT        (1<<16) // sample the wait pin
+#define Z80_PIP_BIT_IRQ         (1<<24) // handle interrupt request
 
-   The low 24 bits define 'active tcycles' in an instruction, if bit 0 is 
-   set, the next case-branch in the big switch-case decoder will be called.
+#define Z80_PIP_BITS (Z80_PIP_BIT_STEP|Z80_PIP_BIT_LOADIR|Z80_PIP_BIT_WAIT|Z80_PIP_BIT_IRQ)
 
-   The other bit ranges are used to trigger various delayed actions:
-
-   - memory and io read/write machine cycles
-   - interrupt handling
-   - 
-*/
-#define Z80_PIP_MASK_LOADIR     (0x3ULL<<0) // load instruction register
-#define Z80_PIP_MASK_TCYCLE     (0xFFFFFFFFULL<<2) // up to 32 opcode tcycles
-
-#define Z80_PIP_BIT_LOAD_IR     (1ULL<<0)
-#define Z80_PIP_BIT_TCYCLE      (1ULL<<2)
-#define Z80_PIP_BITS_MASK       (Z80_PIP_BIT_TCYCLE|Z80_PIP_BIT_LOAD_IR)
+#define Z80_PIP_MASK_STEP       (0xFF)
+#define Z80_PIP_MASK_LOADIR     (0xFF00)
+#define Z80_PIP_MASK_WAIT       (0xFF0000)
+#define Z80_PIP_MASK_IRQ        (0xFF000000)
 
 // CPU state
 typedef struct {
@@ -140,15 +134,19 @@ uint64_t z80_init(z80_t* cpu) {
 }
 
 uint64_t z80_tick(z80_t* c, uint64_t pins) {
-    c->pip =  (c->pip & ~Z80_PIP_BITS_MASK) >> 1;
-    if (c->pip & Z80_PIP_BIT_LOAD_IR) {
+    pins &= ~Z80_CTRL_MASK;
+    if ((c->pip & Z80_PIP_BIT_WAIT) && (pins & Z80_WAIT)) {
+        c->pins = pins;
+        return pins;
+    }
+    c->pip = (c->pip & ~Z80_PIP_BITS) >> 1;
+    if (c->pip & Z80_PIP_BIT_LOADIR) {
         // load next instruction byte from data bus into instruction
         // register, make room for machine cycle counter
         c->ir = _GD()<<3;
     }
     // early out if there's nothing else to do this tick
-    pins &= ~Z80_CTRL_MASK;
-    if (0 == (c->pip & Z80_PIP_BIT_TCYCLE)) {
+    if (0 == (c->pip & Z80_PIP_BIT_STEP)) {
         c->pins = pins;
         return pins;
     }
