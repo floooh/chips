@@ -90,7 +90,15 @@ typedef struct {
     uint64_t pip;       // execution pipeline
     uint16_t ir;        // instruction register with extra bits for next 'active' tcycle
     uint16_t pc;        // program counter
-    uint8_t r;          // refresh register
+    uint8_t f, a, c, b, e, d, l, h;
+    uint16_t wz;
+    uint16_t sp;
+    uint16_t ix;
+    uint16_t iy;
+    uint8_t i;
+    uint8_t r;
+    uint8_t im;
+    uint8_t af2, bc2, de2, hl2;     // ex registers
 } z80_t;
 
 // initialize a new Z80 instance and return initial pin mask
@@ -110,28 +118,58 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins);
 #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-// set 16-bit address in 64-bit pin mask
-#define _SA(addr) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)
-// set 16-bit addess and extra pins
-#define _SAX(addr,x) pins=(pins&~0xFFFF)|((addr)&0xFFFFULL)|(x)
-// extract 16-bit addess from pin mask
-#define _GA() ((uint16_t)(pins&0xFFFFULL))
-// set 16-bit address and 8-bit data in 64-bit pin mask
-#define _SAD(addr,data) pins=(pins&~0xFFFFFF)|((((data)&0xFF)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL)
-// set 8-bit data in 64-bit pin mask
-#define _SD(data) pins=((pins&~0xFF0000ULL)|(((data&0xFF)<<16)&0xFF0000ULL))
-// extract 8-bit data from 64-bit pin mask
-#define _GD() ((uint8_t)((pins&0xFF0000ULL)>>16))
-// set bit mask for an opcode fetch
-#define _FETCH() _SAX(c->pc++,Z80_M1|Z80_MREQ|Z80_RD)
-// set bit mask for the refresh sub-machine-cycle
-#define _RFSH() _SAX(c->r,Z80_MREQ|Z80_RFSH);c->r=(c->r&0x80)|((c->r+1)&0x7F)
-
 uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
     memset(cpu, 0, sizeof(cpu));
     // FIXME initial CPU state (according to visualz80)
 }
+
+static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
+    return (pins & ~0xFFFF) | ab;
+}
+
+static inline uint64_t z80_set_ab_x(uint64_t pins, uint16_t ab, uint64_t x) {
+    return (pins & ~0xFFFF) | ab | x;
+}
+
+static inline uint64_t z80_set_ab_db(uint64_t pins, uint16_t ab, uint8_t db) {
+    return (pins & ~0xFFFFFF) | (db<<16) | ab;
+}
+
+static inline uint64_t z80_set_ab_db_x(uint64_t pins, uint16_t ab, uint8_t db, uint64_t x) {
+    return (pins & ~0xFFFFFF) | (db<<16) | ab | x;
+}
+
+static inline uint8_t z80_get_db(uint64_t pins) {
+    return pins>>16;
+}
+
+// register helper macros
+#define _gaf()      ((uint16_t)(c->f<<8)|c->a)
+#define _gbc()      ((uint16_t)(c->b<<8)|c->c)
+#define _gde()      ((uint16_t)(c->d<<8)|c->e)
+#define _ghl()      ((uint16_t)(c->h<<8)|c->l)
+#define _gsp()      (c->sp)
+#define _saf(af)    {c->f=af>>8;c->a=af}
+#define _sbc(bc)    {c->b=bc>>8;c->c=bc}
+#define _sde(de)    {c->d=de>>8;c->e=de}
+#define _shl(hl)    {c->h=hl>>8;c->l=hl}
+#define _ssp(sp)    {c->sp=sp;}
+
+// pin helper macros
+#define _sa(ab)             pins=z80_set_ab(pins,ab)
+#define _sax(ab,x)          pins=z80_set_ab_x(pins,ab,x)
+#define _sad(ab,d)          pins=z80_set_ab_db(pins,ab,d)
+#define _sadx(ab,d,x)       pins=z80_set_ab_db_x(pins,ab,d,x)
+#define _gd()               z80_get_d(pins)
+
+// high level helper macros
+#define _fetch()    _sax(c->pc++,Z80_M1|Z80_MREQ|Z80_RD)
+#define _rfsh()     _sax(c->r,Z80_MREQ|Z80_RFSH);c->r=(c->r&0x80)|((c->r+1)&0x7F)
+#define _mr(ab)     _sax(ab,Z80_MREQ|Z80_RD)
+#define _mw(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
+#define _ior(ab)    _sax(ab,Z80_IORQ|Z80_RD)
+#define _iow(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
 
 uint64_t z80_tick(z80_t* c, uint64_t pins) {
     pins &= ~Z80_CTRL_MASK;

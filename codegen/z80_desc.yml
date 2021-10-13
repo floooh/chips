@@ -23,30 +23,30 @@
 #== QUADRANT X1 ================================================================
 HALT:
   cond: (x == 1) and (y == 6) and (z == 6)
-  overlapped: halt
+  overlapped: { code: z80_halt(c) }
 
 LD (HL),r[z]:
   cond: (x == 1) and (y == 6) and (z != 6)
-  mwrite: addr=hl, dbus=r[z]
+  mwrite: { ab: hl, db: rz }
 
 LD r[y],(HL):
   cond: (x == 1) and (y != 6) and (z == 6)
-  mread: addr=hl, dest=dlatch
-  overlapped: r[y]=dlatch
+  mread: { ab: hl, dst: dlatch }
+  overlapped: { code: ry=dlatch }
 
 LD r[z],r[y]:
   cond: (x == 1) and (y != 6) and (z != 6)
-  overlapped: r[y]=r[z]
+  overlapped: { code: ry=rz }
 
 #== QUADRANT X2 ================================================================
 alu[y] (HL):
   cond: (x == 2) and (z == 6)
-  mread: addr=hl, dest=dlatch
-  overlapped: func=alu[y](dlatch)
+  mread: { ab: hl, dst: dlatch }
+  overlapped: { code: aluy(dlatch) }
 
 alu[y] r[z]:
   cond: (x == 2) and (z != 6)
-  overlapped: func=alu[y](r[z])
+  overlapped: { func: aluy(rz) }
 
 #== QUADRANT X0 ================================================================
 
