@@ -45,7 +45,7 @@ aluy (HL):
 
 aluy rz:
   cond: (x == 2) and (z != 6)
-  overlapped: { func: aluy(rz) }
+  overlapped: { code: aluy(rz) }
 
 #== QUADRANT X0 ================================================================
 

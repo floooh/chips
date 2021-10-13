@@ -98,7 +98,8 @@ typedef struct {
     uint8_t i;
     uint8_t r;
     uint8_t im;
-    uint8_t af2, bc2, de2, hl2;     // ex registers
+    uint8_t af2, bc2, de2, hl2; // shadow register bank
+    uint8_t dlatch;     // temporary store for data bus value
 } z80_t;
 
 // initialize a new Z80 instance and return initial pin mask
@@ -121,7 +122,12 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins);
 uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
     memset(cpu, 0, sizeof(cpu));
-    // FIXME initial CPU state (according to visualz80)
+    // initial state according to visualz80
+    cpu->f = cpu->a = cpu->c = cpu->b = 0x55;
+    cpu->e = cpu->d = cpu->l = cpu->h = 0x55f;
+    cpu->wz = cpu->sp = cpu->ix = cpu->ix = 0x5555;
+    cpu->af2 = cpu->bc2 = cpu->de2 = cpu->hl2 = 0x5555;
+    // FIXME: iff1/2 disabled, initial value of IM???
 }
 
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
@@ -145,31 +151,41 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 }
 
 // register helper macros
-#define _gaf()      ((uint16_t)(c->f<<8)|c->a)
-#define _gbc()      ((uint16_t)(c->b<<8)|c->c)
-#define _gde()      ((uint16_t)(c->d<<8)|c->e)
-#define _ghl()      ((uint16_t)(c->h<<8)|c->l)
-#define _gsp()      (c->sp)
-#define _saf(af)    {c->f=af>>8;c->a=af}
-#define _sbc(bc)    {c->b=bc>>8;c->c=bc}
-#define _sde(de)    {c->d=de>>8;c->e=de}
-#define _shl(hl)    {c->h=hl>>8;c->l=hl}
-#define _ssp(sp)    {c->sp=sp;}
+#define _gaf()      ((uint16_t)(cpu->f<<8)|cpu->a)
+#define _gbc()      ((uint16_t)(cpu->b<<8)|cpu->c)
+#define _gde()      ((uint16_t)(cpu->d<<8)|cpu->e)
+#define _ghl()      ((uint16_t)(cpu->h<<8)|cpu->l)
+#define _gsp()      (cpu->sp)
+#define _saf(af)    {cpu->f=af>>8;cpu->a=af}
+#define _sbc(bc)    {cpu->b=bc>>8;cpu->c=bc}
+#define _sde(de)    {cpu->d=de>>8;cpu->e=de}
+#define _shl(hl)    {cpu->h=hl>>8;cpu->l=hl}
+#define _ssp(sp)    {cpu->sp=sp;}
 
 // pin helper macros
 #define _sa(ab)             pins=z80_set_ab(pins,ab)
 #define _sax(ab,x)          pins=z80_set_ab_x(pins,ab,x)
 #define _sad(ab,d)          pins=z80_set_ab_db(pins,ab,d)
 #define _sadx(ab,d,x)       pins=z80_set_ab_db_x(pins,ab,d,x)
-#define _gd()               z80_get_d(pins)
+#define _gd()               z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()    _sax(c->pc++,Z80_M1|Z80_MREQ|Z80_RD)
-#define _rfsh()     _sax(c->r,Z80_MREQ|Z80_RFSH);c->r=(c->r&0x80)|((c->r+1)&0x7F)
+#define _fetch()    _sax(cpu->pc++,Z80_M1|Z80_MREQ|Z80_RD)
+#define _rfsh()     _sax(cpu->r,Z80_MREQ|Z80_RFSH);cpu->r=(cpu->r&0x80)|((cpu->r+1)&0x7F)
 #define _mr(ab)     _sax(ab,Z80_MREQ|Z80_RD)
 #define _mw(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ior(ab)    _sax(ab,Z80_IORQ|Z80_RD)
 #define _iow(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
+
+// function call helpers
+#define _add(val)   z80_add(cpu,val)
+#define _adc(val)   z80_adc(cpu,val)
+#define _sub(val)   z80_sub(cpu,val)
+#define _sbc(val)   z80_sbc(cpu,val)
+#define _and(val)   z80_and(cpu,val)
+#define _xor(val)   z80_xor(cpu,val)
+#define _or(val)    z80_or(cpu,val)
+#define _cp(val)    z80_cp(cpu,val)
 
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     pins &= ~Z80_CTRL_MASK;
@@ -181,7 +197,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     if (cpu->pip & Z80_PIP_BIT_LOADIR) {
         // load next instruction byte from data bus into instruction
         // register, make room for machine cycle counter
-        cpu->ir = _GD()<<3;
+        cpu->ir = _gd()<<3;
     }
     // early out if there's nothing else to do this tick
     if (0 == (cpu->pip & Z80_PIP_BIT_STEP)) {
@@ -193,11 +209,37 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
 $decode_block
     }
     cpu->pins = pins;
+    return pins;
 }
 
-#undef _SA
-#undef _GA
-#undef _SAD
-#undef _SD
-#undef _GD
+#undef _gaf
+#undef _gbc
+#undef _gde
+#undef _ghl
+#undef _gsp
+#undef _saf
+#undef _sbc
+#undef _sde
+#undef _shl
+#undef _ssp
+#undef _sa
+#undef _sax
+#undef _sad
+#undef _sadx
+#undef _gd
+#undef _fetch
+#undef _rfsh
+#undef _mr
+#undef _mw
+#undef _ior
+#undef _iow
+#undef _add
+#undef _adc
+#undef _sub
+#undef _sbc
+#undef _and
+#undef _xor
+#undef _or
+#undef _cp
+
 #endif // CHIPS_IMPL

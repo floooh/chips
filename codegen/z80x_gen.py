@@ -1,5 +1,11 @@
 import yaml, copy
+from string import Template
 from typing import Optional, TypeVar
+
+DESC_PATH  = 'z80_desc.yml'
+TEMPL_PATH = 'z80x.template.h'
+OUT_PATH   = '../chips/z80x.h'
+TAB_WIDTH  = 4
 
 # a machine cycle description
 class MCycle:
@@ -39,6 +45,7 @@ cc_comment  = [ 'NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M' ]
 r_set   = [ 'cpu->b=_X_', 'cpu->c=_X_', 'cpu->d=_X_', 'cpu->e=_X_', 'cpu->h=_X_', 'cpu->l=_X_', 'XXX', 'cpu->a=_X_' ]
 rp_set  = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_ssp(_X_)' ]
 rp2_set = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_saf(_X_)' ]
+alu_map = [ '_add', '_adc', '_sub', '_sbc', '_and', '_xor', '_or', '_cp' ]
 
 r_get   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
 rp_get  = [ 'bc', 'de', 'hl', 'sp' ]
@@ -54,10 +61,15 @@ def unwrap(maybe_value: Optional[T]) -> T:
     return maybe_value
 
 # append a source code line
-out_lines = ''
+indent: int = 2
+out_lines: str = ''
+
+def tab() -> str:
+    return ' ' * TAB_WIDTH * indent
+
 def l(s: str) :
     global out_lines
-    out_lines += s + '\n'
+    out_lines += tab() + s + '\n'
 
 def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
@@ -82,6 +94,7 @@ def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
         .replace('ry', r_get[y])\
         .replace('rz', r_get[z])\
+        .replace('aluy', alu_map[y])\
         .replace('rp', rp_get[p])\
         .replace('rp2', rp2_get[p])\
         .replace('af', '_gaf()')\
@@ -121,7 +134,7 @@ def parse_mcycle_name(name: str) -> tuple[str, int]:
     return type, tcycles
 
 def parse_opdescs():
-    with open('z80_desc.yml') as fp:
+    with open(DESC_PATH, 'r') as fp:
         desc = yaml.load(fp, Loader=yaml.FullLoader) # type: ignore
         for (op_name, op_desc) in desc.items():
             if 'cond' not in op_desc:
@@ -235,7 +248,8 @@ def gen_decoder():
 
         step = 0
         opc = op.opcode
-        l(f'\n// {op.name}')
+        l('')
+        l(f'// {op.name}')
         for i,mcycle in enumerate(op.mcycles):
             # execution mask for the current machine cycle
             pip = build_pip(mcycle)
@@ -268,7 +282,7 @@ def gen_decoder():
             elif mcycle.type == 'generic':
                 add(opc, f'cpu->pip=0x{pip:X}/*FIXME: action*/')
             elif mcycle.type == 'overlapped':
-                action = mcycle.items['code'] if 'code' in mcycle.items else ''
+                action = (mcycle.items['code'] if 'code' in mcycle.items else '')
                 add(opc, f'cpu->pip=0x{pip:X};_fetch();{action}')
         if step > 7:
             err(f"too many steps in instruction '{op.name}'!")
@@ -283,8 +297,15 @@ def dump():
     # print('\n')
     print(out_lines)
 
+def write_result():
+    with open(TEMPL_PATH, 'r') as templf:
+        templ = Template(templf.read())
+        c_src = templ.safe_substitute(decode_block=out_lines)
+        with open(OUT_PATH, 'w') as outf:
+            outf.write(c_src)
+
 if __name__=='__main__':
     parse_opdescs()
     expand_optable()
     gen_decoder()
-    dump()
+    write_result()
