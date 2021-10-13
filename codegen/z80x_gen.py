@@ -36,13 +36,13 @@ rp2_comment = [ 'BC', 'DE', 'HL', 'AF' ]
 alu_comment = [ 'ADD', 'ADC', 'SUB', 'SBC', 'AND', 'XOR', 'OR', 'CP' ]
 cc_comment  = [ 'NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M' ]
 
-r_set   = [ 'c->b', 'c->c', 'c->d', 'c->e', 'c->h', 'c->l', 'XXX', 'c->a' ]
-rp_set  = [ '_sbc(X)', '_sde(X)', '_shl(X)', '_ssp(X)' ]
-rp2_set = [ '_sbc(X)', '_sde(X)', '_shl(X)', '_saf(X)' ]
+r_set   = [ 'cpu->b=_X_', 'cpu->c=_X_', 'cpu->d=_X_', 'cpu->e=_X_', 'cpu->h=_X_', 'cpu->l=_X_', 'XXX', 'cpu->a=_X_' ]
+rp_set  = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_ssp(_X_)' ]
+rp2_set = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_saf(_X_)' ]
 
-r_get   = [ 'c->b', 'c->c', 'c->d', 'c->e', 'c->h', 'c->l', 'XXX', 'c->a' ]
-rp_get  = [ '_gbc()', '_gde()', '_ghl()', '_gsp()' ]
-rp2_get = [ '_gbc()', '_gde()', '_ghl()', '_gaf()' ]
+r_get   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
+rp_get  = [ 'bc', 'de', 'hl', 'sp' ]
+rp2_get = [ 'bc', 'de', 'hl', 'af' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -70,14 +70,13 @@ def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('ccy', cc_comment[y])\
         .replace('y*8', f'{y*8:X}h')
 
-def map_set(inp:str, val:str, y:int, z:int, p:int, q:int) -> str:
+def map_set(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
         .replace('ry', r_set[y])\
         .replace('rz', r_set[z])\
         .replace('rp', rp_set[p])\
         .replace('rp2', rp2_set[p])\
-        .replace('dlatch', 'c->dlatch=X')\
-        .replace('X', val) # keep at end!
+        .replace('dlatch', 'cpu->dlatch=_X_')
 
 def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
@@ -85,7 +84,11 @@ def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('rz', r_get[z])\
         .replace('rp', rp_get[p])\
         .replace('rp2', rp2_get[p])\
-        .replace('dlatch', 'c->dlatch')
+        .replace('af', '_gaf()')\
+        .replace('bc', '_gbc()')\
+        .replace('de', '_gde()')\
+        .replace('hl', '_ghl()')\
+        .replace('dlatch', 'cpu->dlatch')
 
 def parse_mcycle_name(name: str) -> tuple[str, int]:
     tokens = name.replace('[',' ').replace(']',' ').split(' ')
@@ -141,8 +144,15 @@ def parse_opdescs():
                 op.mcycles.append(MCycle('overlapped', OVERLAPPED_TCYCLES, {}))
             OP_PATTERNS.append(op)
 
-def stampout_mcycle_items(items: dict[str,str], y: int, z: int, p: int, q: int) -> dict[str,str]:
-    return {}
+def stampout_mcycle_items(mcycle_items: dict[str,str], y: int, z: int, p: int, q: int) -> dict[str,str]:
+    res: dict[str,str] = {}
+    for key,val in mcycle_items.items():
+        if key in ['ab', 'db', 'code']:
+            val = map_get(val, y, z, p, q)
+        elif key == 'dst':
+            val = map_set(val, y, z, p, q)
+        res[key] = val
+    return res
 
 def expand_optable():
     for opcode in range(0,256):
@@ -157,7 +167,7 @@ def expand_optable():
         for op_desc_index,op_desc in enumerate(OP_PATTERNS):
             if eval(op_desc.cond_compiled):
                 if OPS[opcode] is not None:
-                    err(f"Condition collision for opcode {op_desc_index:02X} and '{op_desc.name}'")
+                    err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
                 op = copy.deepcopy(OP_PATTERNS[op_desc_index])
                 op.name = map_comment(op.name, y, z, p, q)
                 op.opcode = opcode
@@ -220,55 +230,57 @@ def gen_decoder():
 
         def add(opcode: int, action: str):
             nonlocal step
-            l(f'case 0x{opcode:02X}|(1<<{step}): {action} break;')
+            l(f'case (0x{opcode:02X}<<3)|{step}: {action}; break;')
             step += 1
 
         step = 0
         opc = op.opcode
+        l(f'\n// {op.name}')
         for i,mcycle in enumerate(op.mcycles):
             # execution mask for the current machine cycle
             pip = build_pip(mcycle)
             if mcycle.type == 'fetch':
-                l(f'// {op.name}: M1')
+                l(f'// -- M1')
             elif mcycle.type == 'overlapped':
-                l(f'// {op.name}: OVERLAP')
+                l(f'// -- OVERLAP')
             else:
-                l(f'// {op.name}: M{i+1}')
+                l(f'// -- M{i+1}')
             if mcycle.type == 'fetch':
                 # initialize next tcycle mask
-                add(opc, f'c->pip=0x{pip:X}/*{pip:08b}*/')
+                add(opc, f'cpu->pip=0x{pip:X}')
                 # refresh cycle
-                add(opc, '_rfsh();')
+                add(opc, '_rfsh()')
             elif mcycle.type == 'mread':
-                add(opc, f'c->pip=0x{pip:X}/*{pip:08b}*/;_mr(0xFFFF);/*FIXME: address!*/')
-                add(opc, '/*FIXME: read data bus*/')
+                addr = mcycle.items['ab']
+                store = mcycle.items['dst'].replace('_X_', '_gd()')
+                add(opc, f'cpu->pip=0x{pip:X};_mr({addr})')
+                add(opc, f'{store}')
             elif mcycle.type == 'write':
-                add(opc, f'c->pip=0x{pip:X}/*{pip:08b}*/')
-                add(opc, '_mw(0xFFFF,0xFF);/*FIXME: address and data!*/')
+                add(opc, f'cpu->pip=0x{pip:X}')
+                add(opc, '_mw(0xFFFF,0xFF)/*FIXME: address and data!*/')
             elif mcycle.type == 'ioread':
-                add(opc, f'c->pip=0x{pip:X}/*{pip:08b}*/;')
-                add(opc, '_ior(0xFFFF);/*FIXME: address!*/')
+                add(opc, f'cpu->pip=0x{pip:X}')
+                add(opc, '_ior(0xFFFF)/*FIXME: address!*/')
                 add(opc, '/*FIXME: read data bus*/')
             elif mcycle.type == 'iowrite':
-                add(opc, f'c->pip=0x{pip:X}/*{pip:08b}*/;')
-                add(opc, '_iow(0xFFFF,0xFF);/*FIXME: address and data!*/')
+                add(opc, f'cpu->pip=0x{pip:X}')
+                add(opc, '_iow(0xFFFF,0xFF)/*FIXME: address and data!*/')
             elif mcycle.type == 'generic':
-                add(opc, f'c->pip=0x{pip:X}/*{pip:08b}*/;/*FIXME: action*/')
+                add(opc, f'cpu->pip=0x{pip:X}/*FIXME: action*/')
             elif mcycle.type == 'overlapped':
-                add(opc, f'c->pip=0x{pip:X}/*{pip:08b}*/;_fetch();/*FIXME: overlapped action!*/')
+                action = mcycle.items['code'] if 'code' in mcycle.items else ''
+                add(opc, f'cpu->pip=0x{pip:X};_fetch();{action}')
+        if step > 7:
+            err(f"too many steps in instruction '{op.name}'!")
 
 def dump():
-    for op_desc in OP_PATTERNS:
-        print(f"\nop(name='{op_desc.name}', cond='{op_desc.cond}'):")
-        for mc in op_desc.mcycles:
-            print(f'  mcycle(type={mc.type}, tcycles={mc.tcycles})')
-            for key,val in mc.items.items():
-                print(f'    {key}:{val}')
-    print('\n')
-    for maybe_op in OPS:
-        op = unwrap(maybe_op)
-        print(f"{op.opcode:02X}: {op.name}")
-
+    # for op_desc in OP_PATTERNS:
+    #     print(f"\nop(name='{op_desc.name}', cond='{op_desc.cond}'):")
+    #     for mc in op_desc.mcycles:
+    #         print(f'  mcycle(type={mc.type}, tcycles={mc.tcycles})')
+    #         for key,val in mc.items.items():
+    #             print(f'    {key}:{val}')
+    # print('\n')
     print(out_lines)
 
 if __name__=='__main__':

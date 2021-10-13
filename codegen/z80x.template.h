@@ -171,28 +171,28 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 #define _ior(ab)    _sax(ab,Z80_IORQ|Z80_RD)
 #define _iow(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
 
-uint64_t z80_tick(z80_t* c, uint64_t pins) {
+uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     pins &= ~Z80_CTRL_MASK;
-    if ((c->pip & Z80_PIP_BIT_WAIT) && (pins & Z80_WAIT)) {
-        c->pins = pins;
+    if ((cpu->pip & Z80_PIP_BIT_WAIT) && (pins & Z80_WAIT)) {
+        cpu->pins = pins;
         return pins;
     }
-    c->pip = (c->pip & ~Z80_PIP_BITS) >> 1;
-    if (c->pip & Z80_PIP_BIT_LOADIR) {
+    cpu->pip = (cpu->pip & ~Z80_PIP_BITS) >> 1;
+    if (cpu->pip & Z80_PIP_BIT_LOADIR) {
         // load next instruction byte from data bus into instruction
         // register, make room for machine cycle counter
-        c->ir = _GD()<<3;
+        cpu->ir = _GD()<<3;
     }
     // early out if there's nothing else to do this tick
-    if (0 == (c->pip & Z80_PIP_BIT_STEP)) {
-        c->pins = pins;
+    if (0 == (cpu->pip & Z80_PIP_BIT_STEP)) {
+        cpu->pins = pins;
         return pins;
     }
     // process the next 'active' tcycle
-    switch (c->ir++) {
+    switch (cpu->ir++) {
 $decode_block
     }
-    c->pins = pins;
+    cpu->pins = pins;
 }
 
 #undef _SA

@@ -25,26 +25,25 @@ HALT:
   cond: (x == 1) and (y == 6) and (z == 6)
   overlapped: { code: z80_halt(c) }
 
-LD (HL),r[z]:
+LD (HL),rz:
   cond: (x == 1) and (y == 6) and (z != 6)
   mwrite: { ab: hl, db: rz }
 
-LD r[y],(HL):
+LD ry,(HL):
   cond: (x == 1) and (y != 6) and (z == 6)
-  mread: { ab: hl, dst: dlatch }
-  overlapped: { code: ry=dlatch }
+  mread: { ab: hl, dst: ry }
 
-LD r[z],r[y]:
+LD rz,ry:
   cond: (x == 1) and (y != 6) and (z != 6)
   overlapped: { code: ry=rz }
 
 #== QUADRANT X2 ================================================================
-alu[y] (HL):
+aluy (HL):
   cond: (x == 2) and (z == 6)
   mread: { ab: hl, dst: dlatch }
   overlapped: { code: aluy(dlatch) }
 
-alu[y] r[z]:
+aluy rz:
   cond: (x == 2) and (z != 6)
   overlapped: { func: aluy(rz) }
 
@@ -66,16 +65,16 @@ JR d:
   cond: (x == 0) and (y == 3) and (z == 0)
   # FIXME
 
-JR cc[y-4],d:
+JR ccy-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
   # FIXME
 
 # 16-bit load immediate/add
-LD rp[p],nn:
+LD rp,nn:
   cond: (x == 0) and (z == 1) and (q == 0)
   # FIXME
 
-ADD HL,rp[p]:
+ADD HL,rp:
   cond: (x == 0) and (z == 1) and (q == 1)
   # FIXME
 
@@ -113,25 +112,25 @@ LD A,(nn):
   # FIXME
 
 # 16-bit inc/dec
-INC rp[p]:
+INC rp:
   cond: (x == 0) and (z == 3) and (q == 0)
   # FIXME
 
-DEC rp[p]:
+DEC rp:
   cond: (x == 0) and (z == 3) and (q == 1)
   # FIXME
 
 # 8-bit inc/dec
-INC r[y]:
+INC ry:
   cond: (x == 0) and (z == 4)
   # FIXME
 
-DEC r[y]:
+DEC ry:
   cond: (x == 0) and (z == 5)
   # FIXME
 
 # 8-bit load immediate
-LD r[y],n:
+LD ry,n:
   cond: (x == 0) and (z == 6)
   # FIXME
 
@@ -171,12 +170,12 @@ CCF:
 #== QUADRANT X3 ================================================================
 
 # conditional return
-RET cc[y]:
+RET ccy:
   cond: (x == 3) and (z == 0)
   # FIXME
 
 # POP and various ops
-POP rp2[p]:
+POP rp2:
   cond: (x == 3) and (z == 1) and (q == 0)
   # FIXME
 
@@ -197,7 +196,7 @@ LD SP,HL:
   # FIXME
 
 # conditional jump
-JP cc[y],nn:
+JP ccy,nn:
   cond: (x == 3) and (z == 2)
   # FIXME
 
@@ -235,12 +234,12 @@ EI:
   # FIXME
 
 # conditional CALL
-CALL cc[y],nn:
+CALL ccy,nn:
   cond: (x == 3) and (z == 4)
   # FIXME
 
 # PUSH and various ops
-PUSH rp2[p]:
+PUSH rp2:
   cond: (x == 3) and (z == 5) and (q == 0)
   # FIXME
 
@@ -260,7 +259,7 @@ FD prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 3)
   # FIXME
 
-alu[y] n:
+aluy n:
   cond: (x == 3) and (z == 6)
   # FIXME
 
