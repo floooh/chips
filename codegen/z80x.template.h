@@ -37,27 +37,24 @@ extern "C" {
 #define Z80_D6  (1ULL<<22)
 #define Z80_D7  (1ULL<<23)
 
-// output pins
+// 
 #define Z80_M1    (1ULL<<24)        // machine cycle 1
 #define Z80_MREQ  (1ULL<<25)        // memory request
 #define Z80_IORQ  (1ULL<<26)        // input/output request
 #define Z80_RD    (1ULL<<27)        // read
 #define Z80_WR    (1ULL<<28)        // write
 #define Z80_HALT  (1ULL<<29)        // halt state
-#define Z80_RFSH  (1ULL<<32)        // refresh
-// NOTE: this mask not containing the HALT pin is intended
-#define Z80_CTRL_MASK (Z80_M1|Z80_MREQ|Z80_IORQ|Z80_RD|Z80_WR|Z80_RFSH)
-
-// input pins
 #define Z80_INT   (1ULL<<30)        // interrupt request
-#define Z80_NMI   (1ULL<<31)        // non-maskable interrupt
-#define Z80_RES   (1ULL<<33)        // reset requested
-#define Z80_WAIT  (1ULL<<34)        // wait requested
+#define Z80_RES   (1ULL<<31)        // reset requested
+#define Z80_NMI   (1ULL<<32)        // non-maskable interrupt
+#define Z80_WAIT  (1ULL<<33)        // wait requested
+#define Z80_RFSH  (1ULL<<34)        // refresh
 
 // virtual pins (for interrupt daisy chain protocol)
 #define Z80_IEIO    (1ULL<<37)      // unified daisy chain 'Interrupt Enable In+Out'
 #define Z80_RETI    (1ULL<<38)      // cpu has decoded a RETI instruction
 
+#define Z80_CTRL_PIN_MASK (Z80_M1|Z80_MREQ|Z80_IORQ|Z80_RD|Z80_WR|Z80_RFSH)
 #define Z80_PIN_MASK ((1ULL<<40)-1)
 
 // status flags
@@ -72,17 +69,13 @@ extern "C" {
 #define Z80_SF (1<<7)           // sign
 
 // machine cycle execution pipeline bits (TODO: explain this stuff)
-#define Z80_PIP_BIT_STEP        (1<<0)  // step the instruction decoder forward
-#define Z80_PIP_BIT_LOADIR      (1<<8)  // load the next opcode from data bus
-#define Z80_PIP_BIT_WAIT        (1<<16) // sample the wait pin
-#define Z80_PIP_BIT_IRQ         (1<<24) // handle interrupt request
+#define Z80_PIP_BIT_STEP        (1ULL<<0)  // step the instruction decoder forward
+#define Z80_PIP_BIT_WAIT        (1ULL<<32) // sample the wait pin
 
-#define Z80_PIP_BITS (Z80_PIP_BIT_STEP|Z80_PIP_BIT_LOADIR|Z80_PIP_BIT_WAIT|Z80_PIP_BIT_IRQ)
+#define Z80_PIP_BITS (Z80_PIP_BIT_STEP|Z80_PIP_BIT_WAIT)
 
-#define Z80_PIP_MASK_STEP       (0xFF)
-#define Z80_PIP_MASK_LOADIR     (0xFF00)
-#define Z80_PIP_MASK_WAIT       (0xFF0000)
-#define Z80_PIP_MASK_IRQ        (0xFF000000)
+#define Z80_PIP_MASK_STEP       (0xFFFFFFFFULL)
+#define Z80_PIP_MASK_WAIT       (0xFFFFFFFF00000000ULL)
 
 // CPU state
 typedef struct {
@@ -118,6 +111,10 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins);
 #include <assert.h>
 #define CHIPS_ASSERT(c) assert(c)
 #endif
+
+static const uint64_t z80_pip_table[256] = {
+$pip_table;
+};
 
 uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
@@ -188,26 +185,26 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 #define _cp(val)    z80_cp(cpu,val)
 
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
-    pins &= ~Z80_CTRL_MASK;
-    if ((cpu->pip & Z80_PIP_BIT_WAIT) && (pins & Z80_WAIT)) {
-        cpu->pins = pins;
+    uint64_t pip = cpu->pip;
+    // wait cycle?
+    if ((pip & Z80_PIP_BIT_WAIT) && (pins & Z80_WAIT)) {
+        cpu->pins = pins & ~Z80_CTRL_PIN_MASK;
         return pins;
     }
-    cpu->pip = (cpu->pip & ~Z80_PIP_BITS) >> 1;
-    if (cpu->pip & Z80_PIP_BIT_LOADIR) {
-        // load next instruction byte from data bus into instruction
-        // register, make room for machine cycle counter
-        cpu->ir = _gd()<<3;
-    }
-    // early out if there's nothing else to do this tick
-    if (0 == (cpu->pip & Z80_PIP_BIT_STEP)) {
-        cpu->pins = pins;
-        return pins;
+    // check if new opcode must be loaded from data bus
+    if ((pins & (Z80_M1|Z80_MREQ|Z80_RD)) == (Z80_M1|Z80_MREQ|Z80_RD)) {
+        uint8_t opcode = _gd();
+        cpu->ir = opcode<<3;
+        pip = z80_pip_table[opcode];
     }
     // process the next 'active' tcycle
-    switch (cpu->ir++) {
+    pins &= ~Z80_CTRL_PIN_MASK;
+    if (pip & Z80_PIP_BIT_STEP) {
+        switch (cpu->ir++) {
 $decode_block
+        }
     }
+    cpu->pip = (pip & ~Z80_PIP_BITS) >> 1;
     cpu->pins = pins;
     return pins;
 }
