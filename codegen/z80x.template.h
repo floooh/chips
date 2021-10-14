@@ -113,7 +113,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins);
 #endif
 
 static const uint64_t z80_pip_table[256] = {
-$pip_table;
+$pip_table_block
 };
 
 uint64_t z80_init(z80_t* cpu) {
@@ -174,16 +174,6 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 #define _ior(ab)    _sax(ab,Z80_IORQ|Z80_RD)
 #define _iow(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
 
-// function call helpers
-#define _add(val)   z80_add(cpu,val)
-#define _adc(val)   z80_adc(cpu,val)
-#define _sub(val)   z80_sub(cpu,val)
-#define _sbc(val)   z80_sbc(cpu,val)
-#define _and(val)   z80_and(cpu,val)
-#define _xor(val)   z80_xor(cpu,val)
-#define _or(val)    z80_or(cpu,val)
-#define _cp(val)    z80_cp(cpu,val)
-
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     uint64_t pip = cpu->pip;
     // wait cycle?
@@ -230,13 +220,5 @@ $decode_block
 #undef _mw
 #undef _ior
 #undef _iow
-#undef _add
-#undef _adc
-#undef _sub
-#undef _sbc
-#undef _and
-#undef _xor
-#undef _or
-#undef _cp
 
 #endif // CHIPS_IMPL

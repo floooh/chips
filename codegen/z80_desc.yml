@@ -21,248 +21,248 @@
 #
 
 #== QUADRANT X1 ================================================================
-HALT:
+halt:
   cond: (x == 1) and (y == 6) and (z == 6)
-  overlapped: { code: z80_halt(c) }
+  overlapped: { code: "z80_halt(cpu)" }
 
-LD (HL),rz:
+ld (hl),RZ:
   cond: (x == 1) and (y == 6) and (z != 6)
-  mwrite: { ab: hl, db: rz }
+  mwrite: { ab: HL, db: RZ }
 
-LD ry,(HL):
+ld RY,(hl):
   cond: (x == 1) and (y != 6) and (z == 6)
-  mread: { ab: hl, dst: ry }
+  mread: { ab: HL, dst: RY }
 
-LD rz,ry:
+ld RZ,RY:
   cond: (x == 1) and (y != 6) and (z != 6)
-  overlapped: { code: ry=rz }
+  overlapped: { code: RY=RZ }
 
 #== QUADRANT X2 ================================================================
-aluy (HL):
+ALU (hl):
   cond: (x == 2) and (z == 6)
-  mread: { ab: hl, dst: dlatch }
-  overlapped: { code: aluy(dlatch) }
+  mread: { ab: HL, dst: DLATCH }
+  overlapped: { code: "ALU(cpu,DLATCH)" }
 
-aluy rz:
+ALU RZ:
   cond: (x == 2) and (z != 6)
-  overlapped: { code: aluy(rz) }
+  overlapped: { code: "ALU(cpu,RZ)" }
 
 #== QUADRANT X0 ================================================================
 
 # assorted ops and relative jumps
-NOP:
+nop:
   cond: (x == 0) and (y == 0) and (z == 0)
 
-EX AF,AF':
+ex af,af':
   cond: (x == 0) and (y == 1) and (z == 0)
   # FIXME
 
-DJNZ d:
+djnz d:
   cond: (x == 0) and (y == 2) and (z == 0)
   # FIXME
 
-JR d:
+jr d:
   cond: (x == 0) and (y == 3) and (z == 0)
   # FIXME
 
-JR ccy-4,d:
+jr CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
   # FIXME
 
 # 16-bit load immediate/add
-LD rp,nn:
+ld RP,nn:
   cond: (x == 0) and (z == 1) and (q == 0)
   # FIXME
 
-ADD HL,rp:
+add hl,RP:
   cond: (x == 0) and (z == 1) and (q == 1)
   # FIXME
 
 # indirect loading
-LD (BC),A:
+ld (bc),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 0)
   # FIXME
 
-LD (DE),A:
+ld (de),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 1)
   # FIXME
 
-LD (nn),HL:
+ld (nn),hl:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 2)
   # FIXME
 
-LD (nn),A:
+ld (nn),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 3)
   # FIXME
 
-LD A,(BC):
+ld a,(bc):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 0)
   # FIXME
 
-LD A,(DE):
+ld a,(de):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 1)
   # FIXME
 
-LD HL,(nn):
+ld hl,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 2)
   # FIXME
 
-LD A,(nn):
+ld a,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 3)
   # FIXME
 
 # 16-bit inc/dec
-INC rp:
+inc RP:
   cond: (x == 0) and (z == 3) and (q == 0)
   # FIXME
 
-DEC rp:
+dec RP:
   cond: (x == 0) and (z == 3) and (q == 1)
   # FIXME
 
 # 8-bit inc/dec
-INC ry:
+inc RY:
   cond: (x == 0) and (z == 4)
   # FIXME
 
-DEC ry:
+dec RY:
   cond: (x == 0) and (z == 5)
   # FIXME
 
 # 8-bit load immediate
-LD ry,n:
+ld RY,n:
   cond: (x == 0) and (z == 6)
   # FIXME
 
 # assorted operations on accumulator and flags
-RLCA:
+rlca:
   cond: (x == 0) and (y == 0) and (z == 7)
   # FIXME
 
-RRCA:
+rrca:
   cond: (x == 0) and (y == 1) and (z == 7)
   # FIXME
 
-RLA:
+rla:
   cond: (x == 0) and (y == 2) and (z == 7)
   # FIXME
 
-RRA:
+rra:
   cond: (x == 0) and (y == 3) and (z == 7)
   # FIXME
 
-DAA:
+daa:
   cond: (x == 0) and (y == 4) and (z == 7)
   # FIXME
 
-CPL:
+cpl:
   cond: (x == 0) and (y == 5) and (z == 7)
   # FIXME
 
-SCF:
+scf:
   cond: (x == 0) and (y == 6) and (z == 7)
   # FIXME
 
-CCF:
+ccf:
   cond: (x == 0) and (y == 7) and (z == 7)
   # FIXME
 
 #== QUADRANT X3 ================================================================
 
 # conditional return
-RET ccy:
+ret CC:
   cond: (x == 3) and (z == 0)
   # FIXME
 
 # POP and various ops
-POP rp2:
+pop RP2:
   cond: (x == 3) and (z == 1) and (q == 0)
   # FIXME
 
-RET:
+ret:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 0)
   # FIXME
 
-EXX:
+exx:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 1)
   # FIXME
 
-JP HL:
+jp hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 2)
   # FIXME
 
-LD SP,HL:
+ld sp,hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 3)
   # FIXME
 
 # conditional jump
-JP ccy,nn:
+jp CC,nn:
   cond: (x == 3) and (z == 2)
   # FIXME
 
 # assorted operations
-JP nn:
+jp nn:
   cond: (x == 3) and (y == 0) and (z == 3)
   # FIXME
 
-CB prefix:
+cb prefix:
   cond: (x == 3) and (y == 1) and (z == 3)
   # FIXME
 
-OUT (n),A:
+out (n),a:
   cond: (x == 3) and (y == 2) and (z == 3)
   # FIXME
 
-IN A,(n):
+in a,(n):
   cond: (x == 3) and (y == 3) and (z == 3)
   # FIXME
 
-EX (SP),HL:
+ex (sp),hl:
   cond: (x == 3) and (y == 4) and (z == 3)
   # FIXME
 
-EX DE,HL:
+ex de,hl:
   cond: (x == 3) and (y == 5) and (z == 3)
   # FIXME
 
-DI:
+di:
   cond: (x == 3) and (y == 6) and (z == 3)
   # FIXME
 
-EI:
+ei:
   cond: (x == 3) and (y == 7) and (z == 3)
   # FIXME
 
 # conditional CALL
-CALL ccy,nn:
+call CC,nn:
   cond: (x == 3) and (z == 4)
   # FIXME
 
 # PUSH and various ops
-PUSH rp2:
+push RP2:
   cond: (x == 3) and (z == 5) and (q == 0)
   # FIXME
 
-CALL nn:
+call nn:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 0)
   # FIXME
 
-DD prefix:
+dd prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 1)
   # FIXME
 
-ED prefix:
+ed prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 2)
   # FIXME
 
-FD prefix:
+fd prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 3)
   # FIXME
 
-aluy n:
+ALU n:
   cond: (x == 3) and (z == 6)
   # FIXME
 
-RST y*8:
+rst Y*8:
   cond: (x == 3) and (z == 7)
   # FIXME

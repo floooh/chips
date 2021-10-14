@@ -1,3 +1,4 @@
+from os import X_OK
 import yaml, copy
 from string import Template
 from typing import Optional, TypeVar
@@ -21,6 +22,8 @@ class Op:
         self.cond = cond
         self.cond_compiled = compile(cond, '<string>', 'eval')
         self.opcode: int = -1
+        self.pip: int = 0
+        self.num_cycles = 0
         self.mcycles: list[MCycle] = []
 
 # these are essentially opcode patterns
@@ -36,20 +39,20 @@ MEM_TCYCLES = 3
 IO_TCYCLES = 4
 
 # register mapping tables, see: http://www.z80.info/decoding.htm
-r_comment   = [ 'B', 'C', 'D', 'E', 'H', 'L', '(HL)', 'A' ]
-rp_comment  = [ 'BC', 'DE', 'HL', 'SP' ]
-rp2_comment = [ 'BC', 'DE', 'HL', 'AF' ]
-alu_comment = [ 'ADD', 'ADC', 'SUB', 'SBC', 'AND', 'XOR', 'OR', 'CP' ]
-cc_comment  = [ 'NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M' ]
+r_comment   = [ 'b', 'c', 'd', 'e', 'h', 'l', '(hl)', 'a' ]
+rp_comment  = [ 'bc', 'de', 'hl', 'sp' ]
+rp2_comment = [ 'bc', 'de', 'hl', 'af' ]
+alu_comment = [ 'add', 'adc', 'sub', 'sbc', 'and', 'xor', 'or', 'cp' ]
+cc_comment  = [ 'nz', 'z', 'nc', 'c', 'po', 'pe', 'p', 'm' ]
 
 r_set   = [ 'cpu->b=_X_', 'cpu->c=_X_', 'cpu->d=_X_', 'cpu->e=_X_', 'cpu->h=_X_', 'cpu->l=_X_', 'XXX', 'cpu->a=_X_' ]
 rp_set  = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_ssp(_X_)' ]
 rp2_set = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_saf(_X_)' ]
-alu_map = [ '_add', '_adc', '_sub', '_sbc', '_and', '_xor', '_or', '_cp' ]
+alu_map = [ 'z80_add',  'z80_adc', 'z80_sub', 'z80_sbc', 'z80_and', 'z80_xor', 'z80_or', 'z80_cp' ]
 
 r_get   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
-rp_get  = [ 'bc', 'de', 'hl', 'sp' ]
-rp2_get = [ 'bc', 'de', 'hl', 'af' ]
+rp_get  = [ 'BC', 'DE', 'HL', 'SP' ]
+rp2_get = [ 'BC', 'DE', 'HL', 'AF' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -73,35 +76,35 @@ def l(s: str) :
 
 def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
-        .replace('ry', r_comment[y])\
-        .replace('rz', r_comment[z])\
-        .replace('aluy', alu_comment[y])\
-        .replace('rp', rp_comment[p])\
-        .replace('rp2', rp2_comment[p])\
-        .replace('ccy-4', cc_comment[y-4])\
-        .replace('ccy', cc_comment[y])\
-        .replace('y*8', f'{y*8:X}h')
+        .replace('RY', r_comment[y])\
+        .replace('RZ', r_comment[z])\
+        .replace('ALU', alu_comment[y])\
+        .replace('RP', rp_comment[p])\
+        .replace('RP2', rp2_comment[p])\
+        .replace('CC-4', cc_comment[y-4])\
+        .replace('CC', cc_comment[y])\
+        .replace('Y*8', f'{y*8:X}h')
 
 def map_set(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
-        .replace('ry', r_set[y])\
-        .replace('rz', r_set[z])\
-        .replace('rp', rp_set[p])\
-        .replace('rp2', rp2_set[p])\
-        .replace('dlatch', 'cpu->dlatch=_X_')
+        .replace('RY', r_set[y])\
+        .replace('RZ', r_set[z])\
+        .replace('RP', rp_set[p])\
+        .replace('RP2', rp2_set[p])\
+        .replace('DLATCH', 'cpu->dlatch=_X_')
 
 def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
-        .replace('ry', r_get[y])\
-        .replace('rz', r_get[z])\
-        .replace('aluy', alu_map[y])\
-        .replace('rp', rp_get[p])\
-        .replace('rp2', rp2_get[p])\
-        .replace('af', '_gaf()')\
-        .replace('bc', '_gbc()')\
-        .replace('de', '_gde()')\
-        .replace('hl', '_ghl()')\
-        .replace('dlatch', 'cpu->dlatch')
+        .replace('ALU', alu_map[y])\
+        .replace('RY', r_get[y])\
+        .replace('RZ', r_get[z])\
+        .replace('RP', rp_get[p])\
+        .replace('RP2', rp2_get[p])\
+        .replace('AF', '_gaf()')\
+        .replace('BC', '_gbc()')\
+        .replace('DE', '_gde()')\
+        .replace('HL', '_ghl()')\
+        .replace('DLATCH', 'cpu->dlatch')
 
 def parse_mcycle_name(name: str) -> tuple[str, int]:
     tokens = name.replace('[',' ').replace(']',' ').split(' ')
@@ -188,104 +191,98 @@ def expand_optable():
                     mcycle.items = stampout_mcycle_items(mcycle.items, y, z, p, q)
                 OPS[opcode] = op
 
-# build the execution pipeline bitmask for a given machine cycle
-def build_pip(mcycle: MCycle) -> int:
+# build the execution pipeline bitmask for a given instruction
+def build_pip(op: Op) -> int:
     pip = 0
+    cycle = 0
 
-    def tcycles(tc: int, bits: list[int], total: int) -> int:
-        pos = 0
-        for pos in range(0,total):
-            if pos < len(bits):
-                if bits[pos] != 0:
-                    tc |=  (1<<pos)
-        # this triggers the next machine cycle
-        tc |= (1<<total)
-        if tc >= 256:
-            err('tcycle overflow!')
-        return tc
+    def tcycles(bits: list[int], wait_cycle: int, total: int):
+        nonlocal cycle
+        nonlocal pip
+        if wait_cycle != -1:
+            pip |= (1<<(32 + wait_cycle + cycle))
+        for i in range(0,total):
+            if i < len(bits):
+                if bits[i] != 0:
+                    pip |=  (1<<(i + cycle))
+        cycle += total
 
-    def sample_wait(tc: int, pos: int) -> int:
-        return (tc | (1<<(pos + 16)))
-
-    def loadir(tc: int) -> int:
-        return (tc |(1<<9))
-        
-    if mcycle.type == 'fetch':
-        # 3-cycle 'part-fetch' because of overlapped execute/fetch
-        pip = tcycles(pip, [1,1], mcycle.tcycles)
-    elif mcycle.type == 'mread':
-        # memory read cycle needs one tcycle to initiate read, and next tcycle to store result
-        pip = tcycles(pip, [1,1,0], mcycle.tcycles)
-        pip = sample_wait(pip, 1)
-    elif mcycle.type == 'mwrite':
-        # memory write 
-        pip = tcycles(pip, [1,1,0], mcycle.tcycles)
-        pip = sample_wait(pip, 1)
-    elif mcycle.type == 'ioread':
-        pip = tcycles(pip, [1,1,1,0], mcycle.tcycles)
-        pip = sample_wait(pip, 2)
-    elif mcycle.type == 'iowrite':
-        # same as memory write, but one extra cycle
-        pip = tcycles(pip, [1,1,0,0], mcycle.tcycles)
-        pip = sample_wait(pip, 2)
-    elif mcycle.type == 'generic':
-        pip = tcycles(pip, [1], mcycle.tcycles)
-    elif mcycle.type == 'overlapped':
-        pip = tcycles(pip, [1], mcycle.tcycles)
-        pip = sample_wait(pip, 1)
-        pip = loadir(pip)
+    for mcycle in op.mcycles:
+        if mcycle.type == 'fetch':
+            # the last 3 tcycles of instruction fetch, the wait pin is
+            # sampled on the first cycle (T2 of the whole fetch machine cycle),
+            # and in T3 the refresh cycle is initiated
+            tcycles([0,1], 0, mcycle.tcycles)
+        elif mcycle.type == 'mread':
+            # memory read machine cycle, initiate the read in T1 and T2 to store the result
+            # the wait pin is sampled on T2
+            tcycles([1,1,0], 1, mcycle.tcycles)
+        elif mcycle.type == 'mwrite':
+            # memory write machine cycle, initiate the write and sample wait pin in T2
+            tcycles([0,1,0], 1, mcycle.tcycles)
+        elif mcycle.type == 'ioread':
+            # io read is like a memory read delayed by one cycle
+            tcycles([0,1,1,0], 2, mcycle.tcycles)
+        elif mcycle.type == 'iowrite':
+            # io write is like a 
+            tcycles([0,1,0,0], 2, mcycle.tcycles)
+        elif mcycle.type == 'generic':
+            tcycles([1], -1, mcycle.tcycles)
+        elif mcycle.type == 'overlapped':
+            # the final overlapped tcycle is actually the first tcycle
+            # of the next instruction and only initiates a memory fetch
+            tcycles([1], -1, mcycle.tcycles)
+    op.num_cycles = cycle
     return pip
 
 # generate code for one op
 def gen_decoder():
+    
+    def add(opcode: int, action: str):
+        nonlocal step
+        l(f'case (0x{opcode:02X}<<3)|{step}: {action}; break;')
+        step += 1
+    
     for maybe_op in OPS:
         op = unwrap(maybe_op)
-
-        def add(opcode: int, action: str):
-            nonlocal step
-            l(f'case (0x{opcode:02X}<<3)|{step}: {action}; break;')
-            step += 1
-
         step = 0
         opc = op.opcode
+        op.pip = build_pip(op)
+
         l('')
-        l(f'// {op.name}')
+        l(f'// {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
-            # execution mask for the current machine cycle
-            pip = build_pip(mcycle)
             if mcycle.type == 'fetch':
                 l(f'// -- M1')
-            elif mcycle.type == 'overlapped':
-                l(f'// -- OVERLAP')
-            else:
-                l(f'// -- M{i+1}')
-            if mcycle.type == 'fetch':
-                # initialize next tcycle mask
-                add(opc, f'cpu->pip=0x{pip:X}')
-                # refresh cycle
                 add(opc, '_rfsh()')
             elif mcycle.type == 'mread':
+                l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(opc, f'cpu->pip=0x{pip:X};_mr({addr})')
+                add(opc, f'_mr({addr})')
                 add(opc, f'{store}')
-            elif mcycle.type == 'write':
-                add(opc, f'cpu->pip=0x{pip:X}')
+            elif mcycle.type == 'mwrite':
+                l(f'// -- M{i+1}')
                 add(opc, '_mw(0xFFFF,0xFF)/*FIXME: address and data!*/')
             elif mcycle.type == 'ioread':
-                add(opc, f'cpu->pip=0x{pip:X}')
+                l(f'// -- M{i+1}')
                 add(opc, '_ior(0xFFFF)/*FIXME: address!*/')
                 add(opc, '/*FIXME: read data bus*/')
             elif mcycle.type == 'iowrite':
-                add(opc, f'cpu->pip=0x{pip:X}')
+                l(f'// -- M{i+1}')
                 add(opc, '_iow(0xFFFF,0xFF)/*FIXME: address and data!*/')
             elif mcycle.type == 'generic':
-                add(opc, f'cpu->pip=0x{pip:X}/*FIXME: action*/')
+                l(f'// -- M{i+1}')
+                add(opc, f'/*FIXME: action*/')
             elif mcycle.type == 'overlapped':
-                action = (mcycle.items['code'] if 'code' in mcycle.items else '')
-                add(opc, f'cpu->pip=0x{pip:X};_fetch();{action}')
-        if step > 7:
-            err(f"too many steps in instruction '{op.name}'!")
+                l(f'// -- OVERLAP')
+                action = (f"{mcycle.items['code']};" if 'code' in mcycle.items else '')
+                add(opc, f'{action}_fetch()')
+        # the number of steps must match the number of step-bits in the
+        # execution pipeline
+        step_pip = op.pip & ((1<<32)-1)
+        if step != bin(step_pip).count('1'):
+            err(f"Pipeline vs steps mismatch in '{op.name}(0x{op.opcode:02X})': {step_pip:b} vs {step}")
 
 def dump():
     # for op_desc in OP_PATTERNS:
@@ -297,10 +294,20 @@ def dump():
     # print('\n')
     print(out_lines)
 
+def pip_table_to_string() -> str:
+    global indent
+    indent = 1
+    res: str = ''
+    for maybe_op in OPS:
+        op = unwrap(maybe_op)
+        res += tab() + f'// {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})\n'
+        res += tab() + f'0x{op.pip:016X},\n' 
+    return res
+
 def write_result():
     with open(TEMPL_PATH, 'r') as templf:
         templ = Template(templf.read())
-        c_src = templ.safe_substitute(decode_block=out_lines)
+        c_src = templ.safe_substitute(decode_block=out_lines, pip_table_block=pip_table_to_string())
         with open(OUT_PATH, 'w') as outf:
             outf.write(c_src)
 
