@@ -81,7 +81,7 @@ extern "C" {
 typedef struct {
     uint64_t pins;      // last stored pin state
     uint64_t pip;       // execution pipeline
-    uint16_t ir;        // instruction register with extra bits for next 'active' tcycle
+    uint64_t step;      // current decoder step
     uint16_t pc;        // program counter
     uint8_t f, a, c, b, e, d, l, h;
     uint16_t wz;
@@ -112,7 +112,12 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins);
 #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-static const uint64_t z80_pip_table[256] = {
+typedef struct {
+    uint64_t pip;   // decode pipeline
+    uint64_t step;  // the first case-branch of the instruction
+} z80_opdesc_t;
+
+static const z80_opdesc_t z80_opdesc_table[256] = {
 $pip_table_block
 };
 
@@ -184,13 +189,13 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     // check if new opcode must be loaded from data bus
     if ((pins & (Z80_M1|Z80_MREQ|Z80_RD)) == (Z80_M1|Z80_MREQ|Z80_RD)) {
         uint8_t opcode = _gd();
-        cpu->ir = opcode<<3;
-        pip = z80_pip_table[opcode];
+        pip = z80_opdesc_table[opcode].pip;
+        cpu->step = z80_opdesc_table[opcode].step;
     }
     // process the next 'active' tcycle
     pins &= ~Z80_CTRL_PIN_MASK;
     if (pip & Z80_PIP_BIT_STEP) {
-        switch (cpu->ir++) {
+        switch (cpu->step++) {
 $decode_block
         }
     }

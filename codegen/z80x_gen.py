@@ -24,6 +24,8 @@ class Op:
         self.opcode: int = -1
         self.pip: int = 0
         self.num_cycles = 0
+        self.num_steps = 0
+        self.decoder_offset: int = 0
         self.mcycles: list[MCycle] = []
 
 # these are essentially opcode patterns
@@ -64,7 +66,7 @@ def unwrap(maybe_value: Optional[T]) -> T:
     return maybe_value
 
 # append a source code line
-indent: int = 2
+indent: int = 0
 out_lines: str = ''
 
 def tab() -> str:
@@ -237,10 +239,15 @@ def build_pip(op: Op) -> int:
 
 # generate code for one op
 def gen_decoder():
-    
+    global indent
+    indent = 3
+    decoder_step = 0
+
     def add(opcode: int, action: str):
+        nonlocal decoder_step
         nonlocal step
-        l(f'case (0x{opcode:02X}<<3)|{step}: {action}; break;')
+        l(f'case 0x{decoder_step:04X}: {action}; break;')
+        decoder_step += 1
         step += 1
     
     for maybe_op in OPS:
@@ -248,41 +255,43 @@ def gen_decoder():
         step = 0
         opc = op.opcode
         op.pip = build_pip(op)
+        op.decoder_offset = decoder_step
 
         l('')
         l(f'// {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
             if mcycle.type == 'fetch':
-                l(f'// -- M1')
+                l(f'// -- M1 (fetch/rfsh)')
                 add(opc, '_rfsh()')
             elif mcycle.type == 'mread':
-                l(f'// -- M{i+1}')
+                l(f'// -- M{i+1} (mread)')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 add(opc, f'_mr({addr})')
                 add(opc, f'{store}')
             elif mcycle.type == 'mwrite':
-                l(f'// -- M{i+1}')
+                l(f'// -- M{i+1} (mwrite)')
                 add(opc, '_mw(0xFFFF,0xFF)/*FIXME: address and data!*/')
             elif mcycle.type == 'ioread':
-                l(f'// -- M{i+1}')
+                l(f'// -- M{i+1} (ioread)')
                 add(opc, '_ior(0xFFFF)/*FIXME: address!*/')
                 add(opc, '/*FIXME: read data bus*/')
             elif mcycle.type == 'iowrite':
-                l(f'// -- M{i+1}')
+                l(f'// -- M{i+1} (iowrite)')
                 add(opc, '_iow(0xFFFF,0xFF)/*FIXME: address and data!*/')
             elif mcycle.type == 'generic':
-                l(f'// -- M{i+1}')
+                l(f'// -- M{i+1} (generic)')
                 add(opc, f'/*FIXME: action*/')
             elif mcycle.type == 'overlapped':
                 l(f'// -- OVERLAP')
                 action = (f"{mcycle.items['code']};" if 'code' in mcycle.items else '')
                 add(opc, f'{action}_fetch()')
+        op.num_steps = step
         # the number of steps must match the number of step-bits in the
         # execution pipeline
         step_pip = op.pip & ((1<<32)-1)
         if step != bin(step_pip).count('1'):
-            err(f"Pipeline vs steps mismatch in '{op.name}(0x{op.opcode:02X})': {step_pip:b} vs {step}")
+            err(f"Pipeline vs steps mismatch in '{op.name}(0x{op.opcode:02X})': {step_pip:b} vs {op.num_steps}")
 
 def dump():
     # for op_desc in OP_PATTERNS:
@@ -300,8 +309,8 @@ def pip_table_to_string() -> str:
     res: str = ''
     for maybe_op in OPS:
         op = unwrap(maybe_op)
-        res += tab() + f'// {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})\n'
-        res += tab() + f'0x{op.pip:016X},\n' 
+        res += tab() + f'// {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
+        res += tab() + f'{{ 0x{op.pip:016X}, 0x{op.decoder_offset:04X} }},\n' 
     return res
 
 def write_result():
