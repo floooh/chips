@@ -1,4 +1,3 @@
-from os import X_OK
 import yaml, copy
 from string import Template
 from typing import Optional, TypeVar
@@ -47,18 +46,12 @@ rp2_comment = [ 'bc', 'de', 'hl', 'af' ]
 alu_comment = [ 'add', 'adc', 'sub', 'sbc', 'and', 'xor', 'or', 'cp' ]
 cc_comment  = [ 'nz', 'z', 'nc', 'c', 'po', 'pe', 'p', 'm' ]
 
-r_set   = [ 'cpu->b=_X_', 'cpu->c=_X_', 'cpu->d=_X_', 'cpu->e=_X_', 'cpu->h=_X_', 'cpu->l=_X_', 'XXX', 'cpu->a=_X_' ]
-rp_set  = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_ssp(_X_)' ]
-rpl_set = [ 'cpu->c=_X_', 'cpu->e=_X_', 'cpu->l=_X_', 'cpu->spl=_X_']
-rph_set = [ 'cpu->b=_X_', 'cpu->d=_X_', 'cpu->h=_X_', 'cpu->sph=_X_']
-rp2_set = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_saf(_X_)' ]
+r_map   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
+rp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->sp' ]
+rpl_map = [ 'cpu->c', 'cpu->e', 'cpu->l', 'cpu->spl']
+rph_map = [ 'cpu->b', 'cpu->d', 'cpu->h', 'cpu->sph']
+rp2_map = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->af' ]
 alu_map = [ 'z80_add',  'z80_adc', 'z80_sub', 'z80_sbc', 'z80_and', 'z80_xor', 'z80_or', 'z80_cp' ]
-
-r_get   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
-rp_get  = [ 'BC', 'DE', 'HL', 'SP' ]
-rpl_get = [ 'cpu->c', 'cpu->e', 'cpu->l', 'cpu->spl' ]
-rph_get = [ 'cpu->b', 'cpu->d', 'cpu->h', 'cpu->sph' ]
-rp2_get = [ 'BC', 'DE', 'HL', 'AF' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -91,31 +84,25 @@ def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('CC', cc_comment[y])\
         .replace('Y*8', f'{y*8:X}h')
 
-def map_set(inp:str, y:int, z:int, p:int, q:int) -> str:
-    return inp\
-        .replace('RY', r_set[y])\
-        .replace('RZ', r_set[z])\
-        .replace('RPL', rpl_set[p])\
-        .replace('RPH', rph_set[p])\
-        .replace('RP', rp_set[p])\
-        .replace('RP2', rp2_set[p])\
-        .replace('DLATCH', 'cpu->dlatch=_X_')
-
-def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
+def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
         .replace('ALU', alu_map[y])\
-        .replace('RY', r_get[y])\
-        .replace('RZ', r_get[z])\
-        .replace('RPL', rpl_get[p])\
-        .replace('RPH', rph_get[p])\
-        .replace('RP', rp_get[p])\
-        .replace('RP2', rp2_get[p])\
+        .replace('RY', r_map[y])\
+        .replace('RZ', r_map[z])\
+        .replace('RPL', rpl_map[p])\
+        .replace('RPH', rph_map[p])\
+        .replace('RP', rp_map[p])\
+        .replace('RP2', rp2_map[p])\
         .replace('PC', 'cpu->pc')\
-        .replace('AF', '_gaf()')\
-        .replace('BC', '_gbc()')\
-        .replace('DE', '_gde()')\
-        .replace('HL', '_ghl()')\
-        .replace('DLATCH', 'cpu->dlatch')
+        .replace('AF', 'cpu->af')\
+        .replace('BC', 'cpu->bc')\
+        .replace('DE', 'cpu->de')\
+        .replace('HL', 'cpu->hl')\
+        .replace('WZL', 'cpu->wzl')\
+        .replace('WZH', 'cpu->wzh')\
+        .replace('WZ', 'cpu->wz')\
+        .replace('DLATCH', 'cpu->dlatch')\
+        .replace('A', 'cpu->a')
 
 def parse_opdescs():
     with open(DESC_PATH, 'r') as fp:
@@ -164,11 +151,7 @@ def parse_opdescs():
 def stampout_mcycle_items(mcycle_items: dict[str,str], y: int, z: int, p: int, q: int) -> dict[str,str]:
     res: dict[str,str] = {}
     for key,val in mcycle_items.items():
-        if key in ['ab', 'db', 'code']:
-            val = map_get(val, y, z, p, q)
-        elif key == 'dst':
-            val = map_set(val, y, z, p, q)
-        res[key] = val
+        res[key] = map_cpu(val, y, z, p, q)
     return res
 
 def expand_optable():
@@ -245,7 +228,7 @@ def gen_decoder():
     def add(opcode: int, action: str):
         nonlocal decoder_step
         nonlocal step
-        l(f'case 0x{decoder_step:04X}: {action}; break;')
+        l(f'case 0x{decoder_step:04X}: {action} break;')
         decoder_step += 1
         step += 1
     
@@ -261,36 +244,37 @@ def gen_decoder():
         for i,mcycle in enumerate(op.mcycles):
             if mcycle.type == 'fetch':
                 l(f'// -- M1')
-                add(opc, '_rfsh()')
+                add(opc, '_rfsh();')
             elif mcycle.type == 'mread':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(opc, f'_mread({addr})')
-                add(opc, f'{store}')
+                action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
+                add(opc, f'_mread({addr});{action}')
+                add(opc, f'{store}=_gd();')
             elif mcycle.type == 'mwrite':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                add(opc, f'_mwrite({addr},{data})')
+                add(opc, f'_mwrite({addr},{data});')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(opc, f'_ioread(addr)')
-                add(opc, f'{store}')
+                add(opc, f'_ioread(addr);')
+                add(opc, f'{store}=_gd();')
             elif mcycle.type == 'iowrite':
                 l(f'// -- M{i+1} (iowrite)')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                add(opc, f'_iowrite({addr},{data})')
+                add(opc, f'_iowrite({addr},{data});')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
                 add(opc, f'/*FIXME: action*/')
             elif mcycle.type == 'overlapped':
                 l(f'// -- OVERLAP')
-                action = (f"{mcycle.items['code']};" if 'code' in mcycle.items else '')
-                add(opc, f'{action}_fetch()')
+                action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
+                add(opc, f'{action}_fetch();')
         op.num_steps = step
         # the number of steps must match the number of step-bits in the
         # execution pipeline

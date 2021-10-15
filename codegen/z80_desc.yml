@@ -4,7 +4,7 @@
 halt:
   cond: (x == 1) and (y == 6) and (z == 6)
   mcycles:
-    - { type: overlapped, code: "z80_halt(cpu)" }
+    - { type: overlapped, action: "z80_halt(cpu)" }
 
 ld (hl),RZ:
   cond: (x == 1) and (y == 6) and (z != 6)
@@ -19,19 +19,19 @@ ld RY,(hl):
 ld RY,RZ:
   cond: (x == 1) and (y != 6) and (z != 6)
   mcycles:
-    - { type: overlapped,  code: RY=RZ }
+    - { type: overlapped,  action: RY=RZ }
 
 #== QUADRANT X2 ================================================================
 ALU (hl):
   cond: (x == 2) and (z == 6)
   mcycles:
     - { type: mread, ab: HL, dst: DLATCH }
-    - { type: overlapped, code: "ALU(cpu,DLATCH)" }
+    - { type: overlapped, action: "ALU(cpu,DLATCH)" }
 
 ALU RZ:
   cond: (x == 2) and (z != 6)
   mcycles:
-    - { type: overlapped,  code: "ALU(cpu,RZ)" }
+    - { type: overlapped,  action: "ALU(cpu,RZ)" }
 
 #== QUADRANT X0 ================================================================
 
@@ -95,23 +95,24 @@ ld (nn),a:
 
 ld a,(bc):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: BC, dst: A, action: "WZ=BC+1" }
 
 ld a,(de):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: DE, dst: A, action: "WZ=DE+1" }
 
 ld hl,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 2)
   mcycles: []
-  # FIXME
 
 ld a,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: PC++, dst: WZL }
+    - { type: mread, ab: PC++, dst: WZH }
+    - { type: mread, ab: WZ++, dst: A }
 
 # 16-bit inc/dec
 inc RP:

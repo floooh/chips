@@ -93,12 +93,17 @@ typedef struct {
     uint64_t pins;      // last stored pin state
     z80_opstate_t op;   // the currently active op
     uint16_t pc;        // program counter
-    uint8_t f, a, c, b, e, d, l, h;
     uint8_t dlatch;     // temporary store for data bus value
-    uint8_t wzl, wzh;
-    uint8_t spl, sph;
-    uint8_t ixl, ixh;
-    uint8_t iyl, iyh;
+
+    // NOTE: These unions are fine in C, but not C++.
+    union { struct { uint8_t f; uint8_t a; }; uint16_t af; };
+    union { struct { uint8_t c; uint8_t b; }; uint16_t bc; };
+    union { struct { uint8_t e; uint8_t d; }; uint16_t de; };
+    union { struct { uint8_t l; uint8_t h; }; uint16_t hl; };
+    union { struct { uint8_t wzl; uint8_t wzh; }; uint16_t wz; };
+    union { struct { uint8_t spl; uint8_t sph; }; uint16_t sp; };
+    union { struct { uint8_t ixl; uint8_t ixh; }; uint16_t ix; };
+    union { struct { uint8_t iyl; uint8_t iyh; }; uint16_t iy; };
     uint8_t i;
     uint8_t r;
     uint8_t im;
@@ -133,12 +138,8 @@ uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
     memset(cpu, 0, sizeof(z80_t));
     // initial state according to visualz80
-    cpu->f = cpu->a = cpu->c = cpu->b = 0x55;
-    cpu->e = cpu->d = cpu->l = cpu->h = 0x55;
-    cpu->wzl = cpu->wzh = 0x55;
-    cpu->spl = cpu->sph = 0x55;
-    cpu->ixl = cpu->ixh = 0x55;
-    cpu->iyl = cpu->iyh = 0x55;
+    cpu->af = cpu->bc = cpu->de = cpu->hl = 0x5555;
+    cpu->wz = cpu->sp = cpu->ix = cpu->iy = 0x5555;
     cpu->af2 = cpu->bc2 = cpu->de2 = cpu->hl2 = 0x5555;
     // FIXME: iff1/2 disabled, initial value of IM???
 
@@ -216,18 +217,6 @@ static const z80_opstate_t z80_opstate_table[256] = {
 $pip_table_block
 };
 
-// register helper macros
-#define _gaf()      ((uint16_t)(cpu->f<<8)|cpu->a)
-#define _gbc()      ((uint16_t)(cpu->b<<8)|cpu->c)
-#define _gde()      ((uint16_t)(cpu->d<<8)|cpu->e)
-#define _ghl()      ((uint16_t)(cpu->h<<8)|cpu->l)
-#define _gsp()      ((uint16_t)(cpu->sph<<8)|cpu->spl)
-#define _saf(af)    {cpu->f=af>>8;cpu->a=af;}
-#define _sbc(bc)    {cpu->b=bc>>8;cpu->c=bc;}
-#define _sde(de)    {cpu->d=de>>8;cpu->e=de;}
-#define _shl(hl)    {cpu->h=hl>>8;cpu->l=hl;}
-#define _ssp(sp)    {cpu->sph=sp>>8;cpu->spl=sp;}
-
 // pin helper macros
 #define _sa(ab)             pins=z80_set_ab(pins,ab)
 #define _sax(ab,x)          pins=z80_set_ab_x(pins,ab,x)
@@ -267,16 +256,6 @@ $decode_block
     return pins;
 }
 
-#undef _gaf
-#undef _gbc
-#undef _gde
-#undef _ghl
-#undef _gsp
-#undef _saf
-#undef _sbc
-#undef _sde
-#undef _shl
-#undef _ssp
 #undef _sa
 #undef _sax
 #undef _sad
