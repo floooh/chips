@@ -95,10 +95,10 @@ typedef struct {
     uint16_t pc;        // program counter
     uint8_t f, a, c, b, e, d, l, h;
     uint8_t dlatch;     // temporary store for data bus value
-    uint16_t wz;
-    uint16_t sp;
-    uint16_t ix;
-    uint16_t iy;
+    uint8_t wzl, wzh;
+    uint8_t spl, sph;
+    uint8_t ixl, ixh;
+    uint8_t iyl, iyh;
     uint8_t i;
     uint8_t r;
     uint8_t im;
@@ -135,7 +135,10 @@ uint64_t z80_init(z80_t* cpu) {
     // initial state according to visualz80
     cpu->f = cpu->a = cpu->c = cpu->b = 0x55;
     cpu->e = cpu->d = cpu->l = cpu->h = 0x55;
-    cpu->wz = cpu->sp = cpu->ix = cpu->iy = 0x5555;
+    cpu->wzl = cpu->wzh = 0x55;
+    cpu->spl = cpu->sph = 0x55;
+    cpu->ixl = cpu->ixh = 0x55;
+    cpu->iyl = cpu->iyh = 0x55;
     cpu->af2 = cpu->bc2 = cpu->de2 = cpu->hl2 = 0x5555;
     // FIXME: iff1/2 disabled, initial value of IM???
 
@@ -218,12 +221,12 @@ $pip_table_block
 #define _gbc()      ((uint16_t)(cpu->b<<8)|cpu->c)
 #define _gde()      ((uint16_t)(cpu->d<<8)|cpu->e)
 #define _ghl()      ((uint16_t)(cpu->h<<8)|cpu->l)
-#define _gsp()      (cpu->sp)
-#define _saf(af)    {cpu->f=af>>8;cpu->a=af}
-#define _sbc(bc)    {cpu->b=bc>>8;cpu->c=bc}
-#define _sde(de)    {cpu->d=de>>8;cpu->e=de}
-#define _shl(hl)    {cpu->h=hl>>8;cpu->l=hl}
-#define _ssp(sp)    {cpu->sp=sp;}
+#define _gsp()      ((uint16_t)(cpu->sph<<8)|cpu->spl)
+#define _saf(af)    {cpu->f=af>>8;cpu->a=af;}
+#define _sbc(bc)    {cpu->b=bc>>8;cpu->c=bc;}
+#define _sde(de)    {cpu->d=de>>8;cpu->e=de;}
+#define _shl(hl)    {cpu->h=hl>>8;cpu->l=hl;}
+#define _ssp(sp)    {cpu->sph=sp>>8;cpu->spl=sp;}
 
 // pin helper macros
 #define _sa(ab)             pins=z80_set_ab(pins,ab)

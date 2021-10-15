@@ -49,11 +49,15 @@ cc_comment  = [ 'nz', 'z', 'nc', 'c', 'po', 'pe', 'p', 'm' ]
 
 r_set   = [ 'cpu->b=_X_', 'cpu->c=_X_', 'cpu->d=_X_', 'cpu->e=_X_', 'cpu->h=_X_', 'cpu->l=_X_', 'XXX', 'cpu->a=_X_' ]
 rp_set  = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_ssp(_X_)' ]
+rpl_set = [ 'cpu->c=_X_', 'cpu->e=_X_', 'cpu->l=_X_', 'cpu->spl=_X_']
+rph_set = [ 'cpu->b=_X_', 'cpu->d=_X_', 'cpu->h=_X_', 'cpu->sph=_X_']
 rp2_set = [ '_sbc(_X_)', '_sde(_X_)', '_shl(_X_)', '_saf(_X_)' ]
 alu_map = [ 'z80_add',  'z80_adc', 'z80_sub', 'z80_sbc', 'z80_and', 'z80_xor', 'z80_or', 'z80_cp' ]
 
 r_get   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
 rp_get  = [ 'BC', 'DE', 'HL', 'SP' ]
+rpl_get = [ 'cpu->c', 'cpu->e', 'cpu->l', 'cpu->spl' ]
+rph_get = [ 'cpu->b', 'cpu->d', 'cpu->h', 'cpu->sph' ]
 rp2_get = [ 'BC', 'DE', 'HL', 'AF' ]
 
 def err(msg: str):
@@ -91,6 +95,8 @@ def map_set(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
         .replace('RY', r_set[y])\
         .replace('RZ', r_set[z])\
+        .replace('RPL', rpl_set[p])\
+        .replace('RPH', rph_set[p])\
         .replace('RP', rp_set[p])\
         .replace('RP2', rp2_set[p])\
         .replace('DLATCH', 'cpu->dlatch=_X_')
@@ -100,6 +106,8 @@ def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('ALU', alu_map[y])\
         .replace('RY', r_get[y])\
         .replace('RZ', r_get[z])\
+        .replace('RPL', rpl_get[p])\
+        .replace('RPH', rph_get[p])\
         .replace('RP', rp_get[p])\
         .replace('RP2', rp2_get[p])\
         .replace('PC', 'cpu->pc')\
@@ -109,54 +117,44 @@ def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('HL', '_ghl()')\
         .replace('DLATCH', 'cpu->dlatch')
 
-def parse_mcycle_name(name: str) -> tuple[str, int]:
-    tokens = name.replace('[',' ').replace(']',' ').split(' ')
-    if len(tokens) not in [1,3]:
-        err(f'invalid mcycle syntax: {name}')
-    type = tokens[0]
-    if type not in ['fetch', 'mread', 'mwrite', 'ioread', 'iowrite', 'generic', 'overlapped']:
-        err(f'invalid mcycle type: {type}')
-    tcycles = 0
-    if len(tokens) == 1:
-        # standard machine cycle lengths
-        if type == 'fetch':
-            # not a bug (because of overlapped execute/fetch)
-            tcycles = FETCH_TCYCLES
-        elif type in ['mread', 'mwrite']:
-            tcycles = MEM_TCYCLES
-        elif type in ['ioread', 'iowrite']:
-            tcycles = IO_TCYCLES
-        elif type == 'generic':
-            err(f'generic mcycles must have an explicit length')
-        elif type == 'overlapped':
-            tcycles = OVERLAPPED_TCYCLES
-    else:
-        tcycles = int(tokens[1])
-        if type == 'fetch':
-            # fix overlapped fetch tcycle length 
-            tcycles -= OVERLAPPED_TCYCLES
-    if (tcycles < 1) or (tcycles > 6):
-        err(f'invalid mcycle len: {tcycles}')
-    return type, tcycles
-
 def parse_opdescs():
     with open(DESC_PATH, 'r') as fp:
         desc = yaml.load(fp, Loader=yaml.FullLoader) # type: ignore
         for (op_name, op_desc) in desc.items():
             if 'cond' not in op_desc:
-                err(f"op '{op_name}'' has no condition!")
+                err(f"op '{op_name}' has no condition!")
+            if 'mcycles' not in op_desc:
+                err(f"op '{op_name}' has no mcycles!")
             op = Op(op_name,op_desc['cond'])
             num_fetch = 0
             num_overlapped = 0
-            for (mc_name, mc_items) in op_desc.items():
-                if mc_name != 'cond':
-                    mc_type, mc_tcycles = parse_mcycle_name(mc_name)
-                    if mc_type == 'fetch':
-                        num_fetch += 1
-                    elif mc_type == 'overlapped':
-                        num_overlapped += 1
-                    mc = MCycle(mc_type, mc_tcycles, mc_items)
-                    op.mcycles.append(mc)
+            for mc_desc in op_desc['mcycles']:
+                mc_type = mc_desc['type']
+                if mc_type == 'fetch':
+                    num_fetch += 1
+                elif mc_type == 'overlapped':
+                    num_overlapped += 1
+                if 'tcycles' in mc_desc:
+                    mc_tcycles = mc_desc['tcycles']
+                else:
+                    default_tcycles = {
+                        'fetch': FETCH_TCYCLES,
+                        'mread': MEM_TCYCLES,
+                        'mwrite': MEM_TCYCLES,
+                        'ioread': IO_TCYCLES,
+                        'iowrite': IO_TCYCLES,
+                        'overlapped': OVERLAPPED_TCYCLES,
+                        'generic': -1
+                    }
+                    mc_tcycles = default_tcycles[mc_type]
+                if mc_tcycles == -1:
+                    err(f'generic mcycles must have explicit length (op: {op_name})')
+                if (mc_tcycles < 1) or (mc_tcycles > 6):
+                    err(f'invalid mcycle len: {mc_tcycles}')
+                if mc_type == 'fetch':
+                    mc_tcycles -= OVERLAPPED_TCYCLES
+                mc = MCycle(mc_type, mc_tcycles, mc_desc)
+                op.mcycles.append(mc)
             if num_fetch == 0:
                 op.mcycles.insert(0, MCycle('fetch', FETCH_TCYCLES, {}))
             if num_overlapped == 0:
@@ -259,7 +257,7 @@ def gen_decoder():
         op.decoder_offset = decoder_step
 
         l('')
-        l(f'// {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
+        l(f'// 0x{op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
             if mcycle.type == 'fetch':
                 l(f'// -- M1')
@@ -310,7 +308,7 @@ def pip_table_to_string() -> str:
     res: str = ''
     for maybe_op in OPS:
         op = unwrap(maybe_op)
-        res += tab() + f'// {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
+        res += tab() + f'// 0x{op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
         res += tab() + f'{{ 0x{op.pip:016X}, 0x{op.decoder_offset:04X} }},\n' 
     return res
 

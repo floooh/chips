@@ -1,175 +1,191 @@
-#
-# cond:       the instruction byte pattern (TODO: prefix bytes)
-# fetch[N]:   fetch machine-cycle (optional)
-# mread[N]:   memory read machine cycle
-# mwrite[N]:  memory write machine cycle
-# ioread[N]:  io read machine cycle
-# iowrite[N]: io write machine cycle
-# generic[N]: a generic machine cycle
-# overlapped: overlapped fetch/execute 'half machine cycle' (optional)
-#
-# The [N] is optional for fetch (def=4), mread/mwrite (def=3) and 
-# ioread/iowrite (def=4).
-#
-# x,y,z,p,q are opcode bit patterns:
-#
-#   |76|543|210|
-#   |xx|yyy|zzz|
-#      |ppq|
-#
-# Also see http://www.z80.info/decoding.htm !
-#
+# FIXME: describe syntax
 
 #== QUADRANT X1 ================================================================
 halt:
   cond: (x == 1) and (y == 6) and (z == 6)
-  overlapped: { code: "z80_halt(cpu)" }
+  mcycles:
+    - { type: overlapped, code: "z80_halt(cpu)" }
 
 ld (hl),RZ:
   cond: (x == 1) and (y == 6) and (z != 6)
-  mwrite: { ab: HL, db: RZ }
+  mcycles:
+    - { type: mwrite,  ab: HL, db: RZ }
 
 ld RY,(hl):
   cond: (x == 1) and (y != 6) and (z == 6)
-  mread: { ab: HL, dst: RY }
+  mcycles:
+    - { type: mread,  ab: HL, dst: RY }
 
 ld RY,RZ:
   cond: (x == 1) and (y != 6) and (z != 6)
-  overlapped: { code: RY=RZ }
+  mcycles:
+    - { type: overlapped,  code: RY=RZ }
 
 #== QUADRANT X2 ================================================================
 ALU (hl):
   cond: (x == 2) and (z == 6)
-  mread: { ab: HL, dst: DLATCH }
-  overlapped: { code: "ALU(cpu,DLATCH)" }
+  mcycles:
+    - { type: mread, ab: HL, dst: DLATCH }
+    - { type: overlapped, code: "ALU(cpu,DLATCH)" }
 
 ALU RZ:
   cond: (x == 2) and (z != 6)
-  overlapped: { code: "ALU(cpu,RZ)" }
+  mcycles:
+    - { type: overlapped,  code: "ALU(cpu,RZ)" }
 
 #== QUADRANT X0 ================================================================
 
 # assorted ops and relative jumps
 nop:
   cond: (x == 0) and (y == 0) and (z == 0)
+  mcycles: []
 
 ex af,af':
   cond: (x == 0) and (y == 1) and (z == 0)
+  mcycles: []
   # FIXME
 
 djnz d:
   cond: (x == 0) and (y == 2) and (z == 0)
+  mcycles: []
   # FIXME
 
 jr d:
   cond: (x == 0) and (y == 3) and (z == 0)
+  mcycles: []
   # FIXME
 
 jr CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
+  mcycles: []
   # FIXME
 
 # 16-bit load immediate/add
 ld RP,nn:
   cond: (x == 0) and (z == 1) and (q == 0)
-  # FIXME
+  mcycles:
+    - { type: mread,  ab: PC++, dst: RPL }
+    - { type: mread,  ab: PC++, dst: RPH }
 
 add hl,RP:
   cond: (x == 0) and (z == 1) and (q == 1)
+  mcycles: []
   # FIXME
 
 # indirect loading
 ld (bc),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 0)
+  mcycles: []
   # FIXME
 
 ld (de),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 1)
+  mcycles: []
   # FIXME
 
 ld (nn),hl:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 2)
+  mcycles: []
   # FIXME
 
 ld (nn),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 3)
+  mcycles: []
   # FIXME
 
 ld a,(bc):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 0)
+  mcycles: []
   # FIXME
 
 ld a,(de):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 1)
+  mcycles: []
   # FIXME
 
 ld hl,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 2)
+  mcycles: []
   # FIXME
 
 ld a,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 3)
+  mcycles: []
   # FIXME
 
 # 16-bit inc/dec
 inc RP:
   cond: (x == 0) and (z == 3) and (q == 0)
+  mcycles: []
   # FIXME
 
 dec RP:
   cond: (x == 0) and (z == 3) and (q == 1)
+  mcycles: []
   # FIXME
 
 # 8-bit inc/dec
 inc RY:
   cond: (x == 0) and (z == 4)
+  mcycles: []
   # FIXME
 
 dec RY:
   cond: (x == 0) and (z == 5)
+  mcycles: []
   # FIXME
 
 # 8-bit load immediate
 ld RY,n:
   cond: (x == 0) and (y != 6) and (z == 6)
-  mread: { ab: PC++, dst: RY }
+  mcycles:
+    - { type: mread, ab: PC++, dst: RY }
 
 ld (HL),n:
   cond: (x == 0) and (y == 6) and (z == 6)
-  mread: { ab: PC++, dst: DLATCH }
-  mwrite: { ab: HL, db: DLATCH }
+  mcycles:
+    - { type: mread, ab: PC++, dst: DLATCH }
+    - { type: mwrite, ab: HL, db: DLATCH }
 
 # assorted operations on accumulator and flags
 rlca:
   cond: (x == 0) and (y == 0) and (z == 7)
+  mcycles: []
   # FIXME
 
 rrca:
   cond: (x == 0) and (y == 1) and (z == 7)
+  mcycles: []
   # FIXME
 
 rla:
   cond: (x == 0) and (y == 2) and (z == 7)
+  mcycles: []
   # FIXME
 
 rra:
   cond: (x == 0) and (y == 3) and (z == 7)
+  mcycles: []
   # FIXME
 
 daa:
   cond: (x == 0) and (y == 4) and (z == 7)
+  mcycles: []
   # FIXME
 
 cpl:
   cond: (x == 0) and (y == 5) and (z == 7)
+  mcycles: []
   # FIXME
 
 scf:
   cond: (x == 0) and (y == 6) and (z == 7)
+  mcycles: []
   # FIXME
 
 ccf:
   cond: (x == 0) and (y == 7) and (z == 7)
+  mcycles: []
   # FIXME
 
 #== QUADRANT X3 ================================================================
@@ -177,97 +193,120 @@ ccf:
 # conditional return
 ret CC:
   cond: (x == 3) and (z == 0)
+  mcycles: []
   # FIXME
 
 # POP and various ops
 pop RP2:
   cond: (x == 3) and (z == 1) and (q == 0)
+  mcycles: []
   # FIXME
 
 ret:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 0)
+  mcycles: []
   # FIXME
 
 exx:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 1)
+  mcycles: []
   # FIXME
 
 jp hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 2)
+  mcycles: []
   # FIXME
 
 ld sp,hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 3)
+  mcycles: []
   # FIXME
 
 # conditional jump
 jp CC,nn:
   cond: (x == 3) and (z == 2)
+  mcycles: []
   # FIXME
 
 # assorted operations
 jp nn:
   cond: (x == 3) and (y == 0) and (z == 3)
+  mcycles: []
   # FIXME
 
 cb prefix:
   cond: (x == 3) and (y == 1) and (z == 3)
+  mcycles: []
   # FIXME
 
 out (n),a:
   cond: (x == 3) and (y == 2) and (z == 3)
+  mcycles: []
   # FIXME
 
 in a,(n):
   cond: (x == 3) and (y == 3) and (z == 3)
+  mcycles: []
   # FIXME
 
 ex (sp),hl:
   cond: (x == 3) and (y == 4) and (z == 3)
+  mcycles: []
   # FIXME
 
 ex de,hl:
   cond: (x == 3) and (y == 5) and (z == 3)
+  mcycles: []
   # FIXME
 
 di:
   cond: (x == 3) and (y == 6) and (z == 3)
+  mcycles: []
   # FIXME
 
 ei:
   cond: (x == 3) and (y == 7) and (z == 3)
+  mcycles: []
   # FIXME
 
 # conditional CALL
 call CC,nn:
   cond: (x == 3) and (z == 4)
+  mcycles: []
   # FIXME
 
 # PUSH and various ops
 push RP2:
   cond: (x == 3) and (z == 5) and (q == 0)
+  mcycles: []
   # FIXME
 
 call nn:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 0)
+  mcycles: []
   # FIXME
 
 dd prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 1)
+  mcycles: []
   # FIXME
 
 ed prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 2)
+  mcycles: []
   # FIXME
 
 fd prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 3)
+  mcycles: []
   # FIXME
 
 ALU n:
   cond: (x == 3) and (z == 6)
+  mcycles: []
   # FIXME
 
 rst Y*8:
   cond: (x == 3) and (z == 7)
+  mcycles: []
   # FIXME
