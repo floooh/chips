@@ -102,7 +102,7 @@ def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('RZ', r_get[z])\
         .replace('RP', rp_get[p])\
         .replace('RP2', rp2_get[p])\
-        .replace('IMM8', 'cpu->pc++')\
+        .replace('PC', 'cpu->pc')\
         .replace('AF', '_gaf()')\
         .replace('BC', '_gbc()')\
         .replace('DE', '_gde()')\

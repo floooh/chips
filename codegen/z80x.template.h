@@ -109,6 +109,13 @@ typedef struct {
 uint64_t z80_init(z80_t* cpu);
 // execute one tick, return new pin mask
 uint64_t z80_tick(z80_t* cpu, uint64_t pins);
+// return true when full instruction has finished
+bool z80_opdone(z80_t* cpu) {
+    // because of the overlapped cycle, the result of the previous
+    // instruction is only available in the refresh cycle
+    // FIXME: prefixed instructions!
+    return 0 != (cpu->pins & Z80_RFSH);
+}
 
 #ifdef __cplusplus
 } // extern C

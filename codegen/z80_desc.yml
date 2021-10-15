@@ -6,7 +6,7 @@
 # ioread[N]:  io read machine cycle
 # iowrite[N]: io write machine cycle
 # generic[N]: a generic machine cycle
-# overlapped: overlapped fetch/execyte 'half machine cycle' (optional)
+# overlapped: overlapped fetch/execute 'half machine cycle' (optional)
 #
 # The [N] is optional for fetch (def=4), mread/mwrite (def=3) and 
 # ioread/iowrite (def=4).
@@ -33,9 +33,9 @@ ld RY,(hl):
   cond: (x == 1) and (y != 6) and (z == 6)
   mread: { ab: HL, dst: RY }
 
-ld RZ,RY:
+ld RY,RZ:
   cond: (x == 1) and (y != 6) and (z != 6)
-  overlapped: { code: RZ=RY }
+  overlapped: { code: RY=RZ }
 
 #== QUADRANT X2 ================================================================
 ALU (hl):
@@ -132,11 +132,11 @@ dec RY:
 # 8-bit load immediate
 ld RY,n:
   cond: (x == 0) and (y != 6) and (z == 6)
-  mread: { ab: IMM8, dst: RY }
+  mread: { ab: PC++, dst: RY }
 
 ld (HL),n:
   cond: (x == 0) and (y == 6) and (z == 6)
-  mread: { ab: IMM8, dst: DLATCH }
+  mread: { ab: PC++, dst: DLATCH }
   mwrite: { ab: HL, db: DLATCH }
 
 # assorted operations on accumulator and flags
