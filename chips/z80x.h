@@ -1144,7 +1144,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x0089: _mread(cpu->pc++); break;
             case 0x008A: cpu->dlatch=_gd(); break;
             // -- M3
-            case 0x008B: _mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/; break;
+            case 0x008B: _mwrite(_ghl(),cpu->dlatch); break;
             // -- OVERLAP
             case 0x008C: _fetch(); break;
             
@@ -1515,7 +1515,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- M1
             case 0x010D: _rfsh(); break;
             // -- M2
-            case 0x010E: _mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/; break;
+            case 0x010E: _mwrite(_ghl(),cpu->b); break;
             // -- OVERLAP
             case 0x010F: _fetch(); break;
             
@@ -1523,7 +1523,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- M1
             case 0x0110: _rfsh(); break;
             // -- M2
-            case 0x0111: _mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/; break;
+            case 0x0111: _mwrite(_ghl(),cpu->c); break;
             // -- OVERLAP
             case 0x0112: _fetch(); break;
             
@@ -1531,7 +1531,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- M1
             case 0x0113: _rfsh(); break;
             // -- M2
-            case 0x0114: _mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/; break;
+            case 0x0114: _mwrite(_ghl(),cpu->d); break;
             // -- OVERLAP
             case 0x0115: _fetch(); break;
             
@@ -1539,7 +1539,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- M1
             case 0x0116: _rfsh(); break;
             // -- M2
-            case 0x0117: _mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/; break;
+            case 0x0117: _mwrite(_ghl(),cpu->e); break;
             // -- OVERLAP
             case 0x0118: _fetch(); break;
             
@@ -1547,7 +1547,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- M1
             case 0x0119: _rfsh(); break;
             // -- M2
-            case 0x011A: _mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/; break;
+            case 0x011A: _mwrite(_ghl(),cpu->h); break;
             // -- OVERLAP
             case 0x011B: _fetch(); break;
             
@@ -1555,7 +1555,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- M1
             case 0x011C: _rfsh(); break;
             // -- M2
-            case 0x011D: _mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/; break;
+            case 0x011D: _mwrite(_ghl(),cpu->l); break;
             // -- OVERLAP
             case 0x011E: _fetch(); break;
             
@@ -1569,7 +1569,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- M1
             case 0x0121: _rfsh(); break;
             // -- M2
-            case 0x0122: _mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/; break;
+            case 0x0122: _mwrite(_ghl(),cpu->a); break;
             // -- OVERLAP
             case 0x0123: _fetch(); break;
             

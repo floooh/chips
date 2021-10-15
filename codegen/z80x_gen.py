@@ -270,14 +270,20 @@ def gen_decoder():
                 add(opc, f'{store}')
             elif mcycle.type == 'mwrite':
                 l(f'// -- M{i+1}')
-                add(opc, '_mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/')
+                addr = mcycle.items['ab']
+                data = mcycle.items['db']
+                add(opc, f'_mwrite({addr},{data})')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
-                add(opc, '_ioread(0xFFFF)/*FIXME: address!*/')
-                add(opc, '/*FIXME: read data bus*/')
+                addr = mcycle.items['ab']
+                store = mcycle.items['dst'].replace('_X_', '_gd()')
+                add(opc, f'_ioread(addr)')
+                add(opc, f'{store}')
             elif mcycle.type == 'iowrite':
                 l(f'// -- M{i+1} (iowrite)')
-                add(opc, '_iowrite(0xFFFF,0xFF)/*FIXME: address and data!*/')
+                addr = mcycle.items['ab']
+                data = mcycle.items['db']
+                add(opc, f'_iowrite({addr},{data})')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
                 add(opc, f'/*FIXME: action*/')
