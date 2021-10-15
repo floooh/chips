@@ -102,7 +102,13 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('WZH', 'cpu->wzh')\
         .replace('WZ', 'cpu->wz')\
         .replace('DLATCH', 'cpu->dlatch')\
-        .replace('A', 'cpu->a')
+        .replace('A', 'cpu->a')\
+        .replace('C', 'cpu->c')\
+        .replace('B', 'cpu->b')\
+        .replace('E', 'cpu->e')\
+        .replace('D', 'cpu->d')\
+        .replace('L', 'cpu->l')\
+        .replace('H', 'cpu->h')
 
 def parse_opdescs():
     with open(DESC_PATH, 'r') as fp:
@@ -256,7 +262,8 @@ def gen_decoder():
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                add(opc, f'_mwrite({addr},{data});')
+                action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
+                add(opc, f'_mwrite({addr},{data});{action}')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
                 addr = mcycle.items['ab']

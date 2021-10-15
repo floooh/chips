@@ -75,13 +75,15 @@ add hl,RP:
 # indirect loading
 ld (bc),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    # NOTE: WZH can also be 0 on Z80 clones (the VisualZ80 netlist also sets WZH to zero)
+    - { type: mwrite, ab: BC, db: A, action: "WZL=C+1;WZH=A" }
 
 ld (de),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    # NOTE: WZH can also be 0 on Z80 clones (the VisualZ80 netlist also sets WZH to zero)
+    - { type: mwrite, ab: DE, db: A, action: "WZL=E+1;WZH=A" }
 
 ld (nn),hl:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 2)
@@ -90,18 +92,23 @@ ld (nn),hl:
 
 ld (nn),a:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 3)
-  mcycles: []
+  mcycles:
+    - { type: mread, ab: PC++, dst: WZL }
+    - { type: mread, ab: PC++, dst: WZH }
+    # NOTE: WZH can also be 0 on Z80 clones (the VisualZ80 netlist also sets WZH to zero)
+    - { type: mwrite, ab: WZ++, db: A, action: "WZH=A" }
+
   # FIXME
 
 ld a,(bc):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 0)
   mcycles:
-    - { type: mread, ab: BC, dst: A, action: "WZ=BC+1" }
+    - { type: mread, ab: BC, dst: A, action: WZ=BC+1 }
 
 ld a,(de):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 1)
   mcycles:
-    - { type: mread, ab: DE, dst: A, action: "WZ=DE+1" }
+    - { type: mread, ab: DE, dst: A, action: WZ=DE+1 }
 
 ld hl,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 2)
