@@ -102,6 +102,7 @@ def map_get(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('RZ', r_get[z])\
         .replace('RP', rp_get[p])\
         .replace('RP2', rp2_get[p])\
+        .replace('IMM8', 'cpu->pc++')\
         .replace('AF', '_gaf()')\
         .replace('BC', '_gbc()')\
         .replace('DE', '_gde()')\
@@ -261,24 +262,24 @@ def gen_decoder():
         l(f'// {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
             if mcycle.type == 'fetch':
-                l(f'// -- M1 (fetch/rfsh)')
+                l(f'// -- M1')
                 add(opc, '_rfsh()')
             elif mcycle.type == 'mread':
-                l(f'// -- M{i+1} (mread)')
+                l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(opc, f'_mr({addr})')
+                add(opc, f'_mread({addr})')
                 add(opc, f'{store}')
             elif mcycle.type == 'mwrite':
-                l(f'// -- M{i+1} (mwrite)')
-                add(opc, '_mw(0xFFFF,0xFF)/*FIXME: address and data!*/')
+                l(f'// -- M{i+1}')
+                add(opc, '_mwrite(0xFFFF,0xFF)/*FIXME: address and data!*/')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
-                add(opc, '_ior(0xFFFF)/*FIXME: address!*/')
+                add(opc, '_ioread(0xFFFF)/*FIXME: address!*/')
                 add(opc, '/*FIXME: read data bus*/')
             elif mcycle.type == 'iowrite':
                 l(f'// -- M{i+1} (iowrite)')
-                add(opc, '_iow(0xFFFF,0xFF)/*FIXME: address and data!*/')
+                add(opc, '_iowrite(0xFFFF,0xFF)/*FIXME: address and data!*/')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
                 add(opc, f'/*FIXME: action*/')

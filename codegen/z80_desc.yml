@@ -35,7 +35,7 @@ ld RY,(hl):
 
 ld RZ,RY:
   cond: (x == 1) and (y != 6) and (z != 6)
-  overlapped: { code: RY=RZ }
+  overlapped: { code: RZ=RY }
 
 #== QUADRANT X2 ================================================================
 ALU (hl):
@@ -131,8 +131,13 @@ dec RY:
 
 # 8-bit load immediate
 ld RY,n:
-  cond: (x == 0) and (z == 6)
-  # FIXME
+  cond: (x == 0) and (y != 6) and (z == 6)
+  mread: { ab: IMM8, dst: RY }
+
+ld (HL),n:
+  cond: (x == 0) and (y == 6) and (z == 6)
+  mread: { ab: IMM8, dst: DLATCH }
+  mwrite: { ab: HL, db: DLATCH }
 
 # assorted operations on accumulator and flags
 rlca:

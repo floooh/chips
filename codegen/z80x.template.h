@@ -57,6 +57,12 @@ extern "C" {
 #define Z80_CTRL_PIN_MASK (Z80_M1|Z80_MREQ|Z80_IORQ|Z80_RD|Z80_WR|Z80_RFSH)
 #define Z80_PIN_MASK ((1ULL<<40)-1)
 
+// pin access helper macros
+#define Z80_GET_ADDR(p) ((uint16_t)(p&0xFFFF))
+#define Z80_SET_ADDR(p,a) {p=(p&~0xFFFF)|((a)&0xFFFF);}
+#define Z80_GET_DATA(p) ((uint8_t)((p>>16)&0xFF))
+#define Z80_SET_DATA(p,d) {p=(p&~0xFF0000)|((d<<16)&0xFF0000);}
+
 // status flags
 #define Z80_CF (1<<0)           // carry
 #define Z80_NF (1<<1)           // add/subtract
@@ -77,13 +83,18 @@ extern "C" {
 #define Z80_PIP_MASK_STEP       (0xFFFFFFFFULL)
 #define Z80_PIP_MASK_WAIT       (0xFFFFFFFF00000000ULL)
 
+typedef struct {
+    uint64_t pip;   // the op's decode pipeline
+    uint64_t step;  // first or current decoder switch-case branch step
+} z80_opstate_t;
+
 // CPU state
 typedef struct {
     uint64_t pins;      // last stored pin state
-    uint64_t pip;       // execution pipeline
-    uint64_t step;      // current decoder step
+    z80_opstate_t op;   // the currently active op
     uint16_t pc;        // program counter
     uint8_t f, a, c, b, e, d, l, h;
+    uint8_t dlatch;     // temporary store for data bus value
     uint16_t wz;
     uint16_t sp;
     uint16_t ix;
@@ -91,8 +102,7 @@ typedef struct {
     uint8_t i;
     uint8_t r;
     uint8_t im;
-    uint8_t af2, bc2, de2, hl2; // shadow register bank
-    uint8_t dlatch;     // temporary store for data bus value
+    uint16_t af2, bc2, de2, hl2; // shadow register bank
 } z80_t;
 
 // initialize a new Z80 instance and return initial pin mask
@@ -112,24 +122,64 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins);
 #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-typedef struct {
-    uint64_t pip;   // decode pipeline
-    uint64_t step;  // the first case-branch of the instruction
-} z80_opdesc_t;
-
-static const z80_opdesc_t z80_opdesc_table[256] = {
-$pip_table_block
-};
-
 uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
-    memset(cpu, 0, sizeof(cpu));
+    memset(cpu, 0, sizeof(z80_t));
     // initial state according to visualz80
     cpu->f = cpu->a = cpu->c = cpu->b = 0x55;
-    cpu->e = cpu->d = cpu->l = cpu->h = 0x55f;
-    cpu->wz = cpu->sp = cpu->ix = cpu->ix = 0x5555;
+    cpu->e = cpu->d = cpu->l = cpu->h = 0x55;
+    cpu->wz = cpu->sp = cpu->ix = cpu->iy = 0x5555;
     cpu->af2 = cpu->bc2 = cpu->de2 = cpu->hl2 = 0x5555;
     // FIXME: iff1/2 disabled, initial value of IM???
+
+    // return bit mask which causes the CPU to execute one
+    // NOP in order to 'ignore' instruction processing
+    return Z80_M1|Z80_MREQ|Z80_RD;
+}
+
+static inline void z80_halt(z80_t* cpu) {
+    // FIXME
+    (void)cpu;
+}
+
+static inline void z80_add(z80_t* cpu, uint8_t val) {
+    // FIXME
+    (void)cpu; (void)val;
+}
+
+static inline void z80_adc(z80_t* cpu, uint8_t val) {
+    // FIXME
+    (void)cpu; (void)val;
+}
+
+static inline void z80_sub(z80_t* cpu, uint8_t val) {
+    // FIXME
+    (void)cpu; (void)val;
+}
+
+static inline void z80_sbc(z80_t* cpu, uint8_t val) {
+    // FIXME
+    (void)cpu; (void)val;
+}
+
+static inline void z80_and(z80_t* cpu, uint8_t val) {
+    // FIXME
+    (void)cpu; (void)val;
+}
+
+static inline void z80_xor(z80_t* cpu, uint8_t val) {
+    // FIXME
+    (void)cpu; (void)val;
+}
+
+static inline void z80_or(z80_t* cpu, uint8_t val) {
+    // FIXME
+    (void)cpu; (void)val;
+}
+
+static inline void z80_cp(z80_t* cpu, uint8_t val) {
+    // FIXME
+    (void)cpu; (void)val;
 }
 
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
@@ -152,6 +202,10 @@ static inline uint8_t z80_get_db(uint64_t pins) {
     return pins>>16;
 }
 
+static const z80_opstate_t z80_opstate_table[256] = {
+$pip_table_block
+};
+
 // register helper macros
 #define _gaf()      ((uint16_t)(cpu->f<<8)|cpu->a)
 #define _gbc()      ((uint16_t)(cpu->b<<8)|cpu->c)
@@ -172,34 +226,33 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 #define _gd()               z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()    _sax(cpu->pc++,Z80_M1|Z80_MREQ|Z80_RD)
-#define _rfsh()     _sax(cpu->r,Z80_MREQ|Z80_RFSH);cpu->r=(cpu->r&0x80)|((cpu->r+1)&0x7F)
-#define _mr(ab)     _sax(ab,Z80_MREQ|Z80_RD)
-#define _mw(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
-#define _ior(ab)    _sax(ab,Z80_IORQ|Z80_RD)
-#define _iow(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
+#define _fetch()        _sax(cpu->pc++,Z80_M1|Z80_MREQ|Z80_RD)
+#define _rfsh()         _sax(cpu->r,Z80_MREQ|Z80_RFSH);cpu->r=(cpu->r&0x80)|((cpu->r+1)&0x7F)
+#define _mread(ab)      _sax(ab,Z80_MREQ|Z80_RD)
+#define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
+#define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
+#define _iowrite(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
 
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
-    uint64_t pip = cpu->pip;
-    // wait cycle?
-    if ((pip & Z80_PIP_BIT_WAIT) && (pins & Z80_WAIT)) {
+    // wait cycle? (wait pin sampling only happens in specific tcycles)
+    if ((cpu->op.pip & Z80_PIP_BIT_WAIT) && (pins & Z80_WAIT)) {
         cpu->pins = pins & ~Z80_CTRL_PIN_MASK;
         return pins;
     }
-    // check if new opcode must be loaded from data bus
+    // load next instruction opcode from data bus
     if ((pins & (Z80_M1|Z80_MREQ|Z80_RD)) == (Z80_M1|Z80_MREQ|Z80_RD)) {
         uint8_t opcode = _gd();
-        pip = z80_opdesc_table[opcode].pip;
-        cpu->step = z80_opdesc_table[opcode].step;
+        cpu->op = z80_opstate_table[opcode];
     }
-    // process the next 'active' tcycle
+    // process the next active tcycle
     pins &= ~Z80_CTRL_PIN_MASK;
-    if (pip & Z80_PIP_BIT_STEP) {
-        switch (cpu->step++) {
+    if (cpu->op.pip & Z80_PIP_BIT_STEP) {
+        switch (cpu->op.step++) {
 $decode_block
         }
     }
-    cpu->pip = (pip & ~Z80_PIP_BITS) >> 1;
+    // advance the decode pipeline by one tcycle
+    cpu->op.pip = (cpu->op.pip & ~Z80_PIP_BITS) >> 1;
     cpu->pins = pins;
     return pins;
 }
@@ -221,9 +274,9 @@ $decode_block
 #undef _gd
 #undef _fetch
 #undef _rfsh
-#undef _mr
-#undef _mw
-#undef _ior
-#undef _iow
+#undef _mread
+#undef _mwrite
+#undef _ioread
+#undef _iowrite
 
 #endif // CHIPS_IMPL
