@@ -2,6 +2,7 @@ import yaml, copy
 from string import Template
 from typing import Optional, TypeVar
 
+FIRST_DECODER_STEP = 2
 DESC_PATH  = 'z80_desc.yml'
 TEMPL_PATH = 'z80x.template.h'
 OUT_PATH   = '../chips/z80x.h'
@@ -199,10 +200,7 @@ def build_pip(op: Op) -> int:
 
     for mcycle in op.mcycles:
         if mcycle.type == 'fetch':
-            # the last 3 tcycles of instruction fetch, the wait pin is
-            # sampled on the first cycle (T2 of the whole fetch machine cycle),
-            # and in T3 the refresh cycle is initiated
-            tcycles([0,1], 0, mcycle.tcycles)
+            tcycles([], -1, mcycle.tcycles - 2)
         elif mcycle.type == 'mread':
             # memory read machine cycle, initiate the read in T1 and T2 to store the result
             # the wait pin is sampled on T2
@@ -222,14 +220,14 @@ def build_pip(op: Op) -> int:
             # the final overlapped tcycle is actually the first tcycle
             # of the next instruction and only initiates a memory fetch
             tcycles([1], -1, mcycle.tcycles)
-    op.num_cycles = cycle
+    op.num_cycles = cycle + 2
     return pip
 
 # generate code for one op
 def gen_decoder():
     global indent
     indent = 3
-    decoder_step = 0
+    decoder_step = FIRST_DECODER_STEP
 
     def add(opcode: int, action: str):
         nonlocal decoder_step
@@ -249,8 +247,7 @@ def gen_decoder():
         l(f'// 0x{op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
             if mcycle.type == 'fetch':
-                l(f'// -- M1')
-                add(opc, '_rfsh();')
+                pass
             elif mcycle.type == 'mread':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']

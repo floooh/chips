@@ -93,6 +93,7 @@ typedef struct {
     uint64_t pins;      // last stored pin state
     z80_opstate_t op;   // the currently active op
     uint16_t pc;        // program counter
+    uint8_t ir;         // instruction register
     uint8_t dlatch;     // temporary store for data bus value
 
     // NOTE: These unions are fine in C, but not C++.
@@ -115,12 +116,7 @@ uint64_t z80_init(z80_t* cpu);
 // execute one tick, return new pin mask
 uint64_t z80_tick(z80_t* cpu, uint64_t pins);
 // return true when full instruction has finished
-bool z80_opdone(z80_t* cpu) {
-    // because of the overlapped cycle, the result of the previous
-    // instruction is only available in the refresh cycle
-    // FIXME: prefixed instructions!
-    return 0 != (cpu->pins & Z80_RFSH);
-}
+bool z80_opdone(z80_t* cpu);
 
 #ifdef __cplusplus
 } // extern C
@@ -143,9 +139,15 @@ uint64_t z80_init(z80_t* cpu) {
     cpu->af2 = cpu->bc2 = cpu->de2 = cpu->hl2 = 0x5555;
     // FIXME: iff1/2 disabled, initial value of IM???
 
-    // return bit mask which causes the CPU to execute one
-    // NOP in order to 'ignore' instruction processing
+    // setup CPU state to execute one initial NOP
+    cpu->op.pip = (1<<31)|5;
     return Z80_M1|Z80_MREQ|Z80_RD;
+}
+
+bool z80_opdone(z80_t* cpu) {
+    // because of the overlapped cycle, the result of the previous
+    // instruction is only available in the refresh cycle
+    return 0 != (cpu->pins & Z80_RFSH);
 }
 
 static inline void z80_halt(z80_t* cpu) {
@@ -225,7 +227,7 @@ $pip_table_block
 #define _gd()               z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()        _sax(cpu->pc++,Z80_M1|Z80_MREQ|Z80_RD)
+#define _fetch()        _sax(cpu->pc++,Z80_M1|Z80_MREQ|Z80_RD);cpu->op.pip=(1ULL<<32)|(5ULL<<1);cpu->op.step=0;
 #define _rfsh()         _sax(cpu->r,Z80_MREQ|Z80_RFSH);cpu->r=(cpu->r&0x80)|((cpu->r+1)&0x7F)
 #define _mread(ab)      _sax(ab,Z80_MREQ|Z80_RD)
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
@@ -238,15 +240,21 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         cpu->pins = pins & ~Z80_CTRL_PIN_MASK;
         return pins;
     }
-    // load next instruction opcode from data bus
-    if ((pins & (Z80_M1|Z80_MREQ|Z80_RD)) == (Z80_M1|Z80_MREQ|Z80_RD)) {
-        uint8_t opcode = _gd();
-        cpu->op = z80_opstate_table[opcode];
-    }
     // process the next active tcycle
     pins &= ~Z80_CTRL_PIN_MASK;
     if (cpu->op.pip & Z80_PIP_BIT_STEP) {
         switch (cpu->op.step++) {
+            // shared fetch machine cycle for all opcodes
+            case 0: {
+                cpu->ir = _gd();
+                // FIXME: handle prefixes, 
+            } break;
+            case 1: {
+                cpu->op = z80_opstate_table[cpu->ir];
+                _rfsh();
+            } break;
+            // FIXME: optional index loading
+            // FIXME: optional interrupt handling(?) 
 $decode_block
         }
     }
