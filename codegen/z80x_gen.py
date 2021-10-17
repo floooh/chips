@@ -268,8 +268,8 @@ def gen_decoder():
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
-                add(opc, f'_mread({addr});{action}')
-                add(opc, f'{store}=_gd();')
+                add(opc, f'_mread({addr});')
+                add(opc, f'{store}=_gd();{action}')
             elif mcycle.type == 'mwrite':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']

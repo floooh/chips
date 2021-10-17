@@ -266,6 +266,26 @@ static inline void z80_cp8(z80_t* cpu, uint8_t val) {
     cpu->f = z80_cp_flags(cpu->a, val, res);
 }
 
+static inline uint8_t z80_inc8(z80_t* cpu, uint8_t val) {
+    uint8_t res = val + 1;
+    uint8_t f = z80_sz_flags(res) | (res & (Z80_XF|Z80_YF)) | ((res ^ val) & Z80_HF);
+    if (res == 0x80) {
+        f |= Z80_VF;
+    }
+    cpu->f = f | (cpu->f & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_dec8(z80_t* cpu, uint8_t val) {
+    uint8_t res = val - 1;
+    uint8_t f = Z80_NF | z80_sz_flags(res) | (res & (Z80_XF|Z80_YF)) | ((res ^ val) & Z80_HF);
+    if (res == 0x7F) {
+        f |= Z80_VF;
+    }
+    cpu->f = f | (cpu->f & Z80_CF);
+    return res;
+}
+
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }
