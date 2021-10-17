@@ -109,6 +109,7 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('BC', 'cpu->bc')\
         .replace('DE', 'cpu->de')\
         .replace('HL', 'cpu->hlx[cpu->hlx_idx].hl')\
+        .replace('SP', 'cpu->sp')\
         .replace('WZL', 'cpu->wzl')\
         .replace('WZH', 'cpu->wzh')\
         .replace('WZ', 'cpu->wz')\
@@ -171,7 +172,8 @@ def parse_opdescs():
 def stampout_mcycle_items(mcycle_items: dict[str,str], y: int, z: int, p: int, q: int) -> dict[str,str]:
     res: dict[str,str] = {}
     for key,val in mcycle_items.items():
-        res[key] = map_cpu(val, y, z, p, q)
+        if type(val) == str:
+            res[key] = map_cpu(val, y, z, p, q)
     return res
 
 def expand_optable():
@@ -287,7 +289,8 @@ def gen_decoder():
                 add(opc, f'_iowrite({addr},{data});')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
-                add(opc, f'/*FIXME: action*/')
+                action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
+                add(opc, f'{action}')
             elif mcycle.type == 'overlapped':
                 l(f'// -- OVERLAP')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')

@@ -234,8 +234,8 @@ jp hl:
 
 ld sp,hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: generic, tcycles: 2, action: SP=HL }
 
 # conditional jump
 jp CC,nn:

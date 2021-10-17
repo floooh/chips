@@ -802,20 +802,20 @@ static const z80_opstate_t z80_opstate_table[256] = {
     { 0x0000000000000002, 0x0161, 0 },
     // 0xF8: ret m (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x0162, 0 },
-    // 0xF9: ld sp,hl (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0163, 0 },
+    // 0xF9: ld sp,hl (M:2 T:6 steps:2)
+    { 0x000000000000000A, 0x0163, 0 },
     // 0xFA: jp m,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0164, 0 },
-    // 0xFB: ei (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x0165, 0 },
-    // 0xFC: call m,nn (M:1 T:4 steps:1)
+    // 0xFB: ei (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x0166, 0 },
-    // 0xFD: fd prefix (M:1 T:4 steps:1)
+    // 0xFC: call m,nn (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x0167, 0 },
+    // 0xFD: fd prefix (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0168, 0 },
     // 0xFE: cp n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x0168, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x0000000400000016, 0x0169, Z80_OPSTATE_FLAGS_IMM8 },
     // 0xFF: rst 38h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x016B, 0 },
+    { 0x0000000000000002, 0x016C, 0 },
 
 };
 
@@ -869,7 +869,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                         // (IX+d) or (IY+d): insert 3 4-cycle machine cycles
                         // to load d offset and setup effective address
                         cpu->op.pip = (2ULL<<33)|(3ULL<<1);
-                        // special case: is this is indirect+immediate (which is
+                        // special case: if this is indirect+immediate (which is
                         // just LD (HL),n, then the immediate-load is 'hidden' within
                         // the 8-tcycle d-offset computation)
                         if (cpu->op.flags & Z80_OPSTATE_FLAGS_IMM8) {
@@ -895,6 +895,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                 cpu->op = z80_opstate_table[cpu->ir];
                 // special case: if this is indirect+immediate (which is just LD 
                 // (HL),n), then stretch the immediate-load machine cycle by 3 tcycles
+                // because it is 'hidden' in the d-offset 8-tcycle load
                 if (cpu->op.flags & Z80_OPSTATE_FLAGS_IMM8) {
                     const uint64_t mask = 0x0000000F0000000F;
                     cpu->op.pip = (cpu->op.pip & mask) | ((cpu->op.pip & ~mask)<<2);
@@ -2055,36 +2056,38 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x0162: _fetch(); break;
             
-            // 0xF9: ld sp,hl (M:1 T:4)
-            // -- OVERLAP
-            case 0x0163: _fetch(); break;
-            
-            // 0xFA: jp m,nn (M:1 T:4)
+            // 0xF9: ld sp,hl (M:2 T:6)
+            // -- M2 (generic)
+            case 0x0163: cpu->sp=cpu->hlx[cpu->hlx_idx].hl; break;
             // -- OVERLAP
             case 0x0164: _fetch(); break;
             
-            // 0xFB: ei (M:1 T:4)
+            // 0xFA: jp m,nn (M:1 T:4)
             // -- OVERLAP
             case 0x0165: _fetch(); break;
             
-            // 0xFC: call m,nn (M:1 T:4)
+            // 0xFB: ei (M:1 T:4)
             // -- OVERLAP
             case 0x0166: _fetch(); break;
             
+            // 0xFC: call m,nn (M:1 T:4)
+            // -- OVERLAP
+            case 0x0167: _fetch(); break;
+            
             // 0xFD: fd prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x0167: _fetch_iy(); break;
+            case 0x0168: _fetch_iy(); break;
             
             // 0xFE: cp n (M:2 T:7)
             // -- M2
-            case 0x0168: _mread(cpu->pc++); break;
-            case 0x0169: cpu->dlatch=_gd(); break;
+            case 0x0169: _mread(cpu->pc++); break;
+            case 0x016A: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x016A: z80_cp8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x016B: z80_cp8(cpu,cpu->dlatch);_fetch(); break;
             
             // 0xFF: rst 38h (M:1 T:4)
             // -- OVERLAP
-            case 0x016B: _fetch(); break;
+            case 0x016C: _fetch(); break;
 
         }
     }
