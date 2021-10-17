@@ -95,16 +95,22 @@ typedef struct {
     uint16_t pc;        // program counter
     uint8_t ir;         // instruction register
     uint8_t dlatch;     // temporary store for data bus value
+    uint8_t hlx_idx;    // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
 
     // NOTE: These unions are fine in C, but not C++.
     union { struct { uint8_t f; uint8_t a; }; uint16_t af; };
     union { struct { uint8_t c; uint8_t b; }; uint16_t bc; };
     union { struct { uint8_t e; uint8_t d; }; uint16_t de; };
-    union { struct { uint8_t l; uint8_t h; }; uint16_t hl; };
+    union {
+        struct {
+            union { struct { uint8_t l; uint8_t h; }; uint16_t hl; };
+            union { struct { uint8_t ixl; uint8_t ixh; }; uint16_t ix; };
+            union { struct { uint8_t iyl; uint8_t iyh; }; uint16_t iy; };
+        };
+        struct { union { struct { uint8_t l; uint8_t h; }; uint16_t hl; }; } hlx[3];
+    };
     union { struct { uint8_t wzl; uint8_t wzh; }; uint16_t wz; };
     union { struct { uint8_t spl; uint8_t sph; }; uint16_t sp; };
-    union { struct { uint8_t ixl; uint8_t ixh; }; uint16_t ix; };
-    union { struct { uint8_t iyl; uint8_t iyh; }; uint16_t iy; };
     uint8_t i;
     uint8_t r;
     uint8_t im;
@@ -278,10 +284,11 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 }
 
 // initiate a fetch machine cycle
-static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
+static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins, uint8_t hlx_idx) {
     // reset the decoder to continue at case 0
     cpu->op.pip = (1ULL<<32)|(5ULL<<1);
     cpu->op.step = 0;
+    cpu->hlx_idx = hlx_idx;
     pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     return pins;
 }
@@ -817,7 +824,9 @@ static const z80_opstate_t z80_opstate_table[256] = {
 #define _gd()               z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()        pins=z80_fetch(cpu,pins)
+#define _fetch()        pins=z80_fetch(cpu,pins,0)
+#define _fetch_ix()     pins=z80_fetch(cpu,pins,1)
+#define _fetch_iy()     pins=z80_fetch(cpu,pins,2)
 #define _mread(ab)      _sax(ab,Z80_MREQ|Z80_RD)
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
@@ -836,7 +845,6 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // shared fetch machine cycle for all opcodes
             case 0: {
                 cpu->ir = _gd();
-                // FIXME: handle prefixes, 
             } break;
             case 1: {
                 cpu->op = z80_opstate_table[cpu->ir];
@@ -1014,10 +1022,10 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // 0x21: ld hl,nn (M:3 T:10)
             // -- M2
             case 0x0039: _mread(cpu->pc++); break;
-            case 0x003A: cpu->l=_gd(); break;
+            case 0x003A: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
             // -- M3
             case 0x003B: _mread(cpu->pc++); break;
-            case 0x003C: cpu->h=_gd(); break;
+            case 0x003C: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
             // -- OVERLAP
             case 0x003D: _fetch(); break;
             
@@ -1040,7 +1048,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // 0x26: ld h,n (M:2 T:7)
             // -- M2
             case 0x0042: _mread(cpu->pc++); break;
-            case 0x0043: cpu->h=_gd(); break;
+            case 0x0043: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
             // -- OVERLAP
             case 0x0044: _fetch(); break;
             
@@ -1075,7 +1083,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // 0x2E: ld l,n (M:2 T:7)
             // -- M2
             case 0x004C: _mread(cpu->pc++); break;
-            case 0x004D: cpu->l=_gd(); break;
+            case 0x004D: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
             // -- OVERLAP
             case 0x004E: _fetch(); break;
             
@@ -1196,11 +1204,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x44: ld b,h (M:1 T:4)
             // -- OVERLAP
-            case 0x0078: cpu->b=cpu->h;_fetch(); break;
+            case 0x0078: cpu->b=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             // 0x45: ld b,l (M:1 T:4)
             // -- OVERLAP
-            case 0x0079: cpu->b=cpu->l;_fetch(); break;
+            case 0x0079: cpu->b=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             // 0x46: ld b,(hl) (M:2 T:7)
             // -- M2
@@ -1231,11 +1239,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x4C: ld c,h (M:1 T:4)
             // -- OVERLAP
-            case 0x0082: cpu->c=cpu->h;_fetch(); break;
+            case 0x0082: cpu->c=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             // 0x4D: ld c,l (M:1 T:4)
             // -- OVERLAP
-            case 0x0083: cpu->c=cpu->l;_fetch(); break;
+            case 0x0083: cpu->c=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             // 0x4E: ld c,(hl) (M:2 T:7)
             // -- M2
@@ -1266,11 +1274,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x54: ld d,h (M:1 T:4)
             // -- OVERLAP
-            case 0x008C: cpu->d=cpu->h;_fetch(); break;
+            case 0x008C: cpu->d=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             // 0x55: ld d,l (M:1 T:4)
             // -- OVERLAP
-            case 0x008D: cpu->d=cpu->l;_fetch(); break;
+            case 0x008D: cpu->d=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             // 0x56: ld d,(hl) (M:2 T:7)
             // -- M2
@@ -1301,11 +1309,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x5C: ld e,h (M:1 T:4)
             // -- OVERLAP
-            case 0x0096: cpu->e=cpu->h;_fetch(); break;
+            case 0x0096: cpu->e=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             // 0x5D: ld e,l (M:1 T:4)
             // -- OVERLAP
-            case 0x0097: cpu->e=cpu->l;_fetch(); break;
+            case 0x0097: cpu->e=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             // 0x5E: ld e,(hl) (M:2 T:7)
             // -- M2
@@ -1320,73 +1328,73 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x60: ld h,b (M:1 T:4)
             // -- OVERLAP
-            case 0x009C: cpu->h=cpu->b;_fetch(); break;
+            case 0x009C: cpu->hlx[cpu->hlx_idx].h=cpu->b;_fetch(); break;
             
             // 0x61: ld h,c (M:1 T:4)
             // -- OVERLAP
-            case 0x009D: cpu->h=cpu->c;_fetch(); break;
+            case 0x009D: cpu->hlx[cpu->hlx_idx].h=cpu->c;_fetch(); break;
             
             // 0x62: ld h,d (M:1 T:4)
             // -- OVERLAP
-            case 0x009E: cpu->h=cpu->d;_fetch(); break;
+            case 0x009E: cpu->hlx[cpu->hlx_idx].h=cpu->d;_fetch(); break;
             
             // 0x63: ld h,e (M:1 T:4)
             // -- OVERLAP
-            case 0x009F: cpu->h=cpu->e;_fetch(); break;
+            case 0x009F: cpu->hlx[cpu->hlx_idx].h=cpu->e;_fetch(); break;
             
             // 0x64: ld h,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00A0: cpu->h=cpu->h;_fetch(); break;
+            case 0x00A0: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             // 0x65: ld h,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00A1: cpu->h=cpu->l;_fetch(); break;
+            case 0x00A1: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             // 0x66: ld h,(hl) (M:2 T:7)
             // -- M2
             case 0x00A2: _mread(cpu->hl); break;
-            case 0x00A3: cpu->h=_gd(); break;
+            case 0x00A3: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
             // -- OVERLAP
             case 0x00A4: _fetch(); break;
             
             // 0x67: ld h,a (M:1 T:4)
             // -- OVERLAP
-            case 0x00A5: cpu->h=cpu->a;_fetch(); break;
+            case 0x00A5: cpu->hlx[cpu->hlx_idx].h=cpu->a;_fetch(); break;
             
             // 0x68: ld l,b (M:1 T:4)
             // -- OVERLAP
-            case 0x00A6: cpu->l=cpu->b;_fetch(); break;
+            case 0x00A6: cpu->hlx[cpu->hlx_idx].l=cpu->b;_fetch(); break;
             
             // 0x69: ld l,c (M:1 T:4)
             // -- OVERLAP
-            case 0x00A7: cpu->l=cpu->c;_fetch(); break;
+            case 0x00A7: cpu->hlx[cpu->hlx_idx].l=cpu->c;_fetch(); break;
             
             // 0x6A: ld l,d (M:1 T:4)
             // -- OVERLAP
-            case 0x00A8: cpu->l=cpu->d;_fetch(); break;
+            case 0x00A8: cpu->hlx[cpu->hlx_idx].l=cpu->d;_fetch(); break;
             
             // 0x6B: ld l,e (M:1 T:4)
             // -- OVERLAP
-            case 0x00A9: cpu->l=cpu->e;_fetch(); break;
+            case 0x00A9: cpu->hlx[cpu->hlx_idx].l=cpu->e;_fetch(); break;
             
             // 0x6C: ld l,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00AA: cpu->l=cpu->h;_fetch(); break;
+            case 0x00AA: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             // 0x6D: ld l,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00AB: cpu->l=cpu->l;_fetch(); break;
+            case 0x00AB: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             // 0x6E: ld l,(hl) (M:2 T:7)
             // -- M2
             case 0x00AC: _mread(cpu->hl); break;
-            case 0x00AD: cpu->l=_gd(); break;
+            case 0x00AD: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
             // -- OVERLAP
             case 0x00AE: _fetch(); break;
             
             // 0x6F: ld l,a (M:1 T:4)
             // -- OVERLAP
-            case 0x00AF: cpu->l=cpu->a;_fetch(); break;
+            case 0x00AF: cpu->hlx[cpu->hlx_idx].l=cpu->a;_fetch(); break;
             
             // 0x70: ld (hl),b (M:2 T:7)
             // -- M2
@@ -1414,13 +1422,13 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x74: ld (hl),h (M:2 T:7)
             // -- M2
-            case 0x00B8: _mwrite(cpu->hl,cpu->h); break;
+            case 0x00B8: _mwrite(cpu->hl,cpu->hlx[cpu->hlx_idx].h); break;
             // -- OVERLAP
             case 0x00B9: _fetch(); break;
             
             // 0x75: ld (hl),l (M:2 T:7)
             // -- M2
-            case 0x00BA: _mwrite(cpu->hl,cpu->l); break;
+            case 0x00BA: _mwrite(cpu->hl,cpu->hlx[cpu->hlx_idx].l); break;
             // -- OVERLAP
             case 0x00BB: _fetch(); break;
             
@@ -1452,11 +1460,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x7C: ld a,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00C3: cpu->a=cpu->h;_fetch(); break;
+            case 0x00C3: cpu->a=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             // 0x7D: ld a,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00C4: cpu->a=cpu->l;_fetch(); break;
+            case 0x00C4: cpu->a=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             // 0x7E: ld a,(hl) (M:2 T:7)
             // -- M2
@@ -1487,11 +1495,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x84: add h (M:1 T:4)
             // -- OVERLAP
-            case 0x00CD: z80_add8(cpu,cpu->h);_fetch(); break;
+            case 0x00CD: z80_add8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // 0x85: add l (M:1 T:4)
             // -- OVERLAP
-            case 0x00CE: z80_add8(cpu,cpu->l);_fetch(); break;
+            case 0x00CE: z80_add8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // 0x86: add (hl) (M:2 T:7)
             // -- M2
@@ -1522,11 +1530,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x8C: adc h (M:1 T:4)
             // -- OVERLAP
-            case 0x00D7: z80_adc8(cpu,cpu->h);_fetch(); break;
+            case 0x00D7: z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // 0x8D: adc l (M:1 T:4)
             // -- OVERLAP
-            case 0x00D8: z80_adc8(cpu,cpu->l);_fetch(); break;
+            case 0x00D8: z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // 0x8E: adc (hl) (M:2 T:7)
             // -- M2
@@ -1557,11 +1565,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x94: sub h (M:1 T:4)
             // -- OVERLAP
-            case 0x00E1: z80_sub8(cpu,cpu->h);_fetch(); break;
+            case 0x00E1: z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // 0x95: sub l (M:1 T:4)
             // -- OVERLAP
-            case 0x00E2: z80_sub8(cpu,cpu->l);_fetch(); break;
+            case 0x00E2: z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // 0x96: sub (hl) (M:2 T:7)
             // -- M2
@@ -1592,11 +1600,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x9C: sbc h (M:1 T:4)
             // -- OVERLAP
-            case 0x00EB: z80_sbc8(cpu,cpu->h);_fetch(); break;
+            case 0x00EB: z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // 0x9D: sbc l (M:1 T:4)
             // -- OVERLAP
-            case 0x00EC: z80_sbc8(cpu,cpu->l);_fetch(); break;
+            case 0x00EC: z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // 0x9E: sbc (hl) (M:2 T:7)
             // -- M2
@@ -1627,11 +1635,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0xA4: and h (M:1 T:4)
             // -- OVERLAP
-            case 0x00F5: z80_and8(cpu,cpu->h);_fetch(); break;
+            case 0x00F5: z80_and8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // 0xA5: and l (M:1 T:4)
             // -- OVERLAP
-            case 0x00F6: z80_and8(cpu,cpu->l);_fetch(); break;
+            case 0x00F6: z80_and8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // 0xA6: and (hl) (M:2 T:7)
             // -- M2
@@ -1662,11 +1670,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0xAC: xor h (M:1 T:4)
             // -- OVERLAP
-            case 0x00FF: z80_xor8(cpu,cpu->h);_fetch(); break;
+            case 0x00FF: z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // 0xAD: xor l (M:1 T:4)
             // -- OVERLAP
-            case 0x0100: z80_xor8(cpu,cpu->l);_fetch(); break;
+            case 0x0100: z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // 0xAE: xor (hl) (M:2 T:7)
             // -- M2
@@ -1697,11 +1705,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0xB4: or h (M:1 T:4)
             // -- OVERLAP
-            case 0x0109: z80_or8(cpu,cpu->h);_fetch(); break;
+            case 0x0109: z80_or8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // 0xB5: or l (M:1 T:4)
             // -- OVERLAP
-            case 0x010A: z80_or8(cpu,cpu->l);_fetch(); break;
+            case 0x010A: z80_or8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // 0xB6: or (hl) (M:2 T:7)
             // -- M2
@@ -1732,11 +1740,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0xBC: cp h (M:1 T:4)
             // -- OVERLAP
-            case 0x0113: z80_cp8(cpu,cpu->h);_fetch(); break;
+            case 0x0113: z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // 0xBD: cp l (M:1 T:4)
             // -- OVERLAP
-            case 0x0114: z80_cp8(cpu,cpu->l);_fetch(); break;
+            case 0x0114: z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // 0xBE: cp (hl) (M:2 T:7)
             // -- M2
@@ -1876,7 +1884,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0xDD: dd prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x013C: _fetch(); break;
+            case 0x013C: _fetch_ix(); break;
             
             // 0xDE: sbc n (M:2 T:7)
             // -- M2
@@ -2016,7 +2024,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0xFD: fd prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x0164: _fetch(); break;
+            case 0x0164: _fetch_iy(); break;
             
             // 0xFE: cp n (M:2 T:7)
             // -- M2
@@ -2043,6 +2051,8 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
 #undef _sadx
 #undef _gd
 #undef _fetch
+#undef _fetch_ix
+#undef _fetch_iy
 #undef _mread
 #undef _mwrite
 #undef _ioread

@@ -95,16 +95,22 @@ typedef struct {
     uint16_t pc;        // program counter
     uint8_t ir;         // instruction register
     uint8_t dlatch;     // temporary store for data bus value
+    uint8_t hlx_idx;    // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
 
     // NOTE: These unions are fine in C, but not C++.
     union { struct { uint8_t f; uint8_t a; }; uint16_t af; };
     union { struct { uint8_t c; uint8_t b; }; uint16_t bc; };
     union { struct { uint8_t e; uint8_t d; }; uint16_t de; };
-    union { struct { uint8_t l; uint8_t h; }; uint16_t hl; };
+    union {
+        struct {
+            union { struct { uint8_t l; uint8_t h; }; uint16_t hl; };
+            union { struct { uint8_t ixl; uint8_t ixh; }; uint16_t ix; };
+            union { struct { uint8_t iyl; uint8_t iyh; }; uint16_t iy; };
+        };
+        struct { union { struct { uint8_t l; uint8_t h; }; uint16_t hl; }; } hlx[3];
+    };
     union { struct { uint8_t wzl; uint8_t wzh; }; uint16_t wz; };
     union { struct { uint8_t spl; uint8_t sph; }; uint16_t sp; };
-    union { struct { uint8_t ixl; uint8_t ixh; }; uint16_t ix; };
-    union { struct { uint8_t iyl; uint8_t iyh; }; uint16_t iy; };
     uint8_t i;
     uint8_t r;
     uint8_t im;
@@ -278,10 +284,11 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 }
 
 // initiate a fetch machine cycle
-static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
+static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins, uint8_t hlx_idx) {
     // reset the decoder to continue at case 0
     cpu->op.pip = (1ULL<<32)|(5ULL<<1);
     cpu->op.step = 0;
+    cpu->hlx_idx = hlx_idx;
     pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     return pins;
 }
@@ -305,7 +312,9 @@ $pip_table_block
 #define _gd()               z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()        pins=z80_fetch(cpu,pins)
+#define _fetch()        pins=z80_fetch(cpu,pins,0)
+#define _fetch_ix()     pins=z80_fetch(cpu,pins,1)
+#define _fetch_iy()     pins=z80_fetch(cpu,pins,2)
 #define _mread(ab)      _sax(ab,Z80_MREQ|Z80_RD)
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
@@ -324,7 +333,6 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // shared fetch machine cycle for all opcodes
             case 0: {
                 cpu->ir = _gd();
-                // FIXME: handle prefixes, 
             } break;
             case 1: {
                 cpu->op = z80_opstate_table[cpu->ir];
@@ -347,6 +355,8 @@ $decode_block
 #undef _sadx
 #undef _gd
 #undef _fetch
+#undef _fetch_ix
+#undef _fetch_iy
 #undef _mread
 #undef _mwrite
 #undef _ioread

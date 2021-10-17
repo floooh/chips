@@ -45,11 +45,11 @@ rp2_comment = [ 'bc', 'de', 'hl', 'af' ]
 alu_comment = [ 'add', 'adc', 'sub', 'sbc', 'and', 'xor', 'or', 'cp' ]
 cc_comment  = [ 'nz', 'z', 'nc', 'c', 'po', 'pe', 'p', 'm' ]
 
-r_map   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
-rp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->sp' ]
-rpl_map = [ 'cpu->c', 'cpu->e', 'cpu->l', 'cpu->spl']
-rph_map = [ 'cpu->b', 'cpu->d', 'cpu->h', 'cpu->sph']
-rp2_map = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->af' ]
+r_map   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->hlx[cpu->hlx_idx].l', 'XXX', 'cpu->a' ]
+rp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->sp' ]
+rpl_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->spl']
+rph_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->sph']
+rp2_map = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->af' ]
 alu_map = [ 'z80_add8(cpu,', 
             'z80_adc8(cpu,', 
             'z80_sub8(cpu,',
@@ -283,7 +283,15 @@ def gen_decoder():
             elif mcycle.type == 'overlapped':
                 l(f'// -- OVERLAP')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
-                add(opc, f'{action}_fetch();')
+                if 'prefix' in mcycle.items:
+                    prefix = mcycle.items['prefix']
+                    if prefix == 'ix':
+                        fetch = '_fetch_ix();'
+                    elif prefix == 'iy':
+                        fetch = '_fetch_iy();'
+                else:
+                    fetch = '_fetch();'
+                add(opc, f'{action}{fetch}')
         op.num_steps = step
         # the number of steps must match the number of step-bits in the
         # execution pipeline
