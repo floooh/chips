@@ -6,15 +6,19 @@ halt:
   mcycles:
     - { type: overlapped, action: "z80_halt(cpu)" }
 
+# NOTE: RRZ and RRY are special case for H and L which are never mapped
+# to IXH/IYH and IXL/IYL
 ld (hl),RZ:
   cond: (x == 1) and (y == 6) and (z != 6)
+  flags: { indirect: true }
   mcycles:
-    - { type: mwrite,  ab: HL, db: RZ }
+    - { type: mwrite, ab: ADDR, db: RRZ }
 
 ld RY,(hl):
   cond: (x == 1) and (y != 6) and (z == 6)
+  flags: { indirect: true }
   mcycles:
-    - { type: mread,  ab: HL, dst: RY }
+    - { type: mread,  ab: ADDR, dst: RRY }
 
 ld RY,RZ:
   cond: (x == 1) and (y != 6) and (z != 6)
@@ -24,8 +28,9 @@ ld RY,RZ:
 #== QUADRANT X2 ================================================================
 ALU (hl):
   cond: (x == 2) and (z == 6)
+  flags: { indirect: true }
   mcycles:
-    - { type: mread, ab: HL, dst: DLATCH }
+    - { type: mread, ab: ADDR, dst: DLATCH }
     - { type: overlapped, action: "ALU(DLATCH)" }
 
 ALU RZ:
@@ -146,14 +151,16 @@ dec RY:
 # 8-bit load immediate
 ld RY,n:
   cond: (x == 0) and (y != 6) and (z == 6)
+  flags: { imm8: true }
   mcycles:
     - { type: mread, ab: PC++, dst: RY }
 
-ld (HL),n:
+ld (hl),n:
   cond: (x == 0) and (y == 6) and (z == 6)
+  flags: { indirect: true, imm8: true }
   mcycles:
     - { type: mread, ab: PC++, dst: DLATCH }
-    - { type: mwrite, ab: HL, db: DLATCH }
+    - { type: mwrite, ab: ADDR, db: DLATCH }
 
 # assorted operations on accumulator and flags
 rlca:
@@ -311,6 +318,7 @@ fd prefix:
 
 ALU n:
   cond: (x == 3) and (z == 6)
+  flags: { imm8: true }
   mcycles:
     - { type: mread, ab: PC++, dst: DLATCH }
     - { type: overlapped, action: "ALU(DLATCH)" }

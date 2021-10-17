@@ -83,9 +83,19 @@ extern "C" {
 #define Z80_PIP_MASK_STEP       (0xFFFFFFFFULL)
 #define Z80_PIP_MASK_WAIT       (0xFFFFFFFF00000000ULL)
 
+// flags for z80_opstate.flags
+#define Z80_OPSTATE_FLAGS_INDIRECT  (1<<0)  // this is a (HL)/(IX+d)/(IY+d) instruction
+#define Z80_OPSTATE_FLAGS_IMM8 (1<<1)       // this is an 8-bit immediate load instruction
+
+// values for hlx_idx for mapping HL, IX or IY
+#define Z80_MAP_HL (0)
+#define Z80_MAP_IX (1)
+#define Z80_MAP_IY (2)
+
 typedef struct {
     uint64_t pip;   // the op's decode pipeline
-    uint64_t step;  // first or current decoder switch-case branch step
+    uint32_t step;  // first or current decoder switch-case branch step
+    uint32_t flags; // Z80_OPSTATE_FLAGS_
 } z80_opstate_t;
 
 // CPU state
@@ -93,6 +103,7 @@ typedef struct {
     uint64_t pins;      // last stored pin state
     z80_opstate_t op;   // the currently active op
     uint16_t pc;        // program counter
+    uint16_t addr;      // effective address for (HL),(IX+d),(IY+d)
     uint8_t ir;         // instruction register
     uint8_t dlatch;     // temporary store for data bus value
     uint8_t hlx_idx;    // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
@@ -155,15 +166,7 @@ uint64_t z80_init(z80_t* cpu) {
 bool z80_opdone(z80_t* cpu) {
     // because of the overlapped cycle, the result of the previous
     // instruction is only available in M1/T2
-    return 0 == cpu->op.step;
-}
-
-uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
-    cpu->pc = new_pc;
-    cpu->op.pip = 1;
-    // overlapped M1:T1 of the NOP instruction to initiate opcode fetch at new pc
-    cpu->op.step = 2;
-    return 0;
+    return (0 == cpu->op.step) && (cpu->hlx_idx == 0);
 }
 
 static inline void z80_halt(z80_t* cpu) {
@@ -304,6 +307,14 @@ static const z80_opstate_t z80_opstate_table[256] = {
 $pip_table_block
 };
 
+uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
+    cpu->pc = new_pc;
+    cpu->op.pip = 1;
+    // overlapped M1:T1 of the NOP instruction to initiate opcode fetch at new pc
+    cpu->op.step = z80_opstate_table[0].step;
+    return 0;
+}
+
 // pin helper macros
 #define _sa(ab)             pins=z80_set_ab(pins,ab)
 #define _sax(ab,x)          pins=z80_set_ab_x(pins,ab,x)
@@ -312,9 +323,9 @@ $pip_table_block
 #define _gd()               z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()        pins=z80_fetch(cpu,pins,0)
-#define _fetch_ix()     pins=z80_fetch(cpu,pins,1)
-#define _fetch_iy()     pins=z80_fetch(cpu,pins,2)
+#define _fetch()        pins=z80_fetch(cpu,pins,Z80_MAP_HL)
+#define _fetch_ix()     pins=z80_fetch(cpu,pins,Z80_MAP_IX)
+#define _fetch_iy()     pins=z80_fetch(cpu,pins,Z80_MAP_IY)
 #define _mread(ab)      _sax(ab,Z80_MREQ|Z80_RD)
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
@@ -334,11 +345,38 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0: {
                 cpu->ir = _gd();
             } break;
+            // refresh cycle
             case 1: {
                 cpu->op = z80_opstate_table[cpu->ir];
                 pins = z80_refresh(cpu, pins);
+                // if this is a (HL)/(IX+d)/(IY+d) instruction, insert
+                // d-load cycle if needed and compute effective address
+                if (cpu->op.flags & Z80_OPSTATE_FLAGS_INDIRECT) {
+                    cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
+                    if (cpu->hlx_idx != Z80_MAP_HL) {
+                        // (IX+d) or (IY+d): insert 3 4-cycle machine cycles
+                        // to load d offset and setup effective address
+                        cpu->op.pip = (2ULL<<33)|(1ULL<<8)|(3ULL<<1);
+                        cpu->op.step = 2;
+
+                        // FIXME: if both INDIRECT+IMMEDIATE, the immediate-load
+                        // is hidden within the same 8-cycle period!!!
+                    }
+                }
             } break;
-            // FIXME: optional index loading
+            //=== optional d-loading cycle for (HL), (IX+d), (IY+d)
+            case 2: {
+                _mread(cpu->pc++);
+            } break;
+            case 3: {
+                cpu->addr += (int8_t)_gd();
+                cpu->wz = cpu->addr;
+                // FIXME: INDIRECT+IMMEDIATE!
+            } break;
+            case 4: {
+                // continue with original instruction
+                cpu->op = z80_opstate_table[cpu->ir];
+            } break;
             // FIXME: optional interrupt handling(?) 
 $decode_block
         }

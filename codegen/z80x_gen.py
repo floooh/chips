@@ -2,7 +2,7 @@ import yaml, copy
 from string import Template
 from typing import Optional, TypeVar
 
-FIRST_DECODER_STEP = 2
+FIRST_DECODER_STEP = 5
 DESC_PATH  = 'z80_desc.yml'
 TEMPL_PATH = 'z80x.template.h'
 OUT_PATH   = '../chips/z80x.h'
@@ -17,10 +17,11 @@ class MCycle:
 
 # an opcode description
 class Op:
-    def __init__(self, name:str, cond:str):
-        self.name = name
-        self.cond = cond
+    def __init__(self, name:str, cond:str, flags: dict[str,str]):
+        self.name: str = name
+        self.cond: str = cond
         self.cond_compiled = compile(cond, '<string>', 'eval')
+        self.flags: dict[str,str] = flags
         self.opcode: int = -1
         self.pip: int = 0
         self.num_cycles = 0
@@ -46,6 +47,7 @@ alu_comment = [ 'add', 'adc', 'sub', 'sbc', 'and', 'xor', 'or', 'cp' ]
 cc_comment  = [ 'nz', 'z', 'nc', 'c', 'po', 'pe', 'p', 'm' ]
 
 r_map   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->hlx[cpu->hlx_idx].l', 'XXX', 'cpu->a' ]
+rr_map  = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
 rp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->sp' ]
 rpl_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->spl']
 rph_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->sph']
@@ -92,7 +94,10 @@ def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
 
 def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
+        .replace('ADDR', 'cpu->addr')\
         .replace('ALU(', alu_map[y])\
+        .replace('RRY', rr_map[y])\
+        .replace('RRZ', rr_map[z])\
         .replace('RY', r_map[y])\
         .replace('RZ', r_map[z])\
         .replace('RPL', rpl_map[p])\
@@ -103,7 +108,7 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('AF', 'cpu->af')\
         .replace('BC', 'cpu->bc')\
         .replace('DE', 'cpu->de')\
-        .replace('HL', 'cpu->hl')\
+        .replace('HL', 'cpu->hlx[cpu->hlx_idx].hl')\
         .replace('WZL', 'cpu->wzl')\
         .replace('WZH', 'cpu->wzh')\
         .replace('WZ', 'cpu->wz')\
@@ -113,8 +118,8 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('B', 'cpu->b')\
         .replace('E', 'cpu->e')\
         .replace('D', 'cpu->d')\
-        .replace('L', 'cpu->l')\
-        .replace('H', 'cpu->h')
+        .replace('L', 'cpu->hlx[cpu->hlx_idx].l')\
+        .replace('H', 'cpu->hlz[cpu->hlx_idx].h')
 
 def parse_opdescs():
     with open(DESC_PATH, 'r') as fp:
@@ -124,7 +129,10 @@ def parse_opdescs():
                 err(f"op '{op_name}' has no condition!")
             if 'mcycles' not in op_desc:
                 err(f"op '{op_name}' has no mcycles!")
-            op = Op(op_name,op_desc['cond'])
+            flags: dict[str,str] = {}
+            if 'flags' in op_desc:
+                flags = op_desc['flags']
+            op = Op(op_name,op_desc['cond'], flags)
             num_fetch = 0
             num_overlapped = 0
             for mc_desc in op_desc['mcycles']:
@@ -316,7 +324,16 @@ def pip_table_to_string() -> str:
     for maybe_op in OPS:
         op = unwrap(maybe_op)
         res += tab() + f'// 0x{op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
-        res += tab() + f'{{ 0x{op.pip:016X}, 0x{op.decoder_offset:04X} }},\n' 
+        flags = ''
+        if 'indirect' in op.flags and op.flags['indirect']:
+            flags += 'Z80_OPSTATE_FLAGS_INDIRECT'
+        if 'imm8' in op.flags and op.flags['imm8']:
+            if flags != '':
+                flags += '|'
+            flags += 'Z80_OPSTATE_FLAGS_IMM8'
+        if flags == '':
+            flags = '0'
+        res += tab() + f'{{ 0x{op.pip:016X}, 0x{op.decoder_offset:04X}, {flags} }},\n' 
     return res
 
 def write_result():
