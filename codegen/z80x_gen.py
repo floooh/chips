@@ -28,9 +28,7 @@ class Op:
         self.decoder_offset: int = 0
         self.mcycles: list[MCycle] = []
 
-# these are essentially opcode patterns
 OP_PATTERNS: list[Op] = []
-# these are stamped out opcode descriptions
 OPS: list[Optional[Op]] = [None for _ in range(0,256)]
 
 # a fetch machine cycle is processed as 2 parts because it overlaps
@@ -52,7 +50,14 @@ rp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->sp' ]
 rpl_map = [ 'cpu->c', 'cpu->e', 'cpu->l', 'cpu->spl']
 rph_map = [ 'cpu->b', 'cpu->d', 'cpu->h', 'cpu->sph']
 rp2_map = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->af' ]
-alu_map = [ 'z80_add',  'z80_adc', 'z80_sub', 'z80_sbc', 'z80_and', 'z80_xor', 'z80_or', 'z80_cp' ]
+alu_map = [ 'cpu->a=z80_add(cpu,', 
+            'cpu->a=z80_adc(cpu,', 
+            'cpu->a=z80_sub(cpu,',
+            'cpu->a=z80_sbc(cpu,',
+            'cpu->a=z80_and(cpu,',
+            'cpu->a=z80_xor(cpu,',
+            'cpu->a=z80_or(cpu,',
+            'z80_cp(cpu,' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -87,7 +92,7 @@ def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
 
 def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
-        .replace('ALU', alu_map[y])\
+        .replace('ALU(', alu_map[y])\
         .replace('RY', r_map[y])\
         .replace('RZ', r_map[z])\
         .replace('RPL', rpl_map[p])\

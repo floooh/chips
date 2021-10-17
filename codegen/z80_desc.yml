@@ -26,12 +26,12 @@ ALU (hl):
   cond: (x == 2) and (z == 6)
   mcycles:
     - { type: mread, ab: HL, dst: DLATCH }
-    - { type: overlapped, action: "ALU(cpu,DLATCH)" }
+    - { type: overlapped, action: "ALU(DLATCH)" }
 
 ALU RZ:
   cond: (x == 2) and (z != 6)
   mcycles:
-    - { type: overlapped,  action: "ALU(cpu,RZ)" }
+    - { type: overlapped,  action: "ALU(RZ)" }
 
 #== QUADRANT X0 ================================================================
 

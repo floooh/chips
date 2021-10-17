@@ -115,6 +115,8 @@ typedef struct {
 uint64_t z80_init(z80_t* cpu);
 // execute one tick, return new pin mask
 uint64_t z80_tick(z80_t* cpu, uint64_t pins);
+// force execution to continue at address 'new_pc'
+uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc);
 // return true when full instruction has finished
 bool z80_opdone(z80_t* cpu);
 
@@ -146,8 +148,16 @@ uint64_t z80_init(z80_t* cpu) {
 
 bool z80_opdone(z80_t* cpu) {
     // because of the overlapped cycle, the result of the previous
-    // instruction is only available in the refresh cycle
-    return 0 != (cpu->pins & Z80_RFSH);
+    // instruction is only available in M1/T2
+    return 0 == cpu->op.step;
+}
+
+uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
+    cpu->pc = new_pc;
+    cpu->op.pip = 1;
+    // overlapped M1:T1 of the NOP instruction to initiate opcode fetch at new pc
+    cpu->op.step = 2;
+    return 0;
 }
 
 static inline void z80_halt(z80_t* cpu) {
@@ -155,39 +165,46 @@ static inline void z80_halt(z80_t* cpu) {
     (void)cpu;
 }
 
-static inline void z80_add(z80_t* cpu, uint8_t val) {
+static inline uint8_t z80_add(z80_t* cpu, uint8_t val) {
     // FIXME
     (void)cpu; (void)val;
+    return 0;
 }
 
-static inline void z80_adc(z80_t* cpu, uint8_t val) {
+static inline uint8_t z80_adc(z80_t* cpu, uint8_t val) {
     // FIXME
     (void)cpu; (void)val;
+    return 0;
 }
 
-static inline void z80_sub(z80_t* cpu, uint8_t val) {
+static inline uint8_t z80_sub(z80_t* cpu, uint8_t val) {
     // FIXME
     (void)cpu; (void)val;
+    return 0;
 }
 
-static inline void z80_sbc(z80_t* cpu, uint8_t val) {
+static inline uint8_t z80_sbc(z80_t* cpu, uint8_t val) {
     // FIXME
     (void)cpu; (void)val;
+    return 0;
 }
 
-static inline void z80_and(z80_t* cpu, uint8_t val) {
+static inline uint8_t z80_and(z80_t* cpu, uint8_t val) {
     // FIXME
     (void)cpu; (void)val;
+    return 0;
 }
 
-static inline void z80_xor(z80_t* cpu, uint8_t val) {
+static inline uint8_t z80_xor(z80_t* cpu, uint8_t val) {
     // FIXME
     (void)cpu; (void)val;
+    return 0;
 }
 
-static inline void z80_or(z80_t* cpu, uint8_t val) {
+static inline uint8_t z80_or(z80_t* cpu, uint8_t val) {
     // FIXME
     (void)cpu; (void)val;
+    return 0;
 }
 
 static inline void z80_cp(z80_t* cpu, uint8_t val) {
@@ -215,6 +232,22 @@ static inline uint8_t z80_get_db(uint64_t pins) {
     return pins>>16;
 }
 
+// initiate a fetch machine cycle
+static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
+    // reset the decoder to continue at case 0
+    cpu->op.pip = (1ULL<<32)|(5ULL<<1);
+    cpu->op.step = 0;
+    pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+    return pins;
+}
+
+// initiate refresh cycle
+static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
+    pins = z80_set_ab_x(pins, cpu->r, Z80_MREQ|Z80_RFSH);
+    cpu->r = (cpu->r & 0x80) | ((cpu->r + 1) & 0x7F);
+    return pins;
+}
+
 static const z80_opstate_t z80_opstate_table[256] = {
 $pip_table_block
 };
@@ -227,8 +260,7 @@ $pip_table_block
 #define _gd()               z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()        _sax(cpu->pc++,Z80_M1|Z80_MREQ|Z80_RD);cpu->op.pip=(1ULL<<32)|(5ULL<<1);cpu->op.step=0;
-#define _rfsh()         _sax(cpu->r,Z80_MREQ|Z80_RFSH);cpu->r=(cpu->r&0x80)|((cpu->r+1)&0x7F)
+#define _fetch()        pins=z80_fetch(cpu,pins)
 #define _mread(ab)      _sax(ab,Z80_MREQ|Z80_RD)
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
@@ -251,7 +283,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             } break;
             case 1: {
                 cpu->op = z80_opstate_table[cpu->ir];
-                _rfsh();
+                pins = z80_refresh(cpu, pins);
             } break;
             // FIXME: optional index loading
             // FIXME: optional interrupt handling(?) 
@@ -270,7 +302,6 @@ $decode_block
 #undef _sadx
 #undef _gd
 #undef _fetch
-#undef _rfsh
 #undef _mread
 #undef _mwrite
 #undef _ioread
