@@ -50,14 +50,14 @@ rp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->sp' ]
 rpl_map = [ 'cpu->c', 'cpu->e', 'cpu->l', 'cpu->spl']
 rph_map = [ 'cpu->b', 'cpu->d', 'cpu->h', 'cpu->sph']
 rp2_map = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->af' ]
-alu_map = [ 'cpu->a=z80_add(cpu,', 
-            'cpu->a=z80_adc(cpu,', 
-            'cpu->a=z80_sub(cpu,',
-            'cpu->a=z80_sbc(cpu,',
-            'cpu->a=z80_and(cpu,',
-            'cpu->a=z80_xor(cpu,',
-            'cpu->a=z80_or(cpu,',
-            'z80_cp(cpu,' ]
+alu_map = [ 'z80_add8(cpu,', 
+            'z80_adc8(cpu,', 
+            'z80_sub8(cpu,',
+            'z80_sbc8(cpu,',
+            'z80_and8(cpu,',
+            'z80_xor8(cpu,',
+            'z80_or8(cpu,',
+            'z80_cp8(cpu,' ]
 
 def err(msg: str):
     raise BaseException(msg)

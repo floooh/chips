@@ -311,8 +311,9 @@ fd prefix:
 
 ALU n:
   cond: (x == 3) and (z == 6)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: PC++, dst: DLATCH }
+    - { type: overlapped, action: "ALU(DLATCH)" }
 
 rst Y*8:
   cond: (x == 3) and (z == 7)
