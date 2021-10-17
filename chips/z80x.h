@@ -868,11 +868,17 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                     if (cpu->hlx_idx != Z80_MAP_HL) {
                         // (IX+d) or (IY+d): insert 3 4-cycle machine cycles
                         // to load d offset and setup effective address
-                        cpu->op.pip = (2ULL<<33)|(1ULL<<8)|(3ULL<<1);
+                        cpu->op.pip = (2ULL<<33)|(3ULL<<1);
+                        // special case: is this is indirect+immediate (which is
+                        // just LD (HL),n, then the immediate-load is 'hidden' within
+                        // the 8-tcycle d-offset computation)
+                        if (cpu->op.flags & Z80_OPSTATE_FLAGS_IMM8) {
+                            cpu->op.pip |= 1ULL<<3;
+                        }
+                        else {
+                            cpu->op.pip |= 1ULL<<8;
+                        }
                         cpu->op.step = 2;
-
-                        // FIXME: if both INDIRECT+IMMEDIATE, the immediate-load
-                        // is hidden within the same 8-cycle period!!!
                     }
                 }
             } break;
@@ -883,11 +889,16 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 3: {
                 cpu->addr += (int8_t)_gd();
                 cpu->wz = cpu->addr;
-                // FIXME: INDIRECT+IMMEDIATE!
             } break;
             case 4: {
                 // continue with original instruction
                 cpu->op = z80_opstate_table[cpu->ir];
+                // special case: if this is indirect+immediate (which is just LD 
+                // (HL),n), then stretch the immediate-load machine cycle by 3 tcycles
+                if (cpu->op.flags & Z80_OPSTATE_FLAGS_IMM8) {
+                    const uint64_t mask = 0x0000000F0000000F;
+                    cpu->op.pip = (cpu->op.pip & mask) | ((cpu->op.pip & ~mask)<<2);
+                }
             } break;
             // FIXME: optional interrupt handling(?) 
             
