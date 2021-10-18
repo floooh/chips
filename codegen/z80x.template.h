@@ -169,6 +169,13 @@ bool z80_opdone(z80_t* cpu) {
     return (0 == cpu->op.step) && (cpu->hlx_idx == 0);
 }
 
+static inline void z80_skip(z80_t* cpu, int steps, int tcycles) {
+    cpu->op.step += steps;
+    for (int i = 0; i < tcycles; i++) {
+        cpu->op.pip = (cpu->op.pip & ~Z80_PIP_BITS) >> 1;
+    }
+}
+
 static inline uint64_t z80_halt(z80_t* cpu, uint64_t pins) {
     cpu->pc--;
     return pins | Z80_HALT;

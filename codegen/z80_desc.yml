@@ -57,12 +57,16 @@ djnz d:
 
 jr d:
   cond: (x == 0) and (y == 3) and (z == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: PC++, dst: DLATCH }
+    - { type: generic, tcycles: 5, action: "PC+=(int8_t)DLATCH;WZ=PC;" }
 
 jr CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
-  mcycles: []
+  mcycles:
+    - { type: mread, ab: PC++, dst: DLATCH, action: "if(!(CC-4)){z80_skip(cpu,1,5);}" }
+    - { type: generic, tcycles: 5, action: "PC+=(int8_t)DLATCH;WZ=PC;" }
+
   # FIXME
 
 # 16-bit load immediate/add
@@ -244,8 +248,8 @@ exx:
 
 jp hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 2)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "PC=HL" }
 
 ld sp,hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 3)
@@ -262,8 +266,9 @@ jp CC,nn:
 # assorted operations
 jp nn:
   cond: (x == 3) and (y == 0) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: PC++, dst: WZL }
+    - { type: mread, ab: PC++, dst: WZH, action: "PC=WZ" }
 
 cb prefix:
   cond: (x == 3) and (y == 1) and (z == 3)
