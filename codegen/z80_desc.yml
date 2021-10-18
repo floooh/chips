@@ -52,8 +52,11 @@ ex af,af':
 
 djnz d:
   cond: (x == 0) and (y == 2) and (z == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    # fetch has one extra tcycle
+    - { type: fetch, tcycles: 5 }
+    - { type: mread, ab: PC++, dst: DLATCH, action: "if(--B==0){z80_skip(cpu,1,5);}"}
+    - { type: generic, tcycles: 5, action: "PC+=(int8_t)DLATCH;WZ=PC;" }
 
 jr d:
   cond: (x == 0) and (y == 3) and (z == 0)
