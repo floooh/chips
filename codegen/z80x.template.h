@@ -367,8 +367,8 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             } break;
             // refresh cycle
             case 1: {
-                cpu->op = z80_opstate_table[cpu->ir];
                 pins = z80_refresh(cpu, pins);
+                cpu->op = z80_opstate_table[cpu->ir];
                 // if this is a (HL)/(IX+d)/(IY+d) instruction, insert
                 // d-load cycle if needed and compute effective address
                 if (cpu->op.flags & Z80_OPSTATE_FLAGS_INDIRECT) {

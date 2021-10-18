@@ -52,6 +52,8 @@ rp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->sp' ]
 rpl_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->spl']
 rph_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->sph']
 rp2_map = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->af' ]
+rp2l_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->f']
+rp2h_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->a']
 alu_map = [ 'z80_add8(cpu,', 
             'z80_adc8(cpu,', 
             'z80_sub8(cpu,',
@@ -86,8 +88,8 @@ def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('RY', r_comment[y])\
         .replace('RZ', r_comment[z])\
         .replace('ALU', alu_comment[y])\
-        .replace('RP', rp_comment[p])\
         .replace('RP2', rp2_comment[p])\
+        .replace('RP', rp_comment[p])\
         .replace('CC-4', cc_comment[y-4])\
         .replace('CC', cc_comment[y])\
         .replace('Y*8', f'{y*8:X}h')
@@ -100,10 +102,12 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('RRZ', rr_map[z])\
         .replace('RY', r_map[y])\
         .replace('RZ', r_map[z])\
+        .replace('RP2L', rp2l_map[p])\
+        .replace('RP2H', rp2h_map[p])\
+        .replace('RP2', rp2_map[p])\
         .replace('RPL', rpl_map[p])\
         .replace('RPH', rph_map[p])\
         .replace('RP', rp_map[p])\
-        .replace('RP2', rp2_map[p])\
         .replace('PC', 'cpu->pc')\
         .replace('AF', 'cpu->af')\
         .replace('BC', 'cpu->bc')\

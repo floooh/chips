@@ -129,13 +129,13 @@ ld a,(nn):
 # 16-bit inc/dec
 inc RP:
   cond: (x == 0) and (z == 3) and (q == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: generic, tcycles: 2, action: "RP++" }
 
 dec RP:
   cond: (x == 0) and (z == 3) and (q == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: generic, tcycles: 2, action: "RP--" }
 
 # 8-bit inc/dec
 inc (hl):
@@ -228,8 +228,9 @@ ret CC:
 # POP and various ops
 pop RP2:
   cond: (x == 3) and (z == 1) and (q == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: SP++, dst: RP2L }
+    - { type: mread, ab: SP++, dst: RP2H }
 
 ret:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 0)
@@ -307,8 +308,11 @@ call CC,nn:
 # PUSH and various ops
 push RP2:
   cond: (x == 3) and (z == 5) and (q == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    # fetch has one extra tcycle
+    - { type: fetch, tcycles: 5 }
+    - { type: mwrite, ab: --SP, db: RP2H }
+    - { type: mwrite, ab: --SP, db: RP2L }
 
 call nn:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 0)
