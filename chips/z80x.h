@@ -169,9 +169,9 @@ bool z80_opdone(z80_t* cpu) {
     return (0 == cpu->op.step) && (cpu->hlx_idx == 0);
 }
 
-static inline void z80_halt(z80_t* cpu) {
-    // FIXME
-    (void)cpu;
+static inline uint64_t z80_halt(z80_t* cpu, uint64_t pins) {
+    cpu->pc--;
+    return pins | Z80_HALT;
 }
 
 // sign+zero+parity lookup table
@@ -303,6 +303,68 @@ static inline void z80_exx(z80_t* cpu) {
     tmp = cpu->bc; cpu->bc = cpu->bc2; cpu->bc2 = tmp;
     tmp = cpu->de; cpu->de = cpu->de2; cpu->de2 = tmp;
     tmp = cpu->hl; cpu->hl = cpu->hl2; cpu->hl2 = tmp;
+}
+
+static inline void z80_rlca(z80_t* cpu) {
+    uint8_t res = (cpu->a << 1) | (cpu->a >> 7);
+    cpu->f = ((cpu->a >> 7) & Z80_CF) | (cpu->f & (Z80_SF|Z80_ZF|Z80_PF)) | (res & (Z80_YF|Z80_XF));
+    cpu->a = res;
+}
+
+static inline void z80_rrca(z80_t* cpu) {
+    uint8_t res = (cpu->a >> 1) | (cpu->a << 7);
+    cpu->f = (cpu->a & Z80_CF) | (cpu->f & (Z80_SF|Z80_ZF|Z80_PF)) | (res & (Z80_YF|Z80_XF));
+    cpu->a = res;
+}
+
+static inline void z80_rla(z80_t* cpu) {
+    uint8_t res = (cpu->a << 1) | (cpu->f & Z80_CF);
+    cpu->f = ((cpu->a >> 7) & Z80_CF) | (cpu->f & (Z80_SF|Z80_ZF|Z80_PF)) | (res & (Z80_YF|Z80_XF));
+    cpu->a = res;
+}
+
+static inline void z80_rra(z80_t* cpu) {
+    uint8_t res = (cpu->a >> 1) | ((cpu->f & Z80_CF) << 7);
+    cpu->f = (cpu->a & Z80_CF) | (cpu->f & (Z80_SF|Z80_ZF|Z80_PF)) | (res & (Z80_YF|Z80_XF));
+    cpu->a = res;
+}
+
+static inline void z80_daa(z80_t* cpu) {
+    uint8_t res = cpu->a;
+    if (cpu->f & Z80_NF) {
+        if (((cpu->a & 0xF)>0x9) || (cpu->f & Z80_HF)) {
+            res -= 0x06;
+        }
+        if ((cpu->a > 0x99) || (cpu->f & Z80_CF)) {
+            res -= 0x60;
+        }
+    }
+    else {
+        if (((cpu->a & 0xF)>0x9) || (cpu->f & Z80_HF)) {
+            res += 0x06;
+        }
+        if ((cpu->a > 0x99) || (cpu->f & Z80_CF)) {
+            res += 0x60;
+        }
+    }
+    cpu->f &= Z80_CF|Z80_NF;
+    cpu->f |= (cpu->a > 0x99) ? Z80_CF : 0;
+    cpu->f |= (cpu->a ^ res) & Z80_HF;
+    cpu->f |= z80_szp_flags[res];
+    cpu->a = res;
+}
+
+static inline void z80_cpl(z80_t* cpu) {
+    cpu->a ^= 0xFF;
+    cpu->f= (cpu->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) |Z80_HF|Z80_NF| (cpu->a & (Z80_YF|Z80_XF));
+}
+
+static inline void z80_scf(z80_t* cpu) {
+    cpu->f = (cpu->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | Z80_CF | (cpu->a & (Z80_YF|Z80_XF));
+}
+
+static inline void z80_ccf(z80_t* cpu) {
+    cpu->f = ((cpu->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | ((cpu->f & Z80_CF)<<4) | (cpu->a & (Z80_YF|Z80_XF))) ^ Z80_CF;
 }
 
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
@@ -731,130 +793,130 @@ static const z80_opstate_t z80_opstate_table[256] = {
     { 0x0000000000000002, 0x012A, 0 },
     // 0xC1: pop bc (M:3 T:10 steps:5)
     { 0x00000024000000B6, 0x012B, 0 },
-    // 0xC2: jp nz,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0130, 0 },
+    // 0xC2: jp nz,nn (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x0130, 0 },
     // 0xC3: jp nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0131, 0 },
+    { 0x0000000000000002, 0x0135, 0 },
     // 0xC4: call nz,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0132, 0 },
+    { 0x0000000000000002, 0x0136, 0 },
     // 0xC5: push bc (M:3 T:11 steps:3)
-    { 0x0000004800000148, 0x0133, 0 },
+    { 0x0000004800000148, 0x0137, 0 },
     // 0xC6: add n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x0136, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x0000000400000016, 0x013A, Z80_OPSTATE_FLAGS_IMM8 },
     // 0xC7: rst 0h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0139, 0 },
-    // 0xC8: ret z (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x013A, 0 },
-    // 0xC9: ret (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x013B, 0 },
-    // 0xCA: jp z,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x013C, 0 },
-    // 0xCB: cb prefix (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x013D, 0 },
-    // 0xCC: call z,nn (M:1 T:4 steps:1)
+    // 0xC8: ret z (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x013E, 0 },
-    // 0xCD: call nn (M:1 T:4 steps:1)
+    // 0xC9: ret (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x013F, 0 },
+    // 0xCA: jp z,nn (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x0140, 0 },
+    // 0xCB: cb prefix (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0145, 0 },
+    // 0xCC: call z,nn (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0146, 0 },
+    // 0xCD: call nn (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0147, 0 },
     // 0xCE: adc n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x0140, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x0000000400000016, 0x0148, Z80_OPSTATE_FLAGS_IMM8 },
     // 0xCF: rst 8h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0143, 0 },
-    // 0xD0: ret nc (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0144, 0 },
-    // 0xD1: pop de (M:3 T:10 steps:5)
-    { 0x00000024000000B6, 0x0145, 0 },
-    // 0xD2: jp nc,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x014A, 0 },
-    // 0xD3: out (n),a (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x014B, 0 },
-    // 0xD4: call nc,nn (M:1 T:4 steps:1)
+    // 0xD0: ret nc (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x014C, 0 },
-    // 0xD5: push de (M:3 T:11 steps:3)
-    { 0x0000004800000148, 0x014D, 0 },
-    // 0xD6: sub n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x0150, Z80_OPSTATE_FLAGS_IMM8 },
-    // 0xD7: rst 10h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0153, 0 },
-    // 0xD8: ret c (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0154, 0 },
-    // 0xD9: exx (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0155, 0 },
-    // 0xDA: jp c,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0156, 0 },
-    // 0xDB: in a,(n) (M:1 T:4 steps:1)
+    // 0xD1: pop de (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x014D, 0 },
+    // 0xD2: jp nc,nn (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x0152, 0 },
+    // 0xD3: out (n),a (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x0157, 0 },
-    // 0xDC: call c,nn (M:1 T:4 steps:1)
+    // 0xD4: call nc,nn (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x0158, 0 },
+    // 0xD5: push de (M:3 T:11 steps:3)
+    { 0x0000004800000148, 0x0159, 0 },
+    // 0xD6: sub n (M:2 T:7 steps:3)
+    { 0x0000000400000016, 0x015C, Z80_OPSTATE_FLAGS_IMM8 },
+    // 0xD7: rst 10h (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x015F, 0 },
+    // 0xD8: ret c (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0160, 0 },
+    // 0xD9: exx (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0161, 0 },
+    // 0xDA: jp c,nn (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x0162, 0 },
+    // 0xDB: in a,(n) (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0167, 0 },
+    // 0xDC: call c,nn (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0168, 0 },
     // 0xDD: dd prefix (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0159, 0 },
+    { 0x0000000000000002, 0x0169, 0 },
     // 0xDE: sbc n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x015A, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x0000000400000016, 0x016A, Z80_OPSTATE_FLAGS_IMM8 },
     // 0xDF: rst 18h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x015D, 0 },
+    { 0x0000000000000002, 0x016D, 0 },
     // 0xE0: ret po (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x015E, 0 },
+    { 0x0000000000000002, 0x016E, 0 },
     // 0xE1: pop hl (M:3 T:10 steps:5)
-    { 0x00000024000000B6, 0x015F, 0 },
-    // 0xE2: jp po,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0164, 0 },
+    { 0x00000024000000B6, 0x016F, 0 },
+    // 0xE2: jp po,nn (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x0174, 0 },
     // 0xE3: ex (sp),hl (M:5 T:19 steps:7)
-    { 0x0000122400011236, 0x0165, 0 },
+    { 0x0000122400011236, 0x0179, 0 },
     // 0xE4: call po,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x016C, 0 },
+    { 0x0000000000000002, 0x0180, 0 },
     // 0xE5: push hl (M:3 T:11 steps:3)
-    { 0x0000004800000148, 0x016D, 0 },
+    { 0x0000004800000148, 0x0181, 0 },
     // 0xE6: and n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x0170, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x0000000400000016, 0x0184, Z80_OPSTATE_FLAGS_IMM8 },
     // 0xE7: rst 20h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0173, 0 },
+    { 0x0000000000000002, 0x0187, 0 },
     // 0xE8: ret pe (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0174, 0 },
+    { 0x0000000000000002, 0x0188, 0 },
     // 0xE9: jp hl (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0175, 0 },
-    // 0xEA: jp pe,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0176, 0 },
+    { 0x0000000000000002, 0x0189, 0 },
+    // 0xEA: jp pe,nn (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x018A, 0 },
     // 0xEB: ex de,hl (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0177, 0 },
+    { 0x0000000000000002, 0x018F, 0 },
     // 0xEC: call pe,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0178, 0 },
+    { 0x0000000000000002, 0x0190, 0 },
     // 0xED: ed prefix (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0179, 0 },
-    // 0xEE: xor n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x017A, Z80_OPSTATE_FLAGS_IMM8 },
-    // 0xEF: rst 28h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x017D, 0 },
-    // 0xF0: ret p (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x017E, 0 },
-    // 0xF1: pop af (M:3 T:10 steps:5)
-    { 0x00000024000000B6, 0x017F, 0 },
-    // 0xF2: jp p,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0184, 0 },
-    // 0xF3: di (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0185, 0 },
-    // 0xF4: call p,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0186, 0 },
-    // 0xF5: push af (M:3 T:11 steps:3)
-    { 0x0000004800000148, 0x0187, 0 },
-    // 0xF6: or n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x018A, Z80_OPSTATE_FLAGS_IMM8 },
-    // 0xF7: rst 30h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x018D, 0 },
-    // 0xF8: ret m (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x018E, 0 },
-    // 0xF9: ld sp,hl (M:2 T:6 steps:2)
-    { 0x000000000000000A, 0x018F, 0 },
-    // 0xFA: jp m,nn (M:1 T:4 steps:1)
     { 0x0000000000000002, 0x0191, 0 },
+    // 0xEE: xor n (M:2 T:7 steps:3)
+    { 0x0000000400000016, 0x0192, Z80_OPSTATE_FLAGS_IMM8 },
+    // 0xEF: rst 28h (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0195, 0 },
+    // 0xF0: ret p (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x0196, 0 },
+    // 0xF1: pop af (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x0197, 0 },
+    // 0xF2: jp p,nn (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x019C, 0 },
+    // 0xF3: di (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x01A1, 0 },
+    // 0xF4: call p,nn (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x01A2, 0 },
+    // 0xF5: push af (M:3 T:11 steps:3)
+    { 0x0000004800000148, 0x01A3, 0 },
+    // 0xF6: or n (M:2 T:7 steps:3)
+    { 0x0000000400000016, 0x01A6, Z80_OPSTATE_FLAGS_IMM8 },
+    // 0xF7: rst 30h (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x01A9, 0 },
+    // 0xF8: ret m (M:1 T:4 steps:1)
+    { 0x0000000000000002, 0x01AA, 0 },
+    // 0xF9: ld sp,hl (M:2 T:6 steps:2)
+    { 0x000000000000000A, 0x01AB, 0 },
+    // 0xFA: jp m,nn (M:3 T:10 steps:5)
+    { 0x00000024000000B6, 0x01AD, 0 },
     // 0xFB: ei (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0192, 0 },
+    { 0x0000000000000002, 0x01B2, 0 },
     // 0xFC: call m,nn (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0193, 0 },
+    { 0x0000000000000002, 0x01B3, 0 },
     // 0xFD: fd prefix (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0194, 0 },
+    { 0x0000000000000002, 0x01B4, 0 },
     // 0xFE: cp n (M:2 T:7 steps:3)
-    { 0x0000000400000016, 0x0195, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x0000000400000016, 0x01B5, Z80_OPSTATE_FLAGS_IMM8 },
     // 0xFF: rst 38h (M:1 T:4 steps:1)
-    { 0x0000000000000002, 0x0198, 0 },
+    { 0x0000000000000002, 0x01B8, 0 },
 
 };
 
@@ -881,6 +943,14 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
 #define _iowrite(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
+#define _cc_nz          (!(cpu->f&Z80_ZF))
+#define _cc_z           (cpu->f&Z80_ZF)
+#define _cc_nc          (!(cpu->f&Z80_CF))
+#define _cc_c           (cpu->f&Z80_CF)
+#define _cc_po          (!(cpu->f&Z80_PF))
+#define _cc_pe          (cpu->f&Z80_PF)
+#define _cc_p           (!(cpu->f&Z80_SF))
+#define _cc_m           (cpu->f&Z80_SF)
 
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     // wait cycle? (wait pin sampling only happens in specific tcycles)
@@ -985,7 +1055,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x07: rlca (M:1 T:4)
             // -- OVERLAP
-            case 0x0014: _fetch(); break;
+            case 0x0014: z80_rlca(cpu);_fetch(); break;
             
             // 0x08: ex af,af' (M:1 T:4)
             // -- OVERLAP
@@ -1025,7 +1095,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x0F: rrca (M:1 T:4)
             // -- OVERLAP
-            case 0x0021: _fetch(); break;
+            case 0x0021: z80_rrca(cpu);_fetch(); break;
             
             // 0x10: djnz d (M:1 T:4)
             // -- OVERLAP
@@ -1070,7 +1140,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x17: rla (M:1 T:4)
             // -- OVERLAP
-            case 0x0031: _fetch(); break;
+            case 0x0031: z80_rla(cpu);_fetch(); break;
             
             // 0x18: jr d (M:1 T:4)
             // -- OVERLAP
@@ -1110,7 +1180,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x1F: rra (M:1 T:4)
             // -- OVERLAP
-            case 0x003E: _fetch(); break;
+            case 0x003E: z80_rra(cpu);_fetch(); break;
             
             // 0x20: jr nz,d (M:1 T:4)
             // -- OVERLAP
@@ -1153,7 +1223,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x27: daa (M:1 T:4)
             // -- OVERLAP
-            case 0x004D: _fetch(); break;
+            case 0x004D: z80_daa(cpu);_fetch(); break;
             
             // 0x28: jr z,d (M:1 T:4)
             // -- OVERLAP
@@ -1190,7 +1260,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x2F: cpl (M:1 T:4)
             // -- OVERLAP
-            case 0x0058: _fetch(); break;
+            case 0x0058: z80_cpl(cpu);_fetch(); break;
             
             // 0x30: jr nc,d (M:1 T:4)
             // -- OVERLAP
@@ -1253,7 +1323,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x37: scf (M:1 T:4)
             // -- OVERLAP
-            case 0x0073: _fetch(); break;
+            case 0x0073: z80_scf(cpu);_fetch(); break;
             
             // 0x38: jr c,d (M:1 T:4)
             // -- OVERLAP
@@ -1299,7 +1369,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x3F: ccf (M:1 T:4)
             // -- OVERLAP
-            case 0x0084: _fetch(); break;
+            case 0x0084: z80_ccf(cpu);_fetch(); break;
             
             // 0x40: ld b,b (M:1 T:4)
             // -- OVERLAP
@@ -1549,7 +1619,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // 0x76: halt (M:1 T:4)
             // -- OVERLAP
-            case 0x00CD: z80_halt(cpu);_fetch(); break;
+            case 0x00CD: pins=z80_halt(cpu,pins);_fetch(); break;
             
             // 0x77: ld (hl),a (M:2 T:7)
             // -- M2
@@ -1886,323 +1956,371 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x012F: _fetch(); break;
             
-            // 0xC2: jp nz,nn (M:1 T:4)
+            // 0xC2: jp nz,nn (M:3 T:10)
+            // -- M2
+            case 0x0130: _mread(cpu->pc++); break;
+            case 0x0131: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0132: _mread(cpu->pc++); break;
+            case 0x0133: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
-            case 0x0130: _fetch(); break;
+            case 0x0134: _fetch(); break;
             
             // 0xC3: jp nn (M:1 T:4)
             // -- OVERLAP
-            case 0x0131: _fetch(); break;
+            case 0x0135: _fetch(); break;
             
             // 0xC4: call nz,nn (M:1 T:4)
             // -- OVERLAP
-            case 0x0132: _fetch(); break;
+            case 0x0136: _fetch(); break;
             
             // 0xC5: push bc (M:3 T:11)
             // -- M2
-            case 0x0133: _mwrite(--cpu->sp,cpu->b); break;
+            case 0x0137: _mwrite(--cpu->sp,cpu->b); break;
             // -- M3
-            case 0x0134: _mwrite(--cpu->sp,cpu->c); break;
-            // -- OVERLAP
-            case 0x0135: _fetch(); break;
-            
-            // 0xC6: add n (M:2 T:7)
-            // -- M2
-            case 0x0136: _mread(cpu->pc++); break;
-            case 0x0137: cpu->dlatch=_gd(); break;
-            // -- OVERLAP
-            case 0x0138: z80_add8(cpu,cpu->dlatch);_fetch(); break;
-            
-            // 0xC7: rst 0h (M:1 T:4)
+            case 0x0138: _mwrite(--cpu->sp,cpu->c); break;
             // -- OVERLAP
             case 0x0139: _fetch(); break;
             
-            // 0xC8: ret z (M:1 T:4)
+            // 0xC6: add n (M:2 T:7)
+            // -- M2
+            case 0x013A: _mread(cpu->pc++); break;
+            case 0x013B: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x013A: _fetch(); break;
+            case 0x013C: z80_add8(cpu,cpu->dlatch);_fetch(); break;
             
-            // 0xC9: ret (M:1 T:4)
-            // -- OVERLAP
-            case 0x013B: _fetch(); break;
-            
-            // 0xCA: jp z,nn (M:1 T:4)
-            // -- OVERLAP
-            case 0x013C: _fetch(); break;
-            
-            // 0xCB: cb prefix (M:1 T:4)
+            // 0xC7: rst 0h (M:1 T:4)
             // -- OVERLAP
             case 0x013D: _fetch(); break;
             
-            // 0xCC: call z,nn (M:1 T:4)
+            // 0xC8: ret z (M:1 T:4)
             // -- OVERLAP
             case 0x013E: _fetch(); break;
             
-            // 0xCD: call nn (M:1 T:4)
+            // 0xC9: ret (M:1 T:4)
             // -- OVERLAP
             case 0x013F: _fetch(); break;
             
-            // 0xCE: adc n (M:2 T:7)
+            // 0xCA: jp z,nn (M:3 T:10)
             // -- M2
             case 0x0140: _mread(cpu->pc++); break;
-            case 0x0141: cpu->dlatch=_gd(); break;
-            // -- OVERLAP
-            case 0x0142: z80_adc8(cpu,cpu->dlatch);_fetch(); break;
-            
-            // 0xCF: rst 8h (M:1 T:4)
-            // -- OVERLAP
-            case 0x0143: _fetch(); break;
-            
-            // 0xD0: ret nc (M:1 T:4)
+            case 0x0141: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0142: _mread(cpu->pc++); break;
+            case 0x0143: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
             case 0x0144: _fetch(); break;
             
-            // 0xD1: pop de (M:3 T:10)
+            // 0xCB: cb prefix (M:1 T:4)
+            // -- OVERLAP
+            case 0x0145: _fetch(); break;
+            
+            // 0xCC: call z,nn (M:1 T:4)
+            // -- OVERLAP
+            case 0x0146: _fetch(); break;
+            
+            // 0xCD: call nn (M:1 T:4)
+            // -- OVERLAP
+            case 0x0147: _fetch(); break;
+            
+            // 0xCE: adc n (M:2 T:7)
             // -- M2
-            case 0x0145: _mread(cpu->sp++); break;
-            case 0x0146: cpu->e=_gd(); break;
-            // -- M3
-            case 0x0147: _mread(cpu->sp++); break;
-            case 0x0148: cpu->d=_gd(); break;
+            case 0x0148: _mread(cpu->pc++); break;
+            case 0x0149: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0149: _fetch(); break;
+            case 0x014A: z80_adc8(cpu,cpu->dlatch);_fetch(); break;
             
-            // 0xD2: jp nc,nn (M:1 T:4)
-            // -- OVERLAP
-            case 0x014A: _fetch(); break;
-            
-            // 0xD3: out (n),a (M:1 T:4)
+            // 0xCF: rst 8h (M:1 T:4)
             // -- OVERLAP
             case 0x014B: _fetch(); break;
             
-            // 0xD4: call nc,nn (M:1 T:4)
+            // 0xD0: ret nc (M:1 T:4)
             // -- OVERLAP
             case 0x014C: _fetch(); break;
             
-            // 0xD5: push de (M:3 T:11)
+            // 0xD1: pop de (M:3 T:10)
             // -- M2
-            case 0x014D: _mwrite(--cpu->sp,cpu->d); break;
+            case 0x014D: _mread(cpu->sp++); break;
+            case 0x014E: cpu->e=_gd(); break;
             // -- M3
-            case 0x014E: _mwrite(--cpu->sp,cpu->e); break;
+            case 0x014F: _mread(cpu->sp++); break;
+            case 0x0150: cpu->d=_gd(); break;
             // -- OVERLAP
-            case 0x014F: _fetch(); break;
+            case 0x0151: _fetch(); break;
             
-            // 0xD6: sub n (M:2 T:7)
+            // 0xD2: jp nc,nn (M:3 T:10)
             // -- M2
-            case 0x0150: _mread(cpu->pc++); break;
-            case 0x0151: cpu->dlatch=_gd(); break;
-            // -- OVERLAP
-            case 0x0152: z80_sub8(cpu,cpu->dlatch);_fetch(); break;
-            
-            // 0xD7: rst 10h (M:1 T:4)
-            // -- OVERLAP
-            case 0x0153: _fetch(); break;
-            
-            // 0xD8: ret c (M:1 T:4)
-            // -- OVERLAP
-            case 0x0154: _fetch(); break;
-            
-            // 0xD9: exx (M:1 T:4)
-            // -- OVERLAP
-            case 0x0155: z80_exx(cpu);_fetch(); break;
-            
-            // 0xDA: jp c,nn (M:1 T:4)
+            case 0x0152: _mread(cpu->pc++); break;
+            case 0x0153: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0154: _mread(cpu->pc++); break;
+            case 0x0155: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
             case 0x0156: _fetch(); break;
             
-            // 0xDB: in a,(n) (M:1 T:4)
+            // 0xD3: out (n),a (M:1 T:4)
             // -- OVERLAP
             case 0x0157: _fetch(); break;
             
-            // 0xDC: call c,nn (M:1 T:4)
+            // 0xD4: call nc,nn (M:1 T:4)
             // -- OVERLAP
             case 0x0158: _fetch(); break;
             
+            // 0xD5: push de (M:3 T:11)
+            // -- M2
+            case 0x0159: _mwrite(--cpu->sp,cpu->d); break;
+            // -- M3
+            case 0x015A: _mwrite(--cpu->sp,cpu->e); break;
+            // -- OVERLAP
+            case 0x015B: _fetch(); break;
+            
+            // 0xD6: sub n (M:2 T:7)
+            // -- M2
+            case 0x015C: _mread(cpu->pc++); break;
+            case 0x015D: cpu->dlatch=_gd(); break;
+            // -- OVERLAP
+            case 0x015E: z80_sub8(cpu,cpu->dlatch);_fetch(); break;
+            
+            // 0xD7: rst 10h (M:1 T:4)
+            // -- OVERLAP
+            case 0x015F: _fetch(); break;
+            
+            // 0xD8: ret c (M:1 T:4)
+            // -- OVERLAP
+            case 0x0160: _fetch(); break;
+            
+            // 0xD9: exx (M:1 T:4)
+            // -- OVERLAP
+            case 0x0161: z80_exx(cpu);_fetch(); break;
+            
+            // 0xDA: jp c,nn (M:3 T:10)
+            // -- M2
+            case 0x0162: _mread(cpu->pc++); break;
+            case 0x0163: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0164: _mread(cpu->pc++); break;
+            case 0x0165: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;}; break;
+            // -- OVERLAP
+            case 0x0166: _fetch(); break;
+            
+            // 0xDB: in a,(n) (M:1 T:4)
+            // -- OVERLAP
+            case 0x0167: _fetch(); break;
+            
+            // 0xDC: call c,nn (M:1 T:4)
+            // -- OVERLAP
+            case 0x0168: _fetch(); break;
+            
             // 0xDD: dd prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x0159: _fetch_ix(); break;
+            case 0x0169: _fetch_ix(); break;
             
             // 0xDE: sbc n (M:2 T:7)
             // -- M2
-            case 0x015A: _mread(cpu->pc++); break;
-            case 0x015B: cpu->dlatch=_gd(); break;
+            case 0x016A: _mread(cpu->pc++); break;
+            case 0x016B: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x015C: z80_sbc8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x016C: z80_sbc8(cpu,cpu->dlatch);_fetch(); break;
             
             // 0xDF: rst 18h (M:1 T:4)
             // -- OVERLAP
-            case 0x015D: _fetch(); break;
+            case 0x016D: _fetch(); break;
             
             // 0xE0: ret po (M:1 T:4)
             // -- OVERLAP
-            case 0x015E: _fetch(); break;
+            case 0x016E: _fetch(); break;
             
             // 0xE1: pop hl (M:3 T:10)
             // -- M2
-            case 0x015F: _mread(cpu->sp++); break;
-            case 0x0160: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
+            case 0x016F: _mread(cpu->sp++); break;
+            case 0x0170: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
             // -- M3
-            case 0x0161: _mread(cpu->sp++); break;
-            case 0x0162: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
-            // -- OVERLAP
-            case 0x0163: _fetch(); break;
-            
-            // 0xE2: jp po,nn (M:1 T:4)
-            // -- OVERLAP
-            case 0x0164: _fetch(); break;
-            
-            // 0xE3: ex (sp),hl (M:5 T:19)
-            // -- M2
-            case 0x0165: _mread(cpu->sp); break;
-            case 0x0166: cpu->wzl=_gd(); break;
-            // -- M3
-            case 0x0167: _mread(cpu->sp+1); break;
-            case 0x0168: cpu->wzh=_gd(); break;
-            // -- M4
-            case 0x0169: _mwrite(cpu->sp+1,cpu->hlx[cpu->hlx_idx].h); break;
-            // -- M5
-            case 0x016A: _mwrite(cpu->sp,cpu->hlx[cpu->hlx_idx].l);cpu->hlx[cpu->hlx_idx].hl=cpu->wz; break;
-            // -- OVERLAP
-            case 0x016B: _fetch(); break;
-            
-            // 0xE4: call po,nn (M:1 T:4)
-            // -- OVERLAP
-            case 0x016C: _fetch(); break;
-            
-            // 0xE5: push hl (M:3 T:11)
-            // -- M2
-            case 0x016D: _mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].h); break;
-            // -- M3
-            case 0x016E: _mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].l); break;
-            // -- OVERLAP
-            case 0x016F: _fetch(); break;
-            
-            // 0xE6: and n (M:2 T:7)
-            // -- M2
-            case 0x0170: _mread(cpu->pc++); break;
-            case 0x0171: cpu->dlatch=_gd(); break;
-            // -- OVERLAP
-            case 0x0172: z80_and8(cpu,cpu->dlatch);_fetch(); break;
-            
-            // 0xE7: rst 20h (M:1 T:4)
+            case 0x0171: _mread(cpu->sp++); break;
+            case 0x0172: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
             // -- OVERLAP
             case 0x0173: _fetch(); break;
             
-            // 0xE8: ret pe (M:1 T:4)
-            // -- OVERLAP
-            case 0x0174: _fetch(); break;
-            
-            // 0xE9: jp hl (M:1 T:4)
-            // -- OVERLAP
-            case 0x0175: _fetch(); break;
-            
-            // 0xEA: jp pe,nn (M:1 T:4)
-            // -- OVERLAP
-            case 0x0176: _fetch(); break;
-            
-            // 0xEB: ex de,hl (M:1 T:4)
-            // -- OVERLAP
-            case 0x0177: z80_ex_de_hl(cpu);_fetch(); break;
-            
-            // 0xEC: call pe,nn (M:1 T:4)
+            // 0xE2: jp po,nn (M:3 T:10)
+            // -- M2
+            case 0x0174: _mread(cpu->pc++); break;
+            case 0x0175: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0176: _mread(cpu->pc++); break;
+            case 0x0177: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
             case 0x0178: _fetch(); break;
             
-            // 0xED: ed prefix (M:1 T:4)
-            // -- OVERLAP
-            case 0x0179: _fetch(); break;
-            
-            // 0xEE: xor n (M:2 T:7)
+            // 0xE3: ex (sp),hl (M:5 T:19)
             // -- M2
-            case 0x017A: _mread(cpu->pc++); break;
-            case 0x017B: cpu->dlatch=_gd(); break;
-            // -- OVERLAP
-            case 0x017C: z80_xor8(cpu,cpu->dlatch);_fetch(); break;
-            
-            // 0xEF: rst 28h (M:1 T:4)
-            // -- OVERLAP
-            case 0x017D: _fetch(); break;
-            
-            // 0xF0: ret p (M:1 T:4)
-            // -- OVERLAP
-            case 0x017E: _fetch(); break;
-            
-            // 0xF1: pop af (M:3 T:10)
-            // -- M2
-            case 0x017F: _mread(cpu->sp++); break;
-            case 0x0180: cpu->f=_gd(); break;
+            case 0x0179: _mread(cpu->sp); break;
+            case 0x017A: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0181: _mread(cpu->sp++); break;
-            case 0x0182: cpu->a=_gd(); break;
+            case 0x017B: _mread(cpu->sp+1); break;
+            case 0x017C: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x017D: _mwrite(cpu->sp+1,cpu->hlx[cpu->hlx_idx].h); break;
+            // -- M5
+            case 0x017E: _mwrite(cpu->sp,cpu->hlx[cpu->hlx_idx].l);cpu->hlx[cpu->hlx_idx].hl=cpu->wz; break;
+            // -- OVERLAP
+            case 0x017F: _fetch(); break;
+            
+            // 0xE4: call po,nn (M:1 T:4)
+            // -- OVERLAP
+            case 0x0180: _fetch(); break;
+            
+            // 0xE5: push hl (M:3 T:11)
+            // -- M2
+            case 0x0181: _mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].h); break;
+            // -- M3
+            case 0x0182: _mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].l); break;
             // -- OVERLAP
             case 0x0183: _fetch(); break;
             
-            // 0xF2: jp p,nn (M:1 T:4)
-            // -- OVERLAP
-            case 0x0184: _fetch(); break;
-            
-            // 0xF3: di (M:1 T:4)
-            // -- OVERLAP
-            case 0x0185: _fetch(); break;
-            
-            // 0xF4: call p,nn (M:1 T:4)
-            // -- OVERLAP
-            case 0x0186: _fetch(); break;
-            
-            // 0xF5: push af (M:3 T:11)
+            // 0xE6: and n (M:2 T:7)
             // -- M2
-            case 0x0187: _mwrite(--cpu->sp,cpu->a); break;
-            // -- M3
-            case 0x0188: _mwrite(--cpu->sp,cpu->f); break;
+            case 0x0184: _mread(cpu->pc++); break;
+            case 0x0185: cpu->dlatch=_gd(); break;
+            // -- OVERLAP
+            case 0x0186: z80_and8(cpu,cpu->dlatch);_fetch(); break;
+            
+            // 0xE7: rst 20h (M:1 T:4)
+            // -- OVERLAP
+            case 0x0187: _fetch(); break;
+            
+            // 0xE8: ret pe (M:1 T:4)
+            // -- OVERLAP
+            case 0x0188: _fetch(); break;
+            
+            // 0xE9: jp hl (M:1 T:4)
             // -- OVERLAP
             case 0x0189: _fetch(); break;
             
-            // 0xF6: or n (M:2 T:7)
+            // 0xEA: jp pe,nn (M:3 T:10)
             // -- M2
             case 0x018A: _mread(cpu->pc++); break;
-            case 0x018B: cpu->dlatch=_gd(); break;
-            // -- OVERLAP
-            case 0x018C: z80_or8(cpu,cpu->dlatch);_fetch(); break;
-            
-            // 0xF7: rst 30h (M:1 T:4)
-            // -- OVERLAP
-            case 0x018D: _fetch(); break;
-            
-            // 0xF8: ret m (M:1 T:4)
+            case 0x018B: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x018C: _mread(cpu->pc++); break;
+            case 0x018D: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
             case 0x018E: _fetch(); break;
             
-            // 0xF9: ld sp,hl (M:2 T:6)
-            // -- M2 (generic)
-            case 0x018F: cpu->sp=cpu->hlx[cpu->hlx_idx].hl; break;
+            // 0xEB: ex de,hl (M:1 T:4)
+            // -- OVERLAP
+            case 0x018F: z80_ex_de_hl(cpu);_fetch(); break;
+            
+            // 0xEC: call pe,nn (M:1 T:4)
             // -- OVERLAP
             case 0x0190: _fetch(); break;
             
-            // 0xFA: jp m,nn (M:1 T:4)
+            // 0xED: ed prefix (M:1 T:4)
             // -- OVERLAP
             case 0x0191: _fetch(); break;
             
+            // 0xEE: xor n (M:2 T:7)
+            // -- M2
+            case 0x0192: _mread(cpu->pc++); break;
+            case 0x0193: cpu->dlatch=_gd(); break;
+            // -- OVERLAP
+            case 0x0194: z80_xor8(cpu,cpu->dlatch);_fetch(); break;
+            
+            // 0xEF: rst 28h (M:1 T:4)
+            // -- OVERLAP
+            case 0x0195: _fetch(); break;
+            
+            // 0xF0: ret p (M:1 T:4)
+            // -- OVERLAP
+            case 0x0196: _fetch(); break;
+            
+            // 0xF1: pop af (M:3 T:10)
+            // -- M2
+            case 0x0197: _mread(cpu->sp++); break;
+            case 0x0198: cpu->f=_gd(); break;
+            // -- M3
+            case 0x0199: _mread(cpu->sp++); break;
+            case 0x019A: cpu->a=_gd(); break;
+            // -- OVERLAP
+            case 0x019B: _fetch(); break;
+            
+            // 0xF2: jp p,nn (M:3 T:10)
+            // -- M2
+            case 0x019C: _mread(cpu->pc++); break;
+            case 0x019D: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x019E: _mread(cpu->pc++); break;
+            case 0x019F: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;}; break;
+            // -- OVERLAP
+            case 0x01A0: _fetch(); break;
+            
+            // 0xF3: di (M:1 T:4)
+            // -- OVERLAP
+            case 0x01A1: _fetch(); break;
+            
+            // 0xF4: call p,nn (M:1 T:4)
+            // -- OVERLAP
+            case 0x01A2: _fetch(); break;
+            
+            // 0xF5: push af (M:3 T:11)
+            // -- M2
+            case 0x01A3: _mwrite(--cpu->sp,cpu->a); break;
+            // -- M3
+            case 0x01A4: _mwrite(--cpu->sp,cpu->f); break;
+            // -- OVERLAP
+            case 0x01A5: _fetch(); break;
+            
+            // 0xF6: or n (M:2 T:7)
+            // -- M2
+            case 0x01A6: _mread(cpu->pc++); break;
+            case 0x01A7: cpu->dlatch=_gd(); break;
+            // -- OVERLAP
+            case 0x01A8: z80_or8(cpu,cpu->dlatch);_fetch(); break;
+            
+            // 0xF7: rst 30h (M:1 T:4)
+            // -- OVERLAP
+            case 0x01A9: _fetch(); break;
+            
+            // 0xF8: ret m (M:1 T:4)
+            // -- OVERLAP
+            case 0x01AA: _fetch(); break;
+            
+            // 0xF9: ld sp,hl (M:2 T:6)
+            // -- M2 (generic)
+            case 0x01AB: cpu->sp=cpu->hlx[cpu->hlx_idx].hl; break;
+            // -- OVERLAP
+            case 0x01AC: _fetch(); break;
+            
+            // 0xFA: jp m,nn (M:3 T:10)
+            // -- M2
+            case 0x01AD: _mread(cpu->pc++); break;
+            case 0x01AE: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x01AF: _mread(cpu->pc++); break;
+            case 0x01B0: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;}; break;
+            // -- OVERLAP
+            case 0x01B1: _fetch(); break;
+            
             // 0xFB: ei (M:1 T:4)
             // -- OVERLAP
-            case 0x0192: _fetch(); break;
+            case 0x01B2: _fetch(); break;
             
             // 0xFC: call m,nn (M:1 T:4)
             // -- OVERLAP
-            case 0x0193: _fetch(); break;
+            case 0x01B3: _fetch(); break;
             
             // 0xFD: fd prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x0194: _fetch_iy(); break;
+            case 0x01B4: _fetch_iy(); break;
             
             // 0xFE: cp n (M:2 T:7)
             // -- M2
-            case 0x0195: _mread(cpu->pc++); break;
-            case 0x0196: cpu->dlatch=_gd(); break;
+            case 0x01B5: _mread(cpu->pc++); break;
+            case 0x01B6: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0197: z80_cp8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x01B7: z80_cp8(cpu,cpu->dlatch);_fetch(); break;
             
             // 0xFF: rst 38h (M:1 T:4)
             // -- OVERLAP
-            case 0x0198: _fetch(); break;
+            case 0x01B8: _fetch(); break;
 
         }
     }
@@ -2224,5 +2342,13 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
 #undef _mwrite
 #undef _ioread
 #undef _iowrite
+#undef _cc_nz
+#undef _cc_z
+#undef _cc_nc
+#undef _cc_c
+#undef _cc_po
+#undef _cc_pe
+#undef _cc_p
+#undef _cc_m
 
 #endif // CHIPS_IMPL

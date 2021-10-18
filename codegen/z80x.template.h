@@ -169,9 +169,9 @@ bool z80_opdone(z80_t* cpu) {
     return (0 == cpu->op.step) && (cpu->hlx_idx == 0);
 }
 
-static inline void z80_halt(z80_t* cpu) {
-    // FIXME
-    (void)cpu;
+static inline uint64_t z80_halt(z80_t* cpu, uint64_t pins) {
+    cpu->pc--;
+    return pins | Z80_HALT;
 }
 
 // sign+zero+parity lookup table
@@ -305,6 +305,68 @@ static inline void z80_exx(z80_t* cpu) {
     tmp = cpu->hl; cpu->hl = cpu->hl2; cpu->hl2 = tmp;
 }
 
+static inline void z80_rlca(z80_t* cpu) {
+    uint8_t res = (cpu->a << 1) | (cpu->a >> 7);
+    cpu->f = ((cpu->a >> 7) & Z80_CF) | (cpu->f & (Z80_SF|Z80_ZF|Z80_PF)) | (res & (Z80_YF|Z80_XF));
+    cpu->a = res;
+}
+
+static inline void z80_rrca(z80_t* cpu) {
+    uint8_t res = (cpu->a >> 1) | (cpu->a << 7);
+    cpu->f = (cpu->a & Z80_CF) | (cpu->f & (Z80_SF|Z80_ZF|Z80_PF)) | (res & (Z80_YF|Z80_XF));
+    cpu->a = res;
+}
+
+static inline void z80_rla(z80_t* cpu) {
+    uint8_t res = (cpu->a << 1) | (cpu->f & Z80_CF);
+    cpu->f = ((cpu->a >> 7) & Z80_CF) | (cpu->f & (Z80_SF|Z80_ZF|Z80_PF)) | (res & (Z80_YF|Z80_XF));
+    cpu->a = res;
+}
+
+static inline void z80_rra(z80_t* cpu) {
+    uint8_t res = (cpu->a >> 1) | ((cpu->f & Z80_CF) << 7);
+    cpu->f = (cpu->a & Z80_CF) | (cpu->f & (Z80_SF|Z80_ZF|Z80_PF)) | (res & (Z80_YF|Z80_XF));
+    cpu->a = res;
+}
+
+static inline void z80_daa(z80_t* cpu) {
+    uint8_t res = cpu->a;
+    if (cpu->f & Z80_NF) {
+        if (((cpu->a & 0xF)>0x9) || (cpu->f & Z80_HF)) {
+            res -= 0x06;
+        }
+        if ((cpu->a > 0x99) || (cpu->f & Z80_CF)) {
+            res -= 0x60;
+        }
+    }
+    else {
+        if (((cpu->a & 0xF)>0x9) || (cpu->f & Z80_HF)) {
+            res += 0x06;
+        }
+        if ((cpu->a > 0x99) || (cpu->f & Z80_CF)) {
+            res += 0x60;
+        }
+    }
+    cpu->f &= Z80_CF|Z80_NF;
+    cpu->f |= (cpu->a > 0x99) ? Z80_CF : 0;
+    cpu->f |= (cpu->a ^ res) & Z80_HF;
+    cpu->f |= z80_szp_flags[res];
+    cpu->a = res;
+}
+
+static inline void z80_cpl(z80_t* cpu) {
+    cpu->a ^= 0xFF;
+    cpu->f= (cpu->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) |Z80_HF|Z80_NF| (cpu->a & (Z80_YF|Z80_XF));
+}
+
+static inline void z80_scf(z80_t* cpu) {
+    cpu->f = (cpu->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | Z80_CF | (cpu->a & (Z80_YF|Z80_XF));
+}
+
+static inline void z80_ccf(z80_t* cpu) {
+    cpu->f = ((cpu->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | ((cpu->f & Z80_CF)<<4) | (cpu->a & (Z80_YF|Z80_XF))) ^ Z80_CF;
+}
+
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }
@@ -369,6 +431,14 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
 #define _iowrite(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
+#define _cc_nz          (!(cpu->f&Z80_ZF))
+#define _cc_z           (cpu->f&Z80_ZF)
+#define _cc_nc          (!(cpu->f&Z80_CF))
+#define _cc_c           (cpu->f&Z80_CF)
+#define _cc_po          (!(cpu->f&Z80_PF))
+#define _cc_pe          (cpu->f&Z80_PF)
+#define _cc_p           (!(cpu->f&Z80_SF))
+#define _cc_m           (cpu->f&Z80_SF)
 
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     // wait cycle? (wait pin sampling only happens in specific tcycles)
@@ -450,5 +520,13 @@ $decode_block
 #undef _mwrite
 #undef _ioread
 #undef _iowrite
+#undef _cc_nz
+#undef _cc_z
+#undef _cc_nc
+#undef _cc_c
+#undef _cc_po
+#undef _cc_pe
+#undef _cc_p
+#undef _cc_m
 
 #endif // CHIPS_IMPL

@@ -62,6 +62,7 @@ alu_map = [ 'z80_add8(cpu,',
             'z80_xor8(cpu,',
             'z80_or8(cpu,',
             'z80_cp8(cpu,' ]
+cc_map = [ '_cc_nz', '_cc_z', '_cc_nc', '_cc_c', '_cc_po', '_cc_pe', '_cc_p', '_cc_m' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -108,6 +109,8 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('RPL', rpl_map[p])\
         .replace('RPH', rph_map[p])\
         .replace('RP', rp_map[p])\
+        .replace('CC-4', cc_map[y-4])\
+        .replace('CC', cc_map[y])\
         .replace('PC', 'cpu->pc')\
         .replace('AF', 'cpu->af')\
         .replace('BC', 'cpu->bc')\

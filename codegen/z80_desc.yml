@@ -4,7 +4,7 @@
 halt:
   cond: (x == 1) and (y == 6) and (z == 6)
   mcycles:
-    - { type: overlapped, action: "z80_halt(cpu)" }
+    - { type: overlapped, action: "pins=z80_halt(cpu,pins)" }
 
 # NOTE: RRZ and RRY are special case for H and L which are never mapped
 # to IXH/IYH and IXL/IYL
@@ -179,43 +179,43 @@ ld (hl),n:
 # assorted operations on accumulator and flags
 rlca:
   cond: (x == 0) and (y == 0) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_rlca(cpu)" }
 
 rrca:
   cond: (x == 0) and (y == 1) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_rrca(cpu)" }
 
 rla:
   cond: (x == 0) and (y == 2) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_rla(cpu)" }
 
 rra:
   cond: (x == 0) and (y == 3) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_rra(cpu)" }
 
 daa:
   cond: (x == 0) and (y == 4) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_daa(cpu)" }
 
 cpl:
   cond: (x == 0) and (y == 5) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_cpl(cpu)" }
 
 scf:
   cond: (x == 0) and (y == 6) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_scf(cpu)" }
 
 ccf:
   cond: (x == 0) and (y == 7) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_ccf(cpu)" }
 
 #== QUADRANT X3 ================================================================
 
@@ -255,8 +255,9 @@ ld sp,hl:
 # conditional jump
 jp CC,nn:
   cond: (x == 3) and (z == 2)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: PC++, dst: WZL }
+    - { type: mread, ab: PC++, dst: WZH, action: "if(CC){PC=WZ;}"}
 
 # assorted operations
 jp nn:
