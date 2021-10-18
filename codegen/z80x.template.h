@@ -286,6 +286,25 @@ static inline uint8_t z80_dec8(z80_t* cpu, uint8_t val) {
     return res;
 }
 
+static inline void z80_ex_de_hl(z80_t* cpu) {
+    uint16_t tmp = cpu->hl;
+    cpu->hl = cpu->de;
+    cpu->de = tmp;
+}
+
+static inline void z80_ex_af_af2(z80_t* cpu) {
+    uint16_t tmp = cpu->af2;
+    cpu->af2 = cpu->af;
+    cpu->af = tmp;
+}
+
+static inline void z80_exx(z80_t* cpu) {
+    uint16_t tmp;
+    tmp = cpu->bc; cpu->bc = cpu->bc2; cpu->bc2 = tmp;
+    tmp = cpu->de; cpu->de = cpu->de2; cpu->de2 = tmp;
+    tmp = cpu->hl; cpu->hl = cpu->hl2; cpu->hl2 = tmp;
+}
+
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }

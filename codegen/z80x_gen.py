@@ -124,7 +124,7 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('E', 'cpu->e')\
         .replace('D', 'cpu->d')\
         .replace('L', 'cpu->hlx[cpu->hlx_idx].l')\
-        .replace('H', 'cpu->hlz[cpu->hlx_idx].h')
+        .replace('H', 'cpu->hlx[cpu->hlx_idx].h')
 
 def parse_opdescs():
     with open(DESC_PATH, 'r') as fp:

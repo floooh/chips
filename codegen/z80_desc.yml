@@ -47,8 +47,8 @@ nop:
 
 ex af,af':
   cond: (x == 0) and (y == 1) and (z == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_ex_af_af2(cpu)" }
 
 djnz d:
   cond: (x == 0) and (y == 2) and (z == 0)
@@ -239,8 +239,8 @@ ret:
 
 exx:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_exx(cpu)" }
 
 jp hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 2)
@@ -281,13 +281,16 @@ in a,(n):
 
 ex (sp),hl:
   cond: (x == 3) and (y == 4) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: SP, dst: WZL }
+    - { type: mread, tcycles: 4, ab: SP+1, dst: WZH }
+    - { type: mwrite, ab: SP+1, db: H }
+    - { type: mwrite, tcycles: 5, ab: SP, db: L, action: HL=WZ }
 
 ex de,hl:
   cond: (x == 3) and (y == 5) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_ex_de_hl(cpu)" }
 
 di:
   cond: (x == 3) and (y == 6) and (z == 3)
