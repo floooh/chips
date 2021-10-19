@@ -372,8 +372,11 @@ ALU n:
 
 rst Y*8:
   cond: (x == 3) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    # one extra tcycle
+    - { type: fetch, tcycles: 5 }
+    - { type: mwrite, ab: --SP, db: PCH }
+    - { type: mwrite, ab: --SP, db: PCL, action: "WZ=Y*8;PC=WZ"}
 
 #== ED prefix block ============================================================
 in RY,(c):
