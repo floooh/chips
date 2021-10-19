@@ -92,7 +92,7 @@ typedef struct {
 // CPU state
 typedef struct {
     z80_opstate_t op;   // the currently active op
-    uint16_t pc;        // program counter
+    union { struct { uint8_t pcl; uint8_t pch; }; uint16_t pc; };
     uint16_t addr;      // effective address for (HL),(IX+d),(IY+d)
     uint8_t ir;         // instruction register
     uint8_t dlatch;     // temporary store for data bus value

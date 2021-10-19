@@ -241,8 +241,10 @@ pop RP2:
 
 ret:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: SP++, dst: WZL }
+    - { type: mread, ab: SP++, dst: WZH }
+    - { type: overlapped, action: "PC=WZ" }
 
 exx:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 1)
@@ -328,8 +330,12 @@ push RP2:
 
 call nn:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: PC++, dst: WZL }
+    - { type: mread, tcycles: 4, ab: PC++, dst: WZH }
+    - { type: mwrite, ab: --SP, db: PCH }
+    - { type: mwrite, ab: --SP, db: PCL }
+    - { type: overlapped, action: "PC=WZ" }
 
 dd prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 1)

@@ -111,6 +111,8 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('RP', rp_map[p])\
         .replace('CC-4', cc_map[y-4])\
         .replace('CC', cc_map[y])\
+        .replace('PCL', 'cpu->pcl')\
+        .replace('PCH', 'cpu->pch')\
         .replace('PC', 'cpu->pc')\
         .replace('AF', 'cpu->af')\
         .replace('BC', 'cpu->bc')\
