@@ -55,7 +55,7 @@ djnz d:
   mcycles:
     # fetch has one extra tcycle
     - { type: fetch, tcycles: 5 }
-    - { type: mread, ab: PC++, dst: DLATCH, action: "if(--B==0){z80_skip(cpu,1,5);}"}
+    - { type: mread, ab: PC++, dst: DLATCH, action: "if(--B==0){z80_skip(cpu,1,7,2);}"}
     - { type: generic, tcycles: 5, action: "PC+=(int8_t)DLATCH;WZ=PC;" }
 
 jr d:
@@ -67,7 +67,7 @@ jr d:
 jr CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
   mcycles:
-    - { type: mread, ab: PC++, dst: DLATCH, action: "if(!(CC-4)){z80_skip(cpu,1,5);}" }
+    - { type: mread, ab: PC++, dst: DLATCH, action: "if(!(CC-4)){z80_skip(cpu,1,7,2);}" }
     - { type: generic, tcycles: 5, action: "PC+=(int8_t)DLATCH;WZ=PC;" }
 
   # FIXME
@@ -229,8 +229,10 @@ ccf:
 # conditional return
 ret CC:
   cond: (x == 3) and (z == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: generic, tcycles: 1, action: "if(!CC){z80_skip(cpu,4,7,1);}"}
+    - { type: mread, ab: SP++, dst: WZL }
+    - { type: mread, ab: SP++, dst: WZH, action: "PC=WZ" }
 
 # POP and various ops
 pop RP2:
@@ -243,8 +245,7 @@ ret:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 0)
   mcycles:
     - { type: mread, ab: SP++, dst: WZL }
-    - { type: mread, ab: SP++, dst: WZH }
-    - { type: overlapped, action: "PC=WZ" }
+    - { type: mread, ab: SP++, dst: WZH, action: "PC=WZ" }
 
 exx:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 1)
@@ -316,8 +317,12 @@ ei:
 # conditional CALL
 call CC,nn:
   cond: (x == 3) and (z == 4)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: PC++, dst: WZL }
+    - { type: mread, ab: PC++, dst: WZH, action: "if (!CC){z80_skip(cpu,5,9,2);}" }
+    - { type: generic, tcycles: 1 }
+    - { type: mwrite, ab: --SP, db: PCH }
+    - { type: mwrite, ab: --SP, db: PCL, action: "PC=WZ" }
 
 # PUSH and various ops
 push RP2:
@@ -334,8 +339,7 @@ call nn:
     - { type: mread, ab: PC++, dst: WZL }
     - { type: mread, tcycles: 4, ab: PC++, dst: WZH }
     - { type: mwrite, ab: --SP, db: PCH }
-    - { type: mwrite, ab: --SP, db: PCL }
-    - { type: overlapped, action: "PC=WZ" }
+    - { type: mwrite, ab: --SP, db: PCL, action: "PC=WZ" }
 
 dd prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 1)
