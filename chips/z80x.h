@@ -511,450 +511,450 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     { 0x00000216, 0x0046, 0 },
     //  21: ld hl,nn (M:3 T:10 steps:5)
     { 0x000000B6, 0x004A, 0 },
-    //  22: ld (nn),hl (M:1 T:4 steps:1)
-    { 0x00000002, 0x004F, 0 },
+    //  22: ld (nn),hl (M:5 T:16 steps:9)
+    { 0x00003B36, 0x004F, 0 },
     //  23: inc hl (M:2 T:6 steps:2)
-    { 0x0000000A, 0x0050, 0 },
+    { 0x0000000A, 0x0058, 0 },
     //  24: inc h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0052, 0 },
+    { 0x00000002, 0x005A, 0 },
     //  25: dec h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0053, 0 },
+    { 0x00000002, 0x005B, 0 },
     //  26: ld h,n (M:2 T:7 steps:3)
-    { 0x00000016, 0x0054, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x005C, Z80_OPSTATE_FLAGS_IMM8 },
     //  27: daa (M:1 T:4 steps:1)
-    { 0x00000002, 0x0057, 0 },
+    { 0x00000002, 0x005F, 0 },
     //  28: jr z,d (M:3 T:12 steps:4)
-    { 0x00000216, 0x0058, 0 },
+    { 0x00000216, 0x0060, 0 },
     //  29: add hl,hl (M:1 T:4 steps:1)
-    { 0x00000002, 0x005C, 0 },
+    { 0x00000002, 0x0064, 0 },
     //  2A: ld hl,(nn) (M:5 T:16 steps:9)
-    { 0x00002DB6, 0x005D, 0 },
+    { 0x00002DB6, 0x0065, 0 },
     //  2B: dec hl (M:2 T:6 steps:2)
-    { 0x0000000A, 0x0066, 0 },
+    { 0x0000000A, 0x006E, 0 },
     //  2C: inc l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0068, 0 },
+    { 0x00000002, 0x0070, 0 },
     //  2D: dec l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0069, 0 },
+    { 0x00000002, 0x0071, 0 },
     //  2E: ld l,n (M:2 T:7 steps:3)
-    { 0x00000016, 0x006A, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x0072, Z80_OPSTATE_FLAGS_IMM8 },
     //  2F: cpl (M:1 T:4 steps:1)
-    { 0x00000002, 0x006D, 0 },
+    { 0x00000002, 0x0075, 0 },
     //  30: jr nc,d (M:3 T:12 steps:4)
-    { 0x00000216, 0x006E, 0 },
+    { 0x00000216, 0x0076, 0 },
     //  31: ld sp,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x0072, 0 },
+    { 0x000000B6, 0x007A, 0 },
     //  32: ld (nn),a (M:4 T:13 steps:7)
-    { 0x00000736, 0x0077, 0 },
+    { 0x00000736, 0x007F, 0 },
     //  33: inc sp (M:2 T:6 steps:2)
-    { 0x0000000A, 0x007E, 0 },
+    { 0x0000000A, 0x0086, 0 },
     //  34: inc (hl) (M:3 T:11 steps:5)
-    { 0x000001C6, 0x0080, Z80_OPSTATE_FLAGS_INDIRECT },
+    { 0x000001C6, 0x0088, Z80_OPSTATE_FLAGS_INDIRECT },
     //  35: dec (hl) (M:3 T:11 steps:5)
-    { 0x000001C6, 0x0085, Z80_OPSTATE_FLAGS_INDIRECT },
+    { 0x000001C6, 0x008D, Z80_OPSTATE_FLAGS_INDIRECT },
     //  36: ld (hl),n (M:3 T:10 steps:5)
-    { 0x000000E6, 0x008A, Z80_OPSTATE_FLAGS_INDIRECT|Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x000000E6, 0x0092, Z80_OPSTATE_FLAGS_INDIRECT|Z80_OPSTATE_FLAGS_IMM8 },
     //  37: scf (M:1 T:4 steps:1)
-    { 0x00000002, 0x008F, 0 },
+    { 0x00000002, 0x0097, 0 },
     //  38: jr c,d (M:3 T:12 steps:4)
-    { 0x00000216, 0x0090, 0 },
+    { 0x00000216, 0x0098, 0 },
     //  39: add hl,sp (M:1 T:4 steps:1)
-    { 0x00000002, 0x0094, 0 },
+    { 0x00000002, 0x009C, 0 },
     //  3A: ld a,(nn) (M:4 T:13 steps:7)
-    { 0x000005B6, 0x0095, 0 },
+    { 0x000005B6, 0x009D, 0 },
     //  3B: dec sp (M:2 T:6 steps:2)
-    { 0x0000000A, 0x009C, 0 },
+    { 0x0000000A, 0x00A4, 0 },
     //  3C: inc a (M:1 T:4 steps:1)
-    { 0x00000002, 0x009E, 0 },
-    //  3D: dec a (M:1 T:4 steps:1)
-    { 0x00000002, 0x009F, 0 },
-    //  3E: ld a,n (M:2 T:7 steps:3)
-    { 0x00000016, 0x00A0, Z80_OPSTATE_FLAGS_IMM8 },
-    //  3F: ccf (M:1 T:4 steps:1)
-    { 0x00000002, 0x00A3, 0 },
-    //  40: ld b,b (M:1 T:4 steps:1)
-    { 0x00000002, 0x00A4, 0 },
-    //  41: ld b,c (M:1 T:4 steps:1)
-    { 0x00000002, 0x00A5, 0 },
-    //  42: ld b,d (M:1 T:4 steps:1)
     { 0x00000002, 0x00A6, 0 },
-    //  43: ld b,e (M:1 T:4 steps:1)
+    //  3D: dec a (M:1 T:4 steps:1)
     { 0x00000002, 0x00A7, 0 },
-    //  44: ld b,h (M:1 T:4 steps:1)
-    { 0x00000002, 0x00A8, 0 },
-    //  45: ld b,l (M:1 T:4 steps:1)
-    { 0x00000002, 0x00A9, 0 },
-    //  46: ld b,(hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x00AA, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  47: ld b,a (M:1 T:4 steps:1)
+    //  3E: ld a,n (M:2 T:7 steps:3)
+    { 0x00000016, 0x00A8, Z80_OPSTATE_FLAGS_IMM8 },
+    //  3F: ccf (M:1 T:4 steps:1)
+    { 0x00000002, 0x00AB, 0 },
+    //  40: ld b,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x00AC, 0 },
+    //  41: ld b,c (M:1 T:4 steps:1)
     { 0x00000002, 0x00AD, 0 },
-    //  48: ld c,b (M:1 T:4 steps:1)
+    //  42: ld b,d (M:1 T:4 steps:1)
     { 0x00000002, 0x00AE, 0 },
-    //  49: ld c,c (M:1 T:4 steps:1)
+    //  43: ld b,e (M:1 T:4 steps:1)
     { 0x00000002, 0x00AF, 0 },
-    //  4A: ld c,d (M:1 T:4 steps:1)
+    //  44: ld b,h (M:1 T:4 steps:1)
     { 0x00000002, 0x00B0, 0 },
-    //  4B: ld c,e (M:1 T:4 steps:1)
+    //  45: ld b,l (M:1 T:4 steps:1)
     { 0x00000002, 0x00B1, 0 },
-    //  4C: ld c,h (M:1 T:4 steps:1)
-    { 0x00000002, 0x00B2, 0 },
-    //  4D: ld c,l (M:1 T:4 steps:1)
-    { 0x00000002, 0x00B3, 0 },
-    //  4E: ld c,(hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x00B4, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  4F: ld c,a (M:1 T:4 steps:1)
+    //  46: ld b,(hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x00B2, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  47: ld b,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x00B5, 0 },
+    //  48: ld c,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x00B6, 0 },
+    //  49: ld c,c (M:1 T:4 steps:1)
     { 0x00000002, 0x00B7, 0 },
-    //  50: ld d,b (M:1 T:4 steps:1)
+    //  4A: ld c,d (M:1 T:4 steps:1)
     { 0x00000002, 0x00B8, 0 },
-    //  51: ld d,c (M:1 T:4 steps:1)
+    //  4B: ld c,e (M:1 T:4 steps:1)
     { 0x00000002, 0x00B9, 0 },
-    //  52: ld d,d (M:1 T:4 steps:1)
+    //  4C: ld c,h (M:1 T:4 steps:1)
     { 0x00000002, 0x00BA, 0 },
-    //  53: ld d,e (M:1 T:4 steps:1)
+    //  4D: ld c,l (M:1 T:4 steps:1)
     { 0x00000002, 0x00BB, 0 },
-    //  54: ld d,h (M:1 T:4 steps:1)
-    { 0x00000002, 0x00BC, 0 },
-    //  55: ld d,l (M:1 T:4 steps:1)
-    { 0x00000002, 0x00BD, 0 },
-    //  56: ld d,(hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x00BE, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  57: ld d,a (M:1 T:4 steps:1)
+    //  4E: ld c,(hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x00BC, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  4F: ld c,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x00BF, 0 },
+    //  50: ld d,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x00C0, 0 },
+    //  51: ld d,c (M:1 T:4 steps:1)
     { 0x00000002, 0x00C1, 0 },
-    //  58: ld e,b (M:1 T:4 steps:1)
+    //  52: ld d,d (M:1 T:4 steps:1)
     { 0x00000002, 0x00C2, 0 },
-    //  59: ld e,c (M:1 T:4 steps:1)
+    //  53: ld d,e (M:1 T:4 steps:1)
     { 0x00000002, 0x00C3, 0 },
-    //  5A: ld e,d (M:1 T:4 steps:1)
+    //  54: ld d,h (M:1 T:4 steps:1)
     { 0x00000002, 0x00C4, 0 },
-    //  5B: ld e,e (M:1 T:4 steps:1)
+    //  55: ld d,l (M:1 T:4 steps:1)
     { 0x00000002, 0x00C5, 0 },
-    //  5C: ld e,h (M:1 T:4 steps:1)
-    { 0x00000002, 0x00C6, 0 },
-    //  5D: ld e,l (M:1 T:4 steps:1)
-    { 0x00000002, 0x00C7, 0 },
-    //  5E: ld e,(hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x00C8, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  5F: ld e,a (M:1 T:4 steps:1)
+    //  56: ld d,(hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x00C6, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  57: ld d,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x00C9, 0 },
+    //  58: ld e,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x00CA, 0 },
+    //  59: ld e,c (M:1 T:4 steps:1)
     { 0x00000002, 0x00CB, 0 },
-    //  60: ld h,b (M:1 T:4 steps:1)
+    //  5A: ld e,d (M:1 T:4 steps:1)
     { 0x00000002, 0x00CC, 0 },
-    //  61: ld h,c (M:1 T:4 steps:1)
+    //  5B: ld e,e (M:1 T:4 steps:1)
     { 0x00000002, 0x00CD, 0 },
-    //  62: ld h,d (M:1 T:4 steps:1)
+    //  5C: ld e,h (M:1 T:4 steps:1)
     { 0x00000002, 0x00CE, 0 },
-    //  63: ld h,e (M:1 T:4 steps:1)
+    //  5D: ld e,l (M:1 T:4 steps:1)
     { 0x00000002, 0x00CF, 0 },
-    //  64: ld h,h (M:1 T:4 steps:1)
-    { 0x00000002, 0x00D0, 0 },
-    //  65: ld h,l (M:1 T:4 steps:1)
-    { 0x00000002, 0x00D1, 0 },
-    //  66: ld h,(hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x00D2, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  67: ld h,a (M:1 T:4 steps:1)
+    //  5E: ld e,(hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x00D0, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  5F: ld e,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x00D3, 0 },
+    //  60: ld h,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x00D4, 0 },
+    //  61: ld h,c (M:1 T:4 steps:1)
     { 0x00000002, 0x00D5, 0 },
-    //  68: ld l,b (M:1 T:4 steps:1)
+    //  62: ld h,d (M:1 T:4 steps:1)
     { 0x00000002, 0x00D6, 0 },
-    //  69: ld l,c (M:1 T:4 steps:1)
+    //  63: ld h,e (M:1 T:4 steps:1)
     { 0x00000002, 0x00D7, 0 },
-    //  6A: ld l,d (M:1 T:4 steps:1)
+    //  64: ld h,h (M:1 T:4 steps:1)
     { 0x00000002, 0x00D8, 0 },
-    //  6B: ld l,e (M:1 T:4 steps:1)
+    //  65: ld h,l (M:1 T:4 steps:1)
     { 0x00000002, 0x00D9, 0 },
-    //  6C: ld l,h (M:1 T:4 steps:1)
-    { 0x00000002, 0x00DA, 0 },
-    //  6D: ld l,l (M:1 T:4 steps:1)
-    { 0x00000002, 0x00DB, 0 },
-    //  6E: ld l,(hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x00DC, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  6F: ld l,a (M:1 T:4 steps:1)
+    //  66: ld h,(hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x00DA, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  67: ld h,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x00DD, 0 },
+    //  68: ld l,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x00DE, 0 },
+    //  69: ld l,c (M:1 T:4 steps:1)
     { 0x00000002, 0x00DF, 0 },
+    //  6A: ld l,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x00E0, 0 },
+    //  6B: ld l,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x00E1, 0 },
+    //  6C: ld l,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x00E2, 0 },
+    //  6D: ld l,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x00E3, 0 },
+    //  6E: ld l,(hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x00E4, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  6F: ld l,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x00E7, 0 },
     //  70: ld (hl),b (M:2 T:7 steps:3)
-    { 0x0000001C, 0x00E0, Z80_OPSTATE_FLAGS_INDIRECT },
+    { 0x0000001C, 0x00E8, Z80_OPSTATE_FLAGS_INDIRECT },
     //  71: ld (hl),c (M:2 T:7 steps:3)
-    { 0x0000001C, 0x00E3, Z80_OPSTATE_FLAGS_INDIRECT },
+    { 0x0000001C, 0x00EB, Z80_OPSTATE_FLAGS_INDIRECT },
     //  72: ld (hl),d (M:2 T:7 steps:3)
-    { 0x0000001C, 0x00E6, Z80_OPSTATE_FLAGS_INDIRECT },
+    { 0x0000001C, 0x00EE, Z80_OPSTATE_FLAGS_INDIRECT },
     //  73: ld (hl),e (M:2 T:7 steps:3)
-    { 0x0000001C, 0x00E9, Z80_OPSTATE_FLAGS_INDIRECT },
+    { 0x0000001C, 0x00F1, Z80_OPSTATE_FLAGS_INDIRECT },
     //  74: ld (hl),h (M:2 T:7 steps:3)
-    { 0x0000001C, 0x00EC, Z80_OPSTATE_FLAGS_INDIRECT },
+    { 0x0000001C, 0x00F4, Z80_OPSTATE_FLAGS_INDIRECT },
     //  75: ld (hl),l (M:2 T:7 steps:3)
-    { 0x0000001C, 0x00EF, Z80_OPSTATE_FLAGS_INDIRECT },
+    { 0x0000001C, 0x00F7, Z80_OPSTATE_FLAGS_INDIRECT },
     //  76: halt (M:1 T:4 steps:1)
-    { 0x00000002, 0x00F2, 0 },
-    //  77: ld (hl),a (M:2 T:7 steps:3)
-    { 0x0000001C, 0x00F3, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  78: ld a,b (M:1 T:4 steps:1)
-    { 0x00000002, 0x00F6, 0 },
-    //  79: ld a,c (M:1 T:4 steps:1)
-    { 0x00000002, 0x00F7, 0 },
-    //  7A: ld a,d (M:1 T:4 steps:1)
-    { 0x00000002, 0x00F8, 0 },
-    //  7B: ld a,e (M:1 T:4 steps:1)
-    { 0x00000002, 0x00F9, 0 },
-    //  7C: ld a,h (M:1 T:4 steps:1)
     { 0x00000002, 0x00FA, 0 },
-    //  7D: ld a,l (M:1 T:4 steps:1)
-    { 0x00000002, 0x00FB, 0 },
-    //  7E: ld a,(hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x00FC, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  7F: ld a,a (M:1 T:4 steps:1)
+    //  77: ld (hl),a (M:2 T:7 steps:3)
+    { 0x0000001C, 0x00FB, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  78: ld a,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x00FE, 0 },
+    //  79: ld a,c (M:1 T:4 steps:1)
     { 0x00000002, 0x00FF, 0 },
-    //  80: add b (M:1 T:4 steps:1)
+    //  7A: ld a,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0100, 0 },
-    //  81: add c (M:1 T:4 steps:1)
+    //  7B: ld a,e (M:1 T:4 steps:1)
     { 0x00000002, 0x0101, 0 },
-    //  82: add d (M:1 T:4 steps:1)
+    //  7C: ld a,h (M:1 T:4 steps:1)
     { 0x00000002, 0x0102, 0 },
-    //  83: add e (M:1 T:4 steps:1)
+    //  7D: ld a,l (M:1 T:4 steps:1)
     { 0x00000002, 0x0103, 0 },
-    //  84: add h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0104, 0 },
-    //  85: add l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0105, 0 },
-    //  86: add (hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x0106, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  87: add a (M:1 T:4 steps:1)
+    //  7E: ld a,(hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x0104, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  7F: ld a,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0107, 0 },
+    //  80: add b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0108, 0 },
+    //  81: add c (M:1 T:4 steps:1)
     { 0x00000002, 0x0109, 0 },
-    //  88: adc b (M:1 T:4 steps:1)
+    //  82: add d (M:1 T:4 steps:1)
     { 0x00000002, 0x010A, 0 },
-    //  89: adc c (M:1 T:4 steps:1)
+    //  83: add e (M:1 T:4 steps:1)
     { 0x00000002, 0x010B, 0 },
-    //  8A: adc d (M:1 T:4 steps:1)
+    //  84: add h (M:1 T:4 steps:1)
     { 0x00000002, 0x010C, 0 },
-    //  8B: adc e (M:1 T:4 steps:1)
+    //  85: add l (M:1 T:4 steps:1)
     { 0x00000002, 0x010D, 0 },
-    //  8C: adc h (M:1 T:4 steps:1)
-    { 0x00000002, 0x010E, 0 },
-    //  8D: adc l (M:1 T:4 steps:1)
-    { 0x00000002, 0x010F, 0 },
-    //  8E: adc (hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x0110, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  8F: adc a (M:1 T:4 steps:1)
+    //  86: add (hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x010E, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  87: add a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0111, 0 },
+    //  88: adc b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0112, 0 },
+    //  89: adc c (M:1 T:4 steps:1)
     { 0x00000002, 0x0113, 0 },
-    //  90: sub b (M:1 T:4 steps:1)
+    //  8A: adc d (M:1 T:4 steps:1)
     { 0x00000002, 0x0114, 0 },
-    //  91: sub c (M:1 T:4 steps:1)
+    //  8B: adc e (M:1 T:4 steps:1)
     { 0x00000002, 0x0115, 0 },
-    //  92: sub d (M:1 T:4 steps:1)
+    //  8C: adc h (M:1 T:4 steps:1)
     { 0x00000002, 0x0116, 0 },
-    //  93: sub e (M:1 T:4 steps:1)
+    //  8D: adc l (M:1 T:4 steps:1)
     { 0x00000002, 0x0117, 0 },
-    //  94: sub h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0118, 0 },
-    //  95: sub l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0119, 0 },
-    //  96: sub (hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x011A, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  97: sub a (M:1 T:4 steps:1)
+    //  8E: adc (hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x0118, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  8F: adc a (M:1 T:4 steps:1)
+    { 0x00000002, 0x011B, 0 },
+    //  90: sub b (M:1 T:4 steps:1)
+    { 0x00000002, 0x011C, 0 },
+    //  91: sub c (M:1 T:4 steps:1)
     { 0x00000002, 0x011D, 0 },
-    //  98: sbc b (M:1 T:4 steps:1)
+    //  92: sub d (M:1 T:4 steps:1)
     { 0x00000002, 0x011E, 0 },
-    //  99: sbc c (M:1 T:4 steps:1)
+    //  93: sub e (M:1 T:4 steps:1)
     { 0x00000002, 0x011F, 0 },
-    //  9A: sbc d (M:1 T:4 steps:1)
+    //  94: sub h (M:1 T:4 steps:1)
     { 0x00000002, 0x0120, 0 },
-    //  9B: sbc e (M:1 T:4 steps:1)
+    //  95: sub l (M:1 T:4 steps:1)
     { 0x00000002, 0x0121, 0 },
-    //  9C: sbc h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0122, 0 },
-    //  9D: sbc l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0123, 0 },
-    //  9E: sbc (hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x0124, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  9F: sbc a (M:1 T:4 steps:1)
+    //  96: sub (hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x0122, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  97: sub a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0125, 0 },
+    //  98: sbc b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0126, 0 },
+    //  99: sbc c (M:1 T:4 steps:1)
     { 0x00000002, 0x0127, 0 },
-    //  A0: and b (M:1 T:4 steps:1)
+    //  9A: sbc d (M:1 T:4 steps:1)
     { 0x00000002, 0x0128, 0 },
-    //  A1: and c (M:1 T:4 steps:1)
+    //  9B: sbc e (M:1 T:4 steps:1)
     { 0x00000002, 0x0129, 0 },
-    //  A2: and d (M:1 T:4 steps:1)
+    //  9C: sbc h (M:1 T:4 steps:1)
     { 0x00000002, 0x012A, 0 },
-    //  A3: and e (M:1 T:4 steps:1)
+    //  9D: sbc l (M:1 T:4 steps:1)
     { 0x00000002, 0x012B, 0 },
-    //  A4: and h (M:1 T:4 steps:1)
-    { 0x00000002, 0x012C, 0 },
-    //  A5: and l (M:1 T:4 steps:1)
-    { 0x00000002, 0x012D, 0 },
-    //  A6: and (hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x012E, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  A7: and a (M:1 T:4 steps:1)
+    //  9E: sbc (hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x012C, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  9F: sbc a (M:1 T:4 steps:1)
+    { 0x00000002, 0x012F, 0 },
+    //  A0: and b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0130, 0 },
+    //  A1: and c (M:1 T:4 steps:1)
     { 0x00000002, 0x0131, 0 },
-    //  A8: xor b (M:1 T:4 steps:1)
+    //  A2: and d (M:1 T:4 steps:1)
     { 0x00000002, 0x0132, 0 },
-    //  A9: xor c (M:1 T:4 steps:1)
+    //  A3: and e (M:1 T:4 steps:1)
     { 0x00000002, 0x0133, 0 },
-    //  AA: xor d (M:1 T:4 steps:1)
+    //  A4: and h (M:1 T:4 steps:1)
     { 0x00000002, 0x0134, 0 },
-    //  AB: xor e (M:1 T:4 steps:1)
+    //  A5: and l (M:1 T:4 steps:1)
     { 0x00000002, 0x0135, 0 },
-    //  AC: xor h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0136, 0 },
-    //  AD: xor l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0137, 0 },
-    //  AE: xor (hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x0138, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  AF: xor a (M:1 T:4 steps:1)
+    //  A6: and (hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x0136, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  A7: and a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0139, 0 },
+    //  A8: xor b (M:1 T:4 steps:1)
+    { 0x00000002, 0x013A, 0 },
+    //  A9: xor c (M:1 T:4 steps:1)
     { 0x00000002, 0x013B, 0 },
-    //  B0: or b (M:1 T:4 steps:1)
+    //  AA: xor d (M:1 T:4 steps:1)
     { 0x00000002, 0x013C, 0 },
-    //  B1: or c (M:1 T:4 steps:1)
+    //  AB: xor e (M:1 T:4 steps:1)
     { 0x00000002, 0x013D, 0 },
-    //  B2: or d (M:1 T:4 steps:1)
+    //  AC: xor h (M:1 T:4 steps:1)
     { 0x00000002, 0x013E, 0 },
-    //  B3: or e (M:1 T:4 steps:1)
+    //  AD: xor l (M:1 T:4 steps:1)
     { 0x00000002, 0x013F, 0 },
-    //  B4: or h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0140, 0 },
-    //  B5: or l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0141, 0 },
-    //  B6: or (hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x0142, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  B7: or a (M:1 T:4 steps:1)
+    //  AE: xor (hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x0140, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  AF: xor a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0143, 0 },
+    //  B0: or b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0144, 0 },
+    //  B1: or c (M:1 T:4 steps:1)
     { 0x00000002, 0x0145, 0 },
-    //  B8: cp b (M:1 T:4 steps:1)
+    //  B2: or d (M:1 T:4 steps:1)
     { 0x00000002, 0x0146, 0 },
-    //  B9: cp c (M:1 T:4 steps:1)
+    //  B3: or e (M:1 T:4 steps:1)
     { 0x00000002, 0x0147, 0 },
-    //  BA: cp d (M:1 T:4 steps:1)
+    //  B4: or h (M:1 T:4 steps:1)
     { 0x00000002, 0x0148, 0 },
-    //  BB: cp e (M:1 T:4 steps:1)
+    //  B5: or l (M:1 T:4 steps:1)
     { 0x00000002, 0x0149, 0 },
-    //  BC: cp h (M:1 T:4 steps:1)
-    { 0x00000002, 0x014A, 0 },
-    //  BD: cp l (M:1 T:4 steps:1)
-    { 0x00000002, 0x014B, 0 },
-    //  BE: cp (hl) (M:2 T:7 steps:3)
-    { 0x00000016, 0x014C, Z80_OPSTATE_FLAGS_INDIRECT },
-    //  BF: cp a (M:1 T:4 steps:1)
+    //  B6: or (hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x014A, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  B7: or a (M:1 T:4 steps:1)
+    { 0x00000002, 0x014D, 0 },
+    //  B8: cp b (M:1 T:4 steps:1)
+    { 0x00000002, 0x014E, 0 },
+    //  B9: cp c (M:1 T:4 steps:1)
     { 0x00000002, 0x014F, 0 },
+    //  BA: cp d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0150, 0 },
+    //  BB: cp e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0151, 0 },
+    //  BC: cp h (M:1 T:4 steps:1)
+    { 0x00000002, 0x0152, 0 },
+    //  BD: cp l (M:1 T:4 steps:1)
+    { 0x00000002, 0x0153, 0 },
+    //  BE: cp (hl) (M:2 T:7 steps:3)
+    { 0x00000016, 0x0154, Z80_OPSTATE_FLAGS_INDIRECT },
+    //  BF: cp a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0157, 0 },
     //  C0: ret nz (M:4 T:11 steps:6)
-    { 0x0000016E, 0x0150, 0 },
+    { 0x0000016E, 0x0158, 0 },
     //  C1: pop bc (M:3 T:10 steps:5)
-    { 0x000000B6, 0x0156, 0 },
+    { 0x000000B6, 0x015E, 0 },
     //  C2: jp nz,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x015B, 0 },
+    { 0x000000B6, 0x0163, 0 },
     //  C3: jp nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x0160, 0 },
+    { 0x000000B6, 0x0168, 0 },
     //  C4: call nz,nn (M:6 T:17 steps:10)
-    { 0x000076B6, 0x0165, 0 },
+    { 0x000076B6, 0x016D, 0 },
     //  C5: push bc (M:3 T:11 steps:5)
-    { 0x000001D8, 0x016F, 0 },
+    { 0x000001D8, 0x0177, 0 },
     //  C6: add n (M:2 T:7 steps:3)
-    { 0x00000016, 0x0174, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x017C, Z80_OPSTATE_FLAGS_IMM8 },
     //  C7: rst 0h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0177, 0 },
+    { 0x00000002, 0x017F, 0 },
     //  C8: ret z (M:4 T:11 steps:6)
-    { 0x0000016E, 0x0178, 0 },
+    { 0x0000016E, 0x0180, 0 },
     //  C9: ret (M:3 T:10 steps:5)
-    { 0x000000B6, 0x017E, 0 },
+    { 0x000000B6, 0x0186, 0 },
     //  CA: jp z,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x0183, 0 },
+    { 0x000000B6, 0x018B, 0 },
     //  CB: cb prefix (M:1 T:4 steps:1)
-    { 0x00000002, 0x0188, 0 },
+    { 0x00000002, 0x0190, 0 },
     //  CC: call z,nn (M:6 T:17 steps:10)
-    { 0x000076B6, 0x0189, 0 },
+    { 0x000076B6, 0x0191, 0 },
     //  CD: call nn (M:5 T:17 steps:9)
-    { 0x00007636, 0x0193, 0 },
+    { 0x00007636, 0x019B, 0 },
     //  CE: adc n (M:2 T:7 steps:3)
-    { 0x00000016, 0x019C, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x01A4, Z80_OPSTATE_FLAGS_IMM8 },
     //  CF: rst 8h (M:1 T:4 steps:1)
-    { 0x00000002, 0x019F, 0 },
+    { 0x00000002, 0x01A7, 0 },
     //  D0: ret nc (M:4 T:11 steps:6)
-    { 0x0000016E, 0x01A0, 0 },
+    { 0x0000016E, 0x01A8, 0 },
     //  D1: pop de (M:3 T:10 steps:5)
-    { 0x000000B6, 0x01A6, 0 },
+    { 0x000000B6, 0x01AE, 0 },
     //  D2: jp nc,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x01AB, 0 },
+    { 0x000000B6, 0x01B3, 0 },
     //  D3: out (n),a (M:1 T:4 steps:1)
-    { 0x00000002, 0x01B0, 0 },
+    { 0x00000002, 0x01B8, 0 },
     //  D4: call nc,nn (M:6 T:17 steps:10)
-    { 0x000076B6, 0x01B1, 0 },
+    { 0x000076B6, 0x01B9, 0 },
     //  D5: push de (M:3 T:11 steps:5)
-    { 0x000001D8, 0x01BB, 0 },
+    { 0x000001D8, 0x01C3, 0 },
     //  D6: sub n (M:2 T:7 steps:3)
-    { 0x00000016, 0x01C0, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x01C8, Z80_OPSTATE_FLAGS_IMM8 },
     //  D7: rst 10h (M:1 T:4 steps:1)
-    { 0x00000002, 0x01C3, 0 },
+    { 0x00000002, 0x01CB, 0 },
     //  D8: ret c (M:4 T:11 steps:6)
-    { 0x0000016E, 0x01C4, 0 },
+    { 0x0000016E, 0x01CC, 0 },
     //  D9: exx (M:1 T:4 steps:1)
-    { 0x00000002, 0x01CA, 0 },
+    { 0x00000002, 0x01D2, 0 },
     //  DA: jp c,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x01CB, 0 },
+    { 0x000000B6, 0x01D3, 0 },
     //  DB: in a,(n) (M:1 T:4 steps:1)
-    { 0x00000002, 0x01D0, 0 },
+    { 0x00000002, 0x01D8, 0 },
     //  DC: call c,nn (M:6 T:17 steps:10)
-    { 0x000076B6, 0x01D1, 0 },
+    { 0x000076B6, 0x01D9, 0 },
     //  DD: dd prefix (M:1 T:4 steps:1)
-    { 0x00000002, 0x01DB, 0 },
+    { 0x00000002, 0x01E3, 0 },
     //  DE: sbc n (M:2 T:7 steps:3)
-    { 0x00000016, 0x01DC, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x01E4, Z80_OPSTATE_FLAGS_IMM8 },
     //  DF: rst 18h (M:1 T:4 steps:1)
-    { 0x00000002, 0x01DF, 0 },
+    { 0x00000002, 0x01E7, 0 },
     //  E0: ret po (M:4 T:11 steps:6)
-    { 0x0000016E, 0x01E0, 0 },
+    { 0x0000016E, 0x01E8, 0 },
     //  E1: pop hl (M:3 T:10 steps:5)
-    { 0x000000B6, 0x01E6, 0 },
+    { 0x000000B6, 0x01EE, 0 },
     //  E2: jp po,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x01EB, 0 },
+    { 0x000000B6, 0x01F3, 0 },
     //  E3: ex (sp),hl (M:5 T:19 steps:9)
-    { 0x00013636, 0x01F0, 0 },
+    { 0x00013636, 0x01F8, 0 },
     //  E4: call po,nn (M:6 T:17 steps:10)
-    { 0x000076B6, 0x01F9, 0 },
+    { 0x000076B6, 0x0201, 0 },
     //  E5: push hl (M:3 T:11 steps:5)
-    { 0x000001D8, 0x0203, 0 },
+    { 0x000001D8, 0x020B, 0 },
     //  E6: and n (M:2 T:7 steps:3)
-    { 0x00000016, 0x0208, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x0210, Z80_OPSTATE_FLAGS_IMM8 },
     //  E7: rst 20h (M:1 T:4 steps:1)
-    { 0x00000002, 0x020B, 0 },
+    { 0x00000002, 0x0213, 0 },
     //  E8: ret pe (M:4 T:11 steps:6)
-    { 0x0000016E, 0x020C, 0 },
+    { 0x0000016E, 0x0214, 0 },
     //  E9: jp hl (M:1 T:4 steps:1)
-    { 0x00000002, 0x0212, 0 },
+    { 0x00000002, 0x021A, 0 },
     //  EA: jp pe,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x0213, 0 },
+    { 0x000000B6, 0x021B, 0 },
     //  EB: ex de,hl (M:1 T:4 steps:1)
-    { 0x00000002, 0x0218, 0 },
+    { 0x00000002, 0x0220, 0 },
     //  EC: call pe,nn (M:6 T:17 steps:10)
-    { 0x000076B6, 0x0219, 0 },
+    { 0x000076B6, 0x0221, 0 },
     //  ED: ed prefix (M:1 T:4 steps:1)
-    { 0x00000002, 0x0223, 0 },
+    { 0x00000002, 0x022B, 0 },
     //  EE: xor n (M:2 T:7 steps:3)
-    { 0x00000016, 0x0224, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x022C, Z80_OPSTATE_FLAGS_IMM8 },
     //  EF: rst 28h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0227, 0 },
+    { 0x00000002, 0x022F, 0 },
     //  F0: ret p (M:4 T:11 steps:6)
-    { 0x0000016E, 0x0228, 0 },
+    { 0x0000016E, 0x0230, 0 },
     //  F1: pop af (M:3 T:10 steps:5)
-    { 0x000000B6, 0x022E, 0 },
+    { 0x000000B6, 0x0236, 0 },
     //  F2: jp p,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x0233, 0 },
+    { 0x000000B6, 0x023B, 0 },
     //  F3: di (M:1 T:4 steps:1)
-    { 0x00000002, 0x0238, 0 },
+    { 0x00000002, 0x0240, 0 },
     //  F4: call p,nn (M:6 T:17 steps:10)
-    { 0x000076B6, 0x0239, 0 },
+    { 0x000076B6, 0x0241, 0 },
     //  F5: push af (M:3 T:11 steps:5)
-    { 0x000001D8, 0x0243, 0 },
+    { 0x000001D8, 0x024B, 0 },
     //  F6: or n (M:2 T:7 steps:3)
-    { 0x00000016, 0x0248, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x0250, Z80_OPSTATE_FLAGS_IMM8 },
     //  F7: rst 30h (M:1 T:4 steps:1)
-    { 0x00000002, 0x024B, 0 },
+    { 0x00000002, 0x0253, 0 },
     //  F8: ret m (M:4 T:11 steps:6)
-    { 0x0000016E, 0x024C, 0 },
+    { 0x0000016E, 0x0254, 0 },
     //  F9: ld sp,hl (M:2 T:6 steps:2)
-    { 0x0000000A, 0x0252, 0 },
+    { 0x0000000A, 0x025A, 0 },
     //  FA: jp m,nn (M:3 T:10 steps:5)
-    { 0x000000B6, 0x0254, 0 },
+    { 0x000000B6, 0x025C, 0 },
     //  FB: ei (M:1 T:4 steps:1)
-    { 0x00000002, 0x0259, 0 },
+    { 0x00000002, 0x0261, 0 },
     //  FC: call m,nn (M:6 T:17 steps:10)
-    { 0x000076B6, 0x025A, 0 },
+    { 0x000076B6, 0x0262, 0 },
     //  FD: fd prefix (M:1 T:4 steps:1)
-    { 0x00000002, 0x0264, 0 },
+    { 0x00000002, 0x026C, 0 },
     //  FE: cp n (M:2 T:7 steps:3)
-    { 0x00000016, 0x0265, Z80_OPSTATE_FLAGS_IMM8 },
+    { 0x00000016, 0x026D, Z80_OPSTATE_FLAGS_IMM8 },
     //  FF: rst 38h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0268, 0 },
+    { 0x00000002, 0x0270, 0 },
     // ED 00: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED 01: nop (M:1 T:4 steps:1)
@@ -1084,131 +1084,131 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     // ED 3F: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED 40: in b,(c) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0269, 0 },
-    // ED 41: out (c),b (M:1 T:4 steps:1)
-    { 0x00000002, 0x026A, 0 },
-    // ED 42: sbc hl,bc (M:1 T:4 steps:1)
-    { 0x00000002, 0x026B, 0 },
-    // ED 43: ld (nn),bc (M:1 T:4 steps:1)
-    { 0x00000002, 0x026C, 0 },
-    // ED 44: neg (M:1 T:4 steps:1)
-    { 0x00000002, 0x026D, 0 },
-    // ED 45: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x026E, 0 },
-    // ED 46: im IM0 (M:1 T:4 steps:1)
-    { 0x00000002, 0x026F, 0 },
-    // ED 47: ld i,a (M:1 T:4 steps:1)
-    { 0x00000002, 0x0270, 0 },
-    // ED 48: in c,(c) (M:1 T:4 steps:1)
     { 0x00000002, 0x0271, 0 },
-    // ED 49: out (c),c (M:1 T:4 steps:1)
+    // ED 41: out (c),b (M:1 T:4 steps:1)
     { 0x00000002, 0x0272, 0 },
-    // ED 4A: adc hl,bc (M:1 T:4 steps:1)
+    // ED 42: sbc hl,bc (M:1 T:4 steps:1)
     { 0x00000002, 0x0273, 0 },
-    // ED 4B: ld bc,(nn) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0274, 0 },
-    // ED 4C: neg (M:1 T:4 steps:1)
-    { 0x00000002, 0x0275, 0 },
-    // ED 4D: reti (M:1 T:4 steps:1)
-    { 0x00000002, 0x0276, 0 },
-    // ED 4E: im IM1 (M:1 T:4 steps:1)
-    { 0x00000002, 0x0277, 0 },
-    // ED 4F: ld r,a (M:1 T:4 steps:1)
-    { 0x00000002, 0x0278, 0 },
-    // ED 50: in d,(c) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0279, 0 },
-    // ED 51: out (c),d (M:1 T:4 steps:1)
-    { 0x00000002, 0x027A, 0 },
-    // ED 52: sbc hl,de (M:1 T:4 steps:1)
-    { 0x00000002, 0x027B, 0 },
-    // ED 53: ld (nn),de (M:1 T:4 steps:1)
-    { 0x00000002, 0x027C, 0 },
-    // ED 54: neg (M:1 T:4 steps:1)
+    // ED 43: ld (nn),bc (M:5 T:16 steps:9)
+    { 0x00003B36, 0x0274, 0 },
+    // ED 44: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x027D, 0 },
-    // ED 55: retn (M:1 T:4 steps:1)
+    // ED 45: retn (M:1 T:4 steps:1)
     { 0x00000002, 0x027E, 0 },
-    // ED 56: im IM2 (M:1 T:4 steps:1)
+    // ED 46: im IM0 (M:1 T:4 steps:1)
     { 0x00000002, 0x027F, 0 },
-    // ED 57: ld a,i (M:1 T:4 steps:1)
+    // ED 47: ld i,a (M:1 T:4 steps:1)
     { 0x00000002, 0x0280, 0 },
-    // ED 58: in e,(c) (M:1 T:4 steps:1)
+    // ED 48: in c,(c) (M:1 T:4 steps:1)
     { 0x00000002, 0x0281, 0 },
-    // ED 59: out (c),e (M:1 T:4 steps:1)
+    // ED 49: out (c),c (M:1 T:4 steps:1)
     { 0x00000002, 0x0282, 0 },
-    // ED 5A: adc hl,de (M:1 T:4 steps:1)
+    // ED 4A: adc hl,bc (M:1 T:4 steps:1)
     { 0x00000002, 0x0283, 0 },
-    // ED 5B: ld de,(nn) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0284, 0 },
-    // ED 5C: neg (M:1 T:4 steps:1)
-    { 0x00000002, 0x0285, 0 },
-    // ED 5D: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x0286, 0 },
-    // ED 5E: im IM3 (M:1 T:4 steps:1)
-    { 0x00000002, 0x0287, 0 },
-    // ED 5F: ld a,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0288, 0 },
-    // ED 60: in h,(c) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0289, 0 },
-    // ED 61: out (c),h (M:1 T:4 steps:1)
-    { 0x00000002, 0x028A, 0 },
-    // ED 62: sbc hl,hl (M:1 T:4 steps:1)
-    { 0x00000002, 0x028B, 0 },
-    // ED 63: ld (nn),hl (M:1 T:4 steps:1)
-    { 0x00000002, 0x028C, 0 },
-    // ED 64: neg (M:1 T:4 steps:1)
+    // ED 4B: ld bc,(nn) (M:5 T:16 steps:9)
+    { 0x00002DB6, 0x0284, 0 },
+    // ED 4C: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x028D, 0 },
-    // ED 65: retn (M:1 T:4 steps:1)
+    // ED 4D: reti (M:1 T:4 steps:1)
     { 0x00000002, 0x028E, 0 },
-    // ED 66: im IM4 (M:1 T:4 steps:1)
+    // ED 4E: im IM1 (M:1 T:4 steps:1)
     { 0x00000002, 0x028F, 0 },
-    // ED 67: rrd (M:1 T:4 steps:1)
+    // ED 4F: ld r,a (M:1 T:4 steps:1)
     { 0x00000002, 0x0290, 0 },
-    // ED 68: in l,(c) (M:1 T:4 steps:1)
+    // ED 50: in d,(c) (M:1 T:4 steps:1)
     { 0x00000002, 0x0291, 0 },
-    // ED 69: out (c),l (M:1 T:4 steps:1)
+    // ED 51: out (c),d (M:1 T:4 steps:1)
     { 0x00000002, 0x0292, 0 },
-    // ED 6A: adc hl,hl (M:1 T:4 steps:1)
+    // ED 52: sbc hl,de (M:1 T:4 steps:1)
     { 0x00000002, 0x0293, 0 },
-    // ED 6B: ld hl,(nn) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0294, 0 },
-    // ED 6C: neg (M:1 T:4 steps:1)
-    { 0x00000002, 0x0295, 0 },
-    // ED 6D: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x0296, 0 },
-    // ED 6E: im IM5 (M:1 T:4 steps:1)
-    { 0x00000002, 0x0297, 0 },
-    // ED 6F: rld (M:1 T:4 steps:1)
-    { 0x00000002, 0x0298, 0 },
-    // ED 70: in (c) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0299, 0 },
-    // ED 71: out (c),0 (M:1 T:4 steps:1)
-    { 0x00000002, 0x029A, 0 },
-    // ED 72: sbc hl,sp (M:1 T:4 steps:1)
-    { 0x00000002, 0x029B, 0 },
-    // ED 73: ld (nn),sp (M:1 T:4 steps:1)
-    { 0x00000002, 0x029C, 0 },
-    // ED 74: neg (M:1 T:4 steps:1)
+    // ED 53: ld (nn),de (M:5 T:16 steps:9)
+    { 0x00003B36, 0x0294, 0 },
+    // ED 54: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x029D, 0 },
-    // ED 75: retn (M:1 T:4 steps:1)
+    // ED 55: retn (M:1 T:4 steps:1)
     { 0x00000002, 0x029E, 0 },
-    // ED 76: im IM6 (M:1 T:4 steps:1)
+    // ED 56: im IM2 (M:1 T:4 steps:1)
     { 0x00000002, 0x029F, 0 },
+    // ED 57: ld a,i (M:1 T:4 steps:1)
+    { 0x00000002, 0x02A0, 0 },
+    // ED 58: in e,(c) (M:1 T:4 steps:1)
+    { 0x00000002, 0x02A1, 0 },
+    // ED 59: out (c),e (M:1 T:4 steps:1)
+    { 0x00000002, 0x02A2, 0 },
+    // ED 5A: adc hl,de (M:1 T:4 steps:1)
+    { 0x00000002, 0x02A3, 0 },
+    // ED 5B: ld de,(nn) (M:5 T:16 steps:9)
+    { 0x00002DB6, 0x02A4, 0 },
+    // ED 5C: neg (M:1 T:4 steps:1)
+    { 0x00000002, 0x02AD, 0 },
+    // ED 5D: retn (M:1 T:4 steps:1)
+    { 0x00000002, 0x02AE, 0 },
+    // ED 5E: im IM3 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02AF, 0 },
+    // ED 5F: ld a,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x02B0, 0 },
+    // ED 60: in h,(c) (M:1 T:4 steps:1)
+    { 0x00000002, 0x02B1, 0 },
+    // ED 61: out (c),h (M:1 T:4 steps:1)
+    { 0x00000002, 0x02B2, 0 },
+    // ED 62: sbc hl,hl (M:1 T:4 steps:1)
+    { 0x00000002, 0x02B3, 0 },
+    // ED 63: ld (nn),hl (M:5 T:16 steps:9)
+    { 0x00003B36, 0x02B4, 0 },
+    // ED 64: neg (M:1 T:4 steps:1)
+    { 0x00000002, 0x02BD, 0 },
+    // ED 65: retn (M:1 T:4 steps:1)
+    { 0x00000002, 0x02BE, 0 },
+    // ED 66: im IM4 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02BF, 0 },
+    // ED 67: rrd (M:1 T:4 steps:1)
+    { 0x00000002, 0x02C0, 0 },
+    // ED 68: in l,(c) (M:1 T:4 steps:1)
+    { 0x00000002, 0x02C1, 0 },
+    // ED 69: out (c),l (M:1 T:4 steps:1)
+    { 0x00000002, 0x02C2, 0 },
+    // ED 6A: adc hl,hl (M:1 T:4 steps:1)
+    { 0x00000002, 0x02C3, 0 },
+    // ED 6B: ld hl,(nn) (M:5 T:16 steps:9)
+    { 0x00002DB6, 0x02C4, 0 },
+    // ED 6C: neg (M:1 T:4 steps:1)
+    { 0x00000002, 0x02CD, 0 },
+    // ED 6D: retn (M:1 T:4 steps:1)
+    { 0x00000002, 0x02CE, 0 },
+    // ED 6E: im IM5 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02CF, 0 },
+    // ED 6F: rld (M:1 T:4 steps:1)
+    { 0x00000002, 0x02D0, 0 },
+    // ED 70: in (c) (M:1 T:4 steps:1)
+    { 0x00000002, 0x02D1, 0 },
+    // ED 71: out (c),0 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02D2, 0 },
+    // ED 72: sbc hl,sp (M:1 T:4 steps:1)
+    { 0x00000002, 0x02D3, 0 },
+    // ED 73: ld (nn),sp (M:5 T:16 steps:9)
+    { 0x00003B36, 0x02D4, 0 },
+    // ED 74: neg (M:1 T:4 steps:1)
+    { 0x00000002, 0x02DD, 0 },
+    // ED 75: retn (M:1 T:4 steps:1)
+    { 0x00000002, 0x02DE, 0 },
+    // ED 76: im IM6 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02DF, 0 },
     // ED 77: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED 78: in a,(c) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A0, 0 },
+    { 0x00000002, 0x02E0, 0 },
     // ED 79: out (c),a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A1, 0 },
+    { 0x00000002, 0x02E1, 0 },
     // ED 7A: adc hl,sp (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A2, 0 },
-    // ED 7B: ld sp,(nn) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A3, 0 },
+    { 0x00000002, 0x02E2, 0 },
+    // ED 7B: ld sp,(nn) (M:5 T:16 steps:9)
+    { 0x00002DB6, 0x02E3, 0 },
     // ED 7C: neg (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A4, 0 },
+    { 0x00000002, 0x02EC, 0 },
     // ED 7D: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A5, 0 },
+    { 0x00000002, 0x02ED, 0 },
     // ED 7E: im IM7 (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A6, 0 },
+    { 0x00000002, 0x02EE, 0 },
     // ED 7F: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED 80: nop (M:1 T:4 steps:1)
@@ -1276,13 +1276,13 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     // ED 9F: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED A0: ldi (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A7, 0 },
+    { 0x00000002, 0x02EF, 0 },
     // ED A1: cpi (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A8, 0 },
+    { 0x00000002, 0x02F0, 0 },
     // ED A2: ini (M:1 T:4 steps:1)
-    { 0x00000002, 0x02A9, 0 },
+    { 0x00000002, 0x02F1, 0 },
     // ED A3: outi (M:1 T:4 steps:1)
-    { 0x00000002, 0x02AA, 0 },
+    { 0x00000002, 0x02F2, 0 },
     // ED A4: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED A5: nop (M:1 T:4 steps:1)
@@ -1292,13 +1292,13 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     // ED A7: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED A8: ldd (M:1 T:4 steps:1)
-    { 0x00000002, 0x02AB, 0 },
+    { 0x00000002, 0x02F3, 0 },
     // ED A9: cpd (M:1 T:4 steps:1)
-    { 0x00000002, 0x02AC, 0 },
+    { 0x00000002, 0x02F4, 0 },
     // ED AA: ind (M:1 T:4 steps:1)
-    { 0x00000002, 0x02AD, 0 },
+    { 0x00000002, 0x02F5, 0 },
     // ED AB: outd (M:1 T:4 steps:1)
-    { 0x00000002, 0x02AE, 0 },
+    { 0x00000002, 0x02F6, 0 },
     // ED AC: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED AD: nop (M:1 T:4 steps:1)
@@ -1308,13 +1308,13 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     // ED AF: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED B0: ldir (M:1 T:4 steps:1)
-    { 0x00000002, 0x02AF, 0 },
+    { 0x00000002, 0x02F7, 0 },
     // ED B1: cpir (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B0, 0 },
+    { 0x00000002, 0x02F8, 0 },
     // ED B2: inir (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B1, 0 },
+    { 0x00000002, 0x02F9, 0 },
     // ED B3: otir (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B2, 0 },
+    { 0x00000002, 0x02FA, 0 },
     // ED B4: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED B5: nop (M:1 T:4 steps:1)
@@ -1324,13 +1324,13 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     // ED B7: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED B8: lddr (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B3, 0 },
+    { 0x00000002, 0x02FB, 0 },
     // ED B9: cprd (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B4, 0 },
+    { 0x00000002, 0x02FC, 0 },
     // ED BA: indr (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B5, 0 },
+    { 0x00000002, 0x02FD, 0 },
     // ED BB: otdr (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B6, 0 },
+    { 0x00000002, 0x02FE, 0 },
     // ED BC: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // ED BD: nop (M:1 T:4 steps:1)
@@ -1468,517 +1468,517 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     // ED FF: nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0004, 0 },
     // CB 00: rlc b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B7, 0 },
-    // CB 01: rlc c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B8, 0 },
-    // CB 02: rlc d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B9, 0 },
-    // CB 03: rlc e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02BA, 0 },
-    // CB 04: rlc h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02BB, 0 },
-    // CB 05: rlc l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02BC, 0 },
-    // CB 06: rlc (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02BD, 0 },
-    // CB 07: rlc a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02BE, 0 },
-    // CB 08: rrc b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02BF, 0 },
-    // CB 09: rrc c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C0, 0 },
-    // CB 0A: rrc d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C1, 0 },
-    // CB 0B: rrc e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C2, 0 },
-    // CB 0C: rrc h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C3, 0 },
-    // CB 0D: rrc l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C4, 0 },
-    // CB 0E: rrc (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C5, 0 },
-    // CB 0F: rrc a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C6, 0 },
-    // CB 10: rl b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C7, 0 },
-    // CB 11: rl c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C8, 0 },
-    // CB 12: rl d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C9, 0 },
-    // CB 13: rl e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02CA, 0 },
-    // CB 14: rl h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02CB, 0 },
-    // CB 15: rl l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02CC, 0 },
-    // CB 16: rl (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02CD, 0 },
-    // CB 17: rl a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02CE, 0 },
-    // CB 18: rr b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02CF, 0 },
-    // CB 19: rr c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D0, 0 },
-    // CB 1A: rr d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D1, 0 },
-    // CB 1B: rr e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D2, 0 },
-    // CB 1C: rr h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D3, 0 },
-    // CB 1D: rr l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D4, 0 },
-    // CB 1E: rr (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D5, 0 },
-    // CB 1F: rr a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D6, 0 },
-    // CB 20: sla b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D7, 0 },
-    // CB 21: sla c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D8, 0 },
-    // CB 22: sla d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D9, 0 },
-    // CB 23: sla e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02DA, 0 },
-    // CB 24: sla h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02DB, 0 },
-    // CB 25: sla l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02DC, 0 },
-    // CB 26: sla (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02DD, 0 },
-    // CB 27: sla a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02DE, 0 },
-    // CB 28: sra b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02DF, 0 },
-    // CB 29: sra c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E0, 0 },
-    // CB 2A: sra d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E1, 0 },
-    // CB 2B: sra e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E2, 0 },
-    // CB 2C: sra h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E3, 0 },
-    // CB 2D: sra l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E4, 0 },
-    // CB 2E: sra (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E5, 0 },
-    // CB 2F: sra a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E6, 0 },
-    // CB 30: sll b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E7, 0 },
-    // CB 31: sll c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E8, 0 },
-    // CB 32: sll d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02E9, 0 },
-    // CB 33: sll e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02EA, 0 },
-    // CB 34: sll h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02EB, 0 },
-    // CB 35: sll l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02EC, 0 },
-    // CB 36: sll (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02ED, 0 },
-    // CB 37: sll a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02EE, 0 },
-    // CB 38: srl b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02EF, 0 },
-    // CB 39: srl c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F0, 0 },
-    // CB 3A: srl d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F1, 0 },
-    // CB 3B: srl e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F2, 0 },
-    // CB 3C: srl h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F3, 0 },
-    // CB 3D: srl l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F4, 0 },
-    // CB 3E: srl (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F5, 0 },
-    // CB 3F: srl a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F6, 0 },
-    // CB 40: bit 0,b (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F7, 0 },
-    // CB 41: bit 0,c (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F8, 0 },
-    // CB 42: bit 0,d (M:1 T:4 steps:1)
-    { 0x00000002, 0x02F9, 0 },
-    // CB 43: bit 0,e (M:1 T:4 steps:1)
-    { 0x00000002, 0x02FA, 0 },
-    // CB 44: bit 0,h (M:1 T:4 steps:1)
-    { 0x00000002, 0x02FB, 0 },
-    // CB 45: bit 0,l (M:1 T:4 steps:1)
-    { 0x00000002, 0x02FC, 0 },
-    // CB 46: bit (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x02FD, 0 },
-    // CB 47: bit 0,a (M:1 T:4 steps:1)
-    { 0x00000002, 0x02FE, 0 },
-    // CB 48: bit 1,b (M:1 T:4 steps:1)
     { 0x00000002, 0x02FF, 0 },
-    // CB 49: bit 1,c (M:1 T:4 steps:1)
+    // CB 01: rlc c (M:1 T:4 steps:1)
     { 0x00000002, 0x0300, 0 },
-    // CB 4A: bit 1,d (M:1 T:4 steps:1)
+    // CB 02: rlc d (M:1 T:4 steps:1)
     { 0x00000002, 0x0301, 0 },
-    // CB 4B: bit 1,e (M:1 T:4 steps:1)
+    // CB 03: rlc e (M:1 T:4 steps:1)
     { 0x00000002, 0x0302, 0 },
-    // CB 4C: bit 1,h (M:1 T:4 steps:1)
+    // CB 04: rlc h (M:1 T:4 steps:1)
     { 0x00000002, 0x0303, 0 },
-    // CB 4D: bit 1,l (M:1 T:4 steps:1)
+    // CB 05: rlc l (M:1 T:4 steps:1)
     { 0x00000002, 0x0304, 0 },
-    // CB 4E: bit (hl) (M:1 T:4 steps:1)
+    // CB 06: rlc (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0305, 0 },
-    // CB 4F: bit 1,a (M:1 T:4 steps:1)
+    // CB 07: rlc a (M:1 T:4 steps:1)
     { 0x00000002, 0x0306, 0 },
-    // CB 50: bit 2,b (M:1 T:4 steps:1)
+    // CB 08: rrc b (M:1 T:4 steps:1)
     { 0x00000002, 0x0307, 0 },
-    // CB 51: bit 2,c (M:1 T:4 steps:1)
+    // CB 09: rrc c (M:1 T:4 steps:1)
     { 0x00000002, 0x0308, 0 },
-    // CB 52: bit 2,d (M:1 T:4 steps:1)
+    // CB 0A: rrc d (M:1 T:4 steps:1)
     { 0x00000002, 0x0309, 0 },
-    // CB 53: bit 2,e (M:1 T:4 steps:1)
+    // CB 0B: rrc e (M:1 T:4 steps:1)
     { 0x00000002, 0x030A, 0 },
-    // CB 54: bit 2,h (M:1 T:4 steps:1)
+    // CB 0C: rrc h (M:1 T:4 steps:1)
     { 0x00000002, 0x030B, 0 },
-    // CB 55: bit 2,l (M:1 T:4 steps:1)
+    // CB 0D: rrc l (M:1 T:4 steps:1)
     { 0x00000002, 0x030C, 0 },
-    // CB 56: bit (hl) (M:1 T:4 steps:1)
+    // CB 0E: rrc (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x030D, 0 },
-    // CB 57: bit 2,a (M:1 T:4 steps:1)
+    // CB 0F: rrc a (M:1 T:4 steps:1)
     { 0x00000002, 0x030E, 0 },
-    // CB 58: bit 3,b (M:1 T:4 steps:1)
+    // CB 10: rl b (M:1 T:4 steps:1)
     { 0x00000002, 0x030F, 0 },
-    // CB 59: bit 3,c (M:1 T:4 steps:1)
+    // CB 11: rl c (M:1 T:4 steps:1)
     { 0x00000002, 0x0310, 0 },
-    // CB 5A: bit 3,d (M:1 T:4 steps:1)
+    // CB 12: rl d (M:1 T:4 steps:1)
     { 0x00000002, 0x0311, 0 },
-    // CB 5B: bit 3,e (M:1 T:4 steps:1)
+    // CB 13: rl e (M:1 T:4 steps:1)
     { 0x00000002, 0x0312, 0 },
-    // CB 5C: bit 3,h (M:1 T:4 steps:1)
+    // CB 14: rl h (M:1 T:4 steps:1)
     { 0x00000002, 0x0313, 0 },
-    // CB 5D: bit 3,l (M:1 T:4 steps:1)
+    // CB 15: rl l (M:1 T:4 steps:1)
     { 0x00000002, 0x0314, 0 },
-    // CB 5E: bit (hl) (M:1 T:4 steps:1)
+    // CB 16: rl (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0315, 0 },
-    // CB 5F: bit 3,a (M:1 T:4 steps:1)
+    // CB 17: rl a (M:1 T:4 steps:1)
     { 0x00000002, 0x0316, 0 },
-    // CB 60: bit 4,b (M:1 T:4 steps:1)
+    // CB 18: rr b (M:1 T:4 steps:1)
     { 0x00000002, 0x0317, 0 },
-    // CB 61: bit 4,c (M:1 T:4 steps:1)
+    // CB 19: rr c (M:1 T:4 steps:1)
     { 0x00000002, 0x0318, 0 },
-    // CB 62: bit 4,d (M:1 T:4 steps:1)
+    // CB 1A: rr d (M:1 T:4 steps:1)
     { 0x00000002, 0x0319, 0 },
-    // CB 63: bit 4,e (M:1 T:4 steps:1)
+    // CB 1B: rr e (M:1 T:4 steps:1)
     { 0x00000002, 0x031A, 0 },
-    // CB 64: bit 4,h (M:1 T:4 steps:1)
+    // CB 1C: rr h (M:1 T:4 steps:1)
     { 0x00000002, 0x031B, 0 },
-    // CB 65: bit 4,l (M:1 T:4 steps:1)
+    // CB 1D: rr l (M:1 T:4 steps:1)
     { 0x00000002, 0x031C, 0 },
-    // CB 66: bit (hl) (M:1 T:4 steps:1)
+    // CB 1E: rr (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x031D, 0 },
-    // CB 67: bit 4,a (M:1 T:4 steps:1)
+    // CB 1F: rr a (M:1 T:4 steps:1)
     { 0x00000002, 0x031E, 0 },
-    // CB 68: bit 5,b (M:1 T:4 steps:1)
+    // CB 20: sla b (M:1 T:4 steps:1)
     { 0x00000002, 0x031F, 0 },
-    // CB 69: bit 5,c (M:1 T:4 steps:1)
+    // CB 21: sla c (M:1 T:4 steps:1)
     { 0x00000002, 0x0320, 0 },
-    // CB 6A: bit 5,d (M:1 T:4 steps:1)
+    // CB 22: sla d (M:1 T:4 steps:1)
     { 0x00000002, 0x0321, 0 },
-    // CB 6B: bit 5,e (M:1 T:4 steps:1)
+    // CB 23: sla e (M:1 T:4 steps:1)
     { 0x00000002, 0x0322, 0 },
-    // CB 6C: bit 5,h (M:1 T:4 steps:1)
+    // CB 24: sla h (M:1 T:4 steps:1)
     { 0x00000002, 0x0323, 0 },
-    // CB 6D: bit 5,l (M:1 T:4 steps:1)
+    // CB 25: sla l (M:1 T:4 steps:1)
     { 0x00000002, 0x0324, 0 },
-    // CB 6E: bit (hl) (M:1 T:4 steps:1)
+    // CB 26: sla (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0325, 0 },
-    // CB 6F: bit 5,a (M:1 T:4 steps:1)
+    // CB 27: sla a (M:1 T:4 steps:1)
     { 0x00000002, 0x0326, 0 },
-    // CB 70: bit 6,b (M:1 T:4 steps:1)
+    // CB 28: sra b (M:1 T:4 steps:1)
     { 0x00000002, 0x0327, 0 },
-    // CB 71: bit 6,c (M:1 T:4 steps:1)
+    // CB 29: sra c (M:1 T:4 steps:1)
     { 0x00000002, 0x0328, 0 },
-    // CB 72: bit 6,d (M:1 T:4 steps:1)
+    // CB 2A: sra d (M:1 T:4 steps:1)
     { 0x00000002, 0x0329, 0 },
-    // CB 73: bit 6,e (M:1 T:4 steps:1)
+    // CB 2B: sra e (M:1 T:4 steps:1)
     { 0x00000002, 0x032A, 0 },
-    // CB 74: bit 6,h (M:1 T:4 steps:1)
+    // CB 2C: sra h (M:1 T:4 steps:1)
     { 0x00000002, 0x032B, 0 },
-    // CB 75: bit 6,l (M:1 T:4 steps:1)
+    // CB 2D: sra l (M:1 T:4 steps:1)
     { 0x00000002, 0x032C, 0 },
-    // CB 76: bit (hl) (M:1 T:4 steps:1)
+    // CB 2E: sra (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x032D, 0 },
-    // CB 77: bit 6,a (M:1 T:4 steps:1)
+    // CB 2F: sra a (M:1 T:4 steps:1)
     { 0x00000002, 0x032E, 0 },
-    // CB 78: bit 7,b (M:1 T:4 steps:1)
+    // CB 30: sll b (M:1 T:4 steps:1)
     { 0x00000002, 0x032F, 0 },
-    // CB 79: bit 7,c (M:1 T:4 steps:1)
+    // CB 31: sll c (M:1 T:4 steps:1)
     { 0x00000002, 0x0330, 0 },
-    // CB 7A: bit 7,d (M:1 T:4 steps:1)
+    // CB 32: sll d (M:1 T:4 steps:1)
     { 0x00000002, 0x0331, 0 },
-    // CB 7B: bit 7,e (M:1 T:4 steps:1)
+    // CB 33: sll e (M:1 T:4 steps:1)
     { 0x00000002, 0x0332, 0 },
-    // CB 7C: bit 7,h (M:1 T:4 steps:1)
+    // CB 34: sll h (M:1 T:4 steps:1)
     { 0x00000002, 0x0333, 0 },
-    // CB 7D: bit 7,l (M:1 T:4 steps:1)
+    // CB 35: sll l (M:1 T:4 steps:1)
     { 0x00000002, 0x0334, 0 },
-    // CB 7E: bit (hl) (M:1 T:4 steps:1)
+    // CB 36: sll (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0335, 0 },
-    // CB 7F: bit 7,a (M:1 T:4 steps:1)
+    // CB 37: sll a (M:1 T:4 steps:1)
     { 0x00000002, 0x0336, 0 },
-    // CB 80: res 0,b (M:1 T:4 steps:1)
+    // CB 38: srl b (M:1 T:4 steps:1)
     { 0x00000002, 0x0337, 0 },
-    // CB 81: res 0,c (M:1 T:4 steps:1)
+    // CB 39: srl c (M:1 T:4 steps:1)
     { 0x00000002, 0x0338, 0 },
-    // CB 82: res 0,d (M:1 T:4 steps:1)
+    // CB 3A: srl d (M:1 T:4 steps:1)
     { 0x00000002, 0x0339, 0 },
-    // CB 83: res 0,e (M:1 T:4 steps:1)
+    // CB 3B: srl e (M:1 T:4 steps:1)
     { 0x00000002, 0x033A, 0 },
-    // CB 84: res 0,h (M:1 T:4 steps:1)
+    // CB 3C: srl h (M:1 T:4 steps:1)
     { 0x00000002, 0x033B, 0 },
-    // CB 85: res 0,l (M:1 T:4 steps:1)
+    // CB 3D: srl l (M:1 T:4 steps:1)
     { 0x00000002, 0x033C, 0 },
-    // CB 86: res 0,(hl) (M:1 T:4 steps:1)
+    // CB 3E: srl (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x033D, 0 },
-    // CB 87: res 0,a (M:1 T:4 steps:1)
+    // CB 3F: srl a (M:1 T:4 steps:1)
     { 0x00000002, 0x033E, 0 },
-    // CB 88: res 1,b (M:1 T:4 steps:1)
+    // CB 40: bit 0,b (M:1 T:4 steps:1)
     { 0x00000002, 0x033F, 0 },
-    // CB 89: res 1,c (M:1 T:4 steps:1)
+    // CB 41: bit 0,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0340, 0 },
-    // CB 8A: res 1,d (M:1 T:4 steps:1)
+    // CB 42: bit 0,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0341, 0 },
-    // CB 8B: res 1,e (M:1 T:4 steps:1)
+    // CB 43: bit 0,e (M:1 T:4 steps:1)
     { 0x00000002, 0x0342, 0 },
-    // CB 8C: res 1,h (M:1 T:4 steps:1)
+    // CB 44: bit 0,h (M:1 T:4 steps:1)
     { 0x00000002, 0x0343, 0 },
-    // CB 8D: res 1,l (M:1 T:4 steps:1)
+    // CB 45: bit 0,l (M:1 T:4 steps:1)
     { 0x00000002, 0x0344, 0 },
-    // CB 8E: res 1,(hl) (M:1 T:4 steps:1)
+    // CB 46: bit (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0345, 0 },
-    // CB 8F: res 1,a (M:1 T:4 steps:1)
+    // CB 47: bit 0,a (M:1 T:4 steps:1)
     { 0x00000002, 0x0346, 0 },
-    // CB 90: res 2,b (M:1 T:4 steps:1)
+    // CB 48: bit 1,b (M:1 T:4 steps:1)
     { 0x00000002, 0x0347, 0 },
-    // CB 91: res 2,c (M:1 T:4 steps:1)
+    // CB 49: bit 1,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0348, 0 },
-    // CB 92: res 2,d (M:1 T:4 steps:1)
+    // CB 4A: bit 1,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0349, 0 },
-    // CB 93: res 2,e (M:1 T:4 steps:1)
+    // CB 4B: bit 1,e (M:1 T:4 steps:1)
     { 0x00000002, 0x034A, 0 },
-    // CB 94: res 2,h (M:1 T:4 steps:1)
+    // CB 4C: bit 1,h (M:1 T:4 steps:1)
     { 0x00000002, 0x034B, 0 },
-    // CB 95: res 2,l (M:1 T:4 steps:1)
+    // CB 4D: bit 1,l (M:1 T:4 steps:1)
     { 0x00000002, 0x034C, 0 },
-    // CB 96: res 2,(hl) (M:1 T:4 steps:1)
+    // CB 4E: bit (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x034D, 0 },
-    // CB 97: res 2,a (M:1 T:4 steps:1)
+    // CB 4F: bit 1,a (M:1 T:4 steps:1)
     { 0x00000002, 0x034E, 0 },
-    // CB 98: res 3,b (M:1 T:4 steps:1)
+    // CB 50: bit 2,b (M:1 T:4 steps:1)
     { 0x00000002, 0x034F, 0 },
-    // CB 99: res 3,c (M:1 T:4 steps:1)
+    // CB 51: bit 2,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0350, 0 },
-    // CB 9A: res 3,d (M:1 T:4 steps:1)
+    // CB 52: bit 2,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0351, 0 },
-    // CB 9B: res 3,e (M:1 T:4 steps:1)
+    // CB 53: bit 2,e (M:1 T:4 steps:1)
     { 0x00000002, 0x0352, 0 },
-    // CB 9C: res 3,h (M:1 T:4 steps:1)
+    // CB 54: bit 2,h (M:1 T:4 steps:1)
     { 0x00000002, 0x0353, 0 },
-    // CB 9D: res 3,l (M:1 T:4 steps:1)
+    // CB 55: bit 2,l (M:1 T:4 steps:1)
     { 0x00000002, 0x0354, 0 },
-    // CB 9E: res 3,(hl) (M:1 T:4 steps:1)
+    // CB 56: bit (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0355, 0 },
-    // CB 9F: res 3,a (M:1 T:4 steps:1)
+    // CB 57: bit 2,a (M:1 T:4 steps:1)
     { 0x00000002, 0x0356, 0 },
-    // CB A0: res 4,b (M:1 T:4 steps:1)
+    // CB 58: bit 3,b (M:1 T:4 steps:1)
     { 0x00000002, 0x0357, 0 },
-    // CB A1: res 4,c (M:1 T:4 steps:1)
+    // CB 59: bit 3,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0358, 0 },
-    // CB A2: res 4,d (M:1 T:4 steps:1)
+    // CB 5A: bit 3,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0359, 0 },
-    // CB A3: res 4,e (M:1 T:4 steps:1)
+    // CB 5B: bit 3,e (M:1 T:4 steps:1)
     { 0x00000002, 0x035A, 0 },
-    // CB A4: res 4,h (M:1 T:4 steps:1)
+    // CB 5C: bit 3,h (M:1 T:4 steps:1)
     { 0x00000002, 0x035B, 0 },
-    // CB A5: res 4,l (M:1 T:4 steps:1)
+    // CB 5D: bit 3,l (M:1 T:4 steps:1)
     { 0x00000002, 0x035C, 0 },
-    // CB A6: res 4,(hl) (M:1 T:4 steps:1)
+    // CB 5E: bit (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x035D, 0 },
-    // CB A7: res 4,a (M:1 T:4 steps:1)
+    // CB 5F: bit 3,a (M:1 T:4 steps:1)
     { 0x00000002, 0x035E, 0 },
-    // CB A8: res 5,b (M:1 T:4 steps:1)
+    // CB 60: bit 4,b (M:1 T:4 steps:1)
     { 0x00000002, 0x035F, 0 },
-    // CB A9: res 5,c (M:1 T:4 steps:1)
+    // CB 61: bit 4,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0360, 0 },
-    // CB AA: res 5,d (M:1 T:4 steps:1)
+    // CB 62: bit 4,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0361, 0 },
-    // CB AB: res 5,e (M:1 T:4 steps:1)
+    // CB 63: bit 4,e (M:1 T:4 steps:1)
     { 0x00000002, 0x0362, 0 },
-    // CB AC: res 5,h (M:1 T:4 steps:1)
+    // CB 64: bit 4,h (M:1 T:4 steps:1)
     { 0x00000002, 0x0363, 0 },
-    // CB AD: res 5,l (M:1 T:4 steps:1)
+    // CB 65: bit 4,l (M:1 T:4 steps:1)
     { 0x00000002, 0x0364, 0 },
-    // CB AE: res 5,(hl) (M:1 T:4 steps:1)
+    // CB 66: bit (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0365, 0 },
-    // CB AF: res 5,a (M:1 T:4 steps:1)
+    // CB 67: bit 4,a (M:1 T:4 steps:1)
     { 0x00000002, 0x0366, 0 },
-    // CB B0: res 6,b (M:1 T:4 steps:1)
+    // CB 68: bit 5,b (M:1 T:4 steps:1)
     { 0x00000002, 0x0367, 0 },
-    // CB B1: res 6,c (M:1 T:4 steps:1)
+    // CB 69: bit 5,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0368, 0 },
-    // CB B2: res 6,d (M:1 T:4 steps:1)
+    // CB 6A: bit 5,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0369, 0 },
-    // CB B3: res 6,e (M:1 T:4 steps:1)
+    // CB 6B: bit 5,e (M:1 T:4 steps:1)
     { 0x00000002, 0x036A, 0 },
-    // CB B4: res 6,h (M:1 T:4 steps:1)
+    // CB 6C: bit 5,h (M:1 T:4 steps:1)
     { 0x00000002, 0x036B, 0 },
-    // CB B5: res 6,l (M:1 T:4 steps:1)
+    // CB 6D: bit 5,l (M:1 T:4 steps:1)
     { 0x00000002, 0x036C, 0 },
-    // CB B6: res 6,(hl) (M:1 T:4 steps:1)
+    // CB 6E: bit (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x036D, 0 },
-    // CB B7: res 6,a (M:1 T:4 steps:1)
+    // CB 6F: bit 5,a (M:1 T:4 steps:1)
     { 0x00000002, 0x036E, 0 },
-    // CB B8: res 7,b (M:1 T:4 steps:1)
+    // CB 70: bit 6,b (M:1 T:4 steps:1)
     { 0x00000002, 0x036F, 0 },
-    // CB B9: res 7,c (M:1 T:4 steps:1)
+    // CB 71: bit 6,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0370, 0 },
-    // CB BA: res 7,d (M:1 T:4 steps:1)
+    // CB 72: bit 6,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0371, 0 },
-    // CB BB: res 7,e (M:1 T:4 steps:1)
+    // CB 73: bit 6,e (M:1 T:4 steps:1)
     { 0x00000002, 0x0372, 0 },
-    // CB BC: res 7,h (M:1 T:4 steps:1)
+    // CB 74: bit 6,h (M:1 T:4 steps:1)
     { 0x00000002, 0x0373, 0 },
-    // CB BD: res 7,l (M:1 T:4 steps:1)
+    // CB 75: bit 6,l (M:1 T:4 steps:1)
     { 0x00000002, 0x0374, 0 },
-    // CB BE: res 7,(hl) (M:1 T:4 steps:1)
+    // CB 76: bit (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0375, 0 },
-    // CB BF: res 7,a (M:1 T:4 steps:1)
+    // CB 77: bit 6,a (M:1 T:4 steps:1)
     { 0x00000002, 0x0376, 0 },
-    // CB C0: set 0,b (M:1 T:4 steps:1)
+    // CB 78: bit 7,b (M:1 T:4 steps:1)
     { 0x00000002, 0x0377, 0 },
-    // CB C1: set 0,c (M:1 T:4 steps:1)
+    // CB 79: bit 7,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0378, 0 },
-    // CB C2: set 0,d (M:1 T:4 steps:1)
+    // CB 7A: bit 7,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0379, 0 },
-    // CB C3: set 0,e (M:1 T:4 steps:1)
+    // CB 7B: bit 7,e (M:1 T:4 steps:1)
     { 0x00000002, 0x037A, 0 },
-    // CB C4: set 0,h (M:1 T:4 steps:1)
+    // CB 7C: bit 7,h (M:1 T:4 steps:1)
     { 0x00000002, 0x037B, 0 },
-    // CB C5: set 0,l (M:1 T:4 steps:1)
+    // CB 7D: bit 7,l (M:1 T:4 steps:1)
     { 0x00000002, 0x037C, 0 },
-    // CB C6: set 0,(hl) (M:1 T:4 steps:1)
+    // CB 7E: bit (hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x037D, 0 },
-    // CB C7: set 0,a (M:1 T:4 steps:1)
+    // CB 7F: bit 7,a (M:1 T:4 steps:1)
     { 0x00000002, 0x037E, 0 },
-    // CB C8: set 1,b (M:1 T:4 steps:1)
+    // CB 80: res 0,b (M:1 T:4 steps:1)
     { 0x00000002, 0x037F, 0 },
-    // CB C9: set 1,c (M:1 T:4 steps:1)
+    // CB 81: res 0,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0380, 0 },
-    // CB CA: set 1,d (M:1 T:4 steps:1)
+    // CB 82: res 0,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0381, 0 },
-    // CB CB: set 1,e (M:1 T:4 steps:1)
+    // CB 83: res 0,e (M:1 T:4 steps:1)
     { 0x00000002, 0x0382, 0 },
-    // CB CC: set 1,h (M:1 T:4 steps:1)
+    // CB 84: res 0,h (M:1 T:4 steps:1)
     { 0x00000002, 0x0383, 0 },
-    // CB CD: set 1,l (M:1 T:4 steps:1)
+    // CB 85: res 0,l (M:1 T:4 steps:1)
     { 0x00000002, 0x0384, 0 },
-    // CB CE: set 1,(hl) (M:1 T:4 steps:1)
+    // CB 86: res 0,(hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0385, 0 },
-    // CB CF: set 1,a (M:1 T:4 steps:1)
+    // CB 87: res 0,a (M:1 T:4 steps:1)
     { 0x00000002, 0x0386, 0 },
-    // CB D0: set 2,b (M:1 T:4 steps:1)
+    // CB 88: res 1,b (M:1 T:4 steps:1)
     { 0x00000002, 0x0387, 0 },
-    // CB D1: set 2,c (M:1 T:4 steps:1)
+    // CB 89: res 1,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0388, 0 },
-    // CB D2: set 2,d (M:1 T:4 steps:1)
+    // CB 8A: res 1,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0389, 0 },
-    // CB D3: set 2,e (M:1 T:4 steps:1)
+    // CB 8B: res 1,e (M:1 T:4 steps:1)
     { 0x00000002, 0x038A, 0 },
-    // CB D4: set 2,h (M:1 T:4 steps:1)
+    // CB 8C: res 1,h (M:1 T:4 steps:1)
     { 0x00000002, 0x038B, 0 },
-    // CB D5: set 2,l (M:1 T:4 steps:1)
+    // CB 8D: res 1,l (M:1 T:4 steps:1)
     { 0x00000002, 0x038C, 0 },
-    // CB D6: set 2,(hl) (M:1 T:4 steps:1)
+    // CB 8E: res 1,(hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x038D, 0 },
-    // CB D7: set 2,a (M:1 T:4 steps:1)
+    // CB 8F: res 1,a (M:1 T:4 steps:1)
     { 0x00000002, 0x038E, 0 },
-    // CB D8: set 3,b (M:1 T:4 steps:1)
+    // CB 90: res 2,b (M:1 T:4 steps:1)
     { 0x00000002, 0x038F, 0 },
-    // CB D9: set 3,c (M:1 T:4 steps:1)
+    // CB 91: res 2,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0390, 0 },
-    // CB DA: set 3,d (M:1 T:4 steps:1)
+    // CB 92: res 2,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0391, 0 },
-    // CB DB: set 3,e (M:1 T:4 steps:1)
+    // CB 93: res 2,e (M:1 T:4 steps:1)
     { 0x00000002, 0x0392, 0 },
-    // CB DC: set 3,h (M:1 T:4 steps:1)
+    // CB 94: res 2,h (M:1 T:4 steps:1)
     { 0x00000002, 0x0393, 0 },
-    // CB DD: set 3,l (M:1 T:4 steps:1)
+    // CB 95: res 2,l (M:1 T:4 steps:1)
     { 0x00000002, 0x0394, 0 },
-    // CB DE: set 3,(hl) (M:1 T:4 steps:1)
+    // CB 96: res 2,(hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x0395, 0 },
-    // CB DF: set 3,a (M:1 T:4 steps:1)
+    // CB 97: res 2,a (M:1 T:4 steps:1)
     { 0x00000002, 0x0396, 0 },
-    // CB E0: set 4,b (M:1 T:4 steps:1)
+    // CB 98: res 3,b (M:1 T:4 steps:1)
     { 0x00000002, 0x0397, 0 },
-    // CB E1: set 4,c (M:1 T:4 steps:1)
+    // CB 99: res 3,c (M:1 T:4 steps:1)
     { 0x00000002, 0x0398, 0 },
-    // CB E2: set 4,d (M:1 T:4 steps:1)
+    // CB 9A: res 3,d (M:1 T:4 steps:1)
     { 0x00000002, 0x0399, 0 },
-    // CB E3: set 4,e (M:1 T:4 steps:1)
+    // CB 9B: res 3,e (M:1 T:4 steps:1)
     { 0x00000002, 0x039A, 0 },
-    // CB E4: set 4,h (M:1 T:4 steps:1)
+    // CB 9C: res 3,h (M:1 T:4 steps:1)
     { 0x00000002, 0x039B, 0 },
-    // CB E5: set 4,l (M:1 T:4 steps:1)
+    // CB 9D: res 3,l (M:1 T:4 steps:1)
     { 0x00000002, 0x039C, 0 },
-    // CB E6: set 4,(hl) (M:1 T:4 steps:1)
+    // CB 9E: res 3,(hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x039D, 0 },
-    // CB E7: set 4,a (M:1 T:4 steps:1)
+    // CB 9F: res 3,a (M:1 T:4 steps:1)
     { 0x00000002, 0x039E, 0 },
-    // CB E8: set 5,b (M:1 T:4 steps:1)
+    // CB A0: res 4,b (M:1 T:4 steps:1)
     { 0x00000002, 0x039F, 0 },
-    // CB E9: set 5,c (M:1 T:4 steps:1)
+    // CB A1: res 4,c (M:1 T:4 steps:1)
     { 0x00000002, 0x03A0, 0 },
-    // CB EA: set 5,d (M:1 T:4 steps:1)
+    // CB A2: res 4,d (M:1 T:4 steps:1)
     { 0x00000002, 0x03A1, 0 },
-    // CB EB: set 5,e (M:1 T:4 steps:1)
+    // CB A3: res 4,e (M:1 T:4 steps:1)
     { 0x00000002, 0x03A2, 0 },
-    // CB EC: set 5,h (M:1 T:4 steps:1)
+    // CB A4: res 4,h (M:1 T:4 steps:1)
     { 0x00000002, 0x03A3, 0 },
-    // CB ED: set 5,l (M:1 T:4 steps:1)
+    // CB A5: res 4,l (M:1 T:4 steps:1)
     { 0x00000002, 0x03A4, 0 },
-    // CB EE: set 5,(hl) (M:1 T:4 steps:1)
+    // CB A6: res 4,(hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x03A5, 0 },
-    // CB EF: set 5,a (M:1 T:4 steps:1)
+    // CB A7: res 4,a (M:1 T:4 steps:1)
     { 0x00000002, 0x03A6, 0 },
-    // CB F0: set 6,b (M:1 T:4 steps:1)
+    // CB A8: res 5,b (M:1 T:4 steps:1)
     { 0x00000002, 0x03A7, 0 },
-    // CB F1: set 6,c (M:1 T:4 steps:1)
+    // CB A9: res 5,c (M:1 T:4 steps:1)
     { 0x00000002, 0x03A8, 0 },
-    // CB F2: set 6,d (M:1 T:4 steps:1)
+    // CB AA: res 5,d (M:1 T:4 steps:1)
     { 0x00000002, 0x03A9, 0 },
-    // CB F3: set 6,e (M:1 T:4 steps:1)
+    // CB AB: res 5,e (M:1 T:4 steps:1)
     { 0x00000002, 0x03AA, 0 },
-    // CB F4: set 6,h (M:1 T:4 steps:1)
+    // CB AC: res 5,h (M:1 T:4 steps:1)
     { 0x00000002, 0x03AB, 0 },
-    // CB F5: set 6,l (M:1 T:4 steps:1)
+    // CB AD: res 5,l (M:1 T:4 steps:1)
     { 0x00000002, 0x03AC, 0 },
-    // CB F6: set 6,(hl) (M:1 T:4 steps:1)
+    // CB AE: res 5,(hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x03AD, 0 },
-    // CB F7: set 6,a (M:1 T:4 steps:1)
+    // CB AF: res 5,a (M:1 T:4 steps:1)
     { 0x00000002, 0x03AE, 0 },
-    // CB F8: set 7,b (M:1 T:4 steps:1)
+    // CB B0: res 6,b (M:1 T:4 steps:1)
     { 0x00000002, 0x03AF, 0 },
-    // CB F9: set 7,c (M:1 T:4 steps:1)
+    // CB B1: res 6,c (M:1 T:4 steps:1)
     { 0x00000002, 0x03B0, 0 },
-    // CB FA: set 7,d (M:1 T:4 steps:1)
+    // CB B2: res 6,d (M:1 T:4 steps:1)
     { 0x00000002, 0x03B1, 0 },
-    // CB FB: set 7,e (M:1 T:4 steps:1)
+    // CB B3: res 6,e (M:1 T:4 steps:1)
     { 0x00000002, 0x03B2, 0 },
-    // CB FC: set 7,h (M:1 T:4 steps:1)
+    // CB B4: res 6,h (M:1 T:4 steps:1)
     { 0x00000002, 0x03B3, 0 },
-    // CB FD: set 7,l (M:1 T:4 steps:1)
+    // CB B5: res 6,l (M:1 T:4 steps:1)
     { 0x00000002, 0x03B4, 0 },
-    // CB FE: set 7,(hl) (M:1 T:4 steps:1)
+    // CB B6: res 6,(hl) (M:1 T:4 steps:1)
     { 0x00000002, 0x03B5, 0 },
-    // CB FF: set 7,a (M:1 T:4 steps:1)
+    // CB B7: res 6,a (M:1 T:4 steps:1)
     { 0x00000002, 0x03B6, 0 },
+    // CB B8: res 7,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03B7, 0 },
+    // CB B9: res 7,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03B8, 0 },
+    // CB BA: res 7,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03B9, 0 },
+    // CB BB: res 7,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03BA, 0 },
+    // CB BC: res 7,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03BB, 0 },
+    // CB BD: res 7,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03BC, 0 },
+    // CB BE: res 7,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03BD, 0 },
+    // CB BF: res 7,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03BE, 0 },
+    // CB C0: set 0,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03BF, 0 },
+    // CB C1: set 0,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C0, 0 },
+    // CB C2: set 0,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C1, 0 },
+    // CB C3: set 0,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C2, 0 },
+    // CB C4: set 0,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C3, 0 },
+    // CB C5: set 0,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C4, 0 },
+    // CB C6: set 0,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C5, 0 },
+    // CB C7: set 0,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C6, 0 },
+    // CB C8: set 1,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C7, 0 },
+    // CB C9: set 1,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C8, 0 },
+    // CB CA: set 1,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03C9, 0 },
+    // CB CB: set 1,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03CA, 0 },
+    // CB CC: set 1,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03CB, 0 },
+    // CB CD: set 1,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03CC, 0 },
+    // CB CE: set 1,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03CD, 0 },
+    // CB CF: set 1,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03CE, 0 },
+    // CB D0: set 2,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03CF, 0 },
+    // CB D1: set 2,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D0, 0 },
+    // CB D2: set 2,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D1, 0 },
+    // CB D3: set 2,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D2, 0 },
+    // CB D4: set 2,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D3, 0 },
+    // CB D5: set 2,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D4, 0 },
+    // CB D6: set 2,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D5, 0 },
+    // CB D7: set 2,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D6, 0 },
+    // CB D8: set 3,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D7, 0 },
+    // CB D9: set 3,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D8, 0 },
+    // CB DA: set 3,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03D9, 0 },
+    // CB DB: set 3,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03DA, 0 },
+    // CB DC: set 3,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03DB, 0 },
+    // CB DD: set 3,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03DC, 0 },
+    // CB DE: set 3,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03DD, 0 },
+    // CB DF: set 3,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03DE, 0 },
+    // CB E0: set 4,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03DF, 0 },
+    // CB E1: set 4,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E0, 0 },
+    // CB E2: set 4,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E1, 0 },
+    // CB E3: set 4,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E2, 0 },
+    // CB E4: set 4,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E3, 0 },
+    // CB E5: set 4,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E4, 0 },
+    // CB E6: set 4,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E5, 0 },
+    // CB E7: set 4,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E6, 0 },
+    // CB E8: set 5,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E7, 0 },
+    // CB E9: set 5,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E8, 0 },
+    // CB EA: set 5,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03E9, 0 },
+    // CB EB: set 5,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03EA, 0 },
+    // CB EC: set 5,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03EB, 0 },
+    // CB ED: set 5,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03EC, 0 },
+    // CB EE: set 5,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03ED, 0 },
+    // CB EF: set 5,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03EE, 0 },
+    // CB F0: set 6,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03EF, 0 },
+    // CB F1: set 6,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F0, 0 },
+    // CB F2: set 6,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F1, 0 },
+    // CB F3: set 6,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F2, 0 },
+    // CB F4: set 6,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F3, 0 },
+    // CB F5: set 6,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F4, 0 },
+    // CB F6: set 6,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F5, 0 },
+    // CB F7: set 6,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F6, 0 },
+    // CB F8: set 7,b (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F7, 0 },
+    // CB F9: set 7,c (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F8, 0 },
+    // CB FA: set 7,d (M:1 T:4 steps:1)
+    { 0x00000002, 0x03F9, 0 },
+    // CB FB: set 7,e (M:1 T:4 steps:1)
+    { 0x00000002, 0x03FA, 0 },
+    // CB FC: set 7,h (M:1 T:4 steps:1)
+    { 0x00000002, 0x03FB, 0 },
+    // CB FD: set 7,l (M:1 T:4 steps:1)
+    { 0x00000002, 0x03FC, 0 },
+    // CB FE: set 7,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x03FD, 0 },
+    // CB FF: set 7,a (M:1 T:4 steps:1)
+    { 0x00000002, 0x03FE, 0 },
 
 };
 
@@ -2276,2715 +2276,2823 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x004F: _fetch(); break;
             
-            //  22: ld (nn),hl (M:1 T:4)
+            //  22: ld (nn),hl (M:5 T:16)
+            // -- M2
+            case 0x0050: _wait();_mread(cpu->pc++); break;
+            case 0x0051: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0052: _wait();_mread(cpu->pc++); break;
+            case 0x0053: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x0054: _mwrite(cpu->wz++,cpu->hlx[cpu->hlx_idx].l); break;
+            case 0x0055: _wait() break;
+            // -- M5
+            case 0x0056: _mwrite(cpu->wz,cpu->hlx[cpu->hlx_idx].h); break;
+            case 0x0057: _wait() break;
             // -- OVERLAP
-            case 0x0050: _fetch(); break;
+            case 0x0058: _fetch(); break;
             
             //  23: inc hl (M:2 T:6)
             // -- M2 (generic)
-            case 0x0051: cpu->hlx[cpu->hlx_idx].hl++; break;
+            case 0x0059: cpu->hlx[cpu->hlx_idx].hl++; break;
             // -- OVERLAP
-            case 0x0052: _fetch(); break;
+            case 0x005A: _fetch(); break;
             
             //  24: inc h (M:1 T:4)
             // -- OVERLAP
-            case 0x0053: cpu->hlx[cpu->hlx_idx].h=z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x005B: cpu->hlx[cpu->hlx_idx].h=z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  25: dec h (M:1 T:4)
             // -- OVERLAP
-            case 0x0054: cpu->hlx[cpu->hlx_idx].h=z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x005C: cpu->hlx[cpu->hlx_idx].h=z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  26: ld h,n (M:2 T:7)
             // -- M2
-            case 0x0055: _wait();_mread(cpu->pc++); break;
-            case 0x0056: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
+            case 0x005D: _wait();_mread(cpu->pc++); break;
+            case 0x005E: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
             // -- OVERLAP
-            case 0x0057: _fetch(); break;
+            case 0x005F: _fetch(); break;
             
             //  27: daa (M:1 T:4)
             // -- OVERLAP
-            case 0x0058: z80_daa(cpu);_fetch(); break;
+            case 0x0060: z80_daa(cpu);_fetch(); break;
             
             //  28: jr z,d (M:3 T:12)
             // -- M2
-            case 0x0059: _wait();_mread(cpu->pc++); break;
-            case 0x005A: cpu->dlatch=_gd();if(!(_cc_z)){z80_skip(cpu,1,7,2);}; break;
+            case 0x0061: _wait();_mread(cpu->pc++); break;
+            case 0x0062: cpu->dlatch=_gd();if(!(_cc_z)){z80_skip(cpu,1,7,2);}; break;
             // -- M3 (generic)
-            case 0x005B: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
+            case 0x0063: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
             // -- OVERLAP
-            case 0x005C: _fetch(); break;
+            case 0x0064: _fetch(); break;
             
             //  29: add hl,hl (M:1 T:4)
             // -- OVERLAP
-            case 0x005D: _fetch(); break;
+            case 0x0065: _fetch(); break;
             
             //  2A: ld hl,(nn) (M:5 T:16)
             // -- M2
-            case 0x005E: _wait();_mread(cpu->pc++); break;
-            case 0x005F: cpu->wzl=_gd(); break;
+            case 0x0066: _wait();_mread(cpu->pc++); break;
+            case 0x0067: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0060: _wait();_mread(cpu->pc++); break;
-            case 0x0061: cpu->wzh=_gd(); break;
+            case 0x0068: _wait();_mread(cpu->pc++); break;
+            case 0x0069: cpu->wzh=_gd(); break;
             // -- M4
-            case 0x0062: _wait();_mread(cpu->wz++); break;
-            case 0x0063: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
+            case 0x006A: _wait();_mread(cpu->wz++); break;
+            case 0x006B: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
             // -- M5
-            case 0x0064: _wait();_mread(cpu->wz); break;
-            case 0x0065: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
+            case 0x006C: _wait();_mread(cpu->wz); break;
+            case 0x006D: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
             // -- OVERLAP
-            case 0x0066: _fetch(); break;
+            case 0x006E: _fetch(); break;
             
             //  2B: dec hl (M:2 T:6)
             // -- M2 (generic)
-            case 0x0067: cpu->hlx[cpu->hlx_idx].hl--; break;
+            case 0x006F: cpu->hlx[cpu->hlx_idx].hl--; break;
             // -- OVERLAP
-            case 0x0068: _fetch(); break;
+            case 0x0070: _fetch(); break;
             
             //  2C: inc l (M:1 T:4)
             // -- OVERLAP
-            case 0x0069: cpu->hlx[cpu->hlx_idx].l=z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x0071: cpu->hlx[cpu->hlx_idx].l=z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  2D: dec l (M:1 T:4)
             // -- OVERLAP
-            case 0x006A: cpu->hlx[cpu->hlx_idx].l=z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x0072: cpu->hlx[cpu->hlx_idx].l=z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  2E: ld l,n (M:2 T:7)
             // -- M2
-            case 0x006B: _wait();_mread(cpu->pc++); break;
-            case 0x006C: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
+            case 0x0073: _wait();_mread(cpu->pc++); break;
+            case 0x0074: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
             // -- OVERLAP
-            case 0x006D: _fetch(); break;
+            case 0x0075: _fetch(); break;
             
             //  2F: cpl (M:1 T:4)
             // -- OVERLAP
-            case 0x006E: z80_cpl(cpu);_fetch(); break;
+            case 0x0076: z80_cpl(cpu);_fetch(); break;
             
             //  30: jr nc,d (M:3 T:12)
             // -- M2
-            case 0x006F: _wait();_mread(cpu->pc++); break;
-            case 0x0070: cpu->dlatch=_gd();if(!(_cc_nc)){z80_skip(cpu,1,7,2);}; break;
+            case 0x0077: _wait();_mread(cpu->pc++); break;
+            case 0x0078: cpu->dlatch=_gd();if(!(_cc_nc)){z80_skip(cpu,1,7,2);}; break;
             // -- M3 (generic)
-            case 0x0071: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
+            case 0x0079: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
             // -- OVERLAP
-            case 0x0072: _fetch(); break;
+            case 0x007A: _fetch(); break;
             
             //  31: ld sp,nn (M:3 T:10)
             // -- M2
-            case 0x0073: _wait();_mread(cpu->pc++); break;
-            case 0x0074: cpu->spl=_gd(); break;
+            case 0x007B: _wait();_mread(cpu->pc++); break;
+            case 0x007C: cpu->spl=_gd(); break;
             // -- M3
-            case 0x0075: _wait();_mread(cpu->pc++); break;
-            case 0x0076: cpu->sph=_gd(); break;
+            case 0x007D: _wait();_mread(cpu->pc++); break;
+            case 0x007E: cpu->sph=_gd(); break;
             // -- OVERLAP
-            case 0x0077: _fetch(); break;
+            case 0x007F: _fetch(); break;
             
             //  32: ld (nn),a (M:4 T:13)
             // -- M2
-            case 0x0078: _wait();_mread(cpu->pc++); break;
-            case 0x0079: cpu->wzl=_gd(); break;
+            case 0x0080: _wait();_mread(cpu->pc++); break;
+            case 0x0081: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x007A: _wait();_mread(cpu->pc++); break;
-            case 0x007B: cpu->wzh=_gd(); break;
+            case 0x0082: _wait();_mread(cpu->pc++); break;
+            case 0x0083: cpu->wzh=_gd(); break;
             // -- M4
-            case 0x007C: _mwrite(cpu->wz++,cpu->a);cpu->wzh=cpu->a; break;
-            case 0x007D: _wait() break;
+            case 0x0084: _mwrite(cpu->wz++,cpu->a);cpu->wzh=cpu->a; break;
+            case 0x0085: _wait() break;
             // -- OVERLAP
-            case 0x007E: _fetch(); break;
+            case 0x0086: _fetch(); break;
             
             //  33: inc sp (M:2 T:6)
             // -- M2 (generic)
-            case 0x007F: cpu->sp++; break;
+            case 0x0087: cpu->sp++; break;
             // -- OVERLAP
-            case 0x0080: _fetch(); break;
+            case 0x0088: _fetch(); break;
             
             //  34: inc (hl) (M:3 T:11)
             // -- M2
-            case 0x0081: _wait();_mread(cpu->addr); break;
-            case 0x0082: cpu->dlatch=_gd();cpu->dlatch=z80_inc8(cpu,cpu->dlatch); break;
+            case 0x0089: _wait();_mread(cpu->addr); break;
+            case 0x008A: cpu->dlatch=_gd();cpu->dlatch=z80_inc8(cpu,cpu->dlatch); break;
             // -- M3
-            case 0x0083: _mwrite(cpu->addr,cpu->dlatch); break;
-            case 0x0084: _wait() break;
+            case 0x008B: _mwrite(cpu->addr,cpu->dlatch); break;
+            case 0x008C: _wait() break;
             // -- OVERLAP
-            case 0x0085: _fetch(); break;
+            case 0x008D: _fetch(); break;
             
             //  35: dec (hl) (M:3 T:11)
             // -- M2
-            case 0x0086: _wait();_mread(cpu->addr); break;
-            case 0x0087: cpu->dlatch=_gd();cpu->dlatch=z80_dec8(cpu,cpu->dlatch); break;
+            case 0x008E: _wait();_mread(cpu->addr); break;
+            case 0x008F: cpu->dlatch=_gd();cpu->dlatch=z80_dec8(cpu,cpu->dlatch); break;
             // -- M3
-            case 0x0088: _mwrite(cpu->addr,cpu->dlatch); break;
-            case 0x0089: _wait() break;
+            case 0x0090: _mwrite(cpu->addr,cpu->dlatch); break;
+            case 0x0091: _wait() break;
             // -- OVERLAP
-            case 0x008A: _fetch(); break;
+            case 0x0092: _fetch(); break;
             
             //  36: ld (hl),n (M:3 T:10)
             // -- M2
-            case 0x008B: _wait();_mread(cpu->pc++); break;
-            case 0x008C: cpu->dlatch=_gd(); break;
+            case 0x0093: _wait();_mread(cpu->pc++); break;
+            case 0x0094: cpu->dlatch=_gd(); break;
             // -- M3
-            case 0x008D: _mwrite(cpu->addr,cpu->dlatch); break;
-            case 0x008E: _wait() break;
+            case 0x0095: _mwrite(cpu->addr,cpu->dlatch); break;
+            case 0x0096: _wait() break;
             // -- OVERLAP
-            case 0x008F: _fetch(); break;
+            case 0x0097: _fetch(); break;
             
             //  37: scf (M:1 T:4)
             // -- OVERLAP
-            case 0x0090: z80_scf(cpu);_fetch(); break;
+            case 0x0098: z80_scf(cpu);_fetch(); break;
             
             //  38: jr c,d (M:3 T:12)
             // -- M2
-            case 0x0091: _wait();_mread(cpu->pc++); break;
-            case 0x0092: cpu->dlatch=_gd();if(!(_cc_c)){z80_skip(cpu,1,7,2);}; break;
+            case 0x0099: _wait();_mread(cpu->pc++); break;
+            case 0x009A: cpu->dlatch=_gd();if(!(_cc_c)){z80_skip(cpu,1,7,2);}; break;
             // -- M3 (generic)
-            case 0x0093: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
-            // -- OVERLAP
-            case 0x0094: _fetch(); break;
-            
-            //  39: add hl,sp (M:1 T:4)
-            // -- OVERLAP
-            case 0x0095: _fetch(); break;
-            
-            //  3A: ld a,(nn) (M:4 T:13)
-            // -- M2
-            case 0x0096: _wait();_mread(cpu->pc++); break;
-            case 0x0097: cpu->wzl=_gd(); break;
-            // -- M3
-            case 0x0098: _wait();_mread(cpu->pc++); break;
-            case 0x0099: cpu->wzh=_gd(); break;
-            // -- M4
-            case 0x009A: _wait();_mread(cpu->wz++); break;
-            case 0x009B: cpu->a=_gd(); break;
+            case 0x009B: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
             // -- OVERLAP
             case 0x009C: _fetch(); break;
             
+            //  39: add hl,sp (M:1 T:4)
+            // -- OVERLAP
+            case 0x009D: _fetch(); break;
+            
+            //  3A: ld a,(nn) (M:4 T:13)
+            // -- M2
+            case 0x009E: _wait();_mread(cpu->pc++); break;
+            case 0x009F: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x00A0: _wait();_mread(cpu->pc++); break;
+            case 0x00A1: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x00A2: _wait();_mread(cpu->wz++); break;
+            case 0x00A3: cpu->a=_gd(); break;
+            // -- OVERLAP
+            case 0x00A4: _fetch(); break;
+            
             //  3B: dec sp (M:2 T:6)
             // -- M2 (generic)
-            case 0x009D: cpu->sp--; break;
+            case 0x00A5: cpu->sp--; break;
             // -- OVERLAP
-            case 0x009E: _fetch(); break;
+            case 0x00A6: _fetch(); break;
             
             //  3C: inc a (M:1 T:4)
             // -- OVERLAP
-            case 0x009F: cpu->a=z80_inc8(cpu,cpu->a);_fetch(); break;
+            case 0x00A7: cpu->a=z80_inc8(cpu,cpu->a);_fetch(); break;
             
             //  3D: dec a (M:1 T:4)
             // -- OVERLAP
-            case 0x00A0: cpu->a=z80_dec8(cpu,cpu->a);_fetch(); break;
+            case 0x00A8: cpu->a=z80_dec8(cpu,cpu->a);_fetch(); break;
             
             //  3E: ld a,n (M:2 T:7)
             // -- M2
-            case 0x00A1: _wait();_mread(cpu->pc++); break;
-            case 0x00A2: cpu->a=_gd(); break;
+            case 0x00A9: _wait();_mread(cpu->pc++); break;
+            case 0x00AA: cpu->a=_gd(); break;
             // -- OVERLAP
-            case 0x00A3: _fetch(); break;
+            case 0x00AB: _fetch(); break;
             
             //  3F: ccf (M:1 T:4)
             // -- OVERLAP
-            case 0x00A4: z80_ccf(cpu);_fetch(); break;
+            case 0x00AC: z80_ccf(cpu);_fetch(); break;
             
             //  40: ld b,b (M:1 T:4)
             // -- OVERLAP
-            case 0x00A5: cpu->b=cpu->b;_fetch(); break;
+            case 0x00AD: cpu->b=cpu->b;_fetch(); break;
             
             //  41: ld b,c (M:1 T:4)
             // -- OVERLAP
-            case 0x00A6: cpu->b=cpu->c;_fetch(); break;
+            case 0x00AE: cpu->b=cpu->c;_fetch(); break;
             
             //  42: ld b,d (M:1 T:4)
             // -- OVERLAP
-            case 0x00A7: cpu->b=cpu->d;_fetch(); break;
+            case 0x00AF: cpu->b=cpu->d;_fetch(); break;
             
             //  43: ld b,e (M:1 T:4)
             // -- OVERLAP
-            case 0x00A8: cpu->b=cpu->e;_fetch(); break;
+            case 0x00B0: cpu->b=cpu->e;_fetch(); break;
             
             //  44: ld b,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00A9: cpu->b=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
+            case 0x00B1: cpu->b=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             //  45: ld b,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00AA: cpu->b=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
+            case 0x00B2: cpu->b=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             //  46: ld b,(hl) (M:2 T:7)
             // -- M2
-            case 0x00AB: _wait();_mread(cpu->addr); break;
-            case 0x00AC: cpu->b=_gd(); break;
+            case 0x00B3: _wait();_mread(cpu->addr); break;
+            case 0x00B4: cpu->b=_gd(); break;
             // -- OVERLAP
-            case 0x00AD: _fetch(); break;
+            case 0x00B5: _fetch(); break;
             
             //  47: ld b,a (M:1 T:4)
             // -- OVERLAP
-            case 0x00AE: cpu->b=cpu->a;_fetch(); break;
+            case 0x00B6: cpu->b=cpu->a;_fetch(); break;
             
             //  48: ld c,b (M:1 T:4)
             // -- OVERLAP
-            case 0x00AF: cpu->c=cpu->b;_fetch(); break;
+            case 0x00B7: cpu->c=cpu->b;_fetch(); break;
             
             //  49: ld c,c (M:1 T:4)
             // -- OVERLAP
-            case 0x00B0: cpu->c=cpu->c;_fetch(); break;
+            case 0x00B8: cpu->c=cpu->c;_fetch(); break;
             
             //  4A: ld c,d (M:1 T:4)
             // -- OVERLAP
-            case 0x00B1: cpu->c=cpu->d;_fetch(); break;
+            case 0x00B9: cpu->c=cpu->d;_fetch(); break;
             
             //  4B: ld c,e (M:1 T:4)
             // -- OVERLAP
-            case 0x00B2: cpu->c=cpu->e;_fetch(); break;
+            case 0x00BA: cpu->c=cpu->e;_fetch(); break;
             
             //  4C: ld c,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00B3: cpu->c=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
+            case 0x00BB: cpu->c=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             //  4D: ld c,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00B4: cpu->c=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
+            case 0x00BC: cpu->c=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             //  4E: ld c,(hl) (M:2 T:7)
             // -- M2
-            case 0x00B5: _wait();_mread(cpu->addr); break;
-            case 0x00B6: cpu->c=_gd(); break;
+            case 0x00BD: _wait();_mread(cpu->addr); break;
+            case 0x00BE: cpu->c=_gd(); break;
             // -- OVERLAP
-            case 0x00B7: _fetch(); break;
+            case 0x00BF: _fetch(); break;
             
             //  4F: ld c,a (M:1 T:4)
             // -- OVERLAP
-            case 0x00B8: cpu->c=cpu->a;_fetch(); break;
+            case 0x00C0: cpu->c=cpu->a;_fetch(); break;
             
             //  50: ld d,b (M:1 T:4)
             // -- OVERLAP
-            case 0x00B9: cpu->d=cpu->b;_fetch(); break;
+            case 0x00C1: cpu->d=cpu->b;_fetch(); break;
             
             //  51: ld d,c (M:1 T:4)
             // -- OVERLAP
-            case 0x00BA: cpu->d=cpu->c;_fetch(); break;
+            case 0x00C2: cpu->d=cpu->c;_fetch(); break;
             
             //  52: ld d,d (M:1 T:4)
             // -- OVERLAP
-            case 0x00BB: cpu->d=cpu->d;_fetch(); break;
+            case 0x00C3: cpu->d=cpu->d;_fetch(); break;
             
             //  53: ld d,e (M:1 T:4)
             // -- OVERLAP
-            case 0x00BC: cpu->d=cpu->e;_fetch(); break;
+            case 0x00C4: cpu->d=cpu->e;_fetch(); break;
             
             //  54: ld d,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00BD: cpu->d=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
+            case 0x00C5: cpu->d=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             //  55: ld d,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00BE: cpu->d=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
+            case 0x00C6: cpu->d=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             //  56: ld d,(hl) (M:2 T:7)
             // -- M2
-            case 0x00BF: _wait();_mread(cpu->addr); break;
-            case 0x00C0: cpu->d=_gd(); break;
+            case 0x00C7: _wait();_mread(cpu->addr); break;
+            case 0x00C8: cpu->d=_gd(); break;
             // -- OVERLAP
-            case 0x00C1: _fetch(); break;
+            case 0x00C9: _fetch(); break;
             
             //  57: ld d,a (M:1 T:4)
             // -- OVERLAP
-            case 0x00C2: cpu->d=cpu->a;_fetch(); break;
+            case 0x00CA: cpu->d=cpu->a;_fetch(); break;
             
             //  58: ld e,b (M:1 T:4)
             // -- OVERLAP
-            case 0x00C3: cpu->e=cpu->b;_fetch(); break;
+            case 0x00CB: cpu->e=cpu->b;_fetch(); break;
             
             //  59: ld e,c (M:1 T:4)
             // -- OVERLAP
-            case 0x00C4: cpu->e=cpu->c;_fetch(); break;
+            case 0x00CC: cpu->e=cpu->c;_fetch(); break;
             
             //  5A: ld e,d (M:1 T:4)
             // -- OVERLAP
-            case 0x00C5: cpu->e=cpu->d;_fetch(); break;
+            case 0x00CD: cpu->e=cpu->d;_fetch(); break;
             
             //  5B: ld e,e (M:1 T:4)
             // -- OVERLAP
-            case 0x00C6: cpu->e=cpu->e;_fetch(); break;
+            case 0x00CE: cpu->e=cpu->e;_fetch(); break;
             
             //  5C: ld e,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00C7: cpu->e=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
+            case 0x00CF: cpu->e=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             //  5D: ld e,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00C8: cpu->e=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
+            case 0x00D0: cpu->e=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             //  5E: ld e,(hl) (M:2 T:7)
             // -- M2
-            case 0x00C9: _wait();_mread(cpu->addr); break;
-            case 0x00CA: cpu->e=_gd(); break;
+            case 0x00D1: _wait();_mread(cpu->addr); break;
+            case 0x00D2: cpu->e=_gd(); break;
             // -- OVERLAP
-            case 0x00CB: _fetch(); break;
+            case 0x00D3: _fetch(); break;
             
             //  5F: ld e,a (M:1 T:4)
             // -- OVERLAP
-            case 0x00CC: cpu->e=cpu->a;_fetch(); break;
+            case 0x00D4: cpu->e=cpu->a;_fetch(); break;
             
             //  60: ld h,b (M:1 T:4)
             // -- OVERLAP
-            case 0x00CD: cpu->hlx[cpu->hlx_idx].h=cpu->b;_fetch(); break;
+            case 0x00D5: cpu->hlx[cpu->hlx_idx].h=cpu->b;_fetch(); break;
             
             //  61: ld h,c (M:1 T:4)
             // -- OVERLAP
-            case 0x00CE: cpu->hlx[cpu->hlx_idx].h=cpu->c;_fetch(); break;
+            case 0x00D6: cpu->hlx[cpu->hlx_idx].h=cpu->c;_fetch(); break;
             
             //  62: ld h,d (M:1 T:4)
             // -- OVERLAP
-            case 0x00CF: cpu->hlx[cpu->hlx_idx].h=cpu->d;_fetch(); break;
+            case 0x00D7: cpu->hlx[cpu->hlx_idx].h=cpu->d;_fetch(); break;
             
             //  63: ld h,e (M:1 T:4)
             // -- OVERLAP
-            case 0x00D0: cpu->hlx[cpu->hlx_idx].h=cpu->e;_fetch(); break;
+            case 0x00D8: cpu->hlx[cpu->hlx_idx].h=cpu->e;_fetch(); break;
             
             //  64: ld h,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00D1: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
+            case 0x00D9: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             //  65: ld h,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00D2: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
+            case 0x00DA: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             //  66: ld h,(hl) (M:2 T:7)
             // -- M2
-            case 0x00D3: _wait();_mread(cpu->addr); break;
-            case 0x00D4: cpu->h=_gd(); break;
+            case 0x00DB: _wait();_mread(cpu->addr); break;
+            case 0x00DC: cpu->h=_gd(); break;
             // -- OVERLAP
-            case 0x00D5: _fetch(); break;
+            case 0x00DD: _fetch(); break;
             
             //  67: ld h,a (M:1 T:4)
             // -- OVERLAP
-            case 0x00D6: cpu->hlx[cpu->hlx_idx].h=cpu->a;_fetch(); break;
+            case 0x00DE: cpu->hlx[cpu->hlx_idx].h=cpu->a;_fetch(); break;
             
             //  68: ld l,b (M:1 T:4)
             // -- OVERLAP
-            case 0x00D7: cpu->hlx[cpu->hlx_idx].l=cpu->b;_fetch(); break;
+            case 0x00DF: cpu->hlx[cpu->hlx_idx].l=cpu->b;_fetch(); break;
             
             //  69: ld l,c (M:1 T:4)
             // -- OVERLAP
-            case 0x00D8: cpu->hlx[cpu->hlx_idx].l=cpu->c;_fetch(); break;
+            case 0x00E0: cpu->hlx[cpu->hlx_idx].l=cpu->c;_fetch(); break;
             
             //  6A: ld l,d (M:1 T:4)
             // -- OVERLAP
-            case 0x00D9: cpu->hlx[cpu->hlx_idx].l=cpu->d;_fetch(); break;
+            case 0x00E1: cpu->hlx[cpu->hlx_idx].l=cpu->d;_fetch(); break;
             
             //  6B: ld l,e (M:1 T:4)
             // -- OVERLAP
-            case 0x00DA: cpu->hlx[cpu->hlx_idx].l=cpu->e;_fetch(); break;
+            case 0x00E2: cpu->hlx[cpu->hlx_idx].l=cpu->e;_fetch(); break;
             
             //  6C: ld l,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00DB: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
+            case 0x00E3: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             //  6D: ld l,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00DC: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
+            case 0x00E4: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             //  6E: ld l,(hl) (M:2 T:7)
             // -- M2
-            case 0x00DD: _wait();_mread(cpu->addr); break;
-            case 0x00DE: cpu->l=_gd(); break;
+            case 0x00E5: _wait();_mread(cpu->addr); break;
+            case 0x00E6: cpu->l=_gd(); break;
             // -- OVERLAP
-            case 0x00DF: _fetch(); break;
+            case 0x00E7: _fetch(); break;
             
             //  6F: ld l,a (M:1 T:4)
             // -- OVERLAP
-            case 0x00E0: cpu->hlx[cpu->hlx_idx].l=cpu->a;_fetch(); break;
+            case 0x00E8: cpu->hlx[cpu->hlx_idx].l=cpu->a;_fetch(); break;
             
             //  70: ld (hl),b (M:2 T:7)
             // -- M2
-            case 0x00E1: _mwrite(cpu->addr,cpu->b); break;
-            case 0x00E2: _wait() break;
+            case 0x00E9: _mwrite(cpu->addr,cpu->b); break;
+            case 0x00EA: _wait() break;
             // -- OVERLAP
-            case 0x00E3: _fetch(); break;
+            case 0x00EB: _fetch(); break;
             
             //  71: ld (hl),c (M:2 T:7)
             // -- M2
-            case 0x00E4: _mwrite(cpu->addr,cpu->c); break;
-            case 0x00E5: _wait() break;
+            case 0x00EC: _mwrite(cpu->addr,cpu->c); break;
+            case 0x00ED: _wait() break;
             // -- OVERLAP
-            case 0x00E6: _fetch(); break;
+            case 0x00EE: _fetch(); break;
             
             //  72: ld (hl),d (M:2 T:7)
             // -- M2
-            case 0x00E7: _mwrite(cpu->addr,cpu->d); break;
-            case 0x00E8: _wait() break;
+            case 0x00EF: _mwrite(cpu->addr,cpu->d); break;
+            case 0x00F0: _wait() break;
             // -- OVERLAP
-            case 0x00E9: _fetch(); break;
+            case 0x00F1: _fetch(); break;
             
             //  73: ld (hl),e (M:2 T:7)
             // -- M2
-            case 0x00EA: _mwrite(cpu->addr,cpu->e); break;
-            case 0x00EB: _wait() break;
+            case 0x00F2: _mwrite(cpu->addr,cpu->e); break;
+            case 0x00F3: _wait() break;
             // -- OVERLAP
-            case 0x00EC: _fetch(); break;
+            case 0x00F4: _fetch(); break;
             
             //  74: ld (hl),h (M:2 T:7)
             // -- M2
-            case 0x00ED: _mwrite(cpu->addr,cpu->h); break;
-            case 0x00EE: _wait() break;
+            case 0x00F5: _mwrite(cpu->addr,cpu->h); break;
+            case 0x00F6: _wait() break;
             // -- OVERLAP
-            case 0x00EF: _fetch(); break;
+            case 0x00F7: _fetch(); break;
             
             //  75: ld (hl),l (M:2 T:7)
             // -- M2
-            case 0x00F0: _mwrite(cpu->addr,cpu->l); break;
-            case 0x00F1: _wait() break;
+            case 0x00F8: _mwrite(cpu->addr,cpu->l); break;
+            case 0x00F9: _wait() break;
             // -- OVERLAP
-            case 0x00F2: _fetch(); break;
+            case 0x00FA: _fetch(); break;
             
             //  76: halt (M:1 T:4)
             // -- OVERLAP
-            case 0x00F3: pins=z80_halt(cpu,pins);_fetch(); break;
+            case 0x00FB: pins=z80_halt(cpu,pins);_fetch(); break;
             
             //  77: ld (hl),a (M:2 T:7)
             // -- M2
-            case 0x00F4: _mwrite(cpu->addr,cpu->a); break;
-            case 0x00F5: _wait() break;
+            case 0x00FC: _mwrite(cpu->addr,cpu->a); break;
+            case 0x00FD: _wait() break;
             // -- OVERLAP
-            case 0x00F6: _fetch(); break;
+            case 0x00FE: _fetch(); break;
             
             //  78: ld a,b (M:1 T:4)
             // -- OVERLAP
-            case 0x00F7: cpu->a=cpu->b;_fetch(); break;
+            case 0x00FF: cpu->a=cpu->b;_fetch(); break;
             
             //  79: ld a,c (M:1 T:4)
             // -- OVERLAP
-            case 0x00F8: cpu->a=cpu->c;_fetch(); break;
+            case 0x0100: cpu->a=cpu->c;_fetch(); break;
             
             //  7A: ld a,d (M:1 T:4)
             // -- OVERLAP
-            case 0x00F9: cpu->a=cpu->d;_fetch(); break;
+            case 0x0101: cpu->a=cpu->d;_fetch(); break;
             
             //  7B: ld a,e (M:1 T:4)
             // -- OVERLAP
-            case 0x00FA: cpu->a=cpu->e;_fetch(); break;
+            case 0x0102: cpu->a=cpu->e;_fetch(); break;
             
             //  7C: ld a,h (M:1 T:4)
             // -- OVERLAP
-            case 0x00FB: cpu->a=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
+            case 0x0103: cpu->a=cpu->hlx[cpu->hlx_idx].h;_fetch(); break;
             
             //  7D: ld a,l (M:1 T:4)
             // -- OVERLAP
-            case 0x00FC: cpu->a=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
+            case 0x0104: cpu->a=cpu->hlx[cpu->hlx_idx].l;_fetch(); break;
             
             //  7E: ld a,(hl) (M:2 T:7)
             // -- M2
-            case 0x00FD: _wait();_mread(cpu->addr); break;
-            case 0x00FE: cpu->a=_gd(); break;
+            case 0x0105: _wait();_mread(cpu->addr); break;
+            case 0x0106: cpu->a=_gd(); break;
             // -- OVERLAP
-            case 0x00FF: _fetch(); break;
+            case 0x0107: _fetch(); break;
             
             //  7F: ld a,a (M:1 T:4)
             // -- OVERLAP
-            case 0x0100: cpu->a=cpu->a;_fetch(); break;
+            case 0x0108: cpu->a=cpu->a;_fetch(); break;
             
             //  80: add b (M:1 T:4)
             // -- OVERLAP
-            case 0x0101: z80_add8(cpu,cpu->b);_fetch(); break;
+            case 0x0109: z80_add8(cpu,cpu->b);_fetch(); break;
             
             //  81: add c (M:1 T:4)
             // -- OVERLAP
-            case 0x0102: z80_add8(cpu,cpu->c);_fetch(); break;
+            case 0x010A: z80_add8(cpu,cpu->c);_fetch(); break;
             
             //  82: add d (M:1 T:4)
             // -- OVERLAP
-            case 0x0103: z80_add8(cpu,cpu->d);_fetch(); break;
+            case 0x010B: z80_add8(cpu,cpu->d);_fetch(); break;
             
             //  83: add e (M:1 T:4)
             // -- OVERLAP
-            case 0x0104: z80_add8(cpu,cpu->e);_fetch(); break;
+            case 0x010C: z80_add8(cpu,cpu->e);_fetch(); break;
             
             //  84: add h (M:1 T:4)
             // -- OVERLAP
-            case 0x0105: z80_add8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x010D: z80_add8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  85: add l (M:1 T:4)
             // -- OVERLAP
-            case 0x0106: z80_add8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x010E: z80_add8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  86: add (hl) (M:2 T:7)
             // -- M2
-            case 0x0107: _wait();_mread(cpu->addr); break;
-            case 0x0108: cpu->dlatch=_gd(); break;
+            case 0x010F: _wait();_mread(cpu->addr); break;
+            case 0x0110: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0109: z80_add8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x0111: z80_add8(cpu,cpu->dlatch);_fetch(); break;
             
             //  87: add a (M:1 T:4)
             // -- OVERLAP
-            case 0x010A: z80_add8(cpu,cpu->a);_fetch(); break;
+            case 0x0112: z80_add8(cpu,cpu->a);_fetch(); break;
             
             //  88: adc b (M:1 T:4)
             // -- OVERLAP
-            case 0x010B: z80_adc8(cpu,cpu->b);_fetch(); break;
+            case 0x0113: z80_adc8(cpu,cpu->b);_fetch(); break;
             
             //  89: adc c (M:1 T:4)
             // -- OVERLAP
-            case 0x010C: z80_adc8(cpu,cpu->c);_fetch(); break;
+            case 0x0114: z80_adc8(cpu,cpu->c);_fetch(); break;
             
             //  8A: adc d (M:1 T:4)
             // -- OVERLAP
-            case 0x010D: z80_adc8(cpu,cpu->d);_fetch(); break;
+            case 0x0115: z80_adc8(cpu,cpu->d);_fetch(); break;
             
             //  8B: adc e (M:1 T:4)
             // -- OVERLAP
-            case 0x010E: z80_adc8(cpu,cpu->e);_fetch(); break;
+            case 0x0116: z80_adc8(cpu,cpu->e);_fetch(); break;
             
             //  8C: adc h (M:1 T:4)
             // -- OVERLAP
-            case 0x010F: z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x0117: z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  8D: adc l (M:1 T:4)
             // -- OVERLAP
-            case 0x0110: z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x0118: z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  8E: adc (hl) (M:2 T:7)
             // -- M2
-            case 0x0111: _wait();_mread(cpu->addr); break;
-            case 0x0112: cpu->dlatch=_gd(); break;
+            case 0x0119: _wait();_mread(cpu->addr); break;
+            case 0x011A: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0113: z80_adc8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x011B: z80_adc8(cpu,cpu->dlatch);_fetch(); break;
             
             //  8F: adc a (M:1 T:4)
             // -- OVERLAP
-            case 0x0114: z80_adc8(cpu,cpu->a);_fetch(); break;
+            case 0x011C: z80_adc8(cpu,cpu->a);_fetch(); break;
             
             //  90: sub b (M:1 T:4)
             // -- OVERLAP
-            case 0x0115: z80_sub8(cpu,cpu->b);_fetch(); break;
+            case 0x011D: z80_sub8(cpu,cpu->b);_fetch(); break;
             
             //  91: sub c (M:1 T:4)
             // -- OVERLAP
-            case 0x0116: z80_sub8(cpu,cpu->c);_fetch(); break;
+            case 0x011E: z80_sub8(cpu,cpu->c);_fetch(); break;
             
             //  92: sub d (M:1 T:4)
             // -- OVERLAP
-            case 0x0117: z80_sub8(cpu,cpu->d);_fetch(); break;
+            case 0x011F: z80_sub8(cpu,cpu->d);_fetch(); break;
             
             //  93: sub e (M:1 T:4)
             // -- OVERLAP
-            case 0x0118: z80_sub8(cpu,cpu->e);_fetch(); break;
+            case 0x0120: z80_sub8(cpu,cpu->e);_fetch(); break;
             
             //  94: sub h (M:1 T:4)
             // -- OVERLAP
-            case 0x0119: z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x0121: z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  95: sub l (M:1 T:4)
             // -- OVERLAP
-            case 0x011A: z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x0122: z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  96: sub (hl) (M:2 T:7)
             // -- M2
-            case 0x011B: _wait();_mread(cpu->addr); break;
-            case 0x011C: cpu->dlatch=_gd(); break;
+            case 0x0123: _wait();_mread(cpu->addr); break;
+            case 0x0124: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x011D: z80_sub8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x0125: z80_sub8(cpu,cpu->dlatch);_fetch(); break;
             
             //  97: sub a (M:1 T:4)
             // -- OVERLAP
-            case 0x011E: z80_sub8(cpu,cpu->a);_fetch(); break;
+            case 0x0126: z80_sub8(cpu,cpu->a);_fetch(); break;
             
             //  98: sbc b (M:1 T:4)
             // -- OVERLAP
-            case 0x011F: z80_sbc8(cpu,cpu->b);_fetch(); break;
+            case 0x0127: z80_sbc8(cpu,cpu->b);_fetch(); break;
             
             //  99: sbc c (M:1 T:4)
             // -- OVERLAP
-            case 0x0120: z80_sbc8(cpu,cpu->c);_fetch(); break;
+            case 0x0128: z80_sbc8(cpu,cpu->c);_fetch(); break;
             
             //  9A: sbc d (M:1 T:4)
             // -- OVERLAP
-            case 0x0121: z80_sbc8(cpu,cpu->d);_fetch(); break;
+            case 0x0129: z80_sbc8(cpu,cpu->d);_fetch(); break;
             
             //  9B: sbc e (M:1 T:4)
             // -- OVERLAP
-            case 0x0122: z80_sbc8(cpu,cpu->e);_fetch(); break;
+            case 0x012A: z80_sbc8(cpu,cpu->e);_fetch(); break;
             
             //  9C: sbc h (M:1 T:4)
             // -- OVERLAP
-            case 0x0123: z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x012B: z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  9D: sbc l (M:1 T:4)
             // -- OVERLAP
-            case 0x0124: z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x012C: z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  9E: sbc (hl) (M:2 T:7)
             // -- M2
-            case 0x0125: _wait();_mread(cpu->addr); break;
-            case 0x0126: cpu->dlatch=_gd(); break;
+            case 0x012D: _wait();_mread(cpu->addr); break;
+            case 0x012E: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0127: z80_sbc8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x012F: z80_sbc8(cpu,cpu->dlatch);_fetch(); break;
             
             //  9F: sbc a (M:1 T:4)
             // -- OVERLAP
-            case 0x0128: z80_sbc8(cpu,cpu->a);_fetch(); break;
+            case 0x0130: z80_sbc8(cpu,cpu->a);_fetch(); break;
             
             //  A0: and b (M:1 T:4)
             // -- OVERLAP
-            case 0x0129: z80_and8(cpu,cpu->b);_fetch(); break;
+            case 0x0131: z80_and8(cpu,cpu->b);_fetch(); break;
             
             //  A1: and c (M:1 T:4)
             // -- OVERLAP
-            case 0x012A: z80_and8(cpu,cpu->c);_fetch(); break;
+            case 0x0132: z80_and8(cpu,cpu->c);_fetch(); break;
             
             //  A2: and d (M:1 T:4)
             // -- OVERLAP
-            case 0x012B: z80_and8(cpu,cpu->d);_fetch(); break;
+            case 0x0133: z80_and8(cpu,cpu->d);_fetch(); break;
             
             //  A3: and e (M:1 T:4)
             // -- OVERLAP
-            case 0x012C: z80_and8(cpu,cpu->e);_fetch(); break;
+            case 0x0134: z80_and8(cpu,cpu->e);_fetch(); break;
             
             //  A4: and h (M:1 T:4)
             // -- OVERLAP
-            case 0x012D: z80_and8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x0135: z80_and8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  A5: and l (M:1 T:4)
             // -- OVERLAP
-            case 0x012E: z80_and8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x0136: z80_and8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  A6: and (hl) (M:2 T:7)
             // -- M2
-            case 0x012F: _wait();_mread(cpu->addr); break;
-            case 0x0130: cpu->dlatch=_gd(); break;
+            case 0x0137: _wait();_mread(cpu->addr); break;
+            case 0x0138: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0131: z80_and8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x0139: z80_and8(cpu,cpu->dlatch);_fetch(); break;
             
             //  A7: and a (M:1 T:4)
             // -- OVERLAP
-            case 0x0132: z80_and8(cpu,cpu->a);_fetch(); break;
+            case 0x013A: z80_and8(cpu,cpu->a);_fetch(); break;
             
             //  A8: xor b (M:1 T:4)
             // -- OVERLAP
-            case 0x0133: z80_xor8(cpu,cpu->b);_fetch(); break;
+            case 0x013B: z80_xor8(cpu,cpu->b);_fetch(); break;
             
             //  A9: xor c (M:1 T:4)
             // -- OVERLAP
-            case 0x0134: z80_xor8(cpu,cpu->c);_fetch(); break;
+            case 0x013C: z80_xor8(cpu,cpu->c);_fetch(); break;
             
             //  AA: xor d (M:1 T:4)
             // -- OVERLAP
-            case 0x0135: z80_xor8(cpu,cpu->d);_fetch(); break;
+            case 0x013D: z80_xor8(cpu,cpu->d);_fetch(); break;
             
             //  AB: xor e (M:1 T:4)
             // -- OVERLAP
-            case 0x0136: z80_xor8(cpu,cpu->e);_fetch(); break;
+            case 0x013E: z80_xor8(cpu,cpu->e);_fetch(); break;
             
             //  AC: xor h (M:1 T:4)
             // -- OVERLAP
-            case 0x0137: z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x013F: z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  AD: xor l (M:1 T:4)
             // -- OVERLAP
-            case 0x0138: z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x0140: z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  AE: xor (hl) (M:2 T:7)
             // -- M2
-            case 0x0139: _wait();_mread(cpu->addr); break;
-            case 0x013A: cpu->dlatch=_gd(); break;
+            case 0x0141: _wait();_mread(cpu->addr); break;
+            case 0x0142: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x013B: z80_xor8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x0143: z80_xor8(cpu,cpu->dlatch);_fetch(); break;
             
             //  AF: xor a (M:1 T:4)
             // -- OVERLAP
-            case 0x013C: z80_xor8(cpu,cpu->a);_fetch(); break;
+            case 0x0144: z80_xor8(cpu,cpu->a);_fetch(); break;
             
             //  B0: or b (M:1 T:4)
             // -- OVERLAP
-            case 0x013D: z80_or8(cpu,cpu->b);_fetch(); break;
+            case 0x0145: z80_or8(cpu,cpu->b);_fetch(); break;
             
             //  B1: or c (M:1 T:4)
             // -- OVERLAP
-            case 0x013E: z80_or8(cpu,cpu->c);_fetch(); break;
+            case 0x0146: z80_or8(cpu,cpu->c);_fetch(); break;
             
             //  B2: or d (M:1 T:4)
             // -- OVERLAP
-            case 0x013F: z80_or8(cpu,cpu->d);_fetch(); break;
+            case 0x0147: z80_or8(cpu,cpu->d);_fetch(); break;
             
             //  B3: or e (M:1 T:4)
             // -- OVERLAP
-            case 0x0140: z80_or8(cpu,cpu->e);_fetch(); break;
+            case 0x0148: z80_or8(cpu,cpu->e);_fetch(); break;
             
             //  B4: or h (M:1 T:4)
             // -- OVERLAP
-            case 0x0141: z80_or8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x0149: z80_or8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  B5: or l (M:1 T:4)
             // -- OVERLAP
-            case 0x0142: z80_or8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x014A: z80_or8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  B6: or (hl) (M:2 T:7)
             // -- M2
-            case 0x0143: _wait();_mread(cpu->addr); break;
-            case 0x0144: cpu->dlatch=_gd(); break;
+            case 0x014B: _wait();_mread(cpu->addr); break;
+            case 0x014C: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0145: z80_or8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x014D: z80_or8(cpu,cpu->dlatch);_fetch(); break;
             
             //  B7: or a (M:1 T:4)
             // -- OVERLAP
-            case 0x0146: z80_or8(cpu,cpu->a);_fetch(); break;
+            case 0x014E: z80_or8(cpu,cpu->a);_fetch(); break;
             
             //  B8: cp b (M:1 T:4)
             // -- OVERLAP
-            case 0x0147: z80_cp8(cpu,cpu->b);_fetch(); break;
+            case 0x014F: z80_cp8(cpu,cpu->b);_fetch(); break;
             
             //  B9: cp c (M:1 T:4)
             // -- OVERLAP
-            case 0x0148: z80_cp8(cpu,cpu->c);_fetch(); break;
+            case 0x0150: z80_cp8(cpu,cpu->c);_fetch(); break;
             
             //  BA: cp d (M:1 T:4)
             // -- OVERLAP
-            case 0x0149: z80_cp8(cpu,cpu->d);_fetch(); break;
+            case 0x0151: z80_cp8(cpu,cpu->d);_fetch(); break;
             
             //  BB: cp e (M:1 T:4)
             // -- OVERLAP
-            case 0x014A: z80_cp8(cpu,cpu->e);_fetch(); break;
+            case 0x0152: z80_cp8(cpu,cpu->e);_fetch(); break;
             
             //  BC: cp h (M:1 T:4)
             // -- OVERLAP
-            case 0x014B: z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
+            case 0x0153: z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             //  BD: cp l (M:1 T:4)
             // -- OVERLAP
-            case 0x014C: z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
+            case 0x0154: z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             //  BE: cp (hl) (M:2 T:7)
             // -- M2
-            case 0x014D: _wait();_mread(cpu->addr); break;
-            case 0x014E: cpu->dlatch=_gd(); break;
+            case 0x0155: _wait();_mread(cpu->addr); break;
+            case 0x0156: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x014F: z80_cp8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x0157: z80_cp8(cpu,cpu->dlatch);_fetch(); break;
             
             //  BF: cp a (M:1 T:4)
             // -- OVERLAP
-            case 0x0150: z80_cp8(cpu,cpu->a);_fetch(); break;
+            case 0x0158: z80_cp8(cpu,cpu->a);_fetch(); break;
             
             //  C0: ret nz (M:4 T:11)
             // -- M2 (generic)
-            case 0x0151: if(!_cc_nz){z80_skip(cpu,4,7,1);}; break;
+            case 0x0159: if(!_cc_nz){z80_skip(cpu,4,7,1);}; break;
             // -- M3
-            case 0x0152: _wait();_mread(cpu->sp++); break;
-            case 0x0153: cpu->wzl=_gd(); break;
+            case 0x015A: _wait();_mread(cpu->sp++); break;
+            case 0x015B: cpu->wzl=_gd(); break;
             // -- M4
-            case 0x0154: _wait();_mread(cpu->sp++); break;
-            case 0x0155: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x015C: _wait();_mread(cpu->sp++); break;
+            case 0x015D: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x0156: _fetch(); break;
+            case 0x015E: _fetch(); break;
             
             //  C1: pop bc (M:3 T:10)
             // -- M2
-            case 0x0157: _wait();_mread(cpu->sp++); break;
-            case 0x0158: cpu->c=_gd(); break;
+            case 0x015F: _wait();_mread(cpu->sp++); break;
+            case 0x0160: cpu->c=_gd(); break;
             // -- M3
-            case 0x0159: _wait();_mread(cpu->sp++); break;
-            case 0x015A: cpu->b=_gd(); break;
+            case 0x0161: _wait();_mread(cpu->sp++); break;
+            case 0x0162: cpu->b=_gd(); break;
             // -- OVERLAP
-            case 0x015B: _fetch(); break;
+            case 0x0163: _fetch(); break;
             
             //  C2: jp nz,nn (M:3 T:10)
             // -- M2
-            case 0x015C: _wait();_mread(cpu->pc++); break;
-            case 0x015D: cpu->wzl=_gd(); break;
+            case 0x0164: _wait();_mread(cpu->pc++); break;
+            case 0x0165: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x015E: _wait();_mread(cpu->pc++); break;
-            case 0x015F: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;}; break;
+            case 0x0166: _wait();_mread(cpu->pc++); break;
+            case 0x0167: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
-            case 0x0160: _fetch(); break;
+            case 0x0168: _fetch(); break;
             
             //  C3: jp nn (M:3 T:10)
             // -- M2
-            case 0x0161: _wait();_mread(cpu->pc++); break;
-            case 0x0162: cpu->wzl=_gd(); break;
+            case 0x0169: _wait();_mread(cpu->pc++); break;
+            case 0x016A: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0163: _wait();_mread(cpu->pc++); break;
-            case 0x0164: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x016B: _wait();_mread(cpu->pc++); break;
+            case 0x016C: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x0165: _fetch(); break;
+            case 0x016D: _fetch(); break;
             
             //  C4: call nz,nn (M:6 T:17)
             // -- M2
-            case 0x0166: _wait();_mread(cpu->pc++); break;
-            case 0x0167: cpu->wzl=_gd(); break;
+            case 0x016E: _wait();_mread(cpu->pc++); break;
+            case 0x016F: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0168: _wait();_mread(cpu->pc++); break;
-            case 0x0169: cpu->wzh=_gd();if (!_cc_nz){z80_skip(cpu,5,9,2);}; break;
+            case 0x0170: _wait();_mread(cpu->pc++); break;
+            case 0x0171: cpu->wzh=_gd();if (!_cc_nz){z80_skip(cpu,5,9,2);}; break;
             // -- M4 (generic)
-            case 0x016A:  break;
+            case 0x0172:  break;
             // -- M5
-            case 0x016B: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x016C: _wait() break;
+            case 0x0173: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x0174: _wait() break;
             // -- M6
-            case 0x016D: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x016E: _wait() break;
+            case 0x0175: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x0176: _wait() break;
             // -- OVERLAP
-            case 0x016F: _fetch(); break;
+            case 0x0177: _fetch(); break;
             
             //  C5: push bc (M:3 T:11)
             // -- M2
-            case 0x0170: _mwrite(--cpu->sp,cpu->b); break;
-            case 0x0171: _wait() break;
+            case 0x0178: _mwrite(--cpu->sp,cpu->b); break;
+            case 0x0179: _wait() break;
             // -- M3
-            case 0x0172: _mwrite(--cpu->sp,cpu->c); break;
-            case 0x0173: _wait() break;
+            case 0x017A: _mwrite(--cpu->sp,cpu->c); break;
+            case 0x017B: _wait() break;
             // -- OVERLAP
-            case 0x0174: _fetch(); break;
+            case 0x017C: _fetch(); break;
             
             //  C6: add n (M:2 T:7)
             // -- M2
-            case 0x0175: _wait();_mread(cpu->pc++); break;
-            case 0x0176: cpu->dlatch=_gd(); break;
+            case 0x017D: _wait();_mread(cpu->pc++); break;
+            case 0x017E: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0177: z80_add8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x017F: z80_add8(cpu,cpu->dlatch);_fetch(); break;
             
             //  C7: rst 0h (M:1 T:4)
             // -- OVERLAP
-            case 0x0178: _fetch(); break;
+            case 0x0180: _fetch(); break;
             
             //  C8: ret z (M:4 T:11)
             // -- M2 (generic)
-            case 0x0179: if(!_cc_z){z80_skip(cpu,4,7,1);}; break;
+            case 0x0181: if(!_cc_z){z80_skip(cpu,4,7,1);}; break;
             // -- M3
-            case 0x017A: _wait();_mread(cpu->sp++); break;
-            case 0x017B: cpu->wzl=_gd(); break;
+            case 0x0182: _wait();_mread(cpu->sp++); break;
+            case 0x0183: cpu->wzl=_gd(); break;
             // -- M4
-            case 0x017C: _wait();_mread(cpu->sp++); break;
-            case 0x017D: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x0184: _wait();_mread(cpu->sp++); break;
+            case 0x0185: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x017E: _fetch(); break;
+            case 0x0186: _fetch(); break;
             
             //  C9: ret (M:3 T:10)
             // -- M2
-            case 0x017F: _wait();_mread(cpu->sp++); break;
-            case 0x0180: cpu->wzl=_gd(); break;
+            case 0x0187: _wait();_mread(cpu->sp++); break;
+            case 0x0188: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0181: _wait();_mread(cpu->sp++); break;
-            case 0x0182: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x0189: _wait();_mread(cpu->sp++); break;
+            case 0x018A: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x0183: _fetch(); break;
+            case 0x018B: _fetch(); break;
             
             //  CA: jp z,nn (M:3 T:10)
             // -- M2
-            case 0x0184: _wait();_mread(cpu->pc++); break;
-            case 0x0185: cpu->wzl=_gd(); break;
+            case 0x018C: _wait();_mread(cpu->pc++); break;
+            case 0x018D: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0186: _wait();_mread(cpu->pc++); break;
-            case 0x0187: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;}; break;
+            case 0x018E: _wait();_mread(cpu->pc++); break;
+            case 0x018F: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
-            case 0x0188: _fetch(); break;
+            case 0x0190: _fetch(); break;
             
             //  CB: cb prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x0189: _fetch_cb(); break;
+            case 0x0191: _fetch_cb(); break;
             
             //  CC: call z,nn (M:6 T:17)
             // -- M2
-            case 0x018A: _wait();_mread(cpu->pc++); break;
-            case 0x018B: cpu->wzl=_gd(); break;
+            case 0x0192: _wait();_mread(cpu->pc++); break;
+            case 0x0193: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x018C: _wait();_mread(cpu->pc++); break;
-            case 0x018D: cpu->wzh=_gd();if (!_cc_z){z80_skip(cpu,5,9,2);}; break;
+            case 0x0194: _wait();_mread(cpu->pc++); break;
+            case 0x0195: cpu->wzh=_gd();if (!_cc_z){z80_skip(cpu,5,9,2);}; break;
             // -- M4 (generic)
-            case 0x018E:  break;
+            case 0x0196:  break;
             // -- M5
-            case 0x018F: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x0190: _wait() break;
+            case 0x0197: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x0198: _wait() break;
             // -- M6
-            case 0x0191: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x0192: _wait() break;
+            case 0x0199: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x019A: _wait() break;
             // -- OVERLAP
-            case 0x0193: _fetch(); break;
+            case 0x019B: _fetch(); break;
             
             //  CD: call nn (M:5 T:17)
             // -- M2
-            case 0x0194: _wait();_mread(cpu->pc++); break;
-            case 0x0195: cpu->wzl=_gd(); break;
+            case 0x019C: _wait();_mread(cpu->pc++); break;
+            case 0x019D: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0196: _wait();_mread(cpu->pc++); break;
-            case 0x0197: cpu->wzh=_gd(); break;
+            case 0x019E: _wait();_mread(cpu->pc++); break;
+            case 0x019F: cpu->wzh=_gd(); break;
             // -- M4
-            case 0x0198: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x0199: _wait() break;
+            case 0x01A0: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x01A1: _wait() break;
             // -- M5
-            case 0x019A: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x019B: _wait() break;
+            case 0x01A2: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x01A3: _wait() break;
             // -- OVERLAP
-            case 0x019C: _fetch(); break;
+            case 0x01A4: _fetch(); break;
             
             //  CE: adc n (M:2 T:7)
             // -- M2
-            case 0x019D: _wait();_mread(cpu->pc++); break;
-            case 0x019E: cpu->dlatch=_gd(); break;
+            case 0x01A5: _wait();_mread(cpu->pc++); break;
+            case 0x01A6: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x019F: z80_adc8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x01A7: z80_adc8(cpu,cpu->dlatch);_fetch(); break;
             
             //  CF: rst 8h (M:1 T:4)
             // -- OVERLAP
-            case 0x01A0: _fetch(); break;
+            case 0x01A8: _fetch(); break;
             
             //  D0: ret nc (M:4 T:11)
             // -- M2 (generic)
-            case 0x01A1: if(!_cc_nc){z80_skip(cpu,4,7,1);}; break;
+            case 0x01A9: if(!_cc_nc){z80_skip(cpu,4,7,1);}; break;
             // -- M3
-            case 0x01A2: _wait();_mread(cpu->sp++); break;
-            case 0x01A3: cpu->wzl=_gd(); break;
+            case 0x01AA: _wait();_mread(cpu->sp++); break;
+            case 0x01AB: cpu->wzl=_gd(); break;
             // -- M4
-            case 0x01A4: _wait();_mread(cpu->sp++); break;
-            case 0x01A5: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x01AC: _wait();_mread(cpu->sp++); break;
+            case 0x01AD: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x01A6: _fetch(); break;
+            case 0x01AE: _fetch(); break;
             
             //  D1: pop de (M:3 T:10)
             // -- M2
-            case 0x01A7: _wait();_mread(cpu->sp++); break;
-            case 0x01A8: cpu->e=_gd(); break;
+            case 0x01AF: _wait();_mread(cpu->sp++); break;
+            case 0x01B0: cpu->e=_gd(); break;
             // -- M3
-            case 0x01A9: _wait();_mread(cpu->sp++); break;
-            case 0x01AA: cpu->d=_gd(); break;
+            case 0x01B1: _wait();_mread(cpu->sp++); break;
+            case 0x01B2: cpu->d=_gd(); break;
             // -- OVERLAP
-            case 0x01AB: _fetch(); break;
+            case 0x01B3: _fetch(); break;
             
             //  D2: jp nc,nn (M:3 T:10)
             // -- M2
-            case 0x01AC: _wait();_mread(cpu->pc++); break;
-            case 0x01AD: cpu->wzl=_gd(); break;
+            case 0x01B4: _wait();_mread(cpu->pc++); break;
+            case 0x01B5: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x01AE: _wait();_mread(cpu->pc++); break;
-            case 0x01AF: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;}; break;
+            case 0x01B6: _wait();_mread(cpu->pc++); break;
+            case 0x01B7: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
-            case 0x01B0: _fetch(); break;
+            case 0x01B8: _fetch(); break;
             
             //  D3: out (n),a (M:1 T:4)
             // -- OVERLAP
-            case 0x01B1: _fetch(); break;
+            case 0x01B9: _fetch(); break;
             
             //  D4: call nc,nn (M:6 T:17)
             // -- M2
-            case 0x01B2: _wait();_mread(cpu->pc++); break;
-            case 0x01B3: cpu->wzl=_gd(); break;
+            case 0x01BA: _wait();_mread(cpu->pc++); break;
+            case 0x01BB: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x01B4: _wait();_mread(cpu->pc++); break;
-            case 0x01B5: cpu->wzh=_gd();if (!_cc_nc){z80_skip(cpu,5,9,2);}; break;
+            case 0x01BC: _wait();_mread(cpu->pc++); break;
+            case 0x01BD: cpu->wzh=_gd();if (!_cc_nc){z80_skip(cpu,5,9,2);}; break;
             // -- M4 (generic)
-            case 0x01B6:  break;
+            case 0x01BE:  break;
             // -- M5
-            case 0x01B7: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x01B8: _wait() break;
+            case 0x01BF: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x01C0: _wait() break;
             // -- M6
-            case 0x01B9: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x01BA: _wait() break;
+            case 0x01C1: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x01C2: _wait() break;
             // -- OVERLAP
-            case 0x01BB: _fetch(); break;
+            case 0x01C3: _fetch(); break;
             
             //  D5: push de (M:3 T:11)
             // -- M2
-            case 0x01BC: _mwrite(--cpu->sp,cpu->d); break;
-            case 0x01BD: _wait() break;
+            case 0x01C4: _mwrite(--cpu->sp,cpu->d); break;
+            case 0x01C5: _wait() break;
             // -- M3
-            case 0x01BE: _mwrite(--cpu->sp,cpu->e); break;
-            case 0x01BF: _wait() break;
+            case 0x01C6: _mwrite(--cpu->sp,cpu->e); break;
+            case 0x01C7: _wait() break;
             // -- OVERLAP
-            case 0x01C0: _fetch(); break;
+            case 0x01C8: _fetch(); break;
             
             //  D6: sub n (M:2 T:7)
             // -- M2
-            case 0x01C1: _wait();_mread(cpu->pc++); break;
-            case 0x01C2: cpu->dlatch=_gd(); break;
+            case 0x01C9: _wait();_mread(cpu->pc++); break;
+            case 0x01CA: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x01C3: z80_sub8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x01CB: z80_sub8(cpu,cpu->dlatch);_fetch(); break;
             
             //  D7: rst 10h (M:1 T:4)
             // -- OVERLAP
-            case 0x01C4: _fetch(); break;
+            case 0x01CC: _fetch(); break;
             
             //  D8: ret c (M:4 T:11)
             // -- M2 (generic)
-            case 0x01C5: if(!_cc_c){z80_skip(cpu,4,7,1);}; break;
+            case 0x01CD: if(!_cc_c){z80_skip(cpu,4,7,1);}; break;
             // -- M3
-            case 0x01C6: _wait();_mread(cpu->sp++); break;
-            case 0x01C7: cpu->wzl=_gd(); break;
+            case 0x01CE: _wait();_mread(cpu->sp++); break;
+            case 0x01CF: cpu->wzl=_gd(); break;
             // -- M4
-            case 0x01C8: _wait();_mread(cpu->sp++); break;
-            case 0x01C9: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x01D0: _wait();_mread(cpu->sp++); break;
+            case 0x01D1: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x01CA: _fetch(); break;
+            case 0x01D2: _fetch(); break;
             
             //  D9: exx (M:1 T:4)
             // -- OVERLAP
-            case 0x01CB: z80_exx(cpu);_fetch(); break;
+            case 0x01D3: z80_exx(cpu);_fetch(); break;
             
             //  DA: jp c,nn (M:3 T:10)
             // -- M2
-            case 0x01CC: _wait();_mread(cpu->pc++); break;
-            case 0x01CD: cpu->wzl=_gd(); break;
+            case 0x01D4: _wait();_mread(cpu->pc++); break;
+            case 0x01D5: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x01CE: _wait();_mread(cpu->pc++); break;
-            case 0x01CF: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;}; break;
+            case 0x01D6: _wait();_mread(cpu->pc++); break;
+            case 0x01D7: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
-            case 0x01D0: _fetch(); break;
+            case 0x01D8: _fetch(); break;
             
             //  DB: in a,(n) (M:1 T:4)
             // -- OVERLAP
-            case 0x01D1: _fetch(); break;
+            case 0x01D9: _fetch(); break;
             
             //  DC: call c,nn (M:6 T:17)
             // -- M2
-            case 0x01D2: _wait();_mread(cpu->pc++); break;
-            case 0x01D3: cpu->wzl=_gd(); break;
+            case 0x01DA: _wait();_mread(cpu->pc++); break;
+            case 0x01DB: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x01D4: _wait();_mread(cpu->pc++); break;
-            case 0x01D5: cpu->wzh=_gd();if (!_cc_c){z80_skip(cpu,5,9,2);}; break;
+            case 0x01DC: _wait();_mread(cpu->pc++); break;
+            case 0x01DD: cpu->wzh=_gd();if (!_cc_c){z80_skip(cpu,5,9,2);}; break;
             // -- M4 (generic)
-            case 0x01D6:  break;
+            case 0x01DE:  break;
             // -- M5
-            case 0x01D7: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x01D8: _wait() break;
+            case 0x01DF: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x01E0: _wait() break;
             // -- M6
-            case 0x01D9: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x01DA: _wait() break;
+            case 0x01E1: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x01E2: _wait() break;
             // -- OVERLAP
-            case 0x01DB: _fetch(); break;
+            case 0x01E3: _fetch(); break;
             
             //  DD: dd prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x01DC: _fetch_dd(); break;
+            case 0x01E4: _fetch_dd(); break;
             
             //  DE: sbc n (M:2 T:7)
             // -- M2
-            case 0x01DD: _wait();_mread(cpu->pc++); break;
-            case 0x01DE: cpu->dlatch=_gd(); break;
+            case 0x01E5: _wait();_mread(cpu->pc++); break;
+            case 0x01E6: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x01DF: z80_sbc8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x01E7: z80_sbc8(cpu,cpu->dlatch);_fetch(); break;
             
             //  DF: rst 18h (M:1 T:4)
             // -- OVERLAP
-            case 0x01E0: _fetch(); break;
+            case 0x01E8: _fetch(); break;
             
             //  E0: ret po (M:4 T:11)
             // -- M2 (generic)
-            case 0x01E1: if(!_cc_po){z80_skip(cpu,4,7,1);}; break;
+            case 0x01E9: if(!_cc_po){z80_skip(cpu,4,7,1);}; break;
             // -- M3
-            case 0x01E2: _wait();_mread(cpu->sp++); break;
-            case 0x01E3: cpu->wzl=_gd(); break;
+            case 0x01EA: _wait();_mread(cpu->sp++); break;
+            case 0x01EB: cpu->wzl=_gd(); break;
             // -- M4
-            case 0x01E4: _wait();_mread(cpu->sp++); break;
-            case 0x01E5: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x01EC: _wait();_mread(cpu->sp++); break;
+            case 0x01ED: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x01E6: _fetch(); break;
+            case 0x01EE: _fetch(); break;
             
             //  E1: pop hl (M:3 T:10)
             // -- M2
-            case 0x01E7: _wait();_mread(cpu->sp++); break;
-            case 0x01E8: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
+            case 0x01EF: _wait();_mread(cpu->sp++); break;
+            case 0x01F0: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
             // -- M3
-            case 0x01E9: _wait();_mread(cpu->sp++); break;
-            case 0x01EA: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
+            case 0x01F1: _wait();_mread(cpu->sp++); break;
+            case 0x01F2: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
             // -- OVERLAP
-            case 0x01EB: _fetch(); break;
+            case 0x01F3: _fetch(); break;
             
             //  E2: jp po,nn (M:3 T:10)
             // -- M2
-            case 0x01EC: _wait();_mread(cpu->pc++); break;
-            case 0x01ED: cpu->wzl=_gd(); break;
+            case 0x01F4: _wait();_mread(cpu->pc++); break;
+            case 0x01F5: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x01EE: _wait();_mread(cpu->pc++); break;
-            case 0x01EF: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;}; break;
+            case 0x01F6: _wait();_mread(cpu->pc++); break;
+            case 0x01F7: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
-            case 0x01F0: _fetch(); break;
+            case 0x01F8: _fetch(); break;
             
             //  E3: ex (sp),hl (M:5 T:19)
             // -- M2
-            case 0x01F1: _wait();_mread(cpu->sp); break;
-            case 0x01F2: cpu->wzl=_gd(); break;
+            case 0x01F9: _wait();_mread(cpu->sp); break;
+            case 0x01FA: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x01F3: _wait();_mread(cpu->sp+1); break;
-            case 0x01F4: cpu->wzh=_gd(); break;
+            case 0x01FB: _wait();_mread(cpu->sp+1); break;
+            case 0x01FC: cpu->wzh=_gd(); break;
             // -- M4
-            case 0x01F5: _mwrite(cpu->sp+1,cpu->hlx[cpu->hlx_idx].h); break;
-            case 0x01F6: _wait() break;
+            case 0x01FD: _mwrite(cpu->sp+1,cpu->hlx[cpu->hlx_idx].h); break;
+            case 0x01FE: _wait() break;
             // -- M5
-            case 0x01F7: _mwrite(cpu->sp,cpu->hlx[cpu->hlx_idx].l);cpu->hlx[cpu->hlx_idx].hl=cpu->wz; break;
-            case 0x01F8: _wait() break;
+            case 0x01FF: _mwrite(cpu->sp,cpu->hlx[cpu->hlx_idx].l);cpu->hlx[cpu->hlx_idx].hl=cpu->wz; break;
+            case 0x0200: _wait() break;
             // -- OVERLAP
-            case 0x01F9: _fetch(); break;
+            case 0x0201: _fetch(); break;
             
             //  E4: call po,nn (M:6 T:17)
             // -- M2
-            case 0x01FA: _wait();_mread(cpu->pc++); break;
-            case 0x01FB: cpu->wzl=_gd(); break;
+            case 0x0202: _wait();_mread(cpu->pc++); break;
+            case 0x0203: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x01FC: _wait();_mread(cpu->pc++); break;
-            case 0x01FD: cpu->wzh=_gd();if (!_cc_po){z80_skip(cpu,5,9,2);}; break;
+            case 0x0204: _wait();_mread(cpu->pc++); break;
+            case 0x0205: cpu->wzh=_gd();if (!_cc_po){z80_skip(cpu,5,9,2);}; break;
             // -- M4 (generic)
-            case 0x01FE:  break;
+            case 0x0206:  break;
             // -- M5
-            case 0x01FF: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x0200: _wait() break;
+            case 0x0207: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x0208: _wait() break;
             // -- M6
-            case 0x0201: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x0202: _wait() break;
+            case 0x0209: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x020A: _wait() break;
             // -- OVERLAP
-            case 0x0203: _fetch(); break;
+            case 0x020B: _fetch(); break;
             
             //  E5: push hl (M:3 T:11)
             // -- M2
-            case 0x0204: _mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].h); break;
-            case 0x0205: _wait() break;
+            case 0x020C: _mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].h); break;
+            case 0x020D: _wait() break;
             // -- M3
-            case 0x0206: _mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].l); break;
-            case 0x0207: _wait() break;
+            case 0x020E: _mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].l); break;
+            case 0x020F: _wait() break;
             // -- OVERLAP
-            case 0x0208: _fetch(); break;
+            case 0x0210: _fetch(); break;
             
             //  E6: and n (M:2 T:7)
             // -- M2
-            case 0x0209: _wait();_mread(cpu->pc++); break;
-            case 0x020A: cpu->dlatch=_gd(); break;
+            case 0x0211: _wait();_mread(cpu->pc++); break;
+            case 0x0212: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x020B: z80_and8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x0213: z80_and8(cpu,cpu->dlatch);_fetch(); break;
             
             //  E7: rst 20h (M:1 T:4)
             // -- OVERLAP
-            case 0x020C: _fetch(); break;
+            case 0x0214: _fetch(); break;
             
             //  E8: ret pe (M:4 T:11)
             // -- M2 (generic)
-            case 0x020D: if(!_cc_pe){z80_skip(cpu,4,7,1);}; break;
+            case 0x0215: if(!_cc_pe){z80_skip(cpu,4,7,1);}; break;
             // -- M3
-            case 0x020E: _wait();_mread(cpu->sp++); break;
-            case 0x020F: cpu->wzl=_gd(); break;
+            case 0x0216: _wait();_mread(cpu->sp++); break;
+            case 0x0217: cpu->wzl=_gd(); break;
             // -- M4
-            case 0x0210: _wait();_mread(cpu->sp++); break;
-            case 0x0211: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x0218: _wait();_mread(cpu->sp++); break;
+            case 0x0219: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x0212: _fetch(); break;
+            case 0x021A: _fetch(); break;
             
             //  E9: jp hl (M:1 T:4)
             // -- OVERLAP
-            case 0x0213: cpu->pc=cpu->hlx[cpu->hlx_idx].hl;_fetch(); break;
+            case 0x021B: cpu->pc=cpu->hlx[cpu->hlx_idx].hl;_fetch(); break;
             
             //  EA: jp pe,nn (M:3 T:10)
             // -- M2
-            case 0x0214: _wait();_mread(cpu->pc++); break;
-            case 0x0215: cpu->wzl=_gd(); break;
+            case 0x021C: _wait();_mread(cpu->pc++); break;
+            case 0x021D: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0216: _wait();_mread(cpu->pc++); break;
-            case 0x0217: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;}; break;
+            case 0x021E: _wait();_mread(cpu->pc++); break;
+            case 0x021F: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
-            case 0x0218: _fetch(); break;
+            case 0x0220: _fetch(); break;
             
             //  EB: ex de,hl (M:1 T:4)
             // -- OVERLAP
-            case 0x0219: z80_ex_de_hl(cpu);_fetch(); break;
+            case 0x0221: z80_ex_de_hl(cpu);_fetch(); break;
             
             //  EC: call pe,nn (M:6 T:17)
             // -- M2
-            case 0x021A: _wait();_mread(cpu->pc++); break;
-            case 0x021B: cpu->wzl=_gd(); break;
+            case 0x0222: _wait();_mread(cpu->pc++); break;
+            case 0x0223: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x021C: _wait();_mread(cpu->pc++); break;
-            case 0x021D: cpu->wzh=_gd();if (!_cc_pe){z80_skip(cpu,5,9,2);}; break;
+            case 0x0224: _wait();_mread(cpu->pc++); break;
+            case 0x0225: cpu->wzh=_gd();if (!_cc_pe){z80_skip(cpu,5,9,2);}; break;
             // -- M4 (generic)
-            case 0x021E:  break;
+            case 0x0226:  break;
             // -- M5
-            case 0x021F: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x0220: _wait() break;
+            case 0x0227: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x0228: _wait() break;
             // -- M6
-            case 0x0221: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x0222: _wait() break;
+            case 0x0229: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x022A: _wait() break;
             // -- OVERLAP
-            case 0x0223: _fetch(); break;
+            case 0x022B: _fetch(); break;
             
             //  ED: ed prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x0224: _fetch_ed(); break;
+            case 0x022C: _fetch_ed(); break;
             
             //  EE: xor n (M:2 T:7)
             // -- M2
-            case 0x0225: _wait();_mread(cpu->pc++); break;
-            case 0x0226: cpu->dlatch=_gd(); break;
+            case 0x022D: _wait();_mread(cpu->pc++); break;
+            case 0x022E: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x0227: z80_xor8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x022F: z80_xor8(cpu,cpu->dlatch);_fetch(); break;
             
             //  EF: rst 28h (M:1 T:4)
             // -- OVERLAP
-            case 0x0228: _fetch(); break;
+            case 0x0230: _fetch(); break;
             
             //  F0: ret p (M:4 T:11)
             // -- M2 (generic)
-            case 0x0229: if(!_cc_p){z80_skip(cpu,4,7,1);}; break;
+            case 0x0231: if(!_cc_p){z80_skip(cpu,4,7,1);}; break;
             // -- M3
-            case 0x022A: _wait();_mread(cpu->sp++); break;
-            case 0x022B: cpu->wzl=_gd(); break;
+            case 0x0232: _wait();_mread(cpu->sp++); break;
+            case 0x0233: cpu->wzl=_gd(); break;
             // -- M4
-            case 0x022C: _wait();_mread(cpu->sp++); break;
-            case 0x022D: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
+            case 0x0234: _wait();_mread(cpu->sp++); break;
+            case 0x0235: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x022E: _fetch(); break;
+            case 0x0236: _fetch(); break;
             
             //  F1: pop af (M:3 T:10)
             // -- M2
-            case 0x022F: _wait();_mread(cpu->sp++); break;
-            case 0x0230: cpu->f=_gd(); break;
+            case 0x0237: _wait();_mread(cpu->sp++); break;
+            case 0x0238: cpu->f=_gd(); break;
             // -- M3
-            case 0x0231: _wait();_mread(cpu->sp++); break;
-            case 0x0232: cpu->a=_gd(); break;
+            case 0x0239: _wait();_mread(cpu->sp++); break;
+            case 0x023A: cpu->a=_gd(); break;
             // -- OVERLAP
-            case 0x0233: _fetch(); break;
+            case 0x023B: _fetch(); break;
             
             //  F2: jp p,nn (M:3 T:10)
             // -- M2
-            case 0x0234: _wait();_mread(cpu->pc++); break;
-            case 0x0235: cpu->wzl=_gd(); break;
+            case 0x023C: _wait();_mread(cpu->pc++); break;
+            case 0x023D: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x0236: _wait();_mread(cpu->pc++); break;
-            case 0x0237: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;}; break;
+            case 0x023E: _wait();_mread(cpu->pc++); break;
+            case 0x023F: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;}; break;
             // -- OVERLAP
-            case 0x0238: _fetch(); break;
+            case 0x0240: _fetch(); break;
             
             //  F3: di (M:1 T:4)
             // -- OVERLAP
-            case 0x0239: _fetch(); break;
+            case 0x0241: _fetch(); break;
             
             //  F4: call p,nn (M:6 T:17)
             // -- M2
-            case 0x023A: _wait();_mread(cpu->pc++); break;
-            case 0x023B: cpu->wzl=_gd(); break;
+            case 0x0242: _wait();_mread(cpu->pc++); break;
+            case 0x0243: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x023C: _wait();_mread(cpu->pc++); break;
-            case 0x023D: cpu->wzh=_gd();if (!_cc_p){z80_skip(cpu,5,9,2);}; break;
+            case 0x0244: _wait();_mread(cpu->pc++); break;
+            case 0x0245: cpu->wzh=_gd();if (!_cc_p){z80_skip(cpu,5,9,2);}; break;
             // -- M4 (generic)
-            case 0x023E:  break;
+            case 0x0246:  break;
             // -- M5
-            case 0x023F: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x0240: _wait() break;
+            case 0x0247: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x0248: _wait() break;
             // -- M6
-            case 0x0241: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x0242: _wait() break;
+            case 0x0249: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x024A: _wait() break;
             // -- OVERLAP
-            case 0x0243: _fetch(); break;
+            case 0x024B: _fetch(); break;
             
             //  F5: push af (M:3 T:11)
             // -- M2
-            case 0x0244: _mwrite(--cpu->sp,cpu->a); break;
-            case 0x0245: _wait() break;
+            case 0x024C: _mwrite(--cpu->sp,cpu->a); break;
+            case 0x024D: _wait() break;
             // -- M3
-            case 0x0246: _mwrite(--cpu->sp,cpu->f); break;
-            case 0x0247: _wait() break;
+            case 0x024E: _mwrite(--cpu->sp,cpu->f); break;
+            case 0x024F: _wait() break;
             // -- OVERLAP
-            case 0x0248: _fetch(); break;
+            case 0x0250: _fetch(); break;
             
             //  F6: or n (M:2 T:7)
             // -- M2
-            case 0x0249: _wait();_mread(cpu->pc++); break;
-            case 0x024A: cpu->dlatch=_gd(); break;
+            case 0x0251: _wait();_mread(cpu->pc++); break;
+            case 0x0252: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x024B: z80_or8(cpu,cpu->dlatch);_fetch(); break;
+            case 0x0253: z80_or8(cpu,cpu->dlatch);_fetch(); break;
             
             //  F7: rst 30h (M:1 T:4)
             // -- OVERLAP
-            case 0x024C: _fetch(); break;
+            case 0x0254: _fetch(); break;
             
             //  F8: ret m (M:4 T:11)
             // -- M2 (generic)
-            case 0x024D: if(!_cc_m){z80_skip(cpu,4,7,1);}; break;
+            case 0x0255: if(!_cc_m){z80_skip(cpu,4,7,1);}; break;
             // -- M3
-            case 0x024E: _wait();_mread(cpu->sp++); break;
-            case 0x024F: cpu->wzl=_gd(); break;
+            case 0x0256: _wait();_mread(cpu->sp++); break;
+            case 0x0257: cpu->wzl=_gd(); break;
             // -- M4
-            case 0x0250: _wait();_mread(cpu->sp++); break;
-            case 0x0251: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
-            // -- OVERLAP
-            case 0x0252: _fetch(); break;
-            
-            //  F9: ld sp,hl (M:2 T:6)
-            // -- M2 (generic)
-            case 0x0253: cpu->sp=cpu->hlx[cpu->hlx_idx].hl; break;
-            // -- OVERLAP
-            case 0x0254: _fetch(); break;
-            
-            //  FA: jp m,nn (M:3 T:10)
-            // -- M2
-            case 0x0255: _wait();_mread(cpu->pc++); break;
-            case 0x0256: cpu->wzl=_gd(); break;
-            // -- M3
-            case 0x0257: _wait();_mread(cpu->pc++); break;
-            case 0x0258: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;}; break;
-            // -- OVERLAP
-            case 0x0259: _fetch(); break;
-            
-            //  FB: ei (M:1 T:4)
+            case 0x0258: _wait();_mread(cpu->sp++); break;
+            case 0x0259: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
             case 0x025A: _fetch(); break;
             
+            //  F9: ld sp,hl (M:2 T:6)
+            // -- M2 (generic)
+            case 0x025B: cpu->sp=cpu->hlx[cpu->hlx_idx].hl; break;
+            // -- OVERLAP
+            case 0x025C: _fetch(); break;
+            
+            //  FA: jp m,nn (M:3 T:10)
+            // -- M2
+            case 0x025D: _wait();_mread(cpu->pc++); break;
+            case 0x025E: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x025F: _wait();_mread(cpu->pc++); break;
+            case 0x0260: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;}; break;
+            // -- OVERLAP
+            case 0x0261: _fetch(); break;
+            
+            //  FB: ei (M:1 T:4)
+            // -- OVERLAP
+            case 0x0262: _fetch(); break;
+            
             //  FC: call m,nn (M:6 T:17)
             // -- M2
-            case 0x025B: _wait();_mread(cpu->pc++); break;
-            case 0x025C: cpu->wzl=_gd(); break;
+            case 0x0263: _wait();_mread(cpu->pc++); break;
+            case 0x0264: cpu->wzl=_gd(); break;
             // -- M3
-            case 0x025D: _wait();_mread(cpu->pc++); break;
-            case 0x025E: cpu->wzh=_gd();if (!_cc_m){z80_skip(cpu,5,9,2);}; break;
+            case 0x0265: _wait();_mread(cpu->pc++); break;
+            case 0x0266: cpu->wzh=_gd();if (!_cc_m){z80_skip(cpu,5,9,2);}; break;
             // -- M4 (generic)
-            case 0x025F:  break;
+            case 0x0267:  break;
             // -- M5
-            case 0x0260: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x0261: _wait() break;
+            case 0x0268: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x0269: _wait() break;
             // -- M6
-            case 0x0262: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
-            case 0x0263: _wait() break;
-            // -- OVERLAP
-            case 0x0264: _fetch(); break;
-            
-            //  FD: fd prefix (M:1 T:4)
-            // -- OVERLAP
-            case 0x0265: _fetch_fd(); break;
-            
-            //  FE: cp n (M:2 T:7)
-            // -- M2
-            case 0x0266: _wait();_mread(cpu->pc++); break;
-            case 0x0267: cpu->dlatch=_gd(); break;
-            // -- OVERLAP
-            case 0x0268: z80_cp8(cpu,cpu->dlatch);_fetch(); break;
-            
-            //  FF: rst 38h (M:1 T:4)
-            // -- OVERLAP
-            case 0x0269: _fetch(); break;
-            
-            // ED 40: in b,(c) (M:1 T:4)
-            // -- OVERLAP
-            case 0x026A: _fetch(); break;
-            
-            // ED 41: out (c),b (M:1 T:4)
-            // -- OVERLAP
-            case 0x026B: _fetch(); break;
-            
-            // ED 42: sbc hl,bc (M:1 T:4)
+            case 0x026A: _mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz; break;
+            case 0x026B: _wait() break;
             // -- OVERLAP
             case 0x026C: _fetch(); break;
             
-            // ED 43: ld (nn),bc (M:1 T:4)
+            //  FD: fd prefix (M:1 T:4)
             // -- OVERLAP
-            case 0x026D: _fetch(); break;
+            case 0x026D: _fetch_fd(); break;
             
-            // ED 44: neg (M:1 T:4)
+            //  FE: cp n (M:2 T:7)
+            // -- M2
+            case 0x026E: _wait();_mread(cpu->pc++); break;
+            case 0x026F: cpu->dlatch=_gd(); break;
             // -- OVERLAP
-            case 0x026E: _fetch(); break;
+            case 0x0270: z80_cp8(cpu,cpu->dlatch);_fetch(); break;
             
-            // ED 45: retn (M:1 T:4)
-            // -- OVERLAP
-            case 0x026F: _fetch(); break;
-            
-            // ED 46: im IM0 (M:1 T:4)
-            // -- OVERLAP
-            case 0x0270: _fetch(); break;
-            
-            // ED 47: ld i,a (M:1 T:4)
+            //  FF: rst 38h (M:1 T:4)
             // -- OVERLAP
             case 0x0271: _fetch(); break;
             
-            // ED 48: in c,(c) (M:1 T:4)
+            // ED 40: in b,(c) (M:1 T:4)
             // -- OVERLAP
             case 0x0272: _fetch(); break;
             
-            // ED 49: out (c),c (M:1 T:4)
+            // ED 41: out (c),b (M:1 T:4)
             // -- OVERLAP
             case 0x0273: _fetch(); break;
             
-            // ED 4A: adc hl,bc (M:1 T:4)
+            // ED 42: sbc hl,bc (M:1 T:4)
             // -- OVERLAP
             case 0x0274: _fetch(); break;
             
-            // ED 4B: ld bc,(nn) (M:1 T:4)
-            // -- OVERLAP
-            case 0x0275: _fetch(); break;
-            
-            // ED 4C: neg (M:1 T:4)
-            // -- OVERLAP
-            case 0x0276: _fetch(); break;
-            
-            // ED 4D: reti (M:1 T:4)
-            // -- OVERLAP
-            case 0x0277: _fetch(); break;
-            
-            // ED 4E: im IM1 (M:1 T:4)
-            // -- OVERLAP
-            case 0x0278: _fetch(); break;
-            
-            // ED 4F: ld r,a (M:1 T:4)
-            // -- OVERLAP
-            case 0x0279: _fetch(); break;
-            
-            // ED 50: in d,(c) (M:1 T:4)
-            // -- OVERLAP
-            case 0x027A: _fetch(); break;
-            
-            // ED 51: out (c),d (M:1 T:4)
-            // -- OVERLAP
-            case 0x027B: _fetch(); break;
-            
-            // ED 52: sbc hl,de (M:1 T:4)
-            // -- OVERLAP
-            case 0x027C: _fetch(); break;
-            
-            // ED 53: ld (nn),de (M:1 T:4)
+            // ED 43: ld (nn),bc (M:5 T:16)
+            // -- M2
+            case 0x0275: _wait();_mread(cpu->pc++); break;
+            case 0x0276: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0277: _wait();_mread(cpu->pc++); break;
+            case 0x0278: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x0279: _mwrite(cpu->wz++,cpu->c); break;
+            case 0x027A: _wait() break;
+            // -- M5
+            case 0x027B: _mwrite(cpu->wz,cpu->b); break;
+            case 0x027C: _wait() break;
             // -- OVERLAP
             case 0x027D: _fetch(); break;
             
-            // ED 54: neg (M:1 T:4)
+            // ED 44: neg (M:1 T:4)
             // -- OVERLAP
             case 0x027E: _fetch(); break;
             
-            // ED 55: retn (M:1 T:4)
+            // ED 45: retn (M:1 T:4)
             // -- OVERLAP
             case 0x027F: _fetch(); break;
             
-            // ED 56: im IM2 (M:1 T:4)
+            // ED 46: im IM0 (M:1 T:4)
             // -- OVERLAP
             case 0x0280: _fetch(); break;
             
-            // ED 57: ld a,i (M:1 T:4)
+            // ED 47: ld i,a (M:1 T:4)
             // -- OVERLAP
             case 0x0281: _fetch(); break;
             
-            // ED 58: in e,(c) (M:1 T:4)
+            // ED 48: in c,(c) (M:1 T:4)
             // -- OVERLAP
             case 0x0282: _fetch(); break;
             
-            // ED 59: out (c),e (M:1 T:4)
+            // ED 49: out (c),c (M:1 T:4)
             // -- OVERLAP
             case 0x0283: _fetch(); break;
             
-            // ED 5A: adc hl,de (M:1 T:4)
+            // ED 4A: adc hl,bc (M:1 T:4)
             // -- OVERLAP
             case 0x0284: _fetch(); break;
             
-            // ED 5B: ld de,(nn) (M:1 T:4)
-            // -- OVERLAP
-            case 0x0285: _fetch(); break;
-            
-            // ED 5C: neg (M:1 T:4)
-            // -- OVERLAP
-            case 0x0286: _fetch(); break;
-            
-            // ED 5D: retn (M:1 T:4)
-            // -- OVERLAP
-            case 0x0287: _fetch(); break;
-            
-            // ED 5E: im IM3 (M:1 T:4)
-            // -- OVERLAP
-            case 0x0288: _fetch(); break;
-            
-            // ED 5F: ld a,r (M:1 T:4)
-            // -- OVERLAP
-            case 0x0289: _fetch(); break;
-            
-            // ED 60: in h,(c) (M:1 T:4)
-            // -- OVERLAP
-            case 0x028A: _fetch(); break;
-            
-            // ED 61: out (c),h (M:1 T:4)
-            // -- OVERLAP
-            case 0x028B: _fetch(); break;
-            
-            // ED 62: sbc hl,hl (M:1 T:4)
-            // -- OVERLAP
-            case 0x028C: _fetch(); break;
-            
-            // ED 63: ld (nn),hl (M:1 T:4)
+            // ED 4B: ld bc,(nn) (M:5 T:16)
+            // -- M2
+            case 0x0285: _wait();_mread(cpu->pc++); break;
+            case 0x0286: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0287: _wait();_mread(cpu->pc++); break;
+            case 0x0288: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x0289: _wait();_mread(cpu->wz++); break;
+            case 0x028A: cpu->c=_gd(); break;
+            // -- M5
+            case 0x028B: _wait();_mread(cpu->wz); break;
+            case 0x028C: cpu->b=_gd(); break;
             // -- OVERLAP
             case 0x028D: _fetch(); break;
             
-            // ED 64: neg (M:1 T:4)
+            // ED 4C: neg (M:1 T:4)
             // -- OVERLAP
             case 0x028E: _fetch(); break;
             
-            // ED 65: retn (M:1 T:4)
+            // ED 4D: reti (M:1 T:4)
             // -- OVERLAP
             case 0x028F: _fetch(); break;
             
-            // ED 66: im IM4 (M:1 T:4)
+            // ED 4E: im IM1 (M:1 T:4)
             // -- OVERLAP
             case 0x0290: _fetch(); break;
             
-            // ED 67: rrd (M:1 T:4)
+            // ED 4F: ld r,a (M:1 T:4)
             // -- OVERLAP
             case 0x0291: _fetch(); break;
             
-            // ED 68: in l,(c) (M:1 T:4)
+            // ED 50: in d,(c) (M:1 T:4)
             // -- OVERLAP
             case 0x0292: _fetch(); break;
             
-            // ED 69: out (c),l (M:1 T:4)
+            // ED 51: out (c),d (M:1 T:4)
             // -- OVERLAP
             case 0x0293: _fetch(); break;
             
-            // ED 6A: adc hl,hl (M:1 T:4)
+            // ED 52: sbc hl,de (M:1 T:4)
             // -- OVERLAP
             case 0x0294: _fetch(); break;
             
-            // ED 6B: ld hl,(nn) (M:1 T:4)
-            // -- OVERLAP
-            case 0x0295: _fetch(); break;
-            
-            // ED 6C: neg (M:1 T:4)
-            // -- OVERLAP
-            case 0x0296: _fetch(); break;
-            
-            // ED 6D: retn (M:1 T:4)
-            // -- OVERLAP
-            case 0x0297: _fetch(); break;
-            
-            // ED 6E: im IM5 (M:1 T:4)
-            // -- OVERLAP
-            case 0x0298: _fetch(); break;
-            
-            // ED 6F: rld (M:1 T:4)
-            // -- OVERLAP
-            case 0x0299: _fetch(); break;
-            
-            // ED 70: in (c) (M:1 T:4)
-            // -- OVERLAP
-            case 0x029A: _fetch(); break;
-            
-            // ED 71: out (c),0 (M:1 T:4)
-            // -- OVERLAP
-            case 0x029B: _fetch(); break;
-            
-            // ED 72: sbc hl,sp (M:1 T:4)
-            // -- OVERLAP
-            case 0x029C: _fetch(); break;
-            
-            // ED 73: ld (nn),sp (M:1 T:4)
+            // ED 53: ld (nn),de (M:5 T:16)
+            // -- M2
+            case 0x0295: _wait();_mread(cpu->pc++); break;
+            case 0x0296: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x0297: _wait();_mread(cpu->pc++); break;
+            case 0x0298: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x0299: _mwrite(cpu->wz++,cpu->e); break;
+            case 0x029A: _wait() break;
+            // -- M5
+            case 0x029B: _mwrite(cpu->wz,cpu->d); break;
+            case 0x029C: _wait() break;
             // -- OVERLAP
             case 0x029D: _fetch(); break;
             
-            // ED 74: neg (M:1 T:4)
+            // ED 54: neg (M:1 T:4)
             // -- OVERLAP
             case 0x029E: _fetch(); break;
             
-            // ED 75: retn (M:1 T:4)
+            // ED 55: retn (M:1 T:4)
             // -- OVERLAP
             case 0x029F: _fetch(); break;
             
-            // ED 76: im IM6 (M:1 T:4)
+            // ED 56: im IM2 (M:1 T:4)
             // -- OVERLAP
             case 0x02A0: _fetch(); break;
             
-            // ED 78: in a,(c) (M:1 T:4)
+            // ED 57: ld a,i (M:1 T:4)
             // -- OVERLAP
             case 0x02A1: _fetch(); break;
             
-            // ED 79: out (c),a (M:1 T:4)
+            // ED 58: in e,(c) (M:1 T:4)
             // -- OVERLAP
             case 0x02A2: _fetch(); break;
             
-            // ED 7A: adc hl,sp (M:1 T:4)
+            // ED 59: out (c),e (M:1 T:4)
             // -- OVERLAP
             case 0x02A3: _fetch(); break;
             
-            // ED 7B: ld sp,(nn) (M:1 T:4)
+            // ED 5A: adc hl,de (M:1 T:4)
             // -- OVERLAP
             case 0x02A4: _fetch(); break;
             
-            // ED 7C: neg (M:1 T:4)
-            // -- OVERLAP
-            case 0x02A5: _fetch(); break;
-            
-            // ED 7D: retn (M:1 T:4)
-            // -- OVERLAP
-            case 0x02A6: _fetch(); break;
-            
-            // ED 7E: im IM7 (M:1 T:4)
-            // -- OVERLAP
-            case 0x02A7: _fetch(); break;
-            
-            // ED A0: ldi (M:1 T:4)
-            // -- OVERLAP
-            case 0x02A8: _fetch(); break;
-            
-            // ED A1: cpi (M:1 T:4)
-            // -- OVERLAP
-            case 0x02A9: _fetch(); break;
-            
-            // ED A2: ini (M:1 T:4)
-            // -- OVERLAP
-            case 0x02AA: _fetch(); break;
-            
-            // ED A3: outi (M:1 T:4)
-            // -- OVERLAP
-            case 0x02AB: _fetch(); break;
-            
-            // ED A8: ldd (M:1 T:4)
-            // -- OVERLAP
-            case 0x02AC: _fetch(); break;
-            
-            // ED A9: cpd (M:1 T:4)
+            // ED 5B: ld de,(nn) (M:5 T:16)
+            // -- M2
+            case 0x02A5: _wait();_mread(cpu->pc++); break;
+            case 0x02A6: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x02A7: _wait();_mread(cpu->pc++); break;
+            case 0x02A8: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x02A9: _wait();_mread(cpu->wz++); break;
+            case 0x02AA: cpu->e=_gd(); break;
+            // -- M5
+            case 0x02AB: _wait();_mread(cpu->wz); break;
+            case 0x02AC: cpu->d=_gd(); break;
             // -- OVERLAP
             case 0x02AD: _fetch(); break;
             
-            // ED AA: ind (M:1 T:4)
+            // ED 5C: neg (M:1 T:4)
             // -- OVERLAP
             case 0x02AE: _fetch(); break;
             
-            // ED AB: outd (M:1 T:4)
+            // ED 5D: retn (M:1 T:4)
             // -- OVERLAP
             case 0x02AF: _fetch(); break;
             
-            // ED B0: ldir (M:1 T:4)
+            // ED 5E: im IM3 (M:1 T:4)
             // -- OVERLAP
             case 0x02B0: _fetch(); break;
             
-            // ED B1: cpir (M:1 T:4)
+            // ED 5F: ld a,r (M:1 T:4)
             // -- OVERLAP
             case 0x02B1: _fetch(); break;
             
-            // ED B2: inir (M:1 T:4)
+            // ED 60: in h,(c) (M:1 T:4)
             // -- OVERLAP
             case 0x02B2: _fetch(); break;
             
-            // ED B3: otir (M:1 T:4)
+            // ED 61: out (c),h (M:1 T:4)
             // -- OVERLAP
             case 0x02B3: _fetch(); break;
             
-            // ED B8: lddr (M:1 T:4)
+            // ED 62: sbc hl,hl (M:1 T:4)
             // -- OVERLAP
             case 0x02B4: _fetch(); break;
             
-            // ED B9: cprd (M:1 T:4)
-            // -- OVERLAP
-            case 0x02B5: _fetch(); break;
-            
-            // ED BA: indr (M:1 T:4)
-            // -- OVERLAP
-            case 0x02B6: _fetch(); break;
-            
-            // ED BB: otdr (M:1 T:4)
-            // -- OVERLAP
-            case 0x02B7: _fetch(); break;
-            
-            // CB 00: rlc b (M:1 T:4)
-            // -- OVERLAP
-            case 0x02B8: _fetch(); break;
-            
-            // CB 01: rlc c (M:1 T:4)
-            // -- OVERLAP
-            case 0x02B9: _fetch(); break;
-            
-            // CB 02: rlc d (M:1 T:4)
-            // -- OVERLAP
-            case 0x02BA: _fetch(); break;
-            
-            // CB 03: rlc e (M:1 T:4)
-            // -- OVERLAP
-            case 0x02BB: _fetch(); break;
-            
-            // CB 04: rlc h (M:1 T:4)
-            // -- OVERLAP
-            case 0x02BC: _fetch(); break;
-            
-            // CB 05: rlc l (M:1 T:4)
+            // ED 63: ld (nn),hl (M:5 T:16)
+            // -- M2
+            case 0x02B5: _wait();_mread(cpu->pc++); break;
+            case 0x02B6: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x02B7: _wait();_mread(cpu->pc++); break;
+            case 0x02B8: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x02B9: _mwrite(cpu->wz++,cpu->hlx[cpu->hlx_idx].l); break;
+            case 0x02BA: _wait() break;
+            // -- M5
+            case 0x02BB: _mwrite(cpu->wz,cpu->hlx[cpu->hlx_idx].h); break;
+            case 0x02BC: _wait() break;
             // -- OVERLAP
             case 0x02BD: _fetch(); break;
             
-            // CB 06: rlc (hl) (M:1 T:4)
+            // ED 64: neg (M:1 T:4)
             // -- OVERLAP
             case 0x02BE: _fetch(); break;
             
-            // CB 07: rlc a (M:1 T:4)
+            // ED 65: retn (M:1 T:4)
             // -- OVERLAP
             case 0x02BF: _fetch(); break;
             
-            // CB 08: rrc b (M:1 T:4)
+            // ED 66: im IM4 (M:1 T:4)
             // -- OVERLAP
             case 0x02C0: _fetch(); break;
             
-            // CB 09: rrc c (M:1 T:4)
+            // ED 67: rrd (M:1 T:4)
             // -- OVERLAP
             case 0x02C1: _fetch(); break;
             
-            // CB 0A: rrc d (M:1 T:4)
+            // ED 68: in l,(c) (M:1 T:4)
             // -- OVERLAP
             case 0x02C2: _fetch(); break;
             
-            // CB 0B: rrc e (M:1 T:4)
+            // ED 69: out (c),l (M:1 T:4)
             // -- OVERLAP
             case 0x02C3: _fetch(); break;
             
-            // CB 0C: rrc h (M:1 T:4)
+            // ED 6A: adc hl,hl (M:1 T:4)
             // -- OVERLAP
             case 0x02C4: _fetch(); break;
             
-            // CB 0D: rrc l (M:1 T:4)
-            // -- OVERLAP
-            case 0x02C5: _fetch(); break;
-            
-            // CB 0E: rrc (hl) (M:1 T:4)
-            // -- OVERLAP
-            case 0x02C6: _fetch(); break;
-            
-            // CB 0F: rrc a (M:1 T:4)
-            // -- OVERLAP
-            case 0x02C7: _fetch(); break;
-            
-            // CB 10: rl b (M:1 T:4)
-            // -- OVERLAP
-            case 0x02C8: _fetch(); break;
-            
-            // CB 11: rl c (M:1 T:4)
-            // -- OVERLAP
-            case 0x02C9: _fetch(); break;
-            
-            // CB 12: rl d (M:1 T:4)
-            // -- OVERLAP
-            case 0x02CA: _fetch(); break;
-            
-            // CB 13: rl e (M:1 T:4)
-            // -- OVERLAP
-            case 0x02CB: _fetch(); break;
-            
-            // CB 14: rl h (M:1 T:4)
-            // -- OVERLAP
-            case 0x02CC: _fetch(); break;
-            
-            // CB 15: rl l (M:1 T:4)
+            // ED 6B: ld hl,(nn) (M:5 T:16)
+            // -- M2
+            case 0x02C5: _wait();_mread(cpu->pc++); break;
+            case 0x02C6: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x02C7: _wait();_mread(cpu->pc++); break;
+            case 0x02C8: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x02C9: _wait();_mread(cpu->wz++); break;
+            case 0x02CA: cpu->hlx[cpu->hlx_idx].l=_gd(); break;
+            // -- M5
+            case 0x02CB: _wait();_mread(cpu->wz); break;
+            case 0x02CC: cpu->hlx[cpu->hlx_idx].h=_gd(); break;
             // -- OVERLAP
             case 0x02CD: _fetch(); break;
             
-            // CB 16: rl (hl) (M:1 T:4)
+            // ED 6C: neg (M:1 T:4)
             // -- OVERLAP
             case 0x02CE: _fetch(); break;
             
-            // CB 17: rl a (M:1 T:4)
+            // ED 6D: retn (M:1 T:4)
             // -- OVERLAP
             case 0x02CF: _fetch(); break;
             
-            // CB 18: rr b (M:1 T:4)
+            // ED 6E: im IM5 (M:1 T:4)
             // -- OVERLAP
             case 0x02D0: _fetch(); break;
             
-            // CB 19: rr c (M:1 T:4)
+            // ED 6F: rld (M:1 T:4)
             // -- OVERLAP
             case 0x02D1: _fetch(); break;
             
-            // CB 1A: rr d (M:1 T:4)
+            // ED 70: in (c) (M:1 T:4)
             // -- OVERLAP
             case 0x02D2: _fetch(); break;
             
-            // CB 1B: rr e (M:1 T:4)
+            // ED 71: out (c),0 (M:1 T:4)
             // -- OVERLAP
             case 0x02D3: _fetch(); break;
             
-            // CB 1C: rr h (M:1 T:4)
+            // ED 72: sbc hl,sp (M:1 T:4)
             // -- OVERLAP
             case 0x02D4: _fetch(); break;
             
-            // CB 1D: rr l (M:1 T:4)
-            // -- OVERLAP
-            case 0x02D5: _fetch(); break;
-            
-            // CB 1E: rr (hl) (M:1 T:4)
-            // -- OVERLAP
-            case 0x02D6: _fetch(); break;
-            
-            // CB 1F: rr a (M:1 T:4)
-            // -- OVERLAP
-            case 0x02D7: _fetch(); break;
-            
-            // CB 20: sla b (M:1 T:4)
-            // -- OVERLAP
-            case 0x02D8: _fetch(); break;
-            
-            // CB 21: sla c (M:1 T:4)
-            // -- OVERLAP
-            case 0x02D9: _fetch(); break;
-            
-            // CB 22: sla d (M:1 T:4)
-            // -- OVERLAP
-            case 0x02DA: _fetch(); break;
-            
-            // CB 23: sla e (M:1 T:4)
-            // -- OVERLAP
-            case 0x02DB: _fetch(); break;
-            
-            // CB 24: sla h (M:1 T:4)
-            // -- OVERLAP
-            case 0x02DC: _fetch(); break;
-            
-            // CB 25: sla l (M:1 T:4)
+            // ED 73: ld (nn),sp (M:5 T:16)
+            // -- M2
+            case 0x02D5: _wait();_mread(cpu->pc++); break;
+            case 0x02D6: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x02D7: _wait();_mread(cpu->pc++); break;
+            case 0x02D8: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x02D9: _mwrite(cpu->wz++,cpu->spl); break;
+            case 0x02DA: _wait() break;
+            // -- M5
+            case 0x02DB: _mwrite(cpu->wz,cpu->sph); break;
+            case 0x02DC: _wait() break;
             // -- OVERLAP
             case 0x02DD: _fetch(); break;
             
-            // CB 26: sla (hl) (M:1 T:4)
+            // ED 74: neg (M:1 T:4)
             // -- OVERLAP
             case 0x02DE: _fetch(); break;
             
-            // CB 27: sla a (M:1 T:4)
+            // ED 75: retn (M:1 T:4)
             // -- OVERLAP
             case 0x02DF: _fetch(); break;
             
-            // CB 28: sra b (M:1 T:4)
+            // ED 76: im IM6 (M:1 T:4)
             // -- OVERLAP
             case 0x02E0: _fetch(); break;
             
-            // CB 29: sra c (M:1 T:4)
+            // ED 78: in a,(c) (M:1 T:4)
             // -- OVERLAP
             case 0x02E1: _fetch(); break;
             
-            // CB 2A: sra d (M:1 T:4)
+            // ED 79: out (c),a (M:1 T:4)
             // -- OVERLAP
             case 0x02E2: _fetch(); break;
             
-            // CB 2B: sra e (M:1 T:4)
+            // ED 7A: adc hl,sp (M:1 T:4)
             // -- OVERLAP
             case 0x02E3: _fetch(); break;
             
-            // CB 2C: sra h (M:1 T:4)
-            // -- OVERLAP
-            case 0x02E4: _fetch(); break;
-            
-            // CB 2D: sra l (M:1 T:4)
-            // -- OVERLAP
-            case 0x02E5: _fetch(); break;
-            
-            // CB 2E: sra (hl) (M:1 T:4)
-            // -- OVERLAP
-            case 0x02E6: _fetch(); break;
-            
-            // CB 2F: sra a (M:1 T:4)
-            // -- OVERLAP
-            case 0x02E7: _fetch(); break;
-            
-            // CB 30: sll b (M:1 T:4)
-            // -- OVERLAP
-            case 0x02E8: _fetch(); break;
-            
-            // CB 31: sll c (M:1 T:4)
-            // -- OVERLAP
-            case 0x02E9: _fetch(); break;
-            
-            // CB 32: sll d (M:1 T:4)
-            // -- OVERLAP
-            case 0x02EA: _fetch(); break;
-            
-            // CB 33: sll e (M:1 T:4)
-            // -- OVERLAP
-            case 0x02EB: _fetch(); break;
-            
-            // CB 34: sll h (M:1 T:4)
+            // ED 7B: ld sp,(nn) (M:5 T:16)
+            // -- M2
+            case 0x02E4: _wait();_mread(cpu->pc++); break;
+            case 0x02E5: cpu->wzl=_gd(); break;
+            // -- M3
+            case 0x02E6: _wait();_mread(cpu->pc++); break;
+            case 0x02E7: cpu->wzh=_gd(); break;
+            // -- M4
+            case 0x02E8: _wait();_mread(cpu->wz++); break;
+            case 0x02E9: cpu->spl=_gd(); break;
+            // -- M5
+            case 0x02EA: _wait();_mread(cpu->wz); break;
+            case 0x02EB: cpu->sph=_gd(); break;
             // -- OVERLAP
             case 0x02EC: _fetch(); break;
             
-            // CB 35: sll l (M:1 T:4)
+            // ED 7C: neg (M:1 T:4)
             // -- OVERLAP
             case 0x02ED: _fetch(); break;
             
-            // CB 36: sll (hl) (M:1 T:4)
+            // ED 7D: retn (M:1 T:4)
             // -- OVERLAP
             case 0x02EE: _fetch(); break;
             
-            // CB 37: sll a (M:1 T:4)
+            // ED 7E: im IM7 (M:1 T:4)
             // -- OVERLAP
             case 0x02EF: _fetch(); break;
             
-            // CB 38: srl b (M:1 T:4)
+            // ED A0: ldi (M:1 T:4)
             // -- OVERLAP
             case 0x02F0: _fetch(); break;
             
-            // CB 39: srl c (M:1 T:4)
+            // ED A1: cpi (M:1 T:4)
             // -- OVERLAP
             case 0x02F1: _fetch(); break;
             
-            // CB 3A: srl d (M:1 T:4)
+            // ED A2: ini (M:1 T:4)
             // -- OVERLAP
             case 0x02F2: _fetch(); break;
             
-            // CB 3B: srl e (M:1 T:4)
+            // ED A3: outi (M:1 T:4)
             // -- OVERLAP
             case 0x02F3: _fetch(); break;
             
-            // CB 3C: srl h (M:1 T:4)
+            // ED A8: ldd (M:1 T:4)
             // -- OVERLAP
             case 0x02F4: _fetch(); break;
             
-            // CB 3D: srl l (M:1 T:4)
+            // ED A9: cpd (M:1 T:4)
             // -- OVERLAP
             case 0x02F5: _fetch(); break;
             
-            // CB 3E: srl (hl) (M:1 T:4)
+            // ED AA: ind (M:1 T:4)
             // -- OVERLAP
             case 0x02F6: _fetch(); break;
             
-            // CB 3F: srl a (M:1 T:4)
+            // ED AB: outd (M:1 T:4)
             // -- OVERLAP
             case 0x02F7: _fetch(); break;
             
-            // CB 40: bit 0,b (M:1 T:4)
+            // ED B0: ldir (M:1 T:4)
             // -- OVERLAP
             case 0x02F8: _fetch(); break;
             
-            // CB 41: bit 0,c (M:1 T:4)
+            // ED B1: cpir (M:1 T:4)
             // -- OVERLAP
             case 0x02F9: _fetch(); break;
             
-            // CB 42: bit 0,d (M:1 T:4)
+            // ED B2: inir (M:1 T:4)
             // -- OVERLAP
             case 0x02FA: _fetch(); break;
             
-            // CB 43: bit 0,e (M:1 T:4)
+            // ED B3: otir (M:1 T:4)
             // -- OVERLAP
             case 0x02FB: _fetch(); break;
             
-            // CB 44: bit 0,h (M:1 T:4)
+            // ED B8: lddr (M:1 T:4)
             // -- OVERLAP
             case 0x02FC: _fetch(); break;
             
-            // CB 45: bit 0,l (M:1 T:4)
+            // ED B9: cprd (M:1 T:4)
             // -- OVERLAP
             case 0x02FD: _fetch(); break;
             
-            // CB 46: bit (hl) (M:1 T:4)
+            // ED BA: indr (M:1 T:4)
             // -- OVERLAP
             case 0x02FE: _fetch(); break;
             
-            // CB 47: bit 0,a (M:1 T:4)
+            // ED BB: otdr (M:1 T:4)
             // -- OVERLAP
             case 0x02FF: _fetch(); break;
             
-            // CB 48: bit 1,b (M:1 T:4)
+            // CB 00: rlc b (M:1 T:4)
             // -- OVERLAP
             case 0x0300: _fetch(); break;
             
-            // CB 49: bit 1,c (M:1 T:4)
+            // CB 01: rlc c (M:1 T:4)
             // -- OVERLAP
             case 0x0301: _fetch(); break;
             
-            // CB 4A: bit 1,d (M:1 T:4)
+            // CB 02: rlc d (M:1 T:4)
             // -- OVERLAP
             case 0x0302: _fetch(); break;
             
-            // CB 4B: bit 1,e (M:1 T:4)
+            // CB 03: rlc e (M:1 T:4)
             // -- OVERLAP
             case 0x0303: _fetch(); break;
             
-            // CB 4C: bit 1,h (M:1 T:4)
+            // CB 04: rlc h (M:1 T:4)
             // -- OVERLAP
             case 0x0304: _fetch(); break;
             
-            // CB 4D: bit 1,l (M:1 T:4)
+            // CB 05: rlc l (M:1 T:4)
             // -- OVERLAP
             case 0x0305: _fetch(); break;
             
-            // CB 4E: bit (hl) (M:1 T:4)
+            // CB 06: rlc (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0306: _fetch(); break;
             
-            // CB 4F: bit 1,a (M:1 T:4)
+            // CB 07: rlc a (M:1 T:4)
             // -- OVERLAP
             case 0x0307: _fetch(); break;
             
-            // CB 50: bit 2,b (M:1 T:4)
+            // CB 08: rrc b (M:1 T:4)
             // -- OVERLAP
             case 0x0308: _fetch(); break;
             
-            // CB 51: bit 2,c (M:1 T:4)
+            // CB 09: rrc c (M:1 T:4)
             // -- OVERLAP
             case 0x0309: _fetch(); break;
             
-            // CB 52: bit 2,d (M:1 T:4)
+            // CB 0A: rrc d (M:1 T:4)
             // -- OVERLAP
             case 0x030A: _fetch(); break;
             
-            // CB 53: bit 2,e (M:1 T:4)
+            // CB 0B: rrc e (M:1 T:4)
             // -- OVERLAP
             case 0x030B: _fetch(); break;
             
-            // CB 54: bit 2,h (M:1 T:4)
+            // CB 0C: rrc h (M:1 T:4)
             // -- OVERLAP
             case 0x030C: _fetch(); break;
             
-            // CB 55: bit 2,l (M:1 T:4)
+            // CB 0D: rrc l (M:1 T:4)
             // -- OVERLAP
             case 0x030D: _fetch(); break;
             
-            // CB 56: bit (hl) (M:1 T:4)
+            // CB 0E: rrc (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x030E: _fetch(); break;
             
-            // CB 57: bit 2,a (M:1 T:4)
+            // CB 0F: rrc a (M:1 T:4)
             // -- OVERLAP
             case 0x030F: _fetch(); break;
             
-            // CB 58: bit 3,b (M:1 T:4)
+            // CB 10: rl b (M:1 T:4)
             // -- OVERLAP
             case 0x0310: _fetch(); break;
             
-            // CB 59: bit 3,c (M:1 T:4)
+            // CB 11: rl c (M:1 T:4)
             // -- OVERLAP
             case 0x0311: _fetch(); break;
             
-            // CB 5A: bit 3,d (M:1 T:4)
+            // CB 12: rl d (M:1 T:4)
             // -- OVERLAP
             case 0x0312: _fetch(); break;
             
-            // CB 5B: bit 3,e (M:1 T:4)
+            // CB 13: rl e (M:1 T:4)
             // -- OVERLAP
             case 0x0313: _fetch(); break;
             
-            // CB 5C: bit 3,h (M:1 T:4)
+            // CB 14: rl h (M:1 T:4)
             // -- OVERLAP
             case 0x0314: _fetch(); break;
             
-            // CB 5D: bit 3,l (M:1 T:4)
+            // CB 15: rl l (M:1 T:4)
             // -- OVERLAP
             case 0x0315: _fetch(); break;
             
-            // CB 5E: bit (hl) (M:1 T:4)
+            // CB 16: rl (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0316: _fetch(); break;
             
-            // CB 5F: bit 3,a (M:1 T:4)
+            // CB 17: rl a (M:1 T:4)
             // -- OVERLAP
             case 0x0317: _fetch(); break;
             
-            // CB 60: bit 4,b (M:1 T:4)
+            // CB 18: rr b (M:1 T:4)
             // -- OVERLAP
             case 0x0318: _fetch(); break;
             
-            // CB 61: bit 4,c (M:1 T:4)
+            // CB 19: rr c (M:1 T:4)
             // -- OVERLAP
             case 0x0319: _fetch(); break;
             
-            // CB 62: bit 4,d (M:1 T:4)
+            // CB 1A: rr d (M:1 T:4)
             // -- OVERLAP
             case 0x031A: _fetch(); break;
             
-            // CB 63: bit 4,e (M:1 T:4)
+            // CB 1B: rr e (M:1 T:4)
             // -- OVERLAP
             case 0x031B: _fetch(); break;
             
-            // CB 64: bit 4,h (M:1 T:4)
+            // CB 1C: rr h (M:1 T:4)
             // -- OVERLAP
             case 0x031C: _fetch(); break;
             
-            // CB 65: bit 4,l (M:1 T:4)
+            // CB 1D: rr l (M:1 T:4)
             // -- OVERLAP
             case 0x031D: _fetch(); break;
             
-            // CB 66: bit (hl) (M:1 T:4)
+            // CB 1E: rr (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x031E: _fetch(); break;
             
-            // CB 67: bit 4,a (M:1 T:4)
+            // CB 1F: rr a (M:1 T:4)
             // -- OVERLAP
             case 0x031F: _fetch(); break;
             
-            // CB 68: bit 5,b (M:1 T:4)
+            // CB 20: sla b (M:1 T:4)
             // -- OVERLAP
             case 0x0320: _fetch(); break;
             
-            // CB 69: bit 5,c (M:1 T:4)
+            // CB 21: sla c (M:1 T:4)
             // -- OVERLAP
             case 0x0321: _fetch(); break;
             
-            // CB 6A: bit 5,d (M:1 T:4)
+            // CB 22: sla d (M:1 T:4)
             // -- OVERLAP
             case 0x0322: _fetch(); break;
             
-            // CB 6B: bit 5,e (M:1 T:4)
+            // CB 23: sla e (M:1 T:4)
             // -- OVERLAP
             case 0x0323: _fetch(); break;
             
-            // CB 6C: bit 5,h (M:1 T:4)
+            // CB 24: sla h (M:1 T:4)
             // -- OVERLAP
             case 0x0324: _fetch(); break;
             
-            // CB 6D: bit 5,l (M:1 T:4)
+            // CB 25: sla l (M:1 T:4)
             // -- OVERLAP
             case 0x0325: _fetch(); break;
             
-            // CB 6E: bit (hl) (M:1 T:4)
+            // CB 26: sla (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0326: _fetch(); break;
             
-            // CB 6F: bit 5,a (M:1 T:4)
+            // CB 27: sla a (M:1 T:4)
             // -- OVERLAP
             case 0x0327: _fetch(); break;
             
-            // CB 70: bit 6,b (M:1 T:4)
+            // CB 28: sra b (M:1 T:4)
             // -- OVERLAP
             case 0x0328: _fetch(); break;
             
-            // CB 71: bit 6,c (M:1 T:4)
+            // CB 29: sra c (M:1 T:4)
             // -- OVERLAP
             case 0x0329: _fetch(); break;
             
-            // CB 72: bit 6,d (M:1 T:4)
+            // CB 2A: sra d (M:1 T:4)
             // -- OVERLAP
             case 0x032A: _fetch(); break;
             
-            // CB 73: bit 6,e (M:1 T:4)
+            // CB 2B: sra e (M:1 T:4)
             // -- OVERLAP
             case 0x032B: _fetch(); break;
             
-            // CB 74: bit 6,h (M:1 T:4)
+            // CB 2C: sra h (M:1 T:4)
             // -- OVERLAP
             case 0x032C: _fetch(); break;
             
-            // CB 75: bit 6,l (M:1 T:4)
+            // CB 2D: sra l (M:1 T:4)
             // -- OVERLAP
             case 0x032D: _fetch(); break;
             
-            // CB 76: bit (hl) (M:1 T:4)
+            // CB 2E: sra (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x032E: _fetch(); break;
             
-            // CB 77: bit 6,a (M:1 T:4)
+            // CB 2F: sra a (M:1 T:4)
             // -- OVERLAP
             case 0x032F: _fetch(); break;
             
-            // CB 78: bit 7,b (M:1 T:4)
+            // CB 30: sll b (M:1 T:4)
             // -- OVERLAP
             case 0x0330: _fetch(); break;
             
-            // CB 79: bit 7,c (M:1 T:4)
+            // CB 31: sll c (M:1 T:4)
             // -- OVERLAP
             case 0x0331: _fetch(); break;
             
-            // CB 7A: bit 7,d (M:1 T:4)
+            // CB 32: sll d (M:1 T:4)
             // -- OVERLAP
             case 0x0332: _fetch(); break;
             
-            // CB 7B: bit 7,e (M:1 T:4)
+            // CB 33: sll e (M:1 T:4)
             // -- OVERLAP
             case 0x0333: _fetch(); break;
             
-            // CB 7C: bit 7,h (M:1 T:4)
+            // CB 34: sll h (M:1 T:4)
             // -- OVERLAP
             case 0x0334: _fetch(); break;
             
-            // CB 7D: bit 7,l (M:1 T:4)
+            // CB 35: sll l (M:1 T:4)
             // -- OVERLAP
             case 0x0335: _fetch(); break;
             
-            // CB 7E: bit (hl) (M:1 T:4)
+            // CB 36: sll (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0336: _fetch(); break;
             
-            // CB 7F: bit 7,a (M:1 T:4)
+            // CB 37: sll a (M:1 T:4)
             // -- OVERLAP
             case 0x0337: _fetch(); break;
             
-            // CB 80: res 0,b (M:1 T:4)
+            // CB 38: srl b (M:1 T:4)
             // -- OVERLAP
             case 0x0338: _fetch(); break;
             
-            // CB 81: res 0,c (M:1 T:4)
+            // CB 39: srl c (M:1 T:4)
             // -- OVERLAP
             case 0x0339: _fetch(); break;
             
-            // CB 82: res 0,d (M:1 T:4)
+            // CB 3A: srl d (M:1 T:4)
             // -- OVERLAP
             case 0x033A: _fetch(); break;
             
-            // CB 83: res 0,e (M:1 T:4)
+            // CB 3B: srl e (M:1 T:4)
             // -- OVERLAP
             case 0x033B: _fetch(); break;
             
-            // CB 84: res 0,h (M:1 T:4)
+            // CB 3C: srl h (M:1 T:4)
             // -- OVERLAP
             case 0x033C: _fetch(); break;
             
-            // CB 85: res 0,l (M:1 T:4)
+            // CB 3D: srl l (M:1 T:4)
             // -- OVERLAP
             case 0x033D: _fetch(); break;
             
-            // CB 86: res 0,(hl) (M:1 T:4)
+            // CB 3E: srl (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x033E: _fetch(); break;
             
-            // CB 87: res 0,a (M:1 T:4)
+            // CB 3F: srl a (M:1 T:4)
             // -- OVERLAP
             case 0x033F: _fetch(); break;
             
-            // CB 88: res 1,b (M:1 T:4)
+            // CB 40: bit 0,b (M:1 T:4)
             // -- OVERLAP
             case 0x0340: _fetch(); break;
             
-            // CB 89: res 1,c (M:1 T:4)
+            // CB 41: bit 0,c (M:1 T:4)
             // -- OVERLAP
             case 0x0341: _fetch(); break;
             
-            // CB 8A: res 1,d (M:1 T:4)
+            // CB 42: bit 0,d (M:1 T:4)
             // -- OVERLAP
             case 0x0342: _fetch(); break;
             
-            // CB 8B: res 1,e (M:1 T:4)
+            // CB 43: bit 0,e (M:1 T:4)
             // -- OVERLAP
             case 0x0343: _fetch(); break;
             
-            // CB 8C: res 1,h (M:1 T:4)
+            // CB 44: bit 0,h (M:1 T:4)
             // -- OVERLAP
             case 0x0344: _fetch(); break;
             
-            // CB 8D: res 1,l (M:1 T:4)
+            // CB 45: bit 0,l (M:1 T:4)
             // -- OVERLAP
             case 0x0345: _fetch(); break;
             
-            // CB 8E: res 1,(hl) (M:1 T:4)
+            // CB 46: bit (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0346: _fetch(); break;
             
-            // CB 8F: res 1,a (M:1 T:4)
+            // CB 47: bit 0,a (M:1 T:4)
             // -- OVERLAP
             case 0x0347: _fetch(); break;
             
-            // CB 90: res 2,b (M:1 T:4)
+            // CB 48: bit 1,b (M:1 T:4)
             // -- OVERLAP
             case 0x0348: _fetch(); break;
             
-            // CB 91: res 2,c (M:1 T:4)
+            // CB 49: bit 1,c (M:1 T:4)
             // -- OVERLAP
             case 0x0349: _fetch(); break;
             
-            // CB 92: res 2,d (M:1 T:4)
+            // CB 4A: bit 1,d (M:1 T:4)
             // -- OVERLAP
             case 0x034A: _fetch(); break;
             
-            // CB 93: res 2,e (M:1 T:4)
+            // CB 4B: bit 1,e (M:1 T:4)
             // -- OVERLAP
             case 0x034B: _fetch(); break;
             
-            // CB 94: res 2,h (M:1 T:4)
+            // CB 4C: bit 1,h (M:1 T:4)
             // -- OVERLAP
             case 0x034C: _fetch(); break;
             
-            // CB 95: res 2,l (M:1 T:4)
+            // CB 4D: bit 1,l (M:1 T:4)
             // -- OVERLAP
             case 0x034D: _fetch(); break;
             
-            // CB 96: res 2,(hl) (M:1 T:4)
+            // CB 4E: bit (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x034E: _fetch(); break;
             
-            // CB 97: res 2,a (M:1 T:4)
+            // CB 4F: bit 1,a (M:1 T:4)
             // -- OVERLAP
             case 0x034F: _fetch(); break;
             
-            // CB 98: res 3,b (M:1 T:4)
+            // CB 50: bit 2,b (M:1 T:4)
             // -- OVERLAP
             case 0x0350: _fetch(); break;
             
-            // CB 99: res 3,c (M:1 T:4)
+            // CB 51: bit 2,c (M:1 T:4)
             // -- OVERLAP
             case 0x0351: _fetch(); break;
             
-            // CB 9A: res 3,d (M:1 T:4)
+            // CB 52: bit 2,d (M:1 T:4)
             // -- OVERLAP
             case 0x0352: _fetch(); break;
             
-            // CB 9B: res 3,e (M:1 T:4)
+            // CB 53: bit 2,e (M:1 T:4)
             // -- OVERLAP
             case 0x0353: _fetch(); break;
             
-            // CB 9C: res 3,h (M:1 T:4)
+            // CB 54: bit 2,h (M:1 T:4)
             // -- OVERLAP
             case 0x0354: _fetch(); break;
             
-            // CB 9D: res 3,l (M:1 T:4)
+            // CB 55: bit 2,l (M:1 T:4)
             // -- OVERLAP
             case 0x0355: _fetch(); break;
             
-            // CB 9E: res 3,(hl) (M:1 T:4)
+            // CB 56: bit (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0356: _fetch(); break;
             
-            // CB 9F: res 3,a (M:1 T:4)
+            // CB 57: bit 2,a (M:1 T:4)
             // -- OVERLAP
             case 0x0357: _fetch(); break;
             
-            // CB A0: res 4,b (M:1 T:4)
+            // CB 58: bit 3,b (M:1 T:4)
             // -- OVERLAP
             case 0x0358: _fetch(); break;
             
-            // CB A1: res 4,c (M:1 T:4)
+            // CB 59: bit 3,c (M:1 T:4)
             // -- OVERLAP
             case 0x0359: _fetch(); break;
             
-            // CB A2: res 4,d (M:1 T:4)
+            // CB 5A: bit 3,d (M:1 T:4)
             // -- OVERLAP
             case 0x035A: _fetch(); break;
             
-            // CB A3: res 4,e (M:1 T:4)
+            // CB 5B: bit 3,e (M:1 T:4)
             // -- OVERLAP
             case 0x035B: _fetch(); break;
             
-            // CB A4: res 4,h (M:1 T:4)
+            // CB 5C: bit 3,h (M:1 T:4)
             // -- OVERLAP
             case 0x035C: _fetch(); break;
             
-            // CB A5: res 4,l (M:1 T:4)
+            // CB 5D: bit 3,l (M:1 T:4)
             // -- OVERLAP
             case 0x035D: _fetch(); break;
             
-            // CB A6: res 4,(hl) (M:1 T:4)
+            // CB 5E: bit (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x035E: _fetch(); break;
             
-            // CB A7: res 4,a (M:1 T:4)
+            // CB 5F: bit 3,a (M:1 T:4)
             // -- OVERLAP
             case 0x035F: _fetch(); break;
             
-            // CB A8: res 5,b (M:1 T:4)
+            // CB 60: bit 4,b (M:1 T:4)
             // -- OVERLAP
             case 0x0360: _fetch(); break;
             
-            // CB A9: res 5,c (M:1 T:4)
+            // CB 61: bit 4,c (M:1 T:4)
             // -- OVERLAP
             case 0x0361: _fetch(); break;
             
-            // CB AA: res 5,d (M:1 T:4)
+            // CB 62: bit 4,d (M:1 T:4)
             // -- OVERLAP
             case 0x0362: _fetch(); break;
             
-            // CB AB: res 5,e (M:1 T:4)
+            // CB 63: bit 4,e (M:1 T:4)
             // -- OVERLAP
             case 0x0363: _fetch(); break;
             
-            // CB AC: res 5,h (M:1 T:4)
+            // CB 64: bit 4,h (M:1 T:4)
             // -- OVERLAP
             case 0x0364: _fetch(); break;
             
-            // CB AD: res 5,l (M:1 T:4)
+            // CB 65: bit 4,l (M:1 T:4)
             // -- OVERLAP
             case 0x0365: _fetch(); break;
             
-            // CB AE: res 5,(hl) (M:1 T:4)
+            // CB 66: bit (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0366: _fetch(); break;
             
-            // CB AF: res 5,a (M:1 T:4)
+            // CB 67: bit 4,a (M:1 T:4)
             // -- OVERLAP
             case 0x0367: _fetch(); break;
             
-            // CB B0: res 6,b (M:1 T:4)
+            // CB 68: bit 5,b (M:1 T:4)
             // -- OVERLAP
             case 0x0368: _fetch(); break;
             
-            // CB B1: res 6,c (M:1 T:4)
+            // CB 69: bit 5,c (M:1 T:4)
             // -- OVERLAP
             case 0x0369: _fetch(); break;
             
-            // CB B2: res 6,d (M:1 T:4)
+            // CB 6A: bit 5,d (M:1 T:4)
             // -- OVERLAP
             case 0x036A: _fetch(); break;
             
-            // CB B3: res 6,e (M:1 T:4)
+            // CB 6B: bit 5,e (M:1 T:4)
             // -- OVERLAP
             case 0x036B: _fetch(); break;
             
-            // CB B4: res 6,h (M:1 T:4)
+            // CB 6C: bit 5,h (M:1 T:4)
             // -- OVERLAP
             case 0x036C: _fetch(); break;
             
-            // CB B5: res 6,l (M:1 T:4)
+            // CB 6D: bit 5,l (M:1 T:4)
             // -- OVERLAP
             case 0x036D: _fetch(); break;
             
-            // CB B6: res 6,(hl) (M:1 T:4)
+            // CB 6E: bit (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x036E: _fetch(); break;
             
-            // CB B7: res 6,a (M:1 T:4)
+            // CB 6F: bit 5,a (M:1 T:4)
             // -- OVERLAP
             case 0x036F: _fetch(); break;
             
-            // CB B8: res 7,b (M:1 T:4)
+            // CB 70: bit 6,b (M:1 T:4)
             // -- OVERLAP
             case 0x0370: _fetch(); break;
             
-            // CB B9: res 7,c (M:1 T:4)
+            // CB 71: bit 6,c (M:1 T:4)
             // -- OVERLAP
             case 0x0371: _fetch(); break;
             
-            // CB BA: res 7,d (M:1 T:4)
+            // CB 72: bit 6,d (M:1 T:4)
             // -- OVERLAP
             case 0x0372: _fetch(); break;
             
-            // CB BB: res 7,e (M:1 T:4)
+            // CB 73: bit 6,e (M:1 T:4)
             // -- OVERLAP
             case 0x0373: _fetch(); break;
             
-            // CB BC: res 7,h (M:1 T:4)
+            // CB 74: bit 6,h (M:1 T:4)
             // -- OVERLAP
             case 0x0374: _fetch(); break;
             
-            // CB BD: res 7,l (M:1 T:4)
+            // CB 75: bit 6,l (M:1 T:4)
             // -- OVERLAP
             case 0x0375: _fetch(); break;
             
-            // CB BE: res 7,(hl) (M:1 T:4)
+            // CB 76: bit (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0376: _fetch(); break;
             
-            // CB BF: res 7,a (M:1 T:4)
+            // CB 77: bit 6,a (M:1 T:4)
             // -- OVERLAP
             case 0x0377: _fetch(); break;
             
-            // CB C0: set 0,b (M:1 T:4)
+            // CB 78: bit 7,b (M:1 T:4)
             // -- OVERLAP
             case 0x0378: _fetch(); break;
             
-            // CB C1: set 0,c (M:1 T:4)
+            // CB 79: bit 7,c (M:1 T:4)
             // -- OVERLAP
             case 0x0379: _fetch(); break;
             
-            // CB C2: set 0,d (M:1 T:4)
+            // CB 7A: bit 7,d (M:1 T:4)
             // -- OVERLAP
             case 0x037A: _fetch(); break;
             
-            // CB C3: set 0,e (M:1 T:4)
+            // CB 7B: bit 7,e (M:1 T:4)
             // -- OVERLAP
             case 0x037B: _fetch(); break;
             
-            // CB C4: set 0,h (M:1 T:4)
+            // CB 7C: bit 7,h (M:1 T:4)
             // -- OVERLAP
             case 0x037C: _fetch(); break;
             
-            // CB C5: set 0,l (M:1 T:4)
+            // CB 7D: bit 7,l (M:1 T:4)
             // -- OVERLAP
             case 0x037D: _fetch(); break;
             
-            // CB C6: set 0,(hl) (M:1 T:4)
+            // CB 7E: bit (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x037E: _fetch(); break;
             
-            // CB C7: set 0,a (M:1 T:4)
+            // CB 7F: bit 7,a (M:1 T:4)
             // -- OVERLAP
             case 0x037F: _fetch(); break;
             
-            // CB C8: set 1,b (M:1 T:4)
+            // CB 80: res 0,b (M:1 T:4)
             // -- OVERLAP
             case 0x0380: _fetch(); break;
             
-            // CB C9: set 1,c (M:1 T:4)
+            // CB 81: res 0,c (M:1 T:4)
             // -- OVERLAP
             case 0x0381: _fetch(); break;
             
-            // CB CA: set 1,d (M:1 T:4)
+            // CB 82: res 0,d (M:1 T:4)
             // -- OVERLAP
             case 0x0382: _fetch(); break;
             
-            // CB CB: set 1,e (M:1 T:4)
+            // CB 83: res 0,e (M:1 T:4)
             // -- OVERLAP
             case 0x0383: _fetch(); break;
             
-            // CB CC: set 1,h (M:1 T:4)
+            // CB 84: res 0,h (M:1 T:4)
             // -- OVERLAP
             case 0x0384: _fetch(); break;
             
-            // CB CD: set 1,l (M:1 T:4)
+            // CB 85: res 0,l (M:1 T:4)
             // -- OVERLAP
             case 0x0385: _fetch(); break;
             
-            // CB CE: set 1,(hl) (M:1 T:4)
+            // CB 86: res 0,(hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0386: _fetch(); break;
             
-            // CB CF: set 1,a (M:1 T:4)
+            // CB 87: res 0,a (M:1 T:4)
             // -- OVERLAP
             case 0x0387: _fetch(); break;
             
-            // CB D0: set 2,b (M:1 T:4)
+            // CB 88: res 1,b (M:1 T:4)
             // -- OVERLAP
             case 0x0388: _fetch(); break;
             
-            // CB D1: set 2,c (M:1 T:4)
+            // CB 89: res 1,c (M:1 T:4)
             // -- OVERLAP
             case 0x0389: _fetch(); break;
             
-            // CB D2: set 2,d (M:1 T:4)
+            // CB 8A: res 1,d (M:1 T:4)
             // -- OVERLAP
             case 0x038A: _fetch(); break;
             
-            // CB D3: set 2,e (M:1 T:4)
+            // CB 8B: res 1,e (M:1 T:4)
             // -- OVERLAP
             case 0x038B: _fetch(); break;
             
-            // CB D4: set 2,h (M:1 T:4)
+            // CB 8C: res 1,h (M:1 T:4)
             // -- OVERLAP
             case 0x038C: _fetch(); break;
             
-            // CB D5: set 2,l (M:1 T:4)
+            // CB 8D: res 1,l (M:1 T:4)
             // -- OVERLAP
             case 0x038D: _fetch(); break;
             
-            // CB D6: set 2,(hl) (M:1 T:4)
+            // CB 8E: res 1,(hl) (M:1 T:4)
             // -- OVERLAP
             case 0x038E: _fetch(); break;
             
-            // CB D7: set 2,a (M:1 T:4)
+            // CB 8F: res 1,a (M:1 T:4)
             // -- OVERLAP
             case 0x038F: _fetch(); break;
             
-            // CB D8: set 3,b (M:1 T:4)
+            // CB 90: res 2,b (M:1 T:4)
             // -- OVERLAP
             case 0x0390: _fetch(); break;
             
-            // CB D9: set 3,c (M:1 T:4)
+            // CB 91: res 2,c (M:1 T:4)
             // -- OVERLAP
             case 0x0391: _fetch(); break;
             
-            // CB DA: set 3,d (M:1 T:4)
+            // CB 92: res 2,d (M:1 T:4)
             // -- OVERLAP
             case 0x0392: _fetch(); break;
             
-            // CB DB: set 3,e (M:1 T:4)
+            // CB 93: res 2,e (M:1 T:4)
             // -- OVERLAP
             case 0x0393: _fetch(); break;
             
-            // CB DC: set 3,h (M:1 T:4)
+            // CB 94: res 2,h (M:1 T:4)
             // -- OVERLAP
             case 0x0394: _fetch(); break;
             
-            // CB DD: set 3,l (M:1 T:4)
+            // CB 95: res 2,l (M:1 T:4)
             // -- OVERLAP
             case 0x0395: _fetch(); break;
             
-            // CB DE: set 3,(hl) (M:1 T:4)
+            // CB 96: res 2,(hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0396: _fetch(); break;
             
-            // CB DF: set 3,a (M:1 T:4)
+            // CB 97: res 2,a (M:1 T:4)
             // -- OVERLAP
             case 0x0397: _fetch(); break;
             
-            // CB E0: set 4,b (M:1 T:4)
+            // CB 98: res 3,b (M:1 T:4)
             // -- OVERLAP
             case 0x0398: _fetch(); break;
             
-            // CB E1: set 4,c (M:1 T:4)
+            // CB 99: res 3,c (M:1 T:4)
             // -- OVERLAP
             case 0x0399: _fetch(); break;
             
-            // CB E2: set 4,d (M:1 T:4)
+            // CB 9A: res 3,d (M:1 T:4)
             // -- OVERLAP
             case 0x039A: _fetch(); break;
             
-            // CB E3: set 4,e (M:1 T:4)
+            // CB 9B: res 3,e (M:1 T:4)
             // -- OVERLAP
             case 0x039B: _fetch(); break;
             
-            // CB E4: set 4,h (M:1 T:4)
+            // CB 9C: res 3,h (M:1 T:4)
             // -- OVERLAP
             case 0x039C: _fetch(); break;
             
-            // CB E5: set 4,l (M:1 T:4)
+            // CB 9D: res 3,l (M:1 T:4)
             // -- OVERLAP
             case 0x039D: _fetch(); break;
             
-            // CB E6: set 4,(hl) (M:1 T:4)
+            // CB 9E: res 3,(hl) (M:1 T:4)
             // -- OVERLAP
             case 0x039E: _fetch(); break;
             
-            // CB E7: set 4,a (M:1 T:4)
+            // CB 9F: res 3,a (M:1 T:4)
             // -- OVERLAP
             case 0x039F: _fetch(); break;
             
-            // CB E8: set 5,b (M:1 T:4)
+            // CB A0: res 4,b (M:1 T:4)
             // -- OVERLAP
             case 0x03A0: _fetch(); break;
             
-            // CB E9: set 5,c (M:1 T:4)
+            // CB A1: res 4,c (M:1 T:4)
             // -- OVERLAP
             case 0x03A1: _fetch(); break;
             
-            // CB EA: set 5,d (M:1 T:4)
+            // CB A2: res 4,d (M:1 T:4)
             // -- OVERLAP
             case 0x03A2: _fetch(); break;
             
-            // CB EB: set 5,e (M:1 T:4)
+            // CB A3: res 4,e (M:1 T:4)
             // -- OVERLAP
             case 0x03A3: _fetch(); break;
             
-            // CB EC: set 5,h (M:1 T:4)
+            // CB A4: res 4,h (M:1 T:4)
             // -- OVERLAP
             case 0x03A4: _fetch(); break;
             
-            // CB ED: set 5,l (M:1 T:4)
+            // CB A5: res 4,l (M:1 T:4)
             // -- OVERLAP
             case 0x03A5: _fetch(); break;
             
-            // CB EE: set 5,(hl) (M:1 T:4)
+            // CB A6: res 4,(hl) (M:1 T:4)
             // -- OVERLAP
             case 0x03A6: _fetch(); break;
             
-            // CB EF: set 5,a (M:1 T:4)
+            // CB A7: res 4,a (M:1 T:4)
             // -- OVERLAP
             case 0x03A7: _fetch(); break;
             
-            // CB F0: set 6,b (M:1 T:4)
+            // CB A8: res 5,b (M:1 T:4)
             // -- OVERLAP
             case 0x03A8: _fetch(); break;
             
-            // CB F1: set 6,c (M:1 T:4)
+            // CB A9: res 5,c (M:1 T:4)
             // -- OVERLAP
             case 0x03A9: _fetch(); break;
             
-            // CB F2: set 6,d (M:1 T:4)
+            // CB AA: res 5,d (M:1 T:4)
             // -- OVERLAP
             case 0x03AA: _fetch(); break;
             
-            // CB F3: set 6,e (M:1 T:4)
+            // CB AB: res 5,e (M:1 T:4)
             // -- OVERLAP
             case 0x03AB: _fetch(); break;
             
-            // CB F4: set 6,h (M:1 T:4)
+            // CB AC: res 5,h (M:1 T:4)
             // -- OVERLAP
             case 0x03AC: _fetch(); break;
             
-            // CB F5: set 6,l (M:1 T:4)
+            // CB AD: res 5,l (M:1 T:4)
             // -- OVERLAP
             case 0x03AD: _fetch(); break;
             
-            // CB F6: set 6,(hl) (M:1 T:4)
+            // CB AE: res 5,(hl) (M:1 T:4)
             // -- OVERLAP
             case 0x03AE: _fetch(); break;
             
-            // CB F7: set 6,a (M:1 T:4)
+            // CB AF: res 5,a (M:1 T:4)
             // -- OVERLAP
             case 0x03AF: _fetch(); break;
             
-            // CB F8: set 7,b (M:1 T:4)
+            // CB B0: res 6,b (M:1 T:4)
             // -- OVERLAP
             case 0x03B0: _fetch(); break;
             
-            // CB F9: set 7,c (M:1 T:4)
+            // CB B1: res 6,c (M:1 T:4)
             // -- OVERLAP
             case 0x03B1: _fetch(); break;
             
-            // CB FA: set 7,d (M:1 T:4)
+            // CB B2: res 6,d (M:1 T:4)
             // -- OVERLAP
             case 0x03B2: _fetch(); break;
             
-            // CB FB: set 7,e (M:1 T:4)
+            // CB B3: res 6,e (M:1 T:4)
             // -- OVERLAP
             case 0x03B3: _fetch(); break;
             
-            // CB FC: set 7,h (M:1 T:4)
+            // CB B4: res 6,h (M:1 T:4)
             // -- OVERLAP
             case 0x03B4: _fetch(); break;
             
-            // CB FD: set 7,l (M:1 T:4)
+            // CB B5: res 6,l (M:1 T:4)
             // -- OVERLAP
             case 0x03B5: _fetch(); break;
             
-            // CB FE: set 7,(hl) (M:1 T:4)
+            // CB B6: res 6,(hl) (M:1 T:4)
             // -- OVERLAP
             case 0x03B6: _fetch(); break;
             
-            // CB FF: set 7,a (M:1 T:4)
+            // CB B7: res 6,a (M:1 T:4)
             // -- OVERLAP
             case 0x03B7: _fetch(); break;
+            
+            // CB B8: res 7,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03B8: _fetch(); break;
+            
+            // CB B9: res 7,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03B9: _fetch(); break;
+            
+            // CB BA: res 7,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03BA: _fetch(); break;
+            
+            // CB BB: res 7,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03BB: _fetch(); break;
+            
+            // CB BC: res 7,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03BC: _fetch(); break;
+            
+            // CB BD: res 7,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03BD: _fetch(); break;
+            
+            // CB BE: res 7,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03BE: _fetch(); break;
+            
+            // CB BF: res 7,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03BF: _fetch(); break;
+            
+            // CB C0: set 0,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C0: _fetch(); break;
+            
+            // CB C1: set 0,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C1: _fetch(); break;
+            
+            // CB C2: set 0,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C2: _fetch(); break;
+            
+            // CB C3: set 0,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C3: _fetch(); break;
+            
+            // CB C4: set 0,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C4: _fetch(); break;
+            
+            // CB C5: set 0,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C5: _fetch(); break;
+            
+            // CB C6: set 0,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C6: _fetch(); break;
+            
+            // CB C7: set 0,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C7: _fetch(); break;
+            
+            // CB C8: set 1,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C8: _fetch(); break;
+            
+            // CB C9: set 1,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03C9: _fetch(); break;
+            
+            // CB CA: set 1,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03CA: _fetch(); break;
+            
+            // CB CB: set 1,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03CB: _fetch(); break;
+            
+            // CB CC: set 1,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03CC: _fetch(); break;
+            
+            // CB CD: set 1,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03CD: _fetch(); break;
+            
+            // CB CE: set 1,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03CE: _fetch(); break;
+            
+            // CB CF: set 1,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03CF: _fetch(); break;
+            
+            // CB D0: set 2,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D0: _fetch(); break;
+            
+            // CB D1: set 2,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D1: _fetch(); break;
+            
+            // CB D2: set 2,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D2: _fetch(); break;
+            
+            // CB D3: set 2,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D3: _fetch(); break;
+            
+            // CB D4: set 2,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D4: _fetch(); break;
+            
+            // CB D5: set 2,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D5: _fetch(); break;
+            
+            // CB D6: set 2,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D6: _fetch(); break;
+            
+            // CB D7: set 2,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D7: _fetch(); break;
+            
+            // CB D8: set 3,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D8: _fetch(); break;
+            
+            // CB D9: set 3,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03D9: _fetch(); break;
+            
+            // CB DA: set 3,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03DA: _fetch(); break;
+            
+            // CB DB: set 3,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03DB: _fetch(); break;
+            
+            // CB DC: set 3,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03DC: _fetch(); break;
+            
+            // CB DD: set 3,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03DD: _fetch(); break;
+            
+            // CB DE: set 3,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03DE: _fetch(); break;
+            
+            // CB DF: set 3,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03DF: _fetch(); break;
+            
+            // CB E0: set 4,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E0: _fetch(); break;
+            
+            // CB E1: set 4,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E1: _fetch(); break;
+            
+            // CB E2: set 4,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E2: _fetch(); break;
+            
+            // CB E3: set 4,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E3: _fetch(); break;
+            
+            // CB E4: set 4,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E4: _fetch(); break;
+            
+            // CB E5: set 4,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E5: _fetch(); break;
+            
+            // CB E6: set 4,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E6: _fetch(); break;
+            
+            // CB E7: set 4,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E7: _fetch(); break;
+            
+            // CB E8: set 5,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E8: _fetch(); break;
+            
+            // CB E9: set 5,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03E9: _fetch(); break;
+            
+            // CB EA: set 5,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03EA: _fetch(); break;
+            
+            // CB EB: set 5,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03EB: _fetch(); break;
+            
+            // CB EC: set 5,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03EC: _fetch(); break;
+            
+            // CB ED: set 5,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03ED: _fetch(); break;
+            
+            // CB EE: set 5,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03EE: _fetch(); break;
+            
+            // CB EF: set 5,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03EF: _fetch(); break;
+            
+            // CB F0: set 6,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F0: _fetch(); break;
+            
+            // CB F1: set 6,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F1: _fetch(); break;
+            
+            // CB F2: set 6,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F2: _fetch(); break;
+            
+            // CB F3: set 6,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F3: _fetch(); break;
+            
+            // CB F4: set 6,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F4: _fetch(); break;
+            
+            // CB F5: set 6,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F5: _fetch(); break;
+            
+            // CB F6: set 6,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F6: _fetch(); break;
+            
+            // CB F7: set 6,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F7: _fetch(); break;
+            
+            // CB F8: set 7,b (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F8: _fetch(); break;
+            
+            // CB F9: set 7,c (M:1 T:4)
+            // -- OVERLAP
+            case 0x03F9: _fetch(); break;
+            
+            // CB FA: set 7,d (M:1 T:4)
+            // -- OVERLAP
+            case 0x03FA: _fetch(); break;
+            
+            // CB FB: set 7,e (M:1 T:4)
+            // -- OVERLAP
+            case 0x03FB: _fetch(); break;
+            
+            // CB FC: set 7,h (M:1 T:4)
+            // -- OVERLAP
+            case 0x03FC: _fetch(); break;
+            
+            // CB FD: set 7,l (M:1 T:4)
+            // -- OVERLAP
+            case 0x03FD: _fetch(); break;
+            
+            // CB FE: set 7,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x03FE: _fetch(); break;
+            
+            // CB FF: set 7,a (M:1 T:4)
+            // -- OVERLAP
+            case 0x03FF: _fetch(); break;
 
         }
         cpu->op.step += 1;
