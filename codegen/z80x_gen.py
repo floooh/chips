@@ -23,6 +23,7 @@ class Op:
         self.cond_compiled = compile(cond, '<string>', 'eval')
         self.flags: dict[str,str] = flags
         self.opcode: int = -1
+        self.prefix: str = ''
         self.pip: int = 0
         self.num_cycles = 0
         self.num_steps = 0
@@ -30,7 +31,10 @@ class Op:
         self.mcycles: list[MCycle] = []
 
 OP_PATTERNS: list[Op] = []
-OPS: list[Optional[Op]] = [None for _ in range(0,256)]
+# 0..255:   core opcodes
+# 256..511: ED prefix opcodes
+# 512..767: CB prefix opcodes 
+OPS: list[Optional[Op]] = [None for _ in range(0,3*256)]
 
 # a fetch machine cycle is processed as 2 parts because it overlaps
 # with the 'action' of the previous instruction
@@ -143,6 +147,8 @@ def parse_opdescs():
             if 'flags' in op_desc:
                 flags = op_desc['flags']
             op = Op(op_name,op_desc['cond'], flags)
+            if 'prefix' in op_desc:
+                op.prefix = op_desc['prefix']
             num_fetch = 0
             num_overlapped = 0
             for mc_desc in op_desc['mcycles']:
@@ -186,25 +192,28 @@ def stampout_mcycle_items(mcycle_items: dict[str,str], y: int, z: int, p: int, q
     return res
 
 def expand_optable():
-    for opcode in range(0,256):
-        #  76 543 210
-        # |xx|yyy|zzz|
-        #    |ppq|
-        x = opcode >> 6 # type: ignore (generated unused warning, but x is needed in 'eval')
-        y = (opcode >> 3) & 7
-        z = opcode & 7
-        p = y >> 1
-        q = y & 1
-        for op_desc_index,op_desc in enumerate(OP_PATTERNS):
-            if eval(op_desc.cond_compiled):
-                if OPS[opcode] is not None:
-                    err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
-                op = copy.deepcopy(OP_PATTERNS[op_desc_index])
-                op.name = map_comment(op.name, y, z, p, q)
-                op.opcode = opcode
-                for mcycle in op.mcycles:
-                    mcycle.items = stampout_mcycle_items(mcycle.items, y, z, p, q)
-                OPS[opcode] = op
+    for oprange,prefix in enumerate(['', 'ed', 'cb']):
+        for opcode in range(0,256):
+            #  76 543 210
+            # |xx|yyy|zzz|
+            #    |ppq|
+            x = opcode >> 6 # type: ignore (generated unused warning, but x is needed in 'eval')
+            y = (opcode >> 3) & 7
+            z = opcode & 7
+            p = y >> 1
+            q = y & 1
+            op_index = oprange * 256 + opcode
+            for op_desc_index,op_desc in enumerate(OP_PATTERNS):
+                if eval(op_desc.cond_compiled) and op_desc.prefix == prefix:
+                    if OPS[op_index] is not None:
+                        err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
+                    op = copy.deepcopy(OP_PATTERNS[op_desc_index])
+                    op.name = map_comment(op.name, y, z, p, q)
+                    op.prefix = prefix
+                    op.opcode = opcode
+                    for mcycle in op.mcycles:
+                        mcycle.items = stampout_mcycle_items(mcycle.items, y, z, p, q)
+                    OPS[op_index] = op
 
 # build the execution pipeline bitmask for a given instruction
 def build_pip(op: Op) -> int:
@@ -254,14 +263,18 @@ def gen_decoder():
         step += 1
     
     for maybe_op in OPS:
+        # ignore empty slots, those will be mapped to NOPs
+        if maybe_op is None:
+            continue
         op = unwrap(maybe_op)
+
         step = 0
         opc = op.opcode
         op.pip = build_pip(op)
         op.decoder_offset = decoder_step
 
         l('')
-        l(f'// 0x{op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
+        l(f'// {op.prefix.upper()} {op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
             if mcycle.type == 'fetch':
                 pass
@@ -303,11 +316,7 @@ def gen_decoder():
                 l(f'// -- OVERLAP')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 if 'prefix' in mcycle.items:
-                    prefix = mcycle.items['prefix']
-                    if prefix == 'ix':
-                        fetch = '_fetch_ix();'
-                    elif prefix == 'iy':
-                        fetch = '_fetch_iy();'
+                    fetch = f"_fetch_{mcycle.items['prefix']}();"
                 else:
                     fetch = '_fetch();'
                 add(opc, f'{action}{fetch}')
@@ -318,23 +327,23 @@ def gen_decoder():
         if step != bin(step_pip).count('1'):
             err(f"Pipeline vs steps mismatch in '{op.name}(0x{op.opcode:02X})': {step_pip:b} vs {op.num_steps}")
 
-def dump():
-    # for op_desc in OP_PATTERNS:
-    #     print(f"\nop(name='{op_desc.name}', cond='{op_desc.cond}'):")
-    #     for mc in op_desc.mcycles:
-    #         print(f'  mcycle(type={mc.type}, tcycles={mc.tcycles})')
-    #         for key,val in mc.items.items():
-    #             print(f'    {key}:{val}')
-    # print('\n')
-    print(out_lines)
-
 def pip_table_to_string() -> str:
     global indent
     indent = 1
     res: str = ''
-    for maybe_op in OPS:
+    for op_index,maybe_op in enumerate(OPS):
+        # fill empty slots with NOPs
+        if maybe_op is None:
+            maybe_op = OPS[0]
         op = unwrap(maybe_op)
-        res += tab() + f'// 0x{op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
+        op_range = op_index & 0xF00
+        if op_range == 0:
+            prefix = ''
+        elif op_range == 0x100:
+            prefix = 'ED'
+        elif op_range == 0x200:
+            prefix = 'CB'
+        res += tab() + f'// {prefix} {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
         flags = ''
         if 'indirect' in op.flags and op.flags['indirect']:
             flags += 'Z80_OPSTATE_FLAGS_INDIRECT'

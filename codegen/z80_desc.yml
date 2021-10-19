@@ -124,7 +124,11 @@ ld a,(de):
 
 ld hl,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 2)
-  mcycles: []
+  mcycles:
+    - { type: mread, ab: PC++, dst: WZL }
+    - { type: mread, ab: PC++, dst: WZH }
+    - { type: mread, ab: WZ++, dst: L }
+    - { type: mread, ab: WZ, dst: H }
 
 ld a,(nn):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 3)
@@ -278,8 +282,8 @@ jp nn:
 
 cb prefix:
   cond: (x == 3) and (y == 1) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, prefix: cb }
 
 out (n),a:
   cond: (x == 3) and (y == 2) and (z == 3)
@@ -344,17 +348,17 @@ call nn:
 dd prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 1)
   mcycles:
-    - { type: overlapped, prefix: ix }
+    - { type: overlapped, prefix: dd }
 
 ed prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 2)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, prefix: ed }
 
 fd prefix:
   cond: (x == 3) and (z == 5) and (q == 1) and (p == 3)
   mcycles:
-    - { type: overlapped, prefix: iy }
+    - { type: overlapped, prefix: fd }
 
 ALU n:
   cond: (x == 3) and (z == 6)

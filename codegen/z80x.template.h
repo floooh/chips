@@ -78,10 +78,17 @@ extern "C" {
 #define Z80_OPSTATE_FLAGS_INDIRECT  (1<<0)  // this is a (HL)/(IX+d)/(IY+d) instruction
 #define Z80_OPSTATE_FLAGS_IMM8 (1<<1)       // this is an 8-bit immediate load instruction
 
-// values for hlx_idx for mapping HL, IX or IY
+// values for hlx_idx for mapping HL, IX or IY, used as index into hlx[]
 #define Z80_MAP_HL (0)
 #define Z80_MAP_IX (1)
 #define Z80_MAP_IY (2)
+
+// currently active prefix
+#define Z80_PREFIX_NONE (0)
+#define Z80_PREFIX_CB   (1<<0)
+#define Z80_PREFIX_DD   (1<<1)
+#define Z80_PREFIX_ED   (1<<2)
+#define Z80_PREFIX_FD   (1<<3)
 
 typedef struct {
     uint32_t pip;   // the op's decode pipeline
@@ -91,12 +98,20 @@ typedef struct {
 
 // CPU state
 typedef struct {
-    z80_opstate_t op;   // the currently active op
+    z80_opstate_t op;       // the currently active op
+    union {
+        struct {
+            uint16_t step_offset;   // 0x100 on ED prefix, 0x200 on CB prefix
+            uint8_t hlx_idx;        // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
+            uint8_t prefix;         // one of Z80_PREFIX_*
+        };
+        uint32_t prefix_state;
+    };
+
     union { struct { uint8_t pcl; uint8_t pch; }; uint16_t pc; };
     uint16_t addr;      // effective address for (HL),(IX+d),(IY+d)
     uint8_t ir;         // instruction register
     uint8_t dlatch;     // temporary store for data bus value
-    uint8_t hlx_idx;    // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
 
     // NOTE: These unions are fine in C, but not C++.
     union { struct { uint8_t f; uint8_t a; }; uint16_t af; };
@@ -156,7 +171,7 @@ uint64_t z80_init(z80_t* cpu) {
 bool z80_opdone(z80_t* cpu) {
     // because of the overlapped cycle, the result of the previous
     // instruction is only available in M1/T2
-    return (0 == cpu->op.step) && (cpu->hlx_idx == 0);
+    return (0 == cpu->op.step) && (cpu->prefix == 0);
 }
 
 static inline void z80_skip(z80_t* cpu, int steps, int tcycles, int delay) {
@@ -383,11 +398,39 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 }
 
 // initiate a fetch machine cycle
-static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins, uint8_t hlx_idx) {
+static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
+    cpu->op.pip = 5<<1;
+    cpu->op.step = 0xFFFF;
+    cpu->prefix_state = 0;
+    pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+    return pins;
+}
+
+static inline uint64_t z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefix) {
     // reset the decoder to continue at step 0
     cpu->op.pip = 5<<1;
     cpu->op.step = 0xFFFF;
-    cpu->hlx_idx = hlx_idx;
+    switch (prefix) {
+        case Z80_PREFIX_CB: // CB prefix preserves current DD/FD prefix
+            cpu->step_offset = 0x0200;
+            cpu->prefix |= Z80_PREFIX_CB;
+            break;
+        case Z80_PREFIX_DD:
+            cpu->step_offset = 0;
+            cpu->hlx_idx = 1;
+            cpu->prefix = Z80_PREFIX_DD;
+            break;
+        case Z80_PREFIX_ED: // ED prefix clears current DD/FD prefix
+            cpu->step_offset = 0x0100;
+            cpu->hlx_idx = 0;
+            cpu->prefix = Z80_PREFIX_ED;
+            break;
+        case Z80_PREFIX_FD:
+            cpu->step_offset = 0;
+            cpu->hlx_idx = 2;
+            cpu->prefix = Z80_PREFIX_FD;
+            break;
+    }
     pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     return pins;
 }
@@ -399,7 +442,7 @@ static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
     return pins;
 }
 
-static const z80_opstate_t z80_opstate_table[256] = {
+static const z80_opstate_t z80_opstate_table[3*256] = {
 $pip_table_block
 };
 
@@ -419,9 +462,11 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _gd()               z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()        pins=z80_fetch(cpu,pins,Z80_MAP_HL)
-#define _fetch_ix()     pins=z80_fetch(cpu,pins,Z80_MAP_IX)
-#define _fetch_iy()     pins=z80_fetch(cpu,pins,Z80_MAP_IY)
+#define _fetch()        pins=z80_fetch(cpu,pins)
+#define _fetch_dd()     pins=z80_fetch_prefix(cpu,pins,Z80_PREFIX_DD);
+#define _fetch_fd()     pins=z80_fetch_prefix(cpu,pins,Z80_PREFIX_FD);
+#define _fetch_ed()     pins=z80_fetch_prefix(cpu,pins,Z80_PREFIX_ED);
+#define _fetch_cb()     pins=z80_fetch_prefix(cpu,pins,Z80_PREFIX_CB);
 #define _mread(ab)      _sax(ab,Z80_MREQ|Z80_RD)
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
@@ -450,6 +495,8 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 1: {
                 pins = z80_refresh(cpu, pins);
                 cpu->op = z80_opstate_table[cpu->ir];
+                cpu->op.step += cpu->step_offset;
+
                 // if this is a (HL)/(IX+d)/(IY+d) instruction, insert
                 // d-load cycle if needed and compute effective address
                 if (cpu->op.flags & Z80_OPSTATE_FLAGS_INDIRECT) {
@@ -507,8 +554,10 @@ $decode_block
 #undef _sadx
 #undef _gd
 #undef _fetch
-#undef _fetch_ix
-#undef _fetch_iy
+#undef _fetch_dd
+#undef _fetch_fd
+#undef _fetch_ed
+#undef _fetch_cb
 #undef _mread
 #undef _mwrite
 #undef _ioread
