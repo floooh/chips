@@ -276,6 +276,12 @@ static inline void z80_cp8(z80_t* cpu, uint8_t val) {
     cpu->f = z80_cp_flags(cpu->a, val, res);
 }
 
+static inline void z80_neg8(z80_t* cpu) {
+    uint32_t res = (uint32_t) (0 - (int)cpu->a);
+    cpu->f = z80_sub_flags(0, cpu->a, res);
+    cpu->a = (uint8_t)res;
+}
+
 static inline uint8_t z80_inc8(z80_t* cpu, uint8_t val) {
     uint8_t res = val + 1;
     uint8_t f = z80_sz_flags(res) | (res & (Z80_XF|Z80_YF)) | ((res ^ val) & Z80_HF);
@@ -3692,7 +3698,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // ED 44: neg (M:1 T:4)
             // -- OVERLAP
-            case 0x027E: _fetch(); break;
+            case 0x027E: z80_neg8(cpu);_fetch(); break;
             
             // ED 45: retn (M:1 T:4)
             // -- OVERLAP
@@ -3736,7 +3742,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // ED 4C: neg (M:1 T:4)
             // -- OVERLAP
-            case 0x028E: _fetch(); break;
+            case 0x028E: z80_neg8(cpu);_fetch(); break;
             
             // ED 4D: reti (M:1 T:4)
             // -- OVERLAP
@@ -3780,7 +3786,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // ED 54: neg (M:1 T:4)
             // -- OVERLAP
-            case 0x029E: _fetch(); break;
+            case 0x029E: z80_neg8(cpu);_fetch(); break;
             
             // ED 55: retn (M:1 T:4)
             // -- OVERLAP
@@ -3824,7 +3830,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // ED 5C: neg (M:1 T:4)
             // -- OVERLAP
-            case 0x02AE: _fetch(); break;
+            case 0x02AE: z80_neg8(cpu);_fetch(); break;
             
             // ED 5D: retn (M:1 T:4)
             // -- OVERLAP
@@ -3868,7 +3874,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // ED 64: neg (M:1 T:4)
             // -- OVERLAP
-            case 0x02BE: _fetch(); break;
+            case 0x02BE: z80_neg8(cpu);_fetch(); break;
             
             // ED 65: retn (M:1 T:4)
             // -- OVERLAP
@@ -3912,7 +3918,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // ED 6C: neg (M:1 T:4)
             // -- OVERLAP
-            case 0x02CE: _fetch(); break;
+            case 0x02CE: z80_neg8(cpu);_fetch(); break;
             
             // ED 6D: retn (M:1 T:4)
             // -- OVERLAP
@@ -3956,7 +3962,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // ED 74: neg (M:1 T:4)
             // -- OVERLAP
-            case 0x02DE: _fetch(); break;
+            case 0x02DE: z80_neg8(cpu);_fetch(); break;
             
             // ED 75: retn (M:1 T:4)
             // -- OVERLAP
@@ -3996,7 +4002,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // ED 7C: neg (M:1 T:4)
             // -- OVERLAP
-            case 0x02ED: _fetch(); break;
+            case 0x02ED: z80_neg8(cpu);_fetch(); break;
             
             // ED 7D: retn (M:1 T:4)
             // -- OVERLAP

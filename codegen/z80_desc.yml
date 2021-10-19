@@ -433,8 +433,8 @@ ld RP,(nn):
 neg:
   prefix: ed
   cond: (x == 1) and (z == 4)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "z80_neg8(cpu)"}
 
 retn:
   prefix: ed
