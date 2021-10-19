@@ -48,6 +48,7 @@ r_comment   = [ 'b', 'c', 'd', 'e', 'h', 'l', '(hl)', 'a' ]
 rp_comment  = [ 'bc', 'de', 'hl', 'sp' ]
 rp2_comment = [ 'bc', 'de', 'hl', 'af' ]
 alu_comment = [ 'add', 'adc', 'sub', 'sbc', 'and', 'xor', 'or', 'cp' ]
+rot_comment = [ 'rlc', 'rrc', 'rl', 'rr', 'sla', 'sra', 'sll', 'srl' ]
 cc_comment  = [ 'nz', 'z', 'nc', 'c', 'po', 'pe', 'p', 'm' ]
 
 r_map   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->hlx[cpu->hlx_idx].l', 'XXX', 'cpu->a' ]
@@ -93,11 +94,13 @@ def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('RY', r_comment[y])\
         .replace('RZ', r_comment[z])\
         .replace('ALU', alu_comment[y])\
+        .replace('ROT', rot_comment[y])\
         .replace('RP2', rp2_comment[p])\
         .replace('RP', rp_comment[p])\
         .replace('CC-4', cc_comment[y-4])\
         .replace('CC', cc_comment[y])\
-        .replace('Y*8', f'{y*8:X}h')
+        .replace('Y*8', f'{y*8:X}h')\
+        .replace('Y', f'{y}')
 
 def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\

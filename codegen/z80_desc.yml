@@ -371,3 +371,256 @@ rst Y*8:
   cond: (x == 3) and (z == 7)
   mcycles: []
   # FIXME
+
+#== ED prefix block ============================================================
+in RY,(c):
+  prefix: ed
+  cond: (x == 1) and (y != 6) and (z == 0)
+  mcycles: []
+  # FIXME
+
+in (c):
+  prefix: ed
+  cond: (x == 1) and (y == 6) and (z == 0)
+  mcycles: []
+  # FIXME
+
+out (c),RY:
+  prefix: ed
+  cond: (x == 1) and (y != 6) and (z == 1)
+  mcycles: []
+  # FIXME
+
+out (c),0:
+  prefix: ed
+  cond: (x == 1) and (y == 6) and (z == 1)
+  mcycles: []
+  # FIXME
+
+sbc hl,RP:
+  prefix: ed
+  cond: (x == 1) and (z == 2) and (q == 0)
+  mcycles: []
+  # FIXME
+
+adc hl,RP:
+  prefix: ed
+  cond: (x == 1) and (z == 2) and (q == 1)
+  mcycles: []
+  # FIXME
+
+ld (nn),RP:
+  prefix: ed
+  cond: (x == 1) and (z == 3) and (q == 0)
+  mcycles: []
+  # FIXME
+  
+ld RP,(nn):
+  prefix: ed
+  cond: (x == 1) and (z == 3) and (q == 1)
+  mcycles: []
+  # FIXME
+
+neg:
+  prefix: ed
+  cond: (x == 1) and (z == 4)
+  mcycles: []
+  # FIXME
+
+retn:
+  prefix: ed
+  cond: (x == 1) and (y != 1) and (z == 5)
+  mcycles: []
+  # FIXME
+
+reti:
+  prefix: ed
+  cond: (x == 1) and (y == 1) and (z == 5)
+  mcycles: []
+  # FIXME
+
+im IMY:
+  prefix: ed
+  cond: (x == 1) and (z == 6)
+  mcycles: []
+  # FIXME
+
+ld i,a:
+  prefix: ed
+  cond: (x == 1) and (y == 0) and (z == 7)
+  mcycles: []
+  # FIXME
+
+ld r,a:
+  prefix: ed
+  cond: (x == 1) and (y == 1) and (z == 7)
+  mcycles: []
+  # FIXME
+
+ld a,i:
+  prefix: ed
+  cond: (x == 1) and (y == 2) and (z == 7)
+  mcycles: []
+  # FIXME
+
+ld a,r:
+  prefix: ed
+  cond: (x == 1) and (y == 3) and (z == 7)
+  mcycles: []
+  # FIXME
+
+rrd:
+  prefix: ed
+  cond: (x == 1) and (y == 4) and (z == 7)
+  mcycles: []
+  # FIXME
+
+rld:
+  prefix: ed
+  cond: (x == 1) and (y == 5) and (z == 7)
+  mcycles: []
+  # FIXME
+
+ldi:
+  prefix: ed
+  cond: (x == 2) and (y == 4) and (z == 0)
+  mcycles: []
+  # FIXME
+
+ldd:
+  prefix: ed
+  cond: (x == 2) and (y == 5) and (z == 0)
+  mcycles: []
+  # FIXME
+
+ldir:
+  prefix: ed
+  cond: (x == 2) and (y == 6) and (z == 0)
+  mcycles: []
+  # FIXME
+
+lddr:
+  prefix: ed
+  cond: (x == 2) and (y == 7) and (z == 0)
+  mcycles: []
+  # FIXME
+
+cpi:
+  prefix: ed
+  cond: (x == 2) and (y == 4) and (z == 1)
+  mcycles: []
+  # FIXME
+
+cpd:
+  prefix: ed
+  cond: (x == 2) and (y == 5) and (z == 1)
+  mcycles: []
+  # FIXME
+
+cpir:
+  prefix: ed
+  cond: (x == 2) and (y == 6) and (z == 1)
+  mcycles: []
+  # FIXME
+
+cprd:
+  prefix: ed
+  cond: (x == 2) and (y == 7) and (z == 1)
+  mcycles: []
+  # FIXME
+
+ini:
+  prefix: ed
+  cond: (x == 2) and (y == 4) and (z == 2)
+  mcycles: []
+  # FIXME
+
+ind:
+  prefix: ed
+  cond: (x == 2) and (y == 5) and (z == 2)
+  mcycles: []
+  # FIXME
+
+inir:
+  prefix: ed
+  cond: (x == 2) and (y == 6) and (z == 2)
+  mcycles: []
+  # FIXME
+
+indr:
+  prefix: ed
+  cond: (x == 2) and (y == 7) and (z == 2)
+  mcycles: []
+  # FIXME
+
+outi:
+  prefix: ed
+  cond: (x == 2) and (y == 4) and (z == 3)
+  mcycles: []
+  # FIXME
+
+outd:
+  prefix: ed
+  cond: (x == 2) and (y == 5) and (z == 3)
+  mcycles: []
+  # FIXME
+
+otir:
+  prefix: ed
+  cond: (x == 2) and (y == 6) and (z == 3)
+  mcycles: []
+  # FIXME
+
+otdr:
+  prefix: ed
+  cond: (x == 2) and (y == 7) and (z == 3)
+  mcycles: []
+  # FIXME
+
+#== CB prefix block ============================================================
+
+ROT (hl):
+  prefix: cb
+  cond: (x == 0) and (z == 6)
+  mcycles: []
+  # FIXME
+
+ROT RZ:
+  prefix: cb
+  cond: (x == 0) and (z != 6)
+  mcycles: []
+  # FIXME
+
+bit (hl):
+  prefix: cb
+  cond: (x == 1) and (z == 6)
+  mcycles: []
+  # FIXME
+
+bit Y,RZ:
+  prefix: cb
+  cond: (x == 1) and (z != 6)
+  mcycles: []
+  # FIXME
+
+res Y,(hl):
+  prefix: cb
+  cond: (x == 2) and (z == 6)
+  mcycles: []
+  # FIXME
+
+res Y,RZ:
+  prefix: cb
+  cond: (x == 2) and (z != 6)
+  mcycles: []
+  # FIXME
+
+set Y,(hl):
+  prefix: cb
+  cond: (x == 3) and (z == 6)
+  mcycles: []
+
+set Y,RZ:
+  prefix: cb
+  cond: (x == 3) and (z != 6)
+  mcycles: []

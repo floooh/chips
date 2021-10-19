@@ -101,7 +101,7 @@ typedef struct {
     z80_opstate_t op;       // the currently active op
     union {
         struct {
-            uint16_t step_offset;   // 0x100 on ED prefix, 0x200 on CB prefix
+            uint16_t prefix_offset; // opstate table offset: 0x100 on ED prefix, 0x200 on CB prefix
             uint8_t hlx_idx;        // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
             uint8_t prefix;         // one of Z80_PREFIX_*
         };
@@ -412,21 +412,21 @@ static inline uint64_t z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefi
     cpu->op.step = 0xFFFF;
     switch (prefix) {
         case Z80_PREFIX_CB: // CB prefix preserves current DD/FD prefix
-            cpu->step_offset = 0x0200;
+            cpu->prefix_offset = 0x0200;
             cpu->prefix |= Z80_PREFIX_CB;
             break;
         case Z80_PREFIX_DD:
-            cpu->step_offset = 0;
+            cpu->prefix_offset = 0;
             cpu->hlx_idx = 1;
             cpu->prefix = Z80_PREFIX_DD;
             break;
         case Z80_PREFIX_ED: // ED prefix clears current DD/FD prefix
-            cpu->step_offset = 0x0100;
+            cpu->prefix_offset = 0x0100;
             cpu->hlx_idx = 0;
             cpu->prefix = Z80_PREFIX_ED;
             break;
         case Z80_PREFIX_FD:
-            cpu->step_offset = 0;
+            cpu->prefix_offset = 0;
             cpu->hlx_idx = 2;
             cpu->prefix = Z80_PREFIX_FD;
             break;
@@ -494,8 +494,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // refresh cycle
             case 1: {
                 pins = z80_refresh(cpu, pins);
-                cpu->op = z80_opstate_table[cpu->ir];
-                cpu->op.step += cpu->step_offset;
+                cpu->op = z80_opstate_table[cpu->ir + cpu->prefix_offset];
 
                 // if this is a (HL)/(IX+d)/(IY+d) instruction, insert
                 // d-load cycle if needed and compute effective address
