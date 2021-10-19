@@ -209,11 +209,9 @@ def build_pip(op: Op) -> int:
     pip = 0
     cycle = 0
 
-    def tcycles(bits: list[int], wait_cycle: int, total: int):
+    def tcycles(bits: list[int], total: int):
         nonlocal cycle
         nonlocal pip
-        if wait_cycle != -1:
-            pip |= (1<<(32 + wait_cycle + cycle))
         for i in range(0,total):
             if i < len(bits):
                 if bits[i] != 0:
@@ -222,26 +220,21 @@ def build_pip(op: Op) -> int:
 
     for mcycle in op.mcycles:
         if mcycle.type == 'fetch':
-            tcycles([], -1, mcycle.tcycles - 2)
+            tcycles([], mcycle.tcycles - 2)
         elif mcycle.type == 'mread':
-            # memory read machine cycle, initiate the read in T1 and T2 to store the result
-            # the wait pin is sampled on T2
-            tcycles([1,1,0], 1, mcycle.tcycles)
+            tcycles([1,1,0], mcycle.tcycles)
         elif mcycle.type == 'mwrite':
-            # memory write machine cycle, initiate the write and sample wait pin in T2
-            tcycles([0,1,0], 1, mcycle.tcycles)
+            tcycles([0,1,1], mcycle.tcycles)
         elif mcycle.type == 'ioread':
-            # io read is like a memory read delayed by one cycle
-            tcycles([0,1,1,0], 2, mcycle.tcycles)
+            tcycles([0,1,1,0], mcycle.tcycles)
         elif mcycle.type == 'iowrite':
-            # io write is like a 
-            tcycles([0,1,0,0], 2, mcycle.tcycles)
+            tcycles([0,1,1,0], mcycle.tcycles)
         elif mcycle.type == 'generic':
-            tcycles([1], -1, mcycle.tcycles)
+            tcycles([1], mcycle.tcycles)
         elif mcycle.type == 'overlapped':
             # the final overlapped tcycle is actually the first tcycle
             # of the next instruction and only initiates a memory fetch
-            tcycles([1], -1, mcycle.tcycles)
+            tcycles([1], mcycle.tcycles)
     op.num_cycles = cycle + 2
     return pip
 
@@ -275,25 +268,31 @@ def gen_decoder():
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
-                add(opc, f'_mread({addr});')
+                # wait pin sampling need to happen before the read! (e.g. changes in memory
+                # content during the wait are picked up by the read)
+                add(opc, f'_wait();_mread({addr});')
                 add(opc, f'{store}=_gd();{action}')
             elif mcycle.type == 'mwrite':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
+                # write happens at end of second tcycle
                 add(opc, f'_mwrite({addr},{data});{action}')
+                # wait pin sampling happens after the write has completed!
+                add(opc, '_wait()')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(opc, f'_ioread(addr);')
+                add(opc, f'_wait();_ioread(addr);')
                 add(opc, f'{store}=_gd();')
             elif mcycle.type == 'iowrite':
                 l(f'// -- M{i+1} (iowrite)')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 add(opc, f'_iowrite({addr},{data});')
+                add(opc, '_wait()')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
@@ -343,7 +342,7 @@ def pip_table_to_string() -> str:
             flags += 'Z80_OPSTATE_FLAGS_IMM8'
         if flags == '':
             flags = '0'
-        res += tab() + f'{{ 0x{op.pip:016X}, 0x{op.decoder_offset:04X}, {flags} }},\n' 
+        res += tab() + f'{{ 0x{op.pip:08X}, 0x{op.decoder_offset-1:04X}, {flags} }},\n' 
     return res
 
 def write_result():

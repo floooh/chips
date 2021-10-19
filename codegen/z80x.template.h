@@ -74,15 +74,6 @@ extern "C" {
 #define Z80_ZF (1<<6)           // zero
 #define Z80_SF (1<<7)           // sign
 
-// machine cycle execution pipeline bits (TODO: explain this stuff)
-#define Z80_PIP_BIT_STEP        (1ULL<<0)  // step the instruction decoder forward
-#define Z80_PIP_BIT_WAIT        (1ULL<<32) // sample the wait pin
-
-#define Z80_PIP_BITS (Z80_PIP_BIT_STEP|Z80_PIP_BIT_WAIT)
-
-#define Z80_PIP_MASK_STEP       (0xFFFFFFFFULL)
-#define Z80_PIP_MASK_WAIT       (0xFFFFFFFF00000000ULL)
-
 // flags for z80_opstate.flags
 #define Z80_OPSTATE_FLAGS_INDIRECT  (1<<0)  // this is a (HL)/(IX+d)/(IY+d) instruction
 #define Z80_OPSTATE_FLAGS_IMM8 (1<<1)       // this is an 8-bit immediate load instruction
@@ -93,14 +84,13 @@ extern "C" {
 #define Z80_MAP_IY (2)
 
 typedef struct {
-    uint64_t pip;   // the op's decode pipeline
-    uint32_t step;  // first or current decoder switch-case branch step
-    uint32_t flags; // Z80_OPSTATE_FLAGS_
+    uint32_t pip;   // the op's decode pipeline
+    uint16_t step;  // first or current decoder switch-case branch step
+    uint16_t flags; // Z80_OPSTATE_FLAGS_
 } z80_opstate_t;
 
 // CPU state
 typedef struct {
-    uint64_t pins;      // last stored pin state
     z80_opstate_t op;   // the currently active op
     uint16_t pc;        // program counter
     uint16_t addr;      // effective address for (HL),(IX+d),(IY+d)
@@ -159,7 +149,7 @@ uint64_t z80_init(z80_t* cpu) {
     // FIXME: iff1/2 disabled, initial value of IM???
 
     // setup CPU state to execute one initial NOP
-    cpu->op.pip = (1<<31)|5;
+    cpu->op.pip = 5;
     return Z80_M1|Z80_MREQ|Z80_RD;
 }
 
@@ -171,9 +161,7 @@ bool z80_opdone(z80_t* cpu) {
 
 static inline void z80_skip(z80_t* cpu, int steps, int tcycles) {
     cpu->op.step += steps;
-    for (int i = 0; i < tcycles; i++) {
-        cpu->op.pip = (cpu->op.pip & ~Z80_PIP_BITS) >> 1;
-    }
+    cpu->op.pip >>= tcycles;
 }
 
 static inline uint64_t z80_halt(z80_t* cpu, uint64_t pins) {
@@ -396,9 +384,9 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 
 // initiate a fetch machine cycle
 static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins, uint8_t hlx_idx) {
-    // reset the decoder to continue at case 0
-    cpu->op.pip = (1ULL<<32)|(5ULL<<1);
-    cpu->op.step = 0;
+    // reset the decoder to continue at step 0
+    cpu->op.pip = 5<<1;
+    cpu->op.step = 0xFFFF;
     cpu->hlx_idx = hlx_idx;
     pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     return pins;
@@ -419,7 +407,7 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
     cpu->pc = new_pc;
     cpu->op.pip = 1;
     // overlapped M1:T1 of the NOP instruction to initiate opcode fetch at new pc
-    cpu->op.step = z80_opstate_table[0].step;
+    cpu->op.step = z80_opstate_table[0].step + 1;
     return 0;
 }
 
@@ -438,6 +426,7 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
 #define _iowrite(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
+#define _wait()         if(pins&Z80_WAIT){return pins;}
 #define _cc_nz          (!(cpu->f&Z80_ZF))
 #define _cc_z           (cpu->f&Z80_ZF)
 #define _cc_nc          (!(cpu->f&Z80_CF))
@@ -448,18 +437,14 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _cc_m           (cpu->f&Z80_SF)
 
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
-    // wait cycle? (wait pin sampling only happens in specific tcycles)
-    if ((cpu->op.pip & Z80_PIP_BIT_WAIT) && (pins & Z80_WAIT)) {
-        cpu->pins = pins & ~Z80_CTRL_PIN_MASK;
-        return pins;
-    }
     // process the next active tcycle
     pins &= ~Z80_CTRL_PIN_MASK;
-    if (cpu->op.pip & Z80_PIP_BIT_STEP) {
-        switch (cpu->op.step++) {
+    if (cpu->op.pip & 1) {
+        switch (cpu->op.step) {
             // shared fetch machine cycle for all opcodes
             case 0: {
                 cpu->ir = _gd();
+                _wait();
             } break;
             // refresh cycle
             case 1: {
@@ -472,22 +457,23 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                     if (cpu->hlx_idx != Z80_MAP_HL) {
                         // (IX+d) or (IY+d): insert 3 4-cycle machine cycles
                         // to load d offset and setup effective address
-                        cpu->op.pip = (2ULL<<33)|(3ULL<<1);
+                        cpu->op.pip = 3<<1;
                         // special case: if this is indirect+immediate (which is
                         // just LD (HL),n, then the immediate-load is 'hidden' within
                         // the 8-tcycle d-offset computation)
                         if (cpu->op.flags & Z80_OPSTATE_FLAGS_IMM8) {
-                            cpu->op.pip |= 1ULL<<3;
+                            cpu->op.pip |= 1<<3;
                         }
                         else {
-                            cpu->op.pip |= 1ULL<<8;
+                            cpu->op.pip |= 1<<8;
                         }
-                        cpu->op.step = 2;
+                        cpu->op.step = 1; // => continues at step 2
                     }
                 }
             } break;
             //=== optional d-loading cycle for (HL), (IX+d), (IY+d)
             case 2: {
+                _wait();
                 _mread(cpu->pc++);
             } break;
             case 3: {
@@ -501,17 +487,17 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                 // (HL),n), then stretch the immediate-load machine cycle by 3 tcycles
                 // because it is 'hidden' in the d-offset 8-tcycle load
                 if (cpu->op.flags & Z80_OPSTATE_FLAGS_IMM8) {
-                    const uint64_t mask = 0x0000000F0000000F;
+                    const uint64_t mask = 0xF;
                     cpu->op.pip = (cpu->op.pip & mask) | ((cpu->op.pip & ~mask)<<2);
                 }
             } break;
             // FIXME: optional interrupt handling(?) 
 $decode_block
         }
+        cpu->op.step += 1;
     }
     // advance the decode pipeline by one tcycle
-    cpu->op.pip = (cpu->op.pip & ~Z80_PIP_BITS) >> 1;
-    cpu->pins = pins;
+    cpu->op.pip >>= 1;
     return pins;
 }
 
@@ -527,6 +513,7 @@ $decode_block
 #undef _mwrite
 #undef _ioread
 #undef _iowrite
+#undef _wait
 #undef _cc_nz
 #undef _cc_z
 #undef _cc_nc
