@@ -523,7 +523,7 @@ ldir:
   mcycles:
     - { type: mread, ab: "cpu->hl++", dst: DLATCH }
     - { type: mwrite, ab: "cpu->de++", db: DLATCH }
-    - { type: generic, tcycles: 2, action: "if(z80_ldi_ldd(cpu)){z80_skip(cpu,1,7,2);}"}
+    - { type: generic, tcycles: 2, action: "if(!z80_ldi_ldd(cpu)){z80_skip(cpu,1,7,2);}"}
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC;" }
 
 lddr:
@@ -532,32 +532,38 @@ lddr:
   mcycles:
     - { type: mread, ab: "cpu->hl--", dst: DLATCH }
     - { type: mwrite, ab: "cpu->de--", db: DLATCH }
-    - { type: generic, tcycles: 2, action: "if(z80_ldi_ldd(cpu)){z80_skip(cpu,1,7,2);}"}
+    - { type: generic, tcycles: 2, action: "if(!z80_ldi_ldd(cpu)){z80_skip(cpu,1,7,2);}"}
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC;" }
 
 cpi:
   prefix: ed
   cond: (x == 2) and (y == 4) and (z == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: "cpu->hl++", dst: DLATCH }
+    - { type: generic, tcycles: 5, action: "WZ++;z80_cpi_cpd(cpu)"}
 
 cpd:
   prefix: ed
   cond: (x == 2) and (y == 5) and (z == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: "cpu->hl--", dst: DLATCH }
+    - { type: generic, tcycles: 5, action: "WZ--;z80_cpi_cpd(cpu)"}
 
 cpir:
   prefix: ed
   cond: (x == 2) and (y == 6) and (z == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: "cpu->hl++", dst: DLATCH }
+    - { type: generic, tcycles: 5, action: "WZ++;if(!z80_cpi_cpd(cpu)){z80_skip(cpu,1,7,2);}"}
+    - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
-cprd:
+cpdr:
   prefix: ed
   cond: (x == 2) and (y == 7) and (z == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: "cpu->hl--", dst: DLATCH }
+    - { type: generic, tcycles: 5, action: "WZ--;if(!z80_cpi_cpd(cpu)){z80_skip(cpu,1,7,2);}"}
+    - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 ini:
   prefix: ed

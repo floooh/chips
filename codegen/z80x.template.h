@@ -423,13 +423,28 @@ static inline void z80_sbc16(z80_t* cpu, uint16_t val) {
 static inline bool z80_ldi_ldd(z80_t* cpu) {
     // this just handles the action after the actual byte transfer
     // dlatch is the transferred byte
-    const uint8_t val = cpu->a + cpu->dlatch;
+    const uint8_t res = cpu->a + cpu->dlatch;
     cpu->bc -= 1;
     cpu->f = (cpu->f & (Z80_SF|Z80_ZF|Z80_CF)) |
-             ((val & 2) ? Z80_YF : 0) |
-             ((val & 8) ? Z80_XF : 0) |
+             ((res & 2) ? Z80_YF : 0) |
+             ((res & 8) ? Z80_XF : 0) |
              (cpu->bc ? Z80_VF : 0);
-    return cpu->bc == 0;
+    return cpu->bc != 0;
+}
+
+static inline bool z80_cpi_cpd(z80_t* cpu) {
+    uint32_t res = (uint32_t) ((int)cpu->a - (int)cpu->dlatch);
+    cpu->bc -= 1;
+    uint8_t f = (cpu->f & Z80_CF)|Z80_NF|z80_sz_flags(res);
+    if ((res & 0xF) > (cpu->a & 0xF)) {
+        f |= Z80_HF;
+        res--;
+    }
+    if (res & 2) { f |= Z80_YF; }
+    if (res & 8) { f |= Z80_XF; }
+    if (cpu->bc) { f |= Z80_VF; }
+    cpu->f = f;
+    return (cpu->bc != 0) && !(f & Z80_ZF);
 }
 
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
