@@ -147,7 +147,6 @@ def flag(op: Op, flag: str) -> bool:
     else:
         return False
 
-
 def parse_opdescs():
     with open(DESC_PATH, 'r') as fp:
         desc = yaml.load(fp, Loader=yaml.FullLoader) # type: ignore
@@ -271,7 +270,7 @@ def gen_decoder():
     indent = 3
     decoder_step = FIRST_DECODER_STEP
 
-    def add(opcode: int, action: str):
+    def add(action: str):
         nonlocal decoder_step
         nonlocal step
         l(f'case 0x{decoder_step:04X}: {action} break;')
@@ -279,16 +278,12 @@ def gen_decoder():
         step += 1
     
     for op_index,maybe_op in enumerate(OPS):
-        # ignore empty slots, those will be mapped to NOPs
-        if maybe_op is None:
-            continue
         op = unwrap(maybe_op)
         # ignore duplicate ops if they are flagged as 'single'
         if flag(op, 'single') and op.first_op_index != op_index:
             continue
 
         step = 0
-        opc = op.opcode
         op.pip = build_pip(op)
         op.decoder_offset = decoder_step
 
@@ -304,33 +299,33 @@ def gen_decoder():
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 # wait pin sampling need to happen before the read! (e.g. changes in memory
                 # content during the wait are picked up by the read)
-                add(opc, f'_wait();_mread({addr});')
-                add(opc, f'{store}=_gd();{action}')
+                add(f'_wait();_mread({addr});')
+                add(f'{store}=_gd();{action}')
             elif mcycle.type == 'mwrite':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 # write happens at end of second tcycle
-                add(opc, f'_mwrite({addr},{data});{action}')
+                add(f'_mwrite({addr},{data});{action}')
                 # wait pin sampling happens after the write has completed!
-                add(opc, '_wait()')
+                add('_wait()')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(opc, f'_wait();_ioread(addr);')
-                add(opc, f'{store}=_gd();')
+                add(f'_wait();_ioread(addr);')
+                add(f'{store}=_gd();')
             elif mcycle.type == 'iowrite':
                 l(f'// -- M{i+1} (iowrite)')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                add(opc, f'_iowrite({addr},{data});')
-                add(opc, '_wait()')
+                add(f'_iowrite({addr},{data});')
+                add('_wait()')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
-                add(opc, f'{action}')
+                add(f'{action}')
             elif mcycle.type == 'overlapped':
                 l(f'// -- OVERLAP')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
@@ -338,7 +333,7 @@ def gen_decoder():
                     fetch = f"_fetch_{mcycle.items['prefix']}();"
                 else:
                     fetch = '_fetch();'
-                add(opc, f'{action}{fetch}')
+                add(f'{action}{fetch}')
         op.num_steps = step
         # the number of steps must match the number of step-bits in the
         # execution pipeline
@@ -351,21 +346,10 @@ def pip_table_to_string() -> str:
     indent = 1
     res: str = ''
     for op_index,maybe_op in enumerate(OPS):
-        # empty slots are mapped to ops
-        if maybe_op is None:
-            maybe_op = OPS[0]
         op = unwrap(maybe_op)
         # map redundant 'single' ops to the original
         if flag(op, 'single') and op.first_op_index != op_index:
             op = unwrap(OPS[op.first_op_index])
-        op_range = op_index & 0xF00
-        if op_range == 0:
-            prefix = ''
-        elif op_range == 0x100:
-            prefix = 'ED'
-        elif op_range == 0x200:
-            prefix = 'CB'
-        res += tab() + f'// {prefix} {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
         flags = ''
         if flag(op, 'indirect'):
             flags += 'Z80_OPSTATE_FLAGS_INDIRECT'
@@ -375,7 +359,8 @@ def pip_table_to_string() -> str:
             flags += 'Z80_OPSTATE_FLAGS_IMM8'
         if flags == '':
             flags = '0'
-        res += tab() + f'{{ 0x{op.pip:08X}, 0x{op.decoder_offset-1:04X}, {flags} }},\n' 
+        res += tab() + f'{{ 0x{op.pip:08X}, 0x{op.decoder_offset-1:04X}, {flags} }},' 
+        res += f'  // {op.prefix.upper()} {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
     return res
 
 def write_result():
