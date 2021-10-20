@@ -1,6 +1,6 @@
 import yaml, copy
 from string import Template
-from typing import Optional, TypeVar
+from typing import Optional, TypeVar, Any
 
 FIRST_DECODER_STEP = 5
 DESC_PATH  = 'z80_desc.yml'
@@ -17,17 +17,19 @@ class MCycle:
 
 # an opcode description
 class Op:
-    def __init__(self, name:str, cond:str, flags: dict[str,str]):
+    def __init__(self, name:str, cond:str, flags: dict[str,Any]):
         self.name: str = name
         self.cond: str = cond
         self.cond_compiled = compile(cond, '<string>', 'eval')
-        self.flags: dict[str,str] = flags
+        self.flags: dict[str,Any] = flags
         self.opcode: int = -1
         self.prefix: str = ''
+        self.single: bool = False
         self.pip: int = 0
         self.num_cycles = 0
         self.num_steps = 0
         self.decoder_offset: int = 0
+        self.first_op_index: int = -1
         self.mcycles: list[MCycle] = []
 
 OP_PATTERNS: list[Op] = []
@@ -39,7 +41,7 @@ OPS: list[Optional[Op]] = [None for _ in range(0,3*256)]
 # a fetch machine cycle is processed as 2 parts because it overlaps
 # with the 'action' of the previous instruction
 FETCH_TCYCLES = 3
-OVERLAPPED_TCYCLES = 1
+OVERLAPPED_FETCH_TCYCLES = 1
 MEM_TCYCLES = 3
 IO_TCYCLES = 4
 
@@ -139,6 +141,13 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('H', 'cpu->hlx[cpu->hlx_idx].h')\
         .replace('Y*8', f'0x{y*8:02X}')\
 
+def flag(op: Op, flag: str) -> bool:
+    if flag in op.flags:
+        return op.flags[flag]
+    else:
+        return False
+
+
 def parse_opdescs():
     with open(DESC_PATH, 'r') as fp:
         desc = yaml.load(fp, Loader=yaml.FullLoader) # type: ignore
@@ -147,7 +156,7 @@ def parse_opdescs():
                 err(f"op '{op_name}' has no condition!")
             if 'mcycles' not in op_desc:
                 err(f"op '{op_name}' has no mcycles!")
-            flags: dict[str,str] = {}
+            flags: dict[str,Any] = {}
             if 'flags' in op_desc:
                 flags = op_desc['flags']
             op = Op(op_name,op_desc['cond'], flags)
@@ -170,7 +179,7 @@ def parse_opdescs():
                         'mwrite': MEM_TCYCLES,
                         'ioread': IO_TCYCLES,
                         'iowrite': IO_TCYCLES,
-                        'overlapped': OVERLAPPED_TCYCLES,
+                        'overlapped': OVERLAPPED_FETCH_TCYCLES,
                         'generic': -1
                     }
                     mc_tcycles = default_tcycles[mc_type]
@@ -179,13 +188,13 @@ def parse_opdescs():
                 if (mc_tcycles < 1) or (mc_tcycles > 6):
                     err(f'invalid mcycle len: {mc_tcycles}')
                 if mc_type == 'fetch':
-                    mc_tcycles -= OVERLAPPED_TCYCLES
+                    mc_tcycles -= OVERLAPPED_FETCH_TCYCLES
                 mc = MCycle(mc_type, mc_tcycles, mc_desc)
                 op.mcycles.append(mc)
             if num_fetch == 0:
                 op.mcycles.insert(0, MCycle('fetch', FETCH_TCYCLES, {}))
             if num_overlapped == 0:
-                op.mcycles.append(MCycle('overlapped', OVERLAPPED_TCYCLES, {}))
+                op.mcycles.append(MCycle('overlapped', OVERLAPPED_FETCH_TCYCLES, {}))
             OP_PATTERNS.append(op)
 
 def stampout_mcycle_items(mcycle_items: dict[str,str], y: int, z: int, p: int, q: int) -> dict[str,str]:
@@ -211,7 +220,10 @@ def expand_optable():
                 if eval(op_desc.cond_compiled) and op_desc.prefix == prefix:
                     if OPS[op_index] is not None:
                         err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
-                    op = copy.deepcopy(OP_PATTERNS[op_desc_index])
+                    op_pattern = OP_PATTERNS[op_desc_index]
+                    if op_pattern.first_op_index == -1:
+                        op_pattern.first_op_index = op_index
+                    op = copy.deepcopy(op_pattern)
                     op.name = map_comment(op.name, y, z, p, q)
                     op.prefix = prefix
                     op.opcode = opcode
@@ -266,11 +278,14 @@ def gen_decoder():
         decoder_step += 1
         step += 1
     
-    for maybe_op in OPS:
+    for op_index,maybe_op in enumerate(OPS):
         # ignore empty slots, those will be mapped to NOPs
         if maybe_op is None:
             continue
         op = unwrap(maybe_op)
+        # ignore duplicate ops if they are flagged as 'single'
+        if flag(op, 'single') and op.first_op_index != op_index:
+            continue
 
         step = 0
         opc = op.opcode
@@ -336,10 +351,13 @@ def pip_table_to_string() -> str:
     indent = 1
     res: str = ''
     for op_index,maybe_op in enumerate(OPS):
-        # fill empty slots with NOPs
+        # empty slots are mapped to ops
         if maybe_op is None:
             maybe_op = OPS[0]
         op = unwrap(maybe_op)
+        # map redundant 'single' ops to the original
+        if flag(op, 'single') and op.first_op_index != op_index:
+            op = unwrap(OPS[op.first_op_index])
         op_range = op_index & 0xF00
         if op_range == 0:
             prefix = ''
@@ -349,9 +367,9 @@ def pip_table_to_string() -> str:
             prefix = 'CB'
         res += tab() + f'// {prefix} {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
         flags = ''
-        if 'indirect' in op.flags and op.flags['indirect']:
+        if flag(op, 'indirect'):
             flags += 'Z80_OPSTATE_FLAGS_INDIRECT'
-        if 'imm8' in op.flags and op.flags['imm8']:
+        if flag(op, 'imm8'):
             if flags != '':
                 flags += '|'
             flags += 'Z80_OPSTATE_FLAGS_IMM8'

@@ -436,12 +436,14 @@ ld RP,(nn):
 neg:
   prefix: ed
   cond: (x == 1) and (z == 4)
+  flags: { single: true }
   mcycles:
     - { type: overlapped, action: "z80_neg8(cpu)"}
 
 retn:
   prefix: ed
   cond: (x == 1) and (y != 1) and (z == 5)
+  flags: { single: true }
   mcycles: []
   # FIXME
 
@@ -603,36 +605,42 @@ ROT RZ:
   mcycles: []
   # FIXME
 
-bit (hl):
+bit n,(hl):
   prefix: cb
+  flags: { single: true }
   cond: (x == 1) and (z == 6)
   mcycles: []
   # FIXME
 
-bit Y,RZ:
+bit n,r:
   prefix: cb
+  flags: { single: true }
   cond: (x == 1) and (z != 6)
   mcycles: []
   # FIXME
 
-res Y,(hl):
+res n,(hl):
   prefix: cb
+  flags: { single: true }
   cond: (x == 2) and (z == 6)
   mcycles: []
   # FIXME
 
-res Y,RZ:
+res n,r:
   prefix: cb
+  flags: { single: true }
   cond: (x == 2) and (z != 6)
   mcycles: []
   # FIXME
 
-set Y,(hl):
+set n,(hl):
   prefix: cb
+  flags: { single: true }
   cond: (x == 3) and (z == 6)
   mcycles: []
 
-set Y,RZ:
+set n,r:
   prefix: cb
+  flags: { single: true }
   cond: (x == 3) and (z != 6)
   mcycles: []
