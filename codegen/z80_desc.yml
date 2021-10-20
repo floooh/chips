@@ -625,14 +625,20 @@ outd:
 otir:
   prefix: ed
   cond: (x == 2) and (y == 6) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: mread, ab: "cpu->hl++", dst: DLATCH, action: "B--" }
+    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC+1;if(!z80_outi_outd(cpu,DLATCH)){z80_skip(cpu,1,6,1);}"}
+    - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 otdr:
   prefix: ed
   cond: (x == 2) and (y == 7) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: mread, ab: "cpu->hl--", dst: DLATCH, action: "B--" }
+    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC-1;if(!z80_outi_outd(cpu,DLATCH)){z80_skip(cpu,1,6,1);}"}
+    - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 #== CB prefix block ============================================================
 
