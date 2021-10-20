@@ -609,14 +609,18 @@ indr:
 outi:
   prefix: ed
   cond: (x == 2) and (y == 4) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: mread, ab: "cpu->hl++", dst: DLATCH, action: "B--" }
+    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC+1;z80_outi_outd(cpu,DLATCH)"}
 
 outd:
   prefix: ed
   cond: (x == 2) and (y == 5) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: mread, ab: "cpu->hl--", dst: DLATCH, action: "B--" }
+    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC-1;z80_outi_outd(cpu,DLATCH)"}
 
 otir:
   prefix: ed

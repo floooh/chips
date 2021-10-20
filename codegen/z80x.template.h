@@ -456,6 +456,17 @@ static inline bool z80_ini_ind(z80_t* cpu, uint8_t val, uint8_t c) {
     return (b != 0);
 }
 
+static inline bool z80_outi_outd(z80_t* cpu, uint8_t val) {
+    const uint8_t b = cpu->b;
+    uint8_t f = z80_sz_flags(b) | (b & (Z80_XF|Z80_YF));
+    if (val & Z80_SF) { f |= Z80_NF; }
+    uint32_t t = (uint32_t)cpu->l + val;
+    if (t & 0x0100) { f |= Z80_HF|Z80_CF; }
+    f |= z80_szp_flags[((uint8_t)(t & 7)) ^ b] & Z80_PF;
+    cpu->f = f;
+    return (b != 0);
+}
+
 static inline uint8_t z80_in(z80_t* cpu, uint8_t val) {
     cpu->f = (cpu->f & Z80_CF) | z80_szp_flags[val];
     return val;
