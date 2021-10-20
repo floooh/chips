@@ -420,6 +420,18 @@ static inline void z80_sbc16(z80_t* cpu, uint16_t val) {
              ((res & 0xFFFF) ? 0 : Z80_ZF);
 }
 
+static inline bool z80_ldi_ldd(z80_t* cpu) {
+    // this just handles the action after the actual byte transfer
+    // dlatch is the transferred byte
+    const uint8_t val = cpu->a + cpu->dlatch;
+    cpu->bc -= 1;
+    cpu->f = (cpu->f & (Z80_SF|Z80_ZF|Z80_CF)) |
+             ((val & 2) ? Z80_YF : 0) |
+             ((val & 8) ? Z80_XF : 0) |
+             (cpu->bc ? Z80_VF : 0);
+    return cpu->bc == 0;
+}
+
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }
@@ -902,34 +914,34 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     { 0x00000002, 0x0295, 0 },  // ED 9D: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED 9E: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED 9F: ed nop (M:1 T:4 steps:1)
-    { 0x00000002, 0x030F, 0 },  // ED A0: ldi (M:1 T:4 steps:1)
-    { 0x00000002, 0x0310, 0 },  // ED A1: cpi (M:1 T:4 steps:1)
-    { 0x00000002, 0x0311, 0 },  // ED A2: ini (M:1 T:4 steps:1)
-    { 0x00000002, 0x0312, 0 },  // ED A3: outi (M:1 T:4 steps:1)
+    { 0x000002E6, 0x030F, 0 },  // ED A0: ldi (M:4 T:12 steps:6)
+    { 0x00000002, 0x0315, 0 },  // ED A1: cpi (M:1 T:4 steps:1)
+    { 0x00000002, 0x0316, 0 },  // ED A2: ini (M:1 T:4 steps:1)
+    { 0x00000002, 0x0317, 0 },  // ED A3: outi (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED A4: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED A5: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED A6: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED A7: ed nop (M:1 T:4 steps:1)
-    { 0x00000002, 0x0313, 0 },  // ED A8: ldd (M:1 T:4 steps:1)
-    { 0x00000002, 0x0314, 0 },  // ED A9: cpd (M:1 T:4 steps:1)
-    { 0x00000002, 0x0315, 0 },  // ED AA: ind (M:1 T:4 steps:1)
-    { 0x00000002, 0x0316, 0 },  // ED AB: outd (M:1 T:4 steps:1)
+    { 0x000002E6, 0x0318, 0 },  // ED A8: ldd (M:4 T:12 steps:6)
+    { 0x00000002, 0x031E, 0 },  // ED A9: cpd (M:1 T:4 steps:1)
+    { 0x00000002, 0x031F, 0 },  // ED AA: ind (M:1 T:4 steps:1)
+    { 0x00000002, 0x0320, 0 },  // ED AB: outd (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED AC: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED AD: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED AE: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED AF: ed nop (M:1 T:4 steps:1)
-    { 0x00000002, 0x0317, 0 },  // ED B0: ldir (M:1 T:4 steps:1)
-    { 0x00000002, 0x0318, 0 },  // ED B1: cpir (M:1 T:4 steps:1)
-    { 0x00000002, 0x0319, 0 },  // ED B2: inir (M:1 T:4 steps:1)
-    { 0x00000002, 0x031A, 0 },  // ED B3: otir (M:1 T:4 steps:1)
+    { 0x000042E6, 0x0321, 0 },  // ED B0: ldir (M:5 T:17 steps:7)
+    { 0x00000002, 0x0328, 0 },  // ED B1: cpir (M:1 T:4 steps:1)
+    { 0x00000002, 0x0329, 0 },  // ED B2: inir (M:1 T:4 steps:1)
+    { 0x00000002, 0x032A, 0 },  // ED B3: otir (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED B4: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED B5: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED B6: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED B7: ed nop (M:1 T:4 steps:1)
-    { 0x00000002, 0x031B, 0 },  // ED B8: lddr (M:1 T:4 steps:1)
-    { 0x00000002, 0x031C, 0 },  // ED B9: cprd (M:1 T:4 steps:1)
-    { 0x00000002, 0x031D, 0 },  // ED BA: indr (M:1 T:4 steps:1)
-    { 0x00000002, 0x031E, 0 },  // ED BB: otdr (M:1 T:4 steps:1)
+    { 0x000042E6, 0x032B, 0 },  // ED B8: lddr (M:5 T:17 steps:7)
+    { 0x00000002, 0x0332, 0 },  // ED B9: cprd (M:1 T:4 steps:1)
+    { 0x00000002, 0x0333, 0 },  // ED BA: indr (M:1 T:4 steps:1)
+    { 0x00000002, 0x0334, 0 },  // ED BB: otdr (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED BC: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED BD: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED BE: ed nop (M:1 T:4 steps:1)
@@ -998,262 +1010,262 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     { 0x00000002, 0x0295, 0 },  // ED FD: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED FE: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x0295, 0 },  // ED FF: ed nop (M:1 T:4 steps:1)
-    { 0x00000002, 0x031F, 0 },  // CB 00: rlc b (M:1 T:4 steps:1)
-    { 0x00000002, 0x0320, 0 },  // CB 01: rlc c (M:1 T:4 steps:1)
-    { 0x00000002, 0x0321, 0 },  // CB 02: rlc d (M:1 T:4 steps:1)
-    { 0x00000002, 0x0322, 0 },  // CB 03: rlc e (M:1 T:4 steps:1)
-    { 0x00000002, 0x0323, 0 },  // CB 04: rlc h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0324, 0 },  // CB 05: rlc l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0325, 0 },  // CB 06: rlc (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0326, 0 },  // CB 07: rlc a (M:1 T:4 steps:1)
-    { 0x00000002, 0x0327, 0 },  // CB 08: rrc b (M:1 T:4 steps:1)
-    { 0x00000002, 0x0328, 0 },  // CB 09: rrc c (M:1 T:4 steps:1)
-    { 0x00000002, 0x0329, 0 },  // CB 0A: rrc d (M:1 T:4 steps:1)
-    { 0x00000002, 0x032A, 0 },  // CB 0B: rrc e (M:1 T:4 steps:1)
-    { 0x00000002, 0x032B, 0 },  // CB 0C: rrc h (M:1 T:4 steps:1)
-    { 0x00000002, 0x032C, 0 },  // CB 0D: rrc l (M:1 T:4 steps:1)
-    { 0x00000002, 0x032D, 0 },  // CB 0E: rrc (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x032E, 0 },  // CB 0F: rrc a (M:1 T:4 steps:1)
-    { 0x00000002, 0x032F, 0 },  // CB 10: rl b (M:1 T:4 steps:1)
-    { 0x00000002, 0x0330, 0 },  // CB 11: rl c (M:1 T:4 steps:1)
-    { 0x00000002, 0x0331, 0 },  // CB 12: rl d (M:1 T:4 steps:1)
-    { 0x00000002, 0x0332, 0 },  // CB 13: rl e (M:1 T:4 steps:1)
-    { 0x00000002, 0x0333, 0 },  // CB 14: rl h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0334, 0 },  // CB 15: rl l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0335, 0 },  // CB 16: rl (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0336, 0 },  // CB 17: rl a (M:1 T:4 steps:1)
-    { 0x00000002, 0x0337, 0 },  // CB 18: rr b (M:1 T:4 steps:1)
-    { 0x00000002, 0x0338, 0 },  // CB 19: rr c (M:1 T:4 steps:1)
-    { 0x00000002, 0x0339, 0 },  // CB 1A: rr d (M:1 T:4 steps:1)
-    { 0x00000002, 0x033A, 0 },  // CB 1B: rr e (M:1 T:4 steps:1)
-    { 0x00000002, 0x033B, 0 },  // CB 1C: rr h (M:1 T:4 steps:1)
-    { 0x00000002, 0x033C, 0 },  // CB 1D: rr l (M:1 T:4 steps:1)
-    { 0x00000002, 0x033D, 0 },  // CB 1E: rr (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x033E, 0 },  // CB 1F: rr a (M:1 T:4 steps:1)
-    { 0x00000002, 0x033F, 0 },  // CB 20: sla b (M:1 T:4 steps:1)
-    { 0x00000002, 0x0340, 0 },  // CB 21: sla c (M:1 T:4 steps:1)
-    { 0x00000002, 0x0341, 0 },  // CB 22: sla d (M:1 T:4 steps:1)
-    { 0x00000002, 0x0342, 0 },  // CB 23: sla e (M:1 T:4 steps:1)
-    { 0x00000002, 0x0343, 0 },  // CB 24: sla h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0344, 0 },  // CB 25: sla l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0345, 0 },  // CB 26: sla (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0346, 0 },  // CB 27: sla a (M:1 T:4 steps:1)
-    { 0x00000002, 0x0347, 0 },  // CB 28: sra b (M:1 T:4 steps:1)
-    { 0x00000002, 0x0348, 0 },  // CB 29: sra c (M:1 T:4 steps:1)
-    { 0x00000002, 0x0349, 0 },  // CB 2A: sra d (M:1 T:4 steps:1)
-    { 0x00000002, 0x034A, 0 },  // CB 2B: sra e (M:1 T:4 steps:1)
-    { 0x00000002, 0x034B, 0 },  // CB 2C: sra h (M:1 T:4 steps:1)
-    { 0x00000002, 0x034C, 0 },  // CB 2D: sra l (M:1 T:4 steps:1)
-    { 0x00000002, 0x034D, 0 },  // CB 2E: sra (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x034E, 0 },  // CB 2F: sra a (M:1 T:4 steps:1)
-    { 0x00000002, 0x034F, 0 },  // CB 30: sll b (M:1 T:4 steps:1)
-    { 0x00000002, 0x0350, 0 },  // CB 31: sll c (M:1 T:4 steps:1)
-    { 0x00000002, 0x0351, 0 },  // CB 32: sll d (M:1 T:4 steps:1)
-    { 0x00000002, 0x0352, 0 },  // CB 33: sll e (M:1 T:4 steps:1)
-    { 0x00000002, 0x0353, 0 },  // CB 34: sll h (M:1 T:4 steps:1)
-    { 0x00000002, 0x0354, 0 },  // CB 35: sll l (M:1 T:4 steps:1)
-    { 0x00000002, 0x0355, 0 },  // CB 36: sll (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0356, 0 },  // CB 37: sll a (M:1 T:4 steps:1)
-    { 0x00000002, 0x0357, 0 },  // CB 38: srl b (M:1 T:4 steps:1)
-    { 0x00000002, 0x0358, 0 },  // CB 39: srl c (M:1 T:4 steps:1)
-    { 0x00000002, 0x0359, 0 },  // CB 3A: srl d (M:1 T:4 steps:1)
-    { 0x00000002, 0x035A, 0 },  // CB 3B: srl e (M:1 T:4 steps:1)
-    { 0x00000002, 0x035B, 0 },  // CB 3C: srl h (M:1 T:4 steps:1)
-    { 0x00000002, 0x035C, 0 },  // CB 3D: srl l (M:1 T:4 steps:1)
-    { 0x00000002, 0x035D, 0 },  // CB 3E: srl (hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035E, 0 },  // CB 3F: srl a (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 40: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 41: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 42: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 43: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 44: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 45: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0360, 0 },  // CB 46: bit n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 47: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 48: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 49: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 4A: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 4B: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 4C: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 4D: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0360, 0 },  // CB 4E: bit n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 4F: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 50: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 51: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 52: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 53: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 54: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 55: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0360, 0 },  // CB 56: bit n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 57: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 58: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 59: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 5A: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 5B: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 5C: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 5D: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0360, 0 },  // CB 5E: bit n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 5F: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 60: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 61: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 62: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 63: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 64: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 65: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0360, 0 },  // CB 66: bit n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 67: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 68: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 69: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 6A: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 6B: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 6C: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 6D: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0360, 0 },  // CB 6E: bit n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 6F: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 70: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 71: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 72: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 73: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 74: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 75: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0360, 0 },  // CB 76: bit n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 77: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 78: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 79: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 7A: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 7B: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 7C: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 7D: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0360, 0 },  // CB 7E: bit n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x035F, 0 },  // CB 7F: bit n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 80: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 81: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 82: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 83: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 84: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 85: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0362, 0 },  // CB 86: res n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 87: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 88: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 89: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 8A: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 8B: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 8C: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 8D: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0362, 0 },  // CB 8E: res n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 8F: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 90: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 91: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 92: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 93: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 94: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 95: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0362, 0 },  // CB 96: res n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 97: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 98: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 99: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 9A: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 9B: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 9C: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 9D: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0362, 0 },  // CB 9E: res n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB 9F: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A0: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A1: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A2: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A3: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A4: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A5: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0362, 0 },  // CB A6: res n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A7: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A8: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB A9: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB AA: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB AB: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB AC: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB AD: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0362, 0 },  // CB AE: res n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB AF: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B0: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B1: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B2: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B3: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B4: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B5: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0362, 0 },  // CB B6: res n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B7: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B8: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB B9: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB BA: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB BB: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB BC: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB BD: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0362, 0 },  // CB BE: res n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0361, 0 },  // CB BF: res n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C0: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C1: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C2: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C3: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C4: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C5: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0364, 0 },  // CB C6: set n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C7: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C8: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB C9: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB CA: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB CB: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB CC: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB CD: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0364, 0 },  // CB CE: set n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB CF: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D0: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D1: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D2: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D3: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D4: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D5: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0364, 0 },  // CB D6: set n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D7: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D8: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB D9: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB DA: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB DB: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB DC: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB DD: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0364, 0 },  // CB DE: set n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB DF: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E0: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E1: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E2: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E3: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E4: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E5: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0364, 0 },  // CB E6: set n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E7: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E8: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB E9: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB EA: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB EB: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB EC: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB ED: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0364, 0 },  // CB EE: set n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB EF: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F0: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F1: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F2: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F3: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F4: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F5: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0364, 0 },  // CB F6: set n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F7: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F8: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB F9: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB FA: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB FB: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB FC: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB FD: set n,r (M:1 T:4 steps:1)
-    { 0x00000002, 0x0364, 0 },  // CB FE: set n,(hl) (M:1 T:4 steps:1)
-    { 0x00000002, 0x0363, 0 },  // CB FF: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0335, 0 },  // CB 00: rlc b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0336, 0 },  // CB 01: rlc c (M:1 T:4 steps:1)
+    { 0x00000002, 0x0337, 0 },  // CB 02: rlc d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0338, 0 },  // CB 03: rlc e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0339, 0 },  // CB 04: rlc h (M:1 T:4 steps:1)
+    { 0x00000002, 0x033A, 0 },  // CB 05: rlc l (M:1 T:4 steps:1)
+    { 0x00000002, 0x033B, 0 },  // CB 06: rlc (hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x033C, 0 },  // CB 07: rlc a (M:1 T:4 steps:1)
+    { 0x00000002, 0x033D, 0 },  // CB 08: rrc b (M:1 T:4 steps:1)
+    { 0x00000002, 0x033E, 0 },  // CB 09: rrc c (M:1 T:4 steps:1)
+    { 0x00000002, 0x033F, 0 },  // CB 0A: rrc d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0340, 0 },  // CB 0B: rrc e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0341, 0 },  // CB 0C: rrc h (M:1 T:4 steps:1)
+    { 0x00000002, 0x0342, 0 },  // CB 0D: rrc l (M:1 T:4 steps:1)
+    { 0x00000002, 0x0343, 0 },  // CB 0E: rrc (hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0344, 0 },  // CB 0F: rrc a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0345, 0 },  // CB 10: rl b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0346, 0 },  // CB 11: rl c (M:1 T:4 steps:1)
+    { 0x00000002, 0x0347, 0 },  // CB 12: rl d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0348, 0 },  // CB 13: rl e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0349, 0 },  // CB 14: rl h (M:1 T:4 steps:1)
+    { 0x00000002, 0x034A, 0 },  // CB 15: rl l (M:1 T:4 steps:1)
+    { 0x00000002, 0x034B, 0 },  // CB 16: rl (hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x034C, 0 },  // CB 17: rl a (M:1 T:4 steps:1)
+    { 0x00000002, 0x034D, 0 },  // CB 18: rr b (M:1 T:4 steps:1)
+    { 0x00000002, 0x034E, 0 },  // CB 19: rr c (M:1 T:4 steps:1)
+    { 0x00000002, 0x034F, 0 },  // CB 1A: rr d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0350, 0 },  // CB 1B: rr e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0351, 0 },  // CB 1C: rr h (M:1 T:4 steps:1)
+    { 0x00000002, 0x0352, 0 },  // CB 1D: rr l (M:1 T:4 steps:1)
+    { 0x00000002, 0x0353, 0 },  // CB 1E: rr (hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0354, 0 },  // CB 1F: rr a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0355, 0 },  // CB 20: sla b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0356, 0 },  // CB 21: sla c (M:1 T:4 steps:1)
+    { 0x00000002, 0x0357, 0 },  // CB 22: sla d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0358, 0 },  // CB 23: sla e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0359, 0 },  // CB 24: sla h (M:1 T:4 steps:1)
+    { 0x00000002, 0x035A, 0 },  // CB 25: sla l (M:1 T:4 steps:1)
+    { 0x00000002, 0x035B, 0 },  // CB 26: sla (hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x035C, 0 },  // CB 27: sla a (M:1 T:4 steps:1)
+    { 0x00000002, 0x035D, 0 },  // CB 28: sra b (M:1 T:4 steps:1)
+    { 0x00000002, 0x035E, 0 },  // CB 29: sra c (M:1 T:4 steps:1)
+    { 0x00000002, 0x035F, 0 },  // CB 2A: sra d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0360, 0 },  // CB 2B: sra e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0361, 0 },  // CB 2C: sra h (M:1 T:4 steps:1)
+    { 0x00000002, 0x0362, 0 },  // CB 2D: sra l (M:1 T:4 steps:1)
+    { 0x00000002, 0x0363, 0 },  // CB 2E: sra (hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0364, 0 },  // CB 2F: sra a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0365, 0 },  // CB 30: sll b (M:1 T:4 steps:1)
+    { 0x00000002, 0x0366, 0 },  // CB 31: sll c (M:1 T:4 steps:1)
+    { 0x00000002, 0x0367, 0 },  // CB 32: sll d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0368, 0 },  // CB 33: sll e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0369, 0 },  // CB 34: sll h (M:1 T:4 steps:1)
+    { 0x00000002, 0x036A, 0 },  // CB 35: sll l (M:1 T:4 steps:1)
+    { 0x00000002, 0x036B, 0 },  // CB 36: sll (hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x036C, 0 },  // CB 37: sll a (M:1 T:4 steps:1)
+    { 0x00000002, 0x036D, 0 },  // CB 38: srl b (M:1 T:4 steps:1)
+    { 0x00000002, 0x036E, 0 },  // CB 39: srl c (M:1 T:4 steps:1)
+    { 0x00000002, 0x036F, 0 },  // CB 3A: srl d (M:1 T:4 steps:1)
+    { 0x00000002, 0x0370, 0 },  // CB 3B: srl e (M:1 T:4 steps:1)
+    { 0x00000002, 0x0371, 0 },  // CB 3C: srl h (M:1 T:4 steps:1)
+    { 0x00000002, 0x0372, 0 },  // CB 3D: srl l (M:1 T:4 steps:1)
+    { 0x00000002, 0x0373, 0 },  // CB 3E: srl (hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0374, 0 },  // CB 3F: srl a (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 40: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 41: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 42: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 43: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 44: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 45: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0376, 0 },  // CB 46: bit n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 47: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 48: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 49: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 4A: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 4B: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 4C: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 4D: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0376, 0 },  // CB 4E: bit n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 4F: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 50: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 51: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 52: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 53: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 54: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 55: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0376, 0 },  // CB 56: bit n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 57: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 58: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 59: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 5A: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 5B: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 5C: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 5D: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0376, 0 },  // CB 5E: bit n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 5F: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 60: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 61: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 62: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 63: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 64: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 65: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0376, 0 },  // CB 66: bit n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 67: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 68: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 69: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 6A: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 6B: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 6C: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 6D: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0376, 0 },  // CB 6E: bit n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 6F: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 70: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 71: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 72: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 73: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 74: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 75: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0376, 0 },  // CB 76: bit n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 77: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 78: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 79: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 7A: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 7B: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 7C: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 7D: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0376, 0 },  // CB 7E: bit n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0375, 0 },  // CB 7F: bit n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 80: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 81: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 82: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 83: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 84: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 85: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0378, 0 },  // CB 86: res n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 87: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 88: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 89: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 8A: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 8B: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 8C: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 8D: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0378, 0 },  // CB 8E: res n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 8F: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 90: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 91: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 92: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 93: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 94: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 95: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0378, 0 },  // CB 96: res n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 97: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 98: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 99: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 9A: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 9B: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 9C: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 9D: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0378, 0 },  // CB 9E: res n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB 9F: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A0: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A1: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A2: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A3: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A4: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A5: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0378, 0 },  // CB A6: res n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A7: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A8: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB A9: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB AA: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB AB: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB AC: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB AD: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0378, 0 },  // CB AE: res n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB AF: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B0: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B1: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B2: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B3: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B4: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B5: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0378, 0 },  // CB B6: res n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B7: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B8: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB B9: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB BA: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB BB: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB BC: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB BD: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0378, 0 },  // CB BE: res n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0377, 0 },  // CB BF: res n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C0: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C1: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C2: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C3: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C4: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C5: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x037A, 0 },  // CB C6: set n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C7: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C8: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB C9: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB CA: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB CB: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB CC: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB CD: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x037A, 0 },  // CB CE: set n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB CF: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D0: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D1: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D2: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D3: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D4: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D5: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x037A, 0 },  // CB D6: set n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D7: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D8: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB D9: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB DA: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB DB: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB DC: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB DD: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x037A, 0 },  // CB DE: set n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB DF: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E0: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E1: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E2: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E3: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E4: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E5: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x037A, 0 },  // CB E6: set n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E7: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E8: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB E9: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB EA: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB EB: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB EC: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB ED: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x037A, 0 },  // CB EE: set n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB EF: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F0: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F1: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F2: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F3: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F4: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F5: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x037A, 0 },  // CB F6: set n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F7: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F8: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB F9: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB FA: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB FB: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB FC: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB FD: set n,r (M:1 T:4 steps:1)
+    { 0x00000002, 0x037A, 0 },  // CB FE: set n,(hl) (M:1 T:4 steps:1)
+    { 0x00000002, 0x0379, 0 },  // CB FF: set n,r (M:1 T:4 steps:1)
 
 };
 
@@ -3305,349 +3317,385 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x030F: _fetch(); break;
             
-            // ED A0: ldi (M:1 T:4)
-            // -- OVERLAP
-            case 0x0310: _fetch(); break;
-            
-            // ED A1: cpi (M:1 T:4)
-            // -- OVERLAP
-            case 0x0311: _fetch(); break;
-            
-            // ED A2: ini (M:1 T:4)
-            // -- OVERLAP
-            case 0x0312: _fetch(); break;
-            
-            // ED A3: outi (M:1 T:4)
-            // -- OVERLAP
-            case 0x0313: _fetch(); break;
-            
-            // ED A8: ldd (M:1 T:4)
-            // -- OVERLAP
-            case 0x0314: _fetch(); break;
-            
-            // ED A9: cpd (M:1 T:4)
+            // ED A0: ldi (M:4 T:12)
+            // -- M2
+            case 0x0310: _wait();_mread(cpu->hl++); break;
+            case 0x0311: cpu->dlatch=_gd(); break;
+            // -- M3
+            case 0x0312: _mwrite(cpu->de++,cpu->dlatch); break;
+            case 0x0313: _wait() break;
+            // -- M4 (generic)
+            case 0x0314: z80_ldi_ldd(cpu); break;
             // -- OVERLAP
             case 0x0315: _fetch(); break;
             
-            // ED AA: ind (M:1 T:4)
+            // ED A1: cpi (M:1 T:4)
             // -- OVERLAP
             case 0x0316: _fetch(); break;
             
-            // ED AB: outd (M:1 T:4)
+            // ED A2: ini (M:1 T:4)
             // -- OVERLAP
             case 0x0317: _fetch(); break;
             
-            // ED B0: ldir (M:1 T:4)
+            // ED A3: outi (M:1 T:4)
             // -- OVERLAP
             case 0x0318: _fetch(); break;
             
-            // ED B1: cpir (M:1 T:4)
-            // -- OVERLAP
-            case 0x0319: _fetch(); break;
-            
-            // ED B2: inir (M:1 T:4)
-            // -- OVERLAP
-            case 0x031A: _fetch(); break;
-            
-            // ED B3: otir (M:1 T:4)
-            // -- OVERLAP
-            case 0x031B: _fetch(); break;
-            
-            // ED B8: lddr (M:1 T:4)
-            // -- OVERLAP
-            case 0x031C: _fetch(); break;
-            
-            // ED B9: cprd (M:1 T:4)
-            // -- OVERLAP
-            case 0x031D: _fetch(); break;
-            
-            // ED BA: indr (M:1 T:4)
+            // ED A8: ldd (M:4 T:12)
+            // -- M2
+            case 0x0319: _wait();_mread(cpu->hl--); break;
+            case 0x031A: cpu->dlatch=_gd(); break;
+            // -- M3
+            case 0x031B: _mwrite(cpu->de--,cpu->dlatch); break;
+            case 0x031C: _wait() break;
+            // -- M4 (generic)
+            case 0x031D: z80_ldi_ldd(cpu); break;
             // -- OVERLAP
             case 0x031E: _fetch(); break;
             
-            // ED BB: otdr (M:1 T:4)
+            // ED A9: cpd (M:1 T:4)
             // -- OVERLAP
             case 0x031F: _fetch(); break;
             
-            // CB 00: rlc b (M:1 T:4)
+            // ED AA: ind (M:1 T:4)
             // -- OVERLAP
             case 0x0320: _fetch(); break;
             
-            // CB 01: rlc c (M:1 T:4)
+            // ED AB: outd (M:1 T:4)
             // -- OVERLAP
             case 0x0321: _fetch(); break;
             
-            // CB 02: rlc d (M:1 T:4)
-            // -- OVERLAP
-            case 0x0322: _fetch(); break;
-            
-            // CB 03: rlc e (M:1 T:4)
-            // -- OVERLAP
-            case 0x0323: _fetch(); break;
-            
-            // CB 04: rlc h (M:1 T:4)
-            // -- OVERLAP
-            case 0x0324: _fetch(); break;
-            
-            // CB 05: rlc l (M:1 T:4)
-            // -- OVERLAP
-            case 0x0325: _fetch(); break;
-            
-            // CB 06: rlc (hl) (M:1 T:4)
-            // -- OVERLAP
-            case 0x0326: _fetch(); break;
-            
-            // CB 07: rlc a (M:1 T:4)
-            // -- OVERLAP
-            case 0x0327: _fetch(); break;
-            
-            // CB 08: rrc b (M:1 T:4)
+            // ED B0: ldir (M:5 T:17)
+            // -- M2
+            case 0x0322: _wait();_mread(cpu->hl++); break;
+            case 0x0323: cpu->dlatch=_gd(); break;
+            // -- M3
+            case 0x0324: _mwrite(cpu->de++,cpu->dlatch); break;
+            case 0x0325: _wait() break;
+            // -- M4 (generic)
+            case 0x0326: if(z80_ldi_ldd(cpu)){z80_skip(cpu,1,7,2);}; break;
+            // -- M5 (generic)
+            case 0x0327: cpu->wz=--cpu->pc;--cpu->pc;; break;
             // -- OVERLAP
             case 0x0328: _fetch(); break;
             
-            // CB 09: rrc c (M:1 T:4)
+            // ED B1: cpir (M:1 T:4)
             // -- OVERLAP
             case 0x0329: _fetch(); break;
             
-            // CB 0A: rrc d (M:1 T:4)
+            // ED B2: inir (M:1 T:4)
             // -- OVERLAP
             case 0x032A: _fetch(); break;
             
-            // CB 0B: rrc e (M:1 T:4)
+            // ED B3: otir (M:1 T:4)
             // -- OVERLAP
             case 0x032B: _fetch(); break;
             
-            // CB 0C: rrc h (M:1 T:4)
-            // -- OVERLAP
-            case 0x032C: _fetch(); break;
-            
-            // CB 0D: rrc l (M:1 T:4)
-            // -- OVERLAP
-            case 0x032D: _fetch(); break;
-            
-            // CB 0E: rrc (hl) (M:1 T:4)
-            // -- OVERLAP
-            case 0x032E: _fetch(); break;
-            
-            // CB 0F: rrc a (M:1 T:4)
-            // -- OVERLAP
-            case 0x032F: _fetch(); break;
-            
-            // CB 10: rl b (M:1 T:4)
-            // -- OVERLAP
-            case 0x0330: _fetch(); break;
-            
-            // CB 11: rl c (M:1 T:4)
-            // -- OVERLAP
-            case 0x0331: _fetch(); break;
-            
-            // CB 12: rl d (M:1 T:4)
+            // ED B8: lddr (M:5 T:17)
+            // -- M2
+            case 0x032C: _wait();_mread(cpu->hl--); break;
+            case 0x032D: cpu->dlatch=_gd(); break;
+            // -- M3
+            case 0x032E: _mwrite(cpu->de--,cpu->dlatch); break;
+            case 0x032F: _wait() break;
+            // -- M4 (generic)
+            case 0x0330: if(z80_ldi_ldd(cpu)){z80_skip(cpu,1,7,2);}; break;
+            // -- M5 (generic)
+            case 0x0331: cpu->wz=--cpu->pc;--cpu->pc;; break;
             // -- OVERLAP
             case 0x0332: _fetch(); break;
             
-            // CB 13: rl e (M:1 T:4)
+            // ED B9: cprd (M:1 T:4)
             // -- OVERLAP
             case 0x0333: _fetch(); break;
             
-            // CB 14: rl h (M:1 T:4)
+            // ED BA: indr (M:1 T:4)
             // -- OVERLAP
             case 0x0334: _fetch(); break;
             
-            // CB 15: rl l (M:1 T:4)
+            // ED BB: otdr (M:1 T:4)
             // -- OVERLAP
             case 0x0335: _fetch(); break;
             
-            // CB 16: rl (hl) (M:1 T:4)
+            // CB 00: rlc b (M:1 T:4)
             // -- OVERLAP
             case 0x0336: _fetch(); break;
             
-            // CB 17: rl a (M:1 T:4)
+            // CB 01: rlc c (M:1 T:4)
             // -- OVERLAP
             case 0x0337: _fetch(); break;
             
-            // CB 18: rr b (M:1 T:4)
+            // CB 02: rlc d (M:1 T:4)
             // -- OVERLAP
             case 0x0338: _fetch(); break;
             
-            // CB 19: rr c (M:1 T:4)
+            // CB 03: rlc e (M:1 T:4)
             // -- OVERLAP
             case 0x0339: _fetch(); break;
             
-            // CB 1A: rr d (M:1 T:4)
+            // CB 04: rlc h (M:1 T:4)
             // -- OVERLAP
             case 0x033A: _fetch(); break;
             
-            // CB 1B: rr e (M:1 T:4)
+            // CB 05: rlc l (M:1 T:4)
             // -- OVERLAP
             case 0x033B: _fetch(); break;
             
-            // CB 1C: rr h (M:1 T:4)
+            // CB 06: rlc (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x033C: _fetch(); break;
             
-            // CB 1D: rr l (M:1 T:4)
+            // CB 07: rlc a (M:1 T:4)
             // -- OVERLAP
             case 0x033D: _fetch(); break;
             
-            // CB 1E: rr (hl) (M:1 T:4)
+            // CB 08: rrc b (M:1 T:4)
             // -- OVERLAP
             case 0x033E: _fetch(); break;
             
-            // CB 1F: rr a (M:1 T:4)
+            // CB 09: rrc c (M:1 T:4)
             // -- OVERLAP
             case 0x033F: _fetch(); break;
             
-            // CB 20: sla b (M:1 T:4)
+            // CB 0A: rrc d (M:1 T:4)
             // -- OVERLAP
             case 0x0340: _fetch(); break;
             
-            // CB 21: sla c (M:1 T:4)
+            // CB 0B: rrc e (M:1 T:4)
             // -- OVERLAP
             case 0x0341: _fetch(); break;
             
-            // CB 22: sla d (M:1 T:4)
+            // CB 0C: rrc h (M:1 T:4)
             // -- OVERLAP
             case 0x0342: _fetch(); break;
             
-            // CB 23: sla e (M:1 T:4)
+            // CB 0D: rrc l (M:1 T:4)
             // -- OVERLAP
             case 0x0343: _fetch(); break;
             
-            // CB 24: sla h (M:1 T:4)
+            // CB 0E: rrc (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0344: _fetch(); break;
             
-            // CB 25: sla l (M:1 T:4)
+            // CB 0F: rrc a (M:1 T:4)
             // -- OVERLAP
             case 0x0345: _fetch(); break;
             
-            // CB 26: sla (hl) (M:1 T:4)
+            // CB 10: rl b (M:1 T:4)
             // -- OVERLAP
             case 0x0346: _fetch(); break;
             
-            // CB 27: sla a (M:1 T:4)
+            // CB 11: rl c (M:1 T:4)
             // -- OVERLAP
             case 0x0347: _fetch(); break;
             
-            // CB 28: sra b (M:1 T:4)
+            // CB 12: rl d (M:1 T:4)
             // -- OVERLAP
             case 0x0348: _fetch(); break;
             
-            // CB 29: sra c (M:1 T:4)
+            // CB 13: rl e (M:1 T:4)
             // -- OVERLAP
             case 0x0349: _fetch(); break;
             
-            // CB 2A: sra d (M:1 T:4)
+            // CB 14: rl h (M:1 T:4)
             // -- OVERLAP
             case 0x034A: _fetch(); break;
             
-            // CB 2B: sra e (M:1 T:4)
+            // CB 15: rl l (M:1 T:4)
             // -- OVERLAP
             case 0x034B: _fetch(); break;
             
-            // CB 2C: sra h (M:1 T:4)
+            // CB 16: rl (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x034C: _fetch(); break;
             
-            // CB 2D: sra l (M:1 T:4)
+            // CB 17: rl a (M:1 T:4)
             // -- OVERLAP
             case 0x034D: _fetch(); break;
             
-            // CB 2E: sra (hl) (M:1 T:4)
+            // CB 18: rr b (M:1 T:4)
             // -- OVERLAP
             case 0x034E: _fetch(); break;
             
-            // CB 2F: sra a (M:1 T:4)
+            // CB 19: rr c (M:1 T:4)
             // -- OVERLAP
             case 0x034F: _fetch(); break;
             
-            // CB 30: sll b (M:1 T:4)
+            // CB 1A: rr d (M:1 T:4)
             // -- OVERLAP
             case 0x0350: _fetch(); break;
             
-            // CB 31: sll c (M:1 T:4)
+            // CB 1B: rr e (M:1 T:4)
             // -- OVERLAP
             case 0x0351: _fetch(); break;
             
-            // CB 32: sll d (M:1 T:4)
+            // CB 1C: rr h (M:1 T:4)
             // -- OVERLAP
             case 0x0352: _fetch(); break;
             
-            // CB 33: sll e (M:1 T:4)
+            // CB 1D: rr l (M:1 T:4)
             // -- OVERLAP
             case 0x0353: _fetch(); break;
             
-            // CB 34: sll h (M:1 T:4)
+            // CB 1E: rr (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0354: _fetch(); break;
             
-            // CB 35: sll l (M:1 T:4)
+            // CB 1F: rr a (M:1 T:4)
             // -- OVERLAP
             case 0x0355: _fetch(); break;
             
-            // CB 36: sll (hl) (M:1 T:4)
+            // CB 20: sla b (M:1 T:4)
             // -- OVERLAP
             case 0x0356: _fetch(); break;
             
-            // CB 37: sll a (M:1 T:4)
+            // CB 21: sla c (M:1 T:4)
             // -- OVERLAP
             case 0x0357: _fetch(); break;
             
-            // CB 38: srl b (M:1 T:4)
+            // CB 22: sla d (M:1 T:4)
             // -- OVERLAP
             case 0x0358: _fetch(); break;
             
-            // CB 39: srl c (M:1 T:4)
+            // CB 23: sla e (M:1 T:4)
             // -- OVERLAP
             case 0x0359: _fetch(); break;
             
-            // CB 3A: srl d (M:1 T:4)
+            // CB 24: sla h (M:1 T:4)
             // -- OVERLAP
             case 0x035A: _fetch(); break;
             
-            // CB 3B: srl e (M:1 T:4)
+            // CB 25: sla l (M:1 T:4)
             // -- OVERLAP
             case 0x035B: _fetch(); break;
             
-            // CB 3C: srl h (M:1 T:4)
+            // CB 26: sla (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x035C: _fetch(); break;
             
-            // CB 3D: srl l (M:1 T:4)
+            // CB 27: sla a (M:1 T:4)
             // -- OVERLAP
             case 0x035D: _fetch(); break;
             
-            // CB 3E: srl (hl) (M:1 T:4)
+            // CB 28: sra b (M:1 T:4)
             // -- OVERLAP
             case 0x035E: _fetch(); break;
             
-            // CB 3F: srl a (M:1 T:4)
+            // CB 29: sra c (M:1 T:4)
             // -- OVERLAP
             case 0x035F: _fetch(); break;
             
-            // CB 40: bit n,r (M:1 T:4)
+            // CB 2A: sra d (M:1 T:4)
             // -- OVERLAP
             case 0x0360: _fetch(); break;
             
-            // CB 46: bit n,(hl) (M:1 T:4)
+            // CB 2B: sra e (M:1 T:4)
             // -- OVERLAP
             case 0x0361: _fetch(); break;
             
-            // CB 80: res n,r (M:1 T:4)
+            // CB 2C: sra h (M:1 T:4)
             // -- OVERLAP
             case 0x0362: _fetch(); break;
             
-            // CB 86: res n,(hl) (M:1 T:4)
+            // CB 2D: sra l (M:1 T:4)
             // -- OVERLAP
             case 0x0363: _fetch(); break;
             
-            // CB C0: set n,r (M:1 T:4)
+            // CB 2E: sra (hl) (M:1 T:4)
             // -- OVERLAP
             case 0x0364: _fetch(); break;
             
-            // CB C6: set n,(hl) (M:1 T:4)
+            // CB 2F: sra a (M:1 T:4)
             // -- OVERLAP
             case 0x0365: _fetch(); break;
+            
+            // CB 30: sll b (M:1 T:4)
+            // -- OVERLAP
+            case 0x0366: _fetch(); break;
+            
+            // CB 31: sll c (M:1 T:4)
+            // -- OVERLAP
+            case 0x0367: _fetch(); break;
+            
+            // CB 32: sll d (M:1 T:4)
+            // -- OVERLAP
+            case 0x0368: _fetch(); break;
+            
+            // CB 33: sll e (M:1 T:4)
+            // -- OVERLAP
+            case 0x0369: _fetch(); break;
+            
+            // CB 34: sll h (M:1 T:4)
+            // -- OVERLAP
+            case 0x036A: _fetch(); break;
+            
+            // CB 35: sll l (M:1 T:4)
+            // -- OVERLAP
+            case 0x036B: _fetch(); break;
+            
+            // CB 36: sll (hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x036C: _fetch(); break;
+            
+            // CB 37: sll a (M:1 T:4)
+            // -- OVERLAP
+            case 0x036D: _fetch(); break;
+            
+            // CB 38: srl b (M:1 T:4)
+            // -- OVERLAP
+            case 0x036E: _fetch(); break;
+            
+            // CB 39: srl c (M:1 T:4)
+            // -- OVERLAP
+            case 0x036F: _fetch(); break;
+            
+            // CB 3A: srl d (M:1 T:4)
+            // -- OVERLAP
+            case 0x0370: _fetch(); break;
+            
+            // CB 3B: srl e (M:1 T:4)
+            // -- OVERLAP
+            case 0x0371: _fetch(); break;
+            
+            // CB 3C: srl h (M:1 T:4)
+            // -- OVERLAP
+            case 0x0372: _fetch(); break;
+            
+            // CB 3D: srl l (M:1 T:4)
+            // -- OVERLAP
+            case 0x0373: _fetch(); break;
+            
+            // CB 3E: srl (hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x0374: _fetch(); break;
+            
+            // CB 3F: srl a (M:1 T:4)
+            // -- OVERLAP
+            case 0x0375: _fetch(); break;
+            
+            // CB 40: bit n,r (M:1 T:4)
+            // -- OVERLAP
+            case 0x0376: _fetch(); break;
+            
+            // CB 46: bit n,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x0377: _fetch(); break;
+            
+            // CB 80: res n,r (M:1 T:4)
+            // -- OVERLAP
+            case 0x0378: _fetch(); break;
+            
+            // CB 86: res n,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x0379: _fetch(); break;
+            
+            // CB C0: set n,r (M:1 T:4)
+            // -- OVERLAP
+            case 0x037A: _fetch(); break;
+            
+            // CB C6: set n,(hl) (M:1 T:4)
+            // -- OVERLAP
+            case 0x037B: _fetch(); break;
 
         }
         cpu->op.step += 1;
