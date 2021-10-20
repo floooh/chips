@@ -81,8 +81,8 @@ ld RP,nn:
 
 add hl,RP:
   cond: (x == 0) and (z == 1) and (q == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: generic, tcycles: 7, action: "z80_add16(cpu,RP)"}
 
 # indirect loading
 ld (bc),a:
@@ -412,14 +412,14 @@ out (c),0:
 sbc hl,RP:
   prefix: ed
   cond: (x == 1) and (z == 2) and (q == 0)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: generic, tcycles: 7, action: "z80_sbc16(cpu,RRP)" }
 
 adc hl,RP:
   prefix: ed
   cond: (x == 1) and (z == 2) and (q == 1)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: generic, tcycles: 7, action: "z80_adc16(cpu,RRP)" }
 
 ld (nn),RP:
   prefix: ed
@@ -427,8 +427,8 @@ ld (nn),RP:
   mcycles:
     - { type: mread, ab: PC++, dst: WZL }
     - { type: mread, ab: PC++, dst: WZH }
-    - { type: mwrite, ab: WZ++, db: RPL }
-    - { type: mwrite, ab: WZ, db: RPH }
+    - { type: mwrite, ab: WZ++, db: RRPL }
+    - { type: mwrite, ab: WZ, db: RRPH }
   
 ld RP,(nn):
   prefix: ed
@@ -436,8 +436,8 @@ ld RP,(nn):
   mcycles:
     - { type: mread, ab: PC++, dst: WZL }
     - { type: mread, ab: PC++, dst: WZH }
-    - { type: mread, ab: WZ++, dst: RPL }
-    - { type: mread, ab: WZ, dst: RPH }
+    - { type: mread, ab: WZ++, dst: RRPL }
+    - { type: mread, ab: WZ, dst: RRPH }
 
 neg:
   prefix: ed

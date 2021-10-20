@@ -53,23 +53,26 @@ alu_comment = [ 'add', 'adc', 'sub', 'sbc', 'and', 'xor', 'or', 'cp' ]
 rot_comment = [ 'rlc', 'rrc', 'rl', 'rr', 'sla', 'sra', 'sll', 'srl' ]
 cc_comment  = [ 'nz', 'z', 'nc', 'c', 'po', 'pe', 'p', 'm' ]
 
-r_map   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->hlx[cpu->hlx_idx].l', 'XXX', 'cpu->a' ]
-rr_map  = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
-rp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->sp' ]
-rpl_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->spl']
-rph_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->sph']
-rp2_map = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->af' ]
+r_map    = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->hlx[cpu->hlx_idx].l', 'XXX', 'cpu->a' ]
+rr_map   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
+rp_map   = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->sp' ]
+rrp_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hl', 'cpu->sp' ]
+rpl_map  = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->spl']
+rrpl_map = [ 'cpu->c', 'cpu->e', 'cpu->l', 'cpu->spl']
+rph_map  = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->sph']
+rrph_map  = [ 'cpu->b', 'cpu->d', 'cpu->h', 'cpu->sph']
+rp2_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->af' ]
 rp2l_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->f']
 rp2h_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->a']
-alu_map = [ 'z80_add8(cpu,', 
-            'z80_adc8(cpu,', 
-            'z80_sub8(cpu,',
-            'z80_sbc8(cpu,',
-            'z80_and8(cpu,',
-            'z80_xor8(cpu,',
-            'z80_or8(cpu,',
-            'z80_cp8(cpu,' ]
-cc_map = [ '_cc_nz', '_cc_z', '_cc_nc', '_cc_c', '_cc_po', '_cc_pe', '_cc_p', '_cc_m' ]
+cc_map   = [ '_cc_nz', '_cc_z', '_cc_nc', '_cc_c', '_cc_po', '_cc_pe', '_cc_p', '_cc_m' ]
+alu_map  = [ 'z80_add8(cpu,', 
+             'z80_adc8(cpu,', 
+             'z80_sub8(cpu,',
+             'z80_sbc8(cpu,',
+             'z80_and8(cpu,',
+             'z80_xor8(cpu,',
+             'z80_or8(cpu,',
+             'z80_cp8(cpu,' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -108,6 +111,9 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
         .replace('ADDR', 'cpu->addr')\
         .replace('ALU(', alu_map[y])\
+        .replace('RRPL', rrpl_map[p])\
+        .replace('RRPH', rrph_map[p])\
+        .replace('RRP', rrp_map[p])\
         .replace('RRY', rr_map[y])\
         .replace('RRZ', rr_map[z])\
         .replace('RY', r_map[y])\
@@ -184,7 +190,7 @@ def parse_opdescs():
                     mc_tcycles = default_tcycles[mc_type]
                 if mc_tcycles == -1:
                     err(f'generic mcycles must have explicit length (op: {op_name})')
-                if (mc_tcycles < 1) or (mc_tcycles > 6):
+                if (mc_tcycles < 1) or (mc_tcycles > 7):
                     err(f'invalid mcycle len: {mc_tcycles}')
                 if mc_type == 'fetch':
                     mc_tcycles -= OVERLAPPED_FETCH_TCYCLES

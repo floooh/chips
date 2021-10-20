@@ -383,6 +383,43 @@ static inline void z80_ccf(z80_t* cpu) {
     cpu->f = ((cpu->f & (Z80_SF|Z80_ZF|Z80_PF|Z80_CF)) | ((cpu->f & Z80_CF)<<4) | (cpu->a & (Z80_YF|Z80_XF))) ^ Z80_CF;
 }
 
+static inline void z80_add16(z80_t* cpu, uint16_t val) {
+    const uint16_t acc = cpu->hlx[cpu->hlx_idx].hl;
+    cpu->wz = acc + 1;
+    const uint32_t res = acc + val;
+    cpu->hlx[cpu->hlx_idx].hl = res;
+    cpu->f = (cpu->f & (Z80_SF|Z80_ZF|Z80_VF)) |
+             (((acc ^ res ^ val)>>8)&Z80_HF) | 
+             ((res >> 16) & Z80_CF) |
+             ((res >> 8) & (Z80_YF|Z80_XF));
+}
+
+static inline void z80_adc16(z80_t* cpu, uint16_t val) {
+    // NOTE: adc is ED-prefixed, so they are never rewired to IX/IY
+    const uint16_t acc = cpu->hl;
+    cpu->wz = acc + 1;
+    const uint32_t res = acc + val + (cpu->f & Z80_CF);
+    cpu->hl = res;
+    cpu->f = (((val ^ acc ^ 0x8000) & (val ^ res) & 0x8000) >> 13) |
+             (((acc ^ res ^ val) >>8 ) & Z80_HF) |
+             ((res >> 16) & Z80_CF) |
+             ((res >> 8) & (Z80_SF|Z80_YF|Z80_XF)) |
+             ((res & 0xFFFF) ? 0 : Z80_ZF);
+}
+
+static inline void z80_sbc16(z80_t* cpu, uint16_t val) {
+    // NOTE: sbc is ED-prefixed, so they are never rewired to IX/IY
+    const uint16_t acc = cpu->hl;
+    cpu->wz = acc + 1;
+    const uint32_t res = acc - val - (cpu->f & Z80_CF);
+    cpu->hl = res;
+    cpu->f = (Z80_NF | (((val ^ acc) & (acc ^ res) & 0x8000) >> 13)) | 
+             (((acc ^ res ^ val) >> 8) & Z80_HF) |
+             ((res >> 16) & Z80_CF) |
+             ((res >> 8) & (Z80_SF|Z80_YF|Z80_XF)) |
+             ((res & 0xFFFF) ? 0 : Z80_ZF);
+}
+
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }
