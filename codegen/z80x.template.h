@@ -420,10 +420,8 @@ static inline void z80_sbc16(z80_t* cpu, uint16_t val) {
              ((res & 0xFFFF) ? 0 : Z80_ZF);
 }
 
-static inline bool z80_ldi_ldd(z80_t* cpu) {
-    // this just handles the action after the actual byte transfer
-    // dlatch is the transferred byte
-    const uint8_t res = cpu->a + cpu->dlatch;
+static inline bool z80_ldi_ldd(z80_t* cpu, uint8_t val) {
+    const uint8_t res = cpu->a + val;
     cpu->bc -= 1;
     cpu->f = (cpu->f & (Z80_SF|Z80_ZF|Z80_CF)) |
              ((res & 2) ? Z80_YF : 0) |
@@ -432,8 +430,8 @@ static inline bool z80_ldi_ldd(z80_t* cpu) {
     return cpu->bc != 0;
 }
 
-static inline bool z80_cpi_cpd(z80_t* cpu) {
-    uint32_t res = (uint32_t) ((int)cpu->a - (int)cpu->dlatch);
+static inline bool z80_cpi_cpd(z80_t* cpu, uint8_t val) {
+    uint32_t res = (uint32_t) ((int)cpu->a - (int)val);
     cpu->bc -= 1;
     uint8_t f = (cpu->f & Z80_CF)|Z80_NF|z80_sz_flags(res);
     if ((res & 0xF) > (cpu->a & 0xF)) {
@@ -445,6 +443,17 @@ static inline bool z80_cpi_cpd(z80_t* cpu) {
     if (cpu->bc) { f |= Z80_VF; }
     cpu->f = f;
     return (cpu->bc != 0) && !(f & Z80_ZF);
+}
+
+static inline bool z80_ini_ind(z80_t* cpu, uint8_t val, uint8_t c) {
+    const uint8_t b = cpu->b;
+    uint8_t f = z80_sz_flags(b) | (b & (Z80_XF|Z80_YF));
+    if (val & Z80_SF) { f |= Z80_NF; }
+    uint32_t t = (uint32_t)c + val;
+    if (t & 0x100) { f |= Z80_HF|Z80_CF; }
+    f |= z80_szp_flags[((uint8_t)(t & 7)) ^ b] & Z80_PF;
+    cpu->f = f;
+    return (cpu->b != 0);
 }
 
 static inline uint8_t z80_in(z80_t* cpu, uint8_t val) {
