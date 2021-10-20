@@ -312,9 +312,9 @@ def gen_decoder():
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 # write happens at end of second tcycle
-                add(f'_mwrite({addr},{data});{action}')
+                add(f'_mwrite({addr},{data});')
                 # wait pin sampling happens after the write has completed!
-                add('_wait()')
+                add(f'_wait();{action}')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
                 addr = mcycle.items['ab']
@@ -325,8 +325,8 @@ def gen_decoder():
                 l(f'// -- M{i+1} (iowrite)')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                add(f'_iowrite({addr},{data});{action}')
-                add('_wait()')
+                add(f'_iowrite({addr},{data});')
+                add(f'_wait();{action}')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
                 add(f'{action}')

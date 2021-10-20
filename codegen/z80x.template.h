@@ -453,7 +453,7 @@ static inline bool z80_ini_ind(z80_t* cpu, uint8_t val, uint8_t c) {
     if (t & 0x100) { f |= Z80_HF|Z80_CF; }
     f |= z80_szp_flags[((uint8_t)(t & 7)) ^ b] & Z80_PF;
     cpu->f = f;
-    return (cpu->b != 0);
+    return (b != 0);
 }
 
 static inline uint8_t z80_in(z80_t* cpu, uint8_t val) {

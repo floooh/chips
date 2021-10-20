@@ -591,13 +591,20 @@ ind:
 inir:
   prefix: ed
   cond: (x == 2) and (y == 6) and (z == 2)
-  mcycles: []
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: ioread, ab: BC, dst: DLATCH, action: "WZ=BC+1;B--;" }
+    - { type: mwrite, ab: "cpu->hl++", db: DLATCH, action: "if (!z80_ini_ind(cpu,DLATCH,C+1)){z80_skip(cpu,1,6,1);}" }
+    - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 indr:
   prefix: ed
   cond: (x == 2) and (y == 7) and (z == 2)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: ioread, ab: BC, dst: DLATCH, action: "WZ=BC-1;B--;" }
+    - { type: mwrite, ab: "cpu->hl--", db: DLATCH, action: "if (!z80_ini_ind(cpu,DLATCH,C-1)){z80_skip(cpu,1,6,1);}" }
+    - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 outi:
   prefix: ed
