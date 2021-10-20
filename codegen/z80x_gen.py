@@ -296,13 +296,13 @@ def gen_decoder():
         l('')
         l(f'// {op.prefix.upper()} {op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
+            action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
             if mcycle.type == 'fetch':
                 pass
             elif mcycle.type == 'mread':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 # wait pin sampling need to happen before the read! (e.g. changes in memory
                 # content during the wait are picked up by the read)
                 add(f'_wait();_mread({addr});')
@@ -311,7 +311,6 @@ def gen_decoder():
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 # write happens at end of second tcycle
                 add(f'_mwrite({addr},{data});{action}')
                 # wait pin sampling happens after the write has completed!
@@ -320,17 +319,16 @@ def gen_decoder():
                 l(f'// -- M{i+1} (ioread)')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(f'_wait();_ioread(addr);')
-                add(f'{store}=_gd();')
+                add(f'_wait();_ioread({addr});')
+                add(f'{store}=_gd();{action}')
             elif mcycle.type == 'iowrite':
                 l(f'// -- M{i+1} (iowrite)')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                add(f'_iowrite({addr},{data});')
+                add(f'_iowrite({addr},{data});{action}')
                 add('_wait()')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
-                action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 add(f'{action}')
             elif mcycle.type == 'overlapped':
                 l(f'// -- OVERLAP')

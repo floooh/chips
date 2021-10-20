@@ -447,6 +447,11 @@ static inline bool z80_cpi_cpd(z80_t* cpu) {
     return (cpu->bc != 0) && !(f & Z80_ZF);
 }
 
+static inline uint8_t z80_in(z80_t* cpu, uint8_t val) {
+    cpu->f = (cpu->f & Z80_CF) | z80_szp_flags[val];
+    return val;
+}
+
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }
