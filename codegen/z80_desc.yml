@@ -501,14 +501,18 @@ ld a,r:
 rrd:
   prefix: ed
   cond: (x == 1) and (y == 4) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: "cpu->hl", dst: DLATCH }
+    - { type: generic, tcycles: 4, action: "DLATCH=z80_rrd(cpu,DLATCH)" }
+    - { type: mwrite, ab: "cpu->hl", db: DLATCH, action: "WZ=cpu->hl+1" }
 
 rld:
   prefix: ed
   cond: (x == 1) and (y == 5) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: "cpu->hl", dst: DLATCH }
+    - { type: generic, tcycles: 4, action: "DLATCH=z80_rld(cpu,DLATCH)" }
+    - { type: mwrite, ab: "cpu->hl", db: DLATCH, action: "WZ=cpu->hl+1" }
 
 ldi:
   prefix: ed

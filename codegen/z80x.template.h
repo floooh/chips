@@ -476,6 +476,22 @@ static inline uint8_t z80_in(z80_t* cpu, uint8_t val) {
     return val;
 }
 
+static inline uint8_t z80_rrd(z80_t* cpu, uint8_t val) {
+    const uint8_t l = cpu->a & 0x0F;
+    cpu->a = (cpu->a & 0xF0) | (val & 0x0F);
+    val = (val >> 4) | (l << 4);
+    cpu->f = (cpu->f & Z80_CF) | z80_szp_flags[cpu->a];
+    return val;
+}
+
+static inline uint8_t z80_rld(z80_t* cpu, uint8_t val) {
+    const uint8_t l = cpu->a & 0x0F;
+    cpu->a = (cpu->a & 0xF0) | (val >> 4);
+    val = (val << 4) | l;
+    cpu->f = (cpu->f & Z80_CF) | z80_szp_flags[cpu->a];
+    return val;
+}
+
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }
