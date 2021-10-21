@@ -130,6 +130,7 @@ typedef struct {
     uint8_t i;
     uint8_t r;
     uint8_t im;
+    bool iff1, iff2;
     uint16_t af2, bc2, de2, hl2; // shadow register bank
 } z80_t;
 
@@ -230,6 +231,10 @@ static inline uint8_t z80_cp_flags(uint8_t acc, uint8_t val, uint32_t res) {
         ((res >> 8) & Z80_CF) |
         ((acc ^ val ^ res) & Z80_HF) |
         ((((val ^ acc) & (res ^ acc)) >> 5) & Z80_VF);    
+}
+
+static inline uint8_t z80_sziff2_flags(z80_t* cpu, uint8_t val) {
+    return (cpu->f & Z80_CF) | z80_sz_flags(val) | (val & (Z80_YF|Z80_XF)) | (cpu->iff2 ? Z80_PF : 0);
 }
 
 static inline void z80_add8(z80_t* cpu, uint8_t val) {
@@ -865,7 +870,7 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     { 0x00000002, 0x02AF, 0 },  // ED 44: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B0, 0 },  // ED 45: retn (M:1 T:4 steps:1)
     { 0x00000002, 0x02B1, 0 },  // ED 46: im IM0 (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B2, 0 },  // ED 47: ld i,a (M:1 T:4 steps:1)
+    { 0x00000004, 0x02B2, 0 },  // ED 47: ld i,a (M:1 T:5 steps:1)
     { 0x0000002C, 0x02B3, 0 },  // ED 48: in c,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x02B6, 0 },  // ED 49: out (c),c (M:2 T:8 steps:3)
     { 0x00000102, 0x02B9, 0 },  // ED 4A: adc hl,bc (M:2 T:11 steps:2)
@@ -873,7 +878,7 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     { 0x00000002, 0x02AF, 0 },  // ED 4C: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02C4, 0 },  // ED 4D: reti (M:1 T:4 steps:1)
     { 0x00000002, 0x02C5, 0 },  // ED 4E: im IM1 (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C6, 0 },  // ED 4F: ld r,a (M:1 T:4 steps:1)
+    { 0x00000004, 0x02C6, 0 },  // ED 4F: ld r,a (M:1 T:5 steps:1)
     { 0x0000002C, 0x02C7, 0 },  // ED 50: in d,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x02CA, 0 },  // ED 51: out (c),d (M:2 T:8 steps:3)
     { 0x00000102, 0x02CD, 0 },  // ED 52: sbc hl,de (M:2 T:11 steps:2)
@@ -881,7 +886,7 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     { 0x00000002, 0x02AF, 0 },  // ED 54: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B0, 0 },  // ED 55: retn (M:1 T:4 steps:1)
     { 0x00000002, 0x02D8, 0 },  // ED 56: im IM2 (M:1 T:4 steps:1)
-    { 0x00000002, 0x02D9, 0 },  // ED 57: ld a,i (M:1 T:4 steps:1)
+    { 0x00000004, 0x02D9, 0 },  // ED 57: ld a,i (M:1 T:5 steps:1)
     { 0x0000002C, 0x02DA, 0 },  // ED 58: in e,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x02DD, 0 },  // ED 59: out (c),e (M:2 T:8 steps:3)
     { 0x00000102, 0x02E0, 0 },  // ED 5A: adc hl,de (M:2 T:11 steps:2)
@@ -889,7 +894,7 @@ static const z80_opstate_t z80_opstate_table[3*256] = {
     { 0x00000002, 0x02AF, 0 },  // ED 5C: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B0, 0 },  // ED 5D: retn (M:1 T:4 steps:1)
     { 0x00000002, 0x02EB, 0 },  // ED 5E: im IM3 (M:1 T:4 steps:1)
-    { 0x00000002, 0x02EC, 0 },  // ED 5F: ld a,r (M:1 T:4 steps:1)
+    { 0x00000004, 0x02EC, 0 },  // ED 5F: ld a,r (M:1 T:5 steps:1)
     { 0x0000002C, 0x02ED, 0 },  // ED 60: in h,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x02F0, 0 },  // ED 61: out (c),h (M:2 T:8 steps:3)
     { 0x00000102, 0x02F3, 0 },  // ED 62: sbc hl,hl (M:2 T:11 steps:2)
@@ -3109,9 +3114,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x02B2: _fetch(); break;
             
-            // ED 47: ld i,a (M:1 T:4)
+            // ED 47: ld i,a (M:1 T:5)
             // -- OVERLAP
-            case 0x02B3: _fetch(); break;
+            case 0x02B3: cpu->i=cpu->a;_fetch(); break;
             
             // ED 48: in c,(c) (M:2 T:8)
             // -- M2 (ioread)
@@ -3157,9 +3162,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x02C6: _fetch(); break;
             
-            // ED 4F: ld r,a (M:1 T:4)
+            // ED 4F: ld r,a (M:1 T:5)
             // -- OVERLAP
-            case 0x02C7: _fetch(); break;
+            case 0x02C7: cpu->r=cpu->a;_fetch(); break;
             
             // ED 50: in d,(c) (M:2 T:8)
             // -- M2 (ioread)
@@ -3201,9 +3206,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x02D9: _fetch(); break;
             
-            // ED 57: ld a,i (M:1 T:4)
+            // ED 57: ld a,i (M:1 T:5)
             // -- OVERLAP
-            case 0x02DA: _fetch(); break;
+            case 0x02DA: cpu->a=cpu->i;cpu->f=z80_sziff2_flags(cpu, cpu->i);_fetch(); break;
             
             // ED 58: in e,(c) (M:2 T:8)
             // -- M2 (ioread)
@@ -3245,9 +3250,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x02EC: _fetch(); break;
             
-            // ED 5F: ld a,r (M:1 T:4)
+            // ED 5F: ld a,r (M:1 T:5)
             // -- OVERLAP
-            case 0x02ED: _fetch(); break;
+            case 0x02ED: cpu->a=cpu->r;cpu->f=z80_sziff2_flags(cpu, cpu->r);_fetch(); break;
             
             // ED 60: in h,(c) (M:2 T:8)
             // -- M2 (ioread)

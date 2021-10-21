@@ -113,8 +113,6 @@ ld (nn),a:
     # NOTE: WZH can also be 0 on Z80 clones (the VisualZ80 netlist also sets WZH to zero)
     - { type: mwrite, ab: WZ++, db: A, action: "WZH=A" }
 
-  # FIXME
-
 ld a,(bc):
   cond: (x == 0) and (z == 2) and (q == 1) and (p == 0)
   mcycles:
@@ -475,26 +473,30 @@ im IMY:
 ld i,a:
   prefix: ed
   cond: (x == 1) and (y == 0) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: overlapped, action: "cpu->i=cpu->a" }
 
 ld r,a:
   prefix: ed
   cond: (x == 1) and (y == 1) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: overlapped, action: "cpu->r=cpu->a" }
 
 ld a,i:
   prefix: ed
   cond: (x == 1) and (y == 2) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: overlapped, action: "cpu->a=cpu->i;cpu->f=z80_sziff2_flags(cpu, cpu->i)"}
 
 ld a,r:
   prefix: ed
   cond: (x == 1) and (y == 3) and (z == 7)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: fetch, tcycles: 5 }
+    - { type: overlapped, action: "cpu->a=cpu->r;cpu->f=z80_sziff2_flags(cpu, cpu->r)"}
 
 rrd:
   prefix: ed

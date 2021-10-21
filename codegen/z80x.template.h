@@ -130,6 +130,7 @@ typedef struct {
     uint8_t i;
     uint8_t r;
     uint8_t im;
+    bool iff1, iff2;
     uint16_t af2, bc2, de2, hl2; // shadow register bank
 } z80_t;
 
@@ -230,6 +231,10 @@ static inline uint8_t z80_cp_flags(uint8_t acc, uint8_t val, uint32_t res) {
         ((res >> 8) & Z80_CF) |
         ((acc ^ val ^ res) & Z80_HF) |
         ((((val ^ acc) & (res ^ acc)) >> 5) & Z80_VF);    
+}
+
+static inline uint8_t z80_sziff2_flags(z80_t* cpu, uint8_t val) {
+    return (cpu->f & Z80_CF) | z80_sz_flags(val) | (val & (Z80_YF|Z80_XF)) | (cpu->iff2 ? Z80_PF : 0);
 }
 
 static inline void z80_add8(z80_t* cpu, uint8_t val) {
