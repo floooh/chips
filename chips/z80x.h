@@ -110,7 +110,7 @@ typedef struct {
 
     union { struct { uint8_t pcl; uint8_t pch; }; uint16_t pc; };
     uint16_t addr;      // effective address for (HL),(IX+d),(IY+d)
-    uint8_t ir;         // instruction register
+    uint8_t opcode;     // current opcode
     uint8_t dlatch;     // temporary store for data bus value
 
     // NOTE: These unions are fine in C, but not C++.
@@ -127,8 +127,7 @@ typedef struct {
     };
     union { struct { uint8_t wzl; uint8_t wzh; }; uint16_t wz; };
     union { struct { uint8_t spl; uint8_t sph; }; uint16_t sp; };
-    uint8_t i;
-    uint8_t r;
+    union { struct { uint8_t r; uint8_t i; }; uint16_t ir; };
     uint8_t im;
     bool iff1, iff2;
     uint16_t af2, bc2, de2, hl2; // shadow register bank
@@ -537,7 +536,7 @@ static inline uint64_t z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefi
 
 // initiate refresh cycle
 static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
-    pins = z80_set_ab_x(pins, cpu->r, Z80_MREQ|Z80_RFSH);
+    pins = z80_set_ab_x(pins, cpu->ir, Z80_MREQ|Z80_RFSH);
     cpu->r = (cpu->r & 0x80) | ((cpu->r + 1) & 0x7F);
     return pins;
 }
@@ -1356,13 +1355,13 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         switch (cpu->op.step) {
             // shared fetch machine cycle for all opcodes
             case 0: {
-                cpu->ir = _gd();
+                cpu->opcode = _gd();
                 _wait();
             } break;
             // refresh cycle
             case 1: {
                 pins = z80_refresh(cpu, pins);
-                cpu->op = z80_opstate_table[cpu->ir + cpu->prefix_offset];
+                cpu->op = z80_opstate_table[cpu->opcode + cpu->prefix_offset];
 
                 // if this is a (HL)/(IX+d)/(IY+d) instruction, insert
                 // d-load cycle if needed and compute effective address
@@ -1396,7 +1395,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             } break;
             case 4: {
                 // continue with original instruction
-                cpu->op = z80_opstate_table[cpu->ir];
+                cpu->op = z80_opstate_table[cpu->opcode];
                 // special case: if this is indirect+immediate (which is just LD 
                 // (HL),n), then stretch the immediate-load machine cycle by 3 tcycles
                 // because it is 'hidden' in the d-offset 8-tcycle load
