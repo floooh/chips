@@ -656,6 +656,7 @@ cb:
 cbhl:
   flags: { special: true }
   mcycles:
+    # FIXME: skip write if z80_cb_action returns false
     - { type: mread, tcycles: 4, ab: "cpu->hl", dst: DLATCH, action: "z80_cb_action(cpu, 6)" }
     - { type: mwrite, ab: "cpu->hl", db: DLATCH }
 
@@ -667,6 +668,7 @@ ddfdcb:
     # load opcode
     - { type: mread, ab: PC++, tcycles: 4, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu, DLATCH)" }
     # read operand
+    # FIXME: skip write if z80_cb_action returns false
     - { type: mread, ab: ADDR, tcycles: 4, dst: DLATCH, action: "z80_cb_action(cpu, 6)" }
     # write result back
     - { type: mwrite, ab: ADDR, db: DLATCH }

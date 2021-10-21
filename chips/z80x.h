@@ -561,7 +561,7 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 }
 
 // CB-prefix block action
-static inline void z80_cb_action(z80_t* cpu, uint8_t z) {
+static inline bool z80_cb_action(z80_t* cpu, uint8_t z) {
     const uint8_t x = cpu->opcode>>6;
     const uint8_t y = (cpu->opcode>>3)&7;
     uint8_t val;
@@ -589,25 +589,39 @@ static inline void z80_cb_action(z80_t* cpu, uint8_t z) {
             }
             break;
         case 1: // bit
-            // FIXME
+            val = val & (1<<y);
+            cpu->f = (cpu->f & Z80_CF) | Z80_HF | (val ? (val & Z80_SF) : (Z80_ZF|Z80_PF));
+            if ((z == 6) || (cpu->prefix & (Z80_PREFIX_DD|Z80_PREFIX_FD))) {
+                cpu->f |= (cpu->wz >> 8) & (Z80_YF|Z80_XF);
+            }
+            else {
+                cpu->f |= val & (Z80_YF|Z80_XF);
+            }
             break;
         case 2: // res
-            // FIXME
+            val = val & (1 << y);
             break;
         case 3: // set
-            // FIXME
+            val = val | (1 << y);
             break;
     }
-    cpu->dlatch = val;
-    switch (z) {
-        case 0: cpu->b = val; break;
-        case 1: cpu->c = val; break;
-        case 2: cpu->d = val; break;
-        case 3: cpu->e = val; break;
-        case 4: cpu->h = val; break;
-        case 5: cpu->l = val; break;
-        case 6: break;   // (HL)
-        case 7: cpu->a = val; break;
+    // don't write result back for BIT
+    if (x != 1) {
+        cpu->dlatch = val;
+        switch (z) {
+            case 0: cpu->b = val; break;
+            case 1: cpu->c = val; break;
+            case 2: cpu->d = val; break;
+            case 3: cpu->e = val; break;
+            case 4: cpu->h = val; break;
+            case 5: cpu->l = val; break;
+            case 6: break;   // (HL)
+            case 7: cpu->a = val; break;
+        }
+        return true;
+    }
+    else {
+        return false;
     }
 }
 
