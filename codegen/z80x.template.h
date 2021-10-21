@@ -614,6 +614,7 @@ static inline void z80_cb_action(z80_t* cpu, uint8_t z) {
 // compute the effective memory address for DD+CB/FD+CB instructions
 static inline void z80_ddfdcb_addr(z80_t* cpu, uint8_t d) {
     cpu->addr = cpu->hlx[cpu->hlx_idx].hl + (int8_t)d;
+    cpu->wz = cpu->addr;
 }
 
 // load the opcode from data bus for DD+CB/FD+CB instructions

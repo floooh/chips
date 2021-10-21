@@ -614,6 +614,7 @@ static inline void z80_cb_action(z80_t* cpu, uint8_t z) {
 // compute the effective memory address for DD+CB/FD+CB instructions
 static inline void z80_ddfdcb_addr(z80_t* cpu, uint8_t d) {
     cpu->addr = cpu->hlx[cpu->hlx_idx].hl + (int8_t)d;
+    cpu->wz = cpu->addr;
 }
 
 // load the opcode from data bus for DD+CB/FD+CB instructions
@@ -1140,8 +1141,8 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00000002, 0x029F, 0 },  // ED FE: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x029F, 0 },  // ED FF: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x039B, 0 },  // CB 00: cb (M:1 T:4 steps:1)
-    { 0x000000E6, 0x039C, 0 },  // CB 01: cbhl (M:3 T:10 steps:5)
-    { 0x000039B6, 0x03A1, 0 },  // CB 02: ddfdcb (M:5 T:16 steps:9)
+    { 0x000001C6, 0x039C, 0 },  // CB 01: cbhl (M:3 T:11 steps:5)
+    { 0x0000E336, 0x03A1, 0 },  // CB 02: ddfdcb (M:5 T:18 steps:9)
 
 };
 
@@ -3531,7 +3532,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x039C: z80_cb_action(cpu, cpu->opcode & 7);_fetch(); break;
             
-            // CB 00: cbhl (M:3 T:10)
+            // CB 00: cbhl (M:3 T:11)
             // -- M2
             case 0x039D: _wait();_mread(cpu->hl); break;
             case 0x039E: cpu->dlatch=_gd();z80_cb_action(cpu, 6); break;
@@ -3541,7 +3542,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x03A1: _fetch(); break;
             
-            // CB 00: ddfdcb (M:5 T:16)
+            // CB 00: ddfdcb (M:5 T:18)
             // -- M2
             case 0x03A2: _wait();_mread(cpu->pc++); break;
             case 0x03A3: cpu->dlatch=_gd();z80_ddfdcb_addr(cpu, cpu->dlatch); break;

@@ -656,7 +656,7 @@ cb:
 cbhl:
   flags: { special: true }
   mcycles:
-    - { type: mread, ab: "cpu->hl", dst: DLATCH, action: "z80_cb_action(cpu, 6)" }
+    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: DLATCH, action: "z80_cb_action(cpu, 6)" }
     - { type: mwrite, ab: "cpu->hl", db: DLATCH }
 
 ddfdcb:
@@ -665,8 +665,8 @@ ddfdcb:
     # load d-offset
     - { type: mread, ab: PC++, dst: DLATCH, action: "z80_ddfdcb_addr(cpu, DLATCH)" }
     # load opcode
-    - { type: mread, ab: PC++, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu, DLATCH)" }
+    - { type: mread, ab: PC++, tcycles: 4, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu, DLATCH)" }
     # read operand
-    - { type: mread, ab: ADDR, dst: DLATCH, action: "z80_cb_action(cpu, 6)" }
+    - { type: mread, ab: ADDR, tcycles: 4, dst: DLATCH, action: "z80_cb_action(cpu, 6)" }
     # write result back
     - { type: mwrite, ab: ADDR, db: DLATCH }
