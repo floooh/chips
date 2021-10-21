@@ -560,40 +560,81 @@ static inline uint8_t z80_get_db(uint64_t pins) {
     return pins>>16;
 }
 
+// CB-prefix block action
+static inline void z80_cb_action(z80_t* cpu, uint8_t z) {
+    const uint8_t x = cpu->opcode>>6;
+    const uint8_t y = (cpu->opcode>>3)&7;
+    uint8_t val;
+    switch (z) {
+        case 0: val = cpu->b; break;
+        case 1: val = cpu->c; break;
+        case 2: val = cpu->d; break;
+        case 3: val = cpu->e; break;
+        case 4: val = cpu->h; break;
+        case 5: val = cpu->l; break;
+        case 6: val = cpu->dlatch; break;   // (HL)
+        case 7: val = cpu->a; break;
+    }
+    switch (x) {
+        case 0: // rot/shift
+            switch (y) {
+                case 0: val = z80_rlc(cpu, val); break;
+                case 1: val = z80_rrc(cpu, val); break;
+                case 2: val = z80_rl(cpu, val); break;
+                case 3: val = z80_rr(cpu, val); break;
+                case 4: val = z80_sla(cpu, val); break;
+                case 5: val = z80_sra(cpu, val); break;
+                case 6: val = z80_sll(cpu, val); break;
+                case 7: val = z80_srl(cpu, val); break;
+            }
+            break;
+        case 1: // bit
+            // FIXME
+            break;
+        case 2: // res
+            // FIXME
+            break;
+        case 3: // set
+            // FIXME
+            break;
+    }
+    cpu->dlatch = val;
+    switch (z) {
+        case 0: cpu->b = val; break;
+        case 1: cpu->c = val; break;
+        case 2: cpu->d = val; break;
+        case 3: cpu->e = val; break;
+        case 4: cpu->h = val; break;
+        case 5: cpu->l = val; break;
+        case 6: break;   // (HL)
+        case 7: cpu->a = val; break;
+    }
+}
+
+// compute the effective memory address for DD+CB/FD+CB instructions
+static inline void z80_ddfdcb_addr(z80_t* cpu, uint8_t d) {
+    cpu->addr = cpu->hlx[cpu->hlx_idx].hl + (int8_t)d;
+}
+
+// load the opcode from data bus for DD+CB/FD+CB instructions
+static inline void z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
+    cpu->opcode = oc;
+}
+
+// special case opstate table slots
+#define Z80_OPSTATE_SLOT_CB     (512)
+#define Z80_OPSTATE_SLOT_CBHL   (512+1)
+#define Z80_OPSTATE_SLOT_DDFDCB (512+2)
+
+static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
+$pip_table_block
+};
+
 // initiate a fetch machine cycle
 static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
     cpu->op.pip = 5<<1;
     cpu->op.step = 0xFFFF;
     cpu->prefix_state = 0;
-    pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-    return pins;
-}
-
-static inline uint64_t z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefix) {
-    // reset the decoder to continue at step 0
-    cpu->op.pip = 5<<1;
-    cpu->op.step = 0xFFFF;
-    switch (prefix) {
-        case Z80_PREFIX_CB: // CB prefix preserves current DD/FD prefix
-            cpu->prefix_offset = 0x0200;
-            cpu->prefix |= Z80_PREFIX_CB;
-            break;
-        case Z80_PREFIX_DD:
-            cpu->prefix_offset = 0;
-            cpu->hlx_idx = 1;
-            cpu->prefix = Z80_PREFIX_DD;
-            break;
-        case Z80_PREFIX_ED: // ED prefix clears current DD/FD prefix
-            cpu->prefix_offset = 0x0100;
-            cpu->hlx_idx = 0;
-            cpu->prefix = Z80_PREFIX_ED;
-            break;
-        case Z80_PREFIX_FD:
-            cpu->prefix_offset = 0;
-            cpu->hlx_idx = 2;
-            cpu->prefix = Z80_PREFIX_FD;
-            break;
-    }
     pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     return pins;
 }
@@ -605,9 +646,51 @@ static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
     return pins;
 }
 
-static const z80_opstate_t z80_opstate_table[3*256] = {
-$pip_table_block
-};
+static inline uint64_t z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefix) {
+    // reset the decoder to continue at step 0
+    cpu->op.pip = 5<<1;
+    cpu->op.step = 0xFFFF;
+    switch (prefix) {
+        case Z80_PREFIX_CB: // CB prefix preserves current DD/FD prefix
+            cpu->prefix |= Z80_PREFIX_CB;
+            if (cpu->prefix & (Z80_PREFIX_DD|Z80_PREFIX_FD)) {
+                // this is a DD+CB / FD+CB instruction, continue
+                // execution on the special DDCB/FDCB decoder block which
+                // loads the d-offset first and then the opcode in a 
+                // regular memory read machine cycle
+                cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_DDFDCB];
+                // NOTE: pins are not set
+            }
+            else {
+                // this is a regular CB-prefixed instruction, continue
+                // execution on a special fetch machine cycle which doesn't
+                // handle DD/FD prefix and then branches either to the
+                // special CB or CBHL decoder block
+                cpu->op.step = 5 - 1;   // => step 5
+                pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+            }
+            break;
+        case Z80_PREFIX_DD:
+            cpu->prefix_offset = 0;
+            cpu->hlx_idx = 1;
+            cpu->prefix = Z80_PREFIX_DD;
+            pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+            break;
+        case Z80_PREFIX_ED: // ED prefix clears current DD/FD prefix
+            cpu->prefix_offset = 0x0100;
+            cpu->hlx_idx = 0;
+            cpu->prefix = Z80_PREFIX_ED;
+            pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+            break;
+        case Z80_PREFIX_FD:
+            cpu->prefix_offset = 0;
+            cpu->hlx_idx = 2;
+            cpu->prefix = Z80_PREFIX_FD;
+            pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+            break;
+    }
+    return pins;
+}
 
 uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
     cpu->pc = new_pc;
@@ -698,6 +781,22 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                 if (cpu->op.flags & Z80_OPSTATE_FLAGS_IMM8) {
                     const uint64_t mask = 0xF;
                     cpu->op.pip = (cpu->op.pip & mask) | ((cpu->op.pip & ~mask)<<2);
+                }
+            } break;
+            //=== special opcode fetch machine cycle for CB-prefixed instructions
+            case 5: {
+                cpu->opcode = _gd();
+                _wait();
+            } break;
+            case 6: {
+                pins = z80_refresh(cpu, pins);
+                if ((cpu->opcode & 7) == 6) {
+                    // this is a (HL) instruction
+                    cpu->addr = cpu->hl;
+                    cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_CBHL];
+                }
+                else {
+                    cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_CB];
                 }
             } break;
             // FIXME: optional interrupt handling(?) 

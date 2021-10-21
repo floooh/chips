@@ -648,53 +648,25 @@ otdr:
 
 #== CB prefix block ============================================================
 
-ROT (hl):
-  prefix: cb
-  cond: (x == 0) and (z == 6)
-  mcycles: []
-
-ROT RZ:
-  prefix: cb
-  cond: (x == 0) and (z != 6)
+cb:
+  flags: { special: true }
   mcycles:
-    - { type: overlapped, action: "RZ=ROT(RZ)" }
+    - { type: overlapped, action: "z80_cb_action(cpu, cpu->opcode & 7)" }
 
-bit n,(hl):
-  prefix: cb
-  flags: { single: true }
-  cond: (x == 1) and (z == 6)
-  mcycles: []
-  # FIXME
+cbhl:
+  flags: { special: true }
+  mcycles:
+    - { type: mread, ab: "cpu->hl", dst: DLATCH, action: "z80_cb_action(cpu, 6)" }
+    - { type: mwrite, ab: "cpu->hl", db: DLATCH }
 
-bit n,r:
-  prefix: cb
-  flags: { single: true }
-  cond: (x == 1) and (z != 6)
-  mcycles: []
-  # FIXME
-
-res n,(hl):
-  prefix: cb
-  flags: { single: true }
-  cond: (x == 2) and (z == 6)
-  mcycles: []
-  # FIXME
-
-res n,r:
-  prefix: cb
-  flags: { single: true }
-  cond: (x == 2) and (z != 6)
-  mcycles: []
-  # FIXME
-
-set n,(hl):
-  prefix: cb
-  flags: { single: true }
-  cond: (x == 3) and (z == 6)
-  mcycles: []
-
-set n,r:
-  prefix: cb
-  flags: { single: true }
-  cond: (x == 3) and (z != 6)
-  mcycles: []
+ddfdcb:
+  flags: { special: true }
+  mcycles:
+    # load d-offset
+    - { type: mread, ab: PC++, dst: DLATCH, action: "z80_ddfdcb_addr(cpu, DLATCH)" }
+    # load opcode
+    - { type: mread, ab: PC++, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu, DLATCH)" }
+    # read operand
+    - { type: mread, ab: ADDR, dst: DLATCH, action: "z80_cb_action(cpu, 6)" }
+    # write result back
+    - { type: mwrite, ab: ADDR, db: DLATCH }

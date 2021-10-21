@@ -2,7 +2,7 @@ import yaml, copy
 from string import Template
 from typing import Optional, TypeVar, Any
 
-FIRST_DECODER_STEP = 5
+FIRST_DECODER_STEP = 7
 DESC_PATH  = 'z80_desc.yml'
 TEMPL_PATH = 'z80x.template.h'
 OUT_PATH   = '../chips/z80x.h'
@@ -35,8 +35,7 @@ class Op:
 OP_PATTERNS: list[Op] = []
 # 0..255:   core opcodes
 # 256..511: ED prefix opcodes
-# 512..767: CB prefix opcodes 
-OPS: list[Optional[Op]] = [None for _ in range(0,3*256)]
+OPS: list[Optional[Op]] = [None for _ in range(0,2*256 + 3)]
 
 # a fetch machine cycle is processed as 2 parts because it overlaps
 # with the 'action' of the previous instruction
@@ -167,7 +166,7 @@ def parse_opdescs():
         desc = yaml.load(fp, Loader=yaml.FullLoader) # type: ignore
         for (op_name, op_desc) in desc.items():
             if 'cond' not in op_desc:
-                err(f"op '{op_name}' has no condition!")
+                op_desc['cond'] = 'True'
             if 'mcycles' not in op_desc:
                 err(f"op '{op_name}' has no mcycles!")
             flags: dict[str,Any] = {}
@@ -211,6 +210,12 @@ def parse_opdescs():
                 op.mcycles.append(MCycle('overlapped', OVERLAPPED_FETCH_TCYCLES, {}))
             OP_PATTERNS.append(op)
 
+def find_opdesc(name: str) -> Optional[Op]:
+    for op_desc in OP_PATTERNS:
+        if op_desc.name == name:
+            return op_desc
+    return None
+
 def stampout_mcycle_items(mcycle_items: dict[str,str], y: int, z: int, p: int, q: int) -> dict[str,str]:
     res: dict[str,str] = {}
     for key,val in mcycle_items.items():
@@ -218,32 +223,42 @@ def stampout_mcycle_items(mcycle_items: dict[str,str], y: int, z: int, p: int, q
             res[key] = map_cpu(val, y, z, p, q)
     return res
 
+def stampout_op(prefix: str, opcode: int, op_index: int, op_desc: Op):
+    #  76 543 210
+    # |xx|yyy|zzz|
+    #    |ppq|
+    y = (opcode >> 3) & 7
+    z = opcode & 7
+    p = y >> 1
+    q = y & 1
+    if op_desc.first_op_index == -1:
+        op_desc.first_op_index = op_index
+    op = copy.deepcopy(op_desc)
+    op.name = map_comment(op.name, y, z, p, q)
+    op.prefix = prefix
+    op.opcode = opcode
+    for mcycle in op.mcycles:
+        mcycle.items = stampout_mcycle_items(mcycle.items, y, z, p, q)
+    OPS[op_index] = op
+
 def expand_optable():
-    for oprange,prefix in enumerate(['', 'ed', 'cb']):
+    for oprange,prefix in enumerate(['', 'ed']):
         for opcode in range(0,256):
-            #  76 543 210
-            # |xx|yyy|zzz|
-            #    |ppq|
             x = opcode >> 6 # type: ignore (generated unused warning, but x is needed in 'eval')
-            y = (opcode >> 3) & 7
-            z = opcode & 7
-            p = y >> 1
-            q = y & 1
+            y = (opcode >> 3) & 7 
+            z = opcode & 7 # type: ignore
+            p = y >> 1 # type: ignore
+            q = y & 1 # type: ignore
             op_index = oprange * 256 + opcode
             for op_desc_index,op_desc in enumerate(OP_PATTERNS):
-                if eval(op_desc.cond_compiled) and op_desc.prefix == prefix:
-                    if OPS[op_index] is not None:
-                        err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
-                    op_pattern = OP_PATTERNS[op_desc_index]
-                    if op_pattern.first_op_index == -1:
-                        op_pattern.first_op_index = op_index
-                    op = copy.deepcopy(op_pattern)
-                    op.name = map_comment(op.name, y, z, p, q)
-                    op.prefix = prefix
-                    op.opcode = opcode
-                    for mcycle in op.mcycles:
-                        mcycle.items = stampout_mcycle_items(mcycle.items, y, z, p, q)
-                    OPS[op_index] = op
+                if not flag(op_desc, 'special'):
+                    if eval(op_desc.cond_compiled) and op_desc.prefix == prefix:
+                        if OPS[op_index] is not None:
+                            err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
+                        stampout_op(prefix, opcode, op_index, op_desc)
+    stampout_op('cb', 0, 512+0, unwrap(find_opdesc('cb')))
+    stampout_op('cb', 0, 512+1, unwrap(find_opdesc('cbhl')))
+    stampout_op('cb', 0, 512+2, unwrap(find_opdesc('ddfdcb')))
 
 # build the execution pipeline bitmask for a given instruction
 def build_pip(op: Op) -> int:
