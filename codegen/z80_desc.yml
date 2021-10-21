@@ -652,13 +652,12 @@ ROT (hl):
   prefix: cb
   cond: (x == 0) and (z == 6)
   mcycles: []
-  # FIXME
 
 ROT RZ:
   prefix: cb
   cond: (x == 0) and (z != 6)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "RZ=ROT(RZ)" }
 
 bit n,(hl):
   prefix: cb

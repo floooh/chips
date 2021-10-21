@@ -73,6 +73,14 @@ alu_map  = [ 'z80_add8(cpu,',
              'z80_xor8(cpu,',
              'z80_or8(cpu,',
              'z80_cp8(cpu,' ]
+rot_map  = [ 'z80_rlc(cpu,',
+             'z80_rrc(cpu,',
+             'z80_rl(cpu,',
+             'z80_rr(cpu,',
+             'z80_sla(cpu,',
+             'z80_sra(cpu,',
+             'z80_sll(cpu,',
+             'z80_srl(cpu,' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -111,6 +119,7 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
     return inp\
         .replace('ADDR', 'cpu->addr')\
         .replace('ALU(', alu_map[y])\
+        .replace('ROT(', rot_map[y])\
         .replace('RRPL', rrpl_map[p])\
         .replace('RRPH', rrph_map[p])\
         .replace('RRP', rrp_map[p])\

@@ -185,7 +185,7 @@ static inline uint64_t z80_halt(z80_t* cpu, uint64_t pins) {
 }
 
 // sign+zero+parity lookup table
-static uint8_t z80_szp_flags[256] = {
+static const uint8_t z80_szp_flags[256] = {
   0x44,0x00,0x00,0x04,0x00,0x04,0x04,0x00,0x08,0x0c,0x0c,0x08,0x0c,0x08,0x08,0x0c,
   0x00,0x04,0x04,0x00,0x04,0x00,0x00,0x04,0x0c,0x08,0x08,0x0c,0x08,0x0c,0x0c,0x08,
   0x20,0x24,0x24,0x20,0x24,0x20,0x20,0x24,0x2c,0x28,0x28,0x2c,0x28,0x2c,0x2c,0x28,
@@ -490,6 +490,54 @@ static inline uint8_t z80_rld(z80_t* cpu, uint8_t val) {
     val = (val << 4) | l;
     cpu->f = (cpu->f & Z80_CF) | z80_szp_flags[cpu->a];
     return val;
+}
+
+static inline uint8_t z80_rlc(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val<<1) | (val>>7);
+    cpu->f = z80_szp_flags[res] | ((val>>7) & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_rrc(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val>>1) | (val<<7);
+    cpu->f = z80_szp_flags[res] | (val & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_rl(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val<<1) | (cpu->f & Z80_CF);
+    cpu->f = z80_szp_flags[res] | ((val>>7) & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_rr(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val>>1) | ((cpu->f & Z80_CF)<<7);
+    cpu->f = z80_szp_flags[res] | (val & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_sla(z80_t* cpu, uint8_t val) {
+    uint8_t res = val<<1;
+    cpu->f = z80_szp_flags[res] | ((val>>7) & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_sra(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val>>1) | (val & 0x80);
+    cpu->f = z80_szp_flags[res] | (val & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_sll(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val<<1) | 1;
+    cpu->f = z80_szp_flags[res] | ((val>>7) & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_srl(z80_t* cpu, uint8_t val) {
+    uint8_t res = val>>1;
+    cpu->f = z80_szp_flags[res] | (val & Z80_CF);
+    return res;
 }
 
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {

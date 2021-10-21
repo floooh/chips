@@ -185,7 +185,7 @@ static inline uint64_t z80_halt(z80_t* cpu, uint64_t pins) {
 }
 
 // sign+zero+parity lookup table
-static uint8_t z80_szp_flags[256] = {
+static const uint8_t z80_szp_flags[256] = {
   0x44,0x00,0x00,0x04,0x00,0x04,0x04,0x00,0x08,0x0c,0x0c,0x08,0x0c,0x08,0x08,0x0c,
   0x00,0x04,0x04,0x00,0x04,0x00,0x00,0x04,0x0c,0x08,0x08,0x0c,0x08,0x0c,0x0c,0x08,
   0x20,0x24,0x24,0x20,0x24,0x20,0x20,0x24,0x2c,0x28,0x28,0x2c,0x28,0x2c,0x2c,0x28,
@@ -490,6 +490,54 @@ static inline uint8_t z80_rld(z80_t* cpu, uint8_t val) {
     val = (val << 4) | l;
     cpu->f = (cpu->f & Z80_CF) | z80_szp_flags[cpu->a];
     return val;
+}
+
+static inline uint8_t z80_rlc(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val<<1) | (val>>7);
+    cpu->f = z80_szp_flags[res] | ((val>>7) & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_rrc(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val>>1) | (val<<7);
+    cpu->f = z80_szp_flags[res] | (val & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_rl(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val<<1) | (cpu->f & Z80_CF);
+    cpu->f = z80_szp_flags[res] | ((val>>7) & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_rr(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val>>1) | ((cpu->f & Z80_CF)<<7);
+    cpu->f = z80_szp_flags[res] | (val & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_sla(z80_t* cpu, uint8_t val) {
+    uint8_t res = val<<1;
+    cpu->f = z80_szp_flags[res] | ((val>>7) & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_sra(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val>>1) | (val & 0x80);
+    cpu->f = z80_szp_flags[res] | (val & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_sll(z80_t* cpu, uint8_t val) {
+    uint8_t res = (val<<1) | 1;
+    cpu->f = z80_szp_flags[res] | ((val>>7) & Z80_CF);
+    return res;
+}
+
+static inline uint8_t z80_srl(z80_t* cpu, uint8_t val) {
+    uint8_t res = val>>1;
+    cpu->f = z80_szp_flags[res] | (val & Z80_CF);
+    return res;
 }
 
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
@@ -3635,27 +3683,27 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 00: rlc b (M:1 T:4)
             // -- OVERLAP
-            case 0x039A: _fetch(); break;
+            case 0x039A: cpu->b=z80_rlc(cpu,cpu->b);_fetch(); break;
             
             // CB 01: rlc c (M:1 T:4)
             // -- OVERLAP
-            case 0x039B: _fetch(); break;
+            case 0x039B: cpu->c=z80_rlc(cpu,cpu->c);_fetch(); break;
             
             // CB 02: rlc d (M:1 T:4)
             // -- OVERLAP
-            case 0x039C: _fetch(); break;
+            case 0x039C: cpu->d=z80_rlc(cpu,cpu->d);_fetch(); break;
             
             // CB 03: rlc e (M:1 T:4)
             // -- OVERLAP
-            case 0x039D: _fetch(); break;
+            case 0x039D: cpu->e=z80_rlc(cpu,cpu->e);_fetch(); break;
             
             // CB 04: rlc h (M:1 T:4)
             // -- OVERLAP
-            case 0x039E: _fetch(); break;
+            case 0x039E: cpu->hlx[cpu->hlx_idx].h=z80_rlc(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // CB 05: rlc l (M:1 T:4)
             // -- OVERLAP
-            case 0x039F: _fetch(); break;
+            case 0x039F: cpu->hlx[cpu->hlx_idx].l=z80_rlc(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // CB 06: rlc (hl) (M:1 T:4)
             // -- OVERLAP
@@ -3663,31 +3711,31 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 07: rlc a (M:1 T:4)
             // -- OVERLAP
-            case 0x03A1: _fetch(); break;
+            case 0x03A1: cpu->a=z80_rlc(cpu,cpu->a);_fetch(); break;
             
             // CB 08: rrc b (M:1 T:4)
             // -- OVERLAP
-            case 0x03A2: _fetch(); break;
+            case 0x03A2: cpu->b=z80_rrc(cpu,cpu->b);_fetch(); break;
             
             // CB 09: rrc c (M:1 T:4)
             // -- OVERLAP
-            case 0x03A3: _fetch(); break;
+            case 0x03A3: cpu->c=z80_rrc(cpu,cpu->c);_fetch(); break;
             
             // CB 0A: rrc d (M:1 T:4)
             // -- OVERLAP
-            case 0x03A4: _fetch(); break;
+            case 0x03A4: cpu->d=z80_rrc(cpu,cpu->d);_fetch(); break;
             
             // CB 0B: rrc e (M:1 T:4)
             // -- OVERLAP
-            case 0x03A5: _fetch(); break;
+            case 0x03A5: cpu->e=z80_rrc(cpu,cpu->e);_fetch(); break;
             
             // CB 0C: rrc h (M:1 T:4)
             // -- OVERLAP
-            case 0x03A6: _fetch(); break;
+            case 0x03A6: cpu->hlx[cpu->hlx_idx].h=z80_rrc(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // CB 0D: rrc l (M:1 T:4)
             // -- OVERLAP
-            case 0x03A7: _fetch(); break;
+            case 0x03A7: cpu->hlx[cpu->hlx_idx].l=z80_rrc(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // CB 0E: rrc (hl) (M:1 T:4)
             // -- OVERLAP
@@ -3695,31 +3743,31 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 0F: rrc a (M:1 T:4)
             // -- OVERLAP
-            case 0x03A9: _fetch(); break;
+            case 0x03A9: cpu->a=z80_rrc(cpu,cpu->a);_fetch(); break;
             
             // CB 10: rl b (M:1 T:4)
             // -- OVERLAP
-            case 0x03AA: _fetch(); break;
+            case 0x03AA: cpu->b=z80_rl(cpu,cpu->b);_fetch(); break;
             
             // CB 11: rl c (M:1 T:4)
             // -- OVERLAP
-            case 0x03AB: _fetch(); break;
+            case 0x03AB: cpu->c=z80_rl(cpu,cpu->c);_fetch(); break;
             
             // CB 12: rl d (M:1 T:4)
             // -- OVERLAP
-            case 0x03AC: _fetch(); break;
+            case 0x03AC: cpu->d=z80_rl(cpu,cpu->d);_fetch(); break;
             
             // CB 13: rl e (M:1 T:4)
             // -- OVERLAP
-            case 0x03AD: _fetch(); break;
+            case 0x03AD: cpu->e=z80_rl(cpu,cpu->e);_fetch(); break;
             
             // CB 14: rl h (M:1 T:4)
             // -- OVERLAP
-            case 0x03AE: _fetch(); break;
+            case 0x03AE: cpu->hlx[cpu->hlx_idx].h=z80_rl(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // CB 15: rl l (M:1 T:4)
             // -- OVERLAP
-            case 0x03AF: _fetch(); break;
+            case 0x03AF: cpu->hlx[cpu->hlx_idx].l=z80_rl(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // CB 16: rl (hl) (M:1 T:4)
             // -- OVERLAP
@@ -3727,31 +3775,31 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 17: rl a (M:1 T:4)
             // -- OVERLAP
-            case 0x03B1: _fetch(); break;
+            case 0x03B1: cpu->a=z80_rl(cpu,cpu->a);_fetch(); break;
             
             // CB 18: rr b (M:1 T:4)
             // -- OVERLAP
-            case 0x03B2: _fetch(); break;
+            case 0x03B2: cpu->b=z80_rr(cpu,cpu->b);_fetch(); break;
             
             // CB 19: rr c (M:1 T:4)
             // -- OVERLAP
-            case 0x03B3: _fetch(); break;
+            case 0x03B3: cpu->c=z80_rr(cpu,cpu->c);_fetch(); break;
             
             // CB 1A: rr d (M:1 T:4)
             // -- OVERLAP
-            case 0x03B4: _fetch(); break;
+            case 0x03B4: cpu->d=z80_rr(cpu,cpu->d);_fetch(); break;
             
             // CB 1B: rr e (M:1 T:4)
             // -- OVERLAP
-            case 0x03B5: _fetch(); break;
+            case 0x03B5: cpu->e=z80_rr(cpu,cpu->e);_fetch(); break;
             
             // CB 1C: rr h (M:1 T:4)
             // -- OVERLAP
-            case 0x03B6: _fetch(); break;
+            case 0x03B6: cpu->hlx[cpu->hlx_idx].h=z80_rr(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // CB 1D: rr l (M:1 T:4)
             // -- OVERLAP
-            case 0x03B7: _fetch(); break;
+            case 0x03B7: cpu->hlx[cpu->hlx_idx].l=z80_rr(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // CB 1E: rr (hl) (M:1 T:4)
             // -- OVERLAP
@@ -3759,31 +3807,31 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 1F: rr a (M:1 T:4)
             // -- OVERLAP
-            case 0x03B9: _fetch(); break;
+            case 0x03B9: cpu->a=z80_rr(cpu,cpu->a);_fetch(); break;
             
             // CB 20: sla b (M:1 T:4)
             // -- OVERLAP
-            case 0x03BA: _fetch(); break;
+            case 0x03BA: cpu->b=z80_sla(cpu,cpu->b);_fetch(); break;
             
             // CB 21: sla c (M:1 T:4)
             // -- OVERLAP
-            case 0x03BB: _fetch(); break;
+            case 0x03BB: cpu->c=z80_sla(cpu,cpu->c);_fetch(); break;
             
             // CB 22: sla d (M:1 T:4)
             // -- OVERLAP
-            case 0x03BC: _fetch(); break;
+            case 0x03BC: cpu->d=z80_sla(cpu,cpu->d);_fetch(); break;
             
             // CB 23: sla e (M:1 T:4)
             // -- OVERLAP
-            case 0x03BD: _fetch(); break;
+            case 0x03BD: cpu->e=z80_sla(cpu,cpu->e);_fetch(); break;
             
             // CB 24: sla h (M:1 T:4)
             // -- OVERLAP
-            case 0x03BE: _fetch(); break;
+            case 0x03BE: cpu->hlx[cpu->hlx_idx].h=z80_sla(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // CB 25: sla l (M:1 T:4)
             // -- OVERLAP
-            case 0x03BF: _fetch(); break;
+            case 0x03BF: cpu->hlx[cpu->hlx_idx].l=z80_sla(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // CB 26: sla (hl) (M:1 T:4)
             // -- OVERLAP
@@ -3791,31 +3839,31 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 27: sla a (M:1 T:4)
             // -- OVERLAP
-            case 0x03C1: _fetch(); break;
+            case 0x03C1: cpu->a=z80_sla(cpu,cpu->a);_fetch(); break;
             
             // CB 28: sra b (M:1 T:4)
             // -- OVERLAP
-            case 0x03C2: _fetch(); break;
+            case 0x03C2: cpu->b=z80_sra(cpu,cpu->b);_fetch(); break;
             
             // CB 29: sra c (M:1 T:4)
             // -- OVERLAP
-            case 0x03C3: _fetch(); break;
+            case 0x03C3: cpu->c=z80_sra(cpu,cpu->c);_fetch(); break;
             
             // CB 2A: sra d (M:1 T:4)
             // -- OVERLAP
-            case 0x03C4: _fetch(); break;
+            case 0x03C4: cpu->d=z80_sra(cpu,cpu->d);_fetch(); break;
             
             // CB 2B: sra e (M:1 T:4)
             // -- OVERLAP
-            case 0x03C5: _fetch(); break;
+            case 0x03C5: cpu->e=z80_sra(cpu,cpu->e);_fetch(); break;
             
             // CB 2C: sra h (M:1 T:4)
             // -- OVERLAP
-            case 0x03C6: _fetch(); break;
+            case 0x03C6: cpu->hlx[cpu->hlx_idx].h=z80_sra(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // CB 2D: sra l (M:1 T:4)
             // -- OVERLAP
-            case 0x03C7: _fetch(); break;
+            case 0x03C7: cpu->hlx[cpu->hlx_idx].l=z80_sra(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // CB 2E: sra (hl) (M:1 T:4)
             // -- OVERLAP
@@ -3823,31 +3871,31 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 2F: sra a (M:1 T:4)
             // -- OVERLAP
-            case 0x03C9: _fetch(); break;
+            case 0x03C9: cpu->a=z80_sra(cpu,cpu->a);_fetch(); break;
             
             // CB 30: sll b (M:1 T:4)
             // -- OVERLAP
-            case 0x03CA: _fetch(); break;
+            case 0x03CA: cpu->b=z80_sll(cpu,cpu->b);_fetch(); break;
             
             // CB 31: sll c (M:1 T:4)
             // -- OVERLAP
-            case 0x03CB: _fetch(); break;
+            case 0x03CB: cpu->c=z80_sll(cpu,cpu->c);_fetch(); break;
             
             // CB 32: sll d (M:1 T:4)
             // -- OVERLAP
-            case 0x03CC: _fetch(); break;
+            case 0x03CC: cpu->d=z80_sll(cpu,cpu->d);_fetch(); break;
             
             // CB 33: sll e (M:1 T:4)
             // -- OVERLAP
-            case 0x03CD: _fetch(); break;
+            case 0x03CD: cpu->e=z80_sll(cpu,cpu->e);_fetch(); break;
             
             // CB 34: sll h (M:1 T:4)
             // -- OVERLAP
-            case 0x03CE: _fetch(); break;
+            case 0x03CE: cpu->hlx[cpu->hlx_idx].h=z80_sll(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // CB 35: sll l (M:1 T:4)
             // -- OVERLAP
-            case 0x03CF: _fetch(); break;
+            case 0x03CF: cpu->hlx[cpu->hlx_idx].l=z80_sll(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // CB 36: sll (hl) (M:1 T:4)
             // -- OVERLAP
@@ -3855,31 +3903,31 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 37: sll a (M:1 T:4)
             // -- OVERLAP
-            case 0x03D1: _fetch(); break;
+            case 0x03D1: cpu->a=z80_sll(cpu,cpu->a);_fetch(); break;
             
             // CB 38: srl b (M:1 T:4)
             // -- OVERLAP
-            case 0x03D2: _fetch(); break;
+            case 0x03D2: cpu->b=z80_srl(cpu,cpu->b);_fetch(); break;
             
             // CB 39: srl c (M:1 T:4)
             // -- OVERLAP
-            case 0x03D3: _fetch(); break;
+            case 0x03D3: cpu->c=z80_srl(cpu,cpu->c);_fetch(); break;
             
             // CB 3A: srl d (M:1 T:4)
             // -- OVERLAP
-            case 0x03D4: _fetch(); break;
+            case 0x03D4: cpu->d=z80_srl(cpu,cpu->d);_fetch(); break;
             
             // CB 3B: srl e (M:1 T:4)
             // -- OVERLAP
-            case 0x03D5: _fetch(); break;
+            case 0x03D5: cpu->e=z80_srl(cpu,cpu->e);_fetch(); break;
             
             // CB 3C: srl h (M:1 T:4)
             // -- OVERLAP
-            case 0x03D6: _fetch(); break;
+            case 0x03D6: cpu->hlx[cpu->hlx_idx].h=z80_srl(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); break;
             
             // CB 3D: srl l (M:1 T:4)
             // -- OVERLAP
-            case 0x03D7: _fetch(); break;
+            case 0x03D7: cpu->hlx[cpu->hlx_idx].l=z80_srl(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); break;
             
             // CB 3E: srl (hl) (M:1 T:4)
             // -- OVERLAP
@@ -3887,7 +3935,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 3F: srl a (M:1 T:4)
             // -- OVERLAP
-            case 0x03D9: _fetch(); break;
+            case 0x03D9: cpu->a=z80_srl(cpu,cpu->a);_fetch(); break;
             
             // CB 40: bit n,r (M:1 T:4)
             // -- OVERLAP
