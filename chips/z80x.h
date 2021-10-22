@@ -561,11 +561,11 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 }
 
 // CB-prefix block action
-static inline bool z80_cb_action(z80_t* cpu, uint8_t z) {
+static inline bool z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
     const uint8_t x = cpu->opcode>>6;
     const uint8_t y = (cpu->opcode>>3)&7;
     uint8_t val;
-    switch (z) {
+    switch (z0) {
         case 0: val = cpu->b; break;
         case 1: val = cpu->c; break;
         case 2: val = cpu->d; break;
@@ -591,7 +591,7 @@ static inline bool z80_cb_action(z80_t* cpu, uint8_t z) {
         case 1: // bit
             val = val & (1<<y);
             cpu->f = (cpu->f & Z80_CF) | Z80_HF | (val ? (val & Z80_SF) : (Z80_ZF|Z80_PF));
-            if ((z == 6) || (cpu->prefix & (Z80_PREFIX_DD|Z80_PREFIX_FD))) {
+            if (z0 == 6) {
                 cpu->f |= (cpu->wz >> 8) & (Z80_YF|Z80_XF);
             }
             else {
@@ -599,7 +599,7 @@ static inline bool z80_cb_action(z80_t* cpu, uint8_t z) {
             }
             break;
         case 2: // res
-            val = val & (1 << y);
+            val = val & ~(1 << y);
             break;
         case 3: // set
             val = val | (1 << y);
@@ -608,7 +608,7 @@ static inline bool z80_cb_action(z80_t* cpu, uint8_t z) {
     // don't write result back for BIT
     if (x != 1) {
         cpu->dlatch = val;
-        switch (z) {
+        switch (z1) {
             case 0: cpu->b = val; break;
             case 1: cpu->c = val; break;
             case 2: cpu->d = val; break;
@@ -3544,12 +3544,12 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             // CB 00: cb (M:1 T:4)
             // -- OVERLAP
-            case 0x039C: z80_cb_action(cpu, cpu->opcode & 7);_fetch(); break;
+            case 0x039C: {uint8_t z=cpu->opcode&7; z80_cb_action(cpu, z, z);};_fetch(); break;
             
             // CB 00: cbhl (M:3 T:11)
             // -- M2
             case 0x039D: _wait();_mread(cpu->hl); break;
-            case 0x039E: cpu->dlatch=_gd();z80_cb_action(cpu, 6); break;
+            case 0x039E: cpu->dlatch=_gd();z80_cb_action(cpu, 6, 6); break;
             // -- M3
             case 0x039F: _mwrite(cpu->hl,cpu->dlatch); break;
             case 0x03A0: _wait(); break;
@@ -3565,7 +3565,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x03A5: cpu->dlatch=_gd();z80_ddfdcb_opcode(cpu, cpu->dlatch); break;
             // -- M4
             case 0x03A6: _wait();_mread(cpu->addr); break;
-            case 0x03A7: cpu->dlatch=_gd();z80_cb_action(cpu, 6); break;
+            case 0x03A7: cpu->dlatch=_gd();z80_cb_action(cpu, 6, cpu->opcode&7); break;
             // -- M5
             case 0x03A8: _mwrite(cpu->addr,cpu->dlatch); break;
             case 0x03A9: _wait(); break;
