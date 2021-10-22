@@ -651,13 +651,12 @@ otdr:
 cb:
   flags: { special: true }
   mcycles:
-    - { type: overlapped, action: "{uint8_t z=cpu->opcode&7; z80_cb_action(cpu, z, z);}" }
+    - { type: overlapped, action: "{uint8_t z=cpu->opcode&7;z80_cb_action(cpu,z,z);}" }
 
 cbhl:
   flags: { special: true }
   mcycles:
-    # FIXME: skip write if z80_cb_action returns false
-    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: DLATCH, action: "z80_cb_action(cpu, 6, 6)" }
+    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: DLATCH, action: "if(!z80_cb_action(cpu,6,6)){z80_skip(cpu,2,6,3);}" }
     - { type: mwrite, ab: "cpu->hl", db: DLATCH }
 
 ddfdcb:
@@ -666,9 +665,8 @@ ddfdcb:
     # load d-offset
     - { type: mread, ab: PC++, dst: DLATCH, action: "z80_ddfdcb_addr(cpu, DLATCH)" }
     # load opcode
-    - { type: mread, ab: PC++, tcycles: 4, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu, DLATCH)" }
+    - { type: mread, ab: PC++, tcycles: 4, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu,DLATCH)" }
     # read operand
-    # FIXME: skip write if z80_cb_action returns false
-    - { type: mread, ab: ADDR, tcycles: 4, dst: DLATCH, action: "z80_cb_action(cpu, 6, cpu->opcode&7)" }
+    - { type: mread, ab: ADDR, tcycles: 4, dst: DLATCH, action: "if(!z80_cb_action(cpu,6,cpu->opcode&7)){z80_skip(cpu,2,6,3);}" }
     # write result back
     - { type: mwrite, ab: ADDR, db: DLATCH }
