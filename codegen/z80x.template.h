@@ -564,7 +564,7 @@ static inline uint8_t z80_get_db(uint64_t pins) {
 static inline bool z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
     const uint8_t x = cpu->opcode>>6;
     const uint8_t y = (cpu->opcode>>3)&7;
-    uint8_t val;
+    uint8_t val, res;
     switch (z0) {
         case 0: val = cpu->b; break;
         case 1: val = cpu->c; break;
@@ -578,19 +578,19 @@ static inline bool z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
     switch (x) {
         case 0: // rot/shift
             switch (y) {
-                case 0: val = z80_rlc(cpu, val); break;
-                case 1: val = z80_rrc(cpu, val); break;
-                case 2: val = z80_rl(cpu, val); break;
-                case 3: val = z80_rr(cpu, val); break;
-                case 4: val = z80_sla(cpu, val); break;
-                case 5: val = z80_sra(cpu, val); break;
-                case 6: val = z80_sll(cpu, val); break;
-                case 7: val = z80_srl(cpu, val); break;
+                case 0: res = z80_rlc(cpu, val); break;
+                case 1: res = z80_rrc(cpu, val); break;
+                case 2: res = z80_rl(cpu, val); break;
+                case 3: res = z80_rr(cpu, val); break;
+                case 4: res = z80_sla(cpu, val); break;
+                case 5: res = z80_sra(cpu, val); break;
+                case 6: res = z80_sll(cpu, val); break;
+                case 7: res = z80_srl(cpu, val); break;
             }
             break;
         case 1: // bit
-            val = val & (1<<y);
-            cpu->f = (cpu->f & Z80_CF) | Z80_HF | (val ? (val & Z80_SF) : (Z80_ZF|Z80_PF));
+            res = val & (1<<y);
+            cpu->f = (cpu->f & Z80_CF) | Z80_HF | (res ? (res & Z80_SF) : (Z80_ZF|Z80_PF));
             if (z0 == 6) {
                 cpu->f |= (cpu->wz >> 8) & (Z80_YF|Z80_XF);
             }
@@ -599,24 +599,24 @@ static inline bool z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
             }
             break;
         case 2: // res
-            val = val & ~(1 << y);
+            res = val & ~(1 << y);
             break;
         case 3: // set
-            val = val | (1 << y);
+            res = val | (1 << y);
             break;
     }
     // don't write result back for BIT
     if (x != 1) {
-        cpu->dlatch = val;
+        cpu->dlatch = res;
         switch (z1) {
-            case 0: cpu->b = val; break;
-            case 1: cpu->c = val; break;
-            case 2: cpu->d = val; break;
-            case 3: cpu->e = val; break;
-            case 4: cpu->h = val; break;
-            case 5: cpu->l = val; break;
+            case 0: cpu->b = res; break;
+            case 1: cpu->c = res; break;
+            case 2: cpu->d = res; break;
+            case 3: cpu->e = res; break;
+            case 4: cpu->h = res; break;
+            case 5: cpu->l = res; break;
             case 6: break;   // (HL)
-            case 7: cpu->a = val; break;
+            case 7: cpu->a = res; break;
         }
         return true;
     }
