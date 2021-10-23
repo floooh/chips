@@ -315,13 +315,17 @@ ex de,hl:
 
 di:
   cond: (x == 3) and (y == 6) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    # NOTE: interrupts are never executed at the end of DI, no matter
+    # what the previous IFF state was
+    - { type: overlapped, action: "cpu->iff1=cpu->iff2=false;"}
 
 ei:
   cond: (x == 3) and (y == 7) and (z == 3)
-  mcycles: []
-  # FIXME
+  mcycles:
+    # NOTE: interrupts are never executed at the end of an EI, no matter
+    # what the previous IFF state was
+    - { type: overlapped, action: "cpu->iff1=cpu->iff2=false", post_action: "cpu->iff1=cpu->iff2=true" }
 
 # conditional CALL
 call CC,nn:
@@ -467,8 +471,8 @@ reti:
 im IMY:
   prefix: ed
   cond: (x == 1) and (z == 6)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: overlapped, action: "IM=IMY" }
 
 ld i,a:
   prefix: ed

@@ -80,6 +80,7 @@ rot_map  = [ 'z80_rlc(cpu,',
              'z80_sra(cpu,',
              'z80_sll(cpu,',
              'z80_srl(cpu,' ]
+im_map = [ '0', '0', '1', '2', '0', '0', '1', '2' ]
 
 def err(msg: str):
     raise BaseException(msg)
@@ -111,6 +112,7 @@ def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('RP', rp_comment[p])\
         .replace('CC-4', cc_comment[y-4])\
         .replace('CC', cc_comment[y])\
+        .replace('IMY', im_map[y])\
         .replace('Y*8', f'{y*8:X}h')\
         .replace('Y', f'{y}')
 
@@ -153,6 +155,8 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('D', 'cpu->d')\
         .replace('L', 'cpu->hlx[cpu->hlx_idx].l')\
         .replace('H', 'cpu->hlx[cpu->hlx_idx].h')\
+        .replace('IMY', im_map[y])\
+        .replace('IM', 'cpu->im')\
         .replace('Y*8', f'0x{y*8:02X}')\
 
 def flag(op: Op, flag: str) -> bool:
@@ -357,11 +361,13 @@ def gen_decoder():
             elif mcycle.type == 'overlapped':
                 l(f'// -- OVERLAP')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
+                post_action = (f"{mcycle.items['post_action']};" if 'post_action' in mcycle.items else '')
                 if 'prefix' in mcycle.items:
                     fetch = f"_fetch_{mcycle.items['prefix']}();"
                 else:
                     fetch = '_fetch();'
-                add(f'{action}{fetch}')
+                # important, action AFTER fetch!
+                add(f'{action}{fetch}{post_action}')
         op.num_steps = step
         # the number of steps must match the number of step-bits in the
         # execution pipeline

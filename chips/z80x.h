@@ -968,7 +968,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00003B36, 0x02A8, 0 },  // ED 43: ld (nn),bc (M:5 T:16 steps:9)
     { 0x00000002, 0x02B1, 0 },  // ED 44: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B2, 0 },  // ED 45: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x02B3, 0 },  // ED 46: im IM0 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02B3, 0 },  // ED 46: im 0 (M:1 T:4 steps:1)
     { 0x00000004, 0x02B4, 0 },  // ED 47: ld i,a (M:1 T:5 steps:1)
     { 0x0000002C, 0x02B5, 0 },  // ED 48: in c,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x02B8, 0 },  // ED 49: out (c),c (M:2 T:8 steps:3)
@@ -976,7 +976,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00002DB6, 0x02BD, 0 },  // ED 4B: ld bc,(nn) (M:5 T:16 steps:9)
     { 0x00000002, 0x02B1, 0 },  // ED 4C: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02C6, 0 },  // ED 4D: reti (M:1 T:4 steps:1)
-    { 0x00000002, 0x02C7, 0 },  // ED 4E: im IM1 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02C7, 0 },  // ED 4E: im 0 (M:1 T:4 steps:1)
     { 0x00000004, 0x02C8, 0 },  // ED 4F: ld r,a (M:1 T:5 steps:1)
     { 0x0000002C, 0x02C9, 0 },  // ED 50: in d,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x02CC, 0 },  // ED 51: out (c),d (M:2 T:8 steps:3)
@@ -984,7 +984,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00003B36, 0x02D1, 0 },  // ED 53: ld (nn),de (M:5 T:16 steps:9)
     { 0x00000002, 0x02B1, 0 },  // ED 54: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B2, 0 },  // ED 55: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x02DA, 0 },  // ED 56: im IM2 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02DA, 0 },  // ED 56: im 1 (M:1 T:4 steps:1)
     { 0x00000004, 0x02DB, 0 },  // ED 57: ld a,i (M:1 T:5 steps:1)
     { 0x0000002C, 0x02DC, 0 },  // ED 58: in e,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x02DF, 0 },  // ED 59: out (c),e (M:2 T:8 steps:3)
@@ -992,7 +992,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00002DB6, 0x02E4, 0 },  // ED 5B: ld de,(nn) (M:5 T:16 steps:9)
     { 0x00000002, 0x02B1, 0 },  // ED 5C: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B2, 0 },  // ED 5D: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x02ED, 0 },  // ED 5E: im IM3 (M:1 T:4 steps:1)
+    { 0x00000002, 0x02ED, 0 },  // ED 5E: im 2 (M:1 T:4 steps:1)
     { 0x00000004, 0x02EE, 0 },  // ED 5F: ld a,r (M:1 T:5 steps:1)
     { 0x0000002C, 0x02EF, 0 },  // ED 60: in h,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x02F2, 0 },  // ED 61: out (c),h (M:2 T:8 steps:3)
@@ -1000,7 +1000,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00003B36, 0x02F7, 0 },  // ED 63: ld (nn),hl (M:5 T:16 steps:9)
     { 0x00000002, 0x02B1, 0 },  // ED 64: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B2, 0 },  // ED 65: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x0300, 0 },  // ED 66: im IM4 (M:1 T:4 steps:1)
+    { 0x00000002, 0x0300, 0 },  // ED 66: im 0 (M:1 T:4 steps:1)
     { 0x00000E16, 0x0301, 0 },  // ED 67: rrd (M:4 T:14 steps:6)
     { 0x0000002C, 0x0307, 0 },  // ED 68: in l,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x030A, 0 },  // ED 69: out (c),l (M:2 T:8 steps:3)
@@ -1008,7 +1008,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00002DB6, 0x030F, 0 },  // ED 6B: ld hl,(nn) (M:5 T:16 steps:9)
     { 0x00000002, 0x02B1, 0 },  // ED 6C: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B2, 0 },  // ED 6D: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x0318, 0 },  // ED 6E: im IM5 (M:1 T:4 steps:1)
+    { 0x00000002, 0x0318, 0 },  // ED 6E: im 0 (M:1 T:4 steps:1)
     { 0x00000E16, 0x0319, 0 },  // ED 6F: rld (M:4 T:14 steps:6)
     { 0x0000002C, 0x031F, 0 },  // ED 70: in (c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x0322, 0 },  // ED 71: out (c),0 (M:2 T:8 steps:3)
@@ -1016,7 +1016,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00003B36, 0x0327, 0 },  // ED 73: ld (nn),sp (M:5 T:16 steps:9)
     { 0x00000002, 0x02B1, 0 },  // ED 74: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B2, 0 },  // ED 75: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x0330, 0 },  // ED 76: im IM6 (M:1 T:4 steps:1)
+    { 0x00000002, 0x0330, 0 },  // ED 76: im 1 (M:1 T:4 steps:1)
     { 0x00000002, 0x029F, 0 },  // ED 77: ed nop (M:1 T:4 steps:1)
     { 0x0000002C, 0x0331, 0 },  // ED 78: in a,(c) (M:2 T:8 steps:3)
     { 0x0000002C, 0x0334, 0 },  // ED 79: out (c),a (M:2 T:8 steps:3)
@@ -1024,7 +1024,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00002DB6, 0x0339, 0 },  // ED 7B: ld sp,(nn) (M:5 T:16 steps:9)
     { 0x00000002, 0x02B1, 0 },  // ED 7C: neg (M:1 T:4 steps:1)
     { 0x00000002, 0x02B2, 0 },  // ED 7D: retn (M:1 T:4 steps:1)
-    { 0x00000002, 0x0342, 0 },  // ED 7E: im IM7 (M:1 T:4 steps:1)
+    { 0x00000002, 0x0342, 0 },  // ED 7E: im 2 (M:1 T:4 steps:1)
     { 0x00000002, 0x029F, 0 },  // ED 7F: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x029F, 0 },  // ED 80: ed nop (M:1 T:4 steps:1)
     { 0x00000002, 0x029F, 0 },  // ED 81: ed nop (M:1 T:4 steps:1)
@@ -1160,19 +1160,20 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
 
 };
 
+// initiate refresh cycle
+static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
+    pins = z80_set_ab_x(pins, cpu->ir, Z80_MREQ|Z80_RFSH);
+    cpu->r = (cpu->r & 0x80) | ((cpu->r + 1) & 0x7F);
+    return pins;
+}
+
 // initiate a fetch machine cycle
 static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
     cpu->op.pip = 5<<1;
     cpu->op.step = 0xFFFF;
     cpu->prefix_state = 0;
     pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-    return pins;
-}
-
-// initiate refresh cycle
-static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
-    pins = z80_set_ab_x(pins, cpu->ir, Z80_MREQ|Z80_RFSH);
-    cpu->r = (cpu->r & 0x80) | ((cpu->r + 1) & 0x7F);
+    // FIXME: interrupt check needs to happen here!
     return pins;
 }
 
@@ -2868,7 +2869,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             //  F3: di (M:1 T:4)
             // -- OVERLAP
-            case 0x0267: _fetch(); break;
+            case 0x0267: cpu->iff1=cpu->iff2=false;;_fetch(); break;
             
             //  F4: call p,nn (M:6 T:17)
             // -- M2
@@ -2945,7 +2946,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             
             //  FB: ei (M:1 T:4)
             // -- OVERLAP
-            case 0x028C: _fetch(); break;
+            case 0x028C: cpu->iff1=cpu->iff2=false;_fetch();cpu->iff1=cpu->iff2=true; break;
             
             //  FC: call m,nn (M:6 T:17)
             // -- M2
@@ -3034,9 +3035,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x02B3: _fetch(); break;
             
-            // ED 46: im IM0 (M:1 T:4)
+            // ED 46: im 0 (M:1 T:4)
             // -- OVERLAP
-            case 0x02B4: _fetch(); break;
+            case 0x02B4: cpu->im=0;_fetch(); break;
             
             // ED 47: ld i,a (M:1 T:5)
             // -- OVERLAP
@@ -3082,9 +3083,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x02C7: _fetch(); break;
             
-            // ED 4E: im IM1 (M:1 T:4)
+            // ED 4E: im 0 (M:1 T:4)
             // -- OVERLAP
-            case 0x02C8: _fetch(); break;
+            case 0x02C8: cpu->im=0;_fetch(); break;
             
             // ED 4F: ld r,a (M:1 T:5)
             // -- OVERLAP
@@ -3126,9 +3127,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x02DA: _fetch(); break;
             
-            // ED 56: im IM2 (M:1 T:4)
+            // ED 56: im 1 (M:1 T:4)
             // -- OVERLAP
-            case 0x02DB: _fetch(); break;
+            case 0x02DB: cpu->im=1;_fetch(); break;
             
             // ED 57: ld a,i (M:1 T:5)
             // -- OVERLAP
@@ -3170,9 +3171,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x02ED: _fetch(); break;
             
-            // ED 5E: im IM3 (M:1 T:4)
+            // ED 5E: im 2 (M:1 T:4)
             // -- OVERLAP
-            case 0x02EE: _fetch(); break;
+            case 0x02EE: cpu->im=2;_fetch(); break;
             
             // ED 5F: ld a,r (M:1 T:5)
             // -- OVERLAP
@@ -3214,9 +3215,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x0300: _fetch(); break;
             
-            // ED 66: im IM4 (M:1 T:4)
+            // ED 66: im 0 (M:1 T:4)
             // -- OVERLAP
-            case 0x0301: _fetch(); break;
+            case 0x0301: cpu->im=0;_fetch(); break;
             
             // ED 67: rrd (M:4 T:14)
             // -- M2
@@ -3266,9 +3267,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x0318: _fetch(); break;
             
-            // ED 6E: im IM5 (M:1 T:4)
+            // ED 6E: im 0 (M:1 T:4)
             // -- OVERLAP
-            case 0x0319: _fetch(); break;
+            case 0x0319: cpu->im=0;_fetch(); break;
             
             // ED 6F: rld (M:4 T:14)
             // -- M2
@@ -3318,9 +3319,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x0330: _fetch(); break;
             
-            // ED 76: im IM6 (M:1 T:4)
+            // ED 76: im 1 (M:1 T:4)
             // -- OVERLAP
-            case 0x0331: _fetch(); break;
+            case 0x0331: cpu->im=1;_fetch(); break;
             
             // ED 78: in a,(c) (M:2 T:8)
             // -- M2 (ioread)
@@ -3358,9 +3359,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x0342: _fetch(); break;
             
-            // ED 7E: im IM7 (M:1 T:4)
+            // ED 7E: im 2 (M:1 T:4)
             // -- OVERLAP
-            case 0x0343: _fetch(); break;
+            case 0x0343: cpu->im=2;_fetch(); break;
             
             // ED A0: ldi (M:4 T:12)
             // -- M2

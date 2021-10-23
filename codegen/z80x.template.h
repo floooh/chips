@@ -645,19 +645,20 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
 $pip_table_block
 };
 
+// initiate refresh cycle
+static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
+    pins = z80_set_ab_x(pins, cpu->ir, Z80_MREQ|Z80_RFSH);
+    cpu->r = (cpu->r & 0x80) | ((cpu->r + 1) & 0x7F);
+    return pins;
+}
+
 // initiate a fetch machine cycle
 static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
     cpu->op.pip = 5<<1;
     cpu->op.step = 0xFFFF;
     cpu->prefix_state = 0;
     pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-    return pins;
-}
-
-// initiate refresh cycle
-static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
-    pins = z80_set_ab_x(pins, cpu->ir, Z80_MREQ|Z80_RFSH);
-    cpu->r = (cpu->r & 0x80) | ((cpu->r + 1) & 0x7F);
+    // FIXME: interrupt check needs to happen here!
     return pins;
 }
 
