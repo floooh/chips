@@ -33,9 +33,22 @@ class Op:
         self.mcycles: list[MCycle] = []
 
 OP_PATTERNS: list[Op] = []
+
+OP_INDEX_CB = 512
+OP_INDEX_CBHL = 513
+OP_INDEX_DDFDCB = 514
+OP_INDEX_INT_IM0 = 515
+OP_INDEX_INT_IM1 = 516
+OP_INDEX_INT_IM2 = 517
+OP_INDEX_NMI = 518
+
+NUM_SPECIAL_OPS = 7
+
 # 0..255:   core opcodes
 # 256..511: ED prefix opcodes
-OPS: list[Optional[Op]] = [None for _ in range(0,2*256 + 3)]
+# 512..514: special decoder blocks for CB-prefix
+# 515..519: special decoder blocks for interrupt handling
+OPS: list[Optional[Op]] = [None for _ in range(0,2*256 + NUM_SPECIAL_OPS)]
 
 # a fetch machine cycle is processed as 2 parts because it overlaps
 # with the 'action' of the previous instruction
@@ -260,9 +273,13 @@ def expand_optable():
                         if OPS[op_index] is not None:
                             err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
                         stampout_op(prefix, opcode, op_index, op_desc)
-    stampout_op('cb', 0, 512+0, unwrap(find_opdesc('cb')))
-    stampout_op('cb', 0, 512+1, unwrap(find_opdesc('cbhl')))
-    stampout_op('cb', 0, 512+2, unwrap(find_opdesc('ddfdcb')))
+    stampout_op('cb', 0, OP_INDEX_CB, unwrap(find_opdesc('cb')))
+    stampout_op('cb', 0, OP_INDEX_CBHL, unwrap(find_opdesc('cbhl')))
+    stampout_op('cb', 0, OP_INDEX_DDFDCB, unwrap(find_opdesc('ddfdcb')))
+    stampout_op('', 0, OP_INDEX_INT_IM0, unwrap(find_opdesc('int_im0')))
+    stampout_op('', 0, OP_INDEX_INT_IM1, unwrap(find_opdesc('int_im1')))
+    stampout_op('', 0, OP_INDEX_INT_IM2, unwrap(find_opdesc('int_im2')))
+    stampout_op('', 0, OP_INDEX_NMI, unwrap(find_opdesc('nmi')))
 
 # build the execution pipeline bitmask for a given instruction
 def build_pip(op: Op) -> int:

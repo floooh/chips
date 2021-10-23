@@ -670,3 +670,21 @@ ddfdcb:
     - { type: mread, ab: ADDR, tcycles: 4, dst: DLATCH, action: "if(!z80_cb_action(cpu,6,cpu->opcode&7)){z80_skip(cpu,2,6,3);}" }
     # write result back
     - { type: mwrite, ab: ADDR, db: DLATCH }
+
+#== INTERRUPT HANDLING =========================================================
+
+int_im0:
+  flags: { special: true }
+  mcycles: []
+
+int_im1:
+  flags: { special: true }
+  mcycles: []
+
+int_im2:
+  flags: { special: true }
+  mcycles: []
+
+nmi:
+  flags: { special: true}
+  mcycles: []

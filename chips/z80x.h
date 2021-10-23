@@ -644,11 +644,17 @@ static inline void z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
 }
 
 // special case opstate table slots
-#define Z80_OPSTATE_SLOT_CB     (512)
-#define Z80_OPSTATE_SLOT_CBHL   (512+1)
-#define Z80_OPSTATE_SLOT_DDFDCB (512+2)
+#define Z80_OPSTATE_SLOT_CB         (512)
+#define Z80_OPSTATE_SLOT_CBHL       (512+1)
+#define Z80_OPSTATE_SLOT_DDFDCB     (512+2)
+#define Z80_OPSTATE_SLOT_INT_IM0    (512+3)
+#define Z80_OPSTATE_SLOT_INT_IM1    (512+4)
+#define Z80_OPSTATE_SLOT_INT_IM2    (512+5)
+#define Z80_OPSTATE_SLOT_NMI        (512+6)
 
-static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
+#define Z80_OPSTATE_NUM_SPECIAL_OPS (7)
+
+static const z80_opstate_t z80_opstate_table[2*256 + Z80_OPSTATE_NUM_SPECIAL_OPS] = {
     { 0x00000002, 0x0006, 0 },  //  00: nop (M:1 T:4 steps:1)
     { 0x000000B6, 0x0007, 0 },  //  01: ld bc,nn (M:3 T:10 steps:5)
     { 0x0000001C, 0x000C, 0 },  //  02: ld (bc),a (M:2 T:7 steps:3)
@@ -1164,6 +1170,10 @@ static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
     { 0x00000002, 0x039E, 0 },  // CB 00: cb (M:1 T:4 steps:1)
     { 0x000001C6, 0x039F, 0 },  // CB 01: cbhl (M:3 T:11 steps:5)
     { 0x0000E336, 0x03A4, 0 },  // CB 02: ddfdcb (M:5 T:18 steps:9)
+    { 0x00000002, 0x03AD, 0 },  //  03: int_im0 (M:1 T:4 steps:1)
+    { 0x00000002, 0x03AE, 0 },  //  04: int_im1 (M:1 T:4 steps:1)
+    { 0x00000002, 0x03AF, 0 },  //  05: int_im2 (M:1 T:4 steps:1)
+    { 0x00000002, 0x03B0, 0 },  //  06: nmi (M:1 T:4 steps:1)
 
 };
 
@@ -3581,6 +3591,22 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x03AC: _wait(); break;
             // -- OVERLAP
             case 0x03AD: _fetch(); break;
+            
+            //  00: int_im0 (M:1 T:4)
+            // -- OVERLAP
+            case 0x03AE: _fetch(); break;
+            
+            //  00: int_im1 (M:1 T:4)
+            // -- OVERLAP
+            case 0x03AF: _fetch(); break;
+            
+            //  00: int_im2 (M:1 T:4)
+            // -- OVERLAP
+            case 0x03B0: _fetch(); break;
+            
+            //  00: nmi (M:1 T:4)
+            // -- OVERLAP
+            case 0x03B1: _fetch(); break;
 
         }
         cpu->op.step += 1;

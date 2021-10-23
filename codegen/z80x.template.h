@@ -644,11 +644,17 @@ static inline void z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
 }
 
 // special case opstate table slots
-#define Z80_OPSTATE_SLOT_CB     (512)
-#define Z80_OPSTATE_SLOT_CBHL   (512+1)
-#define Z80_OPSTATE_SLOT_DDFDCB (512+2)
+#define Z80_OPSTATE_SLOT_CB         (512)
+#define Z80_OPSTATE_SLOT_CBHL       (512+1)
+#define Z80_OPSTATE_SLOT_DDFDCB     (512+2)
+#define Z80_OPSTATE_SLOT_INT_IM0    (512+3)
+#define Z80_OPSTATE_SLOT_INT_IM1    (512+4)
+#define Z80_OPSTATE_SLOT_INT_IM2    (512+5)
+#define Z80_OPSTATE_SLOT_NMI        (512+6)
 
-static const z80_opstate_t z80_opstate_table[2*256 + 3] = {
+#define Z80_OPSTATE_NUM_SPECIAL_OPS (7)
+
+static const z80_opstate_t z80_opstate_table[2*256 + Z80_OPSTATE_NUM_SPECIAL_OPS] = {
 $pip_table_block
 };
 
