@@ -540,6 +540,13 @@ static inline uint8_t z80_srl(z80_t* cpu, uint8_t val) {
     return res;
 }
 
+static inline uint64_t z80_reti_retn(z80_t* cpu, uint64_t pins) {
+    cpu->iff1 = cpu->iff2;
+    // virtual pin 'Z80_RETI' is used by the daisy chain protocol
+    // implementation in other Z80-family chips
+    return pins | Z80_RETI;
+}
+
 static inline uint64_t z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }

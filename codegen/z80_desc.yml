@@ -455,18 +455,14 @@ neg:
   mcycles:
     - { type: overlapped, action: "z80_neg8(cpu)"}
 
-retn:
+reti/retn:
   prefix: ed
-  cond: (x == 1) and (y != 1) and (z == 5)
+  cond: (x == 1) and (z == 5)
   flags: { single: true }
-  mcycles: []
-  # FIXME
-
-reti:
-  prefix: ed
-  cond: (x == 1) and (y == 1) and (z == 5)
-  mcycles: []
-  # FIXME
+  mcycles:
+    - { type: mread, ab: SP++, dst: WZL }
+    - { type: mread, ab: SP++, dst: WZH, action: "PC=WZ" }
+    - { type: overlapped, post_action: "pins=z80_reti_retn(cpu,pins)"}
 
 im IMY:
   prefix: ed
