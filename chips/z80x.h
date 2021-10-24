@@ -99,6 +99,7 @@ typedef struct {
 // CPU state
 typedef struct {
     z80_opstate_t op;       // the currently active op
+    uint64_t int_bits;      // track INT and NMI state;
     union {
         struct {
             uint16_t prefix_offset; // opstate table offset: 0x100 on ED prefix, 0x200 on CB prefix
@@ -1265,7 +1266,7 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
 #define _iowrite(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
-#define _wait()         if(pins&Z80_WAIT){return pins;}
+#define _wait()         if(pins&Z80_WAIT){goto track_int_bits;}
 #define _cc_nz          (!(cpu->f&Z80_ZF))
 #define _cc_z           (cpu->f&Z80_ZF)
 #define _cc_nc          (!(cpu->f&Z80_CF))
@@ -3613,6 +3614,14 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     }
     // advance the decode pipeline by one tcycle
     cpu->op.pip >>= 1;
+
+    // track NMI 0 => 1 edge and current INT pin state, this will track the
+    // relevant interrupt status up to the last instruction cycle and will
+    // be checked in the first M1 cycle (during _fetch)
+track_int_bits: {
+        const uint64_t rising_nmi = (pins ^ cpu->int_bits) & pins; // NMI 0 => 1
+        cpu->int_bits = ((cpu->int_bits | rising_nmi) & Z80_NMI) | (pins & Z80_INT);
+    }
     return pins;
 }
 
