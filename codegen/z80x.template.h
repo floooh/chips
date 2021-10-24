@@ -644,6 +644,21 @@ static inline void z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
     cpu->opcode = oc;
 }
 
+// initiate M1 cycle of NMI
+static inline uint64_t z80_nmi_m1(z80_t* cpu,uint64_t pins) {
+    // the next regular opcode which is on the data bus is ignored!
+
+    // disable interrupts
+    cpu->iff1 = false;
+
+    // if in HALT state, continue
+    if (pins & Z80_HALT) {
+        pins &= ~Z80_HALT;
+        cpu->pc++;
+    }
+    return pins;
+}
+
 // special case opstate table slots
 #define Z80_OPSTATE_SLOT_CB         (512)
 #define Z80_OPSTATE_SLOT_CBHL       (512+1)
@@ -668,11 +683,24 @@ static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
 
 // initiate a fetch machine cycle
 static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
-    cpu->op.pip = 5<<1;
-    cpu->op.step = 0xFFFF;
+    // need to handle interrupt?
+    if (cpu->int_bits & Z80_NMI) {
+        // non-maskable interrupt starts with a regular M1 machine cycle
+        cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_NMI];
+        // NOTE: PC is *not* incremented!
+        pins = z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
+    }
+    else if ((cpu->int_bits & Z80_INT) && cpu->iff1) {
+        // FIXME: maskable interrupt
+    }
+    else {
+        // no interrupt, continue with next opcode
+        cpu->op.pip = 5<<1;
+        cpu->op.step = 0xFFFF;
+        pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+    }
     cpu->prefix_state = 0;
-    pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-    // FIXME: interrupt check needs to happen here!
+    cpu->int_bits = 0;
     return pins;
 }
 

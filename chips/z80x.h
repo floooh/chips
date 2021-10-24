@@ -644,6 +644,21 @@ static inline void z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
     cpu->opcode = oc;
 }
 
+// initiate M1 cycle of NMI
+static inline uint64_t z80_nmi_m1(z80_t* cpu,uint64_t pins) {
+    // the next regular opcode which is on the data bus is ignored!
+
+    // disable interrupts
+    cpu->iff1 = false;
+
+    // if in HALT state, continue
+    if (pins & Z80_HALT) {
+        pins &= ~Z80_HALT;
+        cpu->pc++;
+    }
+    return pins;
+}
+
 // special case opstate table slots
 #define Z80_OPSTATE_SLOT_CB         (512)
 #define Z80_OPSTATE_SLOT_CBHL       (512+1)
@@ -1174,7 +1189,7 @@ static const z80_opstate_t z80_opstate_table[2*256 + Z80_OPSTATE_NUM_SPECIAL_OPS
     { 0x00000002, 0x03AD, 0 },  //  03: int_im0 (M:1 T:4 steps:1)
     { 0x00000002, 0x03AE, 0 },  //  04: int_im1 (M:1 T:4 steps:1)
     { 0x00000002, 0x03AF, 0 },  //  05: int_im2 (M:1 T:4 steps:1)
-    { 0x00000002, 0x03B0, 0 },  //  06: nmi (M:1 T:4 steps:1)
+    { 0x00000EC6, 0x03B0, 0 },  //  06: nmi (M:5 T:14 steps:7)
 
 };
 
@@ -1187,11 +1202,24 @@ static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
 
 // initiate a fetch machine cycle
 static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
-    cpu->op.pip = 5<<1;
-    cpu->op.step = 0xFFFF;
+    // need to handle interrupt?
+    if (cpu->int_bits & Z80_NMI) {
+        // non-maskable interrupt starts with a regular M1 machine cycle
+        cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_NMI];
+        // NOTE: PC is *not* incremented!
+        pins = z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
+    }
+    else if ((cpu->int_bits & Z80_INT) && cpu->iff1) {
+        // FIXME: maskable interrupt
+    }
+    else {
+        // no interrupt, continue with next opcode
+        cpu->op.pip = 5<<1;
+        cpu->op.step = 0xFFFF;
+        pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+    }
     cpu->prefix_state = 0;
-    pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-    // FIXME: interrupt check needs to happen here!
+    cpu->int_bits = 0;
     return pins;
 }
 
@@ -3605,9 +3633,19 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x03B0: _fetch(); break;
             
-            //  00: nmi (M:1 T:4)
+            //  00: nmi (M:5 T:14)
+            // -- M2 (generic)
+            case 0x03B1: pins=z80_nmi_m1(cpu,pins); break;
+            // -- M3 (generic)
+            case 0x03B2: pins=z80_refresh(cpu,pins); break;
+            // -- M4
+            case 0x03B3: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x03B4: _wait(); break;
+            // -- M5
+            case 0x03B5: _mwrite(--cpu->sp,cpu->pcl); break;
+            case 0x03B6: _wait();cpu->wz=cpu->pc=0x0066; break;
             // -- OVERLAP
-            case 0x03B1: _fetch(); break;
+            case 0x03B7: _fetch(); break;
 
         }
         cpu->op.step += 1;
