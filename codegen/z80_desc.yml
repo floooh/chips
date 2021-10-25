@@ -662,10 +662,10 @@ cbhl:
 ddfdcb:
   flags: { special: true }
   mcycles:
-    # load d-offset
-    - { type: mread, ab: PC++, dst: DLATCH, action: "z80_ddfdcb_addr(cpu, DLATCH)" }
+    # load d-offset, the first tcycle was overlapped from fetch_cb!
+    - { type: generic, tcycles: 2, action: "z80_ddfdcb_addr(cpu, pins)" }
     # load opcode
-    - { type: mread, ab: PC++, tcycles: 4, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu,DLATCH)" }
+    - { type: mread, ab: PC++, tcycles: 5, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu,DLATCH)" }
     # read operand
     - { type: mread, ab: ADDR, tcycles: 4, dst: DLATCH, action: "if(!z80_cb_action(cpu,6,cpu->opcode&7)){z80_skip(cpu,2,6,3);}" }
     # write result back

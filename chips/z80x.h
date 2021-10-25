@@ -636,7 +636,8 @@ static inline bool z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
 }
 
 // compute the effective memory address for DD+CB/FD+CB instructions
-static inline void z80_ddfdcb_addr(z80_t* cpu, uint8_t d) {
+static inline void z80_ddfdcb_addr(z80_t* cpu, uint64_t pins) {
+    uint8_t d = z80_get_db(pins);
     cpu->addr = cpu->hlx[cpu->hlx_idx].hl + (int8_t)d;
     cpu->wz = cpu->addr;
 }
@@ -1187,11 +1188,11 @@ static const z80_opstate_t z80_opstate_table[2*256 + Z80_OPSTATE_NUM_SPECIAL_OPS
     { 0x00000004, 0x029F, 0 },  // ED FF: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x039E, 0 },  // CB 00: cb (M:1 T:4 steps:1)
     { 0x0000038C, 0x039F, 0 },  // CB 01: cbhl (M:3 T:11 steps:5)
-    { 0x0001C66C, 0x03A4, 0 },  // CB 02: ddfdcb (M:5 T:18 steps:9)
-    { 0x00000004, 0x03AD, 0 },  //  03: int_im0 (M:1 T:4 steps:1)
-    { 0x00000004, 0x03AE, 0 },  //  04: int_im1 (M:1 T:4 steps:1)
-    { 0x00000004, 0x03AF, 0 },  //  05: int_im2 (M:1 T:4 steps:1)
-    { 0x00001D8C, 0x03B0, 0 },  //  06: nmi (M:5 T:14 steps:7)
+    { 0x0001C634, 0x03A4, 0 },  // CB 02: ddfdcb (M:5 T:18 steps:8)
+    { 0x00000004, 0x03AC, 0 },  //  03: int_im0 (M:1 T:4 steps:1)
+    { 0x00000004, 0x03AD, 0 },  //  04: int_im1 (M:1 T:4 steps:1)
+    { 0x00000004, 0x03AE, 0 },  //  05: int_im2 (M:1 T:4 steps:1)
+    { 0x00001D8C, 0x03AF, 0 },  //  06: nmi (M:5 T:14 steps:7)
 
 };
 
@@ -1238,7 +1239,9 @@ static inline uint64_t z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefi
                 // loads the d-offset first and then the opcode in a 
                 // regular memory read machine cycle
                 cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_DDFDCB];
-                // NOTE: pins are not set
+                cpu->op.pip >>= 1;
+                // set pins for a regular read machine cycle to read d-offset
+                pins = z80_set_ab_x(pins, cpu->pc++, Z80_MREQ|Z80_RD);
             }
             else {
                 // this is a regular CB-prefixed instruction, continue
@@ -3609,46 +3612,45 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x03A4: _fetch(); break;
             
             // CB 00: ddfdcb (M:5 T:18)
-            // -- M2
-            case 0x03A5: _wait();_mread(cpu->pc++); break;
-            case 0x03A6: cpu->dlatch=_gd();z80_ddfdcb_addr(cpu, cpu->dlatch); break;
+            // -- M2 (generic)
+            case 0x03A5: z80_ddfdcb_addr(cpu, pins); break;
             // -- M3
-            case 0x03A7: _wait();_mread(cpu->pc++); break;
-            case 0x03A8: cpu->dlatch=_gd();z80_ddfdcb_opcode(cpu,cpu->dlatch); break;
+            case 0x03A6: _wait();_mread(cpu->pc++); break;
+            case 0x03A7: cpu->dlatch=_gd();z80_ddfdcb_opcode(cpu,cpu->dlatch); break;
             // -- M4
-            case 0x03A9: _wait();_mread(cpu->addr); break;
-            case 0x03AA: cpu->dlatch=_gd();if(!z80_cb_action(cpu,6,cpu->opcode&7)){z80_skip(cpu,2,6,3);}; break;
+            case 0x03A8: _wait();_mread(cpu->addr); break;
+            case 0x03A9: cpu->dlatch=_gd();if(!z80_cb_action(cpu,6,cpu->opcode&7)){z80_skip(cpu,2,6,3);}; break;
             // -- M5
-            case 0x03AB: _mwrite(cpu->addr,cpu->dlatch); break;
-            case 0x03AC: _wait(); break;
+            case 0x03AA: _mwrite(cpu->addr,cpu->dlatch); break;
+            case 0x03AB: _wait(); break;
             // -- OVERLAP
-            case 0x03AD: _fetch(); break;
+            case 0x03AC: _fetch(); break;
             
             //  00: int_im0 (M:1 T:4)
             // -- OVERLAP
-            case 0x03AE: _fetch(); break;
+            case 0x03AD: _fetch(); break;
             
             //  00: int_im1 (M:1 T:4)
             // -- OVERLAP
-            case 0x03AF: _fetch(); break;
+            case 0x03AE: _fetch(); break;
             
             //  00: int_im2 (M:1 T:4)
             // -- OVERLAP
-            case 0x03B0: _fetch(); break;
+            case 0x03AF: _fetch(); break;
             
             //  00: nmi (M:5 T:14)
             // -- M2 (generic)
-            case 0x03B1: pins=z80_nmi_m1(cpu,pins); break;
+            case 0x03B0: pins=z80_nmi_m1(cpu,pins); break;
             // -- M3 (generic)
-            case 0x03B2: pins=z80_refresh(cpu,pins); break;
+            case 0x03B1: pins=z80_refresh(cpu,pins); break;
             // -- M4
-            case 0x03B3: _mwrite(--cpu->sp,cpu->pch); break;
-            case 0x03B4: _wait(); break;
+            case 0x03B2: _mwrite(--cpu->sp,cpu->pch); break;
+            case 0x03B3: _wait(); break;
             // -- M5
-            case 0x03B5: _mwrite(--cpu->sp,cpu->pcl); break;
-            case 0x03B6: _wait();cpu->wz=cpu->pc=0x0066; break;
+            case 0x03B4: _mwrite(--cpu->sp,cpu->pcl); break;
+            case 0x03B5: _wait();cpu->wz=cpu->pc=0x0066; break;
             // -- OVERLAP
-            case 0x03B7: _fetch(); break;
+            case 0x03B6: _fetch(); break;
 
         }
         cpu->op.step += 1;

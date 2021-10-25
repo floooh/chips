@@ -636,7 +636,8 @@ static inline bool z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
 }
 
 // compute the effective memory address for DD+CB/FD+CB instructions
-static inline void z80_ddfdcb_addr(z80_t* cpu, uint8_t d) {
+static inline void z80_ddfdcb_addr(z80_t* cpu, uint64_t pins) {
+    uint8_t d = z80_get_db(pins);
     cpu->addr = cpu->hlx[cpu->hlx_idx].hl + (int8_t)d;
     cpu->wz = cpu->addr;
 }
@@ -719,7 +720,9 @@ static inline uint64_t z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefi
                 // loads the d-offset first and then the opcode in a 
                 // regular memory read machine cycle
                 cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_DDFDCB];
-                // NOTE: pins are not set
+                cpu->op.pip >>= 1;
+                // set pins for a regular read machine cycle to read d-offset
+                pins = z80_set_ab_x(pins, cpu->pc++, Z80_MREQ|Z80_RD);
             }
             else {
                 // this is a regular CB-prefixed instruction, continue
