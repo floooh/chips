@@ -690,6 +690,7 @@ static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
     if (cpu->int_bits & Z80_NMI) {
         // non-maskable interrupt starts with a regular M1 machine cycle
         cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_NMI];
+        cpu->op.pip >>= 1;
         // NOTE: PC is *not* incremented!
         pins = z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
     }
