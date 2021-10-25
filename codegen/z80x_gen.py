@@ -297,7 +297,7 @@ def build_pip(op: Op) -> int:
 
     for mcycle in op.mcycles:
         if mcycle.type == 'fetch':
-            tcycles([], mcycle.tcycles - 2)
+            tcycles([], mcycle.tcycles - 1)
         elif mcycle.type == 'mread':
             tcycles([1,1,0], mcycle.tcycles)
         elif mcycle.type == 'mwrite':
@@ -312,7 +312,7 @@ def build_pip(op: Op) -> int:
             # the final overlapped tcycle is actually the first tcycle
             # of the next instruction and only initiates a memory fetch
             tcycles([1], mcycle.tcycles)
-    op.num_cycles = cycle + 2
+    op.num_cycles = cycle + 1
     return pip
 
 # generate code for one op
@@ -388,7 +388,7 @@ def gen_decoder():
         op.num_steps = step
         # the number of steps must match the number of step-bits in the
         # execution pipeline
-        step_pip = op.pip & ((1<<32)-1)
+        step_pip = op.pip
         if step != bin(step_pip).count('1'):
             err(f"Pipeline vs steps mismatch in '{op.name}(0x{op.opcode:02X})': {step_pip:b} vs {op.num_steps}")
 

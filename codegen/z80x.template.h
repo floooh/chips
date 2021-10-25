@@ -155,6 +155,8 @@ bool z80_opdone(z80_t* cpu);
 #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#define Z80_M1_PIP (3)
+
 uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
     memset(cpu, 0, sizeof(z80_t));
@@ -165,7 +167,7 @@ uint64_t z80_init(z80_t* cpu) {
     // FIXME: iff1/2 disabled, initial value of IM???
 
     // setup CPU state to execute one initial NOP
-    cpu->op.pip = 5;
+    cpu->op.pip = Z80_M1_PIP;
     return Z80_M1|Z80_MREQ|Z80_RD;
 }
 
@@ -695,7 +697,7 @@ static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
     }
     else {
         // no interrupt, continue with next opcode
-        cpu->op.pip = 5<<1;
+        cpu->op.pip = (Z80_M1_PIP)<<1;
         cpu->op.step = 0xFFFF;
         pins = z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     }
@@ -706,7 +708,7 @@ static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
 
 static inline uint64_t z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefix) {
     // reset the decoder to continue at step 0
-    cpu->op.pip = 5<<1;
+    cpu->op.pip = (Z80_M1_PIP)<<1;
     cpu->op.step = 0xFFFF;
     switch (prefix) {
         case Z80_PREFIX_CB: // CB prefix preserves current DD/FD prefix
@@ -807,15 +809,15 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                     if (cpu->hlx_idx != Z80_MAP_HL) {
                         // (IX+d) or (IY+d): insert 3 4-cycle machine cycles
                         // to load d offset and setup effective address
-                        cpu->op.pip = 3<<1;
+                        cpu->op.pip = 3<<2;
                         // special case: if this is indirect+immediate (which is
                         // just LD (HL),n, then the immediate-load is 'hidden' within
                         // the 8-tcycle d-offset computation)
                         if (cpu->op.flags & Z80_OPSTATE_FLAGS_IMM8) {
-                            cpu->op.pip |= 1<<3;
+                            cpu->op.pip |= 1<<4;
                         }
                         else {
-                            cpu->op.pip |= 1<<8;
+                            cpu->op.pip |= 1<<9;
                         }
                         cpu->op.step = 1; // => continues at step 2
                     }
@@ -840,6 +842,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                     const uint64_t mask = 0xF;
                     cpu->op.pip = (cpu->op.pip & mask) | ((cpu->op.pip & ~mask)<<2);
                 }
+                cpu->op.pip >>= 1;
             } break;
             //=== special opcode fetch machine cycle for CB-prefixed instructions
             case 5: {
