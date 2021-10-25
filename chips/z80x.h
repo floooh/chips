@@ -1382,7 +1382,6 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                     cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_CB];
                 }
             } break;
-            // FIXME: optional interrupt handling(?) 
             
             //  00: nop (M:1 T:4)
             // -- OVERLAP
