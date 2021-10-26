@@ -685,8 +685,8 @@ static inline uint64_t z80_nmi_step0(z80_t* cpu, uint64_t pins) {
     return pins;
 }
 
-// IM0 interrupt steps
-static inline uint64_t z80_int0_step0(z80_t* cpu, uint64_t pins) {
+// IM0..IM2 initial step
+static inline uint64_t z80_int012_step0(z80_t* cpu, uint64_t pins) {
     // disable interrupts
     cpu->iff1 = cpu->iff2 = false;
     // if in HALT state, continue
@@ -697,18 +697,21 @@ static inline uint64_t z80_int0_step0(z80_t* cpu, uint64_t pins) {
     return pins;
 }
 
-static inline uint64_t z80_int0_step1(z80_t* cpu, uint64_t pins) {
+// IM0..IM2 step 1: issue M1|IORQ cycle
+static inline uint64_t z80_int012_step1(z80_t* cpu, uint64_t pins) {
     (void)cpu;
     // issue M1|IORQ to get opcode byte
     return pins | (Z80_M1|Z80_IORQ);
 }
 
+// IM0 step 2: load data bus into opcode
 static inline uint64_t z80_int0_step2(z80_t* cpu, uint64_t pins) {
     // store opcode byte
     cpu->opcode = z80_get_db(pins);
     return pins;
 }
 
+// IM0 step 3: refresh cycle and start executing loaded opcode
 static inline uint64_t z80_int0_step3(z80_t* cpu, uint64_t pins) {
     // step3 is a regular refresh cycle
     pins = z80_refresh(cpu, pins);
