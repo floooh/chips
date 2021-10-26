@@ -648,21 +648,6 @@ static inline void z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
     cpu->opcode = oc;
 }
 
-// initiate M1 cycle of NMI
-static inline uint64_t z80_nmi_m1(z80_t* cpu,uint64_t pins) {
-    // the next regular opcode which is on the data bus is ignored!
-
-    // disable interrupts
-    cpu->iff1 = false;
-
-    // if in HALT state, continue
-    if (pins & Z80_HALT) {
-        pins &= ~Z80_HALT;
-        cpu->pc++;
-    }
-    return pins;
-}
-
 // special case opstate table slots
 #define Z80_OPSTATE_SLOT_CB         (512)
 #define Z80_OPSTATE_SLOT_CBHL       (512+1)
@@ -682,6 +667,53 @@ $pip_table_block
 static inline uint64_t z80_refresh(z80_t* cpu, uint64_t pins) {
     pins = z80_set_ab_x(pins, cpu->ir, Z80_MREQ|Z80_RFSH);
     cpu->r = (cpu->r & 0x80) | ((cpu->r + 1) & 0x7F);
+    return pins;
+}
+
+// initiate M1 cycle of NMI
+static inline uint64_t z80_nmi_step0(z80_t* cpu, uint64_t pins) {
+    // the next regular opcode which is on the data bus is ignored!
+
+    // disable interrupts
+    cpu->iff1 = false;
+
+    // if in HALT state, continue
+    if (pins & Z80_HALT) {
+        pins &= ~Z80_HALT;
+        cpu->pc++;
+    }
+    return pins;
+}
+
+// IM0 interrupt steps
+static inline uint64_t z80_int0_step0(z80_t* cpu, uint64_t pins) {
+    // disable interrupts
+    cpu->iff1 = cpu->iff2 = false;
+    // if in HALT state, continue
+    if (pins & Z80_HALT) {
+        pins &= ~Z80_HALT;
+        cpu->pc++;
+    }
+    return pins;
+}
+
+static inline uint64_t z80_int0_step1(z80_t* cpu, uint64_t pins) {
+    (void)cpu;
+    // issue M1|IORQ to get opcode byte
+    return pins | (Z80_M1|Z80_IORQ);
+}
+
+static inline uint64_t z80_int0_step2(z80_t* cpu, uint64_t pins) {
+    // store opcode byte
+    cpu->opcode = z80_get_db(pins);
+    return pins;
+}
+
+static inline uint64_t z80_int0_step3(z80_t* cpu, uint64_t pins) {
+    // step3 is a regular refresh cycle
+    pins = z80_refresh(cpu, pins);
+    // branch to interrupt 'payload' instruction (usually an RST)
+    cpu->op = z80_opstate_table[cpu->opcode];
     return pins;
 }
 
@@ -800,7 +832,6 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // shared fetch machine cycle for all opcodes
             case 0: {
                 cpu->opcode = _gd();
-                _wait();
             } break;
             // refresh cycle
             case 1: {
@@ -852,7 +883,6 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             //=== special opcode fetch machine cycle for CB-prefixed instructions
             case 5: {
                 cpu->opcode = _gd();
-                _wait();
             } break;
             case 6: {
                 pins = z80_refresh(cpu, pins);

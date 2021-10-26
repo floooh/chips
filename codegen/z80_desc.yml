@@ -675,7 +675,14 @@ ddfdcb:
 
 int_im0:
   flags: { special: true }
-  mcycles: []
+  mcycles:
+    # a special interrupt request machine cycle which replaces the opcode machine fetch 
+    # FIXME: _wait()???
+    - { type: generic, tcycles: 1, action: "pins=z80_int0_step0(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "_wait();pins=z80_int0_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "pins=z80_int0_step2(cpu,pins)" }
+    # combined refresh and branch to loaded instruction cycle
+    - { type: generic, tcycles: 2, action: "pins=z80_int0_step3(cpu,pins)" }
 
 int_im1:
   flags: { special: true }
@@ -689,7 +696,8 @@ nmi:
   flags: { special: true}
   mcycles:
     # simulate a regular opcode fetch machine cycle (with one extra tcycle)
-    - { type: generic, tcycles: 1, action: "pins=z80_nmi_m1(cpu,pins)" }
+    # FIXME: _wait() before z80_nmi_m1()???
+    - { type: generic, tcycles: 1, action: "pins=z80_nmi_step0(cpu,pins)" }
     - { type: generic, tcycles: 3, action: "pins=z80_refresh(cpu,pins)"}
     # two regular write machine cycles to push PC on stack, and set PC to 0x0066
     - { type: mwrite, ab: --SP, db: PCH }

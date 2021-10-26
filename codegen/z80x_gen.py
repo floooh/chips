@@ -383,8 +383,7 @@ def gen_decoder():
                     fetch = f"_fetch_{mcycle.items['prefix']}();"
                 else:
                     fetch = '_fetch();'
-                # important, action AFTER fetch!
-                add(f'{action}{fetch}{post_action}')
+                add(f'_wait();{action}{fetch}{post_action}')
         op.num_steps = step
         # the number of steps must match the number of step-bits in the
         # execution pipeline
