@@ -676,7 +676,8 @@ ddfdcb:
 int_im0:
   flags: { special: true }
   mcycles:
-    # a special interrupt request machine cycle which replaces the opcode machine fetch 
+    # special machine cycle which replaces the opcode machine fetch,
+    # issues an M1|IORQ cycle and uses the result as the next opcode
     - { type: generic, tcycles: 1, action: "pins=z80_int012_step0(cpu,pins)" }
     - { type: generic, tcycles: 1, action: "_wait();pins=z80_int012_step1(cpu,pins)" }
     - { type: generic, tcycles: 1, action: "pins=z80_int0_step2(cpu,pins)" }
@@ -686,7 +687,7 @@ int_im0:
 int_im1:
   flags: { special: true }
   mcycles:
-    # a special interrupt request machine cycle which replaces the opcode machine fetch 
+    # special machine cycle which replaces the opcode machine fetch,
     # this issues an M1|IORQ cycle like IM0 and IM2, but ignores the result
     - { type: generic, tcycles: 1, action: "pins=z80_int012_step0(cpu,pins)" }
     - { type: generic, tcycles: 2, action: "_wait();pins=z80_int012_step1(cpu,pins)" }
@@ -699,7 +700,21 @@ int_im1:
 
 int_im2:
   flags: { special: true }
-  mcycles: []
+  mcycles:
+    # special machine cycle which replaces the opcode machine fetch,
+    # this issues an M1|IORQ cycle and uses the result as low byte of the interrupt vector
+    - { type: generic, tcycles: 1, action: "pins=z80_int012_step0(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "_wait();pins=z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "DLATCH=z80_get_db(pins)" }
+    # a regular refresh cycle + one extra tcycle
+    - { type: generic, tcycles: 3, action: "pins=z80_refresh(cpu,pins)" }
+    # two regular write machine cycles to push PC on stack, and set WZ to interrupt vector address
+    - { type: mwrite, ab: --SP, db: PCH }
+    - { type: mwrite, ab: --SP, db: PCL, action: "WZL=DLATCH;WZH=cpu->i;" }
+    # two regular read machine cycles to read isr address
+    - { type: mread, ab: WZ++, dst: DLATCH }
+    - { type: mread, ab: WZ, dst: WZH, action: "WZL=DLATCH;PC=WZ" }
+    # finally a regular opcode fetch to enter the ISR at address 0x0038
 
 nmi:
   flags: { special: true}
