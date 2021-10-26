@@ -1247,7 +1247,13 @@ static inline uint64_t z80_fetch(z80_t* cpu, uint64_t pins) {
         pins = z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
     }
     else if ((cpu->int_bits & Z80_INT) && cpu->iff1) {
-        // FIXME: maskable interrupt
+        // maskable interrupts start with a special M1 machine cycle which
+        // doesn't fetch the next opcode, but instead activate the
+        // pins M1|IOQR to request a special byte which is handled differently
+        // depending on interrupt mode
+        cpu->op = z80_opstate_table[Z80_OPSTATE_SLOT_INT_IM0 + cpu->im];
+        cpu->op.pip >>= 1;
+        // NOTE: PC is not incremented, and no pins are activated here
     }
     else {
         // no interrupt, continue with next opcode
