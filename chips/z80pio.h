@@ -9,7 +9,7 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
@@ -325,8 +325,8 @@ typedef struct {
 void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc);
 /* reset a Z80 PIO instance */
 void z80pio_reset(z80pio_t* pio);
-/* perform an IO request */
-uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins);
+/* tick the Z80 PIO instance */
+uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins);
 /* write value to a PIO port, this may trigger an interrupt */
 void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data);
 /* call this once per machine cycle to handle the interrupt daisy chain */
@@ -412,10 +412,11 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
 
 void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc) {
     CHIPS_ASSERT(pio && desc && desc->in_cb && desc->out_cb);
-    memset(pio, 0, sizeof(*pio));
-    pio->out_cb = desc->out_cb;
-    pio->in_cb = desc->in_cb;
-    pio->user_data = desc->user_data;
+    *pio = (z80pio_t){
+        .out_cb = desc->out_cb,
+        .in_cb = desc->in_cb,
+        .user_data = desc->user_data,
+    };
     z80pio_reset(pio);
 }
 
@@ -566,7 +567,7 @@ uint8_t _z80pio_read_data(z80pio_t* pio, int port_id) {
     return data;
 }
 
-uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins) {
+uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
     if ((pins & (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_CE|Z80PIO_IORQ)) {
         const int port_id = (pins & Z80PIO_BASEL) ? Z80PIO_PORT_B : Z80PIO_PORT_A;
         if (pins & Z80PIO_RD) {
