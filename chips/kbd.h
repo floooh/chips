@@ -180,8 +180,9 @@ uint16_t kbd_scan_columns(kbd_t* kbd);
 */
 void kbd_init(kbd_t* kbd, int sticky_frames) {
     CHIPS_ASSERT(kbd);
-    memset(kbd, 0, sizeof(*kbd));
-    kbd->sticky_time = sticky_frames * 16667;
+    *kbd = (kbd_t){
+        .sticky_time = sticky_frames * 16667
+    };
 }
 
 void kbd_register_modifier(kbd_t* kbd, int layer, int column, int line) {

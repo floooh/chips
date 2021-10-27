@@ -84,7 +84,7 @@ typedef struct {
 // CPU state
 typedef struct {
     z80_opstate_t op;       // the currently active op
-    uint64_t last_pins;     // last pin state, used for NMI detection
+    uint64_t pins;          // last pin state, used for NMI detection
     uint64_t int_bits;      // track INT and NMI state
     union {
         struct {
@@ -929,8 +929,8 @@ $decode_block
     // relevant interrupt status up to the last instruction cycle and will
     // be checked in the first M1 cycle (during _fetch)
 track_int_bits: {
-        const uint64_t rising_nmi = (pins ^ cpu->last_pins) & pins; // NMI 0 => 1
-        cpu->last_pins = pins;
+        const uint64_t rising_nmi = (pins ^ cpu->pins) & pins; // NMI 0 => 1
+        cpu->pins = pins;
         cpu->int_bits = ((cpu->int_bits | rising_nmi) & Z80_NMI) | (pins & Z80_INT);
     }
     return pins;

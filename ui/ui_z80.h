@@ -146,9 +146,9 @@ static void _ui_z80_regs(ui_z80_t* win) {
     ImGui::Text("IFF1:  %s", cpu->iff1?"ON":"OFF");
     ImGui::Text("IFF2:  %s", cpu->iff2?"ON":"OFF");
     ImGui::Separator();
-    ImGui::Text("Addr:  %04X", Z80_GET_ADDR(cpu->last_pins));
-    ImGui::Text("Data:  %02X", Z80_GET_DATA(cpu->last_pins));
-    ImGui::Text("Wait:  %s", cpu->last_pins & Z80_WAIT ? "ON":"OFF");
+    ImGui::Text("Addr:  %04X", Z80_GET_ADDR(cpu->pins));
+    ImGui::Text("Data:  %02X", Z80_GET_DATA(cpu->pins));
+    ImGui::Text("Wait:  %s", cpu->pins & Z80_WAIT ? "ON":"OFF");
 }
 
 void ui_z80_draw(ui_z80_t* win) {
@@ -160,7 +160,7 @@ void ui_z80_draw(ui_z80_t* win) {
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##z80_chip", ImVec2(176, 0), true);
-        ui_chip_draw(&win->chip, win->cpu->last_pins);
+        ui_chip_draw(&win->chip, win->cpu->pins);
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##z80_regs", ImVec2(0, 0), true);
