@@ -120,17 +120,17 @@ void ui_z80_discard(ui_z80_t* win) {
 
 static void _ui_z80_regs(ui_z80_t* win) {
     z80_t* cpu = win->cpu;
-    ImGui::Text("AF: %04X  AF': %04X", z80_af(cpu), z80_af_(cpu));
-    ImGui::Text("BC: %04X  BC': %04X", z80_bc(cpu), z80_bc_(cpu));
-    ImGui::Text("DE: %04X  DE': %04X", z80_de(cpu), z80_de_(cpu));
-    ImGui::Text("HL: %04X  HL': %04X", z80_hl(cpu), z80_hl_(cpu));
+    ImGui::Text("AF: %04X  AF': %04X", cpu->af, cpu->af2);
+    ImGui::Text("BC: %04X  BC': %04X", cpu->bc, cpu->bc2);
+    ImGui::Text("DE: %04X  DE': %04X", cpu->de, cpu->de2);
+    ImGui::Text("HL: %04X  HL': %04X", cpu->hl, cpu->hl2);
     ImGui::Separator();
-    ImGui::Text("IX: %04X  IY:  %04X", z80_ix(cpu), z80_iy(cpu));
-    ImGui::Text("PC: %04X  SP:  %04X", z80_pc(cpu), z80_sp(cpu));
-    ImGui::Text("IR: %04X  WZ:  %04X", z80_ir(cpu), z80_wz(cpu));
-    ImGui::Text("IM: %02X", z80_im(cpu));
+    ImGui::Text("IX: %04X  IY:  %04X", cpu->ix, cpu->iy);
+    ImGui::Text("PC: %04X  SP:  %04X", cpu->pc, cpu->sp);
+    ImGui::Text("IR: %04X  WZ:  %04X", cpu->ir, cpu->wz);
+    ImGui::Text("IM: %02X", cpu->im);
     ImGui::Separator();
-    const uint8_t f = z80_f(cpu);
+    const uint8_t f = cpu->f;
     char f_str[9] = {
         (f & Z80_SF) ? 'S':'-',
         (f & Z80_ZF) ? 'Z':'-',
@@ -143,12 +143,12 @@ static void _ui_z80_regs(ui_z80_t* win) {
         0,
     };
     ImGui::Text("Flags: %s", f_str);
-    ImGui::Text("IFF1:  %s", z80_iff1(cpu)?"ON":"OFF");
-    ImGui::Text("IFF2:  %s", z80_iff2(cpu)?"ON":"OFF");
+    ImGui::Text("IFF1:  %s", cpu->iff1?"ON":"OFF");
+    ImGui::Text("IFF2:  %s", cpu->iff2?"ON":"OFF");
     ImGui::Separator();
-    ImGui::Text("Addr:  %04X", Z80_GET_ADDR(cpu->pins));
-    ImGui::Text("Data:  %02X", Z80_GET_DATA(cpu->pins));
-    ImGui::Text("Wait:  %d", (int)Z80_GET_WAIT(cpu->pins));
+    ImGui::Text("Addr:  %04X", Z80_GET_ADDR(cpu->last_pins));
+    ImGui::Text("Data:  %02X", Z80_GET_DATA(cpu->last_pins));
+    ImGui::Text("Wait:  %s", cpu->last_pins & Z80_WAIT ? "ON":"OFF");
 }
 
 void ui_z80_draw(ui_z80_t* win) {
@@ -160,7 +160,7 @@ void ui_z80_draw(ui_z80_t* win) {
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##z80_chip", ImVec2(176, 0), true);
-        ui_chip_draw(&win->chip, win->cpu->pins);
+        ui_chip_draw(&win->chip, win->cpu->last_pins);
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("##z80_regs", ImVec2(0, 0), true);
