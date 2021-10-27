@@ -62,6 +62,7 @@ extern "C" {
 #define Z80_SET_ADDR(p,a) {p=(p&~0xFFFF)|((a)&0xFFFF);}
 #define Z80_GET_DATA(p) ((uint8_t)((p>>16)&0xFF))
 #define Z80_SET_DATA(p,d) {p=(p&~0xFF0000)|((d<<16)&0xFF0000);}
+#define Z80_COPY_DATA(p0,p1) (((p0)&~0xFF0000ULL)|((p1)&0xFF0000ULL))
 
 // status flags
 #define Z80_CF (1<<0)           // carry
