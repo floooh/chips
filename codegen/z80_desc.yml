@@ -4,7 +4,7 @@
 halt:
   cond: (x == 1) and (y == 6) and (z == 6)
   mcycles:
-    - { type: overlapped, action: "pins=z80_halt(cpu,pins)" }
+    - { type: overlapped, action: "pins=_z80_halt(cpu,pins)" }
 
 # NOTE: RRZ and RRY are special case for H and L which are never mapped
 # to IXH/IYH and IXL/IYL
@@ -48,14 +48,14 @@ nop:
 ex af,af':
   cond: (x == 0) and (y == 1) and (z == 0)
   mcycles:
-    - { type: overlapped, action: "z80_ex_af_af2(cpu)" }
+    - { type: overlapped, action: "_z80_ex_af_af2(cpu)" }
 
 djnz d:
   cond: (x == 0) and (y == 2) and (z == 0)
   mcycles:
     # fetch has one extra tcycle
     - { type: fetch, tcycles: 5 }
-    - { type: mread, ab: PC++, dst: DLATCH, action: "if(--B==0){z80_skip(cpu,1,7,2);}"}
+    - { type: mread, ab: PC++, dst: DLATCH, action: "if(--B==0){_z80_skip(cpu,1,7,2);}"}
     - { type: generic, tcycles: 5, action: "PC+=(int8_t)DLATCH;WZ=PC;" }
 
 jr d:
@@ -67,7 +67,7 @@ jr d:
 jr CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
   mcycles:
-    - { type: mread, ab: PC++, dst: DLATCH, action: "if(!(CC-4)){z80_skip(cpu,1,7,2);}" }
+    - { type: mread, ab: PC++, dst: DLATCH, action: "if(!(CC-4)){_z80_skip(cpu,1,7,2);}" }
     - { type: generic, tcycles: 5, action: "PC+=(int8_t)DLATCH;WZ=PC;" }
 
   # FIXME
@@ -82,7 +82,7 @@ ld RP,nn:
 add hl,RP:
   cond: (x == 0) and (z == 1) and (q == 1)
   mcycles:
-    - { type: generic, tcycles: 7, action: "z80_add16(cpu,RP)"}
+    - { type: generic, tcycles: 7, action: "_z80_add16(cpu,RP)"}
 
 # indirect loading
 ld (bc),a:
@@ -154,25 +154,25 @@ inc (hl):
   cond: (x == 0) and (y == 6) and (z == 4)
   flags: { indirect: true }
   mcycles:
-    - { type: mread, tcycles: 4, ab: ADDR, dst: DLATCH, action: "DLATCH=z80_inc8(cpu,DLATCH)" }
+    - { type: mread, tcycles: 4, ab: ADDR, dst: DLATCH, action: "DLATCH=_z80_inc8(cpu,DLATCH)" }
     - { type: mwrite, ab: ADDR, db: DLATCH }
 
 inc RY:
   cond: (x == 0) and (y != 6) and (z == 4)
   mcycles:
-    - { type: overlapped, action: "RY=z80_inc8(cpu,RY)" }
+    - { type: overlapped, action: "RY=_z80_inc8(cpu,RY)" }
 
 dec (hl):
   cond: (x == 0) and (y == 6) and (z == 5)
   flags: { indirect: true }
   mcycles:
-    - { type: mread, tcycles: 4, ab: ADDR, dst: DLATCH, action: "DLATCH=z80_dec8(cpu,DLATCH)" }
+    - { type: mread, tcycles: 4, ab: ADDR, dst: DLATCH, action: "DLATCH=_z80_dec8(cpu,DLATCH)" }
     - { type: mwrite, ab: ADDR, db: DLATCH }
 
 dec RY:
   cond: (x == 0) and (y != 6) and (z == 5)
   mcycles:
-    - { type: overlapped, action: "RY=z80_dec8(cpu,RY)" }
+    - { type: overlapped, action: "RY=_z80_dec8(cpu,RY)" }
 
 # 8-bit load immediate
 ld RY,n:
@@ -192,42 +192,42 @@ ld (hl),n:
 rlca:
   cond: (x == 0) and (y == 0) and (z == 7)
   mcycles:
-    - { type: overlapped, action: "z80_rlca(cpu)" }
+    - { type: overlapped, action: "_z80_rlca(cpu)" }
 
 rrca:
   cond: (x == 0) and (y == 1) and (z == 7)
   mcycles:
-    - { type: overlapped, action: "z80_rrca(cpu)" }
+    - { type: overlapped, action: "_z80_rrca(cpu)" }
 
 rla:
   cond: (x == 0) and (y == 2) and (z == 7)
   mcycles:
-    - { type: overlapped, action: "z80_rla(cpu)" }
+    - { type: overlapped, action: "_z80_rla(cpu)" }
 
 rra:
   cond: (x == 0) and (y == 3) and (z == 7)
   mcycles:
-    - { type: overlapped, action: "z80_rra(cpu)" }
+    - { type: overlapped, action: "_z80_rra(cpu)" }
 
 daa:
   cond: (x == 0) and (y == 4) and (z == 7)
   mcycles:
-    - { type: overlapped, action: "z80_daa(cpu)" }
+    - { type: overlapped, action: "_z80_daa(cpu)" }
 
 cpl:
   cond: (x == 0) and (y == 5) and (z == 7)
   mcycles:
-    - { type: overlapped, action: "z80_cpl(cpu)" }
+    - { type: overlapped, action: "_z80_cpl(cpu)" }
 
 scf:
   cond: (x == 0) and (y == 6) and (z == 7)
   mcycles:
-    - { type: overlapped, action: "z80_scf(cpu)" }
+    - { type: overlapped, action: "_z80_scf(cpu)" }
 
 ccf:
   cond: (x == 0) and (y == 7) and (z == 7)
   mcycles:
-    - { type: overlapped, action: "z80_ccf(cpu)" }
+    - { type: overlapped, action: "_z80_ccf(cpu)" }
 
 #== QUADRANT X3 ================================================================
 
@@ -235,7 +235,7 @@ ccf:
 ret CC:
   cond: (x == 3) and (z == 0)
   mcycles:
-    - { type: generic, tcycles: 1, action: "if(!CC){z80_skip(cpu,4,7,1);}"}
+    - { type: generic, tcycles: 1, action: "if(!CC){_z80_skip(cpu,4,7,1);}"}
     - { type: mread, ab: SP++, dst: WZL }
     - { type: mread, ab: SP++, dst: WZH, action: "PC=WZ" }
 
@@ -255,7 +255,7 @@ ret:
 exx:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 1)
   mcycles:
-    - { type: overlapped, action: "z80_exx(cpu)" }
+    - { type: overlapped, action: "_z80_exx(cpu)" }
 
 jp hl:
   cond: (x == 3) and (z == 1) and (q == 1) and (p == 2)
@@ -311,7 +311,7 @@ ex (sp),hl:
 ex de,hl:
   cond: (x == 3) and (y == 5) and (z == 3)
   mcycles:
-    - { type: overlapped, action: "z80_ex_de_hl(cpu)" }
+    - { type: overlapped, action: "_z80_ex_de_hl(cpu)" }
 
 di:
   cond: (x == 3) and (y == 6) and (z == 3)
@@ -332,7 +332,7 @@ call CC,nn:
   cond: (x == 3) and (z == 4)
   mcycles:
     - { type: mread, ab: PC++, dst: WZL }
-    - { type: mread, ab: PC++, dst: WZH, action: "if (!CC){z80_skip(cpu,5,9,2);}" }
+    - { type: mread, ab: PC++, dst: WZH, action: "if (!CC){_z80_skip(cpu,5,9,2);}" }
     - { type: generic, tcycles: 1 }
     - { type: mwrite, ab: --SP, db: PCH }
     - { type: mwrite, ab: --SP, db: PCL, action: "PC=WZ" }
@@ -396,7 +396,7 @@ in RY,(c):
   cond: (x == 1) and (y != 6) and (z == 0)
   mcycles:
     - { type: ioread, ab: BC, dst: DLATCH, action: WZ=BC+1 }
-    - { type: overlapped, action: "RY=z80_in(cpu,DLATCH)" }
+    - { type: overlapped, action: "RY=_z80_in(cpu,DLATCH)" }
 
 in (c):
   prefix: ed
@@ -404,7 +404,7 @@ in (c):
   mcycles:
     - { type: ioread, ab: BC, dst: DLATCH, action: WZ=BC+1 }
     # discard result, only set flags
-    - { type: overlapped, action: "z80_in(cpu,DLATCH)" }
+    - { type: overlapped, action: "_z80_in(cpu,DLATCH)" }
 
 out (c),RY:
   prefix: ed
@@ -422,13 +422,13 @@ sbc hl,RP:
   prefix: ed
   cond: (x == 1) and (z == 2) and (q == 0)
   mcycles:
-    - { type: generic, tcycles: 7, action: "z80_sbc16(cpu,RRP)" }
+    - { type: generic, tcycles: 7, action: "_z80_sbc16(cpu,RRP)" }
 
 adc hl,RP:
   prefix: ed
   cond: (x == 1) and (z == 2) and (q == 1)
   mcycles:
-    - { type: generic, tcycles: 7, action: "z80_adc16(cpu,RRP)" }
+    - { type: generic, tcycles: 7, action: "_z80_adc16(cpu,RRP)" }
 
 ld (nn),RP:
   prefix: ed
@@ -453,7 +453,7 @@ neg:
   cond: (x == 1) and (z == 4)
   flags: { single: true }
   mcycles:
-    - { type: overlapped, action: "z80_neg8(cpu)"}
+    - { type: overlapped, action: "_z80_neg8(cpu)"}
 
 reti/retn:
   prefix: ed
@@ -462,7 +462,7 @@ reti/retn:
   mcycles:
     - { type: mread, ab: SP++, dst: WZL }
     - { type: mread, ab: SP++, dst: WZH, action: "PC=WZ" }
-    - { type: overlapped, post_action: "pins=z80_reti_retn(cpu,pins)"}
+    - { type: overlapped, post_action: "pins=_z80_reti_retn(cpu,pins)"}
 
 im IMY:
   prefix: ed
@@ -489,21 +489,21 @@ ld a,i:
   cond: (x == 1) and (y == 2) and (z == 7)
   mcycles:
     - { type: fetch, tcycles: 5 }
-    - { type: overlapped, action: "cpu->a=cpu->i;cpu->f=z80_sziff2_flags(cpu, cpu->i)"}
+    - { type: overlapped, action: "cpu->a=cpu->i;cpu->f=_z80_sziff2_flags(cpu, cpu->i)"}
 
 ld a,r:
   prefix: ed
   cond: (x == 1) and (y == 3) and (z == 7)
   mcycles:
     - { type: fetch, tcycles: 5 }
-    - { type: overlapped, action: "cpu->a=cpu->r;cpu->f=z80_sziff2_flags(cpu, cpu->r)"}
+    - { type: overlapped, action: "cpu->a=cpu->r;cpu->f=_z80_sziff2_flags(cpu, cpu->r)"}
 
 rrd:
   prefix: ed
   cond: (x == 1) and (y == 4) and (z == 7)
   mcycles:
     - { type: mread, ab: "cpu->hl", dst: DLATCH }
-    - { type: generic, tcycles: 4, action: "DLATCH=z80_rrd(cpu,DLATCH)" }
+    - { type: generic, tcycles: 4, action: "DLATCH=_z80_rrd(cpu,DLATCH)" }
     - { type: mwrite, ab: "cpu->hl", db: DLATCH, action: "WZ=cpu->hl+1" }
 
 rld:
@@ -511,7 +511,7 @@ rld:
   cond: (x == 1) and (y == 5) and (z == 7)
   mcycles:
     - { type: mread, ab: "cpu->hl", dst: DLATCH }
-    - { type: generic, tcycles: 4, action: "DLATCH=z80_rld(cpu,DLATCH)" }
+    - { type: generic, tcycles: 4, action: "DLATCH=_z80_rld(cpu,DLATCH)" }
     - { type: mwrite, ab: "cpu->hl", db: DLATCH, action: "WZ=cpu->hl+1" }
 
 ldi:
@@ -520,7 +520,7 @@ ldi:
   mcycles:
     - { type: mread, ab: "cpu->hl++", dst: DLATCH }
     - { type: mwrite, ab: "cpu->de++", db: DLATCH }
-    - { type: generic, tcycles: 2, action: "z80_ldi_ldd(cpu,DLATCH)" }
+    - { type: generic, tcycles: 2, action: "_z80_ldi_ldd(cpu,DLATCH)" }
 
 ldd:
   prefix: ed
@@ -528,7 +528,7 @@ ldd:
   mcycles:
     - { type: mread, ab: "cpu->hl--", dst: DLATCH }
     - { type: mwrite, ab: "cpu->de--", db: DLATCH }
-    - { type: generic, tcycles: 2, action: "z80_ldi_ldd(cpu,DLATCH)" }
+    - { type: generic, tcycles: 2, action: "_z80_ldi_ldd(cpu,DLATCH)" }
 
 ldir:
   prefix: ed
@@ -536,7 +536,7 @@ ldir:
   mcycles:
     - { type: mread, ab: "cpu->hl++", dst: DLATCH }
     - { type: mwrite, ab: "cpu->de++", db: DLATCH }
-    - { type: generic, tcycles: 2, action: "if(!z80_ldi_ldd(cpu,DLATCH)){z80_skip(cpu,1,7,2);}"}
+    - { type: generic, tcycles: 2, action: "if(!_z80_ldi_ldd(cpu,DLATCH)){_z80_skip(cpu,1,7,2);}"}
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC;" }
 
 lddr:
@@ -545,7 +545,7 @@ lddr:
   mcycles:
     - { type: mread, ab: "cpu->hl--", dst: DLATCH }
     - { type: mwrite, ab: "cpu->de--", db: DLATCH }
-    - { type: generic, tcycles: 2, action: "if(!z80_ldi_ldd(cpu,DLATCH)){z80_skip(cpu,1,7,2);}"}
+    - { type: generic, tcycles: 2, action: "if(!_z80_ldi_ldd(cpu,DLATCH)){_z80_skip(cpu,1,7,2);}"}
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC;" }
 
 cpi:
@@ -553,21 +553,21 @@ cpi:
   cond: (x == 2) and (y == 4) and (z == 1)
   mcycles:
     - { type: mread, ab: "cpu->hl++", dst: DLATCH }
-    - { type: generic, tcycles: 5, action: "WZ++;z80_cpi_cpd(cpu,DLATCH)"}
+    - { type: generic, tcycles: 5, action: "WZ++;_z80_cpi_cpd(cpu,DLATCH)"}
 
 cpd:
   prefix: ed
   cond: (x == 2) and (y == 5) and (z == 1)
   mcycles:
     - { type: mread, ab: "cpu->hl--", dst: DLATCH }
-    - { type: generic, tcycles: 5, action: "WZ--;z80_cpi_cpd(cpu,DLATCH)"}
+    - { type: generic, tcycles: 5, action: "WZ--;_z80_cpi_cpd(cpu,DLATCH)"}
 
 cpir:
   prefix: ed
   cond: (x == 2) and (y == 6) and (z == 1)
   mcycles:
     - { type: mread, ab: "cpu->hl++", dst: DLATCH }
-    - { type: generic, tcycles: 5, action: "WZ++;if(!z80_cpi_cpd(cpu,DLATCH)){z80_skip(cpu,1,7,2);}"}
+    - { type: generic, tcycles: 5, action: "WZ++;if(!_z80_cpi_cpd(cpu,DLATCH)){_z80_skip(cpu,1,7,2);}"}
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 cpdr:
@@ -575,7 +575,7 @@ cpdr:
   cond: (x == 2) and (y == 7) and (z == 1)
   mcycles:
     - { type: mread, ab: "cpu->hl--", dst: DLATCH }
-    - { type: generic, tcycles: 5, action: "WZ--;if(!z80_cpi_cpd(cpu,DLATCH)){z80_skip(cpu,1,7,2);}"}
+    - { type: generic, tcycles: 5, action: "WZ--;if(!_z80_cpi_cpd(cpu,DLATCH)){_z80_skip(cpu,1,7,2);}"}
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 ini:
@@ -584,7 +584,7 @@ ini:
   mcycles: 
     - { type: fetch, tcycles: 5 }
     - { type: ioread, ab: BC, dst: DLATCH, action: "WZ=BC+1;B--;" }
-    - { type: mwrite, ab: "cpu->hl++", db: DLATCH, action: "z80_ini_ind(cpu,DLATCH,C+1)" }
+    - { type: mwrite, ab: "cpu->hl++", db: DLATCH, action: "_z80_ini_ind(cpu,DLATCH,C+1)" }
 
 ind:
   prefix: ed
@@ -592,7 +592,7 @@ ind:
   mcycles:
     - { type: fetch, tcycles: 5 }
     - { type: ioread, ab: BC, dst: DLATCH, action: "WZ=BC-1;B--;" }
-    - { type: mwrite, ab: "cpu->hl--", db: DLATCH, action: "z80_ini_ind(cpu,DLATCH,C-1)" }
+    - { type: mwrite, ab: "cpu->hl--", db: DLATCH, action: "_z80_ini_ind(cpu,DLATCH,C-1)" }
 
 inir:
   prefix: ed
@@ -600,7 +600,7 @@ inir:
   mcycles:
     - { type: fetch, tcycles: 5 }
     - { type: ioread, ab: BC, dst: DLATCH, action: "WZ=BC+1;B--;" }
-    - { type: mwrite, ab: "cpu->hl++", db: DLATCH, action: "if (!z80_ini_ind(cpu,DLATCH,C+1)){z80_skip(cpu,1,6,1);}" }
+    - { type: mwrite, ab: "cpu->hl++", db: DLATCH, action: "if (!_z80_ini_ind(cpu,DLATCH,C+1)){_z80_skip(cpu,1,6,1);}" }
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 indr:
@@ -609,7 +609,7 @@ indr:
   mcycles:
     - { type: fetch, tcycles: 5 }
     - { type: ioread, ab: BC, dst: DLATCH, action: "WZ=BC-1;B--;" }
-    - { type: mwrite, ab: "cpu->hl--", db: DLATCH, action: "if (!z80_ini_ind(cpu,DLATCH,C-1)){z80_skip(cpu,1,6,1);}" }
+    - { type: mwrite, ab: "cpu->hl--", db: DLATCH, action: "if (!_z80_ini_ind(cpu,DLATCH,C-1)){_z80_skip(cpu,1,6,1);}" }
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 outi:
@@ -618,7 +618,7 @@ outi:
   mcycles:
     - { type: fetch, tcycles: 5 }
     - { type: mread, ab: "cpu->hl++", dst: DLATCH, action: "B--" }
-    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC+1;z80_outi_outd(cpu,DLATCH)"}
+    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC+1;_z80_outi_outd(cpu,DLATCH)"}
 
 outd:
   prefix: ed
@@ -626,7 +626,7 @@ outd:
   mcycles:
     - { type: fetch, tcycles: 5 }
     - { type: mread, ab: "cpu->hl--", dst: DLATCH, action: "B--" }
-    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC-1;z80_outi_outd(cpu,DLATCH)"}
+    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC-1;_z80_outi_outd(cpu,DLATCH)"}
 
 otir:
   prefix: ed
@@ -634,7 +634,7 @@ otir:
   mcycles:
     - { type: fetch, tcycles: 5 }
     - { type: mread, ab: "cpu->hl++", dst: DLATCH, action: "B--" }
-    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC+1;if(!z80_outi_outd(cpu,DLATCH)){z80_skip(cpu,1,6,1);}"}
+    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC+1;if(!_z80_outi_outd(cpu,DLATCH)){_z80_skip(cpu,1,6,1);}"}
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 otdr:
@@ -643,7 +643,7 @@ otdr:
   mcycles:
     - { type: fetch, tcycles: 5 }
     - { type: mread, ab: "cpu->hl--", dst: DLATCH, action: "B--" }
-    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC-1;if(!z80_outi_outd(cpu,DLATCH)){z80_skip(cpu,1,6,1);}"}
+    - { type: iowrite, ab: BC, db: DLATCH, action: "WZ=BC-1;if(!_z80_outi_outd(cpu,DLATCH)){_z80_skip(cpu,1,6,1);}"}
     - { type: generic, tcycles: 5, action: "WZ=--PC;--PC"}
 
 #== CB prefix block ============================================================
@@ -651,23 +651,23 @@ otdr:
 cb:
   flags: { special: true }
   mcycles:
-    - { type: overlapped, action: "{uint8_t z=cpu->opcode&7;z80_cb_action(cpu,z,z);}" }
+    - { type: overlapped, action: "{uint8_t z=cpu->opcode&7;_z80_cb_action(cpu,z,z);}" }
 
 cbhl:
   flags: { special: true }
   mcycles:
-    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: DLATCH, action: "if(!z80_cb_action(cpu,6,6)){z80_skip(cpu,2,6,3);}" }
+    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: DLATCH, action: "if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,2,6,3);}" }
     - { type: mwrite, ab: "cpu->hl", db: DLATCH }
 
 ddfdcb:
   flags: { special: true }
   mcycles:
     # load d-offset, the first tcycle was overlapped from fetch_cb!
-    - { type: generic, tcycles: 2, action: "z80_ddfdcb_addr(cpu, pins)" }
+    - { type: generic, tcycles: 2, action: "_z80_ddfdcb_addr(cpu, pins)" }
     # load opcode
-    - { type: mread, ab: PC++, tcycles: 5, dst: DLATCH, action: "z80_ddfdcb_opcode(cpu,DLATCH)" }
+    - { type: mread, ab: PC++, tcycles: 5, dst: DLATCH, action: "_z80_ddfdcb_opcode(cpu,DLATCH)" }
     # read operand
-    - { type: mread, ab: ADDR, tcycles: 4, dst: DLATCH, action: "if(!z80_cb_action(cpu,6,cpu->opcode&7)){z80_skip(cpu,2,6,3);}" }
+    - { type: mread, ab: ADDR, tcycles: 4, dst: DLATCH, action: "if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,2,6,3);}" }
     # write result back
     - { type: mwrite, ab: ADDR, db: DLATCH }
 
@@ -678,21 +678,21 @@ int_im0:
   mcycles:
     # special machine cycle which replaces the opcode machine fetch,
     # issues an M1|IORQ cycle and uses the result as the next opcode
-    - { type: generic, tcycles: 1, action: "pins=z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "_wait();pins=z80_int012_step1(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "pins=z80_int0_step2(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "_wait();pins=_z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "pins=_z80_int0_step2(cpu,pins)" }
     # combined refresh and branch to loaded instruction cycle
-    - { type: generic, tcycles: 2, action: "pins=z80_int0_step3(cpu,pins)" }
+    - { type: generic, tcycles: 2, action: "pins=_z80_int0_step3(cpu,pins)" }
 
 int_im1:
   flags: { special: true }
   mcycles:
     # special machine cycle which replaces the opcode machine fetch,
     # this issues an M1|IORQ cycle like IM0 and IM2, but ignores the result
-    - { type: generic, tcycles: 1, action: "pins=z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 2, action: "_wait();pins=z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
+    - { type: generic, tcycles: 2, action: "_wait();pins=_z80_int012_step1(cpu,pins)" }
     # a regular refresh cycle + one extra tcycle
-    - { type: generic, tcycles: 3, action: "pins=z80_refresh(cpu,pins)" }
+    - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)" }
     # two regular write machine cycles to push PC on stack, and set PC to 0x0038
     - { type: mwrite, ab: --SP, db: PCH }
     - { type: mwrite, ab: --SP, db: PCL, action: "WZ=PC=0x0038" }
@@ -703,11 +703,11 @@ int_im2:
   mcycles:
     # special machine cycle which replaces the opcode machine fetch,
     # this issues an M1|IORQ cycle and uses the result as low byte of the interrupt vector
-    - { type: generic, tcycles: 1, action: "pins=z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "_wait();pins=z80_int012_step1(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "DLATCH=z80_get_db(pins)" }
+    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "_wait();pins=_z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "DLATCH=_z80_get_db(pins)" }
     # a regular refresh cycle + one extra tcycle
-    - { type: generic, tcycles: 3, action: "pins=z80_refresh(cpu,pins)" }
+    - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)" }
     # two regular write machine cycles to push PC on stack, and set WZ to interrupt vector address
     - { type: mwrite, ab: --SP, db: PCH }
     - { type: mwrite, ab: --SP, db: PCL, action: "WZL=DLATCH;WZH=cpu->i;" }
@@ -721,8 +721,8 @@ nmi:
   mcycles:
     # simulate a regular opcode fetch machine cycle (with one extra tcycle)
     # FIXME: _wait() before z80_nmi_m1()???
-    - { type: generic, tcycles: 1, action: "pins=z80_nmi_step0(cpu,pins)" }
-    - { type: generic, tcycles: 3, action: "pins=z80_refresh(cpu,pins)"}
+    - { type: generic, tcycles: 1, action: "pins=_z80_nmi_step0(cpu,pins)" }
+    - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)"}
     # two regular write machine cycles to push PC on stack, and set PC to 0x0066
     - { type: mwrite, ab: --SP, db: PCH }
     - { type: mwrite, ab: --SP, db: PCL, action: "WZ=PC=0x0066" }

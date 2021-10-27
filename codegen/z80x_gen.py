@@ -77,22 +77,22 @@ rp2_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->af' ]
 rp2l_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->f']
 rp2h_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->a']
 cc_map   = [ '_cc_nz', '_cc_z', '_cc_nc', '_cc_c', '_cc_po', '_cc_pe', '_cc_p', '_cc_m' ]
-alu_map  = [ 'z80_add8(cpu,', 
-             'z80_adc8(cpu,', 
-             'z80_sub8(cpu,',
-             'z80_sbc8(cpu,',
-             'z80_and8(cpu,',
-             'z80_xor8(cpu,',
-             'z80_or8(cpu,',
-             'z80_cp8(cpu,' ]
-rot_map  = [ 'z80_rlc(cpu,',
-             'z80_rrc(cpu,',
-             'z80_rl(cpu,',
-             'z80_rr(cpu,',
-             'z80_sla(cpu,',
-             'z80_sra(cpu,',
-             'z80_sll(cpu,',
-             'z80_srl(cpu,' ]
+alu_map  = [ '_z80_add8(cpu,', 
+             '_z80_adc8(cpu,', 
+             '_z80_sub8(cpu,',
+             '_z80_sbc8(cpu,',
+             '_z80_and8(cpu,',
+             '_z80_xor8(cpu,',
+             '_z80_or8(cpu,',
+             '_z80_cp8(cpu,' ]
+rot_map  = [ '_z80_rlc(cpu,',
+             '_z80_rrc(cpu,',
+             '_z80_rl(cpu,',
+             '_z80_rr(cpu,',
+             '_z80_sla(cpu,',
+             '_z80_sra(cpu,',
+             '_z80_sll(cpu,',
+             '_z80_srl(cpu,' ]
 im_map = [ '0', '0', '1', '2', '0', '0', '1', '2' ]
 
 def err(msg: str):
@@ -402,11 +402,11 @@ def pip_table_to_string() -> str:
             op = unwrap(OPS[op.first_op_index])
         flags = ''
         if flag(op, 'indirect'):
-            flags += 'Z80_OPSTATE_FLAGS_INDIRECT'
+            flags += '_Z80_OPSTATE_FLAGS_INDIRECT'
         if flag(op, 'imm8'):
             if flags != '':
                 flags += '|'
-            flags += 'Z80_OPSTATE_FLAGS_IMM8'
+            flags += '_Z80_OPSTATE_FLAGS_IMM8'
         if flags == '':
             flags = '0'
         res += tab() + f'{{ 0x{op.pip:08X}, 0x{op.decoder_offset-1:04X}, {flags} }},' 
