@@ -69,22 +69,22 @@
 extern "C" {
 #endif
 
-/* Z1013 model types */
+// Z1013 model types
 typedef enum {
-    Z1013_TYPE_64,      /* Z1013.64 (default, latest model with 2 MHz and 64 KB RAM, new ROM) */
-    Z1013_TYPE_16,      /* Z1013.16 (2 MHz model with 16 KB RAM, new ROM) */
-    Z1013_TYPE_01,      /* Z1013.01 (original model, 1 MHz, 16 KB RAM) */
+    Z1013_TYPE_64,      // Z1013.64 (default, latest model with 2 MHz and 64 KB RAM, new ROM)
+    Z1013_TYPE_16,      // Z1013.16 (2 MHz model with 16 KB RAM, new ROM)
+    Z1013_TYPE_01,      // Z1013.01 (original model, 1 MHz, 16 KB RAM)
 } z1013_type_t;
 
-/* configuration parameters for z1013_setup() */
+// configuration parameters for z1013_setup()
 typedef struct {
-    z1013_type_t type;          /* default is Z1013_TYPE_64 */
+    z1013_type_t type;          // default is Z1013_TYPE_64
 
-    /* video output config */
-    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes */
-    int pixel_buffer_size;      /* size of the pixel buffer in bytes */
+    // video output config
+    void* pixel_buffer;         // pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes
+    int pixel_buffer_size;      // size of the pixel buffer in bytes
 
-    /* ROM images */
+    // ROM images
     const void* rom_mon202;
     const void* rom_mon_a2;
     const void* rom_font;
@@ -93,8 +93,10 @@ typedef struct {
     int rom_font_size;
 } z1013_desc_t;
 
-/* Z1013 emulator state */
+// Z1013 emulator state
 typedef struct {
+    uint64_t pins;
+    uint64_t freq_hz;
     z80_t cpu;
     z80pio_t pio;
     bool valid;
@@ -102,7 +104,6 @@ typedef struct {
     uint8_t kbd_request_column;
     bool kbd_request_line_hilo;
     uint32_t* pixel_buffer;
-    clk_t clk;
     mem_t mem;
     kbd_t kbd;
     uint8_t ram[1<<16];
@@ -110,51 +111,51 @@ typedef struct {
     uint8_t rom_font[2048];
 } z1013_t;
 
-/* initialize a new Z1013 instance */
+// initialize a new Z1013 instance
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
-/* discard a z1013 instance */
+// discard a z1013 instance
 void z1013_discard(z1013_t* sys);
-/* get the standard framebuffer width and height in pixels */
+// reset Z1013 instance
+void z1013_reset(z1013_t* sys);
+// execute a single tick
+void z1013_tick(z1013_t* sys);
+// run the Z1013 instance for a given number of microseconds
+void z1013_exec(z1013_t* sys, uint32_t micro_seconds);
+// get the standard framebuffer width and height in pixels
 int z1013_std_display_width(void);
 int z1013_std_display_height(void);
-/* get the maximum framebuffer size in number of bytes */
+// get the maximum framebuffer size in number of bytes
 int z1013_max_display_size(void);
-/* get the current framebuffer width and height in pixels */
+// get the current framebuffer width and height in pixels
 int z1013_display_width(z1013_t* sys);
 int z1013_display_height(z1013_t* sys);
-/* reset Z1013 instance */
-void z1013_reset(z1013_t* sys);
-/* run the Z1013 instance for a given number of microseconds */
-void z1013_exec(z1013_t* sys, uint32_t micro_seconds);
-/* send a key-down event */
+// send a key-down event
 void z1013_key_down(z1013_t* sys, int key_code);
-/* send a key-up event */
+// send a key-up event
 void z1013_key_up(z1013_t* sys, int key_code);
-/* load a "KC .z80" file into the emulator */
+// load a "KC .z80" file into the emulator
 bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
-/*-- IMPLEMENTATION ----------------------------------------------------------*/
+//-- IMPLEMENTATION ------------------------------------------------------------
 #ifdef CHIPS_IMPL
 #include <string.h>
 #ifndef CHIPS_ASSERT
-    #include <assert.h>
-    #define CHIPS_ASSERT(c) assert(c)
+#include <assert.h>
+#define CHIPS_ASSERT(c) assert(c)
 #endif
 
 #define _Z1013_DISPLAY_WIDTH (256)
 #define _Z1013_DISPLAY_HEIGHT (256)
 #define _Z1013_DISPLAY_SIZE (_Z1013_DISPLAY_WIDTH*_Z1013_DISPLAY_HEIGHT*4)
 
-static uint64_t _z1013_tick(int num, uint64_t pins, void* user_data);
+static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins);
 static uint8_t _z1013_pio_in(int port_id, void* user_data);
 static void _z1013_pio_out(int port_id, uint8_t data, void* user_data);
 static void _z1013_decode_vidmem(z1013_t* sys);
-
-#define _Z1013_CLEAR(val) memset(&val, 0, sizeof(val))
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -166,11 +167,12 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     else {
         CHIPS_ASSERT(desc->rom_mon_a2 && (desc->rom_mon_a2_size == sizeof(sys->rom_os)));
     }
-
-    memset(sys, 0, sizeof(z1013_t));
-    sys->valid = true;
-    sys->type = desc->type;
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
+    *sys = (z1013_t) {
+        .valid = true,
+        .type = desc->type,
+        .pixel_buffer = (uint32_t*) desc->pixel_buffer,
+        .freq_hz = (Z1013_TYPE_01 == desc->type) ? 1000000 : 2000000,
+    };
     memcpy(sys->rom_font, desc->rom_font, sizeof(sys->rom_font));
     if (desc->type == Z1013_TYPE_01) {
         memcpy(sys->rom_os, desc->rom_mon202, sizeof(sys->rom_os));
@@ -179,27 +181,16 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
         memcpy(sys->rom_os, desc->rom_mon_a2, sizeof(sys->rom_os));
     }
 
-    /* initialize the hardware */
-    z80_desc_t cpu_desc;
-    _Z1013_CLEAR(cpu_desc);
-    cpu_desc.tick_cb = _z1013_tick;
-    cpu_desc.user_data = sys;
-    z80_init(&sys->cpu, &cpu_desc);
-    z80pio_desc_t pio_desc;
-    _Z1013_CLEAR(pio_desc);
-    pio_desc.in_cb = _z1013_pio_in;
-    pio_desc.out_cb = _z1013_pio_out;
-    pio_desc.user_data = sys;
-    z80pio_init(&sys->pio, &pio_desc);
-    if (Z1013_TYPE_01 == sys->type) {
-        clk_init(&sys->clk, 1000000);
-    }
-    else {
-        clk_init(&sys->clk, 2000000);
-    }
+    // initialize the hardware
+    sys->pins = z80_init(&sys->cpu);
+    z80pio_init(&sys->pio, &(z80pio_desc_t){
+        .in_cb = _z1013_pio_in,
+        .out_cb = _z1013_pio_out,
+        .user_data = sys,
+    });
 
-    /* execution starts at 0xF000 */
-    z80_set_pc(&sys->cpu, 0xF000);
+    // execution starts at 0xF000
+    z80_prefetch(&sys->cpu, 0xF000);
 
     /* setup the memory map:
         - the Z1013.64 has 64 KByte RAM, all other models 16 KByte RAM
@@ -220,24 +211,24 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     /* Setup the keyboard matrix, the original Z1013.01 has a 8x4 matrix with
        4 shift keys, later models also support a more traditional 8x8 matrix.
     */
-    /* keep key presses sticky for 2 frames */
+    // keep key presses sticky for 2 frames
     kbd_init(&sys->kbd, 2);
     if (Z1013_TYPE_01 == sys->type) {
-        /* 8x4 keyboard matrix */
+        // 8x4 keyboard matrix
         kbd_register_modifier(&sys->kbd, 0, 0, 3);
         kbd_register_modifier(&sys->kbd, 1, 1, 3);
         kbd_register_modifier(&sys->kbd, 2, 2, 3);
         kbd_register_modifier(&sys->kbd, 3, 3, 3);       
         const char* keymap =
-            /* no shift */
+            // no shift
             "@ABCDEFG"  "HIJKLMNO"  "PQRSTUVW"  "        "
-            /* shift 1 */
+            // shift 1
             "XYZ[\\]^-" "01234567"  "89:;<=>?"  "        "
-            /* shift 2 */
+            // shift 2
             "   {|}~ "  " !\"#$%&'" "()*+,-./"  "        "
-            /* shift 3 */
+            // shift 3
             " abcdefg"  "hijklmno"  "pqrstuvw"  "        "
-            /* shift 4 */
+            // shift 4
             "xyz     "  "        "  "        "  "        ";
         for (int layer = 0; layer < 5; layer++) {
             for (int line = 0; line < 4; line++) {
@@ -249,25 +240,25 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
                 }
             }
         }
-        /* special keys */
-        kbd_register_key(&sys->kbd, ' ', 5, 3, 0);   /* Space */
-        kbd_register_key(&sys->kbd, 0x08, 4, 3, 0);  /* Cursor Left */
-        kbd_register_key(&sys->kbd, 0x09, 6, 3, 0);  /* Cursor Right */
-        kbd_register_key(&sys->kbd, 0x0D, 7, 3, 0);  /* Enter */
-        kbd_register_key(&sys->kbd, 0x03, 3, 1, 4);  /* Break/Escape */
+        // special keys
+        kbd_register_key(&sys->kbd, ' ', 5, 3, 0);   // Space
+        kbd_register_key(&sys->kbd, 0x08, 4, 3, 0);  // Cursor Left
+        kbd_register_key(&sys->kbd, 0x09, 6, 3, 0);  // Cursor Right
+        kbd_register_key(&sys->kbd, 0x0D, 7, 3, 0);  // Enter
+        kbd_register_key(&sys->kbd, 0x03, 3, 1, 4);  // Break/Escape
     }
     else {
-        /* 8x8 keyboard matrix (http://www.z1013.de/images/21.gif) */
-        /* shift key modifier is column 7 line 6 */
+        // 8x8 keyboard matrix (http://www.z1013.de/images/21.gif)
+        // shift key modifier is column 7 line 6
         const int shift = 0, shift_mask = (1<<shift);
         kbd_register_modifier(&sys->kbd, shift, 7, 6);
-        /* ctrl key modifier is column 6 line 5 */
+        // ctrl key modifier is column 6 line 5
         const int ctrl = 1, ctrl_mask = (1<<ctrl);
         kbd_register_modifier(&sys->kbd, ctrl, 6, 5);
         const char* keymap = 
-            /* no shift */
+            // no shift
             "13579-  QETUO@  ADGJL*  YCBM.^  24680[  WRZIP]  SFHK+\\  XVN,/_  "
-            /* shift */
+            // shift
             "!#%')=  qetuo`  adgjl:  ycbm>~  \"$&( {  wrzip}  sfhk;|  xvn<?   ";
         for (int layer = 0; layer < 2; layer++) {
             for (int line = 0; line < 8; line++) {
@@ -279,14 +270,14 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
                 }
             }
         }
-        /* special keys */
-        kbd_register_key(&sys->kbd, ' ',  6, 4, 0);  /* space */
-        kbd_register_key(&sys->kbd, 0x08, 6, 2, 0);  /* cursor left */
-        kbd_register_key(&sys->kbd, 0x09, 6, 3, 0);  /* cursor right */
-        kbd_register_key(&sys->kbd, 0x0A, 6, 7, 0);  /* cursor down */
-        kbd_register_key(&sys->kbd, 0x0B, 6, 6, 0);  /* cursor up */
-        kbd_register_key(&sys->kbd, 0x0D, 6, 1, 0);  /* enter */
-        kbd_register_key(&sys->kbd, 0x03, 1, 3, ctrl_mask); /* map Esc to Ctrl+C (STOP/BREAK) */
+        // special keys
+        kbd_register_key(&sys->kbd, ' ',  6, 4, 0);  // space
+        kbd_register_key(&sys->kbd, 0x08, 6, 2, 0);  // cursor left
+        kbd_register_key(&sys->kbd, 0x09, 6, 3, 0);  // cursor right
+        kbd_register_key(&sys->kbd, 0x0A, 6, 7, 0);  // cursor down
+        kbd_register_key(&sys->kbd, 0x0B, 6, 6, 0);  // cursor up
+        kbd_register_key(&sys->kbd, 0x0D, 6, 1, 0);  // enter
+        kbd_register_key(&sys->kbd, 0x03, 1, 3, ctrl_mask); // map Esc to Ctrl+C (STOP/BREAK)
     }
 }
 
@@ -322,14 +313,19 @@ void z1013_reset(z1013_t* sys) {
     z80_reset(&sys->cpu);
     z80pio_reset(&sys->pio);
     sys->kbd_request_column = 0;
-    z80_set_pc(&sys->cpu, 0xF000);
+    z80_prefetch(&sys->cpu, 0xF000);
+}
+
+void z1013_tick(z1013_t* sys) {
+    sys->pins = _z1013_tick(sys, sys->pins);
 }
 
 void z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
-    uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
-    clk_ticks_executed(&sys->clk, ticks_executed);
+    uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
+    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+        sys->pins = _z1013_tick(sys, sys->pins);
+    }
     kbd_update(&sys->kbd, micro_seconds);
     _z1013_decode_vidmem(sys);
 }
@@ -344,22 +340,25 @@ void z1013_key_up(z1013_t* sys, int key_code) {
     kbd_key_up(&sys->kbd, key_code);
 }
 
-static uint64_t _z1013_tick(int num_ticks, uint64_t pins, void* user_data) {
-    (void)num_ticks;
-    z1013_t* sys = (z1013_t*) user_data;
-    if (pins & Z80_MREQ) {
-        /* a memory request */
-        const uint16_t addr = Z80_GET_ADDR(pins);
-        if (pins & Z80_RD) {
-            /* read memory byte */
-            Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
+static uint64_t _z1013_tick(z1013_t* sys, uint64_t cpu_pins) {
+    cpu_pins = z80_tick(&sys->cpu, cpu_pins);
+    uint64_t pio_pins = cpu_pins & Z80_PIN_MASK;
+
+    if (cpu_pins & Z80_MREQ) {
+        // a memory request
+        const uint16_t addr = Z80_GET_ADDR(cpu_pins);
+        if (cpu_pins & Z80_RD) {
+            // read memory byte
+            Z80_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
         }
-        else if (pins & Z80_WR) {
-            mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
+        else if (cpu_pins & Z80_WR) {
+            // write memory byte
+            mem_wr(&sys->mem, addr, Z80_GET_DATA(cpu_pins));
         }
     }
-    else if (pins & Z80_IORQ) {
-        /* an I/O request */
+    else if (cpu_pins & Z80_IORQ) {
+        // address decoding
+
         /*
             The PIO Chip-Enable pin (Z80PIO_CE) is connected to output pin 0 of
             a MH7442 BCD-to-Decimal decoder (looks like this is a Czech
@@ -388,33 +387,36 @@ static uint64_t _z1013_tick(int num_ticks, uint64_t pins, void* user_data) {
             in that order. Next the CPU reads back the keyboard matrix lines
             in 2 steps of 4 bits each from PIO port B.
         */
-        if ((pins & (Z80_A4|Z80_A3|Z80_A2)) == 0) {
-            /* address bits A2..A4 are zero, this activates the PIO chip-select pin */
-            uint64_t pio_pins = (pins & Z80_PIN_MASK) | Z80PIO_CE;
-            /* address bit 0 selects data/ctrl */
+        if ((cpu_pins & (Z80_A4|Z80_A3|Z80_A2)) == 0) {
+            // address bits A2..A4 are zero, this activates the PIO chip-select pin
+            pio_pins |= Z80PIO_CE;
+            // address bit 0 selects data/ctrl
             if (pio_pins & (1<<0)) pio_pins |= Z80PIO_CDSEL;
-            /* address bit 1 selects port A/B */
+            // address bit 1 selects port A/B
             if (pio_pins & (1<<1)) pio_pins |= Z80PIO_BASEL;
-            pins = z80pio_iorq(&sys->pio, pio_pins) & Z80_PIN_MASK;
         }
-        else if ((pins & (Z80_A3|Z80_WR)) == (Z80_A3|Z80_WR)) {
+        else if ((cpu_pins & (Z80_A3|Z80_WR)) == (Z80_A3|Z80_WR)) {
             /* port 8 is connected to a hardware latch to store the
                requested keyboard column for the next keyboard scan
             */
-            sys->kbd_request_column = Z80_GET_DATA(pins) & 7;
+            sys->kbd_request_column = Z80_GET_DATA(cpu_pins) & 7;
         }
     }
-    /* there are no interrupts happening in a vanilla Z1013,
-       so don't trigger the interrupt daisy chain
-    */
-    return pins;
+
+    // tick the PIO, no interrupts on the Z1013, so we don't need to worry
+    // about interrupt handling
+    pio_pins = z80pio_tick(&sys->pio, pio_pins);
+    if ((pio_pins & (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_RD)) == (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_RD)) {
+        cpu_pins = Z80_COPY_DATA(cpu_pins, pio_pins);
+    }
+    return cpu_pins;
 }
 
-/* the PIO input callback handles keyboard input */
+// the PIO input callback handles keyboard input
 static uint8_t _z1013_pio_in(int port_id, void* user_data) {
     z1013_t* sys = (z1013_t*) user_data;
     if (Z80PIO_PORT_A == port_id) {
-        /* nothing to return here, PIO port A is for user devices */
+        // nothing to return here, PIO port A is for user devices
         return 0xFF;
     }
     else {
@@ -432,13 +434,13 @@ static uint8_t _z1013_pio_in(int port_id, void* user_data) {
     }
 }
 
-/* the PIO output callback selects the upper or lower 4 lines for the next keyboard scan */
+// the PIO output callback selects the upper or lower 4 lines for the next keyboard scan
 static void _z1013_pio_out(int port_id, uint8_t data, void* user_data) {
     z1013_t* sys = (z1013_t*) user_data;
     if (Z80PIO_PORT_B == port_id) {
-        /* bit 4 for 8x8 keyboard selects upper or lower 4 kbd matrix line bits */
+        // bit 4 for 8x8 keyboard selects upper or lower 4 kbd matrix line bits
         sys->kbd_request_line_hilo = (data & (1<<4)) != 0;
-        /* bit 7 is cassette output, not emulated */
+        // bit 7 is cassette output, not emulated
     }
 }
 
@@ -447,7 +449,7 @@ static void _z1013_pio_out(int port_id, uint8_t data, void* user_data) {
 */
 static void _z1013_decode_vidmem(z1013_t* sys) {
     uint32_t* dst = sys->pixel_buffer;
-    const uint8_t* src = &sys->ram[0xEC00];   /* the 32x32 framebuffer starts at EC00 */
+    const uint8_t* src = &sys->ram[0xEC00];   // the 32x32 framebuffer starts at EC00
     const uint8_t* font = sys->rom_font;
     for (int y = 0; y < 32; y++) {
         for (int py = 0; py < 8; py++) {
@@ -462,7 +464,7 @@ static void _z1013_decode_vidmem(z1013_t* sys) {
     }
 }
 
-/*=== FILE LOADING ===========================================================*/
+//=== FILE LOADING =============================================================
 
 typedef struct {
     uint8_t load_addr_l;
@@ -497,14 +499,13 @@ bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes) {
     mem_write_range(&sys->mem, addr, ptr, end_addr - addr);
 
     z80_reset(&sys->cpu);
-    z80_set_a(&sys->cpu, 0x00);
-    z80_set_f(&sys->cpu, 0x10);
-    z80_set_bc(&sys->cpu, 0x0000); z80_set_bc_(&sys->cpu, 0x0000);
-    z80_set_de(&sys->cpu, 0x0000); z80_set_de_(&sys->cpu, 0x0000);
-    z80_set_hl(&sys->cpu, 0x0000); z80_set_hl_(&sys->cpu, 0x0000);
-    z80_set_af_(&sys->cpu, 0x0000);
-    z80_set_pc(&sys->cpu, exec_addr);
-
+    sys->cpu.a = 0x00;
+    sys->cpu.f = 0x10;
+    sys->cpu.bc = 0x0000; sys->cpu.bc2 = 0x0000;
+    sys->cpu.de = 0x0000; sys->cpu.de2 = 0x0000;
+    sys->cpu.hl = 0x0000; sys->cpu.hl2 = 0x0000;
+    sys->cpu.af2 = 0x0000;
+    z80_prefetch(&sys->cpu, exec_addr);
     return true;
 }
-#endif /* CHIPS_IMPL */
+#endif // CHIPS_IMPL
