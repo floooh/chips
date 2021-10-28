@@ -83,8 +83,7 @@ typedef struct {
 void ui_z1013_init(ui_z1013_t* ui, const ui_z1013_desc_t* desc);
 void ui_z1013_discard(ui_z1013_t* ui);
 void ui_z1013_draw(ui_z1013_t* ui, double time_ms);
-bool ui_z1013_before_exec(ui_z1013_t* ui);
-void ui_z1013_after_exec(ui_z1013_t* ui);
+void ui_z1013_exec(ui_z1013_t* ui, uint32_t frame_time_us);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -187,11 +186,12 @@ static const ui_chip_pin_t _ui_z1013_cpu_pins[] = {
     { "D5",     5,      Z80_D5 },
     { "D6",     6,      Z80_D6 },
     { "D7",     7,      Z80_D7 },
-    { "M1",     9,      Z80_M1 },
-    { "MREQ",   10,     Z80_MREQ },
-    { "IORQ",   11,     Z80_IORQ },
-    { "RD",     12,     Z80_RD },
-    { "WR",     13,     Z80_WR },
+    { "M1",     8,      Z80_M1 },
+    { "MREQ",   9,      Z80_MREQ },
+    { "IORQ",   10,     Z80_IORQ },
+    { "RD",     11,     Z80_RD },
+    { "WR",     12,     Z80_WR },
+    { "RFSH",   13,     Z80_RFSH },
     { "HALT",   14,     Z80_HALT },
     { "INT",    15,     Z80_INT },
     { "NMI",    16,     Z80_NMI },
@@ -374,14 +374,15 @@ void ui_z1013_draw(ui_z1013_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-bool ui_z1013_before_exec(ui_z1013_t* ui) {
+void ui_z1013_exec(ui_z1013_t* ui, uint32_t frame_time_us) {
     CHIPS_ASSERT(ui && ui->z1013);
-    return ui_dbg_before_exec(&ui->dbg);
-}
-
-void ui_z1013_after_exec(ui_z1013_t* ui) {
-    CHIPS_ASSERT(ui && ui->z1013);
-    ui_dbg_after_exec(&ui->dbg);
+    uint32_t ticks_to_run = clk_us_to_ticks(ui->z1013->freq_hz, frame_time_us);
+    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
+        z1013_tick(ui->z1013);
+        ui_dbg_tick(&ui->dbg, ui->z1013->pins);
+    }
+    kbd_update(&ui->z1013->kbd, frame_time_us);
+    z1013_decode_vidmem(ui->z1013);
 }
 
 #ifdef __clang__

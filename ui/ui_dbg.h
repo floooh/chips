@@ -289,11 +289,7 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
 void ui_dbg_discard(ui_dbg_t* win);
 /* render the ui_dbg_t UIs */
 void ui_dbg_draw(ui_dbg_t* win);
-/* only z80: call before executing system ticks, don't tick if function returns false */
-bool ui_dbg_before_exec(ui_dbg_t* win);
-/* only z80: call after executing system ticks */
-void ui_dbg_after_exec(ui_dbg_t* win);
-/* only m6502: call after ticking the system */
+/* call after ticking the system */
 void ui_dbg_tick(ui_dbg_t* win, uint64_t pins);
 /* call when resetting the emulated machine (re-initializes some data structures) */
 void ui_dbg_reset(ui_dbg_t* win);
@@ -641,9 +637,8 @@ static void _ui_dbg_dbgstate_reboot(ui_dbg_t* win) {
     _ui_dbg_dbgstate_reset(win);
 }
 
-/* breakpoint evaluation callback, this is installed as CPU trap callback when needed */
-static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data) {
-    ui_dbg_t* win = (ui_dbg_t*) user_data;
+/* breakpoint evaluation callback */
+static int _ui_dbg_bp_eval(ui_dbg_t* win, uint16_t pc, uint32_t ticks, uint64_t pins) {
     int trap_id = 0;
     
     /* check stepping modes and breakpoint */
@@ -651,8 +646,8 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
         switch (win->dbg.step_mode) {
             case UI_DBG_STEPMODE_INTO:
                 #if defined(UI_DBG_USE_Z80)
-                /* stop when PC has changed */
-                if (pc != win->dbg.next_pc) {
+                /* stop on new instruction */
+                if (z80_opdone(win->dbg.z80)) {
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
                 #elif defined(UI_DBG_USE_M6502)
@@ -792,12 +787,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
             win->heatmap.items[(pc + i) & 0xFFFF].op_start = pc;
         }
         /* update last instruction's ticks */
-        if (win->dbg.trap_frame_id == win->dbg.frame_id) {
-            win->heatmap.items[win->dbg.next_pc].ticks = ticks - win->dbg.last_ticks;
-        }
-        else {
-            win->heatmap.items[win->dbg.next_pc].ticks = ticks;
-        }
+        win->heatmap.items[win->dbg.next_pc].ticks = ticks - win->dbg.last_ticks;
         /* add PC to history */
         _ui_dbg_history_push(win, pc);
     }
@@ -1305,7 +1295,7 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui->open = desc->open;
     ui->init_x = (float) desc->x;
     ui->init_y = (float) desc->y;
-    ui->init_w = (float) ((desc->w == 0) ? 370 : desc->w);
+    ui->init_w = (float) ((desc->w == 0) ? 380 : desc->w);
     ui->init_h = (float) ((desc->h == 0) ? 440 : desc->h);
     ui->show_regs = true;
     ui->show_buttons = true;
@@ -1538,13 +1528,11 @@ static void _ui_dbg_handle_input(ui_dbg_t* win) {
                 _ui_dbg_step_into(win);
             }
         }
-        #if defined(UI_DBG_USE_M6502)
         if (0 != win->ui.keys.step_tick_keycode) {
             if (ImGui::IsKeyPressed(win->ui.keys.step_tick_keycode)) {
                 _ui_dbg_step_tick(win);
             }
         }
-        #endif
     }
     else {
         if (ImGui::IsKeyPressed(win->ui.keys.break_keycode)) {
@@ -1577,12 +1565,10 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
             _ui_dbg_step_into(win);
         }
         ImGui::SameLine();
-        #if defined(UI_DBG_USE_M6502)
         snprintf(str, sizeof(str), "Tick (%s)", _ui_dbg_str_or_def(win->ui.keys.step_tick_name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_tick(win);
         }
-        #endif
     }
     else {
         snprintf(str, sizeof(str), "Break (%s)", _ui_dbg_str_or_def(win->ui.keys.break_name, "-"));
@@ -1809,37 +1795,25 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         }
 
         /* tick count */
-        #if defined(UI_DBG_USE_M6502)
         x += glyph_width * (is_pc_line ? 18:20);
-        #else
-        x += glyph_width * 20;
-        #endif
         if (win->ui.show_ticks) {
             int ticks = win->heatmap.items[start_addr].ticks;
             ImGui::SameLine(x);
             if (ticks > 0) {
-                #if defined(UI_DBG_USE_M6502)
                 if (is_pc_line) {
                     ImGui::Text("%d/%d", win->op_ticks, ticks);
                 }
                 else {
                     ImGui::Text("%d", ticks);
                 }
-                #else
-                ImGui::Text("%d", ticks);
-                #endif
             }
             else if (show_dasm) {
-                #if defined(UI_DBG_USE_M6502)
                 if (is_pc_line) {
-                    ImGui::Text("%d/?", win->op_ticks);
+                    ImGui::Text("%2/?", win->op_ticks);
                 }
                 else {
                     ImGui::Text("?");
                 }
-                #else
-                ImGui::Text("?");
-                #endif
             }
             else {
                 ImGui::Text(" ");
@@ -1914,42 +1888,16 @@ void ui_dbg_reboot(ui_dbg_t* win) {
     _ui_dbg_history_reboot(win);
 }
 
-bool ui_dbg_before_exec(ui_dbg_t* win) {
-    #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
-        CHIPS_ASSERT(win && win->valid);
-        win->dbg.frame_id++;
-        return !win->dbg.stopped;
-    #else
-        return false;
-    #endif
-}
-
-void ui_dbg_after_exec(ui_dbg_t* win) {
-    #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
-        CHIPS_ASSERT(win && win->valid);
-        /* uninstall our trap callback, but only if it hasn't been overwritten */
-        // FIXME!
-        int trap_id = 0;
-        if (trap_id >= UI_DBG_STEP_TRAPID) {
-            win->dbg.stopped = true;
-            win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
-            ImGui::SetWindowFocus(win->ui.title);
-            win->ui.open = true;
-        }
-        win->dbg.last_trap_id = trap_id;
-    #endif
-}
-
 void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
-    #if defined(UI_DBG_USE_M6502)
     if (win->dbg.step_mode == UI_DBG_STEPMODE_TICK) {
         win->dbg.stopped = true;
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
     }
+    #if defined(UI_DBG_USE_M6502)
     if (pins & M6502_SYNC) {
         win->op_ticks = 0;
         uint16_t pc = M6502_GET_ADDR(pins);
-        win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, win->cpu_ticks, pins, win);
+        win->dbg.last_trap_id = _ui_dbg_bp_eval(win, pc, win->cpu_ticks, pins);
         if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
             win->dbg.stopped = true;
             win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
@@ -1957,16 +1905,28 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
             win->ui.open = true;
         }
     }
+    #elif defined(UI_DBG_USE_Z80)
+    if (z80_opdone(win->dbg.z80)) {
+        win->op_ticks = 0;
+        uint16_t pc = Z80_GET_ADDR(pins);
+        win->dbg.last_trap_id = _ui_dbg_bp_eval(win, pc, win->cpu_ticks, pins);
+        if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
+            win->dbg.stopped = true;
+            win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
+            ImGui::SetWindowFocus(win->ui.title);
+            win->ui.open = true;
+        }
+    }
+    #else
+    #error "CPU TYPE"
+    #endif
     win->cpu_ticks++;
     win->op_ticks++;
-    #else
-    (void)win;
-    (void)pins;
-    #endif
 }
 
 void ui_dbg_draw(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid && win->ui.title);
+    win->dbg.frame_id++;
     if (!(win->ui.open || win->ui.show_heatmap || win->ui.show_breakpoints || win->ui.show_history)) {
         return;
     }

@@ -135,6 +135,8 @@ void z1013_key_down(z1013_t* sys, int key_code);
 void z1013_key_up(z1013_t* sys, int key_code);
 // load a "KC .z80" file into the emulator
 bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
+// pseudo-private helper function for ui_z1013.h
+void z1013_decode_vidmem(z1013_t* sys);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -155,7 +157,6 @@ bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins);
 static uint8_t _z1013_pio_in(int port_id, void* user_data);
 static void _z1013_pio_out(int port_id, uint8_t data, void* user_data);
-static void _z1013_decode_vidmem(z1013_t* sys);
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -327,7 +328,7 @@ void z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
         sys->pins = _z1013_tick(sys, sys->pins);
     }
     kbd_update(&sys->kbd, micro_seconds);
-    _z1013_decode_vidmem(sys);
+    z1013_decode_vidmem(sys);
 }
 
 void z1013_key_down(z1013_t* sys, int key_code) {
@@ -447,7 +448,7 @@ static void _z1013_pio_out(int port_id, uint8_t data, void* user_data) {
 /* since the Z1013 didn't have any sort of programmable video output, 
     we're cheating a bit and decode the entire frame in one go
 */
-static void _z1013_decode_vidmem(z1013_t* sys) {
+void z1013_decode_vidmem(z1013_t* sys) {
     uint32_t* dst = sys->pixel_buffer;
     const uint8_t* src = &sys->ram[0xEC00];   // the 32x32 framebuffer starts at EC00
     const uint8_t* font = sys->rom_font;

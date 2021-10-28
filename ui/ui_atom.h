@@ -502,10 +502,9 @@ void ui_atom_draw(ui_atom_t* ui, double time_ms) {
 void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us) {
     CHIPS_ASSERT(ui && ui->atom);
     uint32_t ticks_to_run = clk_us_to_ticks(ATOM_FREQUENCY, frame_time_us);
-    atom_t* atom = ui->atom;
     for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
         atom_tick(ui->atom);
-        ui_dbg_tick(&ui->dbg, atom->pins);
+        ui_dbg_tick(&ui->dbg, ui->atom->pins);
     }
     kbd_update(&ui->atom->kbd, frame_time_us);
 }
