@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -293,7 +293,7 @@ void ui_dbg_reboot(ui_dbg_t* win);
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #include <string.h>
 #ifndef CHIPS_ASSERT
     #include <assert.h>
@@ -1902,4 +1902,4 @@ void ui_dbg_draw(ui_dbg_t* win) {
     _ui_dbg_history_draw(win);
     _ui_dbg_bp_draw(win);
 }
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

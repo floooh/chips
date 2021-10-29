@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -89,7 +89,7 @@ void ui_namco_after_exec(ui_namco_t* ui);
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #if !defined(NAMCO_PACMAN) && !defined(NAMCO_PENGO)
 #error "Please define NAMCO_PACMAN or NAMCO_PENGO before including the implementation"
 #endif
@@ -362,4 +362,4 @@ void ui_namco_after_exec(ui_namco_t* ui) {
     ui_dbg_after_exec(&ui->dbg);
 }
 
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

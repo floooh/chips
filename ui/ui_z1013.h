@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -83,14 +83,14 @@ typedef struct {
 void ui_z1013_init(ui_z1013_t* ui, const ui_z1013_desc_t* desc);
 void ui_z1013_discard(ui_z1013_t* ui);
 void ui_z1013_draw(ui_z1013_t* ui, double time_ms);
-void ui_z1013_exec(ui_z1013_t* ui, uint32_t frame_time_us);
+z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -374,18 +374,15 @@ void ui_z1013_draw(ui_z1013_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-void ui_z1013_exec(ui_z1013_t* ui, uint32_t frame_time_us) {
-    CHIPS_ASSERT(ui && ui->z1013);
-    uint32_t ticks_to_run = clk_us_to_ticks(ui->z1013->freq_hz, frame_time_us);
-    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-        z1013_tick(ui->z1013);
-        ui_dbg_tick(&ui->dbg, ui->z1013->pins);
-    }
-    kbd_update(&ui->z1013->kbd, frame_time_us);
-    z1013_decode_vidmem(ui->z1013);
+z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui) {
+    return (z1013_debug_t){
+        .callback = (z1013_debug_callback_t) ui_dbg_tick,
+        .stopped = &ui->dbg.dbg.stopped,
+        .user_data = &ui->dbg
+    };
 }
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

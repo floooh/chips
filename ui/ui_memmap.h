@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -107,7 +107,7 @@ void ui_memmap_region(ui_memmap_t* win, const char* name, uint16_t addr, int len
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -249,4 +249,4 @@ void ui_memmap_region(ui_memmap_t* win, const char* name, uint16_t addr, int len
     reg.on = on;
 }
 
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */
