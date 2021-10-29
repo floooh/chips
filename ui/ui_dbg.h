@@ -58,6 +58,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#if !defined(UI_DBG_USE_Z80) && !defined(UI_DBG_USE_M6502)
+#error "please define UI_DBG_USE_Z80 or UI_DBG_USE_M6502"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -130,7 +134,7 @@ struct ui_dbg_t;
 /* callback for reading a byte from memory */
 typedef uint8_t (*ui_dbg_read_t)(int layer, uint16_t addr, void* user_data);
 /* callback for evaluating uer breakpoints, return breakpoint index, or -1 */
-typedef int (*ui_dbg_user_break_t)(ui_dbg_t* win, uint16_t pc, int ticks, uint64_t pins, void* user_data);
+typedef int (*ui_dbg_user_break_t)(struct ui_dbg_t* win, uint16_t pc, int ticks, uint64_t pins, void* user_data);
 /* a callback to create a dynamic-update RGBA8 UI texture, needs to return an ImTextureID handle */
 typedef void* (*ui_dbg_create_texture_t)(int w, int h);
 /* callback to update a UI texture with new data */
@@ -139,20 +143,19 @@ typedef void (*ui_dbg_update_texture_t)(void* tex_handle, void* data, int data_b
 typedef void (*ui_dbg_destroy_texture_t)(void* tex_handle);
 
 /* user-defined hotkeys (all strings must be static) */
-typedef struct ui_dbg_keydesc_t {
-    int continue_keycode;
-    int break_keycode;
-    int step_over_keycode;
-    int step_into_keycode;
-    int step_tick_keycode;
-    int toggle_breakpoint_keycode;
-    const char* continue_name;
-    const char* break_name;
-    const char* step_over_name;
-    const char* step_into_name;
-    const char* step_tick_name;
-    const char* toggle_breakpoint_name;
-} ui_dbg_keydesc_t;
+typedef struct ui_dbg_key_desc_t {
+    int keycode;
+    const char* name;
+} ui_dbg_key_desc_t;
+
+typedef struct ui_dbg_keys_desc_t {
+    ui_dbg_key_desc_t cont;
+    ui_dbg_key_desc_t stop;
+    ui_dbg_key_desc_t step_over;
+    ui_dbg_key_desc_t step_into;
+    ui_dbg_key_desc_t step_tick;
+    ui_dbg_key_desc_t toggle_breakpoint;
+} ui_dbg_keys_desc_t;
 
 typedef struct ui_dbg_desc_t {
     const char* title;          /* window title */
@@ -171,7 +174,7 @@ typedef struct ui_dbg_desc_t {
     int x, y;                   /* initial window pos */
     int w, h;                   /* initial window size, or 0 for default size */
     bool open;                  /* initial open state */
-    ui_dbg_keydesc_t keys;      /* user-defined hotkeys */
+    ui_dbg_keys_desc_t keys;      /* user-defined hotkeys */
     ui_dbg_breaktype_t user_breaktypes[UI_DBG_MAX_USER_BREAKTYPES];  /* user-defined breakpoint types */
 } ui_dbg_desc_t;
 
@@ -224,7 +227,7 @@ typedef struct ui_dbg_uistate_t {
     bool show_ticks;
     bool show_history;
     bool request_scroll;
-    ui_dbg_keydesc_t keys;
+    ui_dbg_keys_desc_t keys;
     ui_dbg_line_t line_array[UI_DBG_NUM_LINES];
     int num_breaktypes;
     ui_dbg_breaktype_t breaktypes[UI_DBG_MAX_BREAKTYPES];
@@ -237,7 +240,7 @@ typedef struct ui_dbg_heatmapitem_t {
     uint32_t read_count;
     uint16_t ticks;         /* ticks of current instruction */
     uint16_t op_start;      /* set for followup instruction bytes */
-} ui_dbg_heapmap_item_t;
+} ui_dbg_heatmapitem_t;
 
 typedef struct ui_dbg_heatmap_t {
     int tex_width, tex_height;
@@ -298,9 +301,6 @@ void ui_dbg_reboot(ui_dbg_t* win);
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
-#endif
-#if !defined(UI_DBG_USE_Z80) && !defined(UI_DBG_USE_M6502)
-#error "please define UI_DBG_USE_Z80 or UI_DBG_USE_M6502"
 #endif
 
 /*== GENERAL HELPERS =========================================================*/
@@ -1336,19 +1336,19 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
     bool delete_all_bp = false;
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Debug")) {
-            if (ImGui::MenuItem("Break", win->ui.keys.break_name, false, !win->dbg.stopped)) {
+            if (ImGui::MenuItem("Break", win->ui.keys.stop.name, false, !win->dbg.stopped)) {
                 _ui_dbg_break(win);
             }
-            if (ImGui::MenuItem("Continue", win->ui.keys.continue_name, false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Continue", win->ui.keys.cont.name, false, win->dbg.stopped)) {
                 _ui_dbg_continue(win);
             }
-            if (ImGui::MenuItem("Step Over", win->ui.keys.step_over_name, false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Step Over", win->ui.keys.step_over.name, false, win->dbg.stopped)) {
                 _ui_dbg_step_over(win);
             }
-            if (ImGui::MenuItem("Step Into", win->ui.keys.step_into_name, false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Step Into", win->ui.keys.step_into.name, false, win->dbg.stopped)) {
                 _ui_dbg_step_into(win);
             }
-            if (ImGui::MenuItem("Tick", win->ui.keys.step_tick_name, false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Tick", win->ui.keys.step_tick.name, false, win->dbg.stopped)) {
                 _ui_dbg_step_tick(win);
             }
             ImGui::EndMenu();
@@ -1481,33 +1481,33 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
 static void _ui_dbg_handle_input(ui_dbg_t* win) {
     /* unused hotkeys are defined as 0 and will never be triggered */
     if (win->dbg.stopped) {
-        if (0 != win->ui.keys.continue_keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.continue_keycode)) {
+        if (0 != win->ui.keys.cont.keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.cont.keycode)) {
                 _ui_dbg_continue(win);
             }
         }
-        if (0 != win->ui.keys.step_over_keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_over_keycode)) {
+        if (0 != win->ui.keys.step_over.keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_over.keycode)) {
                 _ui_dbg_step_over(win);
             }
         }
-        if (0 != win->ui.keys.step_into_keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_into_keycode)) {
+        if (0 != win->ui.keys.step_into.keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_into.keycode)) {
                 _ui_dbg_step_into(win);
             }
         }
-        if (0 != win->ui.keys.step_tick_keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_tick_keycode)) {
+        if (0 != win->ui.keys.step_tick.keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_tick.keycode)) {
                 _ui_dbg_step_tick(win);
             }
         }
     }
     else {
-        if (ImGui::IsKeyPressed(win->ui.keys.break_keycode)) {
+        if (ImGui::IsKeyPressed(win->ui.keys.stop.keycode)) {
             _ui_dbg_break(win);
         }
     }
-    if (ImGui::IsKeyPressed(win->ui.keys.toggle_breakpoint_keycode)) {
+    if (ImGui::IsKeyPressed(win->ui.keys.toggle_breakpoint.keycode)) {
         _ui_dbg_bp_toggle_exec(win, _ui_dbg_get_pc(win));
     }
 }
@@ -1518,28 +1518,28 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
     }
     char str[32];
     if (win->dbg.stopped || (win->dbg.step_mode != UI_DBG_STEPMODE_NONE)) {
-        snprintf(str, sizeof(str), "Continue (%s)", _ui_dbg_str_or_def(win->ui.keys.continue_name, "-"));
+        snprintf(str, sizeof(str), "Continue (%s)", _ui_dbg_str_or_def(win->ui.keys.cont.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_continue(win);
         }
         ImGui::SameLine();
-        snprintf(str, sizeof(str), "Over (%s)", _ui_dbg_str_or_def(win->ui.keys.step_over_name, "-"));
+        snprintf(str, sizeof(str), "Over (%s)", _ui_dbg_str_or_def(win->ui.keys.step_over.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_over(win);
         }
         ImGui::SameLine();
-        snprintf(str, sizeof(str), "Into (%s)", _ui_dbg_str_or_def(win->ui.keys.step_into_name, "-"));
+        snprintf(str, sizeof(str), "Into (%s)", _ui_dbg_str_or_def(win->ui.keys.step_into.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_into(win);
         }
         ImGui::SameLine();
-        snprintf(str, sizeof(str), "Tick (%s)", _ui_dbg_str_or_def(win->ui.keys.step_tick_name, "-"));
+        snprintf(str, sizeof(str), "Tick (%s)", _ui_dbg_str_or_def(win->ui.keys.step_tick.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_tick(win);
         }
     }
     else {
-        snprintf(str, sizeof(str), "Break (%s)", _ui_dbg_str_or_def(win->ui.keys.break_name, "-"));
+        snprintf(str, sizeof(str), "Break (%s)", _ui_dbg_str_or_def(win->ui.keys.stop.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_break(win);
         }
