@@ -6,7 +6,7 @@
     
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UTIL_IMPL
     ~~~
     before you include this file in *one* C or C++ file to create the 
     implementation.
@@ -81,7 +81,7 @@ uint16_t m6502dasm_op(uint16_t pc, m6502dasm_input_t in_cb, m6502dasm_output_t o
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UTIL_IMPL
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
@@ -482,4 +482,4 @@ uint16_t m6502dasm_op(uint16_t pc, m6502dasm_input_t in_cb, m6502dasm_output_t o
 #undef M_R_
 #undef M__W
 #undef M_RW
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UTIL_IMPL */
