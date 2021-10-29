@@ -82,6 +82,10 @@ void ui_util_options_menu(double time_ms, bool stopped);
 #endif
 #include <string.h> /* memset */
 #include <stdio.h>  /* sscanf */
+#ifndef CHIPS_ASSERT
+    #include <assert.h>
+    #define CHIPS_ASSERT(c) assert(c)
+#endif
 
 uint16_t ui_util_input_u16(const char* label, uint16_t val) {
     char buf[5];
