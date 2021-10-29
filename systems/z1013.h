@@ -76,9 +76,18 @@ typedef enum {
     Z1013_TYPE_01,      // Z1013.01 (original model, 1 MHz, 16 KB RAM)
 } z1013_type_t;
 
+// debug hook function, called per tick
+typedef void (*z1013_debug_callback_t)(void* user_data, uint64_t pins);
+typedef struct {
+    z1013_debug_callback_t callback;
+    bool* stopped;
+    void* user_data;
+} z1013_debug_t;
+
 // configuration parameters for z1013_setup()
 typedef struct {
     z1013_type_t type;          // default is Z1013_TYPE_64
+    z1013_debug_t debug;        // optional debug callback and userdata ptr
 
     // video output config
     void* pixel_buffer;         // pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes
@@ -96,9 +105,9 @@ typedef struct {
 // Z1013 emulator state
 typedef struct {
     uint64_t pins;
-    uint64_t freq_hz;
     z80_t cpu;
     z80pio_t pio;
+    z1013_debug_t debug;
     bool valid;
     z1013_type_t type;
     uint8_t kbd_request_column;
@@ -106,6 +115,7 @@ typedef struct {
     uint32_t* pixel_buffer;
     mem_t mem;
     kbd_t kbd;
+    uint64_t freq_hz;
     uint8_t ram[1<<16];
     uint8_t rom_os[2048];
     uint8_t rom_font[2048];
@@ -117,8 +127,6 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
 void z1013_discard(z1013_t* sys);
 // reset Z1013 instance
 void z1013_reset(z1013_t* sys);
-// execute a single tick
-void z1013_tick(z1013_t* sys);
 // run the Z1013 instance for a given number of microseconds
 void z1013_exec(z1013_t* sys, uint32_t micro_seconds);
 // get the standard framebuffer width and height in pixels
@@ -160,6 +168,9 @@ static void _z1013_pio_out(int port_id, uint8_t data, void* user_data);
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
+    if (desc->debug.callback) {
+        CHIPS_ASSERT(desc->debug.stopped);
+    }
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z1013_DISPLAY_SIZE));
     CHIPS_ASSERT(desc->rom_font && (desc->rom_font_size == sizeof(sys->rom_font)));
     if (desc->type == Z1013_TYPE_01) {
@@ -172,6 +183,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
         .valid = true,
         .type = desc->type,
         .pixel_buffer = (uint32_t*) desc->pixel_buffer,
+        .debug = desc->debug,
         .freq_hz = (Z1013_TYPE_01 == desc->type) ? 1000000 : 2000000,
     };
     memcpy(sys->rom_font, desc->rom_font, sizeof(sys->rom_font));
@@ -319,13 +331,26 @@ void z1013_reset(z1013_t* sys) {
 
 void z1013_tick(z1013_t* sys) {
     sys->pins = _z1013_tick(sys, sys->pins);
+    if (sys->debug.callback) {
+        sys->debug.callback(sys->debug.user_data, sys->pins);
+    }
 }
 
 void z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
-    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-        sys->pins = _z1013_tick(sys, sys->pins);
+    if (0 == sys->debug.callback) {
+        // run without debug hook
+        for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+            sys->pins = _z1013_tick(sys, sys->pins);
+        }
+    }
+    else {
+        // run with debug hook
+        for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
+            sys->pins = _z1013_tick(sys, sys->pins);
+            sys->debug.callback(sys->debug.user_data, sys->pins);
+        }
     }
     kbd_update(&sys->kbd, micro_seconds);
     z1013_decode_vidmem(sys);
