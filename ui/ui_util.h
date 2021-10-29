@@ -65,7 +65,7 @@ void ui_util_b32(const char* label, uint32_t val);
 /* get an ImGui style color (ImGuiCol_*) with overall alpha applied */
 uint32_t ui_util_color(int imgui_color);
 /* inject the common options menu */
-void ui_util_options_menu(double time_ms, bool stopped);
+void ui_util_options_menu(void);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -170,7 +170,7 @@ uint32_t ui_util_color(int imgui_color) {
     return ImColor(c);
 }
 
-void ui_util_options_menu(double time_ms, bool stopped) {
+void ui_util_options_menu(void) {
     if (ImGui::BeginMenu("Options")) {
         ImGui::SliderFloat("UI Alpha", &ImGui::GetStyle().Alpha, 0.1f, 1.0f);
         ImGui::SliderFloat("BG Alpha", &ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w, 0.1f, 1.0f);
@@ -187,12 +187,6 @@ void ui_util_options_menu(double time_ms, bool stopped) {
         ImGui::EndMenu();
     }
     ImGui::SameLine(ImGui::GetWindowWidth() - 120);
-    if (stopped) {
-        ImGui::Text("emu: stopped");
-    }
-    else {
-        ImGui::Text("emu: %.2fms", time_ms);
-    }
 }
 
 #ifdef _MSC_VER

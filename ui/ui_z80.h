@@ -148,7 +148,6 @@ static void _ui_z80_regs(ui_z80_t* win) {
     ImGui::Separator();
     ImGui::Text("Addr:  %04X", Z80_GET_ADDR(cpu->pins));
     ImGui::Text("Data:  %02X", Z80_GET_DATA(cpu->pins));
-    ImGui::Text("Wait:  %s", cpu->pins & Z80_WAIT ? "ON":"OFF");
 }
 
 void ui_z80_draw(ui_z80_t* win) {

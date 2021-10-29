@@ -82,7 +82,7 @@ typedef struct {
 
 void ui_z1013_init(ui_z1013_t* ui, const ui_z1013_desc_t* desc);
 void ui_z1013_discard(ui_z1013_t* ui);
-void ui_z1013_draw(ui_z1013_t* ui, double time_ms);
+void ui_z1013_draw(ui_z1013_t* ui);
 z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui);
 
 #ifdef __cplusplus
@@ -104,7 +104,7 @@ z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_z1013_draw_menu(ui_z1013_t* ui, double time_ms) {
+static void _ui_z1013_draw_menu(ui_z1013_t* ui) {
     CHIPS_ASSERT(ui && ui->z1013 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -153,7 +153,7 @@ static void _ui_z1013_draw_menu(ui_z1013_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
@@ -358,9 +358,9 @@ void ui_z1013_discard(ui_z1013_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_z1013_draw(ui_z1013_t* ui, double time_ms) {
+void ui_z1013_draw(ui_z1013_t* ui) {
     CHIPS_ASSERT(ui && ui->z1013);
-    _ui_z1013_draw_menu(ui, time_ms);
+    _ui_z1013_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_z1013_update_memmap(ui);
     }

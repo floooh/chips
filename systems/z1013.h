@@ -127,8 +127,8 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
 void z1013_discard(z1013_t* sys);
 // reset Z1013 instance
 void z1013_reset(z1013_t* sys);
-// run the Z1013 instance for a given number of microseconds
-void z1013_exec(z1013_t* sys, uint32_t micro_seconds);
+// run the Z1013 instance for a given number of microseconds, returns number of executed ticks
+uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds);
 // get the standard framebuffer width and height in pixels
 int z1013_std_display_width(void);
 int z1013_std_display_height(void);
@@ -336,9 +336,9 @@ void z1013_tick(z1013_t* sys) {
     }
 }
 
-void z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
+uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
-    uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
+    const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
     if (0 == sys->debug.callback) {
         // run without debug hook
         for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
@@ -354,6 +354,7 @@ void z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
     }
     kbd_update(&sys->kbd, micro_seconds);
     z1013_decode_vidmem(sys);
+    return num_ticks;
 }
 
 void z1013_key_down(z1013_t* sys, int key_code) {
