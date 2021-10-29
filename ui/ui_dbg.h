@@ -193,14 +193,12 @@ typedef struct ui_dbg_state_t {
     #endif
     bool stopped;
     int step_mode;
-    uint32_t cpu_ticks;
-    uint32_t op_ticks;
-    uint64_t last_pins;         // cpu pins in last tick 
+    uint64_t last_tick_pins;    // cpu pins in last tick 
     uint32_t frame_id;          // used in trap callback to detect when a new frame has started
-    uint16_t last_pc;           // PC of current instruction
-    int last_op_ticks;          // last instruction tick count
-    int last_trap_id;           // can be used to identify breakpoint which caused trap
+    uint32_t cur_op_ticks;
+    uint16_t cur_op_pc;         // PC of current instruction
     uint16_t stepover_pc;
+    int last_trap_id;           // can be used to identify breakpoint which caused trap
     int delete_breakpoint_index;
     int num_breakpoints;
     ui_dbg_breakpoint_t breakpoints[UI_DBG_MAX_BREAKPOINTS];
@@ -326,7 +324,7 @@ static inline uint16_t _ui_dbg_read_word(ui_dbg_t* win, uint16_t addr) {
 }
 
 static inline uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
-    return win->dbg.last_pc;
+    return win->dbg.cur_op_pc;
 }
 
 /* disassembler callback to fetch the next instruction byte */
@@ -612,8 +610,7 @@ static void _ui_dbg_dbgstate_reset(ui_dbg_t* win) {
     ui_dbg_state_t* dbg = &win->dbg;
     dbg->stopped = false;
     dbg->step_mode = UI_DBG_STEPMODE_NONE;
-    dbg->last_pc = 0;
-    dbg->last_op_ticks = 0;
+    dbg->cur_op_pc = 0;
     dbg->last_trap_id = 0;
 }
 
@@ -696,7 +693,7 @@ static int _ui_dbg_eval_op_breakpoints(ui_dbg_t* win, int trap_id, uint16_t pc) 
 
 //  evaluate per-tick breakpoints, only call this if is dbg.step_mode is UI_DBG_STEPMODE_NONE!
 static int _ui_dbg_eval_tick_breakpoints(ui_dbg_t* win, int trap_id, uint64_t pins) {
-    uint64_t rising_pins = pins & (pins ^ win->dbg.last_pins);
+    uint64_t rising_pins = pins & (pins ^ win->dbg.last_tick_pins);
     for (int i = 0; (i < win->dbg.num_breakpoints) && (trap_id == 0); i++) {
         const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
         if (bp->enabled) {
@@ -1087,7 +1084,7 @@ static void _ui_dbg_heatmap_record_op(ui_dbg_t* win, uint16_t pc) {
         win->heatmap.items[(pc + i) & 0xFFFF].op_start = pc;
     }
     // update last instruction's ticks
-    win->heatmap.items[win->dbg.last_pc].ticks = win->dbg.cpu_ticks - win->dbg.last_op_ticks;
+    win->heatmap.items[win->dbg.cur_op_pc].ticks = win->dbg.cur_op_ticks;
 }
 
 static void _ui_dbg_heatmap_record_tick(ui_dbg_t* win, uint64_t pins) {
@@ -1772,7 +1769,7 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
             ImGui::SameLine(x);
             if (ticks > 0) {
                 if (is_pc_line) {
-                    ImGui::Text("%d/%d", win->dbg.op_ticks, ticks);
+                    ImGui::Text("%d/%d", win->dbg.cur_op_ticks, ticks);
                 }
                 else {
                     ImGui::Text("%d", ticks);
@@ -1780,7 +1777,7 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
             }
             else if (show_dasm) {
                 if (is_pc_line) {
-                    ImGui::Text("%d/?", win->dbg.op_ticks);
+                    ImGui::Text("%d/?", win->dbg.cur_op_ticks);
                 }
                 else {
                     ImGui::Text("?");
@@ -1871,21 +1868,19 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
         const bool new_op = z80_opdone(win->dbg.z80);
     #endif
     if (new_op) {
-        win->dbg.op_ticks = 0;
         const uint16_t pc = pins & 0xFFFF;
         trap_id = _ui_dbg_eval_op_breakpoints(win, trap_id, pc);
         _ui_dbg_heatmap_record_op(win, pc);
         _ui_dbg_history_push(win, pc);
-        win->dbg.last_pc = pc;
-        win->dbg.last_op_ticks = win->dbg.cpu_ticks;
+        win->dbg.cur_op_ticks = 0;
+        win->dbg.cur_op_pc = pc;
     }
     if (win->dbg.step_mode == UI_DBG_STEPMODE_NONE) {
         trap_id = _ui_dbg_eval_tick_breakpoints(win, trap_id, pins);
     }
     _ui_dbg_heatmap_record_tick(win, pins);
-    win->dbg.cpu_ticks++;
-    win->dbg.op_ticks++;
-    win->dbg.last_pins = pins;
+    win->dbg.cur_op_ticks++;
+    win->dbg.last_tick_pins = pins;
 
     if (trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
