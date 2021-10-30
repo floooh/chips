@@ -162,10 +162,6 @@ void z1013_decode_vidmem(z1013_t* sys);
 #define _Z1013_DISPLAY_HEIGHT (256)
 #define _Z1013_DISPLAY_SIZE (_Z1013_DISPLAY_WIDTH*_Z1013_DISPLAY_HEIGHT*4)
 
-static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins);
-static uint8_t _z1013_pio_in(int port_id, void* user_data);
-static void _z1013_pio_out(int port_id, uint8_t data, void* user_data);
-
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     if (desc->debug.callback) {
@@ -196,11 +192,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
 
     // initialize the hardware
     sys->pins = z80_init(&sys->cpu);
-    z80pio_init(&sys->pio, &(z80pio_desc_t){
-        .in_cb = _z1013_pio_in,
-        .out_cb = _z1013_pio_out,
-        .user_data = sys,
-    });
+    z80pio_init(&sys->pio);
 
     // execution starts at 0xF000
     z80_prefetch(&sys->cpu, 0xF000);
@@ -329,37 +321,6 @@ void z1013_reset(z1013_t* sys) {
     z80_prefetch(&sys->cpu, 0xF000);
 }
 
-uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
-    if (0 == sys->debug.callback) {
-        // run without debug hook
-        for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-            sys->pins = _z1013_tick(sys, sys->pins);
-        }
-    }
-    else {
-        // run with debug hook
-        for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
-            sys->pins = _z1013_tick(sys, sys->pins);
-            sys->debug.callback(sys->debug.user_data, sys->pins);
-        }
-    }
-    kbd_update(&sys->kbd, micro_seconds);
-    z1013_decode_vidmem(sys);
-    return num_ticks;
-}
-
-void z1013_key_down(z1013_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    kbd_key_down(&sys->kbd, key_code);
-}
-
-void z1013_key_up(z1013_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    kbd_key_up(&sys->kbd, key_code);
-}
-
 static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
     pins = z80_tick(&sys->cpu, pins) & Z80_PIN_MASK;
     if (pins & Z80_MREQ) {
@@ -422,43 +383,54 @@ static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
 
     // tick the PIO, no interrupts on the Z1013, so we don't need to worry
     // about interrupt handling
-    pins = z80pio_tick(&sys->pio, pins);
+    {
+        uint16_t column_mask = 1 << sys->kbd_request_column;
+        uint16_t line_mask = kbd_test_lines(&sys->kbd, column_mask);
+        if ((Z1013_TYPE_01 != sys->type) && sys->kbd_request_line_hilo) {
+            line_mask >>= 4;
+        }
+        const uint8_t pb = 0x0F & ~(line_mask & 0x0F);
+        Z80PIO_SET_PAB(pins, 0xFF, pb);
+        pins = z80pio_tick(&sys->pio, pins);
+        // bit 4 for 8x8 keyboard selects upper or lower 4 kbd matrix line bits
+        sys->kbd_request_line_hilo = (Z80PIO_GET_PB(pins) & (1<<4)) != 0;
+        // bit 7 is cassette output, not emulated
+    }
     return pins & Z80_PIN_MASK;
 }
 
-// the PIO input callback handles keyboard input
-static uint8_t _z1013_pio_in(int port_id, void* user_data) {
-    z1013_t* sys = (z1013_t*) user_data;
-    if (Z80PIO_PORT_A == port_id) {
-        // nothing to return here, PIO port A is for user devices
-        return 0xFF;
+uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
+    if (0 == sys->debug.callback) {
+        // run without debug hook
+        for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+            sys->pins = _z1013_tick(sys, sys->pins);
+        }
     }
     else {
-        /* port B is for cassette input (bit 7, not implemented), 
-            and the lower 4 bits are for are connected to the keyboard matrix lines
-        */
-        uint16_t column_mask = 1 << sys->kbd_request_column;
-        uint16_t line_mask = kbd_test_lines(&sys->kbd, column_mask);
-        if (Z1013_TYPE_01 != sys->type) {
-            if (sys->kbd_request_line_hilo) {
-                line_mask >>= 4;
-            }
+        // run with debug hook
+        for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
+            sys->pins = _z1013_tick(sys, sys->pins);
+            sys->debug.callback(sys->debug.user_data, sys->pins);
         }
-        return 0x0F & ~(line_mask & 0x0F);
     }
+    kbd_update(&sys->kbd, micro_seconds);
+    z1013_decode_vidmem(sys);
+    return num_ticks;
 }
 
-// the PIO output callback selects the upper or lower 4 lines for the next keyboard scan
-static void _z1013_pio_out(int port_id, uint8_t data, void* user_data) {
-    z1013_t* sys = (z1013_t*) user_data;
-    if (Z80PIO_PORT_B == port_id) {
-        // bit 4 for 8x8 keyboard selects upper or lower 4 kbd matrix line bits
-        sys->kbd_request_line_hilo = (data & (1<<4)) != 0;
-        // bit 7 is cassette output, not emulated
-    }
+void z1013_key_down(z1013_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_down(&sys->kbd, key_code);
 }
 
-/* since the Z1013 didn't have any sort of programmable video output, 
+void z1013_key_up(z1013_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_up(&sys->kbd, key_code);
+}
+
+/* since the Z1013 didn't have any sort of programmable video output,
     we're cheating a bit and decode the entire frame in one go
 */
 void z1013_decode_vidmem(z1013_t* sys) {

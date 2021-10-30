@@ -70,7 +70,7 @@ typedef struct {
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_keysdesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_atom_desc_t;
 
 typedef struct {
