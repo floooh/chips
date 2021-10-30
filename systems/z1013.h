@@ -329,13 +329,6 @@ void z1013_reset(z1013_t* sys) {
     z80_prefetch(&sys->cpu, 0xF000);
 }
 
-void z1013_tick(z1013_t* sys) {
-    sys->pins = _z1013_tick(sys, sys->pins);
-    if (sys->debug.callback) {
-        sys->debug.callback(sys->debug.user_data, sys->pins);
-    }
-}
-
 uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
@@ -367,24 +360,22 @@ void z1013_key_up(z1013_t* sys, int key_code) {
     kbd_key_up(&sys->kbd, key_code);
 }
 
-static uint64_t _z1013_tick(z1013_t* sys, uint64_t cpu_pins) {
-    cpu_pins = z80_tick(&sys->cpu, cpu_pins);
-    uint64_t pio_pins = cpu_pins & Z80_PIN_MASK;
-
-    if (cpu_pins & Z80_MREQ) {
+static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
+    pins = z80_tick(&sys->cpu, pins) & Z80_PIN_MASK;
+    if (pins & Z80_MREQ) {
         // a memory request
-        const uint16_t addr = Z80_GET_ADDR(cpu_pins);
-        if (cpu_pins & Z80_RD) {
+        const uint16_t addr = Z80_GET_ADDR(pins);
+        if (pins & Z80_RD) {
             // read memory byte
-            Z80_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
+            Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
         }
-        else if (cpu_pins & Z80_WR) {
+        else if (pins & Z80_WR) {
             // write memory byte
-            mem_wr(&sys->mem, addr, Z80_GET_DATA(cpu_pins));
+            mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
         }
     }
-    else if (cpu_pins & Z80_IORQ) {
-        // address decoding
+    else if (pins & Z80_IORQ) {
+        // an IO request
 
         /*
             The PIO Chip-Enable pin (Z80PIO_CE) is connected to output pin 0 of
@@ -414,29 +405,25 @@ static uint64_t _z1013_tick(z1013_t* sys, uint64_t cpu_pins) {
             in that order. Next the CPU reads back the keyboard matrix lines
             in 2 steps of 4 bits each from PIO port B.
         */
-        if ((cpu_pins & (Z80_A4|Z80_A3|Z80_A2)) == 0) {
+        if ((pins & (Z80_A4|Z80_A3|Z80_A2)) == 0) {
             // address bits A2..A4 are zero, this activates the PIO chip-select pin
-            pio_pins |= Z80PIO_CE;
+            pins |= Z80PIO_CE;
             // address bit 0 selects data/ctrl
-            if (pio_pins & (1<<0)) pio_pins |= Z80PIO_CDSEL;
+            if (pins & (1<<0)) pins |= Z80PIO_CDSEL;
             // address bit 1 selects port A/B
-            if (pio_pins & (1<<1)) pio_pins |= Z80PIO_BASEL;
+            if (pins & (1<<1)) pins |= Z80PIO_BASEL;
         }
-        else if ((cpu_pins & (Z80_A3|Z80_WR)) == (Z80_A3|Z80_WR)) {
-            /* port 8 is connected to a hardware latch to store the
-               requested keyboard column for the next keyboard scan
-            */
-            sys->kbd_request_column = Z80_GET_DATA(cpu_pins) & 7;
+        else if ((pins & (Z80_A3|Z80_WR)) == (Z80_A3|Z80_WR)) {
+            // port 8 is connected to a hardware latch to store the requested
+            // keyboard column for the next keyboard scan
+            sys->kbd_request_column = Z80_GET_DATA(pins) & 7;
         }
     }
 
     // tick the PIO, no interrupts on the Z1013, so we don't need to worry
     // about interrupt handling
-    pio_pins = z80pio_tick(&sys->pio, pio_pins);
-    if ((pio_pins & (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_RD)) == (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_RD)) {
-        cpu_pins = Z80_COPY_DATA(cpu_pins, pio_pins);
-    }
-    return cpu_pins;
+    pins = z80pio_tick(&sys->pio, pins);
+    return pins & Z80_PIN_MASK;
 }
 
 // the PIO input callback handles keyboard input
