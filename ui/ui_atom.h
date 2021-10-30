@@ -70,7 +70,7 @@ typedef struct {
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keysdesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_atom_desc_t;
 
 typedef struct {
@@ -90,8 +90,8 @@ typedef struct {
 
 void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc);
 void ui_atom_discard(ui_atom_t* ui);
-void ui_atom_draw(ui_atom_t* ui, double time_ms);
-void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us);
+void ui_atom_draw(ui_atom_t* ui);
+atom_debug_t ui_atom_get_debug(ui_atom_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -112,7 +112,7 @@ void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
+static void _ui_atom_draw_menu(ui_atom_t* ui) {
     CHIPS_ASSERT(ui && ui->atom && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -166,7 +166,7 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
@@ -482,9 +482,9 @@ void ui_atom_discard(ui_atom_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_atom_draw(ui_atom_t* ui, double time_ms) {
+void ui_atom_draw(ui_atom_t* ui) {
     CHIPS_ASSERT(ui && ui->atom);
-    _ui_atom_draw_menu(ui, time_ms);
+    _ui_atom_draw_menu(ui);
     ui_audio_draw(&ui->audio, ui->atom->sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
@@ -499,14 +499,12 @@ void ui_atom_draw(ui_atom_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us) {
-    CHIPS_ASSERT(ui && ui->atom);
-    uint32_t ticks_to_run = clk_us_to_ticks(ATOM_FREQUENCY, frame_time_us);
-    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-        atom_tick(ui->atom);
-        ui_dbg_tick(&ui->dbg, ui->atom->pins);
-    }
-    kbd_update(&ui->atom->kbd, frame_time_us);
+atom_debug_t ui_atom_get_debug(ui_atom_t* ui) {
+    return (atom_debug_t){
+        .callback = (atom_debug_callback_t) ui_dbg_tick,
+        .stopped = &ui->dbg.dbg.stopped,
+        .user_data = &ui->dbg
+    };
 }
 
 #ifdef __clang__

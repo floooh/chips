@@ -58,6 +58,7 @@
 */
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,9 +85,18 @@ typedef enum {
 /* audio sample data callback */
 typedef void (*atom_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
+// debugging hook definitions
+typedef void (*atom_debug_callback_t)(void* user_data, uint64_t pins);
+typedef struct {
+    atom_debug_callback_t callback;
+    bool* stopped;
+    void* user_data;
+} atom_debug_t;
+
 /* configuration parameters for atom_init() */
 typedef struct {
     atom_joystick_type_t joystick_type;     /* what joystick type to emulate, default is ATOM_JOYSTICK_NONE */
+    atom_debug_t debug;                     // optional debug callback and userdata ptr
 
     /* video output config */
     void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes */
@@ -112,12 +122,13 @@ typedef struct {
 
 /* Acorn Atom emulation state */
 typedef struct {
-    uint64_t pins;
-    m6502_t cpu;
+    alignas(64) m6502_t cpu;
     mc6847_t vdg;
     i8255_t ppi;
     m6522_t via;
     beeper_t beeper;
+    atom_debug_t debug;
+    uint64_t pins;
     bool valid;
     int counter_2_4khz;
     int period_2_4khz;
@@ -148,6 +159,10 @@ typedef struct {
 void atom_init(atom_t* sys, const atom_desc_t* desc);
 /* discard Atom instance */
 void atom_discard(atom_t* sys);
+/* reset Atom instance */
+void atom_reset(atom_t* sys);
+/* run Atom instance for a number of microseconds */
+uint32_t atom_exec(atom_t* sys, uint32_t micro_seconds);
 /* get the standard framebuffer width and height in pixels */
 int atom_std_display_width(void);
 int atom_std_display_height(void);
@@ -156,12 +171,6 @@ int atom_max_display_size(void);
 /* get the current framebuffer width and height in pixels */
 int atom_display_width(atom_t* sys);
 int atom_display_height(atom_t* sys);
-/* reset Atom instance */
-void atom_reset(atom_t* sys);
-/* execute a single tick */
-void atom_tick(atom_t* sys);
-/* run Atom instance for a number of microseconds */
-void atom_exec(atom_t* sys, uint32_t micro_seconds);
 /* send a key down event */
 void atom_key_down(atom_t* sys, int key_code);
 /* send a key up event */
@@ -191,25 +200,29 @@ void atom_remove_tape(atom_t* sys);
 
 #define _ATOM_ROM_DOSROM_SIZE (0x1000)
 
-static uint64_t _atom_tick(atom_t* sys, uint64_t pins);
 static uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data);
 static void _atom_init_keymap(atom_t* sys);
 static void _atom_init_memorymap(atom_t* sys);
 static uint64_t _atom_osload(atom_t* sys, uint64_t pins);
 
 #define _ATOM_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
-#define _ATOM_CLEAR(val) memset(&val, 0, sizeof(val))
 
 void atom_init(atom_t* sys, const atom_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= atom_max_display_size()));
+    if (desc->debug.callback) {
+        CHIPS_ASSERT(desc->debug.stopped);
+    }
 
-    memset(sys, 0, sizeof(atom_t));
-    sys->valid = true;
-    sys->joystick_type = desc->joystick_type;
-    sys->user_data = desc->user_data;
-    sys->audio_cb = desc->audio_cb;
-    sys->num_samples = _ATOM_DEFAULT(desc->audio_num_samples, ATOM_DEFAULT_AUDIO_SAMPLES);
+    *sys = (atom_t) {
+        .valid = true,
+        .joystick_type = desc->joystick_type,
+        .user_data = desc->user_data,
+        .audio_cb = desc->audio_cb,
+        .num_samples = _ATOM_DEFAULT(desc->audio_num_samples, ATOM_DEFAULT_AUDIO_SAMPLES),
+        .debug = desc->debug,
+        .period_2_4khz = ATOM_FREQUENCY / 4800,
+    };
     CHIPS_ASSERT(sys->num_samples <= ATOM_MAX_AUDIO_SAMPLES);
     CHIPS_ASSERT(desc->rom_abasic && (desc->rom_abasic_size == sizeof(sys->rom_abasic)));
     memcpy(sys->rom_abasic, desc->rom_abasic, sizeof(sys->rom_abasic));
@@ -219,21 +232,14 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     memcpy(&sys->rom_dosrom, desc->rom_dosrom, sizeof(sys->rom_dosrom));
 
     /* initialize the hardware */
-    sys->period_2_4khz = ATOM_FREQUENCY / 4800;
-
-    m6502_desc_t cpu_desc;
-    _ATOM_CLEAR(cpu_desc);
-    sys->pins = m6502_init(&sys->cpu, &cpu_desc);
-
-    mc6847_desc_t vdg_desc;
-    _ATOM_CLEAR(vdg_desc);
-    vdg_desc.tick_hz = ATOM_FREQUENCY;
-    vdg_desc.rgba8_buffer = (uint32_t*) desc->pixel_buffer;
-    vdg_desc.rgba8_buffer_size = desc->pixel_buffer_size;
-    vdg_desc.fetch_cb = _atom_vdg_fetch;
-    vdg_desc.user_data = sys;
-    mc6847_init(&sys->vdg, &vdg_desc);
-
+    sys->pins = m6502_init(&sys->cpu, &(m6502_desc_t){0});
+    mc6847_init(&sys->vdg, &(mc6847_desc_t){
+        .tick_hz = ATOM_FREQUENCY,
+        .rgba8_buffer = (uint32_t*) desc->pixel_buffer,
+        .rgba8_buffer_size = desc->pixel_buffer_size,
+        .fetch_cb = _atom_vdg_fetch,
+        .user_data = sys,
+    });
     i8255_init(&sys->ppi);
     m6522_init(&sys->via);
 
@@ -251,30 +257,6 @@ void atom_discard(atom_t* sys) {
     sys->valid = false;
 }
 
-int atom_std_display_width(void) {
-    return MC6847_DISPLAY_WIDTH;
-}
-
-int atom_std_display_height(void) {
-    return MC6847_DISPLAY_HEIGHT;
-}
-
-int atom_max_display_size(void) {
-    return MC6847_DISPLAY_WIDTH * MC6847_DISPLAY_HEIGHT * 4;
-}
-
-int atom_display_width(atom_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    (void)sys;
-    return MC6847_DISPLAY_WIDTH;
-}
-
-int atom_display_height(atom_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    (void)sys;
-    return MC6847_DISPLAY_HEIGHT;
-}
-
 void atom_reset(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->pins |= M6502_RES;
@@ -285,75 +267,7 @@ void atom_reset(atom_t* sys) {
     sys->state_2_4khz = false;
 }
 
-void atom_tick(atom_t* sys) {
-    sys->pins = _atom_tick(sys, sys->pins);
-}
-
-void atom_exec(atom_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    uint32_t num_ticks = clk_us_to_ticks(ATOM_FREQUENCY, micro_seconds);
-    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-        sys->pins = _atom_tick(sys, sys->pins);
-    }
-    kbd_update(&sys->kbd, micro_seconds);
-}
-
-void atom_key_down(atom_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    switch (sys->joystick_type) {
-        case ATOM_JOYSTICKTYPE_NONE:
-            kbd_key_down(&sys->kbd, key_code);
-            break;
-        case ATOM_JOYSTICKTYPE_MMC:
-            switch (key_code) {
-                case 0x20:  sys->kbd_joymask |= ATOM_JOYSTICK_BTN; break;
-                case 0x08:  sys->kbd_joymask |= ATOM_JOYSTICK_LEFT; break;
-                case 0x09:  sys->kbd_joymask |= ATOM_JOYSTICK_RIGHT; break;
-                case 0x0A:  sys->kbd_joymask |= ATOM_JOYSTICK_DOWN; break;
-                case 0x0B:  sys->kbd_joymask |= ATOM_JOYSTICK_UP; break;
-                default:    kbd_key_down(&sys->kbd, key_code); break;
-            }
-            break;
-    }
-}
-
-void atom_key_up(atom_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    switch (sys->joystick_type) {
-        case ATOM_JOYSTICKTYPE_NONE:
-            kbd_key_up(&sys->kbd, key_code);
-            break;
-        case ATOM_JOYSTICKTYPE_MMC:
-            switch (key_code) {
-                case 0x20:  sys->kbd_joymask &= ~ATOM_JOYSTICK_BTN; break;
-                case 0x08:  sys->kbd_joymask &= ~ATOM_JOYSTICK_LEFT; break;
-                case 0x09:  sys->kbd_joymask &= ~ATOM_JOYSTICK_RIGHT; break;
-                case 0x0A:  sys->kbd_joymask &= ~ATOM_JOYSTICK_DOWN; break;
-                case 0x0B:  sys->kbd_joymask &= ~ATOM_JOYSTICK_UP; break;
-                default:    kbd_key_up(&sys->kbd, key_code); break;
-            }
-            break;
-    }
-}
-
-void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->joystick_type = type;
-}
-
-atom_joystick_type_t atom_joystick_type(atom_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->joystick_type;
-}
-
-void atom_joystick(atom_t* sys, uint8_t mask) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->joy_joymask = mask;
-}
-
-/* CPU tick callback */
 uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
-
     /* tick the CPU */
     cpu_pins = m6502_tick(&sys->cpu, cpu_pins);
 
@@ -411,7 +325,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
                     sys->mmc_cmd = M6502_GET_DATA(cpu_pins);
                 }
             }
-        } 
+        }
         else if ((addr >= 0xB800) && (addr < 0xBC00)) {
             /* 6522 VIA: http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_6522.htm */
             via_pins |= M6522_CS1;
@@ -511,6 +425,28 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
     return cpu_pins;
 }
 
+uint32_t atom_exec(atom_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    uint32_t num_ticks = clk_us_to_ticks(ATOM_FREQUENCY, micro_seconds);
+    uint64_t pins = sys->pins;
+    if (0 == sys->debug.callback) {
+        // run without debug hook
+        for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+            pins = _atom_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debug hook]
+        for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
+            pins = _atom_tick(sys, pins);
+            sys->debug.callback(sys->debug.user_data, pins);
+        }
+    }
+    sys->pins = pins;
+    kbd_update(&sys->kbd, micro_seconds);
+    return num_ticks;
+}
+
 uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data) {
     atom_t* sys = (atom_t*) user_data;
     const uint16_t addr = MC6847_GET_ADDR(pins);
@@ -528,6 +464,83 @@ uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data) {
     if (data & (1<<6)) { pins |= (MC6847_AS|MC6847_INTEXT); }
     else               { pins &= ~(MC6847_AS|MC6847_INTEXT); }
     return pins;
+}
+
+void atom_key_down(atom_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    switch (sys->joystick_type) {
+        case ATOM_JOYSTICKTYPE_NONE:
+            kbd_key_down(&sys->kbd, key_code);
+            break;
+        case ATOM_JOYSTICKTYPE_MMC:
+            switch (key_code) {
+                case 0x20:  sys->kbd_joymask |= ATOM_JOYSTICK_BTN; break;
+                case 0x08:  sys->kbd_joymask |= ATOM_JOYSTICK_LEFT; break;
+                case 0x09:  sys->kbd_joymask |= ATOM_JOYSTICK_RIGHT; break;
+                case 0x0A:  sys->kbd_joymask |= ATOM_JOYSTICK_DOWN; break;
+                case 0x0B:  sys->kbd_joymask |= ATOM_JOYSTICK_UP; break;
+                default:    kbd_key_down(&sys->kbd, key_code); break;
+            }
+            break;
+    }
+}
+
+void atom_key_up(atom_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    switch (sys->joystick_type) {
+        case ATOM_JOYSTICKTYPE_NONE:
+            kbd_key_up(&sys->kbd, key_code);
+            break;
+        case ATOM_JOYSTICKTYPE_MMC:
+            switch (key_code) {
+                case 0x20:  sys->kbd_joymask &= ~ATOM_JOYSTICK_BTN; break;
+                case 0x08:  sys->kbd_joymask &= ~ATOM_JOYSTICK_LEFT; break;
+                case 0x09:  sys->kbd_joymask &= ~ATOM_JOYSTICK_RIGHT; break;
+                case 0x0A:  sys->kbd_joymask &= ~ATOM_JOYSTICK_DOWN; break;
+                case 0x0B:  sys->kbd_joymask &= ~ATOM_JOYSTICK_UP; break;
+                default:    kbd_key_up(&sys->kbd, key_code); break;
+            }
+            break;
+    }
+}
+
+void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joystick_type = type;
+}
+
+atom_joystick_type_t atom_joystick_type(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->joystick_type;
+}
+
+void atom_joystick(atom_t* sys, uint8_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joy_joymask = mask;
+}
+
+int atom_std_display_width(void) {
+    return MC6847_DISPLAY_WIDTH;
+}
+
+int atom_std_display_height(void) {
+    return MC6847_DISPLAY_HEIGHT;
+}
+
+int atom_max_display_size(void) {
+    return MC6847_DISPLAY_WIDTH * MC6847_DISPLAY_HEIGHT * 4;
+}
+
+int atom_display_width(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    (void)sys;
+    return MC6847_DISPLAY_WIDTH;
+}
+
+int atom_display_height(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    (void)sys;
+    return MC6847_DISPLAY_HEIGHT;
 }
 
 static void _atom_init_keymap(atom_t* sys) {
