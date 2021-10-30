@@ -64,6 +64,7 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,7 +77,7 @@ typedef enum {
     Z1013_TYPE_01,      // Z1013.01 (original model, 1 MHz, 16 KB RAM)
 } z1013_type_t;
 
-// debug hook function, called per tick
+// debugging hook definitions
 typedef void (*z1013_debug_callback_t)(void* user_data, uint64_t pins);
 typedef struct {
     z1013_debug_callback_t callback;
@@ -104,16 +105,16 @@ typedef struct {
 
 // Z1013 emulator state
 typedef struct {
-    uint64_t pins;
-    z80_t cpu;
+    alignas(64) z80_t cpu;
     z80pio_t pio;
-    z1013_debug_t debug;
-    bool valid;
-    z1013_type_t type;
-    uint8_t kbd_request_column;
-    bool kbd_request_line_hilo;
-    uint32_t* pixel_buffer;
     mem_t mem;
+    z1013_debug_t debug;
+    uint64_t pins;
+    z1013_type_t type;
+    bool valid;
+    uint16_t kbd_request_line_mask;
+    int kbd_request_line_hilo_shift;
+    uint32_t* pixel_buffer;
     kbd_t kbd;
     uint64_t freq_hz;
     uint8_t ram[1<<16];
@@ -143,8 +144,6 @@ void z1013_key_down(z1013_t* sys, int key_code);
 void z1013_key_up(z1013_t* sys, int key_code);
 // load a "KC .z80" file into the emulator
 bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
-// pseudo-private helper function for ui_z1013.h
-void z1013_decode_vidmem(z1013_t* sys);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -164,11 +163,11 @@ void z1013_decode_vidmem(z1013_t* sys);
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
+    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z1013_DISPLAY_SIZE));
+    CHIPS_ASSERT(desc->rom_font && (desc->rom_font_size == sizeof(sys->rom_font)));
     if (desc->debug.callback) {
         CHIPS_ASSERT(desc->debug.stopped);
     }
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z1013_DISPLAY_SIZE));
-    CHIPS_ASSERT(desc->rom_font && (desc->rom_font_size == sizeof(sys->rom_font)));
     if (desc->type == Z1013_TYPE_01) {
         CHIPS_ASSERT(desc->rom_mon202 && (desc->rom_mon202_size == sizeof(sys->rom_os)));
     }
@@ -291,33 +290,12 @@ void z1013_discard(z1013_t* sys) {
     sys->valid = false;
 }
 
-int z1013_std_display_width(void) {
-    return _Z1013_DISPLAY_WIDTH;
-}
-
-int z1013_std_display_height(void) {
-    return _Z1013_DISPLAY_HEIGHT;
-}
-
-int z1013_max_display_size(void) {
-    return _Z1013_DISPLAY_SIZE;
-}
-
-int z1013_display_width(z1013_t* sys) {
-    (void)sys;
-    return _Z1013_DISPLAY_WIDTH;
-}
-
-int z1013_display_height(z1013_t* sys) {
-    (void)sys;
-    return _Z1013_DISPLAY_HEIGHT;
-}
-
 void z1013_reset(z1013_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     z80_reset(&sys->cpu);
     z80pio_reset(&sys->pio);
-    sys->kbd_request_column = 0;
+    sys->kbd_request_line_mask = 0;
+    sys->kbd_request_line_hilo_shift = 0;
     z80_prefetch(&sys->cpu, 0xF000);
 }
 
@@ -377,63 +355,30 @@ static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
         else if ((pins & (Z80_A3|Z80_WR)) == (Z80_A3|Z80_WR)) {
             // port 8 is connected to a hardware latch to store the requested
             // keyboard column for the next keyboard scan
-            sys->kbd_request_column = Z80_GET_DATA(pins) & 7;
+            uint8_t column_mask = 1 << (Z80_GET_DATA(pins) & 7);
+            sys->kbd_request_line_mask = ~kbd_test_lines(&sys->kbd, column_mask);
         }
     }
 
-    // tick the PIO, no interrupts on the Z1013, so we don't need to worry
-    // about interrupt handling
+    // tick the PIO, no interrupts on the Z1013
     {
-        uint16_t column_mask = 1 << sys->kbd_request_column;
-        uint16_t line_mask = kbd_test_lines(&sys->kbd, column_mask);
-        if ((Z1013_TYPE_01 != sys->type) && sys->kbd_request_line_hilo) {
-            line_mask >>= 4;
-        }
-        const uint8_t pb = 0x0F & ~(line_mask & 0x0F);
+        uint8_t pb = sys->kbd_request_line_mask >> sys->kbd_request_line_hilo_shift;
         Z80PIO_SET_PAB(pins, 0xFF, pb);
         pins = z80pio_tick(&sys->pio, pins);
         // bit 4 for 8x8 keyboard selects upper or lower 4 kbd matrix line bits
-        sys->kbd_request_line_hilo = (Z80PIO_GET_PB(pins) & (1<<4)) != 0;
+        if (Z1013_TYPE_01 != sys->type) {
+            // kbd_request_line_hilo_shift will be 0 or 4
+            sys->kbd_request_line_hilo_shift = (Z80PIO_GET_PB(pins) & (1<<4)) >> 2;
+        }
         // bit 7 is cassette output, not emulated
     }
     return pins & Z80_PIN_MASK;
 }
 
-uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
-    if (0 == sys->debug.callback) {
-        // run without debug hook
-        for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-            sys->pins = _z1013_tick(sys, sys->pins);
-        }
-    }
-    else {
-        // run with debug hook
-        for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
-            sys->pins = _z1013_tick(sys, sys->pins);
-            sys->debug.callback(sys->debug.user_data, sys->pins);
-        }
-    }
-    kbd_update(&sys->kbd, micro_seconds);
-    z1013_decode_vidmem(sys);
-    return num_ticks;
-}
-
-void z1013_key_down(z1013_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    kbd_key_down(&sys->kbd, key_code);
-}
-
-void z1013_key_up(z1013_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    kbd_key_up(&sys->kbd, key_code);
-}
-
 /* since the Z1013 didn't have any sort of programmable video output,
     we're cheating a bit and decode the entire frame in one go
 */
-void z1013_decode_vidmem(z1013_t* sys) {
+static void _z1013_decode_vidmem(z1013_t* sys) {
     uint32_t* dst = sys->pixel_buffer;
     const uint8_t* src = &sys->ram[0xEC00];   // the 32x32 framebuffer starts at EC00
     const uint8_t* font = sys->rom_font;
@@ -448,6 +393,61 @@ void z1013_decode_vidmem(z1013_t* sys) {
             }
         }
     }
+}
+
+uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
+    uint64_t pins = sys->pins;
+    if (0 == sys->debug.callback) {
+        // run without debug hook
+        for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+            pins = _z1013_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debug hook
+        for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
+            pins = _z1013_tick(sys, pins);
+            sys->debug.callback(sys->debug.user_data, pins);
+        }
+    }
+    sys->pins = pins;
+    kbd_update(&sys->kbd, micro_seconds);
+    _z1013_decode_vidmem(sys);
+    return num_ticks;
+}
+
+void z1013_key_down(z1013_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_down(&sys->kbd, key_code);
+}
+
+void z1013_key_up(z1013_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kbd_key_up(&sys->kbd, key_code);
+}
+
+int z1013_std_display_width(void) {
+    return _Z1013_DISPLAY_WIDTH;
+}
+
+int z1013_std_display_height(void) {
+    return _Z1013_DISPLAY_HEIGHT;
+}
+
+int z1013_max_display_size(void) {
+    return _Z1013_DISPLAY_SIZE;
+}
+
+int z1013_display_width(z1013_t* sys) {
+    (void)sys;
+    return _Z1013_DISPLAY_WIDTH;
+}
+
+int z1013_display_height(z1013_t* sys) {
+    (void)sys;
+    return _Z1013_DISPLAY_HEIGHT;
 }
 
 //=== FILE LOADING =============================================================
