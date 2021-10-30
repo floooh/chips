@@ -547,8 +547,7 @@ uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
             }
         }
     }
-    Z80PIO_SET_PA(pins, pio->port[Z80PIO_PORT_A].port);
-    Z80PIO_SET_PB(pins, pio->port[Z80PIO_PORT_B].port);
+    Z80PIO_SET_PAB(pins, pio->port[Z80PIO_PORT_A].port, pio->port[Z80PIO_PORT_B].port);
     pio->pins = pins;
     return pins;
 }
