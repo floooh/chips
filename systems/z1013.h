@@ -91,16 +91,26 @@ typedef struct {
     z1013_debug_t debug;        // optional debug callback and userdata ptr
 
     // video output config
-    void* pixel_buffer;         // pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes
-    int pixel_buffer_size;      // size of the pixel buffer in bytes
+    struct {
+        void* ptr;          // pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes
+        size_t size;        // size of the pixel buffer in bytes
+    } pixel_buffer;
 
     // ROM images
-    const void* rom_mon202;
-    const void* rom_mon_a2;
-    const void* rom_font;
-    int rom_mon202_size;
-    int rom_mon_a2_size;
-    int rom_font_size;
+    struct {
+        struct {
+            const void* ptr;
+            const size_t size;
+        } mon202;
+        struct {
+            const void* ptr;
+            const size_t size;
+        } mon_a2;
+        struct {
+            const void* ptr;
+            const size_t size;
+        } font;
+    } roms;
 } z1013_desc_t;
 
 // Z1013 emulator state
@@ -134,7 +144,7 @@ uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds);
 int z1013_std_display_width(void);
 int z1013_std_display_height(void);
 // get the maximum framebuffer size in number of bytes
-int z1013_max_display_size(void);
+size_t z1013_max_display_size(void);
 // get the current framebuffer width and height in pixels
 int z1013_display_width(z1013_t* sys);
 int z1013_display_height(z1013_t* sys);
@@ -163,30 +173,27 @@ bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= _Z1013_DISPLAY_SIZE));
-    CHIPS_ASSERT(desc->rom_font && (desc->rom_font_size == sizeof(sys->rom_font)));
+    CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _Z1013_DISPLAY_SIZE));
     if (desc->debug.callback) {
         CHIPS_ASSERT(desc->debug.stopped);
     }
+    memset(sys, 0, sizeof(z1013_t));
+    sys->valid = true;
+    sys->type = desc->type;
+    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
+    sys->debug = desc->debug;
+    sys->freq_hz = (Z1013_TYPE_01 == desc->type) ? 1000000 : 2000000;
+
+    // copy ROM dumps
+    CHIPS_ASSERT(desc->roms.font.ptr && (desc->roms.font.size == sizeof(sys->rom_font)));
+    memcpy(sys->rom_font, desc->roms.font.ptr, sizeof(sys->rom_font));
     if (desc->type == Z1013_TYPE_01) {
-        CHIPS_ASSERT(desc->rom_mon202 && (desc->rom_mon202_size == sizeof(sys->rom_os)));
+        CHIPS_ASSERT(desc->roms.mon202.ptr && (desc->roms.mon202.size == sizeof(sys->rom_os)));
+        memcpy(sys->rom_os, desc->roms.mon202.ptr, sizeof(sys->rom_os));
     }
     else {
-        CHIPS_ASSERT(desc->rom_mon_a2 && (desc->rom_mon_a2_size == sizeof(sys->rom_os)));
-    }
-    *sys = (z1013_t) {
-        .valid = true,
-        .type = desc->type,
-        .pixel_buffer = (uint32_t*) desc->pixel_buffer,
-        .debug = desc->debug,
-        .freq_hz = (Z1013_TYPE_01 == desc->type) ? 1000000 : 2000000,
-    };
-    memcpy(sys->rom_font, desc->rom_font, sizeof(sys->rom_font));
-    if (desc->type == Z1013_TYPE_01) {
-        memcpy(sys->rom_os, desc->rom_mon202, sizeof(sys->rom_os));
-    }
-    else {
-        memcpy(sys->rom_os, desc->rom_mon_a2, sizeof(sys->rom_os));
+        CHIPS_ASSERT(desc->roms.mon_a2.ptr && (desc->roms.mon_a2.size == sizeof(sys->rom_os)));
+        memcpy(sys->rom_os, desc->roms.mon_a2.ptr, sizeof(sys->rom_os));
     }
 
     // initialize the hardware
@@ -436,7 +443,7 @@ int z1013_std_display_height(void) {
     return _Z1013_DISPLAY_HEIGHT;
 }
 
-int z1013_max_display_size(void) {
+size_t z1013_max_display_size(void) {
     return _Z1013_DISPLAY_SIZE;
 }
 
