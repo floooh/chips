@@ -87,11 +87,13 @@ typedef enum {
 typedef void (*atom_audio_callback_t)(const float* samples, int num_samples, void* user_data);
 
 // debugging hook definitions
-typedef void (*atom_debug_callback_t)(void* user_data, uint64_t pins);
+typedef void (*atom_debug_func_t)(void* user_data, uint64_t pins);
 typedef struct {
-    atom_debug_callback_t callback;
+    struct {
+        atom_debug_func_t func;
+        void* user_data;
+    } callback;
     bool* stopped;
-    void* user_data;
 } atom_debug_t;
 
 // configuration parameters for atom_init()
@@ -216,7 +218,7 @@ static uint64_t _atom_osload(atom_t* sys, uint64_t pins);
 void atom_init(atom_t* sys, const atom_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= atom_max_display_size()));
-    if (desc->debug.callback) {
+    if (desc->debug.callback.func) {
         CHIPS_ASSERT(desc->debug.stopped);
     }
     memset(sys, 0, sizeof(atom_t));
@@ -435,7 +437,7 @@ uint32_t atom_exec(atom_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     uint32_t num_ticks = clk_us_to_ticks(ATOM_FREQUENCY, micro_seconds);
     uint64_t pins = sys->pins;
-    if (0 == sys->debug.callback) {
+    if (0 == sys->debug.callback.func) {
         // run without debug hook
         for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
             pins = _atom_tick(sys, pins);
@@ -445,7 +447,7 @@ uint32_t atom_exec(atom_t* sys, uint32_t micro_seconds) {
         // run with debug hook]
         for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
             pins = _atom_tick(sys, pins);
-            sys->debug.callback(sys->debug.user_data, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
         }
     }
     sys->pins = pins;

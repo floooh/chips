@@ -398,8 +398,8 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->atom->sample_buffer;
-        desc.num_samples = ui->atom->num_samples;
+        desc.sample_buffer = ui->atom->audio.sample_buffer;
+        desc.num_samples = ui->atom->audio.num_samples;
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->audio, &desc);
@@ -485,7 +485,7 @@ void ui_atom_discard(ui_atom_t* ui) {
 void ui_atom_draw(ui_atom_t* ui) {
     CHIPS_ASSERT(ui && ui->atom);
     _ui_atom_draw_menu(ui);
-    ui_audio_draw(&ui->audio, ui->atom->sample_pos);
+    ui_audio_draw(&ui->audio, ui->atom->audio.sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
     ui_m6522_draw(&ui->via);
@@ -501,9 +501,11 @@ void ui_atom_draw(ui_atom_t* ui) {
 
 atom_debug_t ui_atom_get_debug(ui_atom_t* ui) {
     return (atom_debug_t){
-        .callback = (atom_debug_callback_t) ui_dbg_tick,
+        .callback = {
+            .func = (atom_debug_func_t) ui_dbg_tick,
+            .user_data = &ui->dbg
+        },
         .stopped = &ui->dbg.dbg.stopped,
-        .user_data = &ui->dbg
     };
 }
 

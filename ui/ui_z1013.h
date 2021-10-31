@@ -376,9 +376,11 @@ void ui_z1013_draw(ui_z1013_t* ui) {
 
 z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui) {
     return (z1013_debug_t){
-        .callback = (z1013_debug_callback_t) ui_dbg_tick,
+        .callback = {
+            .func = (z1013_debug_func_t)ui_dbg_tick,
+            .user_data = &ui->dbg
+        },
         .stopped = &ui->dbg.dbg.stopped,
-        .user_data = &ui->dbg
     };
 }
 

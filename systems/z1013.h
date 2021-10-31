@@ -64,6 +64,7 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdalign.h>
 
 #ifdef __cplusplus
@@ -78,11 +79,13 @@ typedef enum {
 } z1013_type_t;
 
 // debugging hook definitions
-typedef void (*z1013_debug_callback_t)(void* user_data, uint64_t pins);
+typedef void (*z1013_debug_func_t)(void* user_data, uint64_t pins);
 typedef struct {
-    z1013_debug_callback_t callback;
+    struct {
+        z1013_debug_func_t func;
+        void* user_data;
+    } callback;
     bool* stopped;
-    void* user_data;
 } z1013_debug_t;
 
 // configuration parameters for z1013_setup()
@@ -174,7 +177,7 @@ bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _Z1013_DISPLAY_SIZE));
-    if (desc->debug.callback) {
+    if (desc->debug.callback.func) {
         CHIPS_ASSERT(desc->debug.stopped);
     }
     memset(sys, 0, sizeof(z1013_t));
@@ -406,7 +409,7 @@ uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
     uint64_t pins = sys->pins;
-    if (0 == sys->debug.callback) {
+    if (0 == sys->debug.callback.func) {
         // run without debug hook
         for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
             pins = _z1013_tick(sys, pins);
@@ -416,7 +419,7 @@ uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds) {
         // run with debug hook
         for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
             pins = _z1013_tick(sys, pins);
-            sys->debug.callback(sys->debug.user_data, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
         }
     }
     sys->pins = pins;
