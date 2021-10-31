@@ -496,8 +496,6 @@ bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
 #define _KC85_4_FREQUENCY (1770000)
 #define _KC85_IRM0_PAGE (4)
 
-static uint8_t _kc85_pio_in(int port_id, void* user_data);
-static void _kc85_pio_out(int port_id, uint8_t data, void* user_data);
 static void _kc85_update_memory_map(kc85_t* sys);
 static void _kc85_init_memory_map(kc85_t* sys);
 static void _kc85_handle_keyboard(kc85_t* sys);
@@ -571,7 +569,10 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     // initialize the hardware
     sys->pins = z80_init(&sys->cpu);
     z80ctc_init(&sys->ctc);
-    z80pio_init(&sys->pio);
+    sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
+    z80pio_init(&sys->pio, &(z80pio_desc_t){
+        .initial_port_a = sys->pio_a
+    });
 
     sys->audio.callback = desc->audio.callback;
     sys->audio.num_samples = _KC85_DEFAULT(desc->audio.num_samples, KC85_DEFAULT_AUDIO_SAMPLES);
@@ -826,6 +827,8 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
 
 static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
     pins = z80_tick(&sys->cpu, pins) & Z80_PIN_MASK;
+    bool pio_selected = false;
+    bool ctc_selected = false;
     if (pins & Z80_MREQ) {
         // handle memory requests
         const uint16_t addr = Z80_GET_ADDR(pins);
@@ -840,9 +843,9 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         // handle IO requests
 
         /*
-            IO request machine cycle
+            IO address decoding.
 
-            on the KC85/3, the chips-select signals for the CTC and PIO
+            On the KC85/3, the chips-select signals for the CTC and PIO
             are generated through logic gates, on KC85/4 this is implemented
             with a PROM chip (details are in the KC85/3 and KC85/4 service manuals)
 
@@ -867,24 +870,13 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         if ((pins & (Z80_A7|Z80_A6|Z80_A5|Z80_A4)) == Z80_A7) {
             // check if the PIO or CTC is addressed (0x88 to 0x8F)
             if (pins & Z80_A3) {
-                /*
-                pins &= Z80_PIN_MASK;
                 // bit A2 selects the PIO or CTC
                 if (pins & Z80_A2) {
-                    // a CTC IO request
-                    pins |= Z80CTC_CE;
-                    if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
-                    if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
-                    pins = z80ctc_iorq(&sys->ctc, pins) & Z80_PIN_MASK;
+                    ctc_selected = true;
                 }
                 else {
-                    // a PIO IO request
-                    pins |= Z80PIO_CE;
-                    if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
-                    if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
-                    pins = z80pio_iorq(&sys->pio, pins) & Z80_PIN_MASK;
+                    pio_selected = true;
                 }
-                */
             }
             else {
                 // we're in range 0x80..0x87
@@ -902,7 +894,7 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
                                     _kc85_update_memory_map(sys);
                                 }
                             }
-                            else {
+                            else if (pins & Z80_RD) {
                                 // read module id in slot
                                 Z80_SET_DATA(pins, _kc85_exp_module_id(sys, slot_addr));
                             }
@@ -931,6 +923,43 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
     
     // tick the video system, this may return Z80CTC_CLKTRG2 on VSYNC
     pins = _kc85_tick_video(sys, pins);
+
+    // FIXME tick CTC
+    /*
+    {
+        if (ctc_selected) {
+            pins |= Z80CTC_CE;
+            if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
+            if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
+        }
+        ...
+    }
+    */
+
+    // tick PIO
+    {
+        if (pio_selected) {
+            pins |= Z80PIO_CE;
+            if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+            if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
+        }
+        Z80PIO_SET_PAB(pins, 0xFF, 0xFF);
+        pins = z80pio_tick(&sys->pio, pins);
+        const uint8_t pio_a = Z80PIO_GET_PA(pins);
+        const uint8_t pio_b = Z80PIO_GET_PB(pins);
+        if ((pio_a != sys->pio_a) || (pio_b != sys->pio_b)) {
+            sys->pio_a = pio_a;
+            sys->pio_b = pio_b;
+            _kc85_update_memory_map(sys);
+        }
+        // NOTE: PA4 is connected to CPU NMI on KC85/2 and /3, but this doesn't work
+        // currently (maybe a problem of how PIO port bits are exposed?)
+        /*
+        if (0 == (pins & Z80PIO_PA4)) {
+            pins |= Z80_NMI;
+        }
+        */
+    }
 
     // tick the CTC and beepers
     /*
@@ -996,24 +1025,6 @@ uint32_t kc85_exec(kc85_t* sys, uint32_t micro_seconds) {
     kbd_update(&sys->kbd, micro_seconds);
     _kc85_handle_keyboard(sys);
     return num_ticks;
-}
-
-static uint8_t _kc85_pio_in(int port_id, void* user_data) {
-    (void)port_id;
-    (void)user_data;
-    return 0xFF;
-}
-
-static void _kc85_pio_out(int port_id, uint8_t data, void* user_data) {
-    kc85_t* sys = (kc85_t*) user_data;
-    if (Z80PIO_PORT_A == port_id) {
-        sys->pio_a = data;
-    }
-    else {
-        sys->pio_b = data;
-        /* FIXME: audio volume */
-    }
-    _kc85_update_memory_map(sys);
 }
 
 static void _kc85_init_memory_map(kc85_t* sys) {
