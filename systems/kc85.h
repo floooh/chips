@@ -308,9 +308,20 @@ typedef struct {
     void* user_data;
 } kc85_patch_callback_t;
 
+// debugging hook definitions
+typedef void (*kc85_debug_func_t)(void* user_data, uint64_t pins);
+typedef struct {
+    struct {
+        kc85_debug_func_t func;
+        void* user_data;
+    } callback;
+    bool* stopped;
+} kc85_debug_t;
+
 // config parameters for kc85_init()
 typedef struct {
     kc85_type_t type;           // default is KC85_TYPE_2
+    kc85_debug_t debug;         // optional debugger hook
 
     // video output config (if you don't need display decoding, set pixel_buffer to 0)
     struct {
@@ -385,6 +396,8 @@ typedef struct {
     z80pio_t pio;
     beeper_t beeper_1;
     beeper_t beeper_2;
+
+    kc85_debug_t debug;
 
     bool valid;
     kc85_type_t type;
@@ -509,6 +522,7 @@ static inline uint32_t _kc85_xorshift32(uint32_t x) {
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _KC85_DISPLAY_SIZE)));
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(kc85_t));
     sys->valid = true;
@@ -516,6 +530,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     sys->freq_hz = (sys->type == KC85_TYPE_4) ? _KC85_4_FREQUENCY : _KC85_2_3_FREQUENCY;
     sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
     sys->patch_callback = desc->patch_callback;
+    sys->debug = desc->debug;
 
     // copy ROM images
     if (desc->type == KC85_TYPE_2) {
@@ -964,9 +979,18 @@ uint32_t kc85_exec(kc85_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
     uint64_t pins = sys->pins;
-    // FIXME: debug hook
-    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-        pins = _kc85_tick(sys, pins);
+    if (0 == sys->debug.callback.func) {
+        // run without debug hook
+        for (uint32_t tick = 0; tick < num_ticks; tick++) {
+            pins = _kc85_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debug hook
+        for (uint32_t tick = 0; (tick < num_ticks) && !(*sys->debug.stopped); tick++) {
+            pins = _kc85_tick(sys, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
+        }
     }
     sys->pins = pins;
     kbd_update(&sys->kbd, micro_seconds);

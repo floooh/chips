@@ -60,7 +60,7 @@
 extern "C" {
 #endif
 
-/* general callback type for rebooting to different configs */
+// general callback type for rebooting to different configs
 typedef void (*ui_kc85_boot_t)(kc85_t* sys, kc85_type_t type);
 
 typedef struct {
@@ -69,7 +69,7 @@ typedef struct {
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_kc85_desc_t;
 
 typedef struct {
@@ -88,9 +88,8 @@ typedef struct {
 
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc);
 void ui_kc85_discard(ui_kc85_t* ui);
-void ui_kc85_draw(ui_kc85_t* ui, double time_ms);
-bool ui_kc85_before_exec(ui_kc85_t* ui);
-void ui_kc85_after_exec(ui_kc85_t* ui);
+void ui_kc85_draw(ui_kc85_t* ui);
+kc85_debug_t ui_kc85_get_debug(ui_kc85_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -111,7 +110,7 @@ void ui_kc85_after_exec(ui_kc85_t* ui);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
+static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
     CHIPS_ASSERT(ui && ui->kc85 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -164,7 +163,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui, double time_ms) {
             ImGui::MenuItem("Scan Commands (TODO)");
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
@@ -235,15 +234,16 @@ static const ui_chip_pin_t _ui_kc85_cpu_pins[] = {
     { "D5",     5,      Z80_D5 },
     { "D6",     6,      Z80_D6 },
     { "D7",     7,      Z80_D7 },
-    { "M1",     9,      Z80_M1 },
-    { "MREQ",   10,     Z80_MREQ },
-    { "IORQ",   11,     Z80_IORQ },
-    { "RD",     12,     Z80_RD },
-    { "WR",     13,     Z80_WR },
+    { "M1",     8,      Z80_M1 },
+    { "MREQ",   9,      Z80_MREQ },
+    { "IORQ",   10,     Z80_IORQ },
+    { "RD",     11,     Z80_RD },
+    { "WR",     12,     Z80_WR },
+    { "RFSH",   13,     Z80_RFSH },
     { "HALT",   14,     Z80_HALT },
     { "INT",    15,     Z80_INT },
     { "NMI",    16,     Z80_NMI },
-    { "WAIT",   17,     Z80_WAIT_MASK },
+    { "WAIT",   17,     Z80_WAIT },
     { "A0",     18,     Z80_A0 },
     { "A1",     19,     Z80_A1 },
     { "A2",     20,     Z80_A2 },
@@ -259,8 +259,7 @@ static const ui_chip_pin_t _ui_kc85_cpu_pins[] = {
     { "A12",    30,     Z80_A12 },
     { "A13",    31,     Z80_A13 },
     { "A14",    32,     Z80_A14 },
-    { "A15",    33,     Z80_A15 },
-};
+    { "A15",    33,     Z80_A15 },};
 
 static const ui_chip_pin_t _ui_kc85_pio_pins[] = {
     { "D0",     0,      Z80_D0 },
@@ -412,8 +411,8 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->kc85->sample_buffer;
-        desc.num_samples = ui->kc85->num_samples;
+        desc.sample_buffer = ui->kc85->audio.sample_buffer;
+        desc.num_samples = ui->kc85->audio.num_samples;
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->audio, &desc);
@@ -478,13 +477,13 @@ void ui_kc85_discard(ui_kc85_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_kc85_draw(ui_kc85_t* ui, double time_ms) {
+void ui_kc85_draw(ui_kc85_t* ui) {
     CHIPS_ASSERT(ui && ui->kc85);
-    _ui_kc85_draw_menu(ui, time_ms);
+    _ui_kc85_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_kc85_update_memmap(ui);
     }
-    ui_audio_draw(&ui->audio, ui->kc85->sample_pos);
+    ui_audio_draw(&ui->audio, ui->kc85->audio.sample_pos);
     ui_z80_draw(&ui->cpu);
     ui_z80pio_draw(&ui->pio);
     ui_z80ctc_draw(&ui->ctc);
@@ -497,14 +496,14 @@ void ui_kc85_draw(ui_kc85_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-bool ui_kc85_before_exec(ui_kc85_t* ui) {
-    CHIPS_ASSERT(ui && ui->kc85);
-    return ui_dbg_before_exec(&ui->dbg);
-}
-
-void ui_kc85_after_exec(ui_kc85_t* ui) {
-    CHIPS_ASSERT(ui && ui->kc85);
-    ui_dbg_after_exec(&ui->dbg);
+kc85_debug_t ui_kc85_get_debug(ui_kc85_t* ui) {
+    return (kc85_debug_t){
+        .callback = {
+            .func = (kc85_debug_func_t)ui_dbg_tick,
+            .user_data = &ui->dbg
+        },
+        .stopped = &ui->dbg.dbg.stopped,
+    };
 }
 
 #ifdef __clang__
