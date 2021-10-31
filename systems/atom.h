@@ -84,7 +84,10 @@ typedef enum {
 #define ATOM_JOYSTICK_BTN   (1<<4)
 
 // audio sample data callback
-typedef void (*atom_audio_callback_t)(const float* samples, int num_samples, void* user_data);
+typedef struct {
+    void (*func)(const float* samples, int num_samples, void* user_data);
+    void* user_data;
+} atom_audio_callback_t;
 
 // debugging hook definitions
 typedef void (*atom_debug_func_t)(void* user_data, uint64_t pins);
@@ -110,7 +113,6 @@ typedef struct {
     // audio output config
     struct {
         atom_audio_callback_t callback;     // called when audio_num_samples are ready
-        void* user_data;                    // optional userdata pointer for audio callback
         int num_samples;                    // output sample buffer size, default is ATOM_DEFAULT_AUDIO_SAMPLES
         int sample_rate;                    // playback sample rate, default is 44100
         float volume;                       // audio volume: 0.0..1.0, default is 0.25
@@ -146,7 +148,6 @@ typedef struct {
     kbd_t kbd;
     struct {
         atom_audio_callback_t callback;
-        void* user_data;
         int num_samples;
         int sample_pos;
         float sample_buffer[ATOM_MAX_AUDIO_SAMPLES];
@@ -224,7 +225,6 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     memset(sys, 0, sizeof(atom_t));
     sys->valid = true;
     sys->joystick_type = desc->joystick_type;
-    sys->audio.user_data = desc->audio.user_data;
     sys->audio.callback = desc->audio.callback;
     sys->audio.num_samples = _ATOM_DEFAULT(desc->audio.num_samples, ATOM_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->audio.num_samples <= ATOM_MAX_AUDIO_SAMPLES);
@@ -291,8 +291,8 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
         /* new audio sample ready */
         sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper.sample;
         if (sys->audio.sample_pos == sys->audio.num_samples) {
-            if (sys->audio.callback) {
-                sys->audio.callback(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.user_data);
+            if (sys->audio.callback.func) {
+                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
             }
             sys->audio.sample_pos = 0;
         }
