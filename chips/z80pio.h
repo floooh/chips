@@ -266,6 +266,7 @@ typedef struct {
 /* Z80 PIO state. */
 typedef struct {
     z80pio_port_t port[Z80PIO_NUM_PORTS];
+    uint8_t initial_port[Z80PIO_NUM_PORTS];
     bool reset_active;  /* currently in reset state? (until a control word is received) */
     uint64_t pins;      /* last pin state (useful for debugging) */
 } z80pio_t;
@@ -287,8 +288,14 @@ typedef struct {
 /* read port data */
 #define Z80PIO_GET_PORT(p,pid) ((uint8_t)(p>>(48+pid*8)))
 
+/* Z80 PIO init parameters */
+typedef struct {
+    uint8_t initial_port_a;
+    uint8_t initial_port_b;
+} z80pio_desc_t;
+
 /* initialize a new Z80 PIO instance */
-void z80pio_init(z80pio_t* pio);
+void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc);
 /* reset a Z80 PIO instance */
 void z80pio_reset(z80pio_t* pio);
 /* tick the Z80 PIO instance */
@@ -376,15 +383,18 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void z80pio_init(z80pio_t* pio) {
-    CHIPS_ASSERT(pio);
-    *pio = (z80pio_t){0};
+void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc) {
+    CHIPS_ASSERT(pio && desc);
+    memset(pio, 0, sizeof(z80pio_t));
+    pio->initial_port[Z80PIO_PORT_A] = desc->initial_port_a;
+    pio->initial_port[Z80PIO_PORT_B] = desc->initial_port_b;
     z80pio_reset(pio);
 }
 
 void z80pio_reset(z80pio_t* pio) {
     CHIPS_ASSERT(pio);
     for (int p = 0; p < Z80PIO_NUM_PORTS; p++) {
+        pio->port[p].port = pio->initial_port[p];
         pio->port[p].mode = Z80PIO_MODE_INPUT;
         pio->port[p].output = 0;
         pio->port[p].io_select = 0;
