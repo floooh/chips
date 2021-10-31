@@ -37,7 +37,7 @@ extern "C" {
 #define Z80_D6  (1ULL<<22)
 #define Z80_D7  (1ULL<<23)
 
-// 
+// control pins
 #define Z80_M1    (1ULL<<24)        // machine cycle 1
 #define Z80_MREQ  (1ULL<<25)        // memory request
 #define Z80_IORQ  (1ULL<<26)        // input/output request
@@ -58,6 +58,7 @@ extern "C" {
 #define Z80_PIN_MASK ((1ULL<<40)-1)
 
 // pin access helper macros
+#define Z80_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
 #define Z80_GET_ADDR(p) ((uint16_t)(p&0xFFFF))
 #define Z80_SET_ADDR(p,a) {p=(p&~0xFFFF)|((a)&0xFFFF);}
 #define Z80_GET_DATA(p) ((uint8_t)((p>>16)&0xFF))
