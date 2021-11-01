@@ -937,19 +937,40 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
     // FIXME: daisy chain begin
     pins |= Z80_IEIO;
 
-    // FIXME tick CTC
-    /*
+    // tick the CTC, NOTE: Z80CTC_CLKTRG2 may be set from video system
     {
         if (ctc_selected) {
             pins |= Z80CTC_CE;
             if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
             if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
         }
-        ...
+        pins = z80ctc_tick(&sys->ctc, pins);
+        // CTC channels 0 and 1 triggers control audio frequencies
+        if (pins & Z80CTC_ZCTO0) {
+            beeper_toggle(&sys->beeper_1);
+        }
+        if (pins & Z80CTC_ZCTO1) {
+            beeper_toggle(&sys->beeper_2);
+        }
+        // CTC channel 2 trigger controls video blink frequency
+        if (pins & Z80CTC_ZCTO2) {
+            sys->blink_flag = !sys->blink_flag;
+        }
+        beeper_tick(&sys->beeper_1);
+        if (beeper_tick(&sys->beeper_2)) {
+            // new audio sample ready
+            sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
+            if (sys->audio.sample_pos == sys->audio.num_samples) {
+                if (sys->audio.callback.func) {
+                    sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+                }
+                sys->audio.sample_pos = 0;
+            }
+        }
+        pins &= Z80_PIN_MASK;
     }
-    */
 
-    // tick PIO
+    // tick the PIO
     {
         if (pio_selected) {
             pins |= Z80PIO_CE;
@@ -974,47 +995,6 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         }
         pins &= Z80_PIN_MASK;
     }
-
-    // tick the CTC and beepers
-    /*
-    for (int i = 0; i < num_ticks; i++) {
-        pins = z80ctc_tick(&sys->ctc, pins);
-        // CTC channels 0 and 1 triggers control audio frequencies
-        if (pins & Z80CTC_ZCTO0) {
-            beeper_toggle(&sys->beeper_1);
-        }
-        if (pins & Z80CTC_ZCTO1) {
-            beeper_toggle(&sys->beeper_2);
-        }
-        // CTC channel 2 trigger controls video blink frequency
-        if (pins & Z80CTC_ZCTO2) {
-            sys->blink_flag = !sys->blink_flag;
-        }
-        pins &= Z80_PIN_MASK;
-        beeper_tick(&sys->beeper_1);
-        if (beeper_tick(&sys->beeper_2)) {
-            // new audio sample ready
-            sys->sample_buffer[sys->sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
-            if (sys->sample_pos == sys->num_samples) {
-                if (sys->audio_cb) {
-                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
-                }
-                sys->sample_pos = 0;
-            }
-        }
-    }
-    */
-    
-    // interrupt daisy chain, CTC is higher priority then PIO
-    /*
-    Z80_DAISYCHAIN_BEGIN(pins)
-    {
-        pins = z80ctc_int(&sys->ctc, pins);
-        pins = z80pio_int(&sys->pio, pins);
-    }
-    Z80_DAISYCHAIN_END(pins);
-    */  
-
     // FIXME: daisy chain end
     pins &= ~Z80_RETI;
     
