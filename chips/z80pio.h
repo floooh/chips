@@ -532,7 +532,7 @@ uint64_t _z80pio_int(z80pio_t* pio, uint64_t pins) {
         /* if any higher priority device in the daisy chain has cleared
            the IEIO pin, skip interrupt handling
         */
-        if ((pins & Z80PIO_IEIO) && (0 != p->int_state)) {
+        if ((0 != p->int_state) && (pins & Z80PIO_IEIO)) {
             /* check if if the CPU has decoded a RETI */
             if (pins & Z80PIO_RETI) {
                 /* if we're the device that's currently under service by
@@ -569,7 +569,6 @@ uint64_t _z80pio_int(z80pio_t* pio, uint64_t pins) {
             /* set Z80_INT pin state during INT_REQUESTED */
             if (p->int_state & Z80PIO_INT_REQUESTED) {
                 pins |= Z80PIO_INT;
-                pio->pins |= Z80PIO_INT;
             }
         }
     }

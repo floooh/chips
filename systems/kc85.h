@@ -934,6 +934,9 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
     // tick the video system, this may return Z80CTC_CLKTRG2 on VSYNC
     pins = _kc85_tick_video(sys, pins);
 
+    // FIXME: daisy chain begin
+    pins |= Z80_IEIO;
+
     // FIXME tick CTC
     /*
     {
@@ -1010,7 +1013,10 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         pins = z80pio_int(&sys->pio, pins);
     }
     Z80_DAISYCHAIN_END(pins);
-    */
+    */  
+
+    // FIXME: daisy chain end
+    pins &= ~Z80_RETI;
     
     return pins & Z80_PIN_MASK;
 }
