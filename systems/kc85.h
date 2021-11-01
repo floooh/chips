@@ -278,6 +278,7 @@ extern "C" {
 #define KC85_PIO_B_RAM8            (1<<5)  // KC85/4 only
 #define KC85_PIO_B_RAM8_RO         (1<<6)  // KC85/4 only
 #define KC85_PIO_B_BLINK_ENABLED   (1<<7)
+
 // KC85/4 only IO latches
 #define KC85_IO84_SEL_VIEW_IMG     (1<<0)  // 0: display img0, 1: display img1
 #define KC85_IO84_SEL_CPU_COLOR    (1<<1)  // 0: access pixels, 1: access colors
@@ -288,6 +289,12 @@ extern "C" {
 #define KC85_IO86_RAM4             (1<<0)
 #define KC85_IO86_RAM4_RO          (1<<1)
 #define KC85_IO86_CAOS_ROM_C       (1<<7)
+
+// PIO and IO latch bit masks which affect the memory mapping
+#define KC85_PIO_A_MEMORY_BITS  (KC85_PIO_A_CAOS_ROM|KC85_PIO_A_RAM|KC85_PIO_A_IRM|KC85_PIO_A_RAM_RO|KC85_PIO_A_BASIC_ROM)
+#define KC85_PIO_B_MEMORY_BITS  (KC85_PIO_B_RAM8|KC85_PIO_B_RAM8_RO)
+#define KC85_IO84_MEMORY_BITS   (KC85_IO84_SEL_CPU_COLOR|KC85_IO84_SEL_CPU_IMG|KC85_IO84_SEL_RAM8)
+#define KC85_IO86_MEMORY_BITS   (KC85_IO86_RAM4|KC85_IO86_RAM4_RO|KC85_IO86_CAOS_ROM_C)
 
 // KC85 model types
 typedef enum {
@@ -570,9 +577,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     sys->pins = z80_init(&sys->cpu);
     z80ctc_init(&sys->ctc);
     sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
-    z80pio_init(&sys->pio, &(z80pio_desc_t){
-        .initial_port_a = sys->pio_a
-    });
+    z80pio_init(&sys->pio);
 
     sys->audio.callback = desc->audio.callback;
     sys->audio.num_samples = _KC85_DEFAULT(desc->audio.num_samples, KC85_DEFAULT_AUDIO_SAMPLES);
@@ -691,8 +696,6 @@ static uint64_t _kc85_video_kc85_2_3(kc85_t* sys, uint64_t pins) {
     /* emulate display needling on KC85/2 and /3, this happens when the
        CPU accesses video memory, which will force the background color
        a short duration
-
-       FIXME: Z80_RD creates a weird static pattern when "MENU" is called
     */
     bool cpu_access = false;
     if (0 != (pins & Z80_WR)) {
@@ -904,16 +907,23 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
                     case 0x04:
                         // port 0x84, KC85/4 only, this is a write-only 8-bit latch
                         if ((KC85_TYPE_4 == sys->type) && (pins & Z80_WR)) {
+                            bool memory_mapping_dirty = (data ^ sys->io84) & KC85_IO84_MEMORY_BITS;
                             sys->io84 = data;
-                            _kc85_update_memory_map(sys);
+                            if (memory_mapping_dirty) {
+                                _kc85_update_memory_map(sys);
+                            }
                         }
                         break;
 
                     case 0x06:
                         // port 0x86, KC85/4 only, this is a write-only 8-bit latch
                         if ((KC85_TYPE_4 == sys->type) && (pins & Z80_WR)) {
+                            // check if memory mapping has changed
+                            bool memory_mapping_dirty = (data ^ sys->io86) & KC85_IO86_MEMORY_BITS;
                             sys->io86 = data;
-                            _kc85_update_memory_map(sys);
+                            if (memory_mapping_dirty) {
+                                _kc85_update_memory_map(sys);
+                            }
                         }
                         break;
                 }
@@ -947,18 +957,19 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         pins = z80pio_tick(&sys->pio, pins);
         const uint8_t pio_a = Z80PIO_GET_PA(pins);
         const uint8_t pio_b = Z80PIO_GET_PB(pins);
-        if ((pio_a != sys->pio_a) || (pio_b != sys->pio_b)) {
-            sys->pio_a = pio_a;
-            sys->pio_b = pio_b;
+        bool memory_mapping_dirty = ((pio_a ^ sys->pio_a) & KC85_PIO_A_MEMORY_BITS) ||
+                                    ((pio_b ^ sys->pio_b) & KC85_PIO_B_MEMORY_BITS);
+        sys->pio_a = pio_a;
+        sys->pio_b = pio_b;
+        if (memory_mapping_dirty) {
             _kc85_update_memory_map(sys);
         }
-        // NOTE: PA4 is connected to CPU NMI on KC85/2 and /3, but this doesn't work
-        // currently (maybe a problem of how PIO port bits are exposed?)
-        /*
-        if (0 == (pins & Z80PIO_PA4)) {
-            pins |= Z80_NMI;
+        // on KC85/2 and /3, PA4 is connected to CPU NMI pin
+        if (KC85_TYPE_4 != sys->type) {
+            if (pins & Z80PIO_PA4) { pins &= ~Z80_NMI; }
+            else                   { pins |= Z80_NMI; }
         }
-        */
+        pins &= Z80_PIN_MASK;
     }
 
     // tick the CTC and beepers
@@ -1084,7 +1095,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
             }
         }
         /* video memory is 4 banks, 2 for pixels, 2 for colors,
-            the area at 0xA800 to 0xBFFF is alwazs mapped to IRM0!
+            the area at 0xA800 to 0xBFFF is always mapped to IRM0!
         */
         if (sys->pio_a & KC85_PIO_A_IRM) {
             uint32_t irm_index = (sys->io84 & 6)>>1;

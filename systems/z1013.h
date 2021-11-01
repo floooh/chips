@@ -201,7 +201,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
 
     // initialize the hardware
     sys->pins = z80_init(&sys->cpu);
-    z80pio_init(&sys->pio, &(z80pio_desc_t){0});
+    z80pio_init(&sys->pio);
 
     // execution starts at 0xF000
     z80_prefetch(&sys->cpu, 0xF000);
