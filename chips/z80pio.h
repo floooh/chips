@@ -294,74 +294,6 @@ void z80pio_reset(z80pio_t* pio);
 uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins);
 /* write value to a PIO port, this may trigger an interrupt */
 void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data);
-/* call this once per machine cycle to handle the interrupt daisy chain */
-static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
-    for (int i = 0; i < Z80PIO_NUM_PORTS; i++) {
-        z80pio_port_t* p = &pio->port[i];
-        /*
-            - set status of IEO pin depending on IEI pin and current
-              channel's interrupt request/acknowledge status, this
-              'ripples' to the next channel and downstream interrupt
-              controllers
-
-            - the IEO pin will be set to inactive (interrupt disabled)
-              when: (1) the IEI pin is inactive, or (2) the IEI pin is
-              active and and an interrupt has been requested
-
-            - if an interrupt has been requested but not ackowledged by
-              the CPU because interrupts are disabled, the RETI state
-              must be passed to downstream devices. If a RETI is
-              received in the interrupt-requested state, the IEIO
-              pin will be set to active, so that downstream devices
-              get a chance to decode the RETI
-        */
-
-        /* if any higher priority device in the daisy chain has cleared
-           the IEIO pin, skip interrupt handling
-        */
-        if ((pins & Z80PIO_IEIO) && (0 != p->int_state)) {
-            /* check if if the CPU has decoded a RETI */
-            if (pins & Z80PIO_RETI) {
-                /* if we're the device that's currently under service by
-                   the CPU, keep interrupts enabled for downstream devices and
-                   clear our interrupt state (this is basically the
-                   'HELP' logic described in the PIO and CTC manuals
-                */
-                if (p->int_state & Z80PIO_INT_SERVICING) {
-                    p->int_state = 0;
-                }
-                /* if we are *NOT* the device currently under service, this
-                   means we have an interrupt request pending but the CPU
-                   denied the request (because interruprs were disabled)
-                */
-            }
-            /* need to request interrupt? */
-            if (p->int_state & Z80PIO_INT_NEEDED) {
-                p->int_state &= ~Z80PIO_INT_NEEDED;
-                p->int_state |= Z80PIO_INT_REQUESTED;
-            }
-            /* need to place interrupt vector on data bus? */
-            if ((pins & (Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_IORQ|Z80PIO_M1)) {
-                /* CPU has acknowledged the interrupt, place interrupt
-                   vector on data bus
-                */
-                Z80PIO_SET_DATA(pins, p->int_vector);
-                p->int_state &= ~Z80PIO_INT_REQUESTED;
-                p->int_state |= Z80PIO_INT_SERVICING;
-            }
-            /* disable interrupts for downstream devices? */
-            if (0 != p->int_state) {
-                pins &= ~Z80PIO_IEIO;
-            }
-            /* set Z80_INT pin state during INT_REQUESTED */
-            if (p->int_state & Z80PIO_INT_REQUESTED) {
-                pins |= Z80PIO_INT;
-                pio->pins |= Z80PIO_INT;
-            }
-        }
-    }
-    return pins;
-}
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -550,6 +482,100 @@ uint64_t _z80pio_set_port_output_pins(z80pio_t* pio, uint64_t pins) {
     return pins;
 }
 
+// handle an IO request from the CPU
+uint64_t _z80pio_iorq(z80pio_t* pio, uint64_t pins) {
+    const int port_id = (pins & Z80PIO_BASEL) ? Z80PIO_PORT_B : Z80PIO_PORT_A;
+    if (pins & Z80PIO_RD) {
+        uint8_t data;
+        if (pins & Z80PIO_CDSEL) {
+            data = _z80pio_read_ctrl(pio);
+        }
+        else {
+            data = _z80pio_read_data(pio, port_id, pins);
+        }
+        Z80PIO_SET_DATA(pins, data);
+    }
+    else {
+        uint8_t data = Z80PIO_GET_DATA(pins);
+        if (pins & Z80PIO_CDSEL) {
+            _z80pio_write_ctrl(pio, port_id, data);
+        }
+        else {
+            _z80pio_write_data(pio, port_id, data);
+        }
+    }
+    return pins;
+}
+
+// handle the interrupt daisy chain protocol
+uint64_t _z80pio_int(z80pio_t* pio, uint64_t pins) {
+    for (int i = 0; i < Z80PIO_NUM_PORTS; i++) {
+        z80pio_port_t* p = &pio->port[i];
+        /*
+            - set status of IEO pin depending on IEI pin and current
+              channel's interrupt request/acknowledge status, this
+              'ripples' to the next channel and downstream interrupt
+              controllers
+
+            - the IEO pin will be set to inactive (interrupt disabled)
+              when: (1) the IEI pin is inactive, or (2) the IEI pin is
+              active and and an interrupt has been requested
+
+            - if an interrupt has been requested but not ackowledged by
+              the CPU because interrupts are disabled, the RETI state
+              must be passed to downstream devices. If a RETI is
+              received in the interrupt-requested state, the IEIO
+              pin will be set to active, so that downstream devices
+              get a chance to decode the RETI
+        */
+
+        /* if any higher priority device in the daisy chain has cleared
+           the IEIO pin, skip interrupt handling
+        */
+        if ((pins & Z80PIO_IEIO) && (0 != p->int_state)) {
+            /* check if if the CPU has decoded a RETI */
+            if (pins & Z80PIO_RETI) {
+                /* if we're the device that's currently under service by
+                   the CPU, keep interrupts enabled for downstream devices and
+                   clear our interrupt state (this is basically the
+                   'HELP' logic described in the PIO and CTC manuals
+                */
+                if (p->int_state & Z80PIO_INT_SERVICING) {
+                    p->int_state = 0;
+                }
+                /* if we are *NOT* the device currently under service, this
+                   means we have an interrupt request pending but the CPU
+                   denied the request (because interruprs were disabled)
+                */
+            }
+            /* need to request interrupt? */
+            if (p->int_state & Z80PIO_INT_NEEDED) {
+                p->int_state &= ~Z80PIO_INT_NEEDED;
+                p->int_state |= Z80PIO_INT_REQUESTED;
+            }
+            /* need to place interrupt vector on data bus? */
+            if ((pins & (Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_IORQ|Z80PIO_M1)) {
+                /* CPU has acknowledged the interrupt, place interrupt
+                   vector on data bus
+                */
+                Z80PIO_SET_DATA(pins, p->int_vector);
+                p->int_state &= ~Z80PIO_INT_REQUESTED;
+                p->int_state |= Z80PIO_INT_SERVICING;
+            }
+            /* disable interrupts for downstream devices? */
+            if (0 != p->int_state) {
+                pins &= ~Z80PIO_IEIO;
+            }
+            /* set Z80_INT pin state during INT_REQUESTED */
+            if (p->int_state & Z80PIO_INT_REQUESTED) {
+                pins |= Z80PIO_INT;
+                pio->pins |= Z80PIO_INT;
+            }
+        }
+    }
+    return pins;
+}
+
 uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
     /*  FIXME:
 
@@ -578,30 +604,11 @@ uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
           the 8-bit mask and 2-bit mask control registers
     */
     if ((pins & (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_CE|Z80PIO_IORQ)) {
-        const int port_id = (pins & Z80PIO_BASEL) ? Z80PIO_PORT_B : Z80PIO_PORT_A;
-        if (pins & Z80PIO_RD) {
-            uint8_t data;
-            if (pins & Z80PIO_CDSEL) {
-                data = _z80pio_read_ctrl(pio);
-            }
-            else {
-                data = _z80pio_read_data(pio, port_id, pins);
-            }
-            Z80PIO_SET_DATA(pins, data);
-        }
-        else {
-            uint8_t data = Z80PIO_GET_DATA(pins);
-            if (pins & Z80PIO_CDSEL) {
-                _z80pio_write_ctrl(pio, port_id, data);
-            }
-            else {
-                _z80pio_write_data(pio, port_id, data);
-            }
-        }
+        pins = _z80pio_iorq(pio, pins);
     }
     pins = _z80pio_set_port_output_pins(pio, pins);
-    // FIXME: pio->pins should be set to a combination of input/output pins
-    // for debug visualization!
+    pins = _z80pio_int(pio, pins);
+
     pio->pins = pins;
     return pins;
 }
