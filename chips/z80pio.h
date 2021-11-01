@@ -540,9 +540,7 @@ uint64_t _z80pio_int(z80pio_t* pio, uint64_t pins) {
                    clear our interrupt state (this is basically the
                    'HELP' logic described in the PIO and CTC manuals
                 */
-                if (p->int_state & Z80PIO_INT_SERVICING) {
-                    p->int_state = 0;
-                }
+                p->int_state &= ~Z80PIO_INT_SERVICING;
                 /* if we are *NOT* the device currently under service, this
                    means we have an interrupt request pending but the CPU
                    denied the request (because interruprs were disabled)
@@ -561,6 +559,8 @@ uint64_t _z80pio_int(z80pio_t* pio, uint64_t pins) {
                 Z80PIO_SET_DATA(pins, p->int_vector);
                 p->int_state &= ~Z80PIO_INT_REQUESTED;
                 p->int_state |= Z80PIO_INT_SERVICING;
+                // FIXME: is this the correct place??
+                pins &= ~Z80PIO_INT;
             }
             /* disable interrupts for downstream devices? */
             if (0 != p->int_state) {

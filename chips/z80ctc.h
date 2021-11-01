@@ -444,12 +444,10 @@ static uint64_t _z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
                    clear our interrupt state (this is basically the
                    'HELP' logic described in the PIO and CTC manuals
                 */
-                if (chn->int_state & Z80CTC_INT_SERVICING) {
-                    chn->int_state = 0;
-                }
+                chn->int_state &= ~Z80CTC_INT_SERVICING;
                 /* if we are *NOT* the device currently under service, this
                    means we have an interrupt request pending but the CPU
-                   denied the request (because interruprs were disabled)
+                   denied the request (because interrupts were disabled)
                 */
             }
             // need to request interrupt?
