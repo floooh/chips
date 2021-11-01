@@ -460,9 +460,10 @@ reti/retn:
   cond: (x == 1) and (z == 5)
   flags: { single: true }
   mcycles:
-    - { type: mread, ab: $SP++, dst: $WZL }
+    # virtual RETI pin must be set as early as possible
+    - { type: mread, ab: $SP++, dst: $WZL, action: "pins|=Z80_RETI" }
     - { type: mread, ab: $SP++, dst: $WZH, action: "$PC=$WZ" }
-    - { type: overlapped, post_action: "pins=_z80_reti_retn(cpu,pins)"}
+    - { type: overlapped, post_action: "cpu->iff1=cpu->iff2"}
 
 im IMY:
   prefix: ed

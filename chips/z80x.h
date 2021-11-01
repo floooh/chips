@@ -559,13 +559,6 @@ static inline uint8_t _z80_srl(z80_t* cpu, uint8_t val) {
     return res;
 }
 
-static inline uint64_t _z80_reti_retn(z80_t* cpu, uint64_t pins) {
-    cpu->iff1 = cpu->iff2;
-    // virtual pin 'Z80_RETI' is used by the daisy chain protocol
-    // implementation in other Z80-family chips
-    return pins | Z80_RETI;
-}
-
 static inline uint64_t _z80_set_ab(uint64_t pins, uint16_t ab) {
     return (pins & ~0xFFFF) | ab;
 }
@@ -3141,12 +3134,12 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // ED 45: reti/retn (M:3 T:10)
             // -- M2
             case 0x02B3: _wait();_mread(cpu->sp++); break;
-            case 0x02B4: cpu->wzl=_gd(); break;
+            case 0x02B4: cpu->wzl=_gd();pins|=Z80_RETI; break;
             // -- M3
             case 0x02B5: _wait();_mread(cpu->sp++); break;
             case 0x02B6: cpu->wzh=_gd();cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x02B7: _wait();_fetch();pins=_z80_reti_retn(cpu,pins); break;
+            case 0x02B7: _wait();_fetch();cpu->iff1=cpu->iff2; break;
             
             // ED 46: im IMY (M:1 T:4)
             // -- OVERLAP
