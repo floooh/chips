@@ -250,7 +250,6 @@ extern "C" {
 typedef struct {
     uint8_t input;          /* 8-bit data input register */
     uint8_t output;         /* 8-bit data output register */
-    uint8_t port;           /* current state of the port I/O pins */
     uint8_t mode;           /* 2-bit mode control register (Z80PIO_MODE_*) */
     uint8_t io_select;      /* 8-bit input/output select register */
     uint8_t int_vector;     /* 8-bit interrupt vector */
@@ -266,7 +265,6 @@ typedef struct {
 /* Z80 PIO state. */
 typedef struct {
     z80pio_port_t port[Z80PIO_NUM_PORTS];
-    uint8_t initial_port[Z80PIO_NUM_PORTS];
     bool reset_active;  /* currently in reset state? (until a control word is received) */
     uint64_t pins;      /* last pin state (useful for debugging) */
 } z80pio_t;
@@ -285,17 +283,11 @@ typedef struct {
 #define Z80PIO_GET_PA(p) ((uint8_t)(p>>48))
 /* extract port B data */
 #define Z80PIO_GET_PB(p) ((uint8_t)(p>>56))
-/* read port data */
+/* get port data from pins by port index */
 #define Z80PIO_GET_PORT(p,pid) ((uint8_t)(p>>(48+pid*8)))
 
-/* Z80 PIO init parameters */
-typedef struct {
-    uint8_t initial_port_a;
-    uint8_t initial_port_b;
-} z80pio_desc_t;
-
 /* initialize a new Z80 PIO instance */
-void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc);
+void z80pio_init(z80pio_t* pio);
 /* reset a Z80 PIO instance */
 void z80pio_reset(z80pio_t* pio);
 /* tick the Z80 PIO instance */
@@ -383,18 +375,15 @@ static inline uint64_t z80pio_int(z80pio_t* pio, uint64_t pins) {
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void z80pio_init(z80pio_t* pio, const z80pio_desc_t* desc) {
-    CHIPS_ASSERT(pio && desc);
+void z80pio_init(z80pio_t* pio) {
+    CHIPS_ASSERT(pio);
     memset(pio, 0, sizeof(z80pio_t));
-    pio->initial_port[Z80PIO_PORT_A] = desc->initial_port_a;
-    pio->initial_port[Z80PIO_PORT_B] = desc->initial_port_b;
     z80pio_reset(pio);
 }
 
 void z80pio_reset(z80pio_t* pio) {
     CHIPS_ASSERT(pio);
     for (int p = 0; p < Z80PIO_NUM_PORTS; p++) {
-        pio->port[p].port = pio->initial_port[p];
         pio->port[p].mode = Z80PIO_MODE_INPUT;
         pio->port[p].output = 0;
         pio->port[p].io_select = 0;
@@ -441,11 +430,7 @@ void _z80pio_write_ctrl(z80pio_t* pio, int port_id, uint8_t data) {
         else if (ctrl == 0x0F) {
             /* set operating mode (Z80PIO_MODE_*) */
             p->mode = data>>6;
-            if (p->mode == Z80PIO_MODE_OUTPUT) {
-                /* make output visible */
-                p->port = p->output;
-            }
-            else if (p->mode == Z80PIO_MODE_BITCONTROL) {
+            if (p->mode == Z80PIO_MODE_BITCONTROL) {
                 /* next control word is the io_select mask */
                 p->expect_io_select = true;
                 /* temporarly disable interrupt until io_select mask written */
@@ -490,11 +475,12 @@ uint8_t _z80pio_read_ctrl(z80pio_t* pio) {
 
 /* new data word received from CPU */
 void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
+    // FIXME: in OUTPUT mode, the ARDY/BRDY pins must be set here
     CHIPS_ASSERT((port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
     z80pio_port_t* p = &pio->port[port_id];
     switch (p->mode) {
         case Z80PIO_MODE_OUTPUT:
-            p->output = p->port = data;
+            p->output = data;
             break;
         case Z80PIO_MODE_INPUT:
             p->output = data;
@@ -504,7 +490,6 @@ void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
             break;
         case Z80PIO_MODE_BITCONTROL:
             p->output = data;
-            p->port = p->io_select | (p->output & ~p->io_select);
             break;
     }
 }
@@ -519,22 +504,79 @@ uint8_t _z80pio_read_data(z80pio_t* pio, int port_id, uint64_t pins) {
             data = p->output;
             break;
         case Z80PIO_MODE_INPUT:
-            p->input = p->port = Z80PIO_GET_PORT(pins,port_id);
-            data = p->input;
+            // FIXME: in INPUT MODE, the input register is only updated
+            // on ASTB/BSTB!!!
+            p->input = data = Z80PIO_GET_PORT(pins,port_id);
             break;
         case Z80PIO_MODE_BIDIRECTIONAL:
             // FIXME
             break;
         case Z80PIO_MODE_BITCONTROL:
             p->input = Z80PIO_GET_PORT(pins,port_id);
-            p->port = (p->input & p->io_select) | (p->output & ~p->io_select);
-            data = p->port;
+            data = (p->input & p->io_select) | (p->output & ~p->io_select);
             break;
     }
     return data;
 }
 
+// set the PA and PB bits into the pin mask
+uint64_t _z80pio_set_port_output_pins(z80pio_t* pio, uint64_t pins) {
+    for (int port_id = 0; port_id < Z80PIO_NUM_PORTS; port_id++) {
+        z80pio_port_t* p = &pio->port[port_id];
+        uint8_t data;
+        switch (p->mode) {
+            case Z80PIO_MODE_OUTPUT:
+                data = p->output;
+                break;
+            case Z80PIO_MODE_INPUT:
+                data = 0xFF;
+                break;
+            case Z80PIO_MODE_BIDIRECTIONAL:
+                // FIXME!
+                data = 0xFF;
+                break;
+            case Z80PIO_MODE_BITCONTROL:
+                // set input bits to 1
+                data = p->io_select | (p->output & ~p->io_select);
+                break;
+        }
+        if (port_id == 0) {
+            Z80PIO_SET_PA(pins, data);
+        }
+        else {
+            Z80PIO_SET_PB(pins, data);
+        }
+    }
+    return pins;
+}
+
 uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
+    /*  FIXME:
+
+        - OUTPUT MODE: On CPU write, the bus data is written to the output
+          register (already happens in _z80pio_write_data()), and the ARDY/BRDY
+          pins must be set until the ASTB/BSTB pins changes from active to inactive.
+          Strobe active=>inactive also an INT if the interrupt enable flip-flop
+          is set and this device has the highest priority.
+
+        - INPUT MODE: When ASTB/BSTB goes active, data is loaded into the port's
+          input register. When ASTB/BSTB then goes from active to inactive, an
+          INT is generated is interrupt enable is set and this is the highest
+          priority interrupt device. ARDY/BRDY goes active on ASTB/BSTB going
+          inactive, and remains active until the CPU reads the input data.
+
+        - BIDIRECTIONAL MODE: FIXME
+
+        - BIT MODE: no handshake pins (ARDY/BRDY, ASTB/BSTB) are used. A CPU write
+          cycle latches the data into the output register. On a CPU read cycle,
+          the data returned to the CPU will be composed of output register data
+          from those port data lines assigned as outputs and input register data
+          from those port data lines assigned as inputs. The input register will
+          contain data which was present immediately prior to the falling edge of RD.
+          An interrupt will be generated if interrupts from the port are enabled and
+          the data on the port data lines satisfy the logical equation defined by
+          the 8-bit mask and 2-bit mask control registers
+    */
     if ((pins & (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_CE|Z80PIO_IORQ)) {
         const int port_id = (pins & Z80PIO_BASEL) ? Z80PIO_PORT_B : Z80PIO_PORT_A;
         if (pins & Z80PIO_RD) {
@@ -557,7 +599,9 @@ uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
             }
         }
     }
-    Z80PIO_SET_PAB(pins, pio->port[Z80PIO_PORT_A].port, pio->port[Z80PIO_PORT_B].port);
+    pins = _z80pio_set_port_output_pins(pio, pins);
+    // FIXME: pio->pins should be set to a combination of input/output pins
+    // for debug visualization!
     pio->pins = pins;
     return pins;
 }
@@ -569,7 +613,7 @@ void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data) {
     if (Z80PIO_MODE_BITCONTROL == p->mode) {
         p->input = data;
         uint8_t val = (p->input & p->io_select) | (p->output & ~p->io_select);
-        p->port = val;
+        //p->port = val;
         uint8_t mask = ~p->int_mask;
         bool match = false;
         val &= mask;
