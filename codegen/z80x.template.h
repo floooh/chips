@@ -843,7 +843,7 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     // process the next active tcycle
-    pins &= ~Z80_CTRL_PIN_MASK;
+    pins &= ~(Z80_CTRL_PIN_MASK|Z80_RETI);
     if (cpu->op.pip & 1) {
         switch (cpu->op.step) {
             // shared fetch machine cycle for all opcodes

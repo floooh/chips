@@ -270,7 +270,7 @@ extern "C" {
 #define KC85_PIO_A_RAM             (1<<1)
 #define KC85_PIO_A_IRM             (1<<2)
 #define KC85_PIO_A_RAM_RO          (1<<3)
-#define KC85_PIO_A_UNUSED          (1<<4)
+#define KC85_PIO_A_NMI             (1<<4)   // KC84/2,3 only: trigger an NMI
 #define KC85_PIO_A_TAPE_LED        (1<<5)
 #define KC85_PIO_A_TAPE_MOTOR      (1<<6)
 #define KC85_PIO_A_BASIC_ROM       (1<<7)
@@ -934,11 +934,10 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
     // tick the video system, this may return Z80CTC_CLKTRG2 on VSYNC
     pins = _kc85_tick_video(sys, pins);
 
-    // FIXME: daisy chain begin
-    pins |= Z80_IEIO;
-
     // tick the CTC, NOTE: Z80CTC_CLKTRG2 may be set from video system
     {
+        // set virtual IEIO pin because CTC is highest priority interrupt device
+        pins |= Z80_IEIO;
         if (ctc_selected) {
             pins |= Z80CTC_CE;
             if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
@@ -990,14 +989,11 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         }
         // on KC85/2 and /3, PA4 is connected to CPU NMI pin
         if (KC85_TYPE_4 != sys->type) {
-            if (pins & Z80PIO_PA4) { pins &= ~Z80_NMI; }
-            else                   { pins |= Z80_NMI; }
+            if (pio_a & KC85_PIO_A_NMI) { pins &= ~Z80_NMI; }
+            else                        { pins |= Z80_NMI; }
         }
         pins &= Z80_PIN_MASK;
     }
-    // FIXME: daisy chain end
-    pins &= ~Z80_RETI;
-    
     return pins & Z80_PIN_MASK;
 }
 
