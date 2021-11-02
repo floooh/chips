@@ -274,7 +274,8 @@ extern "C" {
 #define KC85_PIO_A_TAPE_LED        (1<<5)
 #define KC85_PIO_A_TAPE_MOTOR      (1<<6)
 #define KC85_PIO_A_BASIC_ROM       (1<<7)
-#define KC85_PIO_B_VOLUME_MASK     ((1<<5)-1)
+#define KC85_PIO_B_853_VOLUME_MASK ((1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4))
+#define KC85_PIO_B_854_VOLUME_MASK ((1<<1)|(1<<2)|(1<<3)|(1<<4))
 #define KC85_PIO_B_RAM8            (1<<5)  // KC85/4 only
 #define KC85_PIO_B_RAM8_RO         (1<<6)  // KC85/4 only
 #define KC85_PIO_B_BLINK_ENABLED   (1<<7)
@@ -465,8 +466,10 @@ bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type);
 bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type, const void* rom_ptr, int rom_size);
 // remove module in slot
 bool kc85_remove_module(kc85_t* sys, uint8_t slot);
-// get a module name by module type
-const char* kc85_module_name(kc85_module_type_t mod_type);
+// get a descriptive module name by module type
+const char* kc85_mod_name(kc85_module_type_t mod_type);
+// get a short module name (M022...) by module type
+const char* kc85_mod_short_name(kc85_module_type_t mod_type);
 // lookup slot struct by slot address (0x08 or 0x0C)
 kc85_slot_t* kc85_slot_by_addr(kc85_t* sys, uint8_t slot_addr);
 // return true if a slot contains a module
@@ -477,8 +480,10 @@ bool kc85_slot_cpu_visible(kc85_t* sys, uint8_t slot_addr);
 uint16_t kc85_slot_cpu_addr(kc85_t* sys, uint8_t slot_addr);
 // get byte-size of module in slot (0 if no module in slot)
 int kc85_slot_mod_size(kc85_t* sys, uint8_t slot_addr);
-// get name of module in slot ("NONE" if no module in slot)
+// get descriptive name of module in slot ("NONE" if no module in slot)
 const char* kc85_slot_mod_name(kc85_t* sys, uint8_t slot_addr);
+// get short name of module slot slot
+const char* kc85_slot_mod_short_name(kc85_t* sys, uint8_t slot_addr);
 // get a slot's control byte
 uint8_t kc85_slot_ctrl(kc85_t* sys, uint8_t slot_addr);
 // load a .KCC or .TAP snapshot file into the emulator
@@ -522,7 +527,7 @@ static inline uint32_t _kc85_xorshift32(uint32_t x) {
     return x;
 }
 
-#define _KC85_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
+#define _KC85_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
 
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -581,10 +586,13 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
 
     sys->audio.callback = desc->audio.callback;
     sys->audio.num_samples = _KC85_DEFAULT(desc->audio.num_samples, KC85_DEFAULT_AUDIO_SAMPLES);
-    const int audio_hz = _KC85_DEFAULT(desc->audio.sample_rate, 44100);
-    const float audio_vol = _KC85_DEFAULT(desc->audio.volume, 0.4f);
-    beeper_init(&sys->beeper_1, sys->freq_hz, audio_hz, audio_vol);
-    beeper_init(&sys->beeper_2, sys->freq_hz, audio_hz, audio_vol);
+    const beeper_desc_t beeper_desc = {
+        .tick_hz = sys->freq_hz,
+        .sound_hz = _KC85_DEFAULT(desc->audio.sample_rate, 44100),
+        .base_volume = _KC85_DEFAULT(desc->audio.volume, 0.6f),
+    };
+    beeper_init(&sys->beeper_1, &beeper_desc);
+    beeper_init(&sys->beeper_2, &beeper_desc);
 
     // expansion module system
     _kc85_exp_init(sys);
@@ -982,17 +990,25 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         const uint8_t pio_b = Z80PIO_GET_PB(pins);
         bool memory_mapping_dirty = ((pio_a ^ sys->pio_a) & KC85_PIO_A_MEMORY_BITS) ||
                                     ((pio_b ^ sys->pio_b) & KC85_PIO_B_MEMORY_BITS);
+        if (KC85_TYPE_4 == sys->type) {
+            // volume control on KC85/4
+            bool volume_dirty = (pio_b ^ sys->pio_b) & KC85_PIO_B_854_VOLUME_MASK;
+            if (volume_dirty) {
+                float vol = (((~pio_b) & KC85_PIO_B_854_VOLUME_MASK) >> 1) / 15.0f;
+                beeper_set_volume(&sys->beeper_1, vol);
+                beeper_set_volume(&sys->beeper_2, vol);
+            }
+        }
+        else {
+            // on KC85/2 and /3, PA4 is connected to CPU NMI pin
+            if (pio_a & KC85_PIO_A_NMI) { pins &= ~Z80_NMI; }
+            else                        { pins |= Z80_NMI; }
+        }
         sys->pio_a = pio_a;
         sys->pio_b = pio_b;
         if (memory_mapping_dirty) {
             _kc85_update_memory_map(sys);
         }
-        // on KC85/2 and /3, PA4 is connected to CPU NMI pin
-        if (KC85_TYPE_4 != sys->type) {
-            if (pio_a & KC85_PIO_A_NMI) { pins &= ~Z80_NMI; }
-            else                        { pins |= Z80_NMI; }
-        }
-        pins &= Z80_PIN_MASK;
     }
     return pins & Z80_PIN_MASK;
 }
@@ -1198,7 +1214,7 @@ static void _kc85_exp_reset(kc85_t* sys) {
     /* FIXME? */
 }
 
-const char* kc85_module_name(kc85_module_type_t mod_type) {
+const char* kc85_mod_name(kc85_module_type_t mod_type) {
     switch (mod_type) {
         case KC85_MODULE_NONE:          return "NONE";
         case KC85_MODULE_M006_BASIC:    return "M006 BASIC";
@@ -1207,6 +1223,19 @@ const char* kc85_module_name(kc85_module_type_t mod_type) {
         case KC85_MODULE_M022_16KBYTE:  return "M022 16KBYTE";
         case KC85_MODULE_M026_FORTH:    return "M026 FORTH";
         case KC85_MODULE_M027_DEVELOPMENT:  return "M027 DEV";
+        default: return "???";
+    }
+}
+
+const char* kc85_mod_short_name(kc85_module_type_t mod_type) {
+    switch (mod_type) {
+        case KC85_MODULE_NONE:          return "NONE";
+        case KC85_MODULE_M006_BASIC:    return "M006";
+        case KC85_MODULE_M011_64KBYE:   return "M011";
+        case KC85_MODULE_M012_TEXOR:    return "M012";
+        case KC85_MODULE_M022_16KBYTE:  return "M022";
+        case KC85_MODULE_M026_FORTH:    return "M026";
+        case KC85_MODULE_M027_DEVELOPMENT:  return "M027";
         default: return "???";
     }
 }
@@ -1271,7 +1300,18 @@ const char* kc85_slot_mod_name(kc85_t* sys, uint8_t slot_addr) {
     CHIPS_ASSERT(sys && sys->valid);
     kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     if (slot) {
-        return kc85_module_name(slot->mod.type);
+        return kc85_mod_name(slot->mod.type);
+    }
+    else {
+        return "NONE";
+    }
+}
+
+const char* kc85_slot_mod_short_name(kc85_t* sys, uint8_t slot_addr) {
+    CHIPS_ASSERT(sys && sys->valid);
+    kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
+    if (slot) {
+        return kc85_mod_short_name(slot->mod.type);
     }
     else {
         return "NONE";
