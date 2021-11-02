@@ -173,7 +173,7 @@ uint64_t z80_init(z80_t* cpu) {
         .af2 = 0x5555, .bc2 = 0x5555, .de2 = 0x5555, .hl2 = 0x5555,
         .op.pip = _Z80_M1_PIP
     };
-    return Z80_M1|Z80_MREQ|Z80_RD;
+    return z80_prefetch(cpu, 0x0000);
 }
 
 uint64_t z80_reset(z80_t* cpu) {
@@ -184,7 +184,7 @@ uint64_t z80_reset(z80_t* cpu) {
         .af2 = 0x5555, .bc2 = 0x5555, .de2 = 0x5555, .hl2 = 0x5555,
         .op.pip = _Z80_M1_PIP
     };
-    return Z80_M1|Z80_MREQ|Z80_RD;
+    return z80_prefetch(cpu, 0x0000);
 }
 
 bool z80_opdone(z80_t* cpu) {
