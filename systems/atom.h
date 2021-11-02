@@ -251,9 +251,11 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     i8255_init(&sys->ppi);
     m6522_init(&sys->via);
 
-    const int audio_hz = _ATOM_DEFAULT(desc->audio.sample_rate, 44100);
-    const float audio_vol = _ATOM_DEFAULT(desc->audio.volume, 0.5f);
-    beeper_init(&sys->beeper, ATOM_FREQUENCY, audio_hz, audio_vol);
+    beeper_init(&sys->beeper, &(beeper_desc_t){
+        .tick_hz = ATOM_FREQUENCY,
+        .sound_hz =_ATOM_DEFAULT(desc->audio.sample_rate, 44100),
+        .base_volume = _ATOM_DEFAULT(desc->audio.volume, 0.5f),
+    });
 
     /* setup memory map and keyboard matrix */
     _atom_init_memorymap(sys);
