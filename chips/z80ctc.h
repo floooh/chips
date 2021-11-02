@@ -191,6 +191,7 @@ extern "C" {
 
 // interrupt state bits
 #define Z80CTC_INT_NEEDED           (1<<0)  // interrupt request needed
+#define Z80CTC_INT_SERVICED         (1<<1)  // interrupt is currently being serviced by CPU
 
 // Z80 CTC channel state
 typedef struct {
@@ -414,6 +415,10 @@ static uint64_t _z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
         z80ctc_channel_t* chn = &ctc->chn[i];
         /*
+            Also see: https://github.com/floooh/emu-info/blob/master/z80/z80-interrupts.pdf
+
+            Especially the timing Figure 7 and Figure 7 timing diagrams!
+
             - set status of IEO pin depending on IEI pin and current
               channel's interrupt request/acknowledge status, this
               'ripples' to the next channel and downstream interrupt
@@ -429,28 +434,36 @@ static uint64_t _z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
               received in the interrupt-requested state, the IEIO
               pin will be set to active, so that downstream devices
               get a chance to decode the RETI
-        */
 
-        /* if any higher priority device in the daisy chain has cleared
-           the IEIO pin, skip interrupt handling
+            - NOT IMPLEMENTED: "All channels are inhibited from changing
+              their interrupt request status when M1 is active - about two
+              clock cycles earlier than IORQ".
         */
-        if ((chn->int_state & Z80CTC_INT_NEEDED) && (pins & Z80CTC_IEIO)) {
-            // disable interrupt handling for downstream devices
+        if ((0 != chn->int_state) && (pins & Z80CTC_IEIO)) {
+            // inhibit interrupt handling on downstream devices for the
+            // entire duration of interrupt servicing
             pins &= ~Z80CTC_IEIO;
-            // request interrupt
-            pins |= Z80CTC_INT;
-            // answer the CPU's M1|IORQ cycle (put interrupt vector on data bus)
+            // set INT pint active until the CPU acknowledges the interrupt
+            if (chn->int_state & Z80CTC_INT_NEEDED) {
+                pins |= Z80CTC_INT;
+            }
+            // interrupt ackowledge from CPU (M1|IORQ): put interrupt vector
+            // on data bus, clear INT pin and go into "serviced" state.
             if ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1)) {
                 Z80CTC_SET_DATA(pins, chn->int_vector);
-                chn->int_state &= ~Z80CTC_INT_NEEDED;
+                chn->int_state = (chn->int_state & ~Z80CTC_INT_NEEDED) | Z80CTC_INT_SERVICED;
                 pins &= ~Z80CTC_INT;
             }
         }
-        // RETI is visible to all daisy chain devices, no matter of IEIO state
-// FIXME: hmm there isn't anything to do here on RETI now???
-//        if (pins & Z80CTC_RETI) {
-//            chn->int_state &= ~Z80CTC_INT_SERVICING;
-//        }
+
+        // on RETI, only the highest priority interrupt that's currently being
+        // serviced resets its state so that IEIO enables interrupt handling
+        // on downstream devices, this must be allowed to happen even if a higher
+        // priority device has entered interrupt handling
+        if ((pins & Z80CTC_RETI) && (chn->int_state & Z80CTC_INT_SERVICED)) {
+            chn->int_state &= ~Z80CTC_INT_SERVICED;
+            pins &= ~Z80CTC_RETI;
+        }
     }
     return pins;
 }

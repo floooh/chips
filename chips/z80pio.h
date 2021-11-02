@@ -241,6 +241,7 @@ extern "C" {
 
 /* Interrupt Handling State */
 #define Z80PIO_INT_NEEDED (1<<0)
+#define Z80PIO_INT_SERVICED (1<<1)
 
 /*
     I/O port registers
@@ -510,6 +511,10 @@ uint64_t _z80pio_int(z80pio_t* pio, uint64_t pins) {
     for (int i = 0; i < Z80PIO_NUM_PORTS; i++) {
         z80pio_port_t* p = &pio->port[i];
         /*
+            Also see: https://github.com/floooh/emu-info/blob/master/z80/z80-interrupts.pdf
+
+            Especially the timing Figure 7 and Figure 7 timing diagrams!
+
             - set status of IEO pin depending on IEI pin and current
               channel's interrupt request/acknowledge status, this
               'ripples' to the next channel and downstream interrupt
@@ -525,28 +530,36 @@ uint64_t _z80pio_int(z80pio_t* pio, uint64_t pins) {
               received in the interrupt-requested state, the IEIO
               pin will be set to active, so that downstream devices
               get a chance to decode the RETI
-        */
 
-        /* if any higher priority device in the daisy chain has cleared
-           the IEIO pin, skip interrupt handling
+            - NOT IMPLEMENTED: "All channels are inhibited from changing
+              their interrupt request status when M1 is active - about two
+              clock cycles earlier than IORQ".
         */
-        if ((p->int_state & Z80PIO_INT_NEEDED) && (pins & Z80PIO_IEIO)) {
-            // disable interrupt handling for downstream devices
+        if ((0 != p->int_state) && (pins & Z80PIO_IEIO)) {
+            // inhibit interrupt handling on downstream devices for the
+            // entire duration of interrupt servicing
             pins &= ~Z80PIO_IEIO;
-            // request interrupt
-            pins |= Z80PIO_INT;
-            // answer the CPU's M1|IORQ cycle (put interrupt vector on data bus)
+            // set INT pint active until the CPU acknowledges the interrupt
+            if (p->int_state & Z80PIO_INT_NEEDED) {
+                pins |= Z80PIO_INT;
+            }
+            // interrupt ackowledge from CPU (M1|IORQ): put interrupt vector
+            // on data bus, clear INT pin and go into "serviced" state.
             if ((pins & (Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_IORQ|Z80PIO_M1)) {
                 Z80PIO_SET_DATA(pins, p->int_vector);
-                p->int_state &= ~Z80PIO_INT_NEEDED;
+                p->int_state = (p->int_state & ~Z80PIO_INT_NEEDED) | Z80PIO_INT_SERVICED;
                 pins &= ~Z80PIO_INT;
             }
         }
-        // RETI is visible to all daisy chain devices, no matter of IEIO state
-// FIXME: hmm there isn't anything to do here on RETI now???
-//        if (pins & Z80PIO_RETI) {
-//            p->int_state &= ~Z80PIO_INT_SERVICING;
-//        }
+
+        // on RETI, only the highest priority interrupt that's currently being
+        // serviced resets its state so that IEIO enables interrupt handling
+        // on downstream devices, this must be allowed to happen even if a higher
+        // priority device has entered interrupt handling
+        if ((pins & Z80PIO_RETI) && (p->int_state & Z80PIO_INT_SERVICED)) {
+            p->int_state &= ~Z80PIO_INT_SERVICED;
+            pins &= ~Z80PIO_RETI;
+        }
     }
     return pins;
 }
@@ -588,7 +601,10 @@ uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
     return pins;
 }
 
-/* write value to a port, this may trigger an interrupt */
+/* FIXME: integrate into z80pio_tick()!
+
+    write value to a port, this may trigger an interrupt
+*/
 void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data) {
     CHIPS_ASSERT(pio && (port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
     z80pio_port_t* p = &pio->port[port_id];
