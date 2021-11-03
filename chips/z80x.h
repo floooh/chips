@@ -165,25 +165,20 @@ bool z80_opdone(z80_t* cpu);
 
 uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
-    // NOTE: the initial state differs is the same as in visualz80,
-    // not the initial state that's documented in various sources
-    *cpu = (z80_t){
-        .af = 0x5555, .bc = 0x5555, .de = 0x5555, .hl = 0x5555,
-        .wz = 0x5555, .sp = 0x5555, .ix = 0x5555, .iy = 0x5555,
-        .af2 = 0x5555, .bc2 = 0x5555, .de2 = 0x5555, .hl2 = 0x5555,
-        .op.pip = _Z80_M1_PIP
-    };
+    // initial state as described in 'The Undocumented Z80 Documented'
+    memset(cpu, 0, sizeof(z80_t));
+    cpu->af = cpu->bc = cpu->de = cpu->hl = 0xFFFF;
+    cpu->wz = cpu->sp = cpu->ix = cpu->iy = 0xFFFF;
+    cpu->af2 = cpu->bc2 = cpu->de2 = cpu->hl2 = 0xFFFF;
     return z80_prefetch(cpu, 0x0000);
 }
 
 uint64_t z80_reset(z80_t* cpu) {
-    // FIXME?
-    *cpu = (z80_t){
-        .af = 0x5555, .bc = 0x5555, .de = 0x5555, .hl = 0x5555,
-        .wz = 0x5555, .sp = 0x5555, .ix = 0x5555, .iy = 0x5555,
-        .af2 = 0x5555, .bc2 = 0x5555, .de2 = 0x5555, .hl2 = 0x5555,
-        .op.pip = _Z80_M1_PIP
-    };
+    // reset state as described in 'The Undocumented Z80 Documented'
+    memset(cpu, 0, sizeof(z80_t));
+    cpu->af = cpu->bc = cpu->de = cpu->hl = 0xFFFF;
+    cpu->wz = cpu->sp = cpu->ix = cpu->iy = 0xFFFF;
+    cpu->af2 = cpu->bc2 = cpu->de2 = cpu->hl2 = 0xFFFF;
     return z80_prefetch(cpu, 0x0000);
 }
 
