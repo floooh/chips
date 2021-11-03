@@ -200,11 +200,8 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     }
 
     // initialize the hardware
-    sys->pins = z80_init(&sys->cpu);
+    z80_init(&sys->cpu);
     z80pio_init(&sys->pio);
-
-    // execution starts at 0xF000
-    z80_prefetch(&sys->cpu, 0xF000);
 
     /* setup the memory map:
         - the Z1013.64 has 64 KByte RAM, all other models 16 KByte RAM
@@ -293,6 +290,9 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
         kbd_register_key(&sys->kbd, 0x0D, 6, 1, 0);  // enter
         kbd_register_key(&sys->kbd, 0x03, 1, 3, ctrl_mask); // map Esc to Ctrl+C (STOP/BREAK)
     }
+
+    // execution starts at 0xF000
+    sys->pins = z80_prefetch(&sys->cpu, 0xF000);
 }
 
 void z1013_discard(z1013_t* sys) {
@@ -306,7 +306,7 @@ void z1013_reset(z1013_t* sys) {
     z80pio_reset(&sys->pio);
     sys->kbd_request_line_mask = 0;
     sys->kbd_request_line_hilo_shift = 0;
-    z80_prefetch(&sys->cpu, 0xF000);
+    sys->pins = z80_prefetch(&sys->cpu, 0xF000);
 }
 
 static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {

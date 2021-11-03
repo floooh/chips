@@ -588,7 +588,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     #endif
 
     // initialize the hardware
-    sys->pins = z80_init(&sys->cpu);
+    z80_init(&sys->cpu);
     z80ctc_init(&sys->ctc);
     sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
     z80pio_init(&sys->pio);
@@ -619,7 +619,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     kbd_init(&sys->kbd, 2);
 
     // execution on power-up starts at 0xF000
-    z80_prefetch(&sys->cpu, 0xF000);
+    sys->pins = z80_prefetch(&sys->cpu, 0xF000);
 }
 
 void kc85_discard(kc85_t* sys) {
@@ -645,7 +645,7 @@ void kc85_reset(kc85_t* sys) {
     _kc85_update_memory_map(sys);
 
     // execution after reset starts at 0xE000
-    z80_prefetch(&sys->cpu, 0xE000);
+    sys->pins = z80_prefetch(&sys->cpu, 0xE000);
 }
 
 // hardwired foreground colors

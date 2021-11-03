@@ -260,7 +260,8 @@ static const ui_chip_pin_t _ui_kc85_cpu_pins[] = {
     { "A12",    30,     Z80_A12 },
     { "A13",    31,     Z80_A13 },
     { "A14",    32,     Z80_A14 },
-    { "A15",    33,     Z80_A15 },};
+    { "A15",    33,     Z80_A15 },
+};
 
 static const ui_chip_pin_t _ui_kc85_pio_pins[] = {
     { "D0",     0,      Z80_D0 },
