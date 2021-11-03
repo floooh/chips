@@ -68,7 +68,7 @@ typedef struct {
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_lc80_desc_t;
 
 typedef struct {
@@ -112,9 +112,8 @@ typedef struct {
 
 void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* desc);
 void ui_lc80_discard(ui_lc80_t* ui);
-void ui_lc80_draw(ui_lc80_t* ui, double time_ms);
-bool ui_lc80_before_exec(ui_lc80_t* ui);
-void ui_lc80_after_exec(ui_lc80_t* ui);
+void ui_lc80_draw(ui_lc80_t* ui);
+lc80_debug_t ui_lc80_get_debug(ui_lc80_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -702,7 +701,7 @@ static void _ui_lc80_draw_motherboard(ui_lc80_t* ui) {
     ImGui::End();
 }
 
-static void _ui_lc80_draw_menu(ui_lc80_t* ui, double time_ms) {
+static void _ui_lc80_draw_menu(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui && ui->sys && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -745,13 +744,13 @@ static void _ui_lc80_draw_menu(ui_lc80_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->win.dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
 
 static void _ui_lc80_draw_windows(ui_lc80_t* ui) {
-    ui_audio_draw(&ui->win.audio, ui->sys->sample_pos);
+    ui_audio_draw(&ui->win.audio, ui->sys->audio.sample_pos);
     ui_kbd_draw(&ui->win.kbd);
     ui_z80_draw(&ui->win.cpu);
     ui_z80pio_draw(&ui->win.pio_sys);
@@ -773,15 +772,16 @@ static const ui_chip_pin_t _ui_lc80_cpu_pins[] = {
     { "D5",     5,      Z80_D5 },
     { "D6",     6,      Z80_D6 },
     { "D7",     7,      Z80_D7 },
-    { "M1",     9,      Z80_M1 },
-    { "MREQ",   10,     Z80_MREQ },
-    { "IORQ",   11,     Z80_IORQ },
-    { "RD",     12,     Z80_RD },
-    { "WR",     13,     Z80_WR },
+    { "M1",     8,      Z80_M1 },
+    { "MREQ",   9,      Z80_MREQ },
+    { "IORQ",   10,     Z80_IORQ },
+    { "RD",     11,     Z80_RD },
+    { "WR",     12,     Z80_WR },
+    { "RFSH",   13,     Z80_RFSH },
     { "HALT",   14,     Z80_HALT },
     { "INT",    15,     Z80_INT },
     { "NMI",    16,     Z80_NMI },
-    { "WAIT",   17,     Z80_WAIT_MASK },
+    { "WAIT",   17,     Z80_WAIT },
     { "A0",     18,     Z80_A0 },
     { "A1",     19,     Z80_A1 },
     { "A2",     20,     Z80_A2 },
@@ -1099,8 +1099,8 @@ static void _ui_lc80_init_windows(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) 
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->sys->sample_buffer;
-        desc.num_samples = ui->sys->num_samples;
+        desc.sample_buffer = ui->sys->audio.sample_buffer;
+        desc.num_samples = ui->sys->audio.num_samples;
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->win.audio, &desc);
@@ -1175,21 +1175,21 @@ void ui_lc80_discard(ui_lc80_t* ui) {
     _ui_lc80_discard_windows(ui);
 }
 
-void ui_lc80_draw(ui_lc80_t* ui, double time_ms) {
+void ui_lc80_draw(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui && ui->sys);
-    _ui_lc80_draw_menu(ui, time_ms);
+    _ui_lc80_draw_menu(ui);
     _ui_lc80_draw_motherboard(ui);
     _ui_lc80_draw_windows(ui);
 }
 
-bool ui_lc80_before_exec(ui_lc80_t* ui) {
-    CHIPS_ASSERT(ui && ui->sys);
-    return ui_dbg_before_exec(&ui->win.dbg);
-}
-
-void ui_lc80_after_exec(ui_lc80_t* ui) {
-    CHIPS_ASSERT(ui && ui->sys);
-    ui_dbg_after_exec(&ui->win.dbg);
+lc80_debug_t ui_lc80_get_debug(ui_lc80_t* ui) {
+    return (lc80_debug_t){
+        .callback = {
+            .func = (lc80_debug_func_t)ui_dbg_tick,
+            .user_data = &ui->win.dbg
+        },
+        .stopped = &ui->win.dbg.dbg.stopped,
+    };
 }
 
 #ifdef __clang__
