@@ -409,9 +409,6 @@ typedef struct {
     beeper_t beeper_1;
     beeper_t beeper_2;
 
-    kc85_debug_t debug;
-
-    bool valid;
     uint8_t pio_a;          // current PIO-A value, used for bankswitching
     uint8_t pio_b;          // current PIO-B value, used for bankswitching
     #if defined(CHIPS_KC85_TYPE_4)
@@ -428,6 +425,9 @@ typedef struct {
     kbd_t kbd;
     mem_t mem;
     kc85_exp_t exp;         // expansion module system
+
+    bool valid;
+    kc85_debug_t debug;
 
     uint32_t* pixel_buffer;
     struct {
@@ -846,9 +846,7 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
             mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
         }
     }
-    else if (pins & Z80_IORQ) {
-        // handle IO requests
-
+    else if ((pins & (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)) == (Z80_IORQ|Z80_A7)) {
         /*
             IO address decoding.
 
@@ -872,69 +870,65 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
                  0x84:   (KC85/4 only) control the vide memory bank switching
                  0x86:   (KC85/4 only) control RAM block at 0x4000 and ROM switching
         */
-
-        // check if any of the valid port numbers is addressed (0x80..0x8F)
-        if ((pins & (Z80_A7|Z80_A6|Z80_A5|Z80_A4)) == Z80_A7) {
-            // check if the PIO or CTC is addressed (0x88 to 0x8F)
-            if (pins & Z80_A3) {
-                // bit A2 selects the PIO or CTC
-                if (pins & Z80_A2) {
-                    ctc_selected = true;
-                }
-                else {
-                    pio_selected = true;
-                }
+        // check if the PIO or CTC is addressed (0x88 to 0x8F)
+        if (pins & Z80_A3) {
+            // bit A2 selects the PIO or CTC
+            if (pins & Z80_A2) {
+                ctc_selected = true;
             }
             else {
-                // we're in range 0x80..0x87
-                const uint8_t data = Z80_GET_DATA(pins);
-                switch (pins & (Z80_A2|Z80_A1|Z80_A0)) {
-                    case 0x00:
-                        /*  port 0x80: expansion module control, high byte
-                            of port address contains module slot address
-                        */
-                        {
-                            const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
-                            if (pins & Z80_WR) {
-                                // write new control byte and update the memory mapping
-                                if (_kc85_exp_write_ctrl(sys, slot_addr, data)) {
-                                    _kc85_update_memory_map(sys);
-                                }
-                            }
-                            else if (pins & Z80_RD) {
-                                // read module id in slot
-                                Z80_SET_DATA(pins, _kc85_exp_module_id(sys, slot_addr));
-                            }
-                        }
-                        break;
-
-                    #if defined(CHIPS_KC85_TYPE_4)
-                    case 0x04:
-                        // port 0x84, KC85/4 only, this is a write-only 8-bit latch
+                pio_selected = true;
+            }
+        }
+        else {
+            // we're in range 0x80..0x87
+            const uint8_t data = Z80_GET_DATA(pins);
+            switch (pins & (Z80_A2|Z80_A1|Z80_A0)) {
+                case 0x00:
+                    /*  port 0x80: expansion module control, high byte
+                        of port address contains module slot address
+                    */
+                    {
+                        const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
                         if (pins & Z80_WR) {
-                            bool memory_mapping_dirty = (data ^ sys->io84) & KC85_IO84_MEMORY_BITS;
-                            sys->io84 = data;
-                            if (memory_mapping_dirty) {
+                            // write new control byte and update the memory mapping
+                            if (_kc85_exp_write_ctrl(sys, slot_addr, data)) {
                                 _kc85_update_memory_map(sys);
                             }
                         }
-                        break;
-                    #endif
-
-                    #if defined(CHIPS_KC85_TYPE_4)
-                    case 0x06:
-                        // port 0x86, KC85/4 only, this is a write-only 8-bit latch
-                        if (pins & Z80_WR) {
-                            // check if memory mapping has changed
-                            bool memory_mapping_dirty = (data ^ sys->io86) & KC85_IO86_MEMORY_BITS;
-                            sys->io86 = data;
-                            if (memory_mapping_dirty) {
-                                _kc85_update_memory_map(sys);
-                            }
+                        else if (pins & Z80_RD) {
+                            // read module id in slot
+                            Z80_SET_DATA(pins, _kc85_exp_module_id(sys, slot_addr));
                         }
-                        break;
-                    #endif
-                }
+                    }
+                    break;
+
+                #if defined(CHIPS_KC85_TYPE_4)
+                case 0x04:
+                    // port 0x84, KC85/4 only, this is a write-only 8-bit latch
+                    if (pins & Z80_WR) {
+                        bool memory_mapping_dirty = (data ^ sys->io84) & KC85_IO84_MEMORY_BITS;
+                        sys->io84 = data;
+                        if (memory_mapping_dirty) {
+                            _kc85_update_memory_map(sys);
+                        }
+                    }
+                    break;
+                #endif
+
+                #if defined(CHIPS_KC85_TYPE_4)
+                case 0x06:
+                    // port 0x86, KC85/4 only, this is a write-only 8-bit latch
+                    if (pins & Z80_WR) {
+                        // check if memory mapping has changed
+                        bool memory_mapping_dirty = (data ^ sys->io86) & KC85_IO86_MEMORY_BITS;
+                        sys->io86 = data;
+                        if (memory_mapping_dirty) {
+                            _kc85_update_memory_map(sys);
+                        }
+                    }
+                    break;
+                #endif
             }
         }
     }
@@ -1008,8 +1002,9 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         if (memory_mapping_dirty) {
             _kc85_update_memory_map(sys);
         }
+        pins &= Z80_PIN_MASK;
     }
-    return pins & Z80_PIN_MASK;
+    return pins;
 }
 
 uint32_t kc85_exec(kc85_t* sys, uint32_t micro_seconds) {
