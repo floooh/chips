@@ -11,6 +11,13 @@
     before you include this file in *one* C++ file to create the 
     implementation.
 
+    Define the KC85 type to build before including this header (both the
+    declaration and implementation):
+
+        CHIPS_KC85_TYPE_2
+        CHIPS_KC85_TYPE_3
+        CHIPS_KC85_TYPE_4
+
     Optionally provide the following macros with your own implementation
     
     ~~~C
@@ -56,16 +63,20 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#if !(defined(CHIPS_KC85_TYPE_2) || defined(CHIPS_KC85_TYPE_3) || defined(CHIPS_KC85_TYPE_4))
+#error "Please define one of CHIPS_KC85_TYPE_2, CHIPS_KC85_TYPE_3 or CHIPS_KC85_TYPE_4 before including kc85.h!"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // general callback type for rebooting to different configs
-typedef void (*ui_kc85_boot_t)(kc85_t* sys, kc85_type_t type);
+typedef void (*ui_kc85_boot_t)(kc85_t* sys);
 
 typedef struct {
     kc85_t* kc85;
-    ui_kc85_boot_t boot_cb; /* user-provided callback to reboot to different config */
+    ui_kc85_boot_t boot_cb; /* user-provided callback to reboot */
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
@@ -118,16 +129,8 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
                 kc85_reset(ui->kc85);
                 ui_dbg_reset(&ui->dbg);
             }
-            if (ImGui::MenuItem("KC85/2", 0, ui->kc85->type == KC85_TYPE_2)) {
-                ui->boot_cb(ui->kc85, KC85_TYPE_2);
-                ui_dbg_reboot(&ui->dbg);
-            }
-            if (ImGui::MenuItem("KC85/3", 0, ui->kc85->type == KC85_TYPE_3)) {
-                ui->boot_cb(ui->kc85, KC85_TYPE_3);
-                ui_dbg_reboot(&ui->dbg);
-            }
-            if (ImGui::MenuItem("KC85/4", 0, ui->kc85->type == KC85_TYPE_4)) {
-                ui->boot_cb(ui->kc85, KC85_TYPE_4);
+            if (ImGui::MenuItem("Cold Boot")) {
+                ui->boot_cb(ui->kc85);
                 ui_dbg_reboot(&ui->dbg);
             }
             ImGui::EndMenu();
@@ -171,28 +174,26 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
 static void _ui_kc85_update_memmap(ui_kc85_t* ui) {
     CHIPS_ASSERT(ui && ui->kc85);
     const uint8_t pio_a = ui->kc85->pio_a;
-    const uint8_t pio_b = ui->kc85->pio_b;
-    const uint8_t io86  = ui->kc85->io86;
-    const uint8_t io84  = ui->kc85->io84;
     ui_memmap_reset(&ui->memmap);
-    if (KC85_TYPE_2 == ui->kc85->type) {
+    #if defined(CHIPS_KC85_TYPE_2)
         /* KC85/2 memory map */
         ui_memmap_layer(&ui->memmap, "System");
             ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
             ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_a & KC85_PIO_A_IRM));
             ui_memmap_region(&ui->memmap, "CAOS ROM 1", 0xE000, 0x0800, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
             ui_memmap_region(&ui->memmap, "CAOS ROM 2", 0xF000, 0x0800, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
-    }
-    else if (KC85_TYPE_3 == ui->kc85->type) {
+    #elif defined(CHIPS_KC85_TYPE_3)
         /* KC85/3 memory map */
         ui_memmap_layer(&ui->memmap, "System");
             ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
             ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_a & KC85_PIO_A_IRM));
             ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_a & KC85_PIO_A_BASIC_ROM));
             ui_memmap_region(&ui->memmap, "CAOS ROM", 0xE000, 0x2000, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
-    }
-    else {
+    #else
         /* KC85/4 memory map */
+        const uint8_t pio_b = ui->kc85->pio_b;        
+        const uint8_t io86  = ui->kc85->io86;
+        const uint8_t io84  = ui->kc85->io84;
         ui_memmap_layer(&ui->memmap, "System 0");
             ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
             ui_memmap_region(&ui->memmap, "RAM4", 0x4000, 0x4000, 0 != (io86 & KC85_IO86_RAM4));
@@ -211,7 +212,7 @@ static void _ui_kc85_update_memmap(ui_kc85_t* ui) {
             ui_memmap_region(&ui->memmap, "RAM8 BANK0", 0x8000, 0x4000, (0 != (pio_b & KC85_PIO_B_RAM8)) && (0 == (io84 & KC85_IO84_SEL_RAM8)));
         ui_memmap_layer(&ui->memmap, "System 5");
             ui_memmap_region(&ui->memmap, "RAM8 BANK1", 0x8000, 0x4000, (0 != (pio_b & KC85_PIO_B_RAM8)) && (0 != (io84 & KC85_IO84_SEL_RAM8)));
-    }
+    #endif
     for (int i = 0; i < KC85_NUM_SLOTS; i++) {
         const uint8_t slot_addr = ui->kc85->exp.slot[i].addr;
         ui_memmap_layer(&ui->memmap, slot_addr == 0x08 ? "Slot 08" : "Slot 0C");
