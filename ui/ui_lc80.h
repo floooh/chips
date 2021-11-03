@@ -479,7 +479,7 @@ static void _ui_lc80_draw_wire(ui_lc80_t* ui,
 {
     ui_chip_vec2_t p0 = _ui_lc80_pin_pos(from_chip, from_pin);
     ui_chip_vec2_t p1 = _ui_lc80_pin_pos(to_chip, to_pin);
-    bool hovered = _ui_lc80_pin_hovered(from_chip, from_pin) | _ui_lc80_pin_hovered(to_chip, to_pin);
+    bool hovered = _ui_lc80_pin_hovered(from_chip, from_pin) || _ui_lc80_pin_hovered(to_chip, to_pin);
     _ui_lc80_draw_wire_pos(ui, p0.x, p0.y, p1.x, p1.y, dx0, y, dx1, wire_type, active, hovered);
 }
 
