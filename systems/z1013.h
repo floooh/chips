@@ -323,7 +323,7 @@ static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
             mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
         }
     }
-    else if (pins & Z80_IORQ) {
+    else if ((pins & (Z80_M1|Z80_IORQ)) == Z80_IORQ) {
         // an IO request
 
         /*
