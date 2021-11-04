@@ -451,8 +451,16 @@ static uint64_t _z9001_tick(z9001_t* sys, uint64_t pins) {
         }
         if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
         if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
-        // FIXME: keyboard input/output
+
+        // NOTE port B input may trigger an interrupt
+        const uint8_t pa_in = ~kbd_scan_columns(&sys->kbd);
+        const uint8_t pb_in = ~kbd_scan_lines(&sys->kbd);
+        Z80PIO_SET_PAB(pins, pa_in, pb_in);
         pins = z80pio_tick(&sys->pio2, pins);
+        const uint8_t pa_out = ~Z80PIO_GET_PA(pins);
+        const uint8_t pb_out = ~Z80PIO_GET_PB(pins);
+        kbd_set_active_columns(&sys->kbd, pa_out);
+        kbd_set_active_lines(&sys->kbd, pb_out);
 
         pins &= Z80_PIN_MASK;
     }
@@ -501,7 +509,6 @@ static uint64_t _z9001_tick(z9001_t* sys, uint64_t pins) {
         sys->blink_counter = (_Z9001_FREQUENCY * 8) / 25;
         sys->blink_flip_flop = !sys->blink_flip_flop;
     }
-    
     return pins;
 }
 
@@ -603,33 +610,6 @@ void z9001_key_up(z9001_t* sys, int key_code) {
     /* FIXME FIXME FIXME keyboard matrix lines are directly connected to the PIO2's Port B */
     //z80pio_write_port(&sys->pio2, Z80PIO_PORT_B, ~kbd_scan_lines(&sys->kbd));
 }
-
-/* PIO2: keyboard input */
-/* FIXME FIXME FIXME
-uint8_t _z9001_pio2_in(int port_id, void* user_data) {
-    z9001_t* sys = (z9001_t*) user_data;
-    if (Z80PIO_PORT_A == port_id) {
-        // return keyboard matrix column bits for requested line bits
-        uint8_t columns = (uint8_t) kbd_scan_columns(&sys->kbd);
-        return ~columns;
-    }
-    else {
-        // return keyboard matrix line bits for requested column bits
-        uint8_t lines = (uint8_t) kbd_scan_lines(&sys->kbd);
-        return ~lines;
-    }
-}
-
-void _z9001_pio2_out(int port_id, uint8_t data, void* user_data) {
-    z9001_t* sys = (z9001_t*) user_data;
-    if (Z80PIO_PORT_A == port_id) {
-        kbd_set_active_columns(&sys->kbd, ~data);
-    }
-    else {
-        kbd_set_active_lines(&sys->kbd, ~data);
-    }
-}
-*/
 
 /*=== FILE LOADING ===========================================================*/
 
