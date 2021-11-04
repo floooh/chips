@@ -147,13 +147,21 @@ uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask);
 /* test keyboard matrix against a line bitmask and return lit columns */
 uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask);
 /* set active column mask (use together with kbd_scan_lines */
-void kbd_set_active_columns(kbd_t* kbd, uint16_t column_mask);
+static inline void kbd_set_active_columns(kbd_t* kbd, uint16_t column_mask) {
+    kbd->active_columns = column_mask;
+}
 /* scan active lines (used together with kbd_set_active_columns */
-uint16_t kbd_scan_lines(kbd_t* kbd);
+static inline uint16_t kbd_scan_lines(kbd_t* kbd) {
+    return kbd_test_lines(kbd, kbd->active_columns);
+}
 /* set active lines mask (use together with kbd_scan_columns */
-void kbd_set_active_lines(kbd_t* kbd, uint16_t line_mask);
+static inline void kbd_set_active_lines(kbd_t* kbd, uint16_t line_mask) {
+    kbd->active_lines = line_mask;
+}
 /* scan active columns (used together with kbd_set_active_lines */
-uint16_t kbd_scan_columns(kbd_t* kbd);
+static inline uint16_t kbd_scan_columns(kbd_t* kbd) {
+    return kbd_test_columns(kbd, kbd->active_lines);
+}
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -395,26 +403,6 @@ uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask) {
         }
     }
     return kbd->cur_scanout_column_mask;
-}
-
-/* set currently active columns */
-void kbd_set_active_columns(kbd_t* kbd, uint16_t column_mask) {
-    kbd->active_columns = column_mask;
-}
-
-/* scan the keyboard matrix using currently active columns */
-uint16_t kbd_scan_lines(kbd_t* kbd) {
-    return kbd_test_lines(kbd, kbd->active_columns);
-}
-
-/* set currently active lines */
-void kbd_set_active_lines(kbd_t* kbd, uint16_t line_mask) {
-    kbd->active_lines = line_mask;
-}
-
-/* scan the keyboard matrix using currently active lines */
-uint16_t kbd_scan_columns(kbd_t* kbd) {
-    return kbd_test_columns(kbd, kbd->active_lines);
 }
 
 #endif /* CHIPS_IMPL */
