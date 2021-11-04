@@ -230,13 +230,30 @@ static inline uint32_t _z9001_xorshift32(uint32_t x) {
 
 #define _Z9001_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
 
+// IO address decoding masks and pins
+#define _Z9001_IO_SEL_MASK (Z80_IORQ|Z80_M1|Z80_A7|Z80_A6)
+#define _Z9001_IO_SEL_PINS (Z80_IORQ|Z80_A7)
+// CTC is mapped to ports 0x80 to 0x87 (each port is mapped twice)
+#define _Z9001_CTC_SEL_MASK (_Z9001_IO_SEL_MASK|Z80_A5|Z80_A4|Z80_A3)
+#define _Z9001_CTC_SEL_PINS (_Z9001_IO_SEL_PINS)
+// PIO1 is mapped to ports 0x88 to 0x8F (each port is mapped twice)
+#define _Z9001_PIO1_SEL_MASK (_Z9001_IO_SEL_MASK|Z80_A5|Z80_A4|Z80_A3)
+#define _Z9001_PIO1_SEL_PINS (_Z9001_IO_SEL_PINS|Z80_A3)
+// PIO2 is mapped to ports 0x90 to 0x97 (each port is mapped twice)
+#define _Z9001_PIO2_SEL_MASK (_Z9001_IO_SEL_MASK|Z80_A5|Z80_A4|Z80_A3)
+#define _Z9001_PIO2_SEL_PINS (_Z9001_IO_SEL_PINS|Z80_A4)
+
 void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _Z9001_DISPLAY_SIZE)));
+    if (desc->debug.callback.func) {
+        CHIPS_ASSERT(desc->debug.stopped);
+    }
 
     memset(sys, 0, sizeof(z9001_t));
     sys->valid = true;
     sys->type = desc->type;
+    sys->debug = desc->debug;
     if (desc->type == Z9001_TYPE_Z9001) {
         CHIPS_ASSERT(desc->roms.z9001.font.ptr && (desc->roms.z9001.font.size == sizeof(sys->rom_font)));
         memcpy(sys->rom_font, desc->roms.z9001.font.ptr, sizeof(sys->rom_font));
@@ -390,9 +407,6 @@ void z9001_reset(z9001_t* sys) {
 
 static uint64_t _z9001_tick(z9001_t* sys, uint64_t pins) {
     pins = z80_tick(&sys->cpu, pins);
-    bool ctc_selected = false;
-    bool pio1_selected = false;
-    bool pio2_selected = false;
     if (pins & Z80_MREQ) {
         // handle memory requests
         const uint16_t addr = Z80_GET_ADDR(pins);
@@ -403,26 +417,16 @@ static uint64_t _z9001_tick(z9001_t* sys, uint64_t pins) {
             mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
         }
     }
-    else if ((pins & (Z80_IORQ|Z80_M1|Z80_A7|Z80_A6)) == (Z80_IORQ|Z80_A7)) {
-        // IO address decoding
-        switch ((pins & (Z80_A5|Z80_A4|Z80_A3))>>3) {
-            // CTC is mapped to ports 0x80 to 0x87 (each port is mapped twice)
-            case 0: ctc_selected = true; break;
-            // PIO1 is mapped to ports 0x88 to 0x8F (each port is mapped twice)
-            case 1: pio1_selected = true; break;
-            // PIO2 is mapped to ports 0x90 to 0x97 (each port is mapped twice)
-            case 2: pio2_selected = true; break;
-        }
-    }
 
     // tick PIO-1 (highest priority daisychain device)
     {
         pins |= Z80_IEIO;
-        if (pio1_selected) {
+        // PIO1 is mapped to ports 0x88 to 0x8F (each port is mapped twice)
+        if ((pins & _Z9001_PIO1_SEL_MASK) == _Z9001_PIO1_SEL_PINS) {
             pins |= Z80PIO_CE;
-            if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
-            if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
         }
+        if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+        if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
         // no port A/B inputs
         pins = z80pio_tick(&sys->pio1, pins);
         /*
@@ -441,12 +445,13 @@ static uint64_t _z9001_tick(z9001_t* sys, uint64_t pins) {
 
     // tick PIO-2
     {
-        if (pio2_selected) {
+        // PIO2 is mapped to ports 0x90 to 0x97 (each port is mapped twice)
+        if ((pins & _Z9001_PIO2_SEL_MASK) == _Z9001_PIO2_SEL_PINS) {
             pins |= Z80PIO_CE;
-            if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
-            if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
         }
-        // FIXME: keyboard input/put
+        if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+        if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
+        // FIXME: keyboard input/output
         pins = z80pio_tick(&sys->pio2, pins);
 
         pins &= Z80_PIN_MASK;
@@ -459,11 +464,12 @@ static uint64_t _z9001_tick(z9001_t* sys, uint64_t pins) {
            this is why we need to preserve the CTC ZCTO2 state between ticks
         */
         pins |= sys->ctc_zcto2;
-        if (ctc_selected) {
+        // CTC is mapped to ports 0x80 to 0x87 (each port is mapped twice)
+        if ((pins & _Z9001_CTC_SEL_MASK) == _Z9001_CTC_SEL_PINS) {
             pins |= Z80CTC_CE;
-            if (pins & Z80_A0) { pins |= Z80CTC_CS0; };
-            if (pins & Z80_A1) { pins |= Z80CTC_CS1; };
         }
+        if (pins & Z80_A0) { pins |= Z80CTC_CS0; };
+        if (pins & Z80_A1) { pins |= Z80CTC_CS1; };
         if (pins & Z80CTC_ZCTO2) { pins |= Z80CTC_CLKTRG3; }
         pins = z80ctc_tick(&sys->ctc, pins);
         if (pins & Z80CTC_ZCTO0) {
