@@ -174,6 +174,41 @@ bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 #define _Z1013_DISPLAY_HEIGHT (256)
 #define _Z1013_DISPLAY_SIZE (_Z1013_DISPLAY_WIDTH*_Z1013_DISPLAY_HEIGHT*4)
 
+/*
+    IO address decoding.
+
+    The PIO Chip-Enable pin (Z80PIO_CE) is connected to output pin 0 of
+    a MH7442 BCD-to-Decimal decoder (looks like this is a Czech
+    clone of a SN7442). The lower 3 input pins of the MH7442
+    are connected to address bus pins A2..A4, and the 4th input
+    pin is connected to IORQ. This means the PIO is enabled when
+    the CPU IORQ pin is low (active), and address bus bits 2..4 are
+    off. This puts the PIO at the lowest 4 addresses of an 32-entry
+    address space (so the PIO should be visible at port number
+    0..4, but also at 32..35, 64..67 and so on).
+
+    The PIO Control/Data select pin (Z80PIO_CDSEL) is connected to
+    address bus pin A0. This means even addresses select a PIO data
+    operation, and odd addresses select a PIO control operation.
+
+    The PIO port A/B select pin (Z80PIO_BASEL) is connected to address
+    bus pin A1. This means the lower 2 port numbers address the PIO
+    port A, and the upper 2 port numbers address the PIO port B.
+
+    The keyboard matrix columns are connected to another MH7442
+    BCD-to-Decimal converter, this converts a hardware latch at port
+    address 8 which stores a keyboard matrix column number from the CPU
+    to the column lines. The operating system scans the keyboard by
+    writing the numbers 0..7 to this latch, which is then converted
+    by the MH7442 to light up the keyboard matrix column lines
+    in that order. Next the CPU reads back the keyboard matrix lines
+    in 2 steps of 4 bits each from PIO port B.
+*/
+#define _Z1013_PIO_SEL_MASK (Z80_IORQ|Z80_A4|Z80_A3|Z80_A2)
+#define _Z1013_PIO_SEL_PINS (Z80_IORQ)
+#define _Z1013_PORT8_SEL_MASK (Z80_IORQ|Z80_WR|Z80_A4|Z80_A3|Z80_A2)
+#define _Z1013_PORT8_SEL_PINS (Z80_IORQ|Z80_WR|Z80_A3)
+
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _Z1013_DISPLAY_SIZE));
@@ -323,55 +358,14 @@ static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
             mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
         }
     }
-    else if ((pins & (Z80_M1|Z80_IORQ)) == Z80_IORQ) {
-        // an IO request
-
-        /*
-            The PIO Chip-Enable pin (Z80PIO_CE) is connected to output pin 0 of
-            a MH7442 BCD-to-Decimal decoder (looks like this is a Czech
-            clone of a SN7442). The lower 3 input pins of the MH7442
-            are connected to address bus pins A2..A4, and the 4th input
-            pin is connected to IORQ. This means the PIO is enabled when
-            the CPU IORQ pin is low (active), and address bus bits 2..4 are
-            off. This puts the PIO at the lowest 4 addresses of an 32-entry
-            address space (so the PIO should be visible at port number
-            0..4, but also at 32..35, 64..67 and so on).
-
-            The PIO Control/Data select pin (Z80PIO_CDSEL) is connected to
-            address bus pin A0. This means even addresses select a PIO data
-            operation, and odd addresses select a PIO control operation.
-
-            The PIO port A/B select pin (Z80PIO_BASEL) is connected to address
-            bus pin A1. This means the lower 2 port numbers address the PIO
-            port A, and the upper 2 port numbers address the PIO port B.
-
-            The keyboard matrix columns are connected to another MH7442
-            BCD-to-Decimal converter, this converts a hardware latch at port
-            address 8 which stores a keyboard matrix column number from the CPU
-            to the column lines. The operating system scans the keyboard by
-            writing the numbers 0..7 to this latch, which is then converted
-            by the MH7442 to light up the keyboard matrix column lines
-            in that order. Next the CPU reads back the keyboard matrix lines
-            in 2 steps of 4 bits each from PIO port B.
-        */
-        if ((pins & (Z80_A4|Z80_A3|Z80_A2)) == 0) {
-            // address bits A2..A4 are zero, this activates the PIO chip-select pin
-            pins |= Z80PIO_CE;
-            // address bit 0 selects data/ctrl
-            if (pins & (1<<0)) pins |= Z80PIO_CDSEL;
-            // address bit 1 selects port A/B
-            if (pins & (1<<1)) pins |= Z80PIO_BASEL;
-        }
-        else if ((pins & (Z80_A3|Z80_WR)) == (Z80_A3|Z80_WR)) {
-            // port 8 is connected to a hardware latch to store the requested
-            // keyboard column for the next keyboard scan
-            uint8_t column_mask = 1 << (Z80_GET_DATA(pins) & 7);
-            sys->kbd_request_line_mask = ~kbd_test_lines(&sys->kbd, column_mask);
-        }
-    }
 
     // tick the PIO, no interrupts on the Z1013
     {
+        if ((pins & _Z1013_PIO_SEL_MASK) == _Z1013_PIO_SEL_PINS) {
+            pins |= Z80PIO_CE;
+        }
+        if (pins & Z80_A0) { pins |= Z80PIO_CDSEL; }
+        if (pins & Z80_A1) { pins |= Z80PIO_BASEL; }
         uint8_t pb = sys->kbd_request_line_mask >> sys->kbd_request_line_hilo_shift;
         Z80PIO_SET_PAB(pins, 0xFF, pb);
         pins = z80pio_tick(&sys->pio, pins);
@@ -381,7 +375,16 @@ static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
             sys->kbd_request_line_hilo_shift = (Z80PIO_GET_PB(pins) & (1<<4)) >> 2;
         }
         // bit 7 is cassette output, not emulated
+        pins &= Z80_PIN_MASK;
     }
+
+    // 8-bit write-only latch at port address 8 to store the requested
+    // keyboard column for the next keyboard scan
+    if ((pins & _Z1013_PORT8_SEL_MASK) == _Z1013_PORT8_SEL_PINS) {
+        uint8_t column_mask = 1 << (Z80_GET_DATA(pins) & 7);
+        sys->kbd_request_line_mask = ~kbd_test_lines(&sys->kbd, column_mask);
+    }
+
     return pins & Z80_PIN_MASK;
 }
 
