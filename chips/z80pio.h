@@ -561,16 +561,19 @@ void _z80pio_read_port_inputs(z80pio_t* pio, uint64_t pins) {
     for (int i = 0; i < Z80PIO_NUM_PORTS; i++) {
         z80pio_port_t* p = &pio->port[i];
         uint8_t data = (i == 0) ? Z80PIO_GET_PA(pins) : Z80PIO_GET_PB(pins);
-        if (Z80PIO_MODE_INPUT == p->mode) {
-            // FIXME: strobe/ready handshake and interrupt!
-            p->input = data;
-        }
-        else if (Z80PIO_MODE_BITCONTROL == p->mode) {
-            p->input = data;
-            if (p->int_enabled) {
+
+        // this only needs to be evaluated if either the port input
+        // or port state might have changed
+        if ((data != p->input) || (pins & Z80PIO_CE)) {
+            if (Z80PIO_MODE_INPUT == p->mode) {
+                // FIXME: strobe/ready handshake and interrupt!
+                p->input = data;
+            }
+            else if (Z80PIO_MODE_BITCONTROL == p->mode) {
+                p->input = data;
                 uint8_t val = (p->input & p->io_select) | (p->output & ~p->io_select);
 
-                // check interrupt condition (FIXME: expensive!)
+                // check interrupt condition (FIXME: this is very expensive)
                 uint8_t mask = ~p->int_mask;
                 bool match = false;
                 val &= mask;
@@ -580,7 +583,7 @@ void _z80pio_read_port_inputs(z80pio_t* pio, uint64_t pins) {
                 else if ((ictrl == 0x20) && (val != 0)) match = true;
                 else if ((ictrl == 0x40) && (val == 0)) match = true;
                 else if ((ictrl == 0x60) && (val == mask)) match = true;
-                if (!p->bctrl_match && match && (p->int_control & 0x80)) {
+                if (!p->bctrl_match && match && p->int_enabled) {
                     p->int_state |= Z80PIO_INT_NEEDED;
                 }
                 p->bctrl_match = match;
@@ -590,15 +593,14 @@ void _z80pio_read_port_inputs(z80pio_t* pio, uint64_t pins) {
 }
 
 uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
-    /*  FIXME:
-
+    /*
         - OUTPUT MODE: On CPU write, the bus data is written to the output
-          register (already happens in _z80pio_write_data()), and the ARDY/BRDY
-          pins must be set until the ASTB/BSTB pins changes from active to inactive.
-          Strobe active=>inactive also an INT if the interrupt enable flip-flop
-          is set and this device has the highest priority.
+          register, and the ARDY/BRDY pins must be set until the ASTB/BSTB pins
+          changes from active to inactive. Strobe active=>inactive also an INT
+          if the interrupt enable flip-flop is set and this device has the
+          highest priority.
 
-        - INPUT MODE: When ASTB/BSTB goes active, data is loaded into the port's
+        - INPUT MODE (FIXME): When ASTB/BSTB goes active, data is loaded into the port's
           input register. When ASTB/BSTB then goes from active to inactive, an
           INT is generated is interrupt enable is set and this is the highest
           priority interrupt device. ARDY/BRDY goes active on ASTB/BSTB going
@@ -616,44 +618,14 @@ uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins) {
           the data on the port data lines satisfy the logical equation defined by
           the 8-bit mask and 2-bit mask control registers
     */
-    _z80pio_read_port_inputs(pio, pins);
     if ((pins & (Z80PIO_CE|Z80PIO_IORQ|Z80PIO_M1)) == (Z80PIO_CE|Z80PIO_IORQ)) {
         pins = _z80pio_iorq(pio, pins);
     }
+    _z80pio_read_port_inputs(pio, pins);
     pins = _z80pio_set_port_output_pins(pio, pins);
     pins = _z80pio_int(pio, pins);
-
     pio->pins = pins;
     return pins;
 }
-
-/* FIXME: integrate into z80pio_tick()!
-
-    write value to a port, this may trigger an interrupt
-*/
-/*
-void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data) {
-    CHIPS_ASSERT(pio && (port_id >= 0) && (port_id < Z80PIO_NUM_PORTS));
-    z80pio_port_t* p = &pio->port[port_id];
-    if (Z80PIO_MODE_BITCONTROL == p->mode) {
-        p->input = data;
-        uint8_t val = (p->input & p->io_select) | (p->output & ~p->io_select);
-        //p->port = val;
-        uint8_t mask = ~p->int_mask;
-        bool match = false;
-        val &= mask;
-
-        const uint8_t ictrl = p->int_control & 0x60;
-        if ((ictrl == 0) && (val != mask)) match = true;
-        else if ((ictrl == 0x20) && (val != 0)) match = true;
-        else if ((ictrl == 0x40) && (val == 0)) match = true;
-        else if ((ictrl == 0x60) && (val == mask)) match = true;
-        if (!p->bctrl_match && match && (p->int_control & 0x80)) {
-            p->int_state |= Z80PIO_INT_NEEDED;
-        }
-        p->bctrl_match = match;
-    }
-}
-*/
 
 #endif /* CHIPS_IMPL */
