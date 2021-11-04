@@ -520,6 +520,50 @@ bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
 #endif
 #define _KC85_IRM0_PAGE (4)
 
+/*
+    IO address decoding.
+
+    On the KC85/3, the chips-select signals for the CTC and PIO
+    are generated through logic gates, on KC85/4 this is implemented
+    with a PROM chip (details are in the KC85/3 and KC85/4 service manuals)
+
+    the I/O addresses are as follows:
+
+         0x88:   PIO Port A, data
+         0x89:   PIO Port B, data
+         0x8A:   PIO Port A, control
+         0x8B:   PIO Port B, control
+         0x8C:   CTC Channel 0
+         0x8D:   CTC Channel 1
+         0x8E:   CTC Channel 2
+         0x8F:   CTC Channel 3
+
+         0x80:   controls the expansion module system, the upper
+                 8-bits of the port number address the module slot
+         0x84:   (KC85/4 only) control the vide memory bank switching
+         0x86:   (KC85/4 only) control RAM block at 0x4000 and ROM switching
+*/
+// IO area 0x80..0x8F
+#define _KC85_IO_SEL_MASK (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)
+#define _KC85_IO_SEL_PINS (Z80_IORQ|Z80_A7)
+// CTC ports 0x8C..0x8F
+#define _KC85_CTC_SEL_MASK (_KC85_IO_SEL_MASK|Z80_A3|Z80_A2)
+#define _KC85_CTC_SEL_PINS (_KC85_IO_SEL_PINS|Z80_A3|Z80_A2)
+// PIO ports 0x88..0x8B
+#define _KC85_PIO_SEL_MASK (_KC85_IO_SEL_MASK|Z80_A3|Z80_A2)
+#define _KC85_PIO_SEL_PINS (_KC85_IO_SEL_PINS|Z80_A3)
+// expansion module system port 0x80
+#define _KC85_EXP_SEL_MASK (_KC85_IO_SEL_MASK|Z80_A3|Z80_A2|Z80_A1|Z80_A0)
+#define _KC85_EXP_SEL_PINS (_KC85_IO_SEL_PINS)
+#if defined(CHIPS_KC85_TYPE_4)
+// KC85/4 port 0x84
+#define _KC85_IO84_SEL_MASK (_KC85_IO_SEL_MASK|Z80_A3|Z80_A2|Z80_A1|Z80_A0)
+#define _KC85_IO84_SEL_PINS (_KC85_IO_SEL_PINS|Z80_A2)
+// KC85/4 port 0x86
+#define _KC85_IO86_SEL_MASK (_KC85_IO_SEL_MASK|Z80_A3|Z80_A2|Z80_A1|Z80_A0)
+#define _KC85_IO86_SEL_PINS (_KC85_IO_SEL_PINS|Z80_A2|Z80_A1)
+#endif
+
 static void _kc85_update_memory_map(kc85_t* sys);
 static void _kc85_init_memory_map(kc85_t* sys);
 static void _kc85_handle_keyboard(kc85_t* sys);
@@ -833,11 +877,11 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
 #endif
 
 static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
+    // tick the CPU
     pins = z80_tick(&sys->cpu, pins) & Z80_PIN_MASK;
-    bool pio_selected = false;
-    bool ctc_selected = false;
+
+    // handle memory requests
     if (pins & Z80_MREQ) {
-        // handle memory requests
         const uint16_t addr = Z80_GET_ADDR(pins);
         if (pins & Z80_RD) {
             Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
@@ -846,93 +890,7 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
             mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
         }
     }
-    else if ((pins & (Z80_M1|Z80_IORQ|Z80_A7|Z80_A6|Z80_A5|Z80_A4)) == (Z80_IORQ|Z80_A7)) {
-        /*
-            IO address decoding.
 
-            On the KC85/3, the chips-select signals for the CTC and PIO
-            are generated through logic gates, on KC85/4 this is implemented
-            with a PROM chip (details are in the KC85/3 and KC85/4 service manuals)
-
-            the I/O addresses are as follows:
-
-                 0x88:   PIO Port A, data
-                 0x89:   PIO Port B, data
-                 0x8A:   PIO Port A, control
-                 0x8B:   PIO Port B, control
-                 0x8C:   CTC Channel 0
-                 0x8D:   CTC Channel 1
-                 0x8E:   CTC Channel 2
-                 0x8F:   CTC Channel 3
-
-                 0x80:   controls the expansion module system, the upper
-                         8-bits of the port number address the module slot
-                 0x84:   (KC85/4 only) control the vide memory bank switching
-                 0x86:   (KC85/4 only) control RAM block at 0x4000 and ROM switching
-        */
-        // check if the PIO or CTC is addressed (0x88 to 0x8F)
-        if (pins & Z80_A3) {
-            // bit A2 selects the PIO or CTC
-            if (pins & Z80_A2) {
-                ctc_selected = true;
-            }
-            else {
-                pio_selected = true;
-            }
-        }
-        else {
-            // we're in range 0x80..0x87
-            const uint8_t data = Z80_GET_DATA(pins);
-            switch (pins & (Z80_A2|Z80_A1|Z80_A0)) {
-                case 0x00:
-                    /*  port 0x80: expansion module control, high byte
-                        of port address contains module slot address
-                    */
-                    {
-                        const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
-                        if (pins & Z80_WR) {
-                            // write new control byte and update the memory mapping
-                            if (_kc85_exp_write_ctrl(sys, slot_addr, data)) {
-                                _kc85_update_memory_map(sys);
-                            }
-                        }
-                        else if (pins & Z80_RD) {
-                            // read module id in slot
-                            Z80_SET_DATA(pins, _kc85_exp_module_id(sys, slot_addr));
-                        }
-                    }
-                    break;
-
-                #if defined(CHIPS_KC85_TYPE_4)
-                case 0x04:
-                    // port 0x84, KC85/4 only, this is a write-only 8-bit latch
-                    if (pins & Z80_WR) {
-                        bool memory_mapping_dirty = (data ^ sys->io84) & KC85_IO84_MEMORY_BITS;
-                        sys->io84 = data;
-                        if (memory_mapping_dirty) {
-                            _kc85_update_memory_map(sys);
-                        }
-                    }
-                    break;
-                #endif
-
-                #if defined(CHIPS_KC85_TYPE_4)
-                case 0x06:
-                    // port 0x86, KC85/4 only, this is a write-only 8-bit latch
-                    if (pins & Z80_WR) {
-                        // check if memory mapping has changed
-                        bool memory_mapping_dirty = (data ^ sys->io86) & KC85_IO86_MEMORY_BITS;
-                        sys->io86 = data;
-                        if (memory_mapping_dirty) {
-                            _kc85_update_memory_map(sys);
-                        }
-                    }
-                    break;
-                #endif
-            }
-        }
-    }
-    
     // tick the video system, this may return Z80CTC_CLKTRG2 on VSYNC
     pins = _kc85_tick_video(sys, pins);
 
@@ -940,11 +898,11 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
     {
         // set virtual IEIO pin because CTC is highest priority interrupt device
         pins |= Z80_IEIO;
-        if (ctc_selected) {
+        if ((pins & _KC85_CTC_SEL_MASK) == _KC85_CTC_SEL_PINS) {
             pins |= Z80CTC_CE;
-            if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
-            if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
         }
+        if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
+        if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
         pins = z80ctc_tick(&sys->ctc, pins);
         // CTC channels 0 and 1 triggers control audio frequencies
         if (pins & Z80CTC_ZCTO0) {
@@ -957,27 +915,16 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         if (pins & Z80CTC_ZCTO2) {
             sys->blink_flag = !sys->blink_flag;
         }
-        beeper_tick(&sys->beeper_1);
-        if (beeper_tick(&sys->beeper_2)) {
-            // new audio sample ready
-            sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
-            if (sys->audio.sample_pos == sys->audio.num_samples) {
-                if (sys->audio.callback.func) {
-                    sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
-                }
-                sys->audio.sample_pos = 0;
-            }
-        }
         pins &= Z80_PIN_MASK;
     }
 
     // tick the PIO
     {
-        if (pio_selected) {
+        if ((pins & _KC85_PIO_SEL_MASK) == _KC85_PIO_SEL_PINS) {
             pins |= Z80PIO_CE;
-            if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
-            if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
         }
+        if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+        if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
         Z80PIO_SET_PAB(pins, 0xFF, 0xFF);
         pins = z80pio_tick(&sys->pio, pins);
         const uint8_t pio_a = Z80PIO_GET_PA(pins);
@@ -1004,6 +951,61 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         }
         pins &= Z80_PIN_MASK;
     }
+
+    // IO port 0x80: expansion module control, high byte of
+    // port address contains module slot address
+    if ((pins & _KC85_EXP_SEL_MASK) == _KC85_EXP_SEL_PINS) {
+        const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
+        if (pins & Z80_WR) {
+            // write new control byte and update the memory mapping
+            const uint8_t data = Z80_GET_DATA(pins);
+            if (_kc85_exp_write_ctrl(sys, slot_addr, data)) {
+                _kc85_update_memory_map(sys);
+            }
+        }
+        else if (pins & Z80_RD) {
+            // read module id in slot
+            Z80_SET_DATA(pins, _kc85_exp_module_id(sys, slot_addr));
+        }
+    }
+
+    // KC85/4 ports 0x84 and 0x86, these are write-only 8-bit latches
+    #if defined(CHIPS_KC85_TYPE_4)
+    if ((pins & _KC85_IO84_SEL_MASK) == _KC85_IO84_SEL_PINS) {
+        if (pins & Z80_WR) {
+            const uint8_t data = Z80_GET_DATA(pins);
+            bool memory_mapping_dirty = (data ^ sys->io84) & KC85_IO84_MEMORY_BITS;
+            sys->io84 = data;
+            if (memory_mapping_dirty) {
+                _kc85_update_memory_map(sys);
+            }
+        }
+    }
+    if ((pins & _KC85_IO86_SEL_MASK) == _KC85_IO86_SEL_PINS) {
+        if (pins & Z80_WR) {
+            const uint8_t data = Z80_GET_DATA(pins);
+            bool memory_mapping_dirty = (data ^ sys->io86) & KC85_IO86_MEMORY_BITS;
+            sys->io86 = data;
+            if (memory_mapping_dirty) {
+                _kc85_update_memory_map(sys);
+            }
+        }
+    }
+    #endif
+
+    // tick the audio beepers
+    beeper_tick(&sys->beeper_1);
+    if (beeper_tick(&sys->beeper_2)) {
+        // new audio sample ready
+        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
+        if (sys->audio.sample_pos == sys->audio.num_samples) {
+            if (sys->audio.callback.func) {
+                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+            }
+            sys->audio.sample_pos = 0;
+        }
+    }
+
     return pins;
 }
 
