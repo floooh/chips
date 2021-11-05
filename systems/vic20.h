@@ -57,14 +57,16 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define VIC20_FREQUENCY (1108404)
-#define VIC20_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
-#define VIC20_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */ 
+#define VIC20_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
+#define VIC20_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer 
 
 /* VIC-20 joystick types (only one joystick supported) */
 typedef enum {
@@ -102,130 +104,148 @@ typedef enum {
 #define VIC20_IECPORT_CLK     (1<<3)
 #define VIC20_IECPORT_ATN     (1<<4)
 
-/* audio sample data callback */
-typedef void (*vic20_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-
-/* config parameters for vic20_init() */
+// audio sample callback
 typedef struct {
-    bool c1530_enabled;         /* set to true to enable C1530 datassette emulation */
-    vic20_joystick_type_t joystick_type;    /* default is VIC20_JOYSTICK_NONE */
-    vic20_memory_config_t mem_config;       /* default is VIC20_MEMCONFIG_STANDARD */
-
-    /* video output config (if you don't want video decoding, set these to 0) */
-    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer,
-                                   query required size via vic20_max_display_size() */
-    int pixel_buffer_size;      /* size of the pixel buffer in bytes */
-
-    /* optional user-data for callback functions */
+    void (*func)(const float* samples, int num_samples, void* user_data);
     void* user_data;
+} vic20_audio_callback_t;
 
-    /* audio output config (if you don't want audio, set audio_cb to zero) */
-    vic20_audio_callback_t audio_cb;  /* called when audio_num_samples are ready */
-    int audio_num_samples;          /* default is VIC20_AUDIO_NUM_SAMPLES */
-    int audio_sample_rate;          /* playback sample rate in Hz, default is 44100 */
-    float audio_volume;             /* audio volume of the VIC chip (0.0 .. 1.0), default is 1.0 */
+// debugging hook definitions
+typedef void (*vic20_debug_func_t)(void* user_data, uint64_t pins);
+typedef struct {
+    struct {
+        vic20_debug_func_t func;
+        void* user_data;
+    } callback;
+    bool* stopped;
+} vic20_debug_t;
 
-    /* ROM images */
-    const void* rom_char;           /* 4 KByte character ROM dump */
-    const void* rom_basic;          /* 8 KByte BASIC dump */
-    const void* rom_kernal;         /* 8 KByte KERNAL dump */
-    int rom_char_size;
-    int rom_basic_size;
-    int rom_kernal_size;
+typedef struct {
+    const void* ptr;
+    size_t size;
+} vic20_rom_image_t;
+
+// config parameters for vic20_init()
+typedef struct {
+    bool c1530_enabled;         // set to true to enable C1530 datassette emulation
+    vic20_joystick_type_t joystick_type;    // default is VIC20_JOYSTICK_NONE
+    vic20_memory_config_t mem_config;       // default is VIC20_MEMCONFIG_STANDARD
+    vic20_debug_t debug;        // optional debugging hook
+
+    // video output config (if you don't want video decoding, set these to 0)
+    struct {
+        void* ptr;      // pointer to a linear RGBA8 pixel buffer, query required size via vic20_max_display_size()
+        size_t size;    // size of the pixel buffer in bytes
+    } pixel_buffer;
+
+    // audio output config (if you don't want audio, set audio.callback.func to zero
+    struct {
+        vic20_audio_callback_t callback;    // called when audio_num_samples are ready
+        int num_samples;            // default is VIC20_AUDIO_NUM_SAMPLES
+        int sample_rate;            // playback sample rate in Hz, default is 44100
+        float volume;               // audio volume of the VIC chip (0.0 .. 1.0), default is 1.0
+    } audio;
+
+    // ROM images
+    struct {
+        vic20_rom_image_t chars;    // 4 KByte character ROM dump
+        vic20_rom_image_t basic;    // 8 KByte BASIC dump
+        vic20_rom_image_t kernal;   // 8 KByte KERNAL dump
+    } roms;
 } vic20_desc_t;
 
-/* VIC-20 emulator state */
+// VIC-20 emulator state
 typedef struct {
-    uint64_t pins;
-    m6502_t cpu;
+    alignas(64) m6502_t cpu;
     m6522_t via_1;
     m6522_t via_2;
     m6561_t vic;
-    
-    bool valid;
+    uint64_t pins;
+
     vic20_joystick_type_t joystick_type;
     vic20_memory_config_t mem_config;
-    uint8_t cas_port;           /* cassette port, shared with c1530_t if datasette is connected */
-    uint8_t iec_port;           /* IEC serial port, shared with c1541_t if connected */
-    uint8_t kbd_joy_mask;       /* current joystick state from keyboard-joystick emulation */
-    uint8_t joy_joy_mask;       /* current joystick state from vic20_joystick() */
-    uint64_t via1_joy_mask;     /* merged keyboard/joystick mask ready for or-ing with VIA1 input pins */
-    uint64_t via2_joy_mask;     /* merged keyboard/joystick mask ready for or-ing with VIA2 input pins */
+    uint8_t cas_port;           // cassette port, shared with c1530_t if datasette is connected
+    uint8_t iec_port;           // IEC serial port, shared with c1541_t if connected
+    uint8_t kbd_joy_mask;       // current joystick state from keyboard-joystick emulation
+    uint8_t joy_joy_mask;       // current joystick state from vic20_joystick()
+    uint64_t via1_joy_mask;     // merged keyboard/joystick mask ready for or-ing with VIA1 input pins
+    uint64_t via2_joy_mask;     // merged keyboard/joystick mask ready for or-ing with VIA2 input pins
 
-    kbd_t kbd;                  /* keyboard matrix state */
-    mem_t mem_cpu;              /* CPU-visible memory mapping */
-    mem_t mem_vic;              /* VIC-visible memory mapping */
+    kbd_t kbd;                  // keyboard matrix state
+    mem_t mem_cpu;              // CPU-visible memory mapping
+    mem_t mem_vic;              // VIC-visible memory mapping
+    bool valid;
+    vic20_debug_t debug;
 
-    void* user_data;
     uint32_t* pixel_buffer;
-    vic20_audio_callback_t audio_cb;
-    int num_samples;
-    int sample_pos;
-    float sample_buffer[VIC20_MAX_AUDIO_SAMPLES];
+    struct {
+        vic20_audio_callback_t callback;
+        int num_samples;
+        int sample_pos;
+        float sample_buffer[VIC20_MAX_AUDIO_SAMPLES];
+    } audio;
 
-    uint8_t color_ram[0x0400];      /* special color RAM */
-    uint8_t ram0[0x0400];           /* 1 KB zero page, stack, system work area */
-    uint8_t ram_3k[0x0C00];         /* optional 3K exp RAM */
-    uint8_t ram1[0x1000];           /* 4 KB main RAM */
-    uint8_t rom_char[0x1000];       /* 4 KB character ROM image */
-    uint8_t rom_basic[0x2000];      /* 8 KB BASIC ROM image */
-    uint8_t rom_kernal[0x2000];     /* 8 KB KERNAL V3 ROM image */
-    uint8_t ram_exp[4][0x2000];     /* optional expansion 8K RAM blocks */
+    uint8_t color_ram[0x0400];      // special color RAM
+    uint8_t ram0[0x0400];           // 1 KB zero page, stack, system work area
+    uint8_t ram_3k[0x0C00];         // optional 3K exp RAM
+    uint8_t ram1[0x1000];           // 4 KB main RAM
+    uint8_t rom_char[0x1000];       // 4 KB character ROM image
+    uint8_t rom_basic[0x2000];      // 8 KB BASIC ROM image
+    uint8_t rom_kernal[0x2000];     // 8 KB KERNAL V3 ROM image
+    uint8_t ram_exp[4][0x2000];     // optional expansion 8K RAM blocks
 
-    c1530_t c1530;                  /* c1530.valid = true if enabled */
+    c1530_t c1530;                  // c1530.valid = true if enabled
 
-    mem_t mem_cart;                 /* special ROM cartridge memory mapping helper */
+    mem_t mem_cart;                 // special ROM cartridge memory mapping helper
 } vic20_t;
 
-/* initialize a new VIC-20 instance */
+// initialize a new VIC-20 instance
 void vic20_init(vic20_t* sys, const vic20_desc_t* desc);
-/* discard VIC-20 instance */
+// discard VIC-20 instance
 void vic20_discard(vic20_t* sys);
-/* get the standard framebuffer width and height in pixels */
+// reset a VIC-20 instance
+void vic20_reset(vic20_t* sys);
+// tick VIC-20 instance for a given number of microseconds, return number of executed ticks
+uint32_t vic20_exec(vic20_t* sys, uint32_t micro_seconds);
+// send a key-down event to the VIC-20
+void vic20_key_down(vic20_t* sys, int key_code);
+// send a key-up event to the VIC-20
+void vic20_key_up(vic20_t* sys, int key_code);
+// enable/disable joystick emulation
+void vic20_set_joystick_type(vic20_t* sys, vic20_joystick_type_t type);
+// get current joystick emulation type
+vic20_joystick_type_t vic20_joystick_type(vic20_t* sys);
+// set joystick mask (combination of VIC20_JOYSTICK_*)
+void vic20_joystick(vic20_t* sys, uint8_t joy_mask);
+// quickload a .prg/.bin file
+bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+// load a .prg/.bin file as ROM cartridge
+bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+// remove current ROM cartridge
+void vic20_remove_rom_cartridge(vic20_t* sys);
+// insert tape as .TAP file (c1530 must be enabled)
+bool vic20_insert_tape(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+// remove tape file
+void vic20_remove_tape(vic20_t* sys);
+// return true if a tape is currently inserted
+bool vic20_tape_inserted(vic20_t* sys);
+// start the tape (press the Play button)
+void vic20_tape_play(vic20_t* sys);
+// stop the tape (unpress the Play button
+void vic20_tape_stop(vic20_t* sys);
+// return true if tape motor is on
+bool vic20_is_tape_motor_on(vic20_t* sys);
+// get the standard framebuffer width and height in pixels
 int vic20_std_display_width(void);
 int vic20_std_display_height(void);
-/* get the maximum framebuffer size in number of bytes */
-int vic20_max_display_size(void);
-/* get the current framebuffer width and height in pixels */
+// get the maximum framebuffer size in number of bytes
+size_t vic20_max_display_size(void);
+// get the current framebuffer width and height in pixels
 int vic20_display_width(vic20_t* sys);
 int vic20_display_height(vic20_t* sys);
-/* reset a VIC-20 instance */
-void vic20_reset(vic20_t* sys);
-/* tick VIC-20 instance for a given number of microseconds, also updates keyboard state */
-void vic20_exec(vic20_t* sys, uint32_t micro_seconds);
-/* ...or optionally: tick the VIC-20 instance once, does not update keyboard state! */
-void vic20_tick(vic20_t* sys);
-/* send a key-down event to the VIC-20 */
-void vic20_key_down(vic20_t* sys, int key_code);
-/* send a key-up event to the VIC-20 */
-void vic20_key_up(vic20_t* sys, int key_code);
-/* enable/disable joystick emulation */
-void vic20_set_joystick_type(vic20_t* sys, vic20_joystick_type_t type);
-/* get current joystick emulation type */
-vic20_joystick_type_t vic20_joystick_type(vic20_t* sys);
-/* set joystick mask (combination of VIC20_JOYSTICK_*) */
-void vic20_joystick(vic20_t* sys, uint8_t joy_mask);
-/* quickload a .prg/.bin file */
-bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes);
-/* load a .prg/.bin file as ROM cartridge */
-bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes);
-/* remove current ROM cartridge */
-void vic20_remove_rom_cartridge(vic20_t* sys);
-/* insert tape as .TAP file (c1530 must be enabled) */
-bool vic20_insert_tape(vic20_t* sys, const uint8_t* ptr, int num_bytes);
-/* remove tape file */
-void vic20_remove_tape(vic20_t* sys);
-/* return true if a tape is currently inserted */
-bool vic20_tape_inserted(vic20_t* sys);
-/* start the tape (press the Play button) */
-void vic20_tape_play(vic20_t* sys);
-/* stop the tape (unpress the Play button */
-void vic20_tape_stop(vic20_t* sys);
-/* return true if tape motor is on */
-bool vic20_is_tape_motor_on(vic20_t* sys);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -247,12 +267,14 @@ bool vic20_is_tape_motor_on(vic20_t* sys);
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data);
 static void _vic20_init_key_map(vic20_t* sys);
 
-#define _VIC20_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
-#define _VIC20_CLEAR(val) memset(&val, 0, sizeof(val))
+#define _VIC20_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
 
 void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(!desc->pixel_buffer || (desc->pixel_buffer_size >= _VIC20_DISPLAY_SIZE));
+    CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= vic20_max_display_size()));
+    if (desc->debug.callback.func) {
+        CHIPS_ASSERT(desc->debug.stopped);
+    }
 
     memset(sys, 0, sizeof(vic20_t));
     sys->valid = true;
@@ -260,43 +282,36 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     sys->mem_config = desc->mem_config;
     sys->via1_joy_mask = M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5;
     sys->via2_joy_mask = M6522_PB7;
+    sys->debug = desc->debug;
+    sys->audio.callback = desc->audio.callback;
+    sys->audio.num_samples = _VIC20_DEFAULT(desc->audio.num_samples, VIC20_DEFAULT_AUDIO_SAMPLES);
+    CHIPS_ASSERT(sys->audio.num_samples <= VIC20_MAX_AUDIO_SAMPLES);
+    CHIPS_ASSERT(desc->roms.chars.ptr && (desc->roms.chars.size == sizeof(sys->rom_char)));
+    CHIPS_ASSERT(desc->roms.basic.ptr && (desc->roms.basic.size == sizeof(sys->rom_basic)));
+    CHIPS_ASSERT(desc->roms.kernal.ptr && (desc->roms.kernal.size == sizeof(sys->rom_kernal)));
+    memcpy(sys->rom_char, desc->roms.chars.ptr, sizeof(sys->rom_char));
+    memcpy(sys->rom_basic, desc->roms.basic.ptr, sizeof(sys->rom_basic));
+    memcpy(sys->rom_kernal, desc->roms.kernal.ptr, sizeof(sys->rom_kernal));
 
-    CHIPS_ASSERT(desc->rom_char && (desc->rom_char_size == sizeof(sys->rom_char)));
-    CHIPS_ASSERT(desc->rom_basic && (desc->rom_basic_size == sizeof(sys->rom_basic)));
-    CHIPS_ASSERT(desc->rom_kernal && (desc->rom_kernal_size == sizeof(sys->rom_kernal)));
-    memcpy(sys->rom_char, desc->rom_char, sizeof(sys->rom_char));
-    memcpy(sys->rom_basic, desc->rom_basic, sizeof(sys->rom_basic));
-    memcpy(sys->rom_kernal, desc->rom_kernal, sizeof(sys->rom_kernal));
-    sys->user_data = desc->user_data;
-    sys->audio_cb = desc->audio_cb;
-    sys->num_samples = _VIC20_DEFAULT(desc->audio_num_samples, VIC20_DEFAULT_AUDIO_SAMPLES);
-    CHIPS_ASSERT(sys->num_samples <= VIC20_MAX_AUDIO_SAMPLES);
-
-    /* datasette: motor off, no buttons pressed */
+    // datasette: motor off, no buttons pressed
     sys->cas_port = VIC20_CASPORT_MOTOR|VIC20_CASPORT_SENSE;
 
-    m6502_desc_t cpu_desc;
-    _VIC20_CLEAR(cpu_desc);
-    sys->pins = m6502_init(&sys->cpu, &cpu_desc);
-
+    sys->pins = m6502_init(&sys->cpu, &(m6502_desc_t){0});
     m6522_init(&sys->via_1);
     m6522_init(&sys->via_2);
-
-    m6561_desc_t vic_desc;
-    _VIC20_CLEAR(vic_desc);
-    vic_desc.fetch_cb = _vic20_vic_fetch;
-    vic_desc.rgba8_buffer = (uint32_t*) desc->pixel_buffer;
-    vic_desc.rgba8_buffer_size = desc->pixel_buffer_size;
-    vic_desc.vis_x = _VIC20_DISPLAY_X;
-    vic_desc.vis_y = _VIC20_DISPLAY_Y;
-    vic_desc.vis_w = _VIC20_STD_DISPLAY_WIDTH;
-    vic_desc.vis_h = _VIC20_STD_DISPLAY_HEIGHT;
-    vic_desc.user_data = sys;
-    vic_desc.tick_hz = VIC20_FREQUENCY;
-    vic_desc.sound_hz = _VIC20_DEFAULT(desc->audio_sample_rate, 44100);
-    vic_desc.sound_magnitude = _VIC20_DEFAULT(desc->audio_volume, 1.0f);
-    m6561_init(&sys->vic, &vic_desc);
-
+    m6561_init(&sys->vic, &(m6561_desc_t){
+        .fetch_cb = _vic20_vic_fetch,
+        .rgba8_buffer = (uint32_t*) desc->pixel_buffer.ptr,
+        .rgba8_buffer_size = desc->pixel_buffer.size,
+        .vis_x = _VIC20_DISPLAY_X,
+        .vis_y = _VIC20_DISPLAY_Y,
+        .vis_w = _VIC20_STD_DISPLAY_WIDTH,
+        .vis_h = _VIC20_STD_DISPLAY_HEIGHT,
+        .user_data = sys,
+        .tick_hz = VIC20_FREQUENCY,
+        .sound_hz = _VIC20_DEFAULT(desc->audio.sample_rate, 44100),
+        .sound_magnitude = _VIC20_DEFAULT(desc->audio.volume, 1.0f),
+    });
     _vic20_init_key_map(sys);
     
     /*
@@ -354,14 +369,14 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
         address decoding bit.
     */
     mem_init(&sys->mem_vic);
-    mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);       /* CPU: 8000..8FFF */
+    mem_map_rom(&sys->mem_vic, 0, 0x0000, 0x1000, sys->rom_char);       // CPU: 8000..8FFF
     // FIXME: can the VIC read the color RAM as data?
-    //mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);      /* CPU: 9400..97FF */
-    mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);           /* CPU: 0000..03FF */
+    //mem_map_rom(&sys->mem_vic, 0, 0x1400, 0x0400, sys->color_ram);      // CPU: 9400..97FF
+    mem_map_rom(&sys->mem_vic, 0, 0x2000, 0x0400, sys->ram0);           // CPU: 0000..03FF
     if (desc->mem_config == VIC20_MEMCONFIG_MAX) {
-        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_3k);     /* CPU: 0400..0FFF */
+        mem_map_rom(&sys->mem_vic, 0, 0x2400, 0x0C00, sys->ram_3k);     // CPU: 0400..0FFF
     }
-    mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);           /* CPU: 1000..1FFF */
+    mem_map_rom(&sys->mem_vic, 0, 0x3000, 0x1000, sys->ram1);           // CPU: 1000..1FFF
 
     /*
         A special memory mapping used to copy ROM cartridge PRG files
@@ -375,12 +390,11 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     mem_map_ram(&sys->mem_cart, 0, 0x6000, 0x2000, sys->ram_exp[2]);
     mem_map_ram(&sys->mem_cart, 0, 0xA000, 0x2000, sys->ram_exp[3]);
 
-    /* optionally setup C1530 datasette drive */
+    // optionally setup C1530 datasette drive
     if (desc->c1530_enabled) {
-        c1530_desc_t c1530_desc;
-        _VIC20_CLEAR(c1530_desc);
-        c1530_desc.cas_port = &sys->cas_port;
-        c1530_init(&sys->c1530, &c1530_desc);
+        c1530_init(&sys->c1530, &(c1530_desc_t){
+            .cas_port = &sys->cas_port,
+        });
     }
 }
 
@@ -410,13 +424,13 @@ void vic20_reset(vic20_t* sys) {
 
 static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
 
-    /* tick the CPU */
+    // tick the CPU
     pins = m6502_tick(&sys->cpu, pins);
 
-    /* the IRQ and NMI pins will be set by the VIAs each tick */
+    // the IRQ and NMI pins will be set by the VIAs each tick
     pins &= ~(M6502_IRQ|M6502_NMI);
 
-    /* VIC+VIAs address decoding and memory access */
+    // VIC+VIAs address decoding and memory access
     uint64_t vic_pins  = pins & M6502_PIN_MASK;
     uint64_t via1_pins = pins & M6502_PIN_MASK;
     uint64_t via2_pins = pins & M6502_PIN_MASK;
@@ -448,7 +462,7 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         }
     }
     else {
-        /* regular memory access */
+        // regular memory access
         const uint16_t addr = M6502_GET_ADDR(pins);
         if (pins & M6502_RW) {
             M6502_SET_DATA(pins, mem_rd(&sys->mem_cpu, addr));
@@ -539,44 +553,50 @@ static uint64_t _vic20_tick(vic20_t* sys, uint64_t pins) {
         }
     }
 
-    /* tick the VIC */
+    // tick the VIC
     {
         vic_pins = m6561_tick(&sys->vic, vic_pins);
         if ((vic_pins & (M6561_CS|M6561_RW)) == (M6561_CS|M6561_RW)) {
             pins = M6502_COPY_DATA(pins, vic_pins);
         }
         if (vic_pins & M6561_SAMPLE) {
-            sys->sample_buffer[sys->sample_pos++] = sys->vic.sound.sample;
-            if (sys->sample_pos == sys->num_samples) {
-                if (sys->audio_cb) {
-                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+            sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->vic.sound.sample;
+            if (sys->audio.sample_pos == sys->audio.num_samples) {
+                if (sys->audio.callback.func) {
+                    sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
                 }
-                sys->sample_pos = 0;
+                sys->audio.sample_pos = 0;
             }
         }
     }
 
-    /* optionally tick the C1530 datassette */
+    // optionally tick the C1530 datassette
     if (sys->c1530.valid) {
         c1530_tick(&sys->c1530);
     }
-
     return pins;
 }
 
-void vic20_tick(vic20_t* sys) {
-    sys->pins = _vic20_tick(sys, sys->pins);
-}
-
-void vic20_exec(vic20_t* sys, uint32_t micro_seconds) {
+uint32_t vic20_exec(vic20_t* sys, uint32_t micro_seconds) {
     CHIPS_ASSERT(sys && sys->valid);
     uint32_t num_ticks = clk_us_to_ticks(VIC20_FREQUENCY, micro_seconds);
     uint64_t pins = sys->pins;
-    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-        pins = _vic20_tick(sys, pins);
+    if (0 == sys->debug.callback.func) {
+        // run without debug callback
+        for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+            pins = _vic20_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debug callback
+        for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
+            pins = _vic20_tick(sys, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
+        }
     }
     sys->pins = pins;
     kbd_update(&sys->kbd, micro_seconds);
+    return num_ticks;
 }
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {
@@ -588,7 +608,7 @@ static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {
 static void _vic20_init_key_map(vic20_t* sys) {
     kbd_init(&sys->kbd, 1);
     const char* keymap =
-    /* no shift */
+    // no shift
     //   01234567 (col)
         "1     Q2"  // row 0
         "3WA ZSE4"  // row 1
@@ -609,9 +629,9 @@ static void _vic20_init_key_map(vic20_t* sys) {
         "$ ]?    "
         "        ";
     CHIPS_ASSERT(strlen(keymap) == 128);
-    /* shift is column 3, line 1 */
+    // shift is column 3, line 1
     kbd_register_modifier(&sys->kbd, 0, 3, 1);
-    /* ctrl is column 2, line 0 */
+    // ctrl is column 2, line 0
     kbd_register_modifier(&sys->kbd, 1, 2, 0);
     for (int shift = 0; shift < 2; shift++) {
         for (int column = 0; column < 8; column++) {
@@ -624,15 +644,15 @@ static void _vic20_init_key_map(vic20_t* sys) {
         }
     }
 
-    /* special keys */
-    kbd_register_key(&sys->kbd, 0x20, 4, 0, 0);    /* space */
-    kbd_register_key(&sys->kbd, 0x08, 2, 7, 1);    /* cursor left */
-    kbd_register_key(&sys->kbd, 0x09, 2, 7, 0);    /* cursor right */
-    kbd_register_key(&sys->kbd, 0x0A, 3, 7, 0);    /* cursor down */
-    kbd_register_key(&sys->kbd, 0x0B, 3, 7, 1);    /* cursor up */
-    kbd_register_key(&sys->kbd, 0x01, 0, 7, 0);    /* delete */
-    kbd_register_key(&sys->kbd, 0x0D, 1, 7, 0);    /* return */
-    kbd_register_key(&sys->kbd, 0x03, 3, 0, 0);    /* stop */
+    // special keys
+    kbd_register_key(&sys->kbd, 0x20, 4, 0, 0);    // space
+    kbd_register_key(&sys->kbd, 0x08, 2, 7, 1);    // cursor left
+    kbd_register_key(&sys->kbd, 0x09, 2, 7, 0);    // cursor right
+    kbd_register_key(&sys->kbd, 0x0A, 3, 7, 0);    // cursor down
+    kbd_register_key(&sys->kbd, 0x0B, 3, 7, 1);    // cursor up
+    kbd_register_key(&sys->kbd, 0x01, 0, 7, 0);    // delete
+    kbd_register_key(&sys->kbd, 0x0D, 1, 7, 0);    // return
+    kbd_register_key(&sys->kbd, 0x03, 3, 0, 0);    // stop
     kbd_register_key(&sys->kbd, 0xF1, 4, 7, 0);
     kbd_register_key(&sys->kbd, 0xF2, 4, 7, 1);
     kbd_register_key(&sys->kbd, 0xF3, 5, 7, 0);
@@ -676,7 +696,7 @@ bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes)
         mem_wr(&sys->mem_cart, addr++, *ptr++);
     }
 
-    /* map the ROM cartridge into the CPU's memory layer 0 */
+    // map the ROM cartridge into the CPU's memory layer 0
     mem_unmap_layer(&sys->mem_cpu, 0);
     if (start_addr == 0x2000) {
         mem_map_rom(&sys->mem_cpu, 0, 0x2000, 0x2000, sys->ram_exp[0]);
@@ -706,7 +726,7 @@ int vic20_std_display_height(void) {
     return _VIC20_STD_DISPLAY_HEIGHT;
 }
 
-int vic20_max_display_size(void) {
+size_t vic20_max_display_size(void) {
     return _VIC20_DISPLAY_SIZE;
 }
 
@@ -720,7 +740,7 @@ int vic20_display_height(vic20_t* sys) {
     return m6561_display_height(&sys->vic);
 }
 
-/* generate precomputed VIA-1 and VIA-2 joystick port masks */
+// generate precomputed VIA-1 and VIA-2 joystick port masks
 static void _vic20_update_joymasks(vic20_t* sys) {
     uint8_t jm = sys->kbd_joy_mask | sys->joy_joy_mask;
     sys->via1_joy_mask = M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5;
@@ -836,4 +856,4 @@ bool vic20_is_tape_motor_on(vic20_t* sys) {
     return c1530_is_motor_on(&sys->c1530);
 }
 
-#endif /* CHIPS_IMPL */
+#endif // CHIPS_IMPL
