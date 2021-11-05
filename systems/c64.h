@@ -475,7 +475,6 @@ int c64_display_height(c64_t* sys);
 #define _C64_DISPLAY_X (64)
 #define _C64_DISPLAY_Y (24)
 
-static uint64_t _c64_tick(c64_t* sys, uint64_t pins);
 static uint8_t _c64_cpu_port_in(void* user_data);
 static void _c64_cpu_port_out(uint8_t data, void* user_data);
 static uint16_t _c64_vic_fetch(uint16_t addr, void* user_data);
