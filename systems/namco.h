@@ -59,6 +59,8 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,7 +69,7 @@ extern "C" {
 #define NAMCO_MAX_AUDIO_SAMPLES (1024)
 #define NAMCO_DEFAULT_AUDIO_SAMPLES (128)
 
-/* input bits (use with namco_input_set() and namco_input_clear()) */
+// input bits (use with namco_input_set() and namco_input_clear())
 #define NAMCO_INPUT_P1_UP       (1<<0)
 #define NAMCO_INPUT_P1_LEFT     (1<<1)
 #define NAMCO_INPUT_P1_RIGHT    (1<<2)
@@ -83,138 +85,155 @@ extern "C" {
 #define NAMCO_INPUT_P2_COIN     (1<<12)
 #define NAMCO_INPUT_P2_START    (1<<13)
 
-/* audio sample-data callback */
-typedef void (*namco_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-
-/* configuration parameters for namco_init() */
+// audio callback
 typedef struct {
-    /* video output config */
-    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 224*256*4 bytes */
-    int pixel_buffer_size;      /* size of the pixel buffer in bytes */
-
-    /* optional user-data for audio callback */
+    void (*func)(const float* samples, int num_samples, void* user_data);
     void* user_data;
+} namco_audio_callback_t;
 
-    /* audio output config (if you don't want audio, set audio_cb to zero) */
-    namco_audio_callback_t audio_cb;        /* called when audio_num_samples are ready */
-    int audio_num_samples;                  /* default is NAMCO_DEFAULT_AUDIO_SAMPLES */
-    int audio_sample_rate;                  /* playback sample rate, default is 44100 */
-    float audio_volume;                     /* audio volume, 0.0..1.0, default is 1.0 */
+// debugging hook definitions
+typedef void (*namco_debug_func_t)(void* user_data, uint64_t pins);
+typedef struct {
+    struct {
+        namco_debug_func_t func;
+        void* user_data;
+    } callback;
+    bool* stopped;
+} namco_debug_t;
 
-    /* ROM images */
-    const void* rom_cpu_0000_0FFF;          /* Pacman+Pengo */
-    const void* rom_cpu_1000_1FFF;          /* Pacman+Pengo */
-    const void* rom_cpu_2000_2FFF;          /* Pacman+Pengo */
-    const void* rom_cpu_3000_3FFF;          /* Pacman+Pengo */
-    const void* rom_cpu_4000_4FFF;          /* Pengo only */
-    const void* rom_cpu_5000_5FFF;          /* Pengo only */
-    const void* rom_cpu_6000_6FFF;          /* Pengo only */
-    const void* rom_cpu_7000_7FFF;          /* Pengo only */
-    const void* rom_gfx_0000_0FFF;          /* Pacman only */
-    const void* rom_gfx_1000_1FFF;          /* Pacman only */
-    const void* rom_gfx_0000_1FFF;          /* Pengo only */
-    const void* rom_gfx_2000_3FFF;          /* Pengo only */
-    const void* rom_prom_0000_001F;         /* Pacman+Pengo */
-    const void* rom_prom_0020_011F;         /* Pacman only */
-    const void* rom_prom_0020_041F;         /* Pengo only */
-    const void* rom_sound_0000_00FF;        /* Pacman+Pengo */
-    const void* rom_sound_0100_01FF;        /* Pacman+Pengo */
-    int rom_cpu_0000_0FFF_size;
-    int rom_cpu_1000_1FFF_size;
-    int rom_cpu_2000_2FFF_size;
-    int rom_cpu_3000_3FFF_size;
-    int rom_cpu_4000_4FFF_size;
-    int rom_cpu_5000_5FFF_size;
-    int rom_cpu_6000_6FFF_size;
-    int rom_cpu_7000_7FFF_size;
-    int rom_gfx_0000_0FFF_size;
-    int rom_gfx_1000_1FFF_size;
-    int rom_gfx_0000_1FFF_size;
-    int rom_gfx_2000_3FFF_size;
-    int rom_prom_0000_001F_size;
-    int rom_prom_0020_011F_size;
-    int rom_prom_0020_041F_size;
-    int rom_sound_0000_00FF_size;
-    int rom_sound_0100_01FF_size;
+typedef struct {
+    const void* ptr;
+    size_t size;
+} namco_rom_image_t;
+
+// configuration parameters for namco_init()
+typedef struct {
+    // optional debugging hook
+    namco_debug_t debug;
+
+    // video output config
+    struct {
+        void* ptr;      // pointer to a linear RGBA8 pixel buffer, at least 224*256*4 bytes
+        size_t size;    // size of the pixel buffer in bytes
+    } pixel_buffer;
+
+    // audio output config (if you don't want audio, set audio.callback.func to zero)
+    struct {
+        namco_audio_callback_t callback;    // called when audio_num_samples are ready
+        int num_samples;                    // default is NAMCO_DEFAULT_AUDIO_SAMPLES
+        int sample_rate;                    // playback sample rate, default is 44100
+        float volume;                       // audio volume, 0.0..1.0, default is 1.0
+    } audio;
+
+    // ROM images
+    struct {
+        // common ROM areas for Pacman and Pengo
+        struct {
+            namco_rom_image_t cpu_0000_0FFF;
+            namco_rom_image_t cpu_1000_1FFF;
+            namco_rom_image_t cpu_2000_2FFF;
+            namco_rom_image_t cpu_3000_3FFF;
+            namco_rom_image_t prom_0000_001F;
+            namco_rom_image_t sound_0000_00FF;
+            namco_rom_image_t sound_0100_01FF;
+        } common;
+        // Pengo specific ROM areas
+        struct {
+            namco_rom_image_t cpu_4000_4FFF;
+            namco_rom_image_t cpu_5000_5FFF;
+            namco_rom_image_t cpu_6000_6FFF;
+            namco_rom_image_t cpu_7000_7FFF;
+            namco_rom_image_t gfx_0000_1FFF;
+            namco_rom_image_t gfx_2000_3FFF;
+            namco_rom_image_t prom_0020_041F;
+        } pengo;
+        // Pacman specific ROM areas
+        struct {
+            namco_rom_image_t gfx_0000_0FFF;
+            namco_rom_image_t gfx_1000_1FFF;
+            namco_rom_image_t prom_0020_011F;
+        } pacman;
+    } roms;
 } namco_desc_t;
 
-/* audio state */
+// audio state
 typedef struct {
     int tick_counter;
     int sample_period;
     int sample_counter;
     float volume;
     struct {
-        uint32_t frequency; /* 20-bit frequency */
-        uint32_t counter;   /* 20-bit counter (top 5 bits are index into 32-byte wave table) */
-        uint8_t waveform;   /* 3-bit waveform */
-        uint8_t volume;     /* 4-bit volume */
-        float sample;       /* accumulated sample value */
-        float sample_div  ; /* oversampling divider */
+        uint32_t frequency; // 20-bit frequency
+        uint32_t counter;   // 20-bit counter (top 5 bits are index into 32-byte wave table)
+        uint8_t waveform;   // 3-bit waveform
+        uint8_t volume;     // 4-bit volume
+        float sample;       // accumulated sample value
+        float sample_div  ; // oversampling divider
     } voice[3];
-    uint8_t rom[2][0x0100]; /* wave table ROM */
+    uint8_t rom[2][0x0100]; // wave table ROM
     int num_samples;
     int sample_pos;
     namco_audio_callback_t callback;
     float sample_buffer[NAMCO_MAX_AUDIO_SAMPLES];
 } namco_sound_t;
 
-/* the Namco arcade machine state */
+// the Namco arcade machine state
 typedef struct {
-    bool valid;
-    z80_t cpu;
-    clk_t clk;
-    uint8_t in0;    /* inverted bits (active-low) */
-    uint8_t in1;    /* inverted bits (active-low) */
-    uint8_t dsw1;   /* dip-switches as-is (active-high) */
-    uint8_t dsw2;   /* Pengo only */
+    alignas(64) z80_t cpu;
+    uint8_t in0;    // inverted bits (active-low)
+    uint8_t in1;    // inverted bits (active-low)
+    uint8_t dsw1;   // dip-switches as-is (active-high)
+    uint8_t dsw2;   // Pengo only
+    uint64_t pins;
     int vsync_count;
-    uint8_t int_vector;     /* IM2 interrupt vector set with OUT on port 0 */
+    uint8_t int_vector;     // IM2 interrupt vector set with OUT on port 0
     uint8_t int_enable;
     uint8_t sound_enable;
-    uint8_t flip_screen;    /* screen-flip (for cocktail-cabinet) is not implemented */
-    uint8_t pal_select;     /* Pengo only */
-    uint8_t clut_select;    /* Pengo only */
-    uint8_t tile_select;    /* Pengo only */
-    uint8_t sprite_coords[16];      /* 8 sprites, uint8_t x, uint8_t y */
+    uint8_t flip_screen;    // screen-flip (for cocktail-cabinet) is not implemented
+    uint8_t pal_select;     // Pengo only
+    uint8_t clut_select;    // Pengo only
+    uint8_t tile_select;    // Pengo only
+    uint8_t sprite_coords[16];      // 8 sprites, uint8_t x, uint8_t y
     mem_t mem;
+
+    bool valid;
+    namco_debug_t debug;
+
     uint32_t* pixel_buffer;
-    uint32_t palette_cache[512];    /* precomputed RGBA values, Pacman: 256 entries , Pengo: 512 entries*/
+    uint32_t palette_cache[512];    // precomputed RGBA values, Pacman: 256 entries , Pengo: 512 entries
     void* user_data;
     namco_sound_t sound;
     uint8_t video_ram[0x0400];
     uint8_t color_ram[0x0400];
-    uint8_t main_ram[0x0800];       /* Pacman: 1 KB, Pengo: 2 KB */
-    uint8_t rom_cpu[0x8000];        /* program ROM: Pacman: 16 KB, Pengo: 32 KB */
-    uint8_t rom_gfx[0x4000];        /* tile ROM: Pacman: 8 KB, Pengo: 16 KB*/
-    uint8_t rom_prom[0x0420];       /* palette and color lookup ROM */
+    uint8_t main_ram[0x0800];       // Pacman: 1 KB, Pengo: 2 KB
+    uint8_t rom_cpu[0x8000];        // program ROM: Pacman: 16 KB, Pengo: 32 KB
+    uint8_t rom_gfx[0x4000];        // tile ROM: Pacman: 8 KB, Pengo: 16 KB
+    uint8_t rom_prom[0x0420];       // palette and color lookup ROM
 } namco_t;
 
-/* initialize a new namco_t instance */
+// initialize a new namco_t instance
 void namco_init(namco_t* sys, const namco_desc_t* desc);
-/* discard a namco_t instance */
+// discard a namco_t instance
 void namco_discard(namco_t* sys);
-/* reset a namco_t instance */
+// reset a namco_t instance
 void namco_reset(namco_t* sys);
-/* run namco_t instance for given amount of microseconds */
-void namco_exec(namco_t* sys, uint32_t micro_seconds);
-/* decode video to pixel buffer, must be called once per frame */
-void namco_decode_video(namco_t* sys);
-/* set input bits */
+// run namco_t instance for given amount of microseconds, return number of ticks executed
+uint32_t namco_exec(namco_t* sys, uint32_t micro_seconds);
+// set input bits
 void namco_input_set(namco_t* sys, uint32_t mask);
-/* clear input bits */
+// clear input bits
 void namco_input_clear(namco_t* sys, uint32_t mask);
-/* get the standard framebuffer width and height in pixels */
+// get the standard framebuffer width and height in pixels
 int namco_std_display_width(void);
 int namco_std_display_height(void);
-/* get the maximum framebuffer size in number of bytes */
+// get the maximum framebuffer size in number of bytes
 int namco_max_display_size(void);
-/* get the current framebuffer width and height in pixels */
+// get the current framebuffer width and height in pixels
 int namco_display_width(namco_t* sys);
 int namco_display_height(namco_t* sys);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -352,42 +371,42 @@ int namco_display_height(namco_t* sys);
 #endif
 
 /* sound registers */
-#define NAMCO_ADDR_SOUND_V1_FC0     (NAMCO_ADDR_SOUND_BASE+0x00)    /* voice1 frequency counter nibble 0 */
-#define NAMCO_ADDR_SOUND_V1_FC1     (NAMCO_ADDR_SOUND_BASE+0x01)    /*                          nibble 1 */
-#define NAMCO_ADDR_SOUND_V1_FC2     (NAMCO_ADDR_SOUND_BASE+0x02)    /*                          nibble 2 */
-#define NAMCO_ADDR_SOUND_V1_FC3     (NAMCO_ADDR_SOUND_BASE+0x03)    /*                          nibble 3 */
-#define NAMCO_ADDR_SOUND_V1_FC4     (NAMCO_ADDR_SOUND_BASE+0x04)    /*                          nibble 4 */
-#define NAMCO_ADDR_SOUND_V1_WAVE    (NAMCO_ADDR_SOUND_BASE+0x05)    /* voice1 wave form */
-#define NAMCO_ADDR_SOUND_V2_FC1     (NAMCO_ADDR_SOUND_BASE+0x06)    /* voice2 frequency counter nibble 1 */
-#define NAMCO_ADDR_SOUND_V2_FC2     (NAMCO_ADDR_SOUND_BASE+0x07)    /*                          nibble 2 */
-#define NAMCO_ADDR_SOUND_V2_FC3     (NAMCO_ADDR_SOUND_BASE+0x08)    /*                          nibble 3 */
-#define NAMCO_ADDR_SOUND_V2_FC4     (NAMCO_ADDR_SOUND_BASE+0x09)    /*                          nibble 4 */
-#define NAMCO_ADDR_SOUND_V2_WAVE    (NAMCO_ADDR_SOUND_BASE+0x0A)    /* voice2 wave form */
-#define NAMCO_ADDR_SOUND_V3_FC1     (NAMCO_ADDR_SOUND_BASE+0x0B)    /* voice3 frequency counter nibble 1 */
-#define NAMCO_ADDR_SOUND_V3_FC2     (NAMCO_ADDR_SOUND_BASE+0x0C)    /*                          nibble 2 */
-#define NAMCO_ADDR_SOUND_V3_FC3     (NAMCO_ADDR_SOUND_BASE+0x0D)    /*                          nibble 3 */
-#define NAMCO_ADDR_SOUND_V3_FC4     (NAMCO_ADDR_SOUND_BASE+0x0E)    /*                          nibble 4 */
-#define NAMCO_ADDR_SOUND_V3_WAVE    (NAMCO_ADDR_SOUND_BASE+0x0F)    /* voice3 wave form */
-#define NAMCO_ADDR_SOUND_V1_FQ0     (NAMCO_ADDR_SOUND_BASE+0x10)    /* voice1 frequency nibble 0 */
-#define NAMCO_ADDR_SOUND_V1_FQ1     (NAMCO_ADDR_SOUND_BASE+0x11)    /*                  nibble 1 */
-#define NAMCO_ADDR_SOUND_V1_FQ2     (NAMCO_ADDR_SOUND_BASE+0x12)    /*                  nibble 2 */
-#define NAMCO_ADDR_SOUND_V1_FQ3     (NAMCO_ADDR_SOUND_BASE+0x13)    /*                  nibble 3 */
-#define NAMCO_ADDR_SOUND_V1_FQ4     (NAMCO_ADDR_SOUND_BASE+0x14)    /*                  nibble 4 */
-#define NAMCO_ADDR_SOUND_V1_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x15)    /* voice1 volume */
-#define NAMCO_ADDR_SOUND_V2_FQ1     (NAMCO_ADDR_SOUND_BASE+0x16)    /* voice2 frequency nibble 1 */
-#define NAMCO_ADDR_SOUND_V2_FQ2     (NAMCO_ADDR_SOUND_BASE+0x17)    /*                  nibble 2 */
-#define NAMCO_ADDR_SOUND_V2_FQ3     (NAMCO_ADDR_SOUND_BASE+0x18)    /*                  nibble 3 */
-#define NAMCO_ADDR_SOUND_V2_FQ4     (NAMCO_ADDR_SOUND_BASE+0x19)    /*                  nibble 4 */
-#define NAMCO_ADDR_SOUND_V2_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x1A)    /* voice2 volume */
-#define NAMCO_ADDR_SOUND_V3_FQ1     (NAMCO_ADDR_SOUND_BASE+0x1B)    /* voice3 frequency nibble 1 */
-#define NAMCO_ADDR_SOUND_V3_FQ2     (NAMCO_ADDR_SOUND_BASE+0x1C)    /*                  nibble 2 */
-#define NAMCO_ADDR_SOUND_V3_FQ3     (NAMCO_ADDR_SOUND_BASE+0x1D)    /*                  nibble 3 */
-#define NAMCO_ADDR_SOUND_V3_FQ4     (NAMCO_ADDR_SOUND_BASE+0x1E)    /*                  nibble 4 */
-#define NAMCO_ADDR_SOUND_V3_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x1F)    /* voice3 volume */
+#define NAMCO_ADDR_SOUND_V1_FC0     (NAMCO_ADDR_SOUND_BASE+0x00)    // voice1 frequency counter nibble 0
+#define NAMCO_ADDR_SOUND_V1_FC1     (NAMCO_ADDR_SOUND_BASE+0x01)    //                          nibble 1
+#define NAMCO_ADDR_SOUND_V1_FC2     (NAMCO_ADDR_SOUND_BASE+0x02)    //                          nibble 2
+#define NAMCO_ADDR_SOUND_V1_FC3     (NAMCO_ADDR_SOUND_BASE+0x03)    //                          nibble 3
+#define NAMCO_ADDR_SOUND_V1_FC4     (NAMCO_ADDR_SOUND_BASE+0x04)    //                          nibble 4
+#define NAMCO_ADDR_SOUND_V1_WAVE    (NAMCO_ADDR_SOUND_BASE+0x05)    // voice1 wave form
+#define NAMCO_ADDR_SOUND_V2_FC1     (NAMCO_ADDR_SOUND_BASE+0x06)    // voice2 frequency counter nibble 1
+#define NAMCO_ADDR_SOUND_V2_FC2     (NAMCO_ADDR_SOUND_BASE+0x07)    //                          nibble 2
+#define NAMCO_ADDR_SOUND_V2_FC3     (NAMCO_ADDR_SOUND_BASE+0x08)    //                          nibble 3
+#define NAMCO_ADDR_SOUND_V2_FC4     (NAMCO_ADDR_SOUND_BASE+0x09)    //                          nibble 4
+#define NAMCO_ADDR_SOUND_V2_WAVE    (NAMCO_ADDR_SOUND_BASE+0x0A)    // voice2 wave form
+#define NAMCO_ADDR_SOUND_V3_FC1     (NAMCO_ADDR_SOUND_BASE+0x0B)    // voice3 frequency counter nibble 1
+#define NAMCO_ADDR_SOUND_V3_FC2     (NAMCO_ADDR_SOUND_BASE+0x0C)    //                          nibble 2
+#define NAMCO_ADDR_SOUND_V3_FC3     (NAMCO_ADDR_SOUND_BASE+0x0D)    //                          nibble 3
+#define NAMCO_ADDR_SOUND_V3_FC4     (NAMCO_ADDR_SOUND_BASE+0x0E)    //                          nibble 4
+#define NAMCO_ADDR_SOUND_V3_WAVE    (NAMCO_ADDR_SOUND_BASE+0x0F)    // voice3 wave form
+#define NAMCO_ADDR_SOUND_V1_FQ0     (NAMCO_ADDR_SOUND_BASE+0x10)    // voice1 frequency nibble 0
+#define NAMCO_ADDR_SOUND_V1_FQ1     (NAMCO_ADDR_SOUND_BASE+0x11)    //                  nibble 1
+#define NAMCO_ADDR_SOUND_V1_FQ2     (NAMCO_ADDR_SOUND_BASE+0x12)    //                  nibble 2
+#define NAMCO_ADDR_SOUND_V1_FQ3     (NAMCO_ADDR_SOUND_BASE+0x13)    //                  nibble 3
+#define NAMCO_ADDR_SOUND_V1_FQ4     (NAMCO_ADDR_SOUND_BASE+0x14)    //                  nibble 4
+#define NAMCO_ADDR_SOUND_V1_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x15)    // voice1 volume
+#define NAMCO_ADDR_SOUND_V2_FQ1     (NAMCO_ADDR_SOUND_BASE+0x16)    // voice2 frequency nibble 1
+#define NAMCO_ADDR_SOUND_V2_FQ2     (NAMCO_ADDR_SOUND_BASE+0x17)    //                  nibble 2
+#define NAMCO_ADDR_SOUND_V2_FQ3     (NAMCO_ADDR_SOUND_BASE+0x18)    //                  nibble 3
+#define NAMCO_ADDR_SOUND_V2_FQ4     (NAMCO_ADDR_SOUND_BASE+0x19)    //                  nibble 4
+#define NAMCO_ADDR_SOUND_V2_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x1A)    // voice2 volume
+#define NAMCO_ADDR_SOUND_V3_FQ1     (NAMCO_ADDR_SOUND_BASE+0x1B)    // voice3 frequency nibble 1
+#define NAMCO_ADDR_SOUND_V3_FQ2     (NAMCO_ADDR_SOUND_BASE+0x1C)    //                  nibble 2
+#define NAMCO_ADDR_SOUND_V3_FQ3     (NAMCO_ADDR_SOUND_BASE+0x1D)    //                  nibble 3
+#define NAMCO_ADDR_SOUND_V3_FQ4     (NAMCO_ADDR_SOUND_BASE+0x1E)    //                  nibble 4
+#define NAMCO_ADDR_SOUND_V3_VOLUME  (NAMCO_ADDR_SOUND_BASE+0x1F)    // voice3 volume
 
 #define NAMCO_MASTER_CLOCK      (18432000)
 #define NAMCO_CPU_CLOCK         (NAMCO_MASTER_CLOCK / 6)
-#define NAMCO_SOUND_PERIOD      (32)    /* sound is ticked every 32 CPU ticks */
+#define NAMCO_SOUND_PERIOD      (32)    // sound is ticked every 32 CPU ticks
 #define NAMCO_SOUND_OVERSAMPLE  (2)
 #define NAMCO_SAMPLE_SCALE      (16)
 #define NAMCO_VSYNC_PERIOD      (NAMCO_CPU_CLOCK / 60)
@@ -395,90 +414,66 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_DISPLAY_HEIGHT    (224)
 #define NAMCO_DISPLAY_SIZE      (NAMCO_DISPLAY_WIDTH*NAMCO_DISPLAY_HEIGHT*4)
 
-static uint64_t _namco_tick(int num, uint64_t pins, void* user_data);
 static void _namco_sound_init(namco_t* sys, const namco_desc_t* desc);
 static void _namco_sound_wr(namco_t* sys, uint16_t addr, uint8_t data);
-static void _namco_sound_tick(namco_t* sys, int num_ticks);
+static void _namco_sound_tick(namco_t* sys);
 
 #define _namco_def(val, def) (val == 0 ? def : val)
 
 void namco_init(namco_t* sys, const namco_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->audio_sample_rate > 0);
+    CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= NAMCO_DISPLAY_SIZE)));
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(namco_t));
     sys->valid = true;
-
-    /* audio and video output */
-    sys->user_data = desc->user_data;
-    _namco_sound_init(sys, desc);
-    CHIPS_ASSERT((0 == desc->pixel_buffer) || (desc->pixel_buffer && (desc->pixel_buffer_size >= NAMCO_DISPLAY_SIZE)));
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
-    
-    /* copy over ROM images */
-    CHIPS_ASSERT(desc->rom_cpu_0000_0FFF && (desc->rom_cpu_0000_0FFF_size == 0x1000));
-    CHIPS_ASSERT(desc->rom_cpu_1000_1FFF && (desc->rom_cpu_1000_1FFF_size == 0x1000));
-    CHIPS_ASSERT(desc->rom_cpu_2000_2FFF && (desc->rom_cpu_2000_2FFF_size == 0x1000));
-    CHIPS_ASSERT(desc->rom_cpu_3000_3FFF && (desc->rom_cpu_3000_3FFF_size == 0x1000));
-    #if defined(NAMCO_PENGO)
-    CHIPS_ASSERT(desc->rom_cpu_4000_4FFF && (desc->rom_cpu_4000_4FFF_size == 0x1000));
-    CHIPS_ASSERT(desc->rom_cpu_5000_5FFF && (desc->rom_cpu_5000_5FFF_size == 0x1000));
-    CHIPS_ASSERT(desc->rom_cpu_6000_6FFF && (desc->rom_cpu_6000_6FFF_size == 0x1000));
-    CHIPS_ASSERT(desc->rom_cpu_7000_7FFF && (desc->rom_cpu_7000_7FFF_size == 0x1000));
-    #endif
-    #if defined(NAMCO_PACMAN)
-    CHIPS_ASSERT(desc->rom_gfx_0000_0FFF && (desc->rom_gfx_0000_0FFF_size == 0x1000));
-    CHIPS_ASSERT(desc->rom_gfx_1000_1FFF && (desc->rom_gfx_1000_1FFF_size == 0x1000));
-    #else
-    CHIPS_ASSERT(desc->rom_gfx_0000_1FFF && (desc->rom_gfx_0000_1FFF_size == 0x2000));
-    CHIPS_ASSERT(desc->rom_gfx_2000_3FFF && (desc->rom_gfx_2000_3FFF_size == 0x2000));
-    #endif
-    CHIPS_ASSERT(desc->rom_prom_0000_001F && (desc->rom_prom_0000_001F_size == 0x0020));
-    #if defined(NAMCO_PACMAN)
-    CHIPS_ASSERT(desc->rom_prom_0020_011F && (desc->rom_prom_0020_011F_size == 0x0100));
-    #else
-    CHIPS_ASSERT(desc->rom_prom_0020_041F && (desc->rom_prom_0020_041F_size == 0x0400));
-    #endif
-    CHIPS_ASSERT(desc->rom_sound_0000_00FF && (desc->rom_sound_0000_00FF_size == 0x0100));
-    CHIPS_ASSERT(desc->rom_sound_0100_01FF && (desc->rom_sound_0100_01FF_size == 0x0100));
-    memcpy(&sys->rom_cpu[0x0000], desc->rom_cpu_0000_0FFF, 0x1000);
-    memcpy(&sys->rom_cpu[0x1000], desc->rom_cpu_1000_1FFF, 0x1000);
-    memcpy(&sys->rom_cpu[0x2000], desc->rom_cpu_2000_2FFF, 0x1000);
-    memcpy(&sys->rom_cpu[0x3000], desc->rom_cpu_3000_3FFF, 0x1000);
-    #if defined(NAMCO_PENGO)
-    memcpy(&sys->rom_cpu[0x4000], desc->rom_cpu_4000_4FFF, 0x1000);
-    memcpy(&sys->rom_cpu[0x5000], desc->rom_cpu_5000_5FFF, 0x1000);
-    memcpy(&sys->rom_cpu[0x6000], desc->rom_cpu_6000_6FFF, 0x1000);
-    memcpy(&sys->rom_cpu[0x7000], desc->rom_cpu_7000_7FFF, 0x1000);
-    #endif
-    #if defined(NAMCO_PACMAN)
-    memcpy(&sys->rom_gfx[0x0000], desc->rom_gfx_0000_0FFF, 0x1000);
-    memcpy(&sys->rom_gfx[0x1000], desc->rom_gfx_1000_1FFF, 0x1000);
-    #else
-    memcpy(&sys->rom_gfx[0x0000], desc->rom_gfx_0000_1FFF, 0x2000);
-    memcpy(&sys->rom_gfx[0x2000], desc->rom_gfx_2000_3FFF, 0x2000);
-    #endif
-    memcpy(&sys->rom_prom[0], desc->rom_prom_0000_001F, 0x0020);
-    #if defined(NAMCO_PACMAN)
-    memcpy(&sys->rom_prom[0x0020], desc->rom_prom_0020_011F, 0x0100);
-    #else
-    memcpy(&sys->rom_prom[0x0020], desc->rom_prom_0020_041F, 0x0400);
-    #endif
-    memcpy(sys->sound.rom[0], desc->rom_sound_0000_00FF, 0x0100);
-    memcpy(sys->sound.rom[1], desc->rom_sound_0100_01FF, 0x0100);
-
-    /* vsync/vblank counters */
+    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
+    sys->debug = desc->debug;
     sys->vsync_count = NAMCO_VSYNC_PERIOD;
+    _namco_sound_init(sys, desc);
+    sys->pins = z80_init(&sys->cpu);
 
-    /* system clock and CPU */
-    clk_init(&sys->clk, NAMCO_CPU_CLOCK);
-    z80_desc_t cpu_desc;
-    memset(&cpu_desc, 0, sizeof(cpu_desc));
-    cpu_desc.tick_cb = _namco_tick;
-    cpu_desc.user_data = sys;
-    z80_init(&sys->cpu, &cpu_desc);
+    // copy over ROM images
+    CHIPS_ASSERT(desc->roms.common.cpu_0000_0FFF.ptr && (desc->roms.common.cpu_0000_0FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.common.cpu_1000_1FFF.ptr && (desc->roms.common.cpu_1000_1FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.common.cpu_2000_2FFF.ptr && (desc->roms.common.cpu_2000_2FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.common.cpu_3000_3FFF.ptr && (desc->roms.common.cpu_3000_3FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.common.prom_0000_001F.ptr && (desc->roms.common.prom_0000_001F.size == 0x0020));
+    CHIPS_ASSERT(desc->roms.common.sound_0000_00FF.ptr && (desc->roms.common.sound_0000_00FF.size == 0x0100));
+    CHIPS_ASSERT(desc->roms.common.sound_0100_01FF.ptr && (desc->roms.common.sound_0100_01FF.size == 0x0100));
+    memcpy(&sys->rom_cpu[0x0000], desc->roms.common.cpu_0000_0FFF.ptr, 0x1000);
+    memcpy(&sys->rom_cpu[0x1000], desc->roms.common.cpu_1000_1FFF.ptr, 0x1000);
+    memcpy(&sys->rom_cpu[0x2000], desc->roms.common.cpu_2000_2FFF.ptr, 0x1000);
+    memcpy(&sys->rom_cpu[0x3000], desc->roms.common.cpu_3000_3FFF.ptr, 0x1000);
+    memcpy(&sys->rom_prom[0], desc->roms.common.prom_0000_001F.ptr, 0x0020);
+    memcpy(sys->sound.rom[0], desc->roms.common.sound_0000_00FF.ptr, 0x0100);
+    memcpy(sys->sound.rom[1], desc->roms.common.sound_0100_01FF.ptr, 0x0100);
+    #if defined(NAMCO_PENGO)
+    CHIPS_ASSERT(desc->roms.pengo.cpu_4000_4FFF.ptr && (desc->roms.pengo.cpu_4000_4FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.pengo.cpu_5000_5FFF.ptr && (desc->roms.pengo.cpu_5000_5FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.pengo.cpu_6000_6FFF.ptr && (desc->roms.pengo.cpu_6000_6FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.pengo.cpu_7000_7FFF.ptr && (desc->roms.pengo.cpu_7000_7FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.pengo.gfx_0000_1FFF.ptr && (desc->roms.pengo.gfx_0000_1FFF.size == 0x2000));
+    CHIPS_ASSERT(desc->roms.pengo.gfx_2000_3FFF.ptr && (desc->roms.pengo.gfx_2000_3FFF.size == 0x2000));
+    CHIPS_ASSERT(desc->roms.pengo.prom_0020_041F.ptr && (desc->roms.pengo.prom_0020_041F.size == 0x0400));
+    memcpy(&sys->rom_cpu[0x4000], desc->roms.pengo.cpu_4000_4FFF.ptr, 0x1000);
+    memcpy(&sys->rom_cpu[0x5000], desc->roms.pengo.cpu_5000_5FFF.ptr, 0x1000);
+    memcpy(&sys->rom_cpu[0x6000], desc->roms.pengo.cpu_6000_6FFF.ptr, 0x1000);
+    memcpy(&sys->rom_cpu[0x7000], desc->roms.pengo.cpu_7000_7FFF.ptr, 0x1000);
+    memcpy(&sys->rom_gfx[0x0000], desc->roms.pengo.gfx_0000_1FFF.ptr, 0x2000);
+    memcpy(&sys->rom_gfx[0x2000], desc->roms.pengo.gfx_2000_3FFF.ptr, 0x2000);
+    memcpy(&sys->rom_prom[0x0020], desc->roms.pengo.prom_0020_041F.ptr, 0x0400);
+    #endif
+    #if defined(NAMCO_PACMAN)
+    CHIPS_ASSERT(desc->roms.pacman.gfx_0000_0FFF.ptr && (desc->roms.pacman.gfx_0000_0FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.pacman.gfx_1000_1FFF.ptr && (desc->roms.pacman.gfx_1000_1FFF.size == 0x1000));
+    CHIPS_ASSERT(desc->roms.pacman.prom_0020_011F.ptr && (desc->roms.pacman.prom_0020_011F.size == 0x0100));
+    memcpy(&sys->rom_gfx[0x0000], desc->roms.pacman.gfx_0000_0FFF.ptr, 0x1000);
+    memcpy(&sys->rom_gfx[0x1000], desc->roms.pacman.gfx_1000_1FFF.ptr, 0x1000);
+    memcpy(&sys->rom_prom[0x0020], desc->roms.pacman.prom_0020_011F.ptr, 0x0100);
+    #endif
 
-    /* memory mapped IO config */
+    // memory mapped IO config
     sys->in0 = 0x00;
     sys->in1 = 0x00;
     sys->dsw1 = NAMCO_DSW1_DEFAULT;
@@ -540,7 +535,7 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
         mem_map_ram(&sys->mem, 0, 0x8800, 0x0800, sys->main_ram);
     #endif
 
-    /* setup an RGBA palette from the 8-bit RGB values in PROM */
+    // setup an RGBA palette from the 8-bit RGB values in PROM
     uint32_t hw_colors[32];
     for (int i = 0; i < 32; i++) {
         /*
@@ -574,18 +569,9 @@ void namco_reset(namco_t* sys) {
     z80_reset(&sys->cpu);
 }
 
-void namco_exec(namco_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
-    uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
-    clk_ticks_executed(&sys->clk, ticks_executed);
-}
-
-static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
-    namco_t* sys = (namco_t*) user_data;
-
-    /* update the vsync counter and trigger VSYNC interrupt*/
-    sys->vsync_count -= num_ticks;
+static uint64_t _namco_tick(namco_t* sys, uint64_t pins) {
+    // update the vsync counter and trigger VSYNC interrupt
+    sys->vsync_count--;
     if (sys->vsync_count < 0) {
         sys->vsync_count += NAMCO_VSYNC_PERIOD;
         if (sys->int_enable) {
@@ -593,20 +579,22 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
         }
     }
 
-    /* tick the sound chip */
-    _namco_sound_tick(sys, num_ticks);
+    // tick the sound chip
+    _namco_sound_tick(sys);
 
-    /* memory requests */
+    pins = z80_tick(&sys->cpu, pins);
+
+    // memory requests
     uint16_t addr = Z80_GET_ADDR(pins) & NAMCO_ADDR_MASK;
     if (pins & Z80_MREQ) {
         if (pins & Z80_WR) {
-            /* memory write access */
+            // memory write access
             uint8_t data = Z80_GET_DATA(pins);
             if (addr < NAMCO_IOMAP_BASE) {
                 mem_wr(&sys->mem, addr, data);
             }
             else {
-                /* memory-mapped IO */
+                // memory-mapped IO
                 if (addr == NAMCO_ADDR_INT_ENABLE) {
                     sys->int_enable = data & 1;
                 }
@@ -636,13 +624,13 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
             }
         }
         else if (pins & Z80_RD) {
-            /* memory read access */
+            // memory read access
             if (addr < NAMCO_IOMAP_BASE) {
                 Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
             }
             else {
                 uint8_t data = 0xFF;
-                /* memory-mapped IO */
+                // memory-mapped IO
                 switch (addr) {
                     /* FIXME: IN0, IN1, DSW1 are mirrored for 0x40 bytes */
                     case NAMCO_ADDR_IN0:
@@ -655,7 +643,7 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
                         data = sys->dsw1;
                         break;
                     #if defined(NAMCO_PENGO)
-                    case NAMCO_ADDR_DSW2:   /* Pengo only */
+                    case NAMCO_ADDR_DSW2:
                         data = sys->dsw2;
                         break;
                     #endif
@@ -670,13 +658,14 @@ static uint64_t _namco_tick(int num_ticks, uint64_t pins, void* user_data) {
         if (pins & Z80_WR) {
             uint8_t data = Z80_GET_DATA(pins);
             if ((addr & 0xFF) == 0) {
-                /* OUT to port 0: set interrupt vector */
+                // OUT to port 0: set interrupt vector
                 sys->int_vector = data;
             }
         }
         else if (pins & Z80_M1) {
-            /* an interrupt handling machine cycle, set interrupt vector on data bus */
+            // an interrupt handling machine cycle, set interrupt vector on data bus
             Z80_SET_DATA(pins, sys->int_vector);
+            pins &= ~Z80_INT;
         }
     }
     return pins & Z80_PIN_MASK;
@@ -698,7 +687,7 @@ static uint16_t _namco_video_offset(uint32_t x, uint32_t y) {
     return offset;
 }
 
-/* 8x4 video tile decoder (used both for background tiles and sprites) */
+// 8x4 video tile decoder (used both for background tiles and sprites)
 static inline void _namco_8x4(
     uint32_t* pixel_base,
     uint8_t* tile_base,
@@ -738,7 +727,7 @@ static inline void _namco_8x4(
     }
 }
 
-/* decode background tiles */
+// decode background tiles
 static void _namco_decode_chars(namco_t* sys) {
     uint32_t* pixel_base = sys->pixel_buffer;
     uint32_t* pal_base = &sys->palette_cache[(sys->pal_select<<8)|(sys->clut_select<<7)];
@@ -790,12 +779,34 @@ static void _namco_decode_sprites(namco_t* sys) {
     }
 }
 
-void namco_decode_video(namco_t* sys) {
+void _namco_decode_video(namco_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     if (sys->pixel_buffer) {
         _namco_decode_chars(sys);
         _namco_decode_sprites(sys);
     }
+}
+
+uint32_t namco_exec(namco_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    const uint32_t num_ticks = clk_us_to_ticks(NAMCO_CPU_CLOCK, micro_seconds);
+    uint64_t pins = sys->pins;
+    if (0 == sys->debug.callback.func) {
+        // run without debug hook
+        for (uint32_t tick = 0; tick < num_ticks; tick++) {
+            pins = _namco_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debug hook
+        for (uint32_t tick = 0; (tick < num_ticks) && !(*sys->debug.stopped); tick++) {
+            pins = _namco_tick(sys, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
+        }
+    }
+    sys->pins = pins;
+    _namco_decode_video(sys);
+    return num_ticks;
 }
 
 void namco_input_set(namco_t* sys, uint32_t mask) {
@@ -921,15 +932,15 @@ int namco_display_height(namco_t* sys) {
 }
 
 static void _namco_sound_init(namco_t* sys, const namco_desc_t* desc) {
-    CHIPS_ASSERT(desc->audio_num_samples <= NAMCO_MAX_AUDIO_SAMPLES);
-    /* assume zero-initialized */
+    CHIPS_ASSERT(desc->audio.num_samples <= NAMCO_MAX_AUDIO_SAMPLES);
+    // assume zero-initialized
     namco_sound_t* snd = &sys->sound;
     snd->tick_counter = NAMCO_SOUND_PERIOD;
-    snd->sample_period = (NAMCO_CPU_CLOCK * NAMCO_SAMPLE_SCALE) / _namco_def(desc->audio_sample_rate, 44100);
+    snd->sample_period = (NAMCO_CPU_CLOCK * NAMCO_SAMPLE_SCALE) / _namco_def(desc->audio.sample_rate, 44100);
     snd->sample_counter = sys->sound.sample_period;
-    snd->volume = _namco_def(desc->audio_volume, 1.0f);
-    snd->num_samples = _namco_def(desc->audio_num_samples, NAMCO_DEFAULT_AUDIO_SAMPLES);
-    snd->callback = desc->audio_cb;
+    snd->volume = _namco_def(desc->audio.volume, 1.0f);
+    snd->num_samples = _namco_def(desc->audio.num_samples, NAMCO_DEFAULT_AUDIO_SAMPLES);
+    snd->callback = desc->audio.callback;
 }
 
 #define _NAMCO_SET_NIBBLE_0(val, data) (val=(val&~0x0000F)|((data&0xF)<<0))
@@ -976,12 +987,12 @@ static void _namco_sound_wr(namco_t* sys, uint16_t addr, uint8_t data) {
     }
 }
 
-static void _namco_sound_tick(namco_t* sys, int num_ticks) {
+static void _namco_sound_tick(namco_t* sys) {
     namco_sound_t* snd = &sys->sound;
-    /* tick the sound chip? */
-    snd->tick_counter -= num_ticks;
+    // tick the sound chip?
+    snd->tick_counter--;
     if (snd->tick_counter < 0) {
-        /* handle 96KHz tick */
+        // handle 96KHz tick
         snd->tick_counter += NAMCO_SOUND_PERIOD / NAMCO_SOUND_OVERSAMPLE;
         for (int i = 0; i < 3; i++) {
             if ((snd->voice[i].frequency > 0) && (sys->sound_enable & 1)) {
@@ -990,7 +1001,7 @@ static void _namco_sound_tick(namco_t* sys, int num_ticks) {
                    bits of the 20-bit sample counter, multiple with 4-bit volume
                 */
                 uint32_t smp_index = ((snd->voice[i].waveform<<5) | ((snd->voice[i].counter>>15) & 0x1F)) & 0xFF;
-                /* integer sample value now 7-bits plus sign bit */
+                // integer sample value now 7-bits plus sign bit
                 int val = (((int)(snd->rom[0][smp_index] & 0xF)) - 8) * snd->voice[i].volume;
                 snd->voice[i].sample += (float)val;
             }
@@ -998,8 +1009,8 @@ static void _namco_sound_tick(namco_t* sys, int num_ticks) {
         }
     }
 
-    /* generate a new sample? */
-    snd->sample_counter -= (num_ticks * NAMCO_SAMPLE_SCALE);
+    // generate a new sample?
+    snd->sample_counter -= NAMCO_SAMPLE_SCALE;
     if (snd->sample_counter < 0) {
         snd->sample_counter += snd->sample_period;
         float sm = 0.0f;
@@ -1013,11 +1024,11 @@ static void _namco_sound_tick(namco_t* sys, int num_ticks) {
         sm *= snd->volume * 0.33333f;
         snd->sample_buffer[snd->sample_pos++] = sm;
         if (snd->sample_pos == snd->num_samples) {
-            if (snd->callback) {
-                snd->callback(snd->sample_buffer, snd->num_samples, sys->user_data);
+            if (snd->callback.func) {
+                snd->callback.func(snd->sample_buffer, snd->num_samples, snd->callback.user_data);
             }
             snd->sample_pos = 0;
         }
     }
 }
-#endif /* CHIPS_IMPL */
+#endif // CHIPS_IMPL
