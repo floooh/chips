@@ -134,7 +134,7 @@ struct ui_dbg_t;
 /* callback for reading a byte from memory */
 typedef uint8_t (*ui_dbg_read_t)(int layer, uint16_t addr, void* user_data);
 /* callback for evaluating uer breakpoints, return breakpoint index, or -1 */
-typedef int (*ui_dbg_user_break_t)(struct ui_dbg_t* win, uint16_t pc, int ticks, uint64_t pins, void* user_data);
+typedef int (*ui_dbg_user_break_t)(struct ui_dbg_t* win, int trap_id, uint64_t pins, void* user_data);
 /* a callback to create a dynamic-update RGBA8 UI texture, needs to return an ImTextureID handle */
 typedef void* (*ui_dbg_create_texture_t)(int w, int h);
 /* callback to update a UI texture with new data */
@@ -746,14 +746,9 @@ static int _ui_dbg_eval_tick_breakpoints(ui_dbg_t* win, int trap_id, uint64_t pi
     }
     
     // call optional user-breakpoint evaluation callback
-    // FIXME
-    /*
     if ((0 == trap_id) && win->break_cb) {
-        FIXME
-        trap_id = win->break_cb(win, pc, ticks, pins, win->user_data);
+        trap_id = win->break_cb(win, trap_id, pins, win->user_data);
     }
-    */
-
     return trap_id;
 }
 

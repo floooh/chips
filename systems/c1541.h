@@ -44,12 +44,13 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* IEC port bits, same as C64_IECPORT_* */
+// IEC port bits, same as C64_IECPORT_*
 #define C1541_IECPORT_RESET (1<<0)
 #define C1541_IECPORT_SRQIN (1<<1)
 #define C1541_IECPORT_DATA  (1<<2)
@@ -58,18 +59,23 @@ extern "C" {
 
 #define C1541_FREQUENCY (1000000)
 
-/* config params for c1541_init() */
 typedef struct {
-    /* pointer to a shared byte with IEC serial bus line state */
+    void* ptr;
+    size_t size;
+} c1541_rom_image_t;
+
+// config params for c1541_init()
+typedef struct {
+    // pointer to a shared byte with IEC serial bus line state
     uint8_t* iec_port;
-    /* ROM images */
-    const void* rom_c000_dfff;
-    const void* rom_e000_ffff;
-    int rom_c000_dfff_size;
-    int rom_e000_ffff_size;
+    // rom images
+    struct {
+        c1541_rom_image_t c000_dfff;
+        c1541_rom_image_t e000_ffff;
+    } roms;
 } c1541_desc_t;
 
-/* 1541 emulator state */
+// 1541 emulator state
 typedef struct {
     uint64_t pins;
     uint8_t* iec;
@@ -82,21 +88,21 @@ typedef struct {
     uint8_t rom[0x4000];
 } c1541_t;
 
-/* initialize a new c1541_t instance */
+// initialize a new c1541_t instance
 void c1541_init(c1541_t* sys, const c1541_desc_t* desc);
-/* discard a c1541_t instance */
+// discard a c1541_t instance
 void c1541_discard(c1541_t* sys);
-/* reset a c1541_t instance */
+// reset a c1541_t instance
 void c1541_reset(c1541_t* sys);
-/* tick a c1541_t instance forward */
+// tick a c1541_t instance forward
 void c1541_tick(c1541_t* sys);
-/* insert a disc image file (.d64) */
+// insert a disc image file (.d64)
 void c1541_insert_disc(c1541_t* sys, const uint8_t* ptr, int num_bytes);
-/* remove current disc */
+// remove current disc
 void c1541_remove_disc(c1541_t* sys);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -113,20 +119,20 @@ void c1541_init(c1541_t* sys, const c1541_desc_t* desc) {
     memset(sys, 0, sizeof(c1541_t));
     sys->valid = true;
 
-    /* copy ROM images */
-    CHIPS_ASSERT(desc->rom_c000_dfff && (0x2000 == desc->rom_c000_dfff_size));
-    CHIPS_ASSERT(desc->rom_e000_ffff && (0x2000 == desc->rom_e000_ffff_size));
-    memcpy(&sys->rom[0x0000], desc->rom_c000_dfff, 0x2000);
-    memcpy(&sys->rom[0x2000], desc->rom_e000_ffff, 0x2000);
+    // copy ROM images
+    CHIPS_ASSERT(desc->roms.c000_dfff.ptr && (0x2000 == desc->roms.c000_dfff.size));
+    CHIPS_ASSERT(desc->roms.e000_ffff.ptr && (0x2000 == desc->roms.e000_ffff.size));
+    memcpy(&sys->rom[0x0000], desc->roms.c000_dfff.ptr, 0x2000);
+    memcpy(&sys->rom[0x2000], desc->roms.e000_ffff.ptr, 0x2000);
 
-    /* initialize the hardware */
+    // initialize the hardware
     m6502_desc_t cpu_desc;
     memset(&cpu_desc, 0, sizeof(cpu_desc));
     sys->pins = m6502_init(&sys->cpu, &cpu_desc);
     m6522_init(&sys->via_1);
     m6522_init(&sys->via_2);
 
-    /* setup memory map */
+    // setup memory map
     mem_init(&sys->mem);
     mem_map_ram(&sys->mem, 0, 0x0000, 0x0800, sys->ram);
     mem_map_rom(&sys->mem, 0, 0xC000, 0x4000, sys->rom);
@@ -172,4 +178,4 @@ void c1541_remove_disc(c1541_t* sys) {
     (void)sys;
 }
 
-#endif /* CHIPS_IMPL */
+#endif // CHIPS_IMPL
