@@ -88,6 +88,11 @@ typedef struct {
     bool* stopped;
 } z1013_debug_t;
 
+typedef struct {
+    const void* ptr;
+    size_t size;
+} z1013_rom_image_t;
+
 // configuration parameters for z1013_setup()
 typedef struct {
     z1013_type_t type;          // default is Z1013_TYPE_64
@@ -101,18 +106,9 @@ typedef struct {
 
     // ROM images
     struct {
-        struct {
-            const void* ptr;
-            const size_t size;
-        } mon202;
-        struct {
-            const void* ptr;
-            const size_t size;
-        } mon_a2;
-        struct {
-            const void* ptr;
-            const size_t size;
-        } font;
+        z1013_rom_image_t mon202;
+        z1013_rom_image_t mon_a2;
+        z1013_rom_image_t font;
     } roms;
 } z1013_desc_t;
 

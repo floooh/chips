@@ -325,6 +325,11 @@ typedef struct {
     bool* stopped;
 } kc85_debug_t;
 
+typedef struct {
+    const void* ptr;
+    size_t size;
+} kc85_rom_image_t;
+
 // config parameters for kc85_init()
 typedef struct {
     kc85_debug_t debug;         // optional debugger hook
@@ -349,15 +354,15 @@ typedef struct {
     // ROM images
     struct {
         #if defined(CHIPS_KC85_TYPE_2)
-            struct { const void* ptr; size_t size; } caos22;    // CAOS 2.2 (used in KC85/2)
+            kc85_rom_image_t caos22;    // CAOS 2.2 (used in KC85/2)
         #elif defined(CHIPS_KC85_TYPE_3)
-            struct { const void* ptr; size_t size; } caos31;    // CAOS 3.1 (used in KC85/3)
+            kc85_rom_image_t caos31;    // CAOS 3.1 (used in KC85/3)
         #elif defined(CHIPS_KC85_TYPE_4)
-            struct { const void* ptr; size_t size; } caos42c;   // CAOS 4.2 at 0xC000 (KC85/4)
-            struct { const void* ptr; size_t size; } caos42e;   // CAOS 4.2 at 0xE000 (KC85/4)
+            kc85_rom_image_t caos42c;   // CAOS 4.2 at 0xC000 (KC85/4)
+            kc85_rom_image_t caos42e;   // CAOS 4.2 at 0xE000 (KC85/4)
         #endif
         #if defined(CHIPS_KC85_TYPE_3) || defined(CHIPS_KC85_TYPE_4)
-            struct { const void* ptr; size_t size; } kcbasic;   // same BASIC version for KC85/3 and KC85/4
+            kc85_rom_image_t kcbasic;   // same BASIC version for KC85/3 and KC85/4
         #endif
     } roms;
 } kc85_desc_t;

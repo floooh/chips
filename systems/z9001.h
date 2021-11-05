@@ -111,6 +111,11 @@ typedef struct {
     bool* stopped;
 } z9001_debug_t;
 
+typedef struct {
+    const void* ptr;
+    size_t size;
+} z9001_rom_image_t;
+
 // configuration parameters for z9001_init()
 typedef struct {
     z9001_type_t type;                  // default is Z9001_TYPE_Z9001
@@ -133,17 +138,17 @@ typedef struct {
     struct {
         // Z9001 ROM images
         struct {
-            struct { const void* ptr; size_t size; } os_1;
-            struct { const void* ptr; size_t size; } os_2;
-            struct { const void* ptr; size_t size; } font;
+            z9001_rom_image_t os_1;
+            z9001_rom_image_t os_2;
+            z9001_rom_image_t font;
             // optional BASIC module ROM
-            struct { const void* ptr; size_t size; } basic;
+            z9001_rom_image_t basic;
         } z9001;
         // KC85 ROM images
         struct {
-            struct { const void* ptr; size_t size; } os;
-            struct { const void* ptr; size_t size; } basic;
-            struct { const void* ptr; size_t size; } font;
+            z9001_rom_image_t os;
+            z9001_rom_image_t basic;
+            z9001_rom_image_t font;
         } kc87;
     } roms;
 } z9001_desc_t;

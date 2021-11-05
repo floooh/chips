@@ -99,6 +99,11 @@ typedef struct {
     bool* stopped;
 } atom_debug_t;
 
+typedef struct {
+    const void* ptr;
+    size_t size;
+} atom_rom_image_t;
+
 // configuration parameters for atom_init()
 typedef struct {
     atom_joystick_type_t joystick_type;     // what joystick type to emulate, default is ATOM_JOYSTICK_NONE
@@ -120,9 +125,9 @@ typedef struct {
 
     // ROM images
     struct {
-        struct { const void* ptr; size_t size; } abasic;
-        struct { const void* ptr; size_t size; } afloat;
-        struct { const void* ptr; size_t size; } dosrom;
+        atom_rom_image_t abasic;
+        atom_rom_image_t afloat;
+        atom_rom_image_t dosrom;
     } roms;
 } atom_desc_t;
 
