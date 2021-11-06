@@ -52,6 +52,8 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,20 +62,20 @@ extern "C" {
 #define BOMBJACK_MAX_AUDIO_SAMPLES (1024)
 #define BOMBJACK_DEFAULT_AUDIO_SAMPLES (128)
 
-/* joystick mask bits */
+// joystick mask bits
 #define BOMBJACK_JOYSTICK_RIGHT (1<<0)
 #define BOMBJACK_JOYSTICK_LEFT (1<<1)
 #define BOMBJACK_JOYSTICK_UP (1<<2)
 #define BOMBJACK_JOYSTICK_DOWN (1<<3)
 #define BOMBJACK_JOYSTICK_BUTTON (1<<4)
 
-/* system bits (bombjack_t.main.sys) */
-#define BOMBJACK_SYS_P1_COIN    (1<<0)      /* player 1 coin slot */
-#define BOMBJACK_SYS_P2_COIN    (1<<1)      /* player 2 coin slot*/
-#define BOMBJACK_SYS_P1_START   (1<<2)      /* player 1 start button */
-#define BOMBJACK_SYS_P2_START   (1<<2)      /* player 2 start button */
+// system bits (bombjack_t.main.sys)
+#define BOMBJACK_SYS_P1_COIN    (1<<0)      // player 1 coin slot
+#define BOMBJACK_SYS_P2_COIN    (1<<1)      // player 2 coin slot
+#define BOMBJACK_SYS_P1_START   (1<<2)      // player 1 start button
+#define BOMBJACK_SYS_P2_START   (1<<2)      // player 2 start button
 
-/* DIP switches 1 (bombjack.main.dsw1) */
+// DIP switches 1 (bombjack.main.dsw1)
 #define BOMBJACK_DSW1_P1_MASK           (3)
 #define BOMBJACK_DSW1_P1_1COIN_1PLAY    (0)
 #define BOMBJACK_DSW1_P1_1COIN_2PLAY    (1)
@@ -100,7 +102,7 @@ extern "C" {
 #define BOMBJACK_DSW1_DEMOSOUND_OFF     (0)
 #define BOMBJACK_DSW1_DEMOSOUND_ON      (1<<7)
 
-/* DIP switches 2 (bombjack.main.dsw2) */
+// DIP switches 2 (bombjack.main.dsw2)
 #define BOMBJACK_DSW2_BIRDSPEED_MASK        (3<<3)
 #define BOMBJACK_DSW2_BIRDSPEED_EASY        (0)
 #define BOMBJACK_DSW2_BIRDSPEED_MODERATE    (1<<3)
@@ -117,90 +119,100 @@ extern "C" {
 #define BOMBJACK_DSW2_SPECIALCOIN_EASY      (0)
 #define BOMBJACK_DSW2_SPECIALCOIN_HARD      (1<<7)
 
-/* default DIP-switch configuration */
+// default DIP-switch configuration
 #define BOMBJACK_DSW1_DEFAULT (BOMBJACK_DSW1_CABINET_UPRIGHT|BOMBJACK_DSW1_DEMOSOUND_ON)
 #define BOMBJACK_DSW2_DEFAULT (BOMBJACK_DSW2_DIFFICULTY_EASY)
 
-/* audio sample-data callback */
-typedef void (*bombjack_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-
-/* configuration parameters for bombjack_init() */
+// audio callback
 typedef struct {
-    /* video output config */
-    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes */
-    int pixel_buffer_size;      /* size of the pixel buffer in bytes */
-
-    /* optional user-data for audio callback */
+    void (*func)(const float* samples, int num_samples, void* user_data);
     void* user_data;
+} bombjack_audio_callback_t;
 
-    /* audio output config (if you don't want audio, set audio_cb to zero) */
-    bombjack_audio_callback_t audio_cb;     /* called when audio_num_samples are ready */
-    int audio_num_samples;                  /* default is BOMBJACK_DEFAULT_AUDIO_SAMPLES */
-    int audio_sample_rate;                  /* playback sample rate, default is 44100 */
-    float audio_volume;                     /* audio volume, 0.0..1.0, default is 1.0 */
+// debugging hook definitions
+typedef void (*bombjack_debug_func_t)(void* user_data, uint64_t pins);
+typedef struct {
+    struct {
+        bombjack_debug_func_t func;
+        void* user_data;
+    } callback;
+    bool* stopped;
+} bombjack_debug_t;
 
-    /* ROM images */
-    const void* rom_main_0000_1FFF;     /* main-board ROM 0x0000..0x1FFF */
-    const void* rom_main_2000_3FFF;     /* main-board ROM 0x2000..0x3FFF */
-    const void* rom_main_4000_5FFF;     /* main-board ROM 0x4000..0x5FFF */
-    const void* rom_main_6000_7FFF;     /* main-board ROM 0x6000..0x7FFF */
-    const void* rom_main_C000_DFFF;     /* main-board ROM 0xC000..0xDFFF */
-    const void* rom_sound_0000_1FFF;    /* sound-board ROM 0x0000..0x2000 */
-    const void* rom_chars_0000_0FFF;    /* char ROM 0x0000..0x0FFF */
-    const void* rom_chars_1000_1FFF;    /* char ROM 0x1000..0x1FFF */
-    const void* rom_chars_2000_2FFF;    /* char ROM 0x2000..0x2FFF */
-    const void* rom_tiles_0000_1FFF;    /* tile ROM 0x0000..0x1FFF */
-    const void* rom_tiles_2000_3FFF;    /* tile ROM 0x2000..0x3FFF */
-    const void* rom_tiles_4000_5FFF;    /* tile ROM 0x4000..0x5FFF */
-    const void* rom_sprites_0000_1FFF;  /* sprite ROM 0x0000..0x1FFF */
-    const void* rom_sprites_2000_3FFF;  /* sprite ROM 0x2000..0x3FFF */
-    const void* rom_sprites_4000_5FFF;  /* sprite ROM 0x4000..0x5FFF */
-    const void* rom_maps_0000_0FFF;     /* map ROM 0x0000..0x0FFF */
-    int rom_main_0000_1FFF_size;
-    int rom_main_2000_3FFF_size;
-    int rom_main_4000_5FFF_size;
-    int rom_main_6000_7FFF_size;
-    int rom_main_C000_DFFF_size;
-    int rom_sound_0000_1FFF_size;
-    int rom_chars_0000_0FFF_size;
-    int rom_chars_1000_1FFF_size;
-    int rom_chars_2000_2FFF_size;
-    int rom_tiles_0000_1FFF_size;
-    int rom_tiles_2000_3FFF_size;
-    int rom_tiles_4000_5FFF_size;
-    int rom_sprites_0000_1FFF_size;
-    int rom_sprites_2000_3FFF_size;
-    int rom_sprites_4000_5FFF_size;
-    int rom_maps_0000_0FFF_size;
+typedef struct {
+    const void* ptr;
+    size_t size;
+} bombjack_rom_image_t;
+
+// configuration parameters for bombjack_init()
+typedef struct {
+    // optional debugging hook
+    bombjack_debug_t debug;
+
+    // video output config
+    struct {
+        void* ptr;      // pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes
+        size_t size;    // size of the pixel buffer in bytes
+    } pixel_buffer;
+
+    // audio output config (if you don't want audio, set audio.callback.func to zero)
+    struct {
+        bombjack_audio_callback_t callback; // called when audio_num_samples are ready
+        int num_samples;                    // default is BOMBJACK_DEFAULT_AUDIO_SAMPLES
+        int sample_rate;                    // playback sample rate, default is 44100
+        float volume;                       // audio volume, 0.0..1.0, default is 1.0
+    } audio;
+
+    // ROM images
+    struct {
+        bombjack_rom_image_t main_0000_1FFF;    // main-board ROM 0x0000..0x1FFF
+        bombjack_rom_image_t main_2000_3FFF;    // main-board ROM 0x2000..0x3FFF
+        bombjack_rom_image_t main_4000_5FFF;    // main-board ROM 0x4000..0x5FFF
+        bombjack_rom_image_t main_6000_7FFF;    // main-board ROM 0x6000..0x7FFF
+        bombjack_rom_image_t main_C000_DFFF;    // main-board ROM 0xC000..0xDFFF
+        bombjack_rom_image_t sound_0000_1FFF;   // sound-board ROM 0x0000..0x2000
+        bombjack_rom_image_t chars_0000_0FFF;   // char ROM 0x0000..0x0FFF
+        bombjack_rom_image_t chars_1000_1FFF;   // char ROM 0x1000..0x1FFF
+        bombjack_rom_image_t chars_2000_2FFF;   // char ROM 0x2000..0x2FFF
+        bombjack_rom_image_t tiles_0000_1FFF;   // tile ROM 0x0000..0x1FFF
+        bombjack_rom_image_t tiles_2000_3FFF;   // tile ROM 0x2000..0x3FFF
+        bombjack_rom_image_t tiles_4000_5FFF;   // tile ROM 0x4000..0x5FFF
+        bombjack_rom_image_t sprites_0000_1FFF; // sprite ROM 0x0000..0x1FFF
+        bombjack_rom_image_t sprites_2000_3FFF; // sprite ROM 0x2000..0x3FFF
+        bombjack_rom_image_t sprites_4000_5FFF; // sprite ROM 0x4000..0x5FFF
+        bombjack_rom_image_t maps_0000_0FFF;    // map ROM 0x0000..0x0FFF
+    } roms;
 } bombjack_desc_t;
 
-/* the whole Bomb Jack arcade machine state */
+// the whole Bomb Jack arcade machine state
 typedef struct {
-    bool valid;
     struct {
-        z80_t cpu;
-        clk_t clk;
-        uint8_t p1;     /* joystick 1 state */
-        uint8_t p2;     /* joystick 2 state */
-        uint8_t sys;            /* coins and start buttons */
-        uint8_t dsw1;           /* dip-switches 1 */
-        uint8_t dsw2;           /* dip-switches 2 */
-        uint8_t nmi_mask;       /* if 0, no NMIs are generated */
-        uint8_t bg_image;       /* current background image */
+        alignas(64) z80_t cpu;
+        uint8_t p1;             // joystick 1 state
+        uint8_t p2;             // joystick 2 state
+        uint8_t sys;            // coins and start buttons
+        uint8_t dsw1;           // dip-switches 1
+        uint8_t dsw2;           // dip-switches 2
+        uint8_t nmi_mask;       // if 0, no NMIs are generated
+        uint8_t bg_image;       // current background image
         int vsync_count;
         int vblank_count;
         mem_t mem;
         uint32_t palette[128];
+        uint64_t pins;
     } mainboard;
     struct {
-        z80_t cpu;
-        clk_t clk;
+        alignas(64) z80_t cpu;
         ay38910_t psg[3];
         uint32_t tick_count;
         int vsync_count;
         mem_t mem;
+        uint64_t pins;
     } soundboard;
-    uint8_t sound_latch;            /* shared latch, written by main board, read by sound board */
+    uint8_t sound_latch;        // shared latch, written by main board, read by sound board
+
+    bool valid;
+
     uint8_t main_ram[0x1C00];
     uint8_t sound_ram[0x0400];
     uint8_t rom_main[5][0x2000];
@@ -209,8 +221,7 @@ typedef struct {
     uint8_t rom_tiles[3][0x2000];
     uint8_t rom_sprites[3][0x2000];
     uint8_t rom_maps[1][0x1000];
-    void* user_data;
-    /* audio and video 'rendering' */
+
     struct {
         bombjack_audio_callback_t callback;
         int num_samples;
@@ -220,6 +231,7 @@ typedef struct {
     } audio;
     uint32_t* pixel_buffer;
     struct {
+        bombjack_debug_t debug;
         bool draw_background_layer;
         bool draw_foreground_layer;
         bool draw_sprite_layer;
@@ -227,22 +239,18 @@ typedef struct {
     } dbg;
 } bombjack_t;
 
-/* initialize a new bombjack instance */
+// initialize a new bombjack instance
 void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc);
-/* discard a bombjack instance */
+// discard a bombjack instance
 void bombjack_discard(bombjack_t* sys);
-/* reset a bombjack instance */
+// reset a bombjack instance
 void bombjack_reset(bombjack_t* sys);
-/* run bombjack instance for given amount of microseconds */
-void bombjack_exec(bombjack_t* sys, uint32_t micro_seconds);
-/* decode video to pixel buffer, must be called once per frame */
-void bombjack_decode_video(bombjack_t* sys);
-/* get the standard framebuffer width and height in pixels */
+// run bombjack instance for given amount of microseconds
+uint32_t bombjack_exec(bombjack_t* sys, uint32_t micro_seconds);
+// get the standard framebuffer width and height in pixels
 int bombjack_std_display_width(void);
 int bombjack_std_display_height(void);
-/* get the maximum framebuffer size in number of bytes */
-int bombjack_max_display_size(void);
-/* get the current framebuffer width and height in pixels */
+// get the current framebuffer width and height in pixels
 int bombjack_display_width(bombjack_t* sys);
 int bombjack_display_height(bombjack_t* sys);
 
@@ -267,54 +275,55 @@ int bombjack_display_height(bombjack_t* sys);
 #define _BOMBJACK_DISPLAY_HEIGHT (256)
 #define _BOMBJACK_DISPLAY_SIZE (_BOMBJACK_DISPLAY_WIDTH*_BOMBJACK_DISPLAY_HEIGHT*4)
 
-static uint64_t _bombjack_tick_mainboard(int num, uint64_t pins, void* user_data);
-static uint64_t _bombjack_tick_soundboard(int num, uint64_t pins, void* user_data);
-
 #define _bombjack_def(val, def) (val == 0 ? def : val)
 
 void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    
+    CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _BOMBJACK_DISPLAY_SIZE)));
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
+
     memset(sys, 0, sizeof(bombjack_t));
     sys->valid = true;
+    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
+    sys->dbg.debug = desc->debug;
     sys->dbg.draw_background_layer = true;
     sys->dbg.draw_foreground_layer = true;
     sys->dbg.draw_sprite_layer = true;
     sys->dbg.clear_background_layer = true;
 
     /* copy over ROM images */
-    CHIPS_ASSERT(desc->rom_main_0000_1FFF && (desc->rom_main_0000_1FFF_size == sizeof(sys->rom_main[0])));
-    CHIPS_ASSERT(desc->rom_main_2000_3FFF && (desc->rom_main_2000_3FFF_size == sizeof(sys->rom_main[1])));
-    CHIPS_ASSERT(desc->rom_main_4000_5FFF && (desc->rom_main_4000_5FFF_size == sizeof(sys->rom_main[2])));
-    CHIPS_ASSERT(desc->rom_main_6000_7FFF && (desc->rom_main_6000_7FFF_size == sizeof(sys->rom_main[3])));
-    CHIPS_ASSERT(desc->rom_main_C000_DFFF && (desc->rom_main_C000_DFFF_size == sizeof(sys->rom_main[4])));
-    CHIPS_ASSERT(desc->rom_sound_0000_1FFF && (desc->rom_sound_0000_1FFF_size == sizeof(sys->rom_sound[0])));
-    CHIPS_ASSERT(desc->rom_chars_0000_0FFF && (desc->rom_chars_0000_0FFF_size == sizeof(sys->rom_chars[0])));
-    CHIPS_ASSERT(desc->rom_chars_1000_1FFF && (desc->rom_chars_1000_1FFF_size == sizeof(sys->rom_chars[1])));
-    CHIPS_ASSERT(desc->rom_chars_2000_2FFF && (desc->rom_chars_2000_2FFF_size == sizeof(sys->rom_chars[2])));
-    CHIPS_ASSERT(desc->rom_tiles_0000_1FFF && (desc->rom_tiles_0000_1FFF_size == sizeof(sys->rom_tiles[0])));
-    CHIPS_ASSERT(desc->rom_tiles_2000_3FFF && (desc->rom_tiles_2000_3FFF_size == sizeof(sys->rom_tiles[1])));
-    CHIPS_ASSERT(desc->rom_tiles_4000_5FFF && (desc->rom_tiles_4000_5FFF_size == sizeof(sys->rom_tiles[2])));
-    CHIPS_ASSERT(desc->rom_sprites_0000_1FFF && (desc->rom_sprites_0000_1FFF_size == sizeof(sys->rom_sprites[0])));
-    CHIPS_ASSERT(desc->rom_sprites_2000_3FFF && (desc->rom_sprites_2000_3FFF_size == sizeof(sys->rom_sprites[1])));
-    CHIPS_ASSERT(desc->rom_sprites_4000_5FFF && (desc->rom_sprites_4000_5FFF_size == sizeof(sys->rom_sprites[2])));
-    CHIPS_ASSERT(desc->rom_maps_0000_0FFF && (desc->rom_maps_0000_0FFF_size == sizeof(sys->rom_maps[0])));
-    memcpy(sys->rom_main[0], desc->rom_main_0000_1FFF, sizeof(sys->rom_main[0]));
-    memcpy(sys->rom_main[1], desc->rom_main_2000_3FFF, sizeof(sys->rom_main[1]));
-    memcpy(sys->rom_main[2], desc->rom_main_4000_5FFF, sizeof(sys->rom_main[2]));
-    memcpy(sys->rom_main[3], desc->rom_main_6000_7FFF, sizeof(sys->rom_main[3]));
-    memcpy(sys->rom_main[4], desc->rom_main_C000_DFFF, sizeof(sys->rom_main[4]));
-    memcpy(sys->rom_sound[0], desc->rom_sound_0000_1FFF, sizeof(sys->rom_sound[0]));
-    memcpy(sys->rom_chars[0], desc->rom_chars_0000_0FFF, sizeof(sys->rom_chars[0]));
-    memcpy(sys->rom_chars[1], desc->rom_chars_1000_1FFF, sizeof(sys->rom_chars[1]));
-    memcpy(sys->rom_chars[2], desc->rom_chars_2000_2FFF, sizeof(sys->rom_chars[2]));
-    memcpy(sys->rom_tiles[0], desc->rom_tiles_0000_1FFF, sizeof(sys->rom_tiles[0]));
-    memcpy(sys->rom_tiles[1], desc->rom_tiles_2000_3FFF, sizeof(sys->rom_tiles[1]));
-    memcpy(sys->rom_tiles[2], desc->rom_tiles_4000_5FFF, sizeof(sys->rom_tiles[2]));
-    memcpy(sys->rom_sprites[0], desc->rom_sprites_0000_1FFF, sizeof(sys->rom_sprites[0]));
-    memcpy(sys->rom_sprites[1], desc->rom_sprites_2000_3FFF, sizeof(sys->rom_sprites[1]));
-    memcpy(sys->rom_sprites[2], desc->rom_sprites_4000_5FFF, sizeof(sys->rom_sprites[2]));
-    memcpy(sys->rom_maps[0], desc->rom_maps_0000_0FFF, sizeof(sys->rom_maps[0]));
+    CHIPS_ASSERT(desc->roms.main_0000_1FFF.ptr && (desc->roms.main_0000_1FFF.size == sizeof(sys->rom_main[0])));
+    CHIPS_ASSERT(desc->roms.main_2000_3FFF.ptr && (desc->roms.main_2000_3FFF.size == sizeof(sys->rom_main[1])));
+    CHIPS_ASSERT(desc->roms.main_4000_5FFF.ptr && (desc->roms.main_4000_5FFF.size == sizeof(sys->rom_main[2])));
+    CHIPS_ASSERT(desc->roms.main_6000_7FFF.ptr && (desc->roms.main_6000_7FFF.size == sizeof(sys->rom_main[3])));
+    CHIPS_ASSERT(desc->roms.main_C000_DFFF.ptr && (desc->roms.main_C000_DFFF.size == sizeof(sys->rom_main[4])));
+    CHIPS_ASSERT(desc->roms.sound_0000_1FFF.ptr && (desc->roms.sound_0000_1FFF.size == sizeof(sys->rom_sound[0])));
+    CHIPS_ASSERT(desc->roms.chars_0000_0FFF.ptr && (desc->roms.chars_0000_0FFF.size == sizeof(sys->rom_chars[0])));
+    CHIPS_ASSERT(desc->roms.chars_1000_1FFF.ptr && (desc->roms.chars_1000_1FFF.size == sizeof(sys->rom_chars[1])));
+    CHIPS_ASSERT(desc->roms.chars_2000_2FFF.ptr && (desc->roms.chars_2000_2FFF.size == sizeof(sys->rom_chars[2])));
+    CHIPS_ASSERT(desc->roms.tiles_0000_1FFF.ptr && (desc->roms.tiles_0000_1FFF.size == sizeof(sys->rom_tiles[0])));
+    CHIPS_ASSERT(desc->roms.tiles_2000_3FFF.ptr && (desc->roms.tiles_2000_3FFF.size == sizeof(sys->rom_tiles[1])));
+    CHIPS_ASSERT(desc->roms.tiles_4000_5FFF.ptr && (desc->roms.tiles_4000_5FFF.size == sizeof(sys->rom_tiles[2])));
+    CHIPS_ASSERT(desc->roms.sprites_0000_1FFF.ptr && (desc->roms.sprites_0000_1FFF.size == sizeof(sys->rom_sprites[0])));
+    CHIPS_ASSERT(desc->roms.sprites_2000_3FFF.ptr && (desc->roms.sprites_2000_3FFF.size == sizeof(sys->rom_sprites[1])));
+    CHIPS_ASSERT(desc->roms.sprites_4000_5FFF.ptr && (desc->roms.sprites_4000_5FFF.size == sizeof(sys->rom_sprites[2])));
+    CHIPS_ASSERT(desc->roms.maps_0000_0FFF.ptr && (desc->roms.maps_0000_0FFF.size == sizeof(sys->rom_maps[0])));
+    memcpy(sys->rom_main[0], desc->roms.main_0000_1FFF.ptr, sizeof(sys->rom_main[0]));
+    memcpy(sys->rom_main[1], desc->roms.main_2000_3FFF.ptr, sizeof(sys->rom_main[1]));
+    memcpy(sys->rom_main[2], desc->roms.main_4000_5FFF.ptr, sizeof(sys->rom_main[2]));
+    memcpy(sys->rom_main[3], desc->roms.main_6000_7FFF.ptr, sizeof(sys->rom_main[3]));
+    memcpy(sys->rom_main[4], desc->roms.main_C000_DFFF.ptr, sizeof(sys->rom_main[4]));
+    memcpy(sys->rom_sound[0], desc->roms.sound_0000_1FFF.ptr, sizeof(sys->rom_sound[0]));
+    memcpy(sys->rom_chars[0], desc->roms.chars_0000_0FFF.ptr, sizeof(sys->rom_chars[0]));
+    memcpy(sys->rom_chars[1], desc->roms.chars_1000_1FFF.ptr, sizeof(sys->rom_chars[1]));
+    memcpy(sys->rom_chars[2], desc->roms.chars_2000_2FFF.ptr, sizeof(sys->rom_chars[2]));
+    memcpy(sys->rom_tiles[0], desc->roms.tiles_0000_1FFF.ptr, sizeof(sys->rom_tiles[0]));
+    memcpy(sys->rom_tiles[1], desc->roms.tiles_2000_3FFF.ptr, sizeof(sys->rom_tiles[1]));
+    memcpy(sys->rom_tiles[2], desc->roms.tiles_4000_5FFF.ptr, sizeof(sys->rom_tiles[2]));
+    memcpy(sys->rom_sprites[0], desc->roms.sprites_0000_1FFF.ptr, sizeof(sys->rom_sprites[0]));
+    memcpy(sys->rom_sprites[1], desc->roms.sprites_2000_3FFF.ptr, sizeof(sys->rom_sprites[1]));
+    memcpy(sys->rom_sprites[2], desc->roms.sprites_4000_5FFF.ptr, sizeof(sys->rom_sprites[2]));
+    memcpy(sys->rom_maps[0], desc->roms.maps_0000_0FFF.ptr, sizeof(sys->rom_maps[0]));
 
     /* The VSYNC/VBLANK mainly controls the interrupts (Bombjack generally
         uses NMIs for simplicity. The mainboard's NMI is connected to the
@@ -333,31 +342,22 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     sys->mainboard.vblank_count = 0;
     sys->soundboard.vsync_count = _BOMBJACK_VSYNC_PERIOD_3MHZ;
 
-    /* setup the main board (4 MHz Z80) */
-    clk_init(&sys->mainboard.clk, _BOMBJACK_MAINBOARD_FREQUENCY);
-    z80_desc_t cpu_desc;
-    memset(&cpu_desc, 0, sizeof(cpu_desc));
-    cpu_desc.tick_cb = _bombjack_tick_mainboard;
-    cpu_desc.user_data = sys;
-    z80_init(&sys->mainboard.cpu, &cpu_desc);
+    // setup the main board (4 MHz Z80)
+    sys->mainboard.pins = z80_init(&sys->mainboard.cpu);
 
-    /* setup the sound board (3 MHz Z80 and 3x 1.5 MHz AY-38910) */
-    clk_init(&sys->soundboard.clk, _BOMBJACK_SOUNDBOARD_FREQUENCY);
-    memset(&cpu_desc, 0, sizeof(cpu_desc));
-    cpu_desc.tick_cb = _bombjack_tick_soundboard;
-    cpu_desc.user_data = sys;
-    z80_init(&sys->soundboard.cpu, &cpu_desc);
-    ay38910_desc_t psg_desc;
-    memset(&psg_desc, 0, sizeof(psg_desc));
-    psg_desc.type = AY38910_TYPE_8910;
-    psg_desc.tick_hz = 1500000;
-    psg_desc.sound_hz = _bombjack_def(desc->audio_sample_rate, 44100);
-    psg_desc.magnitude = 0.2f;
+    // setup the sound board (3 MHz Z80 and 3x 1.5 MHz AY-38910)
+    sys->soundboard.pins = z80_init(&sys->soundboard.cpu);
+    ay38910_desc_t psg_desc = {
+        .type = AY38910_TYPE_8910,
+        .tick_hz = 1500000,
+        .sound_hz = _bombjack_def(desc->audio.sample_rate, 44100),
+        .magnitude = 0.2f,
+    };
     for (int i = 0; i < 3; i++) {
         ay38910_init(&sys->soundboard.psg[i], &psg_desc);
     }
 
-    /* dip switches */
+    // dip switches
     sys->mainboard.dsw1 = BOMBJACK_DSW1_DEFAULT;
     sys->mainboard.dsw2 = BOMBJACK_DSW2_DEFAULT;
 
@@ -391,46 +391,21 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     mem_map_ram(&sys->mainboard.mem, 0, 0x8000, 0x1C00, sys->main_ram);
     mem_map_rom(&sys->mainboard.mem, 0, 0xC000, 0x2000, sys->rom_main[4]);
 
-    /* sound board memory map */
+    // sound board memory map
     mem_init(&sys->soundboard.mem);
     mem_map_rom(&sys->soundboard.mem, 0, 0x0000, 0x2000, sys->rom_sound[0]);
     mem_map_ram(&sys->soundboard.mem, 0, 0x4000, 0x0400, sys->sound_ram);
 
-    /* move over audio- and video config parameters */
-    CHIPS_ASSERT(desc->audio_num_samples <= BOMBJACK_MAX_AUDIO_SAMPLES);
-    sys->audio.callback = desc->audio_cb;
-    sys->audio.num_samples = _bombjack_def(desc->audio_num_samples, BOMBJACK_DEFAULT_AUDIO_SAMPLES);
-    sys->audio.volume = _bombjack_def(desc->audio_volume, 1.0f);
-    sys->user_data = desc->user_data;
-    CHIPS_ASSERT((0 == desc->pixel_buffer) || (desc->pixel_buffer && (desc->pixel_buffer_size >= _BOMBJACK_DISPLAY_SIZE)));
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer;
+    // move over audio-output config
+    CHIPS_ASSERT(desc->audio.num_samples <= BOMBJACK_MAX_AUDIO_SAMPLES);
+    sys->audio.callback = desc->audio.callback;
+    sys->audio.num_samples = _bombjack_def(desc->audio.num_samples, BOMBJACK_DEFAULT_AUDIO_SAMPLES);
+    sys->audio.volume = _bombjack_def(desc->audio.volume, 1.0f);
 }
 
 void bombjack_discard(bombjack_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
-}
-
-int bombjack_std_display_width(void) {
-    return _BOMBJACK_DISPLAY_WIDTH;
-}
-
-int bombjack_std_display_height(void) {
-    return _BOMBJACK_DISPLAY_HEIGHT;
-}
-
-int bombjack_display_size(void) {
-    return _BOMBJACK_DISPLAY_SIZE;
-}
-
-int bombjack_display_width(bombjack_t* sys) {
-    (void)sys;
-    return _BOMBJACK_DISPLAY_WIDTH;
-}
-
-int bombjack_display_height(bombjack_t* sys) {
-    (void)sys;
-    return _BOMBJACK_DISPLAY_HEIGHT;
 }
 
 void bombjack_reset(bombjack_t* sys) {
@@ -439,38 +414,6 @@ void bombjack_reset(bombjack_t* sys) {
     z80_reset(&sys->soundboard.cpu);
     for (int i = 0; i < 3; i++) {
         ay38910_reset(&sys->soundboard.psg[i]);
-    }
-}
-
-void bombjack_exec(bombjack_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    /* Run the main board and sound board interleaved for half a frame.
-       This simplifies the communication via the sound latch (the main CPU
-       writes a command byte to the sound latch, the sound board reads
-       the command latch in its interrupt service routine.
-
-       The main board issues at most one command per 60Hz frame, but since the
-       host machine is also running at roughly 60 Hz it may happen that the
-       main board writes 2 sound commands per host frame. For this reason
-       run the 2 boards interleaved for half a frame, so it is guaranteed
-       that at most one sound command can be written by the main board
-       before the sound board is ticked (that way we don't need to implement
-       a complicated command queue.
-    */
-    const uint32_t slice_us = micro_seconds/2;
-    for (int i = 0; i < 2; i++) {
-        /* tick the main board */
-        {
-            uint32_t ticks_to_run = clk_ticks_to_run(&sys->mainboard.clk, slice_us);
-            uint32_t ticks_executed = z80_exec(&sys->mainboard.cpu, ticks_to_run);
-            clk_ticks_executed(&sys->mainboard.clk, ticks_executed);
-        }
-        /* tick the sound board */
-        {
-            uint32_t ticks_to_run = clk_ticks_to_run(&sys->soundboard.clk, slice_us);
-            uint32_t ticks_executed = z80_exec(&sys->soundboard.cpu, ticks_to_run);
-            clk_ticks_executed(&sys->soundboard.clk, ticks_executed);
-        }
     }
 }
 
@@ -486,12 +429,12 @@ static inline void _bombjack_update_palette_cache(bombjack_t* sys, uint16_t addr
     int pal_index = (addr - 0x9C00) / 2;
     uint32_t c = sys->mainboard.palette[pal_index];
     if (addr & 1) {
-        /* uneven addresses are the xxxxBBBB part */
+        // uneven addresses are the xxxxBBBB part
         uint8_t b = (data & 0x0F) | ((data<<4)&0xF0);
         c = 0xFF000000 | (c & 0x0000FFFF) | (b<<16);
     }
     else {
-        /* even addresses are the GGGGRRRR part */
+        // even addresses are the GGGGRRRR part
         uint8_t g = (data & 0xF0) | ((data>>4)&0x0F);
         uint8_t r = (data & 0x0F) | ((data<<4)&0xF0);
         c = 0xFF000000 | (c & 0x00FF0000) | (g<<8) | r;
@@ -499,7 +442,7 @@ static inline void _bombjack_update_palette_cache(bombjack_t* sys, uint16_t addr
     sys->mainboard.palette[pal_index] = c;
 }
 
-/* main board tick callback
+/* main board tick function
 
     Bomb Jack uses memory mapped IO (the Z80's IORQ pin isn't connected).
 
@@ -562,17 +505,15 @@ static inline void _bombjack_update_palette_cache(bombjack_t* sys, uint16_t addr
     B800:       sound command latch,
 
 */
-static uint64_t _bombjack_tick_mainboard(int num_ticks, uint64_t pins, void* user_data) {
-    bombjack_t* sys = (bombjack_t*) user_data;
-
-    /* activate NMI pin during VBLANK */
-    sys->mainboard.vsync_count -= num_ticks;
+static uint64_t _bombjack_tick_mainboard(bombjack_t* sys, uint64_t pins) {
+    // activate NMI pin during VBLANK
+    sys->mainboard.vsync_count--;
     if (sys->mainboard.vsync_count < 0) {
         sys->mainboard.vsync_count += _BOMBJACK_VSYNC_PERIOD_4MHZ;
         sys->mainboard.vblank_count = _BOMBJACK_VBLANK_DURATION_4MHZ;
     }
     if (sys->mainboard.vblank_count != 0) {
-        sys->mainboard.vblank_count -= num_ticks;
+        sys->mainboard.vblank_count--;
         if (sys->mainboard.vblank_count < 0) {
             sys->mainboard.vblank_count = 0;
         }
@@ -584,6 +525,9 @@ static uint64_t _bombjack_tick_mainboard(int num_ticks, uint64_t pins, void* use
         pins &= ~Z80_NMI;
     }
 
+    // tick the CPU
+    pins = z80_tick(&sys->mainboard.cpu, pins);
+
     /* handle memory requests
 
         In hardware, the address decoding is mostly implemented
@@ -593,34 +537,34 @@ static uint64_t _bombjack_tick_mainboard(int num_ticks, uint64_t pins, void* use
     uint16_t addr = Z80_GET_ADDR(pins);
     if (pins & Z80_MREQ) {
         if (pins & Z80_WR) {
-            /* memory write access */
+            // memory write access
             uint8_t data = Z80_GET_DATA(pins);
             if ((addr >= 0x8000) && (addr < 0x9900)) {
-                /* regular RAM, video/color RAM, sprite RAM */
+                // regular RAM, video/color RAM, sprite RAM
                 mem_wr(&sys->mainboard.mem, addr, data);
             }
             else if ((addr >= 0x9C00) && (addr < 0x9D00)) {
-                /* color palette */
+                // color palette
                 _bombjack_update_palette_cache(sys, addr, data);
             }
             else if (addr == 0x9E00) {
-                /* background image selection */
+                // background image selection
                 sys->mainboard.bg_image = data;
             }
             else if (addr == 0xB000) {
-                /* NMI mask */
+                // NMI mask
                 sys->mainboard.nmi_mask = data;
             }
-            /* FIXME: 0xB004: flip screen */
+            // FIXME: 0xB004: flip screen
             else if (addr == 0xB800) {
-                /* shared sound latch */
+                // shared sound latch
                 sys->sound_latch = data;
             }
         }
         else if (pins & Z80_RD) {
-            /* memory read access */
+            // memory read access
             if ((addr >= 0xB000) && (addr <= 0xB005)) {
-                /* IO ports */
+                // IO ports
                 switch (addr) {
                     case 0xB000: Z80_SET_DATA(pins, sys->mainboard.p1); break;
                     case 0xB001: Z80_SET_DATA(pins, sys->mainboard.p2); break;
@@ -630,16 +574,16 @@ static uint64_t _bombjack_tick_mainboard(int num_ticks, uint64_t pins, void* use
                 }
             }
             else {
-                /* regular memory */
+                // regular memory
                 Z80_SET_DATA(pins, mem_rd(&sys->mainboard.mem, addr));
             }
         }
     }
-    /* the Z80 IORQ pin isn't connected, so no IO instructions need to be handled */
-    return pins & Z80_PIN_MASK;
+    // the Z80 IORQ pin isn't connected, so no IO instructions need to be handled
+    return pins;
 }
 
-/* sound board tick callback
+/* sound board tick function
 
     The sound board receives commands from the main board via the shared
     sound command latch (mapped to address 0xB800 on the main board, and
@@ -670,57 +614,56 @@ static uint64_t _bombjack_tick_mainboard(int num_ticks, uint64_t pins, void* use
     10 .. 11:       2nd AY-3-8910
     80 .. 81:       3rd AY-3-8910
 */
-static uint64_t _bombjack_tick_soundboard(int num_ticks, uint64_t pins, void* user_data) {
-    bombjack_t* sys = (bombjack_t*) user_data;
-
+static uint64_t _bombjack_tick_soundboard(bombjack_t* sys, uint64_t pins) {
     /* vsync triggers a flip-flop connected to the CPU's NMI, the flip-flop
        is reset on a read from address 0x6000 (this read happens in the
        interrupt service routine
     */
-    sys->soundboard.vsync_count -= num_ticks;
+    sys->soundboard.vsync_count--;
     if (sys->soundboard.vsync_count < 0) {
         sys->soundboard.vsync_count += _BOMBJACK_VSYNC_PERIOD_3MHZ;
         pins |= Z80_NMI;
     }
 
-    /* tick the 3 sound chips at half frequency */
-    for (int i = 0; i < num_ticks; i++) {
-        if (sys->soundboard.tick_count++ & 1) {
-            ay38910_tick(&sys->soundboard.psg[2]);
-            ay38910_tick(&sys->soundboard.psg[1]);
-            if (ay38910_tick(&sys->soundboard.psg[0])) {
-                /* new sample ready */
-                float s = sys->soundboard.psg[0].sample +
-                          sys->soundboard.psg[1].sample + 
-                          sys->soundboard.psg[2].sample;
-                sys->audio.sample_buffer[sys->audio.sample_pos++] = s * sys->audio.volume;
-                if (sys->audio.sample_pos == sys->audio.num_samples) {
-                    if (sys->audio.callback) {
-                        sys->audio.callback(sys->audio.sample_buffer, sys->audio.num_samples, sys->user_data);
-                    }
-                    sys->audio.sample_pos = 0;
+    // tick the CPU
+    pins = z80_tick(&sys->soundboard.cpu, pins);
+
+    // tick the 3 sound chips at half frequency
+    if (sys->soundboard.tick_count++ & 1) {
+        ay38910_tick(&sys->soundboard.psg[2]);
+        ay38910_tick(&sys->soundboard.psg[1]);
+        if (ay38910_tick(&sys->soundboard.psg[0])) {
+            // new sample ready
+            float s = sys->soundboard.psg[0].sample +
+                      sys->soundboard.psg[1].sample +
+                      sys->soundboard.psg[2].sample;
+            sys->audio.sample_buffer[sys->audio.sample_pos++] = s * sys->audio.volume;
+            if (sys->audio.sample_pos == sys->audio.num_samples) {
+                if (sys->audio.callback.func) {
+                    sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
                 }
+                sys->audio.sample_pos = 0;
             }
         }
     }
 
     const uint16_t addr = Z80_GET_ADDR(pins);
     if (pins & Z80_MREQ) {
-        /* memory requests */
+        // memory requests
         if (pins & Z80_RD) {
-            /* special case: read and clear sound latch and NMI flip-flop */
+            // special case: read and clear sound latch and NMI flip-flop
             if (addr == 0x6000) {
                 Z80_SET_DATA(pins, sys->sound_latch);
                 sys->sound_latch = 0;
                 pins &= ~Z80_NMI;
             }
             else {
-                /* regular memory read */
+                // regular memory read
                 Z80_SET_DATA(pins, mem_rd(&sys->soundboard.mem, addr));
             }
         }
         else if (pins & Z80_WR) {
-            /* regular memory write */
+            // regular memory write
             mem_wr(&sys->soundboard.mem, addr, Z80_GET_DATA(pins));
         }
     }
@@ -739,6 +682,8 @@ static uint64_t _bombjack_tick_soundboard(int num_ticks, uint64_t pins, void* us
             A0 is connected to BC1(!) (I guess that's an error in the
             schematics since these show BC2).
         */
+
+        // FIXME: ay38910_iorq() should be integrated into ay38910_tick()
         int psg_index = ((pins&Z80_A7)>>6) | ((pins&Z80_A4)>>4);
         if (psg_index < 4) {
             uint64_t psg_pins = (pins & Z80_PIN_MASK);
@@ -822,7 +767,7 @@ static void _bombjack_decode_background(bombjack_t* sys) {
     for (int y = 0; y < 16; y++) {
         for (int x = 0; x < 16; x++) {
             int addr = img_base_addr + (y * 16 + x);
-            /* 256 tiles */
+            // 256 tiles
             uint8_t tile_code = img_valid ? sys->rom_maps[0][addr] : 0;
             uint8_t attr = sys->rom_maps[0][addr + 0x0100];
             uint8_t color_block = (attr & 0x0F)<<3;
@@ -830,7 +775,7 @@ static void _bombjack_decode_background(bombjack_t* sys) {
             if (flip_y) {
                 ptr += 15*256;
             }
-            /* every tile is 32 bytes */
+            // every tile is 32 bytes
             int off = tile_code * 32;
             for (int yy = 0; yy < 16; yy++) {
                 uint16_t bm0 = BOMBJACK_GATHER16(sys->rom_tiles[0], off);
@@ -879,18 +824,18 @@ static void _bombjack_decode_background(bombjack_t* sys) {
 static void _bombjack_decode_foreground(bombjack_t* sys) {
     CHIPS_ASSERT(sys && sys->pixel_buffer);
     uint32_t* ptr = sys->pixel_buffer;
-    /* 32x32 tiles, each 8x8 */
+    // 32x32 tiles, each 8x8
     for (int y = 0; y < 32; y++) {
         for (int x = 0; x < 32; x++) {
             int addr = y * 32 + x;
-            /* char codes are at 0x9000, color codes at 0x9400, RAM starts at 0x8000 */
+            // char codes are at 0x9000, color codes at 0x9400, RAM starts at 0x8000
             uint8_t chr = sys->main_ram[(0x9000-0x8000) + addr];
             uint8_t clr = sys->main_ram[(0x9400-0x8000) + addr];
-            /* 512 foreground tiles, take 9th bit from color code */
+            // 512 foreground tiles, take 9th bit from color code
             int tile_code = chr | ((clr & 0x10)<<4);
-            /* 16 color blocks a 8 colors */
+            // 16 color blocks a 8 colors
             int color_block = (clr & 0x0F)<<3;
-            /* 8 bytes per char bitmap */
+            // 8 bytes per char bitmap
             int off = tile_code * 8;
             for (int yy = 0; yy < 8; yy++) {
                 /* 3 bit planes per char (8 colors per pixel within
@@ -942,9 +887,9 @@ static void _bombjack_decode_foreground(bombjack_t* sys) {
 static void _bombjack_decode_sprites(bombjack_t* sys) {
     CHIPS_ASSERT(sys && sys->pixel_buffer);
     uint32_t* dst = sys->pixel_buffer;
-    /* 24 hardware sprites, sprite 0 has highest priority */
+    // 24 hardware sprites, sprite 0 has highest priority
     for (int sprite_nr = 23; sprite_nr >= 0; sprite_nr--) {
-        /* sprite RAM starts at 0x9820, RAM starts at 0x8000 */
+        // sprite RAM starts at 0x9820, RAM starts at 0x8000
         int addr = (0x9820 - 0x8000) + sprite_nr*4;
         uint8_t b0 = sys->main_ram[addr + 0];
         uint8_t b1 = sys->main_ram[addr + 1];
@@ -952,14 +897,14 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
         uint8_t b3 = sys->main_ram[addr + 3];
         uint8_t color_block = (b1 & 0x0F)<<3;
 
-        /* screen is 90 degree rotated, so x and y are switched */
+        // screen is 90 degree rotated, so x and y are switched
         int px = b3;
         int sprite_code = b0 & 0x7F;
         if (b0 & 0x80) {
-            /* 32x32 'large' sprites (no flip-x/y needed) */
+            // 32x32 'large' sprites (no flip-x/y needed)
             int py = 225 - b2;
             uint32_t* ptr = dst + py*256 + px;
-            /* offset into sprite ROM to gather sprite bitmap pixels */
+            // offset into sprite ROM to gather sprite bitmap pixels
             int off = sprite_code * 128;
             for (int y = 0; y < 32; y++) {
                 uint32_t bm0 = BOMBJACK_GATHER32(sys->rom_sprites[0], off);
@@ -983,7 +928,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
             }
         }
         else {
-            /* 16*16 sprites are decoded like 16x16 background tiles */
+            // 16*16 sprites are decoded like 16x16 background tiles
             int py = 241 - b2;
             uint32_t* ptr = dst + py*256 + px;
             bool flip_x = (b1 & 0x80) != 0;
@@ -991,7 +936,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
             if (flip_x) {
                 ptr += 16*256;
             }
-            /* offset into sprite ROM to gather sprite bitmap pixels */
+            // offset into sprite ROM to gather sprite bitmap pixels
             int off = sprite_code * 32;
             for (int y = 0; y < 16; y++) {
                 uint16_t bm0 = BOMBJACK_GATHER16(sys->rom_sprites[0], off);
@@ -1025,7 +970,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
     }
 }
 
-void bombjack_decode_video(bombjack_t* sys) {
+static void _bombjack_decode_video(bombjack_t* sys) {
     if (sys->pixel_buffer) {
         if (sys->dbg.draw_background_layer) {
             _bombjack_decode_background(sys);
@@ -1046,4 +991,66 @@ void bombjack_decode_video(bombjack_t* sys) {
     }
 }
 
-#endif /* CHIPS_IMPL */
+uint32_t bombjack_exec(bombjack_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    /* Run the main board and sound board interleaved for half a frame.
+       This simplifies the communication via the sound latch (the main CPU
+       writes a command byte to the sound latch, the sound board reads
+       the command latch in its interrupt service routine.
+
+       The main board issues at most one command per 60Hz frame, but since the
+       host machine is also running at roughly 60 Hz it may happen that the
+       main board writes 2 sound commands per host frame. For this reason
+       run the 2 boards interleaved for half a frame, so it is guaranteed
+       that at most one sound command can be written by the main board
+       before the sound board is ticked (that way we don't need to implement
+       a complicated command queue.
+    */
+    const uint32_t slice_us = micro_seconds/2;
+    const uint32_t mainboard_num_ticks = clk_us_to_ticks(_BOMBJACK_MAINBOARD_FREQUENCY, slice_us);
+    const uint32_t soundboard_num_ticks = clk_us_to_ticks(_BOMBJACK_SOUNDBOARD_FREQUENCY, slice_us);
+    for (int i = 0; i < 2; i++) {
+        // tick the main board for one half frame
+        {
+            uint64_t pins = sys->mainboard.pins;
+            for (uint32_t tick = 0; tick < mainboard_num_ticks; tick++) {
+                pins = _bombjack_tick_mainboard(sys, pins);
+            }
+            sys->mainboard.pins = pins;
+        }
+        // tick the sound board for one half frame
+        {
+            uint64_t pins = sys->soundboard.pins;
+            for (uint32_t tick = 0; tick < soundboard_num_ticks; tick++) {
+                pins = _bombjack_tick_soundboard(sys, pins);
+            }
+            sys->soundboard.pins = pins;
+        }
+    }
+    _bombjack_decode_video(sys);
+    return 2 * (mainboard_num_ticks + soundboard_num_ticks);
+}
+
+int bombjack_std_display_width(void) {
+    return _BOMBJACK_DISPLAY_WIDTH;
+}
+
+int bombjack_std_display_height(void) {
+    return _BOMBJACK_DISPLAY_HEIGHT;
+}
+
+int bombjack_display_size(void) {
+    return _BOMBJACK_DISPLAY_SIZE;
+}
+
+int bombjack_display_width(bombjack_t* sys) {
+    (void)sys;
+    return _BOMBJACK_DISPLAY_WIDTH;
+}
+
+int bombjack_display_height(bombjack_t* sys) {
+    (void)sys;
+    return _BOMBJACK_DISPLAY_HEIGHT;
+}
+
+#endif // CHIPS_IMPL
