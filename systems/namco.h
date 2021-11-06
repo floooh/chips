@@ -658,12 +658,13 @@ static uint64_t _namco_tick(namco_t* sys, uint64_t pins) {
         if (pins & Z80_WR) {
             uint8_t data = Z80_GET_DATA(pins);
             if ((addr & 0xFF) == 0) {
-                // OUT to port 0: set interrupt vector
+                // OUT to port 0: set interrupt vector latch
                 sys->int_vector = data;
             }
         }
         else if (pins & Z80_M1) {
             // an interrupt handling machine cycle, set interrupt vector on data bus
+            // and clear the INT pin
             Z80_SET_DATA(pins, sys->int_vector);
             pins &= ~Z80_INT;
         }
