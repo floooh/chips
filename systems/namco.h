@@ -226,8 +226,6 @@ void namco_input_clear(namco_t* sys, uint32_t mask);
 // get the standard framebuffer width and height in pixels
 int namco_std_display_width(void);
 int namco_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-int namco_max_display_size(void);
 // get the current framebuffer width and height in pixels
 int namco_display_width(namco_t* sys);
 int namco_display_height(namco_t* sys);
