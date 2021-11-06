@@ -299,11 +299,11 @@ def build_pip(op: Op) -> int:
         if mcycle.type == 'fetch':
             tcycles([], mcycle.tcycles - 1)
         elif mcycle.type == 'mread':
-            tcycles([1,1,0], mcycle.tcycles)
+            tcycles([1,0,1], mcycle.tcycles)
         elif mcycle.type == 'mwrite':
             tcycles([0,1,1], mcycle.tcycles)
         elif mcycle.type == 'ioread':
-            tcycles([0,1,1,0], mcycle.tcycles)
+            tcycles([0,1,0,1], mcycle.tcycles)
         elif mcycle.type == 'iowrite':
             tcycles([0,1,1,0], mcycle.tcycles)
         elif mcycle.type == 'generic':

@@ -55,7 +55,7 @@ djnz d:
   mcycles:
     # fetch has one extra tcycle
     - { type: fetch, tcycles: 5 }
-    - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(--$B==0){_z80_skip(cpu,1,7,2);}"}
+    - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(--$B==0){_z80_skip(cpu,1,6,1);}"}
     - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC;" }
 
 jr d:
@@ -67,7 +67,7 @@ jr d:
 jr CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
   mcycles:
-    - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(!($CC-4)){_z80_skip(cpu,1,7,2);}" }
+    - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(!($CC-4)){_z80_skip(cpu,1,6,1);}" }
     - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC;" }
 
   # FIXME
@@ -332,7 +332,7 @@ call CC,nn:
   cond: (x == 3) and (z == 4)
   mcycles:
     - { type: mread, ab: $PC++, dst: $WZL }
-    - { type: mread, ab: $PC++, dst: $WZH, action: "if (!$CC){_z80_skip(cpu,5,9,2);}" }
+    - { type: mread, ab: $PC++, dst: $WZH, action: "if (!$CC){_z80_skip(cpu,5,8,1);}" }
     - { type: generic, tcycles: 1 }
     - { type: mwrite, ab: --$SP, db: $PCH }
     - { type: mwrite, ab: --$SP, db: $PCL, action: "$PC=$WZ" }
@@ -657,7 +657,7 @@ cb:
 cbhl:
   flags: { special: true }
   mcycles:
-    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,2,6,3);}" }
+    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,2,5,2);}" }
     - { type: mwrite, ab: "cpu->hl", db: $DLATCH }
 
 ddfdcb:
@@ -668,7 +668,7 @@ ddfdcb:
     # load opcode
     - { type: mread, ab: $PC++, tcycles: 5, dst: $DLATCH, action: "_z80_ddfdcb_opcode(cpu,$DLATCH)" }
     # read operand
-    - { type: mread, ab: $ADDR, tcycles: 4, dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,2,6,3);}" }
+    - { type: mread, ab: $ADDR, tcycles: 4, dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,2,5,2);}" }
     # write result back
     - { type: mwrite, ab: $ADDR, db: $DLATCH }
 

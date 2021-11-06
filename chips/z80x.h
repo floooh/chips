@@ -664,68 +664,68 @@ static inline void _z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
 
 static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_OPS] = {
     { 0x00000004, 0x0006, 0 },  //  00: nop (M:1 T:4 steps:1)
-    { 0x0000016C, 0x0007, 0 },  //  01: ld RP,nn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x0007, 0 },  //  01: ld RP,nn (M:3 T:10 steps:5)
     { 0x00000038, 0x000C, 0 },  //  02: ld (bc),a (M:2 T:7 steps:3)
     { 0x00000014, 0x000F, 0 },  //  03: inc RP (M:2 T:6 steps:2)
     { 0x00000004, 0x0011, 0 },  //  04: inc RY (M:1 T:4 steps:1)
     { 0x00000004, 0x0012, 0 },  //  05: dec RY (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0013, _Z80_OPSTATE_FLAGS_IMM8 },  //  06: ld RY,n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0013, _Z80_OPSTATE_FLAGS_IMM8 },  //  06: ld RY,n (M:2 T:7 steps:3)
     { 0x00000004, 0x0016, 0 },  //  07: rlca (M:1 T:4 steps:1)
     { 0x00000004, 0x0017, 0 },  //  08: ex af,af' (M:1 T:4 steps:1)
     { 0x00000204, 0x0018, 0 },  //  09: add hl,RP (M:2 T:11 steps:2)
-    { 0x0000002C, 0x001A, 0 },  //  0A: ld a,(bc) (M:2 T:7 steps:3)
+    { 0x00000034, 0x001A, 0 },  //  0A: ld a,(bc) (M:2 T:7 steps:3)
     { 0x00000014, 0x001D, 0 },  //  0B: dec RP (M:2 T:6 steps:2)
     { 0x00000004, 0x001F, 0 },  //  0C: inc RY (M:1 T:4 steps:1)
     { 0x00000004, 0x0020, 0 },  //  0D: dec RY (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0021, _Z80_OPSTATE_FLAGS_IMM8 },  //  0E: ld RY,n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0021, _Z80_OPSTATE_FLAGS_IMM8 },  //  0E: ld RY,n (M:2 T:7 steps:3)
     { 0x00000004, 0x0024, 0 },  //  0F: rrca (M:1 T:4 steps:1)
-    { 0x00000858, 0x0025, 0 },  //  10: djnz d (M:3 T:13 steps:4)
-    { 0x0000016C, 0x0029, 0 },  //  11: ld RP,nn (M:3 T:10 steps:5)
+    { 0x00000868, 0x0025, 0 },  //  10: djnz d (M:3 T:13 steps:4)
+    { 0x000001B4, 0x0029, 0 },  //  11: ld RP,nn (M:3 T:10 steps:5)
     { 0x00000038, 0x002E, 0 },  //  12: ld (de),a (M:2 T:7 steps:3)
     { 0x00000014, 0x0031, 0 },  //  13: inc RP (M:2 T:6 steps:2)
     { 0x00000004, 0x0033, 0 },  //  14: inc RY (M:1 T:4 steps:1)
     { 0x00000004, 0x0034, 0 },  //  15: dec RY (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0035, _Z80_OPSTATE_FLAGS_IMM8 },  //  16: ld RY,n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0035, _Z80_OPSTATE_FLAGS_IMM8 },  //  16: ld RY,n (M:2 T:7 steps:3)
     { 0x00000004, 0x0038, 0 },  //  17: rla (M:1 T:4 steps:1)
-    { 0x0000042C, 0x0039, 0 },  //  18: jr d (M:3 T:12 steps:4)
+    { 0x00000434, 0x0039, 0 },  //  18: jr d (M:3 T:12 steps:4)
     { 0x00000204, 0x003D, 0 },  //  19: add hl,RP (M:2 T:11 steps:2)
-    { 0x0000002C, 0x003F, 0 },  //  1A: ld a,(de) (M:2 T:7 steps:3)
+    { 0x00000034, 0x003F, 0 },  //  1A: ld a,(de) (M:2 T:7 steps:3)
     { 0x00000014, 0x0042, 0 },  //  1B: dec RP (M:2 T:6 steps:2)
     { 0x00000004, 0x0044, 0 },  //  1C: inc RY (M:1 T:4 steps:1)
     { 0x00000004, 0x0045, 0 },  //  1D: dec RY (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0046, _Z80_OPSTATE_FLAGS_IMM8 },  //  1E: ld RY,n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0046, _Z80_OPSTATE_FLAGS_IMM8 },  //  1E: ld RY,n (M:2 T:7 steps:3)
     { 0x00000004, 0x0049, 0 },  //  1F: rra (M:1 T:4 steps:1)
-    { 0x0000042C, 0x004A, 0 },  //  20: jr CC-4,d (M:3 T:12 steps:4)
-    { 0x0000016C, 0x004E, 0 },  //  21: ld RP,nn (M:3 T:10 steps:5)
-    { 0x0000766C, 0x0053, 0 },  //  22: ld (nn),hl (M:5 T:16 steps:9)
+    { 0x00000434, 0x004A, 0 },  //  20: jr CC-4,d (M:3 T:12 steps:4)
+    { 0x000001B4, 0x004E, 0 },  //  21: ld RP,nn (M:3 T:10 steps:5)
+    { 0x000076B4, 0x0053, 0 },  //  22: ld (nn),hl (M:5 T:16 steps:9)
     { 0x00000014, 0x005C, 0 },  //  23: inc RP (M:2 T:6 steps:2)
     { 0x00000004, 0x005E, 0 },  //  24: inc RY (M:1 T:4 steps:1)
     { 0x00000004, 0x005F, 0 },  //  25: dec RY (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0060, _Z80_OPSTATE_FLAGS_IMM8 },  //  26: ld RY,n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0060, _Z80_OPSTATE_FLAGS_IMM8 },  //  26: ld RY,n (M:2 T:7 steps:3)
     { 0x00000004, 0x0063, 0 },  //  27: daa (M:1 T:4 steps:1)
-    { 0x0000042C, 0x0064, 0 },  //  28: jr CC-4,d (M:3 T:12 steps:4)
+    { 0x00000434, 0x0064, 0 },  //  28: jr CC-4,d (M:3 T:12 steps:4)
     { 0x00000204, 0x0068, 0 },  //  29: add hl,RP (M:2 T:11 steps:2)
-    { 0x00005B6C, 0x006A, 0 },  //  2A: ld hl,(nn) (M:5 T:16 steps:9)
+    { 0x00006DB4, 0x006A, 0 },  //  2A: ld hl,(nn) (M:5 T:16 steps:9)
     { 0x00000014, 0x0073, 0 },  //  2B: dec RP (M:2 T:6 steps:2)
     { 0x00000004, 0x0075, 0 },  //  2C: inc RY (M:1 T:4 steps:1)
     { 0x00000004, 0x0076, 0 },  //  2D: dec RY (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0077, _Z80_OPSTATE_FLAGS_IMM8 },  //  2E: ld RY,n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0077, _Z80_OPSTATE_FLAGS_IMM8 },  //  2E: ld RY,n (M:2 T:7 steps:3)
     { 0x00000004, 0x007A, 0 },  //  2F: cpl (M:1 T:4 steps:1)
-    { 0x0000042C, 0x007B, 0 },  //  30: jr CC-4,d (M:3 T:12 steps:4)
-    { 0x0000016C, 0x007F, 0 },  //  31: ld RP,nn (M:3 T:10 steps:5)
-    { 0x00000E6C, 0x0084, 0 },  //  32: ld (nn),a (M:4 T:13 steps:7)
+    { 0x00000434, 0x007B, 0 },  //  30: jr CC-4,d (M:3 T:12 steps:4)
+    { 0x000001B4, 0x007F, 0 },  //  31: ld RP,nn (M:3 T:10 steps:5)
+    { 0x00000EB4, 0x0084, 0 },  //  32: ld (nn),a (M:4 T:13 steps:7)
     { 0x00000014, 0x008B, 0 },  //  33: inc RP (M:2 T:6 steps:2)
-    { 0x0000038C, 0x008D, _Z80_OPSTATE_FLAGS_INDIRECT },  //  34: inc (hl) (M:3 T:11 steps:5)
-    { 0x0000038C, 0x0092, _Z80_OPSTATE_FLAGS_INDIRECT },  //  35: dec (hl) (M:3 T:11 steps:5)
-    { 0x000001CC, 0x0097, _Z80_OPSTATE_FLAGS_INDIRECT|_Z80_OPSTATE_FLAGS_IMM8 },  //  36: ld (hl),n (M:3 T:10 steps:5)
+    { 0x00000394, 0x008D, _Z80_OPSTATE_FLAGS_INDIRECT },  //  34: inc (hl) (M:3 T:11 steps:5)
+    { 0x00000394, 0x0092, _Z80_OPSTATE_FLAGS_INDIRECT },  //  35: dec (hl) (M:3 T:11 steps:5)
+    { 0x000001D4, 0x0097, _Z80_OPSTATE_FLAGS_INDIRECT|_Z80_OPSTATE_FLAGS_IMM8 },  //  36: ld (hl),n (M:3 T:10 steps:5)
     { 0x00000004, 0x009C, 0 },  //  37: scf (M:1 T:4 steps:1)
-    { 0x0000042C, 0x009D, 0 },  //  38: jr CC-4,d (M:3 T:12 steps:4)
+    { 0x00000434, 0x009D, 0 },  //  38: jr CC-4,d (M:3 T:12 steps:4)
     { 0x00000204, 0x00A1, 0 },  //  39: add hl,RP (M:2 T:11 steps:2)
-    { 0x00000B6C, 0x00A3, 0 },  //  3A: ld a,(nn) (M:4 T:13 steps:7)
+    { 0x00000DB4, 0x00A3, 0 },  //  3A: ld a,(nn) (M:4 T:13 steps:7)
     { 0x00000014, 0x00AA, 0 },  //  3B: dec RP (M:2 T:6 steps:2)
     { 0x00000004, 0x00AC, 0 },  //  3C: inc RY (M:1 T:4 steps:1)
     { 0x00000004, 0x00AD, 0 },  //  3D: dec RY (M:1 T:4 steps:1)
-    { 0x0000002C, 0x00AE, _Z80_OPSTATE_FLAGS_IMM8 },  //  3E: ld RY,n (M:2 T:7 steps:3)
+    { 0x00000034, 0x00AE, _Z80_OPSTATE_FLAGS_IMM8 },  //  3E: ld RY,n (M:2 T:7 steps:3)
     { 0x00000004, 0x00B1, 0 },  //  3F: ccf (M:1 T:4 steps:1)
     { 0x00000004, 0x00B2, 0 },  //  40: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00B3, 0 },  //  41: ld RY,RZ (M:1 T:4 steps:1)
@@ -733,7 +733,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x00B5, 0 },  //  43: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00B6, 0 },  //  44: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00B7, 0 },  //  45: ld RY,RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x00B8, _Z80_OPSTATE_FLAGS_INDIRECT },  //  46: ld RY,(hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x00B8, _Z80_OPSTATE_FLAGS_INDIRECT },  //  46: ld RY,(hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x00BB, 0 },  //  47: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00BC, 0 },  //  48: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00BD, 0 },  //  49: ld RY,RZ (M:1 T:4 steps:1)
@@ -741,7 +741,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x00BF, 0 },  //  4B: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00C0, 0 },  //  4C: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00C1, 0 },  //  4D: ld RY,RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x00C2, _Z80_OPSTATE_FLAGS_INDIRECT },  //  4E: ld RY,(hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x00C2, _Z80_OPSTATE_FLAGS_INDIRECT },  //  4E: ld RY,(hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x00C5, 0 },  //  4F: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00C6, 0 },  //  50: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00C7, 0 },  //  51: ld RY,RZ (M:1 T:4 steps:1)
@@ -749,7 +749,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x00C9, 0 },  //  53: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00CA, 0 },  //  54: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00CB, 0 },  //  55: ld RY,RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x00CC, _Z80_OPSTATE_FLAGS_INDIRECT },  //  56: ld RY,(hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x00CC, _Z80_OPSTATE_FLAGS_INDIRECT },  //  56: ld RY,(hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x00CF, 0 },  //  57: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00D0, 0 },  //  58: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00D1, 0 },  //  59: ld RY,RZ (M:1 T:4 steps:1)
@@ -757,7 +757,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x00D3, 0 },  //  5B: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00D4, 0 },  //  5C: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00D5, 0 },  //  5D: ld RY,RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x00D6, _Z80_OPSTATE_FLAGS_INDIRECT },  //  5E: ld RY,(hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x00D6, _Z80_OPSTATE_FLAGS_INDIRECT },  //  5E: ld RY,(hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x00D9, 0 },  //  5F: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00DA, 0 },  //  60: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00DB, 0 },  //  61: ld RY,RZ (M:1 T:4 steps:1)
@@ -765,7 +765,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x00DD, 0 },  //  63: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00DE, 0 },  //  64: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00DF, 0 },  //  65: ld RY,RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x00E0, _Z80_OPSTATE_FLAGS_INDIRECT },  //  66: ld RY,(hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x00E0, _Z80_OPSTATE_FLAGS_INDIRECT },  //  66: ld RY,(hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x00E3, 0 },  //  67: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00E4, 0 },  //  68: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00E5, 0 },  //  69: ld RY,RZ (M:1 T:4 steps:1)
@@ -773,7 +773,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x00E7, 0 },  //  6B: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00E8, 0 },  //  6C: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x00E9, 0 },  //  6D: ld RY,RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x00EA, _Z80_OPSTATE_FLAGS_INDIRECT },  //  6E: ld RY,(hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x00EA, _Z80_OPSTATE_FLAGS_INDIRECT },  //  6E: ld RY,(hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x00ED, 0 },  //  6F: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000038, 0x00EE, _Z80_OPSTATE_FLAGS_INDIRECT },  //  70: ld (hl),RZ (M:2 T:7 steps:3)
     { 0x00000038, 0x00F1, _Z80_OPSTATE_FLAGS_INDIRECT },  //  71: ld (hl),RZ (M:2 T:7 steps:3)
@@ -789,7 +789,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x0107, 0 },  //  7B: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0108, 0 },  //  7C: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0109, 0 },  //  7D: ld RY,RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x010A, _Z80_OPSTATE_FLAGS_INDIRECT },  //  7E: ld RY,(hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x010A, _Z80_OPSTATE_FLAGS_INDIRECT },  //  7E: ld RY,(hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x010D, 0 },  //  7F: ld RY,RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x010E, 0 },  //  80: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x010F, 0 },  //  81: ALU RZ (M:1 T:4 steps:1)
@@ -797,7 +797,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x0111, 0 },  //  83: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0112, 0 },  //  84: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0113, 0 },  //  85: ALU RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0114, _Z80_OPSTATE_FLAGS_INDIRECT },  //  86: ALU (hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x0114, _Z80_OPSTATE_FLAGS_INDIRECT },  //  86: ALU (hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x0117, 0 },  //  87: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0118, 0 },  //  88: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0119, 0 },  //  89: ALU RZ (M:1 T:4 steps:1)
@@ -805,7 +805,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x011B, 0 },  //  8B: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x011C, 0 },  //  8C: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x011D, 0 },  //  8D: ALU RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x011E, _Z80_OPSTATE_FLAGS_INDIRECT },  //  8E: ALU (hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x011E, _Z80_OPSTATE_FLAGS_INDIRECT },  //  8E: ALU (hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x0121, 0 },  //  8F: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0122, 0 },  //  90: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0123, 0 },  //  91: ALU RZ (M:1 T:4 steps:1)
@@ -813,7 +813,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x0125, 0 },  //  93: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0126, 0 },  //  94: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0127, 0 },  //  95: ALU RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0128, _Z80_OPSTATE_FLAGS_INDIRECT },  //  96: ALU (hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x0128, _Z80_OPSTATE_FLAGS_INDIRECT },  //  96: ALU (hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x012B, 0 },  //  97: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x012C, 0 },  //  98: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x012D, 0 },  //  99: ALU RZ (M:1 T:4 steps:1)
@@ -821,7 +821,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x012F, 0 },  //  9B: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0130, 0 },  //  9C: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0131, 0 },  //  9D: ALU RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0132, _Z80_OPSTATE_FLAGS_INDIRECT },  //  9E: ALU (hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x0132, _Z80_OPSTATE_FLAGS_INDIRECT },  //  9E: ALU (hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x0135, 0 },  //  9F: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0136, 0 },  //  A0: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0137, 0 },  //  A1: ALU RZ (M:1 T:4 steps:1)
@@ -829,7 +829,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x0139, 0 },  //  A3: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x013A, 0 },  //  A4: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x013B, 0 },  //  A5: ALU RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x013C, _Z80_OPSTATE_FLAGS_INDIRECT },  //  A6: ALU (hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x013C, _Z80_OPSTATE_FLAGS_INDIRECT },  //  A6: ALU (hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x013F, 0 },  //  A7: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0140, 0 },  //  A8: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0141, 0 },  //  A9: ALU RZ (M:1 T:4 steps:1)
@@ -837,7 +837,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x0143, 0 },  //  AB: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0144, 0 },  //  AC: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0145, 0 },  //  AD: ALU RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0146, _Z80_OPSTATE_FLAGS_INDIRECT },  //  AE: ALU (hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x0146, _Z80_OPSTATE_FLAGS_INDIRECT },  //  AE: ALU (hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x0149, 0 },  //  AF: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x014A, 0 },  //  B0: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x014B, 0 },  //  B1: ALU RZ (M:1 T:4 steps:1)
@@ -845,7 +845,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x014D, 0 },  //  B3: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x014E, 0 },  //  B4: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x014F, 0 },  //  B5: ALU RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0150, _Z80_OPSTATE_FLAGS_INDIRECT },  //  B6: ALU (hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x0150, _Z80_OPSTATE_FLAGS_INDIRECT },  //  B6: ALU (hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x0153, 0 },  //  B7: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0154, 0 },  //  B8: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0155, 0 },  //  B9: ALU RZ (M:1 T:4 steps:1)
@@ -853,71 +853,71 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x0157, 0 },  //  BB: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0158, 0 },  //  BC: ALU RZ (M:1 T:4 steps:1)
     { 0x00000004, 0x0159, 0 },  //  BD: ALU RZ (M:1 T:4 steps:1)
-    { 0x0000002C, 0x015A, _Z80_OPSTATE_FLAGS_INDIRECT },  //  BE: ALU (hl) (M:2 T:7 steps:3)
+    { 0x00000034, 0x015A, _Z80_OPSTATE_FLAGS_INDIRECT },  //  BE: ALU (hl) (M:2 T:7 steps:3)
     { 0x00000004, 0x015D, 0 },  //  BF: ALU RZ (M:1 T:4 steps:1)
-    { 0x000002DC, 0x015E, 0 },  //  C0: ret CC (M:4 T:11 steps:6)
-    { 0x0000016C, 0x0164, 0 },  //  C1: pop RP2 (M:3 T:10 steps:5)
-    { 0x0000016C, 0x0169, 0 },  //  C2: jp CC,nn (M:3 T:10 steps:5)
-    { 0x0000016C, 0x016E, 0 },  //  C3: jp nn (M:3 T:10 steps:5)
-    { 0x0000ED6C, 0x0173, 0 },  //  C4: call CC,nn (M:6 T:17 steps:10)
+    { 0x0000036C, 0x015E, 0 },  //  C0: ret CC (M:4 T:11 steps:6)
+    { 0x000001B4, 0x0164, 0 },  //  C1: pop RP2 (M:3 T:10 steps:5)
+    { 0x000001B4, 0x0169, 0 },  //  C2: jp CC,nn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x016E, 0 },  //  C3: jp nn (M:3 T:10 steps:5)
+    { 0x0000EDB4, 0x0173, 0 },  //  C4: call CC,nn (M:6 T:17 steps:10)
     { 0x000003B0, 0x017D, 0 },  //  C5: push RP2 (M:3 T:11 steps:5)
-    { 0x0000002C, 0x0182, _Z80_OPSTATE_FLAGS_IMM8 },  //  C6: ALU n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0182, _Z80_OPSTATE_FLAGS_IMM8 },  //  C6: ALU n (M:2 T:7 steps:3)
     { 0x000003B0, 0x0185, 0 },  //  C7: rst Y*8 (M:3 T:11 steps:5)
-    { 0x000002DC, 0x018A, 0 },  //  C8: ret CC (M:4 T:11 steps:6)
-    { 0x0000016C, 0x0190, 0 },  //  C9: ret (M:3 T:10 steps:5)
-    { 0x0000016C, 0x0195, 0 },  //  CA: jp CC,nn (M:3 T:10 steps:5)
+    { 0x0000036C, 0x018A, 0 },  //  C8: ret CC (M:4 T:11 steps:6)
+    { 0x000001B4, 0x0190, 0 },  //  C9: ret (M:3 T:10 steps:5)
+    { 0x000001B4, 0x0195, 0 },  //  CA: jp CC,nn (M:3 T:10 steps:5)
     { 0x00000004, 0x019A, 0 },  //  CB: cb prefix (M:1 T:4 steps:1)
-    { 0x0000ED6C, 0x019B, 0 },  //  CC: call CC,nn (M:6 T:17 steps:10)
-    { 0x0000EC6C, 0x01A5, 0 },  //  CD: call nn (M:5 T:17 steps:9)
-    { 0x0000002C, 0x01AE, _Z80_OPSTATE_FLAGS_IMM8 },  //  CE: ALU n (M:2 T:7 steps:3)
+    { 0x0000EDB4, 0x019B, 0 },  //  CC: call CC,nn (M:6 T:17 steps:10)
+    { 0x0000ECB4, 0x01A5, 0 },  //  CD: call nn (M:5 T:17 steps:9)
+    { 0x00000034, 0x01AE, _Z80_OPSTATE_FLAGS_IMM8 },  //  CE: ALU n (M:2 T:7 steps:3)
     { 0x000003B0, 0x01B1, 0 },  //  CF: rst Y*8 (M:3 T:11 steps:5)
-    { 0x000002DC, 0x01B6, 0 },  //  D0: ret CC (M:4 T:11 steps:6)
-    { 0x0000016C, 0x01BC, 0 },  //  D1: pop RP2 (M:3 T:10 steps:5)
-    { 0x0000016C, 0x01C1, 0 },  //  D2: jp CC,nn (M:3 T:10 steps:5)
-    { 0x000002CC, 0x01C6, 0 },  //  D3: out (n),a (M:3 T:11 steps:5)
-    { 0x0000ED6C, 0x01CB, 0 },  //  D4: call CC,nn (M:6 T:17 steps:10)
+    { 0x0000036C, 0x01B6, 0 },  //  D0: ret CC (M:4 T:11 steps:6)
+    { 0x000001B4, 0x01BC, 0 },  //  D1: pop RP2 (M:3 T:10 steps:5)
+    { 0x000001B4, 0x01C1, 0 },  //  D2: jp CC,nn (M:3 T:10 steps:5)
+    { 0x000002D4, 0x01C6, 0 },  //  D3: out (n),a (M:3 T:11 steps:5)
+    { 0x0000EDB4, 0x01CB, 0 },  //  D4: call CC,nn (M:6 T:17 steps:10)
     { 0x000003B0, 0x01D5, 0 },  //  D5: push RP2 (M:3 T:11 steps:5)
-    { 0x0000002C, 0x01DA, _Z80_OPSTATE_FLAGS_IMM8 },  //  D6: ALU n (M:2 T:7 steps:3)
+    { 0x00000034, 0x01DA, _Z80_OPSTATE_FLAGS_IMM8 },  //  D6: ALU n (M:2 T:7 steps:3)
     { 0x000003B0, 0x01DD, 0 },  //  D7: rst Y*8 (M:3 T:11 steps:5)
-    { 0x000002DC, 0x01E2, 0 },  //  D8: ret CC (M:4 T:11 steps:6)
+    { 0x0000036C, 0x01E2, 0 },  //  D8: ret CC (M:4 T:11 steps:6)
     { 0x00000004, 0x01E8, 0 },  //  D9: exx (M:1 T:4 steps:1)
-    { 0x0000016C, 0x01E9, 0 },  //  DA: jp CC,nn (M:3 T:10 steps:5)
-    { 0x000002CC, 0x01EE, 0 },  //  DB: in a,(n) (M:3 T:11 steps:5)
-    { 0x0000ED6C, 0x01F3, 0 },  //  DC: call CC,nn (M:6 T:17 steps:10)
+    { 0x000001B4, 0x01E9, 0 },  //  DA: jp CC,nn (M:3 T:10 steps:5)
+    { 0x00000354, 0x01EE, 0 },  //  DB: in a,(n) (M:3 T:11 steps:5)
+    { 0x0000EDB4, 0x01F3, 0 },  //  DC: call CC,nn (M:6 T:17 steps:10)
     { 0x00000004, 0x01FD, 0 },  //  DD: dd prefix (M:1 T:4 steps:1)
-    { 0x0000002C, 0x01FE, _Z80_OPSTATE_FLAGS_IMM8 },  //  DE: ALU n (M:2 T:7 steps:3)
+    { 0x00000034, 0x01FE, _Z80_OPSTATE_FLAGS_IMM8 },  //  DE: ALU n (M:2 T:7 steps:3)
     { 0x000003B0, 0x0201, 0 },  //  DF: rst Y*8 (M:3 T:11 steps:5)
-    { 0x000002DC, 0x0206, 0 },  //  E0: ret CC (M:4 T:11 steps:6)
-    { 0x0000016C, 0x020C, 0 },  //  E1: pop RP2 (M:3 T:10 steps:5)
-    { 0x0000016C, 0x0211, 0 },  //  E2: jp CC,nn (M:3 T:10 steps:5)
-    { 0x00026C6C, 0x0216, 0 },  //  E3: ex (sp),hl (M:5 T:19 steps:9)
-    { 0x0000ED6C, 0x021F, 0 },  //  E4: call CC,nn (M:6 T:17 steps:10)
+    { 0x0000036C, 0x0206, 0 },  //  E0: ret CC (M:4 T:11 steps:6)
+    { 0x000001B4, 0x020C, 0 },  //  E1: pop RP2 (M:3 T:10 steps:5)
+    { 0x000001B4, 0x0211, 0 },  //  E2: jp CC,nn (M:3 T:10 steps:5)
+    { 0x00026CB4, 0x0216, 0 },  //  E3: ex (sp),hl (M:5 T:19 steps:9)
+    { 0x0000EDB4, 0x021F, 0 },  //  E4: call CC,nn (M:6 T:17 steps:10)
     { 0x000003B0, 0x0229, 0 },  //  E5: push RP2 (M:3 T:11 steps:5)
-    { 0x0000002C, 0x022E, _Z80_OPSTATE_FLAGS_IMM8 },  //  E6: ALU n (M:2 T:7 steps:3)
+    { 0x00000034, 0x022E, _Z80_OPSTATE_FLAGS_IMM8 },  //  E6: ALU n (M:2 T:7 steps:3)
     { 0x000003B0, 0x0231, 0 },  //  E7: rst Y*8 (M:3 T:11 steps:5)
-    { 0x000002DC, 0x0236, 0 },  //  E8: ret CC (M:4 T:11 steps:6)
+    { 0x0000036C, 0x0236, 0 },  //  E8: ret CC (M:4 T:11 steps:6)
     { 0x00000004, 0x023C, 0 },  //  E9: jp hl (M:1 T:4 steps:1)
-    { 0x0000016C, 0x023D, 0 },  //  EA: jp CC,nn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x023D, 0 },  //  EA: jp CC,nn (M:3 T:10 steps:5)
     { 0x00000004, 0x0242, 0 },  //  EB: ex de,hl (M:1 T:4 steps:1)
-    { 0x0000ED6C, 0x0243, 0 },  //  EC: call CC,nn (M:6 T:17 steps:10)
+    { 0x0000EDB4, 0x0243, 0 },  //  EC: call CC,nn (M:6 T:17 steps:10)
     { 0x00000004, 0x024D, 0 },  //  ED: ed prefix (M:1 T:4 steps:1)
-    { 0x0000002C, 0x024E, _Z80_OPSTATE_FLAGS_IMM8 },  //  EE: ALU n (M:2 T:7 steps:3)
+    { 0x00000034, 0x024E, _Z80_OPSTATE_FLAGS_IMM8 },  //  EE: ALU n (M:2 T:7 steps:3)
     { 0x000003B0, 0x0251, 0 },  //  EF: rst Y*8 (M:3 T:11 steps:5)
-    { 0x000002DC, 0x0256, 0 },  //  F0: ret CC (M:4 T:11 steps:6)
-    { 0x0000016C, 0x025C, 0 },  //  F1: pop RP2 (M:3 T:10 steps:5)
-    { 0x0000016C, 0x0261, 0 },  //  F2: jp CC,nn (M:3 T:10 steps:5)
+    { 0x0000036C, 0x0256, 0 },  //  F0: ret CC (M:4 T:11 steps:6)
+    { 0x000001B4, 0x025C, 0 },  //  F1: pop RP2 (M:3 T:10 steps:5)
+    { 0x000001B4, 0x0261, 0 },  //  F2: jp CC,nn (M:3 T:10 steps:5)
     { 0x00000004, 0x0266, 0 },  //  F3: di (M:1 T:4 steps:1)
-    { 0x0000ED6C, 0x0267, 0 },  //  F4: call CC,nn (M:6 T:17 steps:10)
+    { 0x0000EDB4, 0x0267, 0 },  //  F4: call CC,nn (M:6 T:17 steps:10)
     { 0x000003B0, 0x0271, 0 },  //  F5: push RP2 (M:3 T:11 steps:5)
-    { 0x0000002C, 0x0276, _Z80_OPSTATE_FLAGS_IMM8 },  //  F6: ALU n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0276, _Z80_OPSTATE_FLAGS_IMM8 },  //  F6: ALU n (M:2 T:7 steps:3)
     { 0x000003B0, 0x0279, 0 },  //  F7: rst Y*8 (M:3 T:11 steps:5)
-    { 0x000002DC, 0x027E, 0 },  //  F8: ret CC (M:4 T:11 steps:6)
+    { 0x0000036C, 0x027E, 0 },  //  F8: ret CC (M:4 T:11 steps:6)
     { 0x00000014, 0x0284, 0 },  //  F9: ld sp,hl (M:2 T:6 steps:2)
-    { 0x0000016C, 0x0286, 0 },  //  FA: jp CC,nn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x0286, 0 },  //  FA: jp CC,nn (M:3 T:10 steps:5)
     { 0x00000004, 0x028B, 0 },  //  FB: ei (M:1 T:4 steps:1)
-    { 0x0000ED6C, 0x028C, 0 },  //  FC: call CC,nn (M:6 T:17 steps:10)
+    { 0x0000EDB4, 0x028C, 0 },  //  FC: call CC,nn (M:6 T:17 steps:10)
     { 0x00000004, 0x0296, 0 },  //  FD: fd prefix (M:1 T:4 steps:1)
-    { 0x0000002C, 0x0297, _Z80_OPSTATE_FLAGS_IMM8 },  //  FE: ALU n (M:2 T:7 steps:3)
+    { 0x00000034, 0x0297, _Z80_OPSTATE_FLAGS_IMM8 },  //  FE: ALU n (M:2 T:7 steps:3)
     { 0x000003B0, 0x029A, 0 },  //  FF: rst Y*8 (M:3 T:11 steps:5)
     { 0x00000004, 0x029F, 0 },  // ED 00: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED 01: ed nop (M:1 T:4 steps:1)
@@ -983,68 +983,68 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x029F, 0 },  // ED 3D: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED 3E: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED 3F: ed nop (M:1 T:4 steps:1)
-    { 0x00000058, 0x02A0, 0 },  // ED 40: in RY,(c) (M:2 T:8 steps:3)
+    { 0x00000068, 0x02A0, 0 },  // ED 40: in RY,(c) (M:2 T:8 steps:3)
     { 0x00000058, 0x02A3, 0 },  // ED 41: out (c),RY (M:2 T:8 steps:3)
     { 0x00000204, 0x02A6, 0 },  // ED 42: sbc hl,RP (M:2 T:11 steps:2)
-    { 0x0000766C, 0x02A8, 0 },  // ED 43: ld (nn),RP (M:5 T:16 steps:9)
+    { 0x000076B4, 0x02A8, 0 },  // ED 43: ld (nn),RP (M:5 T:16 steps:9)
     { 0x00000004, 0x02B1, 0 },  // ED 44: neg (M:1 T:4 steps:1)
-    { 0x0000016C, 0x02B2, 0 },  // ED 45: reti/retn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x02B2, 0 },  // ED 45: reti/retn (M:3 T:10 steps:5)
     { 0x00000004, 0x02B7, 0 },  // ED 46: im IMY (M:1 T:4 steps:1)
     { 0x00000008, 0x02B8, 0 },  // ED 47: ld i,a (M:1 T:5 steps:1)
-    { 0x00000058, 0x02B9, 0 },  // ED 48: in RY,(c) (M:2 T:8 steps:3)
+    { 0x00000068, 0x02B9, 0 },  // ED 48: in RY,(c) (M:2 T:8 steps:3)
     { 0x00000058, 0x02BC, 0 },  // ED 49: out (c),RY (M:2 T:8 steps:3)
     { 0x00000204, 0x02BF, 0 },  // ED 4A: adc hl,RP (M:2 T:11 steps:2)
-    { 0x00005B6C, 0x02C1, 0 },  // ED 4B: ld RP,(nn) (M:5 T:16 steps:9)
+    { 0x00006DB4, 0x02C1, 0 },  // ED 4B: ld RP,(nn) (M:5 T:16 steps:9)
     { 0x00000004, 0x02B1, 0 },  // ED 4C: neg (M:1 T:4 steps:1)
-    { 0x0000016C, 0x02B2, 0 },  // ED 4D: reti/retn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x02B2, 0 },  // ED 4D: reti/retn (M:3 T:10 steps:5)
     { 0x00000004, 0x02CA, 0 },  // ED 4E: im IMY (M:1 T:4 steps:1)
     { 0x00000008, 0x02CB, 0 },  // ED 4F: ld r,a (M:1 T:5 steps:1)
-    { 0x00000058, 0x02CC, 0 },  // ED 50: in RY,(c) (M:2 T:8 steps:3)
+    { 0x00000068, 0x02CC, 0 },  // ED 50: in RY,(c) (M:2 T:8 steps:3)
     { 0x00000058, 0x02CF, 0 },  // ED 51: out (c),RY (M:2 T:8 steps:3)
     { 0x00000204, 0x02D2, 0 },  // ED 52: sbc hl,RP (M:2 T:11 steps:2)
-    { 0x0000766C, 0x02D4, 0 },  // ED 53: ld (nn),RP (M:5 T:16 steps:9)
+    { 0x000076B4, 0x02D4, 0 },  // ED 53: ld (nn),RP (M:5 T:16 steps:9)
     { 0x00000004, 0x02B1, 0 },  // ED 54: neg (M:1 T:4 steps:1)
-    { 0x0000016C, 0x02B2, 0 },  // ED 55: reti/retn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x02B2, 0 },  // ED 55: reti/retn (M:3 T:10 steps:5)
     { 0x00000004, 0x02DD, 0 },  // ED 56: im IMY (M:1 T:4 steps:1)
     { 0x00000008, 0x02DE, 0 },  // ED 57: ld a,i (M:1 T:5 steps:1)
-    { 0x00000058, 0x02DF, 0 },  // ED 58: in RY,(c) (M:2 T:8 steps:3)
+    { 0x00000068, 0x02DF, 0 },  // ED 58: in RY,(c) (M:2 T:8 steps:3)
     { 0x00000058, 0x02E2, 0 },  // ED 59: out (c),RY (M:2 T:8 steps:3)
     { 0x00000204, 0x02E5, 0 },  // ED 5A: adc hl,RP (M:2 T:11 steps:2)
-    { 0x00005B6C, 0x02E7, 0 },  // ED 5B: ld RP,(nn) (M:5 T:16 steps:9)
+    { 0x00006DB4, 0x02E7, 0 },  // ED 5B: ld RP,(nn) (M:5 T:16 steps:9)
     { 0x00000004, 0x02B1, 0 },  // ED 5C: neg (M:1 T:4 steps:1)
-    { 0x0000016C, 0x02B2, 0 },  // ED 5D: reti/retn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x02B2, 0 },  // ED 5D: reti/retn (M:3 T:10 steps:5)
     { 0x00000004, 0x02F0, 0 },  // ED 5E: im IMY (M:1 T:4 steps:1)
     { 0x00000008, 0x02F1, 0 },  // ED 5F: ld a,r (M:1 T:5 steps:1)
-    { 0x00000058, 0x02F2, 0 },  // ED 60: in RY,(c) (M:2 T:8 steps:3)
+    { 0x00000068, 0x02F2, 0 },  // ED 60: in RY,(c) (M:2 T:8 steps:3)
     { 0x00000058, 0x02F5, 0 },  // ED 61: out (c),RY (M:2 T:8 steps:3)
     { 0x00000204, 0x02F8, 0 },  // ED 62: sbc hl,RP (M:2 T:11 steps:2)
-    { 0x0000766C, 0x02FA, 0 },  // ED 63: ld (nn),RP (M:5 T:16 steps:9)
+    { 0x000076B4, 0x02FA, 0 },  // ED 63: ld (nn),RP (M:5 T:16 steps:9)
     { 0x00000004, 0x02B1, 0 },  // ED 64: neg (M:1 T:4 steps:1)
-    { 0x0000016C, 0x02B2, 0 },  // ED 65: reti/retn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x02B2, 0 },  // ED 65: reti/retn (M:3 T:10 steps:5)
     { 0x00000004, 0x0303, 0 },  // ED 66: im IMY (M:1 T:4 steps:1)
-    { 0x00001C2C, 0x0304, 0 },  // ED 67: rrd (M:4 T:14 steps:6)
-    { 0x00000058, 0x030A, 0 },  // ED 68: in RY,(c) (M:2 T:8 steps:3)
+    { 0x00001C34, 0x0304, 0 },  // ED 67: rrd (M:4 T:14 steps:6)
+    { 0x00000068, 0x030A, 0 },  // ED 68: in RY,(c) (M:2 T:8 steps:3)
     { 0x00000058, 0x030D, 0 },  // ED 69: out (c),RY (M:2 T:8 steps:3)
     { 0x00000204, 0x0310, 0 },  // ED 6A: adc hl,RP (M:2 T:11 steps:2)
-    { 0x00005B6C, 0x0312, 0 },  // ED 6B: ld RP,(nn) (M:5 T:16 steps:9)
+    { 0x00006DB4, 0x0312, 0 },  // ED 6B: ld RP,(nn) (M:5 T:16 steps:9)
     { 0x00000004, 0x02B1, 0 },  // ED 6C: neg (M:1 T:4 steps:1)
-    { 0x0000016C, 0x02B2, 0 },  // ED 6D: reti/retn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x02B2, 0 },  // ED 6D: reti/retn (M:3 T:10 steps:5)
     { 0x00000004, 0x031B, 0 },  // ED 6E: im IMY (M:1 T:4 steps:1)
-    { 0x00001C2C, 0x031C, 0 },  // ED 6F: rld (M:4 T:14 steps:6)
-    { 0x00000058, 0x0322, 0 },  // ED 70: in (c) (M:2 T:8 steps:3)
+    { 0x00001C34, 0x031C, 0 },  // ED 6F: rld (M:4 T:14 steps:6)
+    { 0x00000068, 0x0322, 0 },  // ED 70: in (c) (M:2 T:8 steps:3)
     { 0x00000058, 0x0325, 0 },  // ED 71: out (c),0 (M:2 T:8 steps:3)
     { 0x00000204, 0x0328, 0 },  // ED 72: sbc hl,RP (M:2 T:11 steps:2)
-    { 0x0000766C, 0x032A, 0 },  // ED 73: ld (nn),RP (M:5 T:16 steps:9)
+    { 0x000076B4, 0x032A, 0 },  // ED 73: ld (nn),RP (M:5 T:16 steps:9)
     { 0x00000004, 0x02B1, 0 },  // ED 74: neg (M:1 T:4 steps:1)
-    { 0x0000016C, 0x02B2, 0 },  // ED 75: reti/retn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x02B2, 0 },  // ED 75: reti/retn (M:3 T:10 steps:5)
     { 0x00000004, 0x0333, 0 },  // ED 76: im IMY (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED 77: ed nop (M:1 T:4 steps:1)
-    { 0x00000058, 0x0334, 0 },  // ED 78: in RY,(c) (M:2 T:8 steps:3)
+    { 0x00000068, 0x0334, 0 },  // ED 78: in RY,(c) (M:2 T:8 steps:3)
     { 0x00000058, 0x0337, 0 },  // ED 79: out (c),RY (M:2 T:8 steps:3)
     { 0x00000204, 0x033A, 0 },  // ED 7A: adc hl,RP (M:2 T:11 steps:2)
-    { 0x00005B6C, 0x033C, 0 },  // ED 7B: ld RP,(nn) (M:5 T:16 steps:9)
+    { 0x00006DB4, 0x033C, 0 },  // ED 7B: ld RP,(nn) (M:5 T:16 steps:9)
     { 0x00000004, 0x02B1, 0 },  // ED 7C: neg (M:1 T:4 steps:1)
-    { 0x0000016C, 0x02B2, 0 },  // ED 7D: reti/retn (M:3 T:10 steps:5)
+    { 0x000001B4, 0x02B2, 0 },  // ED 7D: reti/retn (M:3 T:10 steps:5)
     { 0x00000004, 0x0345, 0 },  // ED 7E: im IMY (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED 7F: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED 80: ed nop (M:1 T:4 steps:1)
@@ -1079,34 +1079,34 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x029F, 0 },  // ED 9D: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED 9E: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED 9F: ed nop (M:1 T:4 steps:1)
-    { 0x000005CC, 0x0346, 0 },  // ED A0: ldi (M:4 T:12 steps:6)
-    { 0x0000042C, 0x034C, 0 },  // ED A1: cpi (M:3 T:12 steps:4)
-    { 0x00000730, 0x0350, 0 },  // ED A2: ini (M:3 T:12 steps:5)
-    { 0x00000598, 0x0355, 0 },  // ED A3: outi (M:3 T:12 steps:5)
+    { 0x000005D4, 0x0346, 0 },  // ED A0: ldi (M:4 T:12 steps:6)
+    { 0x00000434, 0x034C, 0 },  // ED A1: cpi (M:3 T:12 steps:4)
+    { 0x00000750, 0x0350, 0 },  // ED A2: ini (M:3 T:12 steps:5)
+    { 0x000005A8, 0x0355, 0 },  // ED A3: outi (M:3 T:12 steps:5)
     { 0x00000004, 0x029F, 0 },  // ED A4: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED A5: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED A6: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED A7: ed nop (M:1 T:4 steps:1)
-    { 0x000005CC, 0x035A, 0 },  // ED A8: ldd (M:4 T:12 steps:6)
-    { 0x0000042C, 0x0360, 0 },  // ED A9: cpd (M:3 T:12 steps:4)
-    { 0x00000730, 0x0364, 0 },  // ED AA: ind (M:3 T:12 steps:5)
-    { 0x00000598, 0x0369, 0 },  // ED AB: outd (M:3 T:12 steps:5)
+    { 0x000005D4, 0x035A, 0 },  // ED A8: ldd (M:4 T:12 steps:6)
+    { 0x00000434, 0x0360, 0 },  // ED A9: cpd (M:3 T:12 steps:4)
+    { 0x00000750, 0x0364, 0 },  // ED AA: ind (M:3 T:12 steps:5)
+    { 0x000005A8, 0x0369, 0 },  // ED AB: outd (M:3 T:12 steps:5)
     { 0x00000004, 0x029F, 0 },  // ED AC: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED AD: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED AE: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED AF: ed nop (M:1 T:4 steps:1)
-    { 0x000085CC, 0x036E, 0 },  // ED B0: ldir (M:5 T:17 steps:7)
-    { 0x0000842C, 0x0375, 0 },  // ED B1: cpir (M:4 T:17 steps:5)
-    { 0x00008730, 0x037A, 0 },  // ED B2: inir (M:4 T:17 steps:6)
-    { 0x00008598, 0x0380, 0 },  // ED B3: otir (M:4 T:17 steps:6)
+    { 0x000085D4, 0x036E, 0 },  // ED B0: ldir (M:5 T:17 steps:7)
+    { 0x00008434, 0x0375, 0 },  // ED B1: cpir (M:4 T:17 steps:5)
+    { 0x00008750, 0x037A, 0 },  // ED B2: inir (M:4 T:17 steps:6)
+    { 0x000085A8, 0x0380, 0 },  // ED B3: otir (M:4 T:17 steps:6)
     { 0x00000004, 0x029F, 0 },  // ED B4: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED B5: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED B6: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED B7: ed nop (M:1 T:4 steps:1)
-    { 0x000085CC, 0x0386, 0 },  // ED B8: lddr (M:5 T:17 steps:7)
-    { 0x0000842C, 0x038D, 0 },  // ED B9: cpdr (M:4 T:17 steps:5)
-    { 0x00008730, 0x0392, 0 },  // ED BA: indr (M:4 T:17 steps:6)
-    { 0x00008598, 0x0398, 0 },  // ED BB: otdr (M:4 T:17 steps:6)
+    { 0x000085D4, 0x0386, 0 },  // ED B8: lddr (M:5 T:17 steps:7)
+    { 0x00008434, 0x038D, 0 },  // ED B9: cpdr (M:4 T:17 steps:5)
+    { 0x00008750, 0x0392, 0 },  // ED BA: indr (M:4 T:17 steps:6)
+    { 0x000085A8, 0x0398, 0 },  // ED BB: otdr (M:4 T:17 steps:6)
     { 0x00000004, 0x029F, 0 },  // ED BC: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED BD: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED BE: ed nop (M:1 T:4 steps:1)
@@ -1176,11 +1176,11 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x029F, 0 },  // ED FE: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x029F, 0 },  // ED FF: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x039E, 0 },  // CB 00: cb (M:1 T:4 steps:1)
-    { 0x0000038C, 0x039F, 0 },  // CB 01: cbhl (M:3 T:11 steps:5)
-    { 0x0001C634, 0x03A4, 0 },  // CB 02: ddfdcb (M:5 T:18 steps:8)
+    { 0x00000394, 0x039F, 0 },  // CB 01: cbhl (M:3 T:11 steps:5)
+    { 0x0001CA54, 0x03A4, 0 },  // CB 02: ddfdcb (M:5 T:18 steps:8)
     { 0x000000BC, 0x03AC, 0 },  //  03: int_im0 (M:5 T:9 steps:5)
     { 0x0000762C, 0x03B1, 0 },  //  04: int_im1 (M:6 T:16 steps:8)
-    { 0x0016F63C, 0x03B9, 0 },  //  05: int_im2 (M:9 T:22 steps:13)
+    { 0x001B763C, 0x03B9, 0 },  //  05: int_im2 (M:9 T:22 steps:13)
     { 0x00001D8C, 0x03C6, 0 },  //  06: nmi (M:5 T:14 steps:7)
 
 };
@@ -1518,7 +1518,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             //  10: djnz d (M:3 T:13)
             // -- M2
             case 0x0026: _wait();_mread(cpu->pc++); break;
-            case 0x0027: cpu->dlatch=_gd();if(--cpu->b==0){_z80_skip(cpu,1,7,2);}; break;
+            case 0x0027: cpu->dlatch=_gd();if(--cpu->b==0){_z80_skip(cpu,1,6,1);}; break;
             // -- M3 (generic)
             case 0x0028: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
             // -- OVERLAP
@@ -1616,7 +1616,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             //  20: jr CC-4,d (M:3 T:12)
             // -- M2
             case 0x004B: _wait();_mread(cpu->pc++); break;
-            case 0x004C: cpu->dlatch=_gd();if(!(_cc_nz)){_z80_skip(cpu,1,7,2);}; break;
+            case 0x004C: cpu->dlatch=_gd();if(!(_cc_nz)){_z80_skip(cpu,1,6,1);}; break;
             // -- M3 (generic)
             case 0x004D: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
             // -- OVERLAP
@@ -1676,7 +1676,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             //  28: jr CC-4,d (M:3 T:12)
             // -- M2
             case 0x0065: _wait();_mread(cpu->pc++); break;
-            case 0x0066: cpu->dlatch=_gd();if(!(_cc_z)){_z80_skip(cpu,1,7,2);}; break;
+            case 0x0066: cpu->dlatch=_gd();if(!(_cc_z)){_z80_skip(cpu,1,6,1);}; break;
             // -- M3 (generic)
             case 0x0067: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
             // -- OVERLAP
@@ -1732,7 +1732,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             //  30: jr CC-4,d (M:3 T:12)
             // -- M2
             case 0x007C: _wait();_mread(cpu->pc++); break;
-            case 0x007D: cpu->dlatch=_gd();if(!(_cc_nc)){_z80_skip(cpu,1,7,2);}; break;
+            case 0x007D: cpu->dlatch=_gd();if(!(_cc_nc)){_z80_skip(cpu,1,6,1);}; break;
             // -- M3 (generic)
             case 0x007E: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
             // -- OVERLAP
@@ -1804,7 +1804,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             //  38: jr CC-4,d (M:3 T:12)
             // -- M2
             case 0x009E: _wait();_mread(cpu->pc++); break;
-            case 0x009F: cpu->dlatch=_gd();if(!(_cc_c)){_z80_skip(cpu,1,7,2);}; break;
+            case 0x009F: cpu->dlatch=_gd();if(!(_cc_c)){_z80_skip(cpu,1,6,1);}; break;
             // -- M3 (generic)
             case 0x00A0: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;; break;
             // -- OVERLAP
@@ -2480,7 +2480,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x0175: cpu->wzl=_gd(); break;
             // -- M3
             case 0x0176: _wait();_mread(cpu->pc++); break;
-            case 0x0177: cpu->wzh=_gd();if (!_cc_nz){_z80_skip(cpu,5,9,2);}; break;
+            case 0x0177: cpu->wzh=_gd();if (!_cc_nz){_z80_skip(cpu,5,8,1);}; break;
             // -- M4 (generic)
             case 0x0178:  break;
             // -- M5
@@ -2561,7 +2561,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x019D: cpu->wzl=_gd(); break;
             // -- M3
             case 0x019E: _wait();_mread(cpu->pc++); break;
-            case 0x019F: cpu->wzh=_gd();if (!_cc_z){_z80_skip(cpu,5,9,2);}; break;
+            case 0x019F: cpu->wzh=_gd();if (!_cc_z){_z80_skip(cpu,5,8,1);}; break;
             // -- M4 (generic)
             case 0x01A0:  break;
             // -- M5
@@ -2654,7 +2654,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x01CD: cpu->wzl=_gd(); break;
             // -- M3
             case 0x01CE: _wait();_mread(cpu->pc++); break;
-            case 0x01CF: cpu->wzh=_gd();if (!_cc_nc){_z80_skip(cpu,5,9,2);}; break;
+            case 0x01CF: cpu->wzh=_gd();if (!_cc_nc){_z80_skip(cpu,5,8,1);}; break;
             // -- M4 (generic)
             case 0x01D0:  break;
             // -- M5
@@ -2735,7 +2735,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x01F5: cpu->wzl=_gd(); break;
             // -- M3
             case 0x01F6: _wait();_mread(cpu->pc++); break;
-            case 0x01F7: cpu->wzh=_gd();if (!_cc_c){_z80_skip(cpu,5,9,2);}; break;
+            case 0x01F7: cpu->wzh=_gd();if (!_cc_c){_z80_skip(cpu,5,8,1);}; break;
             // -- M4 (generic)
             case 0x01F8:  break;
             // -- M5
@@ -2822,7 +2822,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x0221: cpu->wzl=_gd(); break;
             // -- M3
             case 0x0222: _wait();_mread(cpu->pc++); break;
-            case 0x0223: cpu->wzh=_gd();if (!_cc_po){_z80_skip(cpu,5,9,2);}; break;
+            case 0x0223: cpu->wzh=_gd();if (!_cc_po){_z80_skip(cpu,5,8,1);}; break;
             // -- M4 (generic)
             case 0x0224:  break;
             // -- M5
@@ -2897,7 +2897,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x0245: cpu->wzl=_gd(); break;
             // -- M3
             case 0x0246: _wait();_mread(cpu->pc++); break;
-            case 0x0247: cpu->wzh=_gd();if (!_cc_pe){_z80_skip(cpu,5,9,2);}; break;
+            case 0x0247: cpu->wzh=_gd();if (!_cc_pe){_z80_skip(cpu,5,8,1);}; break;
             // -- M4 (generic)
             case 0x0248:  break;
             // -- M5
@@ -2972,7 +2972,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x0269: cpu->wzl=_gd(); break;
             // -- M3
             case 0x026A: _wait();_mread(cpu->pc++); break;
-            case 0x026B: cpu->wzh=_gd();if (!_cc_p){_z80_skip(cpu,5,9,2);}; break;
+            case 0x026B: cpu->wzh=_gd();if (!_cc_p){_z80_skip(cpu,5,8,1);}; break;
             // -- M4 (generic)
             case 0x026C:  break;
             // -- M5
@@ -3049,7 +3049,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x028E: cpu->wzl=_gd(); break;
             // -- M3
             case 0x028F: _wait();_mread(cpu->pc++); break;
-            case 0x0290: cpu->wzh=_gd();if (!_cc_m){_z80_skip(cpu,5,9,2);}; break;
+            case 0x0290: cpu->wzh=_gd();if (!_cc_m){_z80_skip(cpu,5,8,1);}; break;
             // -- M4 (generic)
             case 0x0291:  break;
             // -- M5
@@ -3647,7 +3647,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // CB 00: cbhl (M:3 T:11)
             // -- M2
             case 0x03A0: _wait();_mread(cpu->hl); break;
-            case 0x03A1: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,2,6,3);}; break;
+            case 0x03A1: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,2,5,2);}; break;
             // -- M3
             case 0x03A2: _mwrite(cpu->hl,cpu->dlatch); break;
             case 0x03A3: _wait(); break;
@@ -3662,7 +3662,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             case 0x03A7: cpu->dlatch=_gd();_z80_ddfdcb_opcode(cpu,cpu->dlatch); break;
             // -- M4
             case 0x03A8: _wait();_mread(cpu->addr); break;
-            case 0x03A9: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,2,6,3);}; break;
+            case 0x03A9: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,2,5,2);}; break;
             // -- M5
             case 0x03AA: _mwrite(cpu->addr,cpu->dlatch); break;
             case 0x03AB: _wait(); break;
