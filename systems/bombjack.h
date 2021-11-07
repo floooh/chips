@@ -686,7 +686,7 @@ static uint64_t _bombjack_tick_soundboard(bombjack_t* sys, uint64_t pins) {
     for (int i = 0; i < 3; i++) {
         uint64_t psg_pins = (sys->soundboard.psg[i].pins & ~Z80_PIN_MASK) | (pins & Z80_PIN_MASK);
         // PSG IO address decoding
-        if (((pins & (Z80_M1|Z80_IORQ)) == Z80_IORQ) && (((pins&Z80_A7)>>6)|((pins&Z80_A4)>>4)) == i) {
+        if ((pins & Z80_IORQ) && (((pins&Z80_A7)>>6)|((pins&Z80_A4)>>4)) == i) {
             if (pins & Z80_WR) {
                 psg_pins |= AY38910_BDIR;
             }
