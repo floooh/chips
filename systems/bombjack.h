@@ -133,10 +133,19 @@ typedef struct {
 typedef void (*bombjack_debug_func_t)(void* user_data, uint64_t pins);
 typedef struct {
     struct {
-        bombjack_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
+        struct {
+            bombjack_debug_func_t func;
+            void* user_data;
+        } callback;
+        bool* stopped;
+    } mainboard;
+    struct {
+        struct {
+            bombjack_debug_func_t func;
+            void* user_data;
+        } callback;
+        bool* stopped;
+    } soundboard;
 } bombjack_debug_t;
 
 typedef struct {
@@ -283,7 +292,8 @@ int bombjack_display_height(bombjack_t* sys);
 void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _BOMBJACK_DISPLAY_SIZE)));
-    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
+    if (desc->debug.mainboard.callback.func) { CHIPS_ASSERT(desc->debug.mainboard.stopped); }
+    if (desc->debug.soundboard.callback.func) { CHIPS_ASSERT(desc->debug.soundboard.stopped); }
 
     memset(sys, 0, sizeof(bombjack_t));
     sys->valid = true;
@@ -1019,30 +1029,54 @@ uint32_t bombjack_exec(bombjack_t* sys, uint32_t micro_seconds) {
        that at most one sound command can be written by the main board
        before the sound board is ticked (that way we don't need to implement
        a complicated command queue.
+
+       NOTE: with the new cycle-stepped Z80 we could just as well do
+       a much more finer grained interleaving (e.g. per tick), but this
+       turns out to be quite a bit slower.
     */
     const uint32_t slice_us = micro_seconds/2;
-    const uint32_t mainboard_num_ticks = clk_us_to_ticks(_BOMBJACK_MAINBOARD_FREQUENCY, slice_us);
-    const uint32_t soundboard_num_ticks = clk_us_to_ticks(_BOMBJACK_SOUNDBOARD_FREQUENCY, slice_us);
+    const uint32_t mb_num_ticks = clk_us_to_ticks(_BOMBJACK_MAINBOARD_FREQUENCY, slice_us);
+    const uint32_t sb_num_ticks = clk_us_to_ticks(_BOMBJACK_SOUNDBOARD_FREQUENCY, slice_us);
     for (int i = 0; i < 2; i++) {
         // tick the main board for one half frame
         {
             uint64_t pins = sys->mainboard.pins;
-            for (uint32_t tick = 0; tick < mainboard_num_ticks; tick++) {
-                pins = _bombjack_tick_mainboard(sys, pins);
+            if (0 == sys->dbg.debug.mainboard.callback.func) {
+                // run without debug callback
+                for (uint32_t tick = 0; tick < mb_num_ticks; tick++) {
+                    pins = _bombjack_tick_mainboard(sys, pins);
+                }
+            }
+            else {
+                // run without debug callback
+                for (uint32_t tick = 0; (tick < mb_num_ticks) && !(*sys->dbg.debug.mainboard.stopped); tick++) {
+                    pins = _bombjack_tick_mainboard(sys, pins);
+                    sys->dbg.debug.mainboard.callback.func(sys->dbg.debug.mainboard.callback.user_data, pins);
+                }
             }
             sys->mainboard.pins = pins;
         }
         // tick the sound board for one half frame
         {
             uint64_t pins = sys->soundboard.pins;
-            for (uint32_t tick = 0; tick < soundboard_num_ticks; tick++) {
-                pins = _bombjack_tick_soundboard(sys, pins);
+            if (0 == sys->dbg.debug.soundboard.callback.func) {
+                // run without debug callback
+                for (uint32_t tick = 0; tick < sb_num_ticks; tick++) {
+                    pins = _bombjack_tick_soundboard(sys, pins);
+                }
+            }
+            else {
+                // run with debug callback
+                for (uint32_t tick = 0; (tick < sb_num_ticks) && !(*sys->dbg.debug.soundboard.stopped); tick++) {
+                    pins = _bombjack_tick_soundboard(sys, pins);
+                    sys->dbg.debug.soundboard.callback.func(sys->dbg.debug.soundboard.callback.user_data, pins);
+                }
             }
             sys->soundboard.pins = pins;
         }
     }
     _bombjack_decode_video(sys);
-    return 2 * (mainboard_num_ticks + soundboard_num_ticks);
+    return 2 * (mb_num_ticks + sb_num_ticks);
 }
 
 int bombjack_std_display_width(void) {
