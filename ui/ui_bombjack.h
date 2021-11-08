@@ -60,10 +60,10 @@ extern "C" {
 
 typedef struct {
     bombjack_t* sys;
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;                      /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_create_texture_t create_texture_cb;      // texture creation callback for ui_dbg_t
+    ui_dbg_update_texture_t update_texture_cb;      // texture update callback for ui_dbg_t
+    ui_dbg_destroy_texture_t destroy_texture_cb;    // texture destruction callback for ui_dbg_t
+    ui_dbg_keys_desc_t dbg_keys;                    // user-defined hotkeys for ui_dbg_t
 } ui_bombjack_desc_t;
 
 typedef struct {
@@ -99,11 +99,8 @@ typedef struct {
 
 void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* desc);
 void ui_bombjack_discard(ui_bombjack_t* ui);
-void ui_bombjack_draw(ui_bombjack_t* ui, double time_ms);
-bool ui_bombjack_before_mainboard_exec(ui_bombjack_t* ui);
-void ui_bombjack_after_mainboard_exec(ui_bombjack_t* ui);
-bool ui_bombjack_before_soundboard_exec(ui_bombjack_t* ui);
-void ui_bombjack_after_soundboard_exec(ui_bombjack_t* ui);
+void ui_bombjack_draw(ui_bombjack_t* ui);
+bombjack_debug_t ui_bombjack_get_debug(ui_bombjack_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -133,15 +130,16 @@ static const ui_chip_pin_t _ui_bombjack_cpu_pins[] = {
     { "D5",     5,      Z80_D5 },
     { "D6",     6,      Z80_D6 },
     { "D7",     7,      Z80_D7 },
-    { "M1",     9,      Z80_M1 },
-    { "MREQ",   10,     Z80_MREQ },
-    { "IORQ",   11,     Z80_IORQ },
-    { "RD",     12,     Z80_RD },
-    { "WR",     13,     Z80_WR },
+    { "M1",     8,      Z80_M1 },
+    { "MREQ",   9,      Z80_MREQ },
+    { "IORQ",   10,     Z80_IORQ },
+    { "RD",     11,     Z80_RD },
+    { "WR",     12,     Z80_WR },
+    { "RFSH",   13,     Z80_RFSH },
     { "HALT",   14,     Z80_HALT },
     { "INT",    15,     Z80_INT },
     { "NMI",    16,     Z80_NMI },
-    { "WAIT",   17,     Z80_WAIT_MASK },
+    { "WAIT",   17,     Z80_WAIT },
     { "A0",     18,     Z80_A0 },
     { "A1",     19,     Z80_A1 },
     { "A2",     20,     Z80_A2 },
@@ -301,7 +299,7 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
             case 1: desc.title = "AY-3-8910 (1)"; break;
             case 2: desc.title = "AY-3-8910 (2)"; break;
         }
-        desc.ay = &ui->bj->soundboard.psg[i];
+        desc.ay = &ui->bj->soundboard.psg[i].ay;
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "8910", 22, _ui_bombjack_psg_pins);
@@ -458,7 +456,7 @@ static void _ui_bombjack_set_dsw2(const ui_bombjack_t* ui, uint8_t mask, uint8_t
     ui->bj->mainboard.dsw2 = _ui_bombjack_set_bits(ui->bj->mainboard.dsw2, mask, bits);
 }
 
-static void _ui_bombjack_draw_menu(ui_bombjack_t* ui, double exec_time) {
+static void _ui_bombjack_draw_menu(ui_bombjack_t* ui) {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reboot")) {
@@ -624,7 +622,7 @@ static void _ui_bombjack_draw_menu(ui_bombjack_t* ui, double exec_time) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(exec_time, ui->main.dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
@@ -813,10 +811,10 @@ static void _ui_bombjack_draw_video(ui_bombjack_t* ui) {
     ImGui::End();
 }
 
-void ui_bombjack_draw(ui_bombjack_t* ui, double time_ms) {
+void ui_bombjack_draw(ui_bombjack_t* ui) {
     CHIPS_ASSERT(ui && ui->bj);
     ui->bj->mainboard.sys = 0;   // FIXME?
-    _ui_bombjack_draw_menu(ui, time_ms);
+    _ui_bombjack_draw_menu(ui);
     _ui_bombjack_draw_video(ui);
     ui_memmap_draw(&ui->memmap);
     ui_dbg_draw(&ui->main.dbg);
@@ -833,25 +831,25 @@ void ui_bombjack_draw(ui_bombjack_t* ui, double time_ms) {
     ui_audio_draw(&ui->sound.audio, ui->bj->audio.sample_pos);
 }
 
-bool ui_bombjack_before_mainboard_exec(ui_bombjack_t* ui) {
-    CHIPS_ASSERT(ui && ui->bj);
-    return ui_dbg_before_exec(&ui->main.dbg);
+bombjack_debug_t ui_bombjack_get_debug(ui_bombjack_t* ui) {
+    return (bombjack_debug_t){
+        .mainboard = {
+            .callback = {
+                .func = (bombjack_debug_func_t)ui_dbg_tick,
+                .user_data = &ui->main.dbg
+            },
+            .stopped = &ui->main.dbg.dbg.stopped
+        },
+        .soundboard = {
+            .callback = {
+                .func = (bombjack_debug_func_t)ui_dbg_tick,
+                .user_data = &ui->sound.dbg
+            },
+            .stopped = &ui->sound.dbg.dbg.stopped
+        }
+    };
 }
 
-void ui_bombjack_after_mainboard_exec(ui_bombjack_t* ui) {
-    CHIPS_ASSERT(ui && ui->bj);
-    ui_dbg_after_exec(&ui->main.dbg);
-}
-
-bool ui_bombjack_before_soundboard_exec(ui_bombjack_t* ui) {
-    CHIPS_ASSERT(ui && ui->bj);
-    return ui_dbg_before_exec(&ui->sound.dbg);
-}
-
-void ui_bombjack_after_soundboard_exec(ui_bombjack_t* ui) {
-    CHIPS_ASSERT(ui && ui->bj);
-    ui_dbg_after_exec(&ui->sound.dbg);
-}
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
