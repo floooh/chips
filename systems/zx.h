@@ -249,6 +249,7 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
     sys->audio.callback = desc->audio.callback;
     sys->audio.num_samples = _ZX_DEFAULT(desc->audio.num_samples, ZX_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->audio.num_samples <= ZX_MAX_AUDIO_SAMPLES);
+    sys->debug = desc->debug;
 
     /* initalize the hardware */
     sys->border_color = 0xFF000000;
