@@ -425,6 +425,34 @@ static bool _zx_decode_scanline(zx_t* sys) {
     }
 }
 
+// ZX128 memory mapping
+static void _zx_update_memory_map_zx128(zx_t* sys, uint8_t data) {
+    if (!sys->memory_paging_disabled) {
+        sys->last_mem_config = data;
+        // bit 3 defines the video scanout memory bank (5 or 7)
+        sys->display_ram_bank = (data & (1<<3)) ? 7 : 5;
+        // only last memory bank is mappable
+        mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->ram[data & 0x7]);
+
+        // ROM0 or ROM1
+        if (data & (1<<4)) {
+            // bit 4 set: ROM1
+            mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom[1]);
+        }
+        else {
+            // bit 4 clear: ROM0
+            mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom[0]);
+        }
+    }
+    if (data & (1<<5)) {
+        /* bit 5 prevents further changes to memory pages
+            until computer is reset, this is used when switching
+            to the 48k ROM
+        */
+        sys->memory_paging_disabled = true;
+    }
+}
+
 static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
     pins = z80_tick(&sys->cpu, pins);
 
@@ -468,31 +496,7 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
             /* Spectrum 128 memory control (0.............0.)
                 http://8bit.yarek.pl/computer/zx.128/
             */
-            const uint8_t data = Z80_GET_DATA(pins);
-            if (!sys->memory_paging_disabled) {
-                sys->last_mem_config = data;
-                // bit 3 defines the video scanout memory bank (5 or 7)
-                sys->display_ram_bank = (data & (1<<3)) ? 7 : 5;
-                // only last memory bank is mappable
-                mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->ram[data & 0x7]);
-
-                // ROM0 or ROM1
-                if (data & (1<<4)) {
-                    // bit 4 set: ROM1
-                    mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom[1]);
-                }
-                else {
-                    // bit 4 clear: ROM0
-                    mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->rom[0]);
-                }
-            }
-            if (data & (1<<5)) {
-                /* bit 5 prevents further changes to memory pages
-                    until computer is reset, this is used when switching
-                    to the 48k ROM
-                */
-                sys->memory_paging_disabled = true;
-            }
+            _zx_update_memory_map_zx128(sys, Z80_GET_DATA(pins));
         }
         else if ((pins & Z80_A0) == 0) {
             /* Spectrum ULA (...............0)
@@ -968,26 +972,32 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
     }
     if (ext_hdr) {
         sys->pins = z80_prefetch(&sys->cpu, (ext_hdr->PC_h<<8)|ext_hdr->PC_l);
-        /* FIXME FIXME FIXME
+
         if (sys->type == ZX_TYPE_128) {
             for (int i = 0; i < 16; i++) {
 
-                LIKE THOS: ay38910_write_reg(&sys->ay, i, ext_hdr->audio[i]);
+                //LIKE THIS: ay38910_set_reg(&sys->ay, i, ext_hdr->audio[i]);
 
                 // latch AY-3-8912 register address
-                ay38910_iorq(&sys->ay, AY38910_BDIR|AY38910_BC1|(i<<16));
+                //ay38910_iorq(&sys->ay, AY38910_BDIR|AY38910_BC1|(i<<16));
                 // write AY-3-8912 register value
-                ay38910_iorq(&sys->ay, AY38910_BDIR|(ext_hdr->audio[i]<<16));
+                //ay38910_iorq(&sys->ay, AY38910_BDIR|(ext_hdr->audio[i]<<16));
             }
         }
         // simulate an out of port 0xFFFD and 0x7FFD
+        if (sys->type == ZX_TYPE_128) {
+            _zx_update_memory_map_zx128(sys, ext_hdr->out_7ffd);
+            sys->ay.addr = ext_hdr->out_fffd;
+        }
+
+        /*
         uint64_t pins = Z80_IORQ|Z80_WR;
         Z80_SET_ADDR(pins, 0xFFFD);
         Z80_SET_DATA(pins, ext_hdr->out_fffd);
-        _zx_tick(4, pins, sys);
+        _zx_tick(sys, pins);
         Z80_SET_ADDR(pins, 0x7FFD);
         Z80_SET_DATA(pins, ext_hdr->out_7ffd);
-        _zx_tick(4, pins, sys);
+        _zx_tick(sys, pins);
         */
     }
     else {
