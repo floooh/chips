@@ -163,6 +163,7 @@ typedef struct {
     int scanline_period;
     int scanline_counter;
     int scanline_y;
+    int int_counter;
     uint32_t display_ram_bank;
     uint32_t border_color;
     kbd_t kbd;
@@ -463,6 +464,15 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
         if (_zx_decode_scanline(sys)) {
             // request vblank interrupt
             pins |= Z80_INT;
+            // hold the INT pin for 32 ticks
+            sys->int_counter = 32;
+        }
+    }
+
+    // clear INT pin after 32 ticks
+    if (pins & Z80_INT) {
+        if (--sys->int_counter < 0) {
+            pins &= ~Z80_INT;
         }
     }
 
@@ -478,27 +488,7 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
         }
     }
     else if (pins & Z80_IORQ) {
-        if (pins & Z80_M1) {
-            // interrupt acknowledge, clear INT pin
-            // FIXME: how does the actual ZX reset the INT pin?
-            pins &= ~Z80_INT;
-        }
-        else if (((pins & (Z80_A15|Z80_A1)) == Z80_A15) && (sys->type == ZX_TYPE_128)) {
-            // AY-3-8912 access (1*............0.)
-            //
-            // AY is ticked at half CPU frequency, so
-            // we need to buffer the IO chip select pin mask so that the
-            // AY doesn't miss any IO requests
-            if (pins & Z80_A14) { sys->ay_sel_pins |= AY38910_BC1; }
-            if (pins & Z80_WR) { sys->ay_sel_pins |= AY38910_BDIR; }
-        }
-        else if (((pins & (Z80_WR|Z80_A15|Z80_A1)) == Z80_WR) && (sys->type == ZX_TYPE_128)) {
-            /* Spectrum 128 memory control (0.............0.)
-                http://8bit.yarek.pl/computer/zx.128/
-            */
-            _zx_update_memory_map_zx128(sys, Z80_GET_DATA(pins));
-        }
-        else if ((pins & Z80_A0) == 0) {
+        if ((pins & Z80_A0) == 0) {
             /* Spectrum ULA (...............0)
                 Bits 5 and 7 as read by INning from Port 0xfe are always one
             */
@@ -523,6 +513,21 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
                 sys->last_fe_out = data;
                 beeper_set(&sys->beeper, 0 != (data & (1<<4)));
             }
+        }
+        else if (((pins & (Z80_WR|Z80_A15|Z80_A1)) == Z80_WR) && (sys->type == ZX_TYPE_128)) {
+            /* Spectrum 128 memory control (0.............0.)
+                http://8bit.yarek.pl/computer/zx.128/
+            */
+            _zx_update_memory_map_zx128(sys, Z80_GET_DATA(pins));
+        }
+        else if (((pins & (Z80_A15|Z80_A1)) == Z80_A15) && (sys->type == ZX_TYPE_128)) {
+            // AY-3-8912 access (1*............0.)
+            //
+            // AY is ticked at half CPU frequency, so
+            // we need to buffer the IO chip select pin mask so that the
+            // AY doesn't miss any IO requests
+            if (pins & Z80_A14) { sys->ay_sel_pins |= AY38910_BC1; }
+            if (pins & Z80_WR) { sys->ay_sel_pins |= AY38910_BDIR; }
         }
         else if ((pins & (Z80_RD|Z80_A7|Z80_A6|Z80_A5)) == Z80_RD) {
             // Kempston Joystick (........000.....)
