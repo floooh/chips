@@ -979,10 +979,10 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
         sys->pins = z80_prefetch(&sys->cpu, (ext_hdr->PC_h<<8)|ext_hdr->PC_l);
         if (sys->type == ZX_TYPE_128) {
             ay38910_reset(&sys->ay);
-            for (int i = 0; i < AY38910_NUM_REGISTERS; i++) {
-                ay38910_write_register(&sys->ay, i, ext_hdr->audio[i]);
+            for (uint8_t i = 0; i < AY38910_NUM_REGISTERS; i++) {
+                ay38910_set_register(&sys->ay, i, ext_hdr->audio[i]);
             }
-            sys->ay.addr = ext_hdr->out_fffd;
+            ay38910_set_addr_latch(&sys->ay, ext_hdr->out_fffd);
             _zx_update_memory_map_zx128(sys, ext_hdr->out_7ffd);
         }
     }
