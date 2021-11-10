@@ -200,8 +200,8 @@ typedef struct {
     // tape loading
     struct {
         int size; // tape_size is > 0 if a tape is inserted
-        int tape_pos;
-        uint8_t tape_buf[CPC_MAX_TAPE_SIZE];
+        int pos;
+        uint8_t buf[CPC_MAX_TAPE_SIZE];
     } tape;
     // floppy disc drive
     fdd_t fdd;
@@ -879,8 +879,8 @@ static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     sys->cpu.e = hdr->E; sys->cpu.d = hdr->D;
     sys->cpu.l = hdr->L; sys->cpu.h = hdr->H;
     sys->cpu.r = hdr->R; sys->cpu.i = hdr->I;
-    sys->cpu.iff1 = (hdr->IFF1 & 1) != 0);
-    sys->cpu.iff2 = (hdr->IFF2 & 1) != 0);
+    sys->cpu.iff1 = (hdr->IFF1 & 1) != 0;
+    sys->cpu.iff2 = (hdr->IFF2 & 1) != 0;
     sys->cpu.ix = (hdr->IX_h<<8) | hdr->IX_l;
     sys->cpu.iy = (hdr->IY_h<<8) | hdr->IY_l;
     sys->cpu.sp = (hdr->SP_h<<8) | hdr->SP_l;
@@ -915,7 +915,7 @@ static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     for (int i = 0; i < 16; i++) {
         ay38910_set_register(&sys->psg, i, hdr->psg_regs[i]);
     }
-    ay38910_set_set_addr_latch(&sys->psg, hdr->psg_selected);
+    ay38910_set_addr_latch(&sys->psg, hdr->psg_selected);
     return true;
 }
 
@@ -954,11 +954,11 @@ static bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr) {
     for (uint16_t i = 0; i < len; i++) {
         mem_wr(&sys->mem, load_addr+i, *ptr++);
     }
-    z80_set_iff1(&sys->cpu, true);
-    z80_set_iff2(&sys->cpu, true);
-    z80_set_c(&sys->cpu, 0);        /* FIXME: "ROM select number" */
-    z80_set_hl(&sys->cpu, start_addr);
-    z80_set_pc(&sys->cpu, 0xBD16);  /* MC START PROGRAM */
+    sys->cpu.iff1 = true;
+    sys->cpu.iff2 = true;
+    sys->cpu.c = 0; // FIXME: "ROM select number"
+    sys->cpu.hl = start_addr;
+    sys->pins = z80_prefetch(&sys->cpu, 0xBD16); // MC START PROGRAM
     return true;}
 
 bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
@@ -970,7 +970,7 @@ bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
         return _cpc_load_bin(sys, ptr);
     }
     else {
-        /* not a known file type, or not enough data */
+        // not a known file type, or not enough data
         return false;
     }
 }
@@ -991,45 +991,47 @@ bool cpc_insert_tape(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     if (num_bytes > CPC_MAX_TAPE_SIZE) {
         return false;
     }
-    memcpy(sys->tape_buf, ptr, num_bytes);
-    sys->tape_pos = 0;
-    sys->tape_size = num_bytes;
+    memcpy(sys->tape.buf, ptr, num_bytes);
+    sys->tape.pos = 0;
+    sys->tape.size = num_bytes;
+    /* FIXME FIXME FIXME
     z80_trap_cb(&sys->cpu, _cpc_trap_cb, sys);
+    */
     return true;
 }
 
 void cpc_remove_tape(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    sys->tape_pos = 0;
-    sys->tape_size = 0;
+    sys->tape.pos = 0;
+    sys->tape.size = 0;
+    /* FIXME FIXME FIXME
     z80_trap_cb(&sys->cpu, 0, 0);
+    */
 }
 
-/* the trapped OS casread function, reads one tape block into memory */
+// the trapped OS casread function, reads one tape block into memory
 static void _cpc_cas_read(cpc_t* sys) {
     bool success = false;
-    /* if no tape is currently inserted, both tape_pos and tape_size is 0 */
-    if ((sys->tape_pos + 3) < sys->tape_size) {
-        uint8_t len_l = sys->tape_buf[sys->tape_pos++];
-        uint8_t len_h = sys->tape_buf[sys->tape_pos++];
+    // if no tape is currently inserted, both tape_pos and tape_size is 0
+    if ((sys->tape.pos + 3) < sys->tape.size) {
+        uint8_t len_l = sys->tape.buf[sys->tape.pos++];
+        uint8_t len_h = sys->tape.buf[sys->tape.pos++];
         uint16_t len = len_h<<8 | len_l;
-        if ((sys->tape_pos + len) <= sys->tape_size) {
-            uint8_t sync = sys->tape_buf[sys->tape_pos++];
-            if (sync == z80_a(&sys->cpu)) {
+        if ((sys->tape.pos + len) <= sys->tape.size) {
+            uint8_t sync = sys->tape.buf[sys->tape.pos++];
+            if (sync == sys->cpu.a) {
                 success = true;
                 for (uint16_t i = 0; i < (len-1); i++) {
-                    uint16_t hl = z80_hl(&sys->cpu);
-                    uint8_t val = sys->tape_buf[sys->tape_pos++];
-                    mem_wr(&sys->mem, hl++, val);
-                    z80_set_hl(&sys->cpu, hl);
+                    uint8_t val = sys->tape.buf[sys->tape.pos++];
+                    mem_wr(&sys->mem, sys->cpu.hl++, val);
                 }
             }
         }
     }
-    z80_set_f(&sys->cpu, success ? 0x45 : 0x00);
-    z80_set_pc(&sys->cpu, sys->casread_ret);
-    if (sys->tape_pos >= sys->tape_size) {
-        /* reached end of tape, remove tape */
+    sys->cpu.f = success ? 0x45 : 0x00;
+    sys->pins = z80_prefetch(&sys->cpu, sys->casread_ret);
+    if (sys->tape.pos >= sys->tape.size) {
+        // reached end of tape, remove tape
         cpc_remove_tape(sys);
     }
 }
