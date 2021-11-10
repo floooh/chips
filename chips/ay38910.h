@@ -257,6 +257,8 @@ void ay38910_init(ay38910_t* ay, const ay38910_desc_t* desc);
 void ay38910_reset(ay38910_t* ay);
 // tick the AY-3-8910
 uint64_t ay38910_tick(ay38910_t* ay, uint64_t pins);
+// helper function to directly write register values and update dependent state, not intended for regular operation!
+void ay38910_write_register(ay38910_t* ay, int reg_index, uint8_t data);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -602,4 +604,13 @@ uint64_t ay38910_tick(ay38910_t* ay, uint64_t pins) {
     return pins;
 }
 
+void ay38910_write_register(ay38910_t* ay, int reg_index, uint8_t data) {
+    CHIPS_ASSERT(ay);
+    CHIPS_ASSERT((reg_index >= 0) && (reg_index < AY38910_NUM_REGISTERS));
+    ay->reg[reg_index] = data & _ay38910_reg_mask[reg_index];
+    _ay38910_update_values(ay);
+    if (reg_index == AY38910_REG_ENV_SHAPE_CYCLE) {
+        _ay38910_restart_env_shape(ay);
+    }
+}
 #endif /* CHIPS_IMPL */
