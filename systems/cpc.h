@@ -69,30 +69,32 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define CPC_MAX_AUDIO_SAMPLES (1024)        /* max number of audio samples in internal sample buffer */
-#define CPC_DEFAULT_AUDIO_SAMPLES (128)     /* default number of samples in internal sample buffer */
-#define CPC_MAX_TAPE_SIZE (128*1024)        /* max size of tape file in bytes */
+#define CPC_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
+#define CPC_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer
+#define CPC_MAX_TAPE_SIZE (128*1024)        // max size of tape file in bytes
 
-/* CPC model types */
+// CPC model types
 typedef enum {
-    CPC_TYPE_6128,          /* default */
+    CPC_TYPE_6128,          // default
     CPC_TYPE_464,
     CPC_TYPE_KCCOMPACT
 } cpc_type_t;
 
-/* joystick types */
+// joystick types
 typedef enum {
     CPC_JOYSTICK_NONE,
     CPC_JOYSTICK_DIGITAL,
     CPC_JOYSTICK_ANALOG,
 } cpc_joystick_type_t;
 
-/* joystick mask bits */
+// joystick mask bits
 #define CPC_JOYSTICK_UP    (1<<0)
 #define CPC_JOYSTICK_DOWN  (1<<1)
 #define CPC_JOYSTICK_LEFT  (1<<2)
@@ -100,54 +102,77 @@ typedef enum {
 #define CPC_JOYSTICK_BTN0  (1<<4)
 #define CPC_JOYSTICK_BTN1  (1<<4)
 
-/* audio sample data callback */
-typedef void (*cpc_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-
-/* configuration parameters for cpc_init() */
+// audio sample callback
 typedef struct {
-    cpc_type_t type;                /* default is the CPC 6128 */
-    cpc_joystick_type_t joystick_type;
-
-    /* video output config */
-    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 1024*312*4 bytes */
-    int pixel_buffer_size;      /* size of the pixel buffer in bytes */
-
-    /* optional user-data for audio- and video-debugging callbacks */
+    void (*func)(const float* samples, int num_samples, void* user_data);
     void* user_data;
+} cpc_audio_callback_t;
 
-    /* audio output config (if you don't want audio, set audio_cb to zero) */
-    cpc_audio_callback_t audio_cb;  /* called when audio_num_samples are ready */
-    int audio_num_samples;          /* default is ZX_AUDIO_NUM_SAMPLES */
-    int audio_sample_rate;          /* playback sample rate, default is 44100 */
-    float audio_volume;             /* audio volume: 0.0..1.0, default is 0.25 */
+// debugging hook
+typedef void (*cpc_debug_func_t)(void* user_data, uint64_t pins);
+typedef struct {
+    struct {
+        cpc_debug_func_t func;
+        void* user_data;
+    } callback;
+    bool* stopped;
+} cpc_debug_t;
 
-    /* ROM images */
-    const void* rom_464_os;
-    const void* rom_464_basic;
-    const void* rom_6128_os;
-    const void* rom_6128_basic;
-    const void* rom_6128_amsdos;
-    const void* rom_kcc_os;
-    const void* rom_kcc_basic;
-    int rom_464_os_size;
-    int rom_464_basic_size;
-    int rom_6128_os_size;
-    int rom_6128_basic_size;
-    int rom_6128_amsdos_size;
-    int rom_kcc_os_size;
-    int rom_kcc_basic_size;
+typedef struct {
+    const void* ptr;
+    size_t size;
+} cpc_rom_image_t;
+
+// configuration parameters for cpc_init()
+typedef struct {
+    cpc_type_t type;                // default is the CPC 6128
+    cpc_joystick_type_t joystick_type;
+    cpc_debug_t debug;
+
+    // video output config
+    struct {
+        void* ptr;              // pointer to a linear RGBA8 pixel buffer, at least 1024*312*4 bytes
+        size_t size;            // size of the pixel buffer in bytes
+    } pixel_buffer;
+
+    // audio output config (if you don't want audio, set callback.func to zero)
+    struct {
+        cpc_audio_callback_t callback;  // called when audio_num_samples are ready */
+        int num_samples;                // default is CPC_AUDIO_NUM_SAMPLES
+        int sample_rate;                // playback sample rate, default is 44100
+        float volume;                   // audio volume: 0.0..1.0, default is 0.25
+    } audio;
+
+    // ROM images
+    struct {
+        // CPC 464
+        struct {
+            cpc_rom_image_t os;
+            cpc_rom_image_t basic;
+        } cpc464;
+        // CPC 6128
+        struct {
+            cpc_rom_image_t os;
+            cpc_rom_image_t basic;
+            cpc_rom_image_t amsdos;
+        } cpc6128;
+        // KC Compact
+        struct {
+            cpc_rom_image_t os;
+            cpc_rom_image_t basic;
+        } kcc;
+    } roms;
 } cpc_desc_t;
 
-/* CPC emulator state */
+// CPC emulator state
 typedef struct {
-    z80_t cpu;
+    alignas(64) z80_t cpu;
     ay38910_t psg;
     mc6845_t crtc;
     am40010_t ga;
     i8255_t ppi;
     upd765_t fdc;
 
-    bool valid;
     cpc_type_t type;
     cpc_joystick_type_t joystick_type;
     uint8_t kbd_joymask;
@@ -155,69 +180,76 @@ typedef struct {
     uint16_t casread_trap;
     uint16_t casread_ret;
 
-    clk_t clk;
     kbd_t kbd;
     mem_t mem;
-    void* user_data;
-    cpc_audio_callback_t audio_cb;
-    int num_samples;
-    int sample_pos;
-    float sample_buffer[CPC_MAX_AUDIO_SAMPLES];
+
+    uint64_t pins;
+    bool valid;
+    cpc_debug_t debug;
+
+    struct {
+        cpc_audio_callback_t callback;
+        int num_samples;
+        int sample_pos;
+        float sample_buffer[CPC_MAX_AUDIO_SAMPLES];
+    } audio;
     uint8_t ram[8][0x4000];
     uint8_t rom_os[0x4000];
     uint8_t rom_basic[0x4000];
     uint8_t rom_amsdos[0x4000];
-    /* tape loading */
-    int tape_size;      /* tape_size is > 0 if a tape is inserted */
-    int tape_pos;
-    uint8_t tape_buf[CPC_MAX_TAPE_SIZE];
-    /* floppy disc drive */
+    // tape loading
+    struct {
+        int size; // tape_size is > 0 if a tape is inserted
+        int tape_pos;
+        uint8_t tape_buf[CPC_MAX_TAPE_SIZE];
+    } tape;
+    // floppy disc drive
     fdd_t fdd;
 } cpc_t;
 
-/* initialize a new CPC instance */
+// initialize a new CPC instance
 void cpc_init(cpc_t* cpc, const cpc_desc_t* desc);
-/* discard a CPC instance */
+// discard a CPC instance
 void cpc_discard(cpc_t* cpc);
-/* get the standard framebuffer width and height in pixels */
+// reset a CPC instance
+void cpc_reset(cpc_t* cpc);
+// run CPC instance for given amount of micro_seconds
+void cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
+// send a key down event
+void cpc_key_down(cpc_t* cpc, int key_code);
+// send a key up event
+void cpc_key_up(cpc_t* cpc, int key_code);
+// enable/disable joystick emulation
+void cpc_set_joystick_type(cpc_t* sys, cpc_joystick_type_t type);
+// get current joystick emulation type
+cpc_joystick_type_t cpc_joystick_type(cpc_t* sys);
+// set joystick mask (combination of CPC_JOYSTICK_*)
+void cpc_joystick(cpc_t* sys, uint8_t mask);
+// load a snapshot file (.sna or .bin) into the emulator
+bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+// insert a tape file (.tap)
+bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+// remove currently inserted tape
+void cpc_remove_tape(cpc_t* cpc);
+// insert a disk image file (.dsk)
+bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+// remove current disc
+void cpc_remove_disc(cpc_t* cpc);
+// if enabled, start calling the video-debugging-callback
+void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
+// get current display debug visualization enabled/disabled state
+bool cpc_video_debugging_enabled(cpc_t* cpc);
+// get the standard framebuffer width and height in pixels
 int cpc_std_display_width(void);
 int cpc_std_display_height(void);
-/* get the maximum framebuffer size in number of bytes */
-int cpc_max_display_size(void);
-/* get the current framebuffer width and height in pixels */
+// get the maximum framebuffer size in number of bytes
+size_t cpc_max_display_size(void);
+// get the current framebuffer width and height in pixels
 int cpc_display_width(cpc_t* sys);
 int cpc_display_height(cpc_t* sys);
-/* reset a CPC instance */
-void cpc_reset(cpc_t* cpc);
-/* run CPC instance for given amount of micro_seconds */
-void cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
-/* send a key down event */
-void cpc_key_down(cpc_t* cpc, int key_code);
-/* send a key up event */
-void cpc_key_up(cpc_t* cpc, int key_code);
-/* enable/disable joystick emulation */
-void cpc_set_joystick_type(cpc_t* sys, cpc_joystick_type_t type);
-/* get current joystick emulation type */
-cpc_joystick_type_t cpc_joystick_type(cpc_t* sys);
-/* set joystick mask (combination of CPC_JOYSTICK_*) */
-void cpc_joystick(cpc_t* sys, uint8_t mask);
-/* load a snapshot file (.sna or .bin) into the emulator */
-bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
-/* insert a tape file (.tap) */
-bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
-/* remove currently inserted tape */
-void cpc_remove_tape(cpc_t* cpc);
-/* insert a disk image file (.dsk) */
-bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
-/* remove current disc */
-void cpc_remove_disc(cpc_t* cpc);
-/* if enabled, start calling the video-debugging-callback */
-void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
-/* get current display debug visualization enabled/disabled state */
-bool cpc_video_debugging_enabled(cpc_t* cpc);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
