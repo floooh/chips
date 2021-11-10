@@ -213,8 +213,8 @@ void cpc_init(cpc_t* cpc, const cpc_desc_t* desc);
 void cpc_discard(cpc_t* cpc);
 // reset a CPC instance
 void cpc_reset(cpc_t* cpc);
-// run CPC instance for given amount of micro_seconds
-void cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
+// run CPC instance for given amount of micro_seconds, returns number of ticks executed
+uint32_t cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
 // send a key down event
 void cpc_key_down(cpc_t* cpc, int key_code);
 // send a key up event
@@ -262,7 +262,6 @@ int cpc_display_height(cpc_t* sys);
 
 #define _CPC_FREQUENCY (4000000)
 
-static uint64_t _cpc_tick(int num, uint64_t pins, void* user_data);
 static uint64_t _cpc_cclk(void* user_data);
 static void _cpc_psg_out(int port_id, uint8_t data, void* user_data);
 static uint8_t _cpc_psg_in(int port_id, void* user_data);
@@ -275,90 +274,75 @@ static int _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_dat
 static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info);
 static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* out_info);
 
-#define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
-#define _CPC_CLEAR(val) memset(&val, 0, sizeof(val))
+#define _CPC_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
 
 void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= cpc_max_display_size()));
+    CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= cpc_max_display_size())));
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(cpc_t));
     sys->valid = true;
     sys->type = desc->type;
     sys->joystick_type = desc->joystick_type;
+    sys->audio.callback = desc->audio.callback;
+    sys->audio.num_samples = _CPC_DEFAULT(desc->audio.num_samples, CPC_DEFAULT_AUDIO_SAMPLES);
+    CHIPS_ASSERT(sys->audio.num_samples <= CPC_MAX_AUDIO_SAMPLES);
     if (CPC_TYPE_464 == desc->type) {
-        CHIPS_ASSERT(desc->rom_464_os && (desc->rom_464_os_size == 0x4000));
-        CHIPS_ASSERT(desc->rom_464_basic && (desc->rom_464_basic_size == 0x4000));
-        memcpy(sys->rom_os, desc->rom_464_os, 0x4000);
-        memcpy(sys->rom_basic, desc->rom_464_basic, 0x4000);
+        CHIPS_ASSERT(desc->roms.cpc464.os.ptr && (desc->roms.cpc464.os.size == 0x4000));
+        CHIPS_ASSERT(desc->roms.cpc464.basic.ptr && (desc->roms.cpc464.basic.size == 0x4000));
+        memcpy(sys->rom_os, desc->roms.cpc464.os.ptr, 0x4000);
+        memcpy(sys->rom_basic, desc->roms.cpc464.basic.ptr, 0x4000);
     }
     else if (CPC_TYPE_6128 == desc->type) {
-        CHIPS_ASSERT(desc->rom_6128_os && (desc->rom_6128_os_size == 0x4000));
-        CHIPS_ASSERT(desc->rom_6128_basic && (desc->rom_6128_basic_size == 0x4000));
-        CHIPS_ASSERT(desc->rom_6128_amsdos && (desc->rom_6128_amsdos_size == 0x4000));
-        memcpy(sys->rom_os, desc->rom_6128_os, 0x4000);
-        memcpy(sys->rom_basic, desc->rom_6128_basic, 0x4000);
-        memcpy(sys->rom_amsdos, desc->rom_6128_amsdos, 0x4000);
+        CHIPS_ASSERT(desc->roms.cpc6128.os.ptr && (desc->roms.cpc6128.os.size == 0x4000));
+        CHIPS_ASSERT(desc->roms.cpc6128.basic.ptr && (desc->roms.cpc6128.basic.size == 0x4000));
+        CHIPS_ASSERT(desc->roms.cpc6128.amsdos.ptr && (desc->roms.cpc6128.amsdos.size == 0x4000));
+        memcpy(sys->rom_os, desc->roms.cpc6128.os.ptr, 0x4000);
+        memcpy(sys->rom_basic, desc->roms.cpc6128.basic.ptr, 0x4000);
+        memcpy(sys->rom_amsdos, desc->roms.cpc6128.amsdos.ptr, 0x4000);
     }
-    else { /* KC Compact */
-        CHIPS_ASSERT(desc->rom_kcc_os && (desc->rom_kcc_os_size == 0x4000));
-        CHIPS_ASSERT(desc->rom_kcc_basic && (desc->rom_kcc_basic_size == 0x4000));
-        memcpy(sys->rom_os, desc->rom_kcc_os, 0x4000);
-        memcpy(sys->rom_basic, desc->rom_kcc_basic, 0x4000);
+    else { // KC Compact
+        CHIPS_ASSERT(desc->roms.kcc.os.ptr && (desc->roms.kcc.os.size == 0x4000));
+        CHIPS_ASSERT(desc->roms.kcc.basic.ptr && (desc->roms.kcc.basic.size == 0x4000));
+        memcpy(sys->rom_os, desc->roms.kcc.os.ptr, 0x4000);
+        memcpy(sys->rom_basic, desc->roms.kcc.basic.ptr, 0x4000);
     }
-    sys->user_data = desc->user_data;
-    sys->audio_cb = desc->audio_cb;
-    sys->num_samples = _CPC_DEFAULT(desc->audio_num_samples, CPC_DEFAULT_AUDIO_SAMPLES);
-    CHIPS_ASSERT(sys->num_samples <= CPC_MAX_AUDIO_SAMPLES);
 
-    /* initialize the hardware */
-    clk_init(&sys->clk, _CPC_FREQUENCY);
-    mem_init(&sys->mem);
-
-    z80_desc_t cpu_desc;
-    _CPC_CLEAR(cpu_desc);
-    cpu_desc.tick_cb = _cpc_tick;
-    cpu_desc.user_data = sys;
-    z80_init(&sys->cpu, &cpu_desc);
-
+    // initialize the hardware
+    sys->pins = z80_init(&sys->cpu);
     i8255_init(&sys->ppi);
-
-    ay38910_desc_t psg_desc;
-    _CPC_CLEAR(psg_desc);
-    psg_desc.type = AY38910_TYPE_8912;
-    psg_desc.in_cb = _cpc_psg_in;
-    psg_desc.out_cb = _cpc_psg_out;
-    psg_desc.tick_hz = _CPC_FREQUENCY / 4;
-    psg_desc.sound_hz = _CPC_DEFAULT(desc->audio_sample_rate, 44100);
-    psg_desc.magnitude = _CPC_DEFAULT(desc->audio_volume, 0.5f);
-    psg_desc.user_data = sys;
-    ay38910_init(&sys->psg, &psg_desc);
-
+    ay38910_init(&sys->psg, &(ay38910_desc_t){
+        .type = AY38910_TYPE_8912,
+        .in_cb = _cpc_psg_in,
+        .out_cb = _cpc_psg_out,
+        .tick_hz = _CPC_FREQUENCY / 4,
+        .sound_hz = _CPC_DEFAULT(desc->audio.sample_rate, 44100),
+        .magnitude = _CPC_DEFAULT(desc->audio.volume, 0.5f),
+        .user_data = sys
+    });
     mc6845_init(&sys->crtc, MC6845_TYPE_UM6845R);
-
-    am40010_desc_t ga_desc;
-    _CPC_CLEAR(ga_desc);
-    ga_desc.cpc_type = (am40010_cpc_type_t) sys->type;
-    ga_desc.bankswitch_cb = _cpc_bankswitch;
-    ga_desc.cclk_cb = _cpc_cclk;
-    ga_desc.ram = &sys->ram[0][0];
-    ga_desc.ram_size = sizeof(sys->ram);
-    ga_desc.rgba8_buffer = (uint32_t*) desc->pixel_buffer;
-    ga_desc.rgba8_buffer_size = desc->pixel_buffer_size;
-    ga_desc.user_data = sys;
-    am40010_init(&sys->ga, &ga_desc);
-
-    upd765_desc_t fdc_desc;
-    _CPC_CLEAR(fdc_desc);
-    fdc_desc.seektrack_cb = _cpc_fdc_seektrack;
-    fdc_desc.seeksector_cb = _cpc_fdc_seeksector;
-    fdc_desc.read_cb = _cpc_fdc_read;
-    fdc_desc.trackinfo_cb = _cpc_fdc_trackinfo;
-    fdc_desc.driveinfo_cb = _cpc_fdc_driveinfo;
-    fdc_desc.user_data = sys;
-    upd765_init(&sys->fdc, &fdc_desc);
+    am40010_init(&sys->ga, &(am40010_desc_t){
+        .cpc_type = (am40010_cpc_type_t) sys->type,
+        .bankswitch_cb = _cpc_bankswitch,
+        .cclk_cb = _cpc_cclk,
+        .ram = &sys->ram[0][0],
+        .ram_size = sizeof(sys->ram),
+        .rgba8_buffer = (uint32_t*) desc->pixel_buffer.ptr,
+        .rgba8_buffer_size = desc->pixel_buffer.size,
+        .user_data = sys,
+    });
+    upd765_init(&sys->fdc, &(upd765_desc_t){
+        .seektrack_cb = _cpc_fdc_seektrack,
+        .seeksector_cb = _cpc_fdc_seeksector,
+        .read_cb = _cpc_fdc_read,
+        .trackinfo_cb = _cpc_fdc_trackinfo,
+        .driveinfo_cb = _cpc_fdc_driveinfo,
+        .user_data = sys,
+    });
     fdd_init(&sys->fdd);
 
+    mem_init(&sys->mem);
     _cpc_init_keymap(sys);
 
     /* cassette tape loading
@@ -372,36 +356,11 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         sys->casread_trap = 0x29A6;
         sys->casread_ret  = 0x29E2;
     }
-    /* execution starts as address 0 */
-    z80_set_pc(&sys->cpu, 0x0000);
 }
 
 void cpc_discard(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
-}
-
-int cpc_std_display_width(void) {
-    return AM40010_DISPLAY_WIDTH;
-}
-
-int cpc_std_display_height(void) {
-    return AM40010_DISPLAY_HEIGHT;
-}
-
-int cpc_max_display_size(void) {
-    /* take debugging visualization into account */
-    return AM40010_DBG_DISPLAY_WIDTH * AM40010_DBG_DISPLAY_HEIGHT * 4;
-}
-
-int cpc_display_width(cpc_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->ga.dbg_vis ? AM40010_DBG_DISPLAY_WIDTH : AM40010_DISPLAY_WIDTH;
-}
-
-int cpc_display_height(cpc_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->ga.dbg_vis ? AM40010_DBG_DISPLAY_HEIGHT : AM40010_DISPLAY_HEIGHT;
 }
 
 void cpc_reset(cpc_t* sys) {
@@ -411,36 +370,194 @@ void cpc_reset(cpc_t* sys) {
     ay38910_reset(&sys->psg);
     i8255_reset(&sys->ppi);
     am40010_reset(&sys->ga);
-    z80_reset(&sys->cpu);
-    z80_set_pc(&sys->cpu, 0x0000);
+    sys->pins = z80_reset(&sys->cpu);
     sys->kbd_joymask = 0;
     sys->joy_joymask = 0;
 }
 
-void cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
-    uint32_t ticks_executed = 0;
-    int trap_id = 0;
-    while ((ticks_executed < ticks_to_run) && (0 == trap_id)) {
-        ticks_executed += z80_exec(&sys->cpu, ticks_to_run);
-        /* check if casread trap has been hit, and the right ROM is mapped in */
-        trap_id = sys->cpu.trap_id;
-        if (trap_id == 1) {
-            if (sys->type == CPC_TYPE_6128) {
-                if (0 == (sys->ga.regs.config & (1<<2))) {
-                    _cpc_cas_read(sys);
-                }
-            }
-            else {
-                /* no memory mapping on KC Compact, 464 or 664 */
-                _cpc_cas_read(sys);
-            }
-            trap_id = 0;
+static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
+    cpu_pins = z80_tick(&sys->cpu, cpu_pins);
+
+    // memory and IO requests
+    if (cpu_pins & Z80_MREQ) {
+        const uint16_t addr = Z80_GET_ADDR(cpu_pins);
+        if (cpu_pins & Z80_RD) {
+            Z80_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
+        }
+        else if (cpu_pins & Z80_WR) {
+            mem_wr(&sys->mem, addr, Z80_GET_DATA(cpu_pins));
         }
     }
-    clk_ticks_executed(&sys->clk, ticks_executed);
+    else if ((cpu_pins & (Z80_M1|Z80_IORQ)) == Z80_IORQ) {
+        /* CPU IO address decoding
+
+            For address decoding, see the main board schematics!
+            also: http://cpcwiki.eu/index.php/Default_I/O_Port_Summary
+        */
+
+        /*
+            Z80 to i8255 PPI pin connections:
+                ~A11 -> CS (CS is active-low)
+                    A8 -> A0
+                    A9 -> A1
+                    RD -> RD
+                    WR -> WR
+                D0..D7 -> D0..D7
+
+            i8255 PPI to AY-3-8912 PSG pin connections:
+                PA0..PA7    -> D0..D7
+                     PC7    -> BDIR
+                     PC6    -> BC1
+
+            i8255 Port B:
+                 Bit 7: cassette data input
+                 Bit 6: printer port ready (1=not ready, 0=ready)
+                 Bit 5: expansion port /EXP pin
+                 Bit 4: screen refresh rate (1=50Hz, 0=60Hz)
+                 Bit 3..1: distributor id (shown in start screen)
+                     0: Isp
+                     1: Triumph
+                     2: Saisho
+                     3: Solavox
+                     4: Awa
+                     5: Schneider
+                     6: Orion
+                     7: Amstrad
+                 Bit 0: vsync
+
+            i8255 Port C:
+                PC0..PC3: select keyboard matrix line
+        */
+        if ((cpu_pins & Z80_A11) == 0) {
+            // i8255 in/out
+            uint64_t ppi_pins = (cpu_pins & Z80_PIN_MASK & ~(I8255_PC_PINS|I8255_A1|I8255_A0)) | I8255_CS;
+            if (cpu_pins & Z80_A9) { ppi_pins |= I8255_A1; }
+            if (cpu_pins & Z80_A8) { ppi_pins |= I8255_A0; }
+            if ((sys->ppi.pins & (I8255_PC7|I8255_PC6)) != 0) {
+                uint64_t ay_pins = 0;
+                if (sys->ppi.pins & I8255_PC7) { ay_pins |= AY38910_BDIR; }
+                if (sys->ppi.pins & I8255_PC6) { ay_pins |= AY38910_BC1; }
+                const uint8_t ay_data = I8255_GET_PA(sys->ppi.pins);
+                AY38910_SET_DATA(ay_pins, ay_data);
+                // FIXME
+                //ay_pins = ay38910_iorq(&sys->psg, ay_pins);
+                I8255_SET_PA(ppi_pins, AY38910_DATA(ay_pins));
+            }
+            ppi_pins |= I8255_PB1|I8255_PB2|I8255_PB3;  // "Amstrad"
+            ppi_pins |= I8255_PB4;  // PAL (50Hz)
+            if (sys->crtc.vs) {
+                ppi_pins |= I8255_PB0;   // VSYNC
+            }
+            ppi_pins = i8255_tick(&sys->ppi, ppi_pins);
+            // copy data bus value to cpu pins
+            if ((ppi_pins & (I8255_CS|I8255_RD)) == (I8255_CS|I8255_RD)) {
+                Z80_SET_DATA(cpu_pins, I8255_GET_DATA(ppi_pins));
+            }
+            // update PSG state
+            if ((ppi_pins & (I8255_PC7|I8255_PC6)) != 0) {
+                uint64_t ay_pins = 0;
+                if (ppi_pins & I8255_PC7) { ay_pins |= AY38910_BDIR; }
+                if (ppi_pins & I8255_PC6) { ay_pins |= AY38910_BC1; }
+                const uint8_t ay_data = I8255_GET_PA(ppi_pins);
+                AY38910_SET_DATA(ay_pins, ay_data);
+                // FIXME
+                //ay38910_iorq(&sys->psg, ay_pins);
+            }
+            // PC0..PC3: select keyboard matrix line
+            uint16_t col_mask = 1<<(I8255_GET_PC(ppi_pins) & 0x0F);
+            kbd_set_active_columns(&sys->kbd, col_mask);
+            // FIXME: cassette write data
+            // FIXME: cassette deck motor control
+        }
+        /*
+            Gate Array Function and upper rom select
+            (only writing to the gate array
+            is possible, but the gate array doesn't check the
+            CPU R/W pins, so each access is a write).
+
+            This is used by the Arnold Acid test "OnlyInc", which
+            access the PPI and gate array in the same IO operation
+            to move data directly from the PPI into the gate array.
+
+            Because of this the gate array must be ticker *after* the PPI
+            and use the returned pins from the PPI as input.
+        */
+        am40010_iorq(&sys->ga, cpu_pins);
+        /*
+            Z80 to MC6845 pin connections:
+
+                ~A14 -> CS (CS is active low)
+                A9  -> RW (high: read, low: write)
+                A8  -> RS
+            D0..D7  -> D0..D7
+        */
+        if ((cpu_pins & Z80_A14) == 0) {
+            // 6845 in/out
+            uint64_t crtc_pins = (cpu_pins & Z80_PIN_MASK)|MC6845_CS;
+            if (cpu_pins & Z80_A9) { crtc_pins |= MC6845_RW; }
+            if (cpu_pins & Z80_A8) { crtc_pins |= MC6845_RS; }
+            cpu_pins = mc6845_iorq(&sys->crtc, crtc_pins) & Z80_PIN_MASK;
+        }
+        // Floppy Disk Interface
+        if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == 0) {
+            if (cpu_pins & Z80_WR) {
+                fdd_motor(&sys->fdd, 0 != (Z80_GET_DATA(cpu_pins) & 1));
+            }
+        }
+        else if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
+            // floppy controller status/data register
+            uint64_t fdc_pins = UPD765_CS | (cpu_pins & Z80_PIN_MASK);
+            cpu_pins = upd765_iorq(&sys->fdc, fdc_pins) & Z80_PIN_MASK;
+        }
+    }
+
+    /* Tick the gate array, this will in turn tick the
+       CRTC and PSG chips at the generated 1 MHz CCLK frequency
+       (see _cpc_cclk callback). The returned CPU pin mask
+       will have the WAIT and INT pin set as needed.
+    */
+    cpu_pins = am40010_tick(&sys->ga, cpu_pins) & Z80_PIN_MASK;
+    return cpu_pins;
+}
+
+
+uint32_t cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    const uint32_t num_ticks = clk_us_to_ticks(_CPC_FREQUENCY, micro_seconds);
+    uint64_t pins = sys->pins;
+    if (0 == sys->debug.callback.func) {
+        // run without debug hook
+        for (uint32_t tick = 0; tick < num_ticks; tick++) {
+            pins = _cpc_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debug hook
+        for (uint32_t tick = 0; (tick < num_ticks) && !(*sys->debug.stopped); tick++) {
+            pins = _cpc_tick(sys, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
+        }
+    }
+    sys->pins = pins;
     kbd_update(&sys->kbd, micro_seconds);
+    return num_ticks;
+
+    /* FIXME FIXME FIXME
+    // check if casread trap has been hit, and the right ROM is mapped in
+    trap_id = sys->cpu.trap_id;
+    if (trap_id == 1) {
+        if (sys->type == CPC_TYPE_6128) {
+            if (0 == (sys->ga.regs.config & (1<<2))) {
+                _cpc_cas_read(sys);
+            }
+        }
+        else {
+            // no memory mapping on KC Compact, 464 or 664
+            _cpc_cas_read(sys);
+        }
+        trap_id = 0;
+    }
+    */
 }
 
 void cpc_key_down(cpc_t* sys, int key_code) {
@@ -502,163 +619,15 @@ bool cpc_video_debugging_enabled(cpc_t* sys) {
     return sys->ga.dbg_vis;
 }
 
-/* the CPU tick callback */
-static uint64_t _cpc_tick(int num_ticks, uint64_t cpu_pins, void* user_data) {
-    cpc_t* sys = (cpc_t*) user_data;
-
-    /* memory and IO requests */
-    if (cpu_pins & Z80_MREQ) {
-        /* CPU MEMORY REQUEST */
-        const uint16_t addr = Z80_GET_ADDR(cpu_pins);
-        if (cpu_pins & Z80_RD) {
-            Z80_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
-        }
-        else if (cpu_pins & Z80_WR) {
-            mem_wr(&sys->mem, addr, Z80_GET_DATA(cpu_pins));
-        }
-    }
-    else if ((cpu_pins & Z80_IORQ) && (cpu_pins & (Z80_RD|Z80_WR))) {
-        /* CPU IO address decoding
-
-            For address decoding, see the main board schematics!
-            also: http://cpcwiki.eu/index.php/Default_I/O_Port_Summary
-        */
-
-        /*
-            Z80 to i8255 PPI pin connections:
-                ~A11 -> CS (CS is active-low)
-                    A8 -> A0
-                    A9 -> A1
-                    RD -> RD
-                    WR -> WR
-                D0..D7 -> D0..D7
-
-            i8255 PPI to AY-3-8912 PSG pin connections:
-                PA0..PA7    -> D0..D7
-                     PC7    -> BDIR
-                     PC6    -> BC1
-
-            i8255 Port B:
-                 Bit 7: cassette data input
-                 Bit 6: printer port ready (1=not ready, 0=ready)
-                 Bit 5: expansion port /EXP pin
-                 Bit 4: screen refresh rate (1=50Hz, 0=60Hz)
-                 Bit 3..1: distributor id (shown in start screen)
-                     0: Isp
-                     1: Triumph
-                     2: Saisho
-                     3: Solavox
-                     4: Awa
-                     5: Schneider
-                     6: Orion
-                     7: Amstrad
-                 Bit 0: vsync
-
-            i8255 Port C:
-                PC0..PC3: select keyboard matrix line
-        */
-        if ((cpu_pins & Z80_A11) == 0) {
-            /* i8255 in/out */
-            uint64_t ppi_pins = (cpu_pins & Z80_PIN_MASK & ~(I8255_PC_PINS|I8255_A1|I8255_A0)) | I8255_CS;
-            if (cpu_pins & Z80_A9) { ppi_pins |= I8255_A1; }
-            if (cpu_pins & Z80_A8) { ppi_pins |= I8255_A0; }
-            if ((sys->ppi.pins & (I8255_PC7|I8255_PC6)) != 0) {
-                uint64_t ay_pins = 0;
-                if (sys->ppi.pins & I8255_PC7) { ay_pins |= AY38910_BDIR; }
-                if (sys->ppi.pins & I8255_PC6) { ay_pins |= AY38910_BC1; }
-                const uint8_t ay_data = I8255_GET_PA(sys->ppi.pins);
-                AY38910_SET_DATA(ay_pins, ay_data);
-                ay_pins = ay38910_iorq(&sys->psg, ay_pins);
-                I8255_SET_PA(ppi_pins, AY38910_DATA(ay_pins));
-            }
-            ppi_pins |= I8255_PB1|I8255_PB2|I8255_PB3;  /* Amstrad */
-            ppi_pins |= I8255_PB4;  /* PAL (50Hz) */
-            if (sys->crtc.vs) {
-                ppi_pins |= I8255_PB0;   /* VSYNC */
-            }
-            ppi_pins = i8255_tick(&sys->ppi, ppi_pins);
-            /* copy data bus value to cpu pins */
-            if ((ppi_pins & (I8255_CS|I8255_RD)) == (I8255_CS|I8255_RD)) {
-                Z80_SET_DATA(cpu_pins, I8255_GET_DATA(ppi_pins));
-            }
-            /* update PSG state */
-            if ((ppi_pins & (I8255_PC7|I8255_PC6)) != 0) {
-                uint64_t ay_pins = 0;
-                if (ppi_pins & I8255_PC7) { ay_pins |= AY38910_BDIR; }
-                if (ppi_pins & I8255_PC6) { ay_pins |= AY38910_BC1; }
-                const uint8_t ay_data = I8255_GET_PA(ppi_pins);
-                AY38910_SET_DATA(ay_pins, ay_data);
-                ay38910_iorq(&sys->psg, ay_pins);
-            }
-            /* PC0..PC3: select keyboard matrix line*/
-            uint16_t col_mask = 1<<(I8255_GET_PC(ppi_pins) & 0x0F);
-            kbd_set_active_columns(&sys->kbd, col_mask);
-            /* FIXME: cassette write data */
-            /* FIXME: cassette deck motor control */
-        }
-        /*
-            Gate Array Function and upper rom select
-            (only writing to the gate array
-            is possible, but the gate array doesn't check the
-            CPU R/W pins, so each access is a write).
-
-            This is used by the Arnold Acid test "OnlyInc", which
-            access the PPI and gate array in the same IO operation
-            to move data directly from the PPI into the gate array.
-
-            Because of this the gate array must be ticker *after* the PPI
-            and use the returned pins from the PPI as input.
-        */
-        am40010_iorq(&sys->ga, cpu_pins);
-        /*
-            Z80 to MC6845 pin connections:
-
-                ~A14 -> CS (CS is active low)
-                A9  -> RW (high: read, low: write)
-                A8  -> RS
-            D0..D7  -> D0..D7
-        */
-        if ((cpu_pins & Z80_A14) == 0) {
-            /* 6845 in/out */
-            uint64_t crtc_pins = (cpu_pins & Z80_PIN_MASK)|MC6845_CS;
-            if (cpu_pins & Z80_A9) { crtc_pins |= MC6845_RW; }
-            if (cpu_pins & Z80_A8) { crtc_pins |= MC6845_RS; }
-            cpu_pins = mc6845_iorq(&sys->crtc, crtc_pins) & Z80_PIN_MASK;
-        }
-        /*
-            Floppy Disk Interface
-        */
-        if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == 0) {
-            if (cpu_pins & Z80_WR) {
-                fdd_motor(&sys->fdd, 0 != (Z80_GET_DATA(cpu_pins) & 1));
-            }
-        }
-        else if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
-            /* floppy controller status/data register */
-            uint64_t fdc_pins = UPD765_CS | (cpu_pins & Z80_PIN_MASK);
-            cpu_pins = upd765_iorq(&sys->fdc, fdc_pins) & Z80_PIN_MASK;
-        }
-    }
-
-    /* Tick the gate array, this will in turn tick the
-       CRTC and PSG chips at the generated 1 MHz CCLK frequency
-       (see _cpc_cclk callback). The returned CPU pin mask
-       has been updated with the necessary WAIT states to inject, and
-       the INT pin when the gate array requests an interrupt
-    */
-    cpu_pins = am40010_tick(&sys->ga, num_ticks, cpu_pins) & Z80_PIN_MASK;
-    return cpu_pins;
-}
-
-/* called when a new sample is ready from the sound chip */
+// called when a new sample is ready from the sound chip
 static inline void _cpc_sample_ready(cpc_t* sys) {
-    sys->sample_buffer[sys->sample_pos++] = sys->psg.sample;
-    if (sys->sample_pos == sys->num_samples) {
-        if (sys->audio_cb) {
-            /* new sample packet is ready */
-            sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+    sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->psg.sample;
+    if (sys->audio.sample_pos == sys->audio.num_samples) {
+        if (sys->audio.callback.func) {
+            // new sample packet is ready
+            sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
         }
-        sys->sample_pos = 0;
+        sys->audio.sample_pos = 0;
     }
 }
 
@@ -667,25 +636,27 @@ static inline void _cpc_sample_ready(cpc_t* sys) {
 */
 static uint64_t _cpc_cclk(void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
-    /* tick the sound chip... */
+    /* FIXME FIXME FIXME
+    // tick the sound chip...
     if (ay38910_tick(&sys->psg)) {
-        /* new sound sample ready */
+        // new sound sample ready
         _cpc_sample_ready(sys);
     }
-    /* tick the CRTC and return its pin mask */
+    */
+    // tick the CRTC and return its pin mask
     uint64_t crtc_pins = mc6845_tick(&sys->crtc);
     return crtc_pins;
 }
 
-/* PSG OUT callback (nothing to do here) */
+// PSG OUT callback (nothing to do here)
 static void _cpc_psg_out(int port_id, uint8_t data, void* user_data) {
-    /* this shouldn't be called */
+    // this shouldn't be called
     (void)port_id;
     (void)data;
     (void)user_data;
 }
 
-/* PSG IN callback (read keyboard matrix and joystick port) */
+// PSG IN callback (read keyboard matrix and joystick port)
 static uint8_t _cpc_psg_in(int port_id, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     if (port_id == AY38910_PORT_A) {
@@ -708,12 +679,12 @@ static uint8_t _cpc_psg_in(int port_id, void* user_data) {
         return ~data;
     }
     else {
-        /* this shouldn't happen since the AY-3-8912 only has one IO port */
+        // this shouldn't happen since the AY-3-8912 only has one IO port
         return 0xFF;
     }
 }
 
-/* keyboard matrix initialization */
+// keyboard matrix initialization
 static void _cpc_init_keymap(cpc_t* sys) {
     /*
         http://cpctech.cpc-live.com/docs/keyboard.html
@@ -725,7 +696,7 @@ static void _cpc_init_keymap(cpc_t* sys) {
     */
     kbd_init(&sys->kbd, 1);
     const char* keymap =
-        /* no shift */
+        // no shift
         "   ^08641 "
         "  [-97532 "
         "   @oure  "
@@ -735,7 +706,7 @@ static void _cpc_init_keymap(cpc_t* sys) {
         "  \\/mnbc  "
         "   ., vxz "
 
-        /* shift */
+        // shift
         "    _(&$! "
         "  {=)'%#\" "
         "   |OURE  "
@@ -744,9 +715,9 @@ static void _cpc_init_keymap(cpc_t* sys) {
         "   *KJFDA "
         "  `?MNBC  "
         "   >< VXZ ";
-    /* shift key is on column 2, line 5 */
+    // shift key is on column 2, line 5
     kbd_register_modifier(&sys->kbd, 0, 2, 5);
-    /* ctrl key is on column 2, line 7 */
+    // ctrl key is on column 2, line 7
     kbd_register_modifier(&sys->kbd, 1, 2, 7);
 
     for (int shift = 0; shift < 2; shift++) {
@@ -760,17 +731,17 @@ static void _cpc_init_keymap(cpc_t* sys) {
         }
     }
 
-    /* special keys */
-    kbd_register_key(&sys->kbd, 0x20, 5, 7, 0); /* space */
-    kbd_register_key(&sys->kbd, 0x08, 1, 0, 0); /* cursor left */
-    kbd_register_key(&sys->kbd, 0x09, 0, 1, 0); /* cursor right */
-    kbd_register_key(&sys->kbd, 0x0A, 0, 2, 0); /* cursor down */
-    kbd_register_key(&sys->kbd, 0x0B, 0, 0, 0); /* cursor up */
-    kbd_register_key(&sys->kbd, 0x01, 9, 7, 0); /* delete */
-    kbd_register_key(&sys->kbd, 0x0C, 2, 0, 0); /* clr */
-    kbd_register_key(&sys->kbd, 0x0D, 2, 2, 0); /* return */
-    kbd_register_key(&sys->kbd, 0x03, 8, 2, 0); /* escape */
-    kbd_register_key(&sys->kbd, 0xF1, 1, 5, 0); /* F1...*/
+    // special keys
+    kbd_register_key(&sys->kbd, 0x20, 5, 7, 0); // space
+    kbd_register_key(&sys->kbd, 0x08, 1, 0, 0); // cursor left
+    kbd_register_key(&sys->kbd, 0x09, 0, 1, 0); // cursor right
+    kbd_register_key(&sys->kbd, 0x0A, 0, 2, 0); // cursor down
+    kbd_register_key(&sys->kbd, 0x0B, 0, 0, 0); // cursor up
+    kbd_register_key(&sys->kbd, 0x01, 9, 7, 0); // delete
+    kbd_register_key(&sys->kbd, 0x0C, 2, 0, 0); // clr
+    kbd_register_key(&sys->kbd, 0x0D, 2, 2, 0); // return
+    kbd_register_key(&sys->kbd, 0x03, 8, 2, 0); // escape
+    kbd_register_key(&sys->kbd, 0xF1, 1, 5, 0); // F1...
     kbd_register_key(&sys->kbd, 0xF2, 1, 6, 0);
     kbd_register_key(&sys->kbd, 0xF3, 0, 5, 0);
     kbd_register_key(&sys->kbd, 0xF4, 4, 2, 0);
@@ -779,10 +750,10 @@ static void _cpc_init_keymap(cpc_t* sys) {
     kbd_register_key(&sys->kbd, 0xF7, 2, 1, 0);
     kbd_register_key(&sys->kbd, 0xF8, 3, 1, 0);
     kbd_register_key(&sys->kbd, 0xF9, 3, 0, 0);
-    kbd_register_key(&sys->kbd, 0xFA, 7, 1, 0); /* F0 -> F10 */
+    kbd_register_key(&sys->kbd, 0xFA, 7, 1, 0); // F0 -> F10
 }
 
-/* CPC6128 RAM block indices */
+// CPC6128 RAM block indices
 static int _cpc_ram_config[8][4] = {
     { 0, 1, 2, 3 },
     { 0, 1, 2, 7 },
@@ -794,7 +765,7 @@ static int _cpc_ram_config[8][4] = {
     { 0, 7, 2, 3 }
 };
 
-/* memory bankswitch callback, invoked by gate array (am40010) */
+// memory bankswitch callback, invoked by gate array (am40010)
 static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_select, void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
     int ram_config_index;
@@ -815,33 +786,33 @@ static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_
     const int i2 = _cpc_ram_config[ram_config_index][2];
     const int i3 = _cpc_ram_config[ram_config_index][3];
 
-    /* 0x0000 .. 0x3FFF */
+    // 0x0000 .. 0x3FFF
     if (rom_enable & AM40010_CONFIG_LROMEN) {
-        /* read/write RAM */
+        // read/write RAM
         mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[i0]);
     }
     else {
-        /* RAM-behind-ROM */
+        // RAM-behind-ROM
         mem_map_rw(&sys->mem, 0, 0x0000, 0x4000, rom0_ptr, sys->ram[i0]);
     }
-    /* 0x4000 .. 0x7FFF */
+    // 0x4000 .. 0x7FFF
     mem_map_ram(&sys->mem, 0, 0x4000, 0x4000, sys->ram[i1]);
-    /* 0x8000 .. 0xBFFF */
+    // 0x8000 .. 0xBFFF
     mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[i2]);
-    /* 0xC000 .. 0xFFFF */
+    // 0xC000 .. 0xFFFF
     if (rom_enable & AM40010_CONFIG_HROMEN) {
-        /* read/write RAM */
+        // read/write RAM
         mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->ram[i3]);
     }
     else {
-        /* RAM-behind-ROM */
+        // RAM-behind-ROM
         mem_map_rw(&sys->mem, 0, 0xC000, 0x4000, rom1_ptr, sys->ram[i3]);
     }
 }
 
 /*=== SNAPSHOT FILE LOADING ==================================================*/
 
-/* CPC SNA fileformat header: http://cpctech.cpc-live.com/docs/snapshot.html */
+// CPC SNA fileformat header: http://cpctech.cpc-live.com/docs/snapshot.html
 typedef struct {
     uint8_t magic[8];     // must be "MV - SNA"
     uint8_t pad0[8];
@@ -883,7 +854,7 @@ static bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
             return false;
         }
     }
-    /* FIXME: check version field? */
+    // FIXME: check version field?
     return true;
 }
 
@@ -903,22 +874,22 @@ static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     memcpy(sys->ram, ptr, dump_num_bytes);
 
 //    z80_reset(&sys->cpu);
-    z80_set_f(&sys->cpu, hdr->F); z80_set_a(&sys->cpu,hdr->A);
-    z80_set_c(&sys->cpu, hdr->C); z80_set_b(&sys->cpu, hdr->B);
-    z80_set_e(&sys->cpu, hdr->E); z80_set_d(&sys->cpu, hdr->D);
-    z80_set_l(&sys->cpu, hdr->L); z80_set_h(&sys->cpu, hdr->H);
-    z80_set_r(&sys->cpu, hdr->R); z80_set_i(&sys->cpu, hdr->I);
-    z80_set_iff1(&sys->cpu, (hdr->IFF1 & 1) != 0);
-    z80_set_iff2(&sys->cpu, (hdr->IFF2 & 1) != 0);
-    z80_set_ix(&sys->cpu, hdr->IX_h<<8 | hdr->IX_l);
-    z80_set_iy(&sys->cpu, hdr->IY_h<<8 | hdr->IY_l);
-    z80_set_sp(&sys->cpu, hdr->SP_h<<8 | hdr->SP_l);
-    z80_set_pc(&sys->cpu, hdr->PC_h<<8 | hdr->PC_l);
-    z80_set_im(&sys->cpu, hdr->IM);
-    z80_set_af_(&sys->cpu, hdr->A_<<8 | hdr->F_);
-    z80_set_bc_(&sys->cpu, hdr->B_<<8 | hdr->C_);
-    z80_set_de_(&sys->cpu, hdr->D_<<8 | hdr->E_);
-    z80_set_hl_(&sys->cpu, hdr->H_<<8 | hdr->L_);
+    sys->cpu.f = hdr->F; sys->cpu.a = hdr->A;
+    sys->cpu.c = hdr->C; sys->cpu.b = hdr->B;
+    sys->cpu.e = hdr->E; sys->cpu.d = hdr->D;
+    sys->cpu.l = hdr->L; sys->cpu.h = hdr->H;
+    sys->cpu.r = hdr->R; sys->cpu.i = hdr->I;
+    sys->cpu.iff1 = (hdr->IFF1 & 1) != 0);
+    sys->cpu.iff2 = (hdr->IFF2 & 1) != 0);
+    sys->cpu.ix = (hdr->IX_h<<8) | hdr->IX_l;
+    sys->cpu.iy = (hdr->IY_h<<8) | hdr->IY_l;
+    sys->cpu.sp = (hdr->SP_h<<8) | hdr->SP_l;
+    sys->cpu.pc = (hdr->PC_h<<8) | hdr->PC_l;
+    sys->cpu.im = hdr->IM;
+    sys->cpu.af2 = (hdr->A_<<8) | hdr->F_;
+    sys->cpu.bc2 = (hdr->B_<<8) | hdr->C_;
+    sys->cpu.de2 = (hdr->D_<<8) | hdr->E_;
+    sys->cpu.hl2 = (hdr->H_<<8) | hdr->L_;
 
     sys->ga.colors.dirty = true;
     for (int i = 0; i < 16; i++) {
@@ -942,10 +913,9 @@ static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     sys->ppi.control = hdr->ppi_control;
 
     for (int i = 0; i < 16; i++) {
-        ay38910_iorq(&sys->psg, AY38910_BDIR|AY38910_BC1|(i<<16));
-        ay38910_iorq(&sys->psg, AY38910_BDIR|(hdr->psg_regs[i]<<16));
+        ay38910_set_register(&sys->psg, i, hdr->psg_regs[i]);
     }
-    ay38910_iorq(&sys->psg, AY38910_BDIR|AY38910_BC1|(hdr->psg_selected<<16));
+    ay38910_set_set_addr_latch(&sys->psg, hdr->psg_selected);
     return true;
 }
 
@@ -1155,6 +1125,29 @@ bool cpc_insert_disc(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
 
 void cpc_remove_disc(cpc_t* sys) {
     fdd_eject_disc(&sys->fdd);
+}
+
+int cpc_std_display_width(void) {
+    return AM40010_DISPLAY_WIDTH;
+}
+
+int cpc_std_display_height(void) {
+    return AM40010_DISPLAY_HEIGHT;
+}
+
+size_t cpc_max_display_size(void) {
+    // take debugging visualization into account
+    return AM40010_DBG_DISPLAY_WIDTH * AM40010_DBG_DISPLAY_HEIGHT * 4;
+}
+
+int cpc_display_width(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->ga.dbg_vis ? AM40010_DBG_DISPLAY_WIDTH : AM40010_DISPLAY_WIDTH;
+}
+
+int cpc_display_height(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->ga.dbg_vis ? AM40010_DBG_DISPLAY_HEIGHT : AM40010_DISPLAY_HEIGHT;
 }
 
 #endif /* CHIPS_IMPL */
