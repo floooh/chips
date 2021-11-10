@@ -124,7 +124,7 @@ typedef struct {
         size_t size;    // size of the pixel buffer in bytes
     } pixel_buffer;
 
-    // audio output config (if you don't want audio, set audio_cb to zero)
+    // audio output config (if you don't want audio, set callback.func to zero)
     struct {
         zx_audio_callback_t callback;   // called when audio_num_samples are ready
         int num_samples;                // default is ZX_AUDIO_NUM_SAMPLES
