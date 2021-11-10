@@ -977,33 +977,14 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
     }
     if (ext_hdr) {
         sys->pins = z80_prefetch(&sys->cpu, (ext_hdr->PC_h<<8)|ext_hdr->PC_l);
-
         if (sys->type == ZX_TYPE_128) {
-            for (int i = 0; i < 16; i++) {
-
-                //LIKE THIS: ay38910_set_reg(&sys->ay, i, ext_hdr->audio[i]);
-
-                // latch AY-3-8912 register address
-                //ay38910_iorq(&sys->ay, AY38910_BDIR|AY38910_BC1|(i<<16));
-                // write AY-3-8912 register value
-                //ay38910_iorq(&sys->ay, AY38910_BDIR|(ext_hdr->audio[i]<<16));
+            ay38910_reset(&sys->ay);
+            for (int i = 0; i < AY38910_NUM_REGISTERS; i++) {
+                ay38910_write_register(&sys->ay, i, ext_hdr->audio[i]);
             }
-        }
-        // simulate an out of port 0xFFFD and 0x7FFD
-        if (sys->type == ZX_TYPE_128) {
-            _zx_update_memory_map_zx128(sys, ext_hdr->out_7ffd);
             sys->ay.addr = ext_hdr->out_fffd;
+            _zx_update_memory_map_zx128(sys, ext_hdr->out_7ffd);
         }
-
-        /*
-        uint64_t pins = Z80_IORQ|Z80_WR;
-        Z80_SET_ADDR(pins, 0xFFFD);
-        Z80_SET_DATA(pins, ext_hdr->out_fffd);
-        _zx_tick(sys, pins);
-        Z80_SET_ADDR(pins, 0x7FFD);
-        Z80_SET_DATA(pins, ext_hdr->out_7ffd);
-        _zx_tick(sys, pins);
-        */
     }
     else {
         sys->pins = z80_prefetch(&sys->cpu, (hdr->PC_h<<8)|hdr->PC_l);
