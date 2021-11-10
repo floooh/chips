@@ -77,7 +77,7 @@ extern "C" {
 #define AM40010_DBG_DISPLAY_WIDTH (1024)
 #define AM40010_DBG_DISPLAY_HEIGHT (312)
 
-/* Z80-compatible pins */
+// Z80-compatible pins
 #define AM40010_A13     (1ULL<<13)
 #define AM40010_A14     (1ULL<<14)
 #define AM40010_A15     (1ULL<<15)
@@ -97,13 +97,10 @@ extern "C" {
 #define AM40010_RD      (1ULL<<27)
 #define AM40010_WR      (1ULL<<28)
 #define AM40010_INT     (1ULL<<30)
-#define AM40010_WAIT_SHIFT (34)
-#define AM40010_WAIT_MASK ((1ULL<<34)|(1ULL<<35)|(1ULL<<36))
+#define AM40010_WAIT    (1ULL<<33)
+#define AM40010_READY   (AM40010_WAIT)
 
-/* set up to 7 wait states in Z80 CPU pin mask */
-#define AM40010_SET_WAIT(p,w) {p=((p&~AM40010_WAIT_MASK)|((((uint64_t)w)<<AM40010_WAIT_SHIFT)&AM40010_WAIT_MASK));}
-
-/* MC6845 compatible pins */
+// MC6845 compatible pins
 #define AM40010_MA0     (1ULL<<0)
 #define AM40010_MA1     (1ULL<<1)
 #define AM40010_MA2     (1ULL<<2)
@@ -129,17 +126,16 @@ extern "C" {
 #define AM40010_RA3     (1ULL<<51)
 #define AM40010_RA4     (1ULL<<52)
 
-/* AM40010 specific pins (starting at pin 40) */
-#define AM40010_READY   (1ULL<<40)
+// AM40010 specific pins (starting at pin 40)
 #define AM40010_SYNC    (1ULL<<41)
 
-/* config register bits */
-#define AM40010_CONFIG_MODE     ((1<<0)|(1<<1)) /* video mode */
-#define AM40010_CONFIG_LROMEN   (1<<2)          /* lower ROM enable */
-#define AM40010_CONFIG_HROMEN   (1<<3)          /* higher ROM enable */
-#define AM40010_CONFIG_IRQRESET (1<<4)          /* reset IRQ counter */
+// config register bits
+#define AM40010_CONFIG_MODE     ((1<<0)|(1<<1)) // video mode
+#define AM40010_CONFIG_LROMEN   (1<<2)          // lower ROM enable
+#define AM40010_CONFIG_HROMEN   (1<<3)          // higher ROM enable
+#define AM40010_CONFIG_IRQRESET (1<<4)          // reset IRQ counter
 
-/* memory configuration callback */
+// memory configuration callback
 typedef void (*am40010_bankswitch_t)(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_select, void* user_data);
 /* CCLK callback, this will be called at 1 MHz frequency and must
    return the CRTC pin mask. Use this callback to tick the MC6845
@@ -147,73 +143,73 @@ typedef void (*am40010_bankswitch_t)(uint8_t ram_config, uint8_t rom_enable, uin
 */
 typedef uint64_t (*am40010_cclk_t)(void* user_data);
 
-/* host system type (same as cpc_type_t) */
+// host system type (same as cpc_type_t)
 typedef enum am40010_cpc_type_t {
     AM40010_CPC_TYPE_6128,
     AM40010_CPC_TYPE_464,
     AM40010_CPC_TYPE_KCCOMPACT,
 } am40010_cpc_type_t;
 
-/* setup parameters for am40010_init() */
+// setup parameters for am40010_init()
 typedef struct am40010_desc_t {
-    am40010_cpc_type_t cpc_type;        /* host system type (mainly for bank switching) */
-    am40010_bankswitch_t bankswitch_cb; /* memory bank-switching callback */
-    am40010_cclk_t cclk_cb;             /* the 1 MHz CCLK callback */
-    const uint8_t* ram;                 /* direct pointer to the gate-array-visible 4*16 KByte RAM banks */
-    uint32_t ram_size;                  /* must be >= 64 KBytes */
-    uint32_t* rgba8_buffer;             /* pointer the RGBA8 output framebuffer */
-    uint32_t rgba8_buffer_size;         /* must be at least 1024*312*4 bytes */
-    void* user_data;                    /* optional userdata for callbacks */
+    am40010_cpc_type_t cpc_type;        // host system type (mainly for bank switching)
+    am40010_bankswitch_t bankswitch_cb; // memory bank-switching callback
+    am40010_cclk_t cclk_cb;             // the 1 MHz CCLK callback
+    const uint8_t* ram;                 // direct pointer to the gate-array-visible 4*16 KByte RAM banks
+    uint32_t ram_size;                  // must be >= 64 KBytes
+    uint32_t* rgba8_buffer;             // pointer to the RGBA8 output framebuffer
+    uint32_t rgba8_buffer_size;         // must be at least 1024*312*4 bytes
+    void* user_data;                    // optional userdata for callbacks
 } am40010_desc_t;
 
-/* registers */
+// registers
 typedef struct am40010_registers_t {
-    uint8_t inksel;     /* 5 bits */
-    uint8_t config;     /* bit4: IRQ reset, bit3: HROMEN, bit2: LROMEN, bit1+0: mode */
-    uint8_t border;     /* 6 bits, see also border_rgba8 */
-    uint8_t ink[16];    /* 5 bits, see also ink_rgba8 */
+    uint8_t inksel;     // 5 bits
+    uint8_t config;     // bit4: IRQ reset, bit3: HROMEN, bit2: LROMEN, bit1+0: mode
+    uint8_t border;     // 6 bits, see also border_rgba8
+    uint8_t ink[16];    // 5 bits, see also ink_rgba8
 } am40010_registers_t;
 
-/* decoded RGBA8 colors */
+// decoded RGBA8 colors
 typedef struct am40010_colors_t {
     bool dirty;
-    uint32_t ink_rgba8[16];         /* the current ink colors as RGBA8 */
-    uint32_t border_rgba8;          /* the current border color as RGBA8 */
-    uint32_t hw_rgba8[32];          /* the hardware color RGBA8 values */
+    uint32_t ink_rgba8[16];         // the current ink colors as RGBA8
+    uint32_t border_rgba8;          // the current border color as RGBA8
+    uint32_t hw_rgba8[32];          // the hardware color RGBA8 values
 } am40010_colors_t;
 
-/* vsync/video/irq generation */
+// vsync/video/irq generation
 typedef struct am40010_video_t {
-    int hscount;        /* 5-bit counter updated at HSYNC falling edge */
-    int intcnt;         /* 6-bit counter updated at HSYNC falling egde */
-    int clkcnt;         /* 4-bit counter updated at 1 MHz */
-    uint8_t mode;       /* currently active mode updated at hsync */
-    bool sync;          /* state of the sync output pin */
-    bool intr;          /* interrupt flip-flop */
+    int hscount;        // 5-bit counter updated at HSYNC falling edge
+    int intcnt;         // 6-bit counter updated at HSYNC falling egde
+    int clkcnt;         // 4-bit counter updated at 1 MHz
+    uint8_t mode;       // currently active mode updated at hsync
+    bool sync;          // state of the sync output pin
+    bool intr;          // interrupt flip-flop
 } am40010_video_t;
 
-/* CRT beam tracking */
+// CRT beam tracking
 typedef struct am40010_crt_t {
-    int pos_x, pos_y;   /* current beam position in visible region */
-    int sync_count;     /* number of ticks since sync raised */
-    int h_pos;          /* current horizontal pos (0..63) */
-    int v_pos;          /* current vertical position (0..312) */
-    int h_retrace;      /* horizontal retrace counter */
-    int v_retrace;      /* vertical retrace counter */
-    bool visible;       /* true if beam is currently in visible region */
-    bool sync;          /* last syns state for sync raise detection */
-    bool h_blank;       /* true if currently in horizontal blanking */
-    bool v_blank;       /* true if currently in vertical blanking */
+    int pos_x, pos_y;   // current beam position in visible region
+    int sync_count;     // number of ticks since sync raised
+    int h_pos;          // current horizontal pos (0..63)
+    int v_pos;          // current vertical position (0..312)
+    int h_retrace;      // horizontal retrace counter
+    int v_retrace;      // vertical retrace counter
+    bool visible;       // true if beam is currently in visible region
+    bool sync;          // last syns state for sync raise detection
+    bool h_blank;       // true if currently in horizontal blanking
+    bool v_blank;       // true if currently in vertical blanking
 } am40010_crt_t;
 
-/* AM40010 state */
+// AM40010 state
 typedef struct am40010_t {
-    bool dbg_vis;               /* debug visualization currently enabled? */
+    bool dbg_vis;               // debug visualization currently enabled?
     am40010_cpc_type_t cpc_type;
-    uint32_t seq_tick_count;    /* gate array sequencer ticks */
-    uint64_t crtc_pins;         /* previous crtc pins */
-    uint8_t rom_select;         /* select upper ROM (AMSDOS or BASIC) */
-    uint8_t ram_config;         /* 3 bits, CPC 6128 RAM configuration */
+    uint32_t seq_tick_count;    // gate array sequencer ticks
+    uint64_t crtc_pins;         // previous crtc pins
+    uint8_t rom_select;         // select upper ROM (AMSDOS or BASIC)
+    uint8_t ram_config;         // 3 bits, CPC 6128 RAM configuration
     am40010_registers_t regs;
     am40010_video_t video;
     am40010_crt_t crt;
@@ -223,7 +219,7 @@ typedef struct am40010_t {
     const uint8_t* ram;
     uint32_t* rgba8_buffer;
     void* user_data;
-    uint64_t pins;              /* only for debug inspection */
+    uint64_t pins;              // only for debug inspection
 } am40010_t;
 
 void am40010_init(am40010_t* ga, const am40010_desc_t* desc);
@@ -234,9 +230,10 @@ void am40010_reset(am40010_t* ga);
     bankswitch callback if the memory configuration needs to be changed.
 */
 void am40010_iorq(am40010_t* ga, uint64_t cpu_pins);
-/* 
-    Call the tick function once per Z80 machine cycle
-    with the machine cycle tick length and CPU pins. The am40010_tick
+/*
+    FIXME FIXME FIXME
+
+    Call the tick function once per Z80 tcycle with the CPU pins. The am40010_tick
     function will call the CCLK callback as needed (at 1 MHz frequency),
     tick the MC6845 and AY-3-8910 from this callback.
 
@@ -246,10 +243,10 @@ void am40010_iorq(am40010_t* ga, uint64_t cpu_pins);
         Z80_WAIT0..2    - the right number of wait states for this machine cycle
         Z80_INT         - interrupt request from the gate array was triggered
 */
-uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t cpu_pins);
+uint64_t am40010_tick(am40010_t* ga, uint64_t cpu_pins);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
@@ -262,10 +259,10 @@ uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t cpu_pins);
 
 #define _AM40010_MAX_FB_SIZE (AM40010_DBG_DISPLAY_WIDTH*AM40010_DBG_DISPLAY_HEIGHT*4)
 
-/* extract 8-bit data bus from 64-bit pin mask */
+// extract 8-bit data bus from 64-bit pin mask
 #define _AM40010_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
 
-/* the first 32 bytes of the KC Compact color ROM */
+// the first 32 bytes of the KC Compact color ROM
 static uint8_t _am40010_kcc_color_rom[32] = {
     0x15, 0x15, 0x31, 0x3d, 0x01, 0x0d, 0x11, 0x1d,
     0x0d, 0x3d, 0x3c, 0x3f, 0x0c, 0x0f, 0x1c, 0x1f,
@@ -314,50 +311,50 @@ static uint32_t _am40010_cpc_colors[32] = {
     0xffF67B6E,         // #5F pastel blue
 };
 
-/* initialize registers for poweron and reset */
+// initialize registers for poweron and reset
 static void _am40010_init_regs(am40010_t* ga) {
     memset(&ga->regs, 0, sizeof(ga->regs));
 }
 
-/* initialize video/vsync unit for poweron and reset */
+// initialize video/vsync unit for poweron and reset
 static void _am40010_init_video(am40010_t* ga) {
     memset(&ga->video, 0, sizeof(ga->video));
 }
 
-/* initialize the crt init */
+// initialize the crt init
 static void _am40010_init_crt(am40010_t* ga) {
     memset(&ga->crt, 0, sizeof(ga->crt));
 }
 
-/* initialize the RGBA8 color caches, assumes already zero-initialized */
+// initialize the RGBA8 color caches, assumes already zero-initialized
 static void _am40010_init_colors(am40010_t* ga) {
     if (ga->cpc_type != AM40010_CPC_TYPE_KCCOMPACT) {
-        /* Amstrad CPC colors */
+        // Amstrad CPC colors
         for (int i = 0; i < 32; i++) {
             ga->colors.hw_rgba8[i] = _am40010_cpc_colors[i];
         }
     }
     else {
-        /* KC Compact colors */
+        // KC Compact colors
         for (int i = 0; i < 32; i++) {
             uint32_t c = 0xFF000000;
             const uint8_t val = _am40010_kcc_color_rom[i];
-            /* color bits: xx|gg|rr|bb */
+            // color bits: xx|gg|rr|bb
             const uint8_t b = val & 0x03;
             const uint8_t r = (val>>2) & 0x03;
             const uint8_t g = (val>>4) & 0x03;
-            if (b == 0x03)     c |= 0x00FF0000;    /* full blue */
-            else if (b != 0)   c |= 0x007F0000;    /* half blue */
-            if (g == 0x03)     c |= 0x0000FF00;    /* full green */
-            else if (g != 0)   c |= 0x00007F00;    /* half green */
-            if (r == 0x03)     c |= 0x000000FF;    /* full red */
-            else if (r != 0)   c |= 0x0000007F;    /* half red */
+            if (b == 0x03)     c |= 0x00FF0000;    // full blue
+            else if (b != 0)   c |= 0x007F0000;    // half blue
+            if (g == 0x03)     c |= 0x0000FF00;    // full green
+            else if (g != 0)   c |= 0x00007F00;    // half green
+            if (r == 0x03)     c |= 0x000000FF;    // full red
+            else if (r != 0)   c |= 0x0000007F;    // half red
             ga->colors.hw_rgba8[i] = c;
         }
     }
 }
 
-/* initialize am40010_t instance */
+// initialize am40010_t instance
 void am40010_init(am40010_t* ga, const am40010_desc_t* desc) {
     CHIPS_ASSERT(ga && desc);
     CHIPS_ASSERT(desc->bankswitch_cb && desc->cclk_cb);
@@ -394,12 +391,12 @@ void am40010_reset(am40010_t* ga) {
    (that's why iorq has no return value).
 */
 void am40010_iorq(am40010_t* ga, uint64_t pins) {
-    /* check that this is called during an IORQ machine cycle */
+    // check that this is called during an IORQ machine cycle
     CHIPS_ASSERT(((pins & (AM40010_M1|AM40010_IORQ)) == (AM40010_IORQ)) && ((pins & (AM40010_RD|AM40010_WR)) != 0));
-    /* a gate array register write */
+    // a gate array register write
     if ((pins & (AM40010_A14|AM40010_A15)) == AM40010_A14) {
         const uint8_t data = _AM40010_GET_DATA(pins);
-        /* data bits 6 and 7 select the register type */
+        // data bits 6 and 7 select the register type
         switch (data & ((1<<7)|(1<<6))) {
             /* select color pen:
                 bit 4 set means 'select border pen', otherwise
@@ -442,7 +439,7 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
                 }
                 break;
 
-            /* RAM bank switching (6128 only) */
+            // RAM bank switching (6128 only)
             case (1<<6)|(1<<7):
                 if (AM40010_CPC_TYPE_6128 == ga->cpc_type) {
                     uint8_t ram_dirty = (ga->ram_config ^ data) & 7;
@@ -455,7 +452,7 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
         }
     }
 
-    /* upper ROM bank select */
+    // upper ROM bank select
     if ((pins & (AM40010_A13|AM40010_WR)) == AM40010_WR) {
         const uint8_t data = _AM40010_GET_DATA(pins);
         bool rom_select_dirty = ga->rom_select != data;
@@ -466,9 +463,9 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
     }
 }
 
-#define _AM40010_CRT_VIS_X0  (6)      /* start of CRT beam visible area */
+#define _AM40010_CRT_VIS_X0  (6)        // start of CRT beam visible area
 #define _AM40010_CRT_VIS_Y0  (32)
-#define _AM40010_CRT_VIS_X1  (6+48)    /* end of CRT beam visible area */
+#define _AM40010_CRT_VIS_X1  (6+48)     // end of CRT beam visible area
 #define _AM40010_CRT_VIS_Y1  (32+272)
 #define _AM40010_CRT_H_DISPLAY_START    (6)
 #define _AM40010_CRT_V_DISPLAY_START    (5)
@@ -484,11 +481,11 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
     bool new_frame = false;
     crt->sync = sync;
 
-    /* bump sync counter if inside sync */
+    // bump sync counter if inside sync
     if (sync) {
         crt->sync_count++;
     }
-    /* if sync signal raised, start horizontal retrace and reset sync counter */
+    // if sync signal raised, start horizontal retrace and reset sync counter
     if (sync_raise) {
         crt->h_retrace = 7;
         crt->h_blank = true;
@@ -501,13 +498,13 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
         crt->v_retrace = 3;
         crt->v_blank = true;
     }
-    /* horizontal update */
+    // horizontal update
     crt->h_pos++;
     if (crt->h_pos == _AM40010_CRT_H_DISPLAY_START) {
         crt->h_blank = false;
     }
     else if (crt->h_pos == 64) {
-        /* no hsync on this line */
+        // no hsync on this line
         new_line = true;
     }
     if (crt->h_retrace > 0) {
@@ -517,14 +514,14 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
         }
     }
     if (new_line) {
-        /* new scanline */
+        // new scanline
         crt->h_pos = 0;
         crt->v_pos++;
         if (crt->v_pos == _AM40010_CRT_V_DISPLAY_START) {
             crt->v_blank = false;
         }
         else if (crt->v_pos == 312) {
-            /* no vsync on this frame */
+            // no vsync on this frame
             new_frame = true;
         }
         if (crt->v_retrace > 0) {
@@ -538,7 +535,7 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
         crt->v_pos = 0;
     }
 
-    /* compute visible beam state */
+    // compute visible beam state
     if ((crt->h_pos >= _AM40010_CRT_VIS_X0) && (crt->h_pos < _AM40010_CRT_VIS_X1) &&
         (crt->v_pos >= _AM40010_CRT_VIS_Y0) && (crt->v_pos < _AM40010_CRT_VIS_Y1))
     {
@@ -551,7 +548,7 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
     }
 }
 
-/* helper functions to detect falling/rising edge on a bit */
+// helper functions to detect falling/rising edge on a bit
 static inline bool _am40010_falling_u8(uint8_t new_val, uint8_t old_val, uint8_t mask) {
     return 0 != (mask & (~new_val & (new_val ^ old_val)));
 }
@@ -571,17 +568,17 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     bool hs_fall = _am40010_falling_u64(crtc_pins, ga->crtc_pins, AM40010_HS);
     bool vs_rise = _am40010_rising_u64(crtc_pins, ga->crtc_pins, AM40010_VS);
 
-    /* on VSYNC rise, clear the HSYNC counter */
+    // on VSYNC rise, clear the HSYNC counter
     if (vs_rise) {
         ga->video.hscount = 0;
     }
-    /* ...on falling HSYNC */
+    // ...on falling HSYNC
     if (hs_fall) {
-        /* increment 6-bit INTCNT on hsync falling edge */
+        // increment 6-bit INTCNT on hsync falling edge
         ga->video.intcnt = (ga->video.intcnt + 1) & 0x3F;
         ga->video.hscount++;
 
-        /* 2 HSYNCs after start of VSYNC, reset the interrupt counter */
+        // 2 HSYNCs after start of VSYNC, reset the interrupt counter
         if (ga->video.hscount == 2) {
             if (ga->video.intcnt >= 32) {
                 ga->video.intr = true;
@@ -589,51 +586,51 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
             ga->video.intcnt = 0;
         }
         
-        /* if interrupt count reaches 52, it is reset to 0 and an interrupt is requested */
+        // if interrupt count reaches 52, it is reset to 0 and an interrupt is requested
         if (ga->video.intcnt == 52) {
             ga->video.intr = true;
             ga->video.intcnt = 0;
         }
     }
     
-    /* SYNC and MODESYNC via 1 MHz 4-bit CLKCNT */
+    // SYNC and MODESYNC via 1 MHz 4-bit CLKCNT
     uint8_t clkcnt = ga->video.clkcnt;
     if (clkcnt == 7) {
-        /* trigger video-mode switch */
+        // trigger video-mode switch
         ga->video.mode = ga->regs.config & AM40010_CONFIG_MODE;
     }
-    /* if HSYNC is off, force the clkcnt counter to 0 */
+    // if HSYNC is off, force the clkcnt counter to 0
     if (0 == (crtc_pins & AM40010_HS)) {
         clkcnt = 0;
     }
     else if (clkcnt < 8) {
         clkcnt++;
     }
-    /* v_sync is on as long as hscount is < 4 */
+    // v_sync is on as long as hscount is < 4
     bool v_sync = ga->video.hscount < 4;
-    /* h_sync is 2 ticks delayed from the CRTC HSYNC, and at most 4 ticks long */
+    // h_sync is 2 ticks delayed from the CRTC HSYNC, and at most 4 ticks long
     bool h_sync = (clkcnt > 2) && (clkcnt < 7);
     ga->video.sync = h_sync || v_sync;
-    /* write back clkcnt */
+    // write back clkcnt
     ga->video.clkcnt = clkcnt;
 
     return ga->video.sync;
 }
 
-/* perform the 4 MHz tick actions of the gate array */
+// perform the 4 MHz tick actions of the gate array
 static inline uint64_t _am40010_do_tick(am40010_t* ga, bool int_ack, uint64_t pins) {
-    /* when the IRQ_RESET bit is set, reset the interrupt counter and clear the interrupt flipflop */
+    // when the IRQ_RESET bit is set, reset the interrupt counter and clear the interrupt flipflop
     if ((ga->regs.config & AM40010_CONFIG_IRQRESET) != 0) {
         ga->regs.config &= ~AM40010_CONFIG_IRQRESET;
         ga->video.intcnt = 0;
         ga->video.intr = false;
     }
-    /* on interrupt acknowledge, clear the interrupt flip-flop, and bit 5 of the interrupt counter */
+    // on interrupt acknowledge, clear the interrupt flip-flop, and bit 5 of the interrupt counter
     if (int_ack) {
        ga->video.intcnt &= 0x1F;
        ga->video.intr = false;
     }
-    /* set the READY pin in 3 out of 4 ticks */
+    // set the READY/WAIT pin in 3 out of 4 ticks
     if (0 != (ga->seq_tick_count & 3)) {
         pins |= AM40010_READY;
     }
@@ -650,9 +647,9 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
         Bits ma13 and m12 point to the 16 KByte page, and all
         other bits are the index into that page.
     */
-    const uint16_t addr = ((crtc_pins & 0x3000) << 2) |     /* MA13,MA12 */
-                          ((crtc_pins & 0x3FF) << 1) |      /* MA9..MA0 */
-                          (((crtc_pins>>48) & 7) << 11);    /* RA0..RA2 */
+    const uint16_t addr = ((crtc_pins & 0x3000) << 2) |     // MA13,MA12
+                          ((crtc_pins & 0x3FF) << 1) |      // MA9..MA0
+                          (((crtc_pins>>48) & 7) << 11);    // RA0..RA2
     const uint8_t* src = &(ga->ram[addr]);
     uint8_t c;
     uint32_t p;
@@ -695,7 +692,7 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
             }
             break;
         case 2:
-            /* 640x200 @ 2 colors (8 pixels per byte) */
+            // 640x200 @ 2 colors (8 pixels per byte)
             for (int i = 0; i < 2; i++) {
                 c = *src++;
                 for (int j = 7; j >= 0; j--) {
@@ -703,11 +700,11 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
                 }
             }
             break;
-        /* FIXME: undocumented mode 3 (not on KC Compact) */
+        // FIXME: undocumented mode 3 (not on KC Compact)
     }
 }
 
-/* video signal generator, call this at 1 MHz frequency */
+// video signal generator, call this at 1 MHz frequency
 static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
     if (ga->dbg_vis) {
         int dst_x = ga->crt.h_pos * 16;
@@ -763,7 +760,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
     }
 }
 
-/* make the selected colors visible by updating the color cache */
+// make the selected colors visible by updating the color cache
 static inline void _am40010_update_colors(am40010_t* ga) {
     if (ga->colors.dirty) {
         ga->colors.dirty = false;
@@ -774,7 +771,7 @@ static inline void _am40010_update_colors(am40010_t* ga) {
     }
 }
 
-/* the actions which need to happen on CCLK (1 MHz frequency) */
+// the actions which need to happen on CCLK (1 MHz frequency)
 static inline void _am40010_do_cclk(am40010_t* ga, uint64_t crtc_pins) {
     _am40010_update_colors(ga);
     bool sync = _am40010_sync_irq(ga, crtc_pins);
@@ -782,85 +779,44 @@ static inline void _am40010_do_cclk(am40010_t* ga, uint64_t crtc_pins) {
     _am40010_decode_video(ga, crtc_pins);
 }
 
-/* determine at which cycle of the current machine cycle the
-    CPU samples the wait pin, if the AM40010 READY pin coincides 
-    with a clock cycle where the CPU samples the WAIT pin, the
-    CPU will be stopped until the READY pin goes inactive again.
-*/
-static inline int _am40010_wait_scan_tick(uint64_t pins) {
-    int wait_scan_tick = -1;
-    /* NOTE: these offsets are important for proper computation of the CCLK clock */
-    if (pins & Z80_MREQ) {
-        /* a memory request, wait pin is sampled in 2nd tick */
-        wait_scan_tick = 2;
-    }
-    else if (pins & Z80_IORQ) {
-        if (pins & Z80_M1) {
-            /* an interrupt acknowledge tick, wait pin is sampled in 4th tick */
-            wait_scan_tick = 4;
-        }
-        else {
-            /* an IO request, wait pin is sampled in 3rd tick */
-            wait_scan_tick = 3;
-        }
-    }
-    return wait_scan_tick;
-}
+// the tick function must be called at 4 MHz
+uint64_t am40010_tick(am40010_t* ga,uint64_t pins) {
+    /* The hardware has a 'main sequencer' with a rotating bit
+        pattern which defines when the different actions happen in
+        the 16 MHz ticks.
+        Since the software emu is only ticked at 4 MHz, we'll replace
+        the sequencer with a counter updated at the 4 MHz tick rate.
+    */
+    ga->seq_tick_count++;
 
-/* the tick function must be called at 4 MHz */
-uint64_t am40010_tick(am40010_t* ga, int num_ticks, uint64_t pins) {
-    /* determine at what clock cycle the CPU samples the WAIT pin */
-    int wait_scan_tick = _am40010_wait_scan_tick(pins);
-
-    /* for each 4 MHz tick... */
-    uint32_t wait_cycles = 0;
-    for (int mc_tick = 0; mc_tick < num_ticks; mc_tick++) {
-        bool wait = false;
-        do {
-            /* The hardware has a 'main sequencer' with a rotating bit
-                pattern which defines when the different actions happen in
-                the 16 MHz ticks.
-                Since the software emu is only ticked at 4 MHz, we'll replace
-                the sequencer with a counter updated at the 4 MHz tick rate.
-            */
-            ga->seq_tick_count++;
-
-            /* the sequencer is reset on an interrupt acknowledge machine cycle
-                NOTE: the actual clock tick in the machine cycle may be important here
-            */
-            bool int_ack = (((Z80_M1|Z80_IORQ) == (pins & (Z80_M1|Z80_IORQ))) && (mc_tick == 0));
-            if (int_ack) {
-                ga->seq_tick_count = 0;
-            }
-            /* derive the 1 MHz CCLK signal from the sequencer, and perform
-                the actions that need to happen at the CCLK tick
-                NOTE: the actual position where CCLK happens is important!
-            */
-            bool cclk = (0 == (ga->seq_tick_count & 3));
-            if (cclk) {
-                uint64_t crtc_pins = ga->cclk_cb(ga->user_data);
-                _am40010_do_cclk(ga, crtc_pins);
-                ga->crtc_pins = crtc_pins;
-            }
-            /* perform the per-4Mhz-tick actions */
-            pins = _am40010_do_tick(ga, int_ack, (pins & ~AM40010_READY));
-            /* need to add a wait cycle? */
-            wait = ((pins & AM40010_READY) && (wait || (wait_scan_tick == mc_tick)));
-            if (wait) {
-                wait_cycles++;
-            }
-        }
-        while (wait);
+    /* the sequencer is reset on an interrupt acknowledge machine cycle
+        NOTE: the actual clock tick in the machine cycle may be important here
+    */
+    bool int_ack = (pins & (Z80_M1|Z80_IORQ)) == (Z80_M1|Z80_IORQ);
+    if (int_ack) {
+        ga->seq_tick_count = 0;
     }
-    /* update the return pin mask */
-    AM40010_SET_WAIT(pins, wait_cycles);
-    if (ga->video.intr) {
-        pins |= AM40010_INT;
+    /* derive the 1 MHz CCLK signal from the sequencer, and perform
+        the actions that need to happen at the CCLK tick
+        NOTE: the actual position where CCLK happens is important!
+    */
+    bool cclk = (0 == (ga->seq_tick_count & 3));
+    if (cclk) {
+        uint64_t crtc_pins = ga->cclk_cb(ga->user_data);
+        _am40010_do_cclk(ga, crtc_pins);
+        ga->crtc_pins = crtc_pins;
     }
+    // perform the per-4Mhz-tick actions, the AM40010_READY pin is also the Z80_WAIT pin
+    pins = _am40010_do_tick(ga, int_ack, (pins & ~AM40010_READY));
+
+    // FIXME: drop .intr and directly set INT pin?
+    if (ga->video.intr) { pins |= AM40010_INT; }
+    else                { pins &= ~AM40010_INT; }
+    // FIXME: drop .sync and directly set SYNC pin?
     if (ga->video.sync) {
         pins |= AM40010_SYNC;
     }
     ga->pins = pins | ((AM40010_DE|AM40010_HS|AM40010_VS) & ga->crtc_pins);
     return pins;
 }
-#endif /* CHIPS_IMPL */
+#endif // CHIPS_IMPL
