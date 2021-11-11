@@ -440,8 +440,7 @@ static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
                 if (sys->ppi.pins & I8255_PC6) { ay_pins |= AY38910_BC1; }
                 const uint8_t ay_data = I8255_GET_PA(sys->ppi.pins);
                 AY38910_SET_DATA(ay_pins, ay_data);
-                // FIXME
-                //ay_pins = ay38910_iorq(&sys->psg, ay_pins);
+                ay_pins = ay38910_iorq(&sys->psg, ay_pins);
                 I8255_SET_PA(ppi_pins, AY38910_DATA(ay_pins));
             }
             ppi_pins |= I8255_PB1|I8255_PB2|I8255_PB3;  // "Amstrad"
@@ -461,8 +460,7 @@ static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
                 if (ppi_pins & I8255_PC6) { ay_pins |= AY38910_BC1; }
                 const uint8_t ay_data = I8255_GET_PA(ppi_pins);
                 AY38910_SET_DATA(ay_pins, ay_data);
-                // FIXME
-                //ay38910_iorq(&sys->psg, ay_pins);
+                ay38910_iorq(&sys->psg, ay_pins);
             }
             // PC0..PC3: select keyboard matrix line
             uint16_t col_mask = 1<<(I8255_GET_PC(ppi_pins) & 0x0F);
@@ -637,13 +635,11 @@ static inline void _cpc_sample_ready(cpc_t* sys) {
 */
 static uint64_t _cpc_cclk(void* user_data) {
     cpc_t* sys = (cpc_t*) user_data;
-    /* FIXME FIXME FIXME
     // tick the sound chip...
     if (ay38910_tick(&sys->psg)) {
         // new sound sample ready
         _cpc_sample_ready(sys);
     }
-    */
     // tick the CRTC and return its pin mask
     uint64_t crtc_pins = mc6845_tick(&sys->crtc);
     return crtc_pins;
