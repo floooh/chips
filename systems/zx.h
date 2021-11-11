@@ -148,7 +148,6 @@ typedef struct {
     alignas(64) z80_t cpu;
     beeper_t beeper;
     ay38910_t ay;
-    uint64_t ay_sel_pins;       // used to buffer IO requests to the AY
     zx_type_t type;
     zx_joystick_type_t joystick_type;
     bool memory_paging_disabled;
@@ -522,12 +521,9 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
         }
         else if (((pins & (Z80_A15|Z80_A1)) == Z80_A15) && (sys->type == ZX_TYPE_128)) {
             // AY-3-8912 access (1*............0.)
-            //
-            // AY is ticked at half CPU frequency, so
-            // we need to buffer the IO chip select pin mask so that the
-            // AY doesn't miss any IO requests
-            if (pins & Z80_A14) { sys->ay_sel_pins |= AY38910_BC1; }
-            if (pins & Z80_WR) { sys->ay_sel_pins |= AY38910_BDIR; }
+            if (pins & Z80_A14) { pins |= AY38910_BC1; }
+            if (pins & Z80_WR) { pins |= AY38910_BDIR; }
+            pins = ay38910_iorq(&sys->ay, pins) & Z80_PIN_MASK;
         }
         else if ((pins & (Z80_RD|Z80_A7|Z80_A6|Z80_A5)) == Z80_RD) {
             // Kempston Joystick (........000.....)
@@ -538,8 +534,7 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
     // tick the AY at half frequency, use the buffered chip select
     // pin mask so that the AY doesn't miss any IO requests
     if (++sys->tick_count & 1) {
-        pins = ay38910_tick(&sys->ay, sys->ay_sel_pins | pins) & Z80_PIN_MASK;
-        sys->ay_sel_pins = 0;
+        ay38910_tick(&sys->ay);
     }
 
     // tick the beeper
