@@ -8,32 +8,32 @@ halt:
 
 # NOTE: RRZ and RRY are special case for H and L which are never mapped
 # to IXH/IYH and IXL/IYL
-ld (hl),RZ:
+ld (hl),$RZ:
   cond: (x == 1) and (y == 6) and (z != 6)
   flags: { indirect: true }
   mcycles:
     - { type: mwrite, ab: $ADDR, db: $RRZ }
 
-ld RY,(hl):
+ld $RY,(hl):
   cond: (x == 1) and (y != 6) and (z == 6)
   flags: { indirect: true }
   mcycles:
     - { type: mread,  ab: $ADDR, dst: $RRY }
 
-ld RY,RZ:
+ld $RY,$RZ:
   cond: (x == 1) and (y != 6) and (z != 6)
   mcycles:
     - { type: overlapped,  action: $RY=$RZ }
 
 #== QUADRANT X2 ================================================================
-ALU (hl):
+$ALU (hl):
   cond: (x == 2) and (z == 6)
   flags: { indirect: true }
   mcycles:
     - { type: mread, ab: $ADDR, dst: $DLATCH }
     - { type: overlapped, action: "$ALU($DLATCH)" }
 
-ALU RZ:
+$ALU $RZ:
   cond: (x == 2) and (z != 6)
   mcycles:
     - { type: overlapped,  action: "$ALU($RZ)" }
@@ -64,7 +64,7 @@ jr d:
     - { type: mread, ab: $PC++, dst: $DLATCH }
     - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC;" }
 
-jr CC-4,d:
+jr $CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
   mcycles:
     - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(!($CC-4)){_z80_skip(cpu,1,6,1);}" }
@@ -73,13 +73,13 @@ jr CC-4,d:
   # FIXME
 
 # 16-bit load immediate/add
-ld RP,nn:
+ld $RP,nn:
   cond: (x == 0) and (z == 1) and (q == 0)
   mcycles:
     - { type: mread,  ab: $PC++, dst: $RPL }
     - { type: mread,  ab: $PC++, dst: $RPH }
 
-add hl,RP:
+add hl,$RP:
   cond: (x == 0) and (z == 1) and (q == 1)
   mcycles:
     - { type: generic, tcycles: 7, action: "_z80_add16(cpu,$RP)"}
@@ -139,12 +139,12 @@ ld a,(nn):
     - { type: mread, ab: $WZ++, dst: $A }
 
 # 16-bit inc/dec
-inc RP:
+inc $RP:
   cond: (x == 0) and (z == 3) and (q == 0)
   mcycles:
     - { type: generic, tcycles: 2, action: "$RP++" }
 
-dec RP:
+dec $RP:
   cond: (x == 0) and (z == 3) and (q == 1)
   mcycles:
     - { type: generic, tcycles: 2, action: "$RP--" }
@@ -157,7 +157,7 @@ inc (hl):
     - { type: mread, tcycles: 4, ab: $ADDR, dst: $DLATCH, action: "$DLATCH=_z80_inc8(cpu,$DLATCH)" }
     - { type: mwrite, ab: $ADDR, db: $DLATCH }
 
-inc RY:
+inc $RY:
   cond: (x == 0) and (y != 6) and (z == 4)
   mcycles:
     - { type: overlapped, action: "$RY=_z80_inc8(cpu,$RY)" }
@@ -169,13 +169,13 @@ dec (hl):
     - { type: mread, tcycles: 4, ab: $ADDR, dst: $DLATCH, action: "$DLATCH=_z80_dec8(cpu,$DLATCH)" }
     - { type: mwrite, ab: $ADDR, db: $DLATCH }
 
-dec RY:
+dec $RY:
   cond: (x == 0) and (y != 6) and (z == 5)
   mcycles:
     - { type: overlapped, action: "$RY=_z80_dec8(cpu,$RY)" }
 
 # 8-bit load immediate
-ld RY,n:
+ld $RY,n:
   cond: (x == 0) and (y != 6) and (z == 6)
   flags: { imm8: true }
   mcycles:
@@ -232,15 +232,15 @@ ccf:
 #== QUADRANT X3 ================================================================
 
 # conditional return
-ret CC:
+ret $CC:
   cond: (x == 3) and (z == 0)
   mcycles:
-    - { type: generic, tcycles: 1, action: "if(!$CC){_z80_skip(cpu,4,7,1);}"}
+    - { type: generic, tcycles: 1, action: "if(!$CC){_z80_skip(cpu,6,7,1);}"}
     - { type: mread, ab: $SP++, dst: $WZL }
     - { type: mread, ab: $SP++, dst: $WZH, action: "$PC=$WZ" }
 
 # POP and various ops
-pop RP2:
+pop $RP2:
   cond: (x == 3) and (z == 1) and (q == 0)
   mcycles:
     - { type: mread, ab: $SP++, dst: $RP2L }
@@ -268,7 +268,7 @@ ld sp,hl:
     - { type: generic, tcycles: 2, action: $SP=$HL }
 
 # conditional jump
-jp CC,nn:
+jp $CC,nn:
   cond: (x == 3) and (z == 2)
   mcycles:
     - { type: mread, ab: $PC++, dst: $WZL }
@@ -328,17 +328,17 @@ ei:
     - { type: overlapped, action: "cpu->iff1=cpu->iff2=false", post_action: "cpu->iff1=cpu->iff2=true" }
 
 # conditional CALL
-call CC,nn:
+call $CC,nn:
   cond: (x == 3) and (z == 4)
   mcycles:
     - { type: mread, ab: $PC++, dst: $WZL }
-    - { type: mread, ab: $PC++, dst: $WZH, action: "if (!$CC){_z80_skip(cpu,5,8,1);}" }
+    - { type: mread, ab: $PC++, dst: $WZH, action: "if (!$CC){_z80_skip(cpu,3,8,1);}" }
     - { type: generic, tcycles: 1 }
     - { type: mwrite, ab: --$SP, db: $PCH }
     - { type: mwrite, ab: --$SP, db: $PCL, action: "$PC=$WZ" }
 
 # PUSH and various ops
-push RP2:
+push $RP2:
   cond: (x == 3) and (z == 5) and (q == 0)
   mcycles:
     # fetch has one extra tcycle
@@ -369,14 +369,14 @@ fd prefix:
   mcycles:
     - { type: overlapped, prefix: fd }
 
-ALU n:
+$ALU n:
   cond: (x == 3) and (z == 6)
   flags: { imm8: true }
   mcycles:
     - { type: mread, ab: $PC++, dst: $DLATCH }
     - { type: overlapped, action: "$ALU($DLATCH)" }
 
-rst Y*8:
+rst $Y*8:
   cond: (x == 3) and (z == 7)
   mcycles:
     # one extra tcycle
@@ -391,7 +391,7 @@ ed nop:
   cond: (x == 0) or (x == 3) or ((x == 1) and (z == 7) and (y >= 6)) or ((x == 2) and ((z > 3) or (y < 4)))
   mcycles: []
 
-in RY,(c):
+in $RY,(c):
   prefix: ed
   cond: (x == 1) and (y != 6) and (z == 0)
   mcycles:
@@ -406,7 +406,7 @@ in (c):
     # discard result, only set flags
     - { type: overlapped, action: "_z80_in(cpu,$DLATCH)" }
 
-out (c),RY:
+out (c),$RY:
   prefix: ed
   cond: (x == 1) and (y != 6) and (z == 1)
   mcycles:
@@ -418,19 +418,19 @@ out (c),0:
   mcycles:
     - { type: iowrite, ab: $BC, db: "0", action: $WZ=$BC+1 }
 
-sbc hl,RP:
+sbc hl,$RP:
   prefix: ed
   cond: (x == 1) and (z == 2) and (q == 0)
   mcycles:
     - { type: generic, tcycles: 7, action: "_z80_sbc16(cpu,$RRP)" }
 
-adc hl,RP:
+adc hl,$RP:
   prefix: ed
   cond: (x == 1) and (z == 2) and (q == 1)
   mcycles:
     - { type: generic, tcycles: 7, action: "_z80_adc16(cpu,$RRP)" }
 
-ld (nn),RP:
+ld (nn),$RP:
   prefix: ed
   cond: (x == 1) and (z == 3) and (q == 0)
   mcycles:
@@ -439,7 +439,7 @@ ld (nn),RP:
     - { type: mwrite, ab: $WZ++, db: $RRPL }
     - { type: mwrite, ab: $WZ, db: $RRPH }
   
-ld RP,(nn):
+ld $RP,(nn):
   prefix: ed
   cond: (x == 1) and (z == 3) and (q == 1)
   mcycles:
@@ -465,7 +465,7 @@ reti/retn:
     - { type: mread, ab: $SP++, dst: $WZH, action: "$PC=$WZ" }
     - { type: overlapped, post_action: "cpu->iff1=cpu->iff2"}
 
-im IMY:
+im $IMY:
   prefix: ed
   cond: (x == 1) and (z == 6)
   mcycles:
@@ -657,7 +657,7 @@ cb:
 cbhl:
   flags: { special: true }
   mcycles:
-    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,2,5,2);}" }
+    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,1,5,2);}" }
     - { type: mwrite, ab: "cpu->hl", db: $DLATCH }
 
 ddfdcb:
@@ -668,7 +668,7 @@ ddfdcb:
     # load opcode
     - { type: mread, ab: $PC++, tcycles: 5, dst: $DLATCH, action: "_z80_ddfdcb_opcode(cpu,$DLATCH)" }
     # read operand
-    - { type: mread, ab: $ADDR, tcycles: 4, dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,2,5,2);}" }
+    - { type: mread, ab: $ADDR, tcycles: 4, dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,1,5,2);}" }
     # write result back
     - { type: mwrite, ab: $ADDR, db: $DLATCH }
 
@@ -680,8 +680,8 @@ int_im0:
     # special machine cycle which replaces the opcode machine fetch,
     # issues an M1|IORQ cycle and uses the result as the next opcode
     - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "_wait();pins=_z80_int012_step1(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "pins=_z80_int0_step2(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "pins=_z80_int0_step2(cpu,pins);_wait();" }
     # combined refresh and branch to loaded instruction cycle
     - { type: generic, tcycles: 2, action: "pins=_z80_int0_step3(cpu,pins)" }
 
@@ -691,7 +691,8 @@ int_im1:
     # special machine cycle which replaces the opcode machine fetch,
     # this issues an M1|IORQ cycle like IM0 and IM2, but ignores the result
     - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 2, action: "_wait();pins=_z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "_wait();"}
     # a regular refresh cycle + one extra tcycle
     - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)" }
     # two regular write machine cycles to push PC on stack, and set PC to 0x0038
@@ -705,8 +706,8 @@ int_im2:
     # special machine cycle which replaces the opcode machine fetch,
     # this issues an M1|IORQ cycle and uses the result as low byte of the interrupt vector
     - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "_wait();pins=_z80_int012_step1(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "$DLATCH=_z80_get_db(pins)" }
+    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "$DLATCH=_z80_get_db(pins);_wait()" }
     # a regular refresh cycle + one extra tcycle
     - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)" }
     # two regular write machine cycles to push PC on stack, and set WZ to interrupt vector address

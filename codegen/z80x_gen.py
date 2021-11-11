@@ -299,11 +299,11 @@ def build_pip(op: Op) -> int:
         if mcycle.type == 'fetch':
             tcycles([], mcycle.tcycles - 1)
         elif mcycle.type == 'mread':
-            tcycles([1,0,1], mcycle.tcycles)
+            tcycles([1,1,1], mcycle.tcycles)
         elif mcycle.type == 'mwrite':
-            tcycles([0,1,1], mcycle.tcycles)
+            tcycles([0,1,0], mcycle.tcycles)
         elif mcycle.type == 'ioread':
-            tcycles([0,1,0,1], mcycle.tcycles)
+            tcycles([0,1,1,1], mcycle.tcycles)
         elif mcycle.type == 'iowrite':
             tcycles([0,1,1,0], mcycle.tcycles)
         elif mcycle.type == 'generic':
@@ -348,23 +348,20 @@ def gen_decoder():
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                # wait pin sampling need to happen before the read! (e.g. changes in memory
-                # content during the wait are picked up by the read)
-                add(f'_wait();_mread({addr});')
+                add(f'_mread({addr});')
+                add(f'_wait();')
                 add(f'{store}=_gd();{action}')
             elif mcycle.type == 'mwrite':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                # write happens at end of second tcycle
-                add(f'_mwrite({addr},{data});')
-                # wait pin sampling happens after the write has completed!
-                add(f'_wait();{action}')
+                add(f'_mwrite({addr},{data});_wait();{action}')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(f'_wait();_ioread({addr});')
+                add(f'_ioread({addr});')
+                add(f'_wait();')
                 add(f'{store}=_gd();{action}')
             elif mcycle.type == 'iowrite':
                 l(f'// -- M{i+1} (iowrite)')
@@ -383,7 +380,7 @@ def gen_decoder():
                     fetch = f"_fetch_{mcycle.items['prefix']}();"
                 else:
                     fetch = '_fetch();'
-                add(f'_wait();{action}{fetch}{post_action}')
+                add(f'{action}{fetch}{post_action}')
         op.num_steps = step
         # the number of steps must match the number of step-bits in the
         # execution pipeline
