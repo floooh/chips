@@ -255,8 +255,10 @@ typedef struct {
 void ay38910_init(ay38910_t* ay, const ay38910_desc_t* desc);
 // reset an existing AY-3-8910 instance
 void ay38910_reset(ay38910_t* ay);
-// tick the AY-3-8910
-uint64_t ay38910_tick(ay38910_t* ay, uint64_t pins);
+// perform an IO request
+uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins);
+// tick the AY-3-8910, return true if a new sample is ready
+bool ay38910_tick(ay38910_t* ay);
 // helper functions to directly write register values and update dependent state, not intended for regular operation!
 void ay38910_set_register(ay38910_t* ay, uint8_t addr, uint8_t data);
 void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr);
@@ -431,7 +433,7 @@ void ay38910_reset(ay38910_t* ay) {
     _ay38910_restart_env_shape(ay);
 }
 
-uint64_t _ay38910_tick(ay38910_t* ay, uint64_t pins) {
+bool ay38910_tick(ay38910_t* ay) {
     ay->tick++;
     if ((ay->tick & 7) == 0) {
         // tick the tone channels
@@ -495,12 +497,13 @@ uint64_t _ay38910_tick(ay38910_t* ay, uint64_t pins) {
             }
         }
         ay->sample = _ay38910_dcadjust(ay, sm) * ay->mag;
-        pins |= AY38910_SAMPLE; // new sample is ready
+        return true; // new sample is ready
     }
-    return pins;
+    // fallthrough: no new sample ready yet
+    return false;
 }
 
-static uint64_t _ay38910_iorq(ay38910_t* ay, uint64_t pins) {
+uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
     if (pins & AY38910_BDIR) {
         const uint8_t data = AY38910_DATA(pins);
         if (pins & AY38910_BC1) {
@@ -590,10 +593,14 @@ static uint64_t _ay38910_iorq(ay38910_t* ay, uint64_t pins) {
             const uint8_t data = ay->reg[ay->addr];
             AY38910_SET_DATA(pins, data);
         }
+        AY38910_SET_PA(pins, ay->port_a);
+        AY38910_SET_PB(pins, ay->port_b);
+        ay->pins = pins;
     }
     return pins;
 }
 
+/*
 uint64_t ay38910_tick(ay38910_t* ay, uint64_t pins) {
     if (pins & (AY38910_BDIR|AY38910_BC1)) {
         pins = _ay38910_iorq(ay, pins);
@@ -604,6 +611,7 @@ uint64_t ay38910_tick(ay38910_t* ay, uint64_t pins) {
     ay->pins = pins;
     return pins;
 }
+*/
 
 void ay38910_set_register(ay38910_t* ay, uint8_t addr, uint8_t data) {
     CHIPS_ASSERT(ay && (addr < AY38910_NUM_REGISTERS));
