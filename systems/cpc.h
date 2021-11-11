@@ -283,6 +283,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
 
     memset(sys, 0, sizeof(cpc_t));
     sys->valid = true;
+    sys->debug = desc->debug;
     sys->type = desc->type;
     sys->joystick_type = desc->joystick_type;
     sys->audio.callback = desc->audio.callback;
@@ -322,6 +323,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         .user_data = sys
     });
     mc6845_init(&sys->crtc, MC6845_TYPE_UM6845R);
+    mem_init(&sys->mem);
     am40010_init(&sys->ga, &(am40010_desc_t){
         .cpc_type = (am40010_cpc_type_t) sys->type,
         .bankswitch_cb = _cpc_bankswitch,
@@ -342,7 +344,6 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     });
     fdd_init(&sys->fdd);
 
-    mem_init(&sys->mem);
     _cpc_init_keymap(sys);
 
     /* cassette tape loading

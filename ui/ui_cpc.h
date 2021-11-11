@@ -74,7 +74,7 @@ typedef struct {
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_cpc_desc_t;
 
 typedef struct {
@@ -99,9 +99,8 @@ typedef struct {
 
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc);
 void ui_cpc_discard(ui_cpc_t* ui);
-void ui_cpc_draw(ui_cpc_t* ui, double time_ms);
-bool ui_cpc_before_exec(ui_cpc_t* ui);
-void ui_cpc_after_exec(ui_cpc_t* ui);
+void ui_cpc_draw(ui_cpc_t* ui);
+cpc_debug_t ui_cpc_get_debug(ui_cpc_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -122,7 +121,7 @@ void ui_cpc_after_exec(ui_cpc_t* ui);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
+static void _ui_cpc_draw_menu(ui_cpc_t* ui) {
     CHIPS_ASSERT(ui && ui->cpc && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -186,7 +185,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
@@ -355,16 +354,13 @@ static void _ui_cpc_mem_write(int layer, uint16_t addr, uint8_t data, void* user
     }
 }
 
-static int _ui_cpc_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
-    (void)pc;
-    (void)ticks;
+static int _ui_cpc_eval_bp(ui_dbg_t* dbg_win, int trap_id, uint64_t pins, void* user_data) {
     (void)pins;
     CHIPS_ASSERT(user_data);
     ui_cpc_t* ui_cpc = (ui_cpc_t*) user_data;
     cpc_t* cpc = ui_cpc->cpc;
     int scanline = cpc->ga.crt.v_pos;
     bool vsync = cpc->crtc.vs;
-    int trap_id = 0;
     for (int i = 0; (i < dbg_win->dbg.num_breakpoints) && (trap_id == 0); i++) {
         const ui_dbg_breakpoint_t* bp = &dbg_win->dbg.breakpoints[i];
         if (bp->enabled) {
@@ -410,15 +406,16 @@ static const ui_chip_pin_t _ui_cpc_cpu_pins[] = {
     { "D5",     5,      Z80_D5 },
     { "D6",     6,      Z80_D6 },
     { "D7",     7,      Z80_D7 },
-    { "M1",     9,      Z80_M1 },
-    { "MREQ",   10,     Z80_MREQ },
-    { "IORQ",   11,     Z80_IORQ },
-    { "RD",     12,     Z80_RD },
-    { "WR",     13,     Z80_WR },
+    { "M1",     8,      Z80_M1 },
+    { "MREQ",   9,      Z80_MREQ },
+    { "IORQ",   10,     Z80_IORQ },
+    { "RD",     11,     Z80_RD },
+    { "WR",     12,     Z80_WR },
+    { "RFSH",   13,     Z80_RFSH },
     { "HALT",   14,     Z80_HALT },
     { "INT",    15,     Z80_INT },
     { "NMI",    16,     Z80_NMI },
-    { "WAIT",   17,     Z80_WAIT_MASK },
+    { "WAIT",   17,     Z80_WAIT },
     { "A0",     18,     Z80_A0 },
     { "A1",     19,     Z80_A1 },
     { "A2",     20,     Z80_A2 },
@@ -676,8 +673,8 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->cpc->sample_buffer;
-        desc.num_samples = ui->cpc->num_samples;
+        desc.sample_buffer = ui->cpc->audio.sample_buffer;
+        desc.num_samples = ui->cpc->audio.num_samples;
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->audio, &desc);
@@ -766,13 +763,13 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
+void ui_cpc_draw(ui_cpc_t* ui) {
     CHIPS_ASSERT(ui && ui->cpc);
-    _ui_cpc_draw_menu(ui, time_ms);
+    _ui_cpc_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_cpc_update_memmap(ui);
     }
-    ui_audio_draw(&ui->audio, ui->cpc->sample_pos);
+    ui_audio_draw(&ui->audio, ui->cpc->audio.sample_pos);
     ui_fdd_draw(&ui->fdd);
     ui_kbd_draw(&ui->kbd);
     ui_z80_draw(&ui->cpu);
@@ -789,14 +786,15 @@ void ui_cpc_draw(ui_cpc_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-bool ui_cpc_before_exec(ui_cpc_t* ui) {
-    CHIPS_ASSERT(ui && ui->cpc);
-    return ui_dbg_before_exec(&ui->dbg);
-}
-
-void ui_cpc_after_exec(ui_cpc_t* ui) {
-    CHIPS_ASSERT(ui && ui->cpc);
-    ui_dbg_after_exec(&ui->dbg);
+cpc_debug_t ui_cpc_get_debug(ui_cpc_t* ui) {
+    CHIPS_ASSERT(ui);
+    return (cpc_debug_t){
+        .callback = {
+            .func = (cpc_debug_func_t) ui_dbg_tick,
+            .user_data = &ui->dbg
+        },
+        .stopped = &ui->dbg.dbg.stopped,
+    };
 }
 
 #ifdef __clang__
