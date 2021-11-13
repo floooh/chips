@@ -1178,11 +1178,11 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 0x00000004, 0x02E3, 0 },  // ED FF: ed nop (M:1 T:4 steps:1)
     { 0x00000004, 0x0404, 0 },  // CB 00: cb (M:1 T:4 steps:1)
     { 0x0000029C, 0x0405, 0 },  // CB 01: cbhl (M:3 T:11 steps:5)
-    { 0x00014E74, 0x040A, 0 },  // CB 02: ddfdcb (M:5 T:18 steps:9)
-    { 0x000000BC, 0x0413, 0 },  //  03: int_im0 (M:5 T:9 steps:5)
-    { 0x0000523C, 0x0418, 0 },  //  04: int_im1 (M:7 T:16 steps:7)
-    { 0x001FD23C, 0x041F, 0 },  //  05: int_im2 (M:9 T:22 steps:13)
-    { 0x0000148C, 0x042C, 0 },  //  06: nmi (M:5 T:14 steps:5)
+    { 0x00014E7C, 0x040A, 0 },  // CB 02: ddfdcb (M:6 T:18 steps:10)
+    { 0x000000BC, 0x0414, 0 },  //  03: int_im0 (M:5 T:9 steps:5)
+    { 0x0000523C, 0x0419, 0 },  //  04: int_im1 (M:7 T:16 steps:7)
+    { 0x001FD23C, 0x0420, 0 },  //  05: int_im2 (M:9 T:22 steps:13)
+    { 0x0000148C, 0x042D, 0 },  //  06: nmi (M:5 T:14 steps:5)
 
 };
 
@@ -3761,85 +3761,87 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // -- OVERLAP
             case 0x040A: _fetch(); break;
             
-            // CB 00: ddfdcb (M:5 T:18)
+            // CB 00: ddfdcb (M:6 T:18)
             // -- M2 (generic)
-            case 0x040B: _z80_ddfdcb_addr(cpu, pins); break;
-            // -- M3
-            case 0x040C: _mread(cpu->pc++); break;
-            case 0x040D: _wait(); break;
-            case 0x040E: cpu->dlatch=_gd();_z80_ddfdcb_opcode(cpu,cpu->dlatch); break;
+            case 0x040B: _wait();; break;
+            // -- M3 (generic)
+            case 0x040C: _z80_ddfdcb_addr(cpu, pins); break;
             // -- M4
-            case 0x040F: _mread(cpu->addr); break;
-            case 0x0410: _wait(); break;
-            case 0x0411: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,1,5,2);}; break;
+            case 0x040D: _mread(cpu->pc++); break;
+            case 0x040E: _wait(); break;
+            case 0x040F: cpu->dlatch=_gd();_z80_ddfdcb_opcode(cpu,cpu->dlatch); break;
             // -- M5
-            case 0x0412: _mwrite(cpu->addr,cpu->dlatch);_wait(); break;
+            case 0x0410: _mread(cpu->addr); break;
+            case 0x0411: _wait(); break;
+            case 0x0412: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,1,5,2);}; break;
+            // -- M6
+            case 0x0413: _mwrite(cpu->addr,cpu->dlatch);_wait(); break;
             // -- OVERLAP
-            case 0x0413: _fetch(); break;
+            case 0x0414: _fetch(); break;
             
             //  00: int_im0 (M:5 T:9)
             // -- M2 (generic)
-            case 0x0414: pins=_z80_int012_step0(cpu,pins); break;
+            case 0x0415: pins=_z80_int012_step0(cpu,pins); break;
             // -- M3 (generic)
-            case 0x0415: pins=_z80_int012_step1(cpu,pins); break;
+            case 0x0416: pins=_z80_int012_step1(cpu,pins); break;
             // -- M4 (generic)
-            case 0x0416: pins=_z80_int0_step2(cpu,pins);_wait();; break;
+            case 0x0417: pins=_z80_int0_step2(cpu,pins);_wait();; break;
             // -- M5 (generic)
-            case 0x0417: pins=_z80_int0_step3(cpu,pins); break;
+            case 0x0418: pins=_z80_int0_step3(cpu,pins); break;
             // -- OVERLAP
-            case 0x0418: _fetch(); break;
+            case 0x0419: _fetch(); break;
             
             //  00: int_im1 (M:7 T:16)
             // -- M2 (generic)
-            case 0x0419: pins=_z80_int012_step0(cpu,pins); break;
+            case 0x041A: pins=_z80_int012_step0(cpu,pins); break;
             // -- M3 (generic)
-            case 0x041A: pins=_z80_int012_step1(cpu,pins); break;
+            case 0x041B: pins=_z80_int012_step1(cpu,pins); break;
             // -- M4 (generic)
-            case 0x041B: _wait();; break;
+            case 0x041C: _wait();; break;
             // -- M5 (generic)
-            case 0x041C: pins=_z80_refresh(cpu,pins); break;
+            case 0x041D: pins=_z80_refresh(cpu,pins); break;
             // -- M6
-            case 0x041D: _mwrite(--cpu->sp,cpu->pch);_wait(); break;
+            case 0x041E: _mwrite(--cpu->sp,cpu->pch);_wait(); break;
             // -- M7
-            case 0x041E: _mwrite(--cpu->sp,cpu->pcl);_wait();cpu->wz=cpu->pc=0x0038; break;
+            case 0x041F: _mwrite(--cpu->sp,cpu->pcl);_wait();cpu->wz=cpu->pc=0x0038; break;
             // -- OVERLAP
-            case 0x041F: _fetch(); break;
+            case 0x0420: _fetch(); break;
             
             //  00: int_im2 (M:9 T:22)
             // -- M2 (generic)
-            case 0x0420: pins=_z80_int012_step0(cpu,pins); break;
+            case 0x0421: pins=_z80_int012_step0(cpu,pins); break;
             // -- M3 (generic)
-            case 0x0421: pins=_z80_int012_step1(cpu,pins); break;
+            case 0x0422: pins=_z80_int012_step1(cpu,pins); break;
             // -- M4 (generic)
-            case 0x0422: cpu->dlatch=_z80_get_db(pins);_wait(); break;
+            case 0x0423: cpu->dlatch=_z80_get_db(pins);_wait(); break;
             // -- M5 (generic)
-            case 0x0423: pins=_z80_refresh(cpu,pins); break;
+            case 0x0424: pins=_z80_refresh(cpu,pins); break;
             // -- M6
-            case 0x0424: _mwrite(--cpu->sp,cpu->pch);_wait(); break;
+            case 0x0425: _mwrite(--cpu->sp,cpu->pch);_wait(); break;
             // -- M7
-            case 0x0425: _mwrite(--cpu->sp,cpu->pcl);_wait();cpu->wzl=cpu->dlatch;cpu->wzh=cpu->i;; break;
+            case 0x0426: _mwrite(--cpu->sp,cpu->pcl);_wait();cpu->wzl=cpu->dlatch;cpu->wzh=cpu->i;; break;
             // -- M8
-            case 0x0426: _mread(cpu->wz++); break;
-            case 0x0427: _wait(); break;
-            case 0x0428: cpu->dlatch=_gd(); break;
+            case 0x0427: _mread(cpu->wz++); break;
+            case 0x0428: _wait(); break;
+            case 0x0429: cpu->dlatch=_gd(); break;
             // -- M9
-            case 0x0429: _mread(cpu->wz); break;
-            case 0x042A: _wait(); break;
-            case 0x042B: cpu->wzh=_gd();cpu->wzl=cpu->dlatch;cpu->pc=cpu->wz; break;
+            case 0x042A: _mread(cpu->wz); break;
+            case 0x042B: _wait(); break;
+            case 0x042C: cpu->wzh=_gd();cpu->wzl=cpu->dlatch;cpu->pc=cpu->wz; break;
             // -- OVERLAP
-            case 0x042C: _fetch(); break;
+            case 0x042D: _fetch(); break;
             
             //  00: nmi (M:5 T:14)
             // -- M2 (generic)
-            case 0x042D: pins=_z80_nmi_step0(cpu,pins); break;
+            case 0x042E: pins=_z80_nmi_step0(cpu,pins); break;
             // -- M3 (generic)
-            case 0x042E: pins=_z80_refresh(cpu,pins); break;
+            case 0x042F: pins=_z80_refresh(cpu,pins); break;
             // -- M4
-            case 0x042F: _mwrite(--cpu->sp,cpu->pch);_wait(); break;
+            case 0x0430: _mwrite(--cpu->sp,cpu->pch);_wait(); break;
             // -- M5
-            case 0x0430: _mwrite(--cpu->sp,cpu->pcl);_wait();cpu->wz=cpu->pc=0x0066; break;
+            case 0x0431: _mwrite(--cpu->sp,cpu->pcl);_wait();cpu->wz=cpu->pc=0x0066; break;
             // -- OVERLAP
-            case 0x0431: _fetch(); break;
+            case 0x0432: _fetch(); break;
 
         }
         cpu->op.step += 1;
