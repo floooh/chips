@@ -87,7 +87,6 @@ typedef struct {
     z80_opstate_t op;       // the currently active op
     uint64_t pins;          // last pin state, used for NMI detection
     uint64_t int_bits;      // track INT and NMI state
-    uint64_t wait_mask;     // 0 or Z80_WAIT
     union {
         struct {
             uint16_t prefix_offset; // opstate table offset: 0x100 on ED prefix, 0x200 on CB prefix
@@ -827,7 +826,7 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
 #define _iowrite(ab,d)  _sadx(ab,d,Z80_IORQ|Z80_WR)
-#define _wait()         {cpu->wait_mask=Z80_WAIT;}
+#define _wait()         {if(pins&Z80_WAIT)goto track_int_bits;}
 #define _cc_nz          (!(cpu->f&Z80_ZF))
 #define _cc_z           (cpu->f&Z80_ZF)
 #define _cc_nc          (!(cpu->f&Z80_CF))
@@ -840,10 +839,6 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     // process the next active tcycle
     pins &= ~(Z80_CTRL_PIN_MASK|Z80_RETI);
-    if (pins & cpu->wait_mask) {
-        goto track_int_bits;
-    }
-    cpu->wait_mask = 0;
     if (cpu->op.pip & 1) {
         switch (cpu->op.step) {
             // shared fetch machine cycle for all opcodes
@@ -877,6 +872,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                 }
             } break;
             //=== optional d-loading cycle for (HL), (IX+d), (IY+d)
+            // FIXME: _mread() vs _wait()
             case 2: {
                 _mread(cpu->pc++);
             } break;

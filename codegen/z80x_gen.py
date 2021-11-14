@@ -305,7 +305,7 @@ def build_pip(op: Op) -> int:
         elif mcycle.type == 'ioread':
             tcycles([0,1,1,1], mcycle.tcycles)
         elif mcycle.type == 'iowrite':
-            tcycles([0,1,1,0], mcycle.tcycles)
+            tcycles([1,0,1,0], mcycle.tcycles)
         elif mcycle.type == 'generic':
             tcycles([1], mcycle.tcycles)
         elif mcycle.type == 'overlapped':
@@ -348,27 +348,27 @@ def gen_decoder():
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(f'_mread({addr});')
-                add(f'_wait();')
+                add('')
+                add(f'_wait();_mread({addr});')
                 add(f'{store}=_gd();{action}')
             elif mcycle.type == 'mwrite':
                 l(f'// -- M{i+1}')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
-                add(f'_mwrite({addr},{data});_wait();{action}')
+                add(f'_wait();_mwrite({addr},{data});{action};')
             elif mcycle.type == 'ioread':
                 l(f'// -- M{i+1} (ioread)')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
-                add(f'_ioread({addr});')
-                add(f'_wait();')
+                add('')
+                add(f'_wait();_ioread({addr});')
                 add(f'{store}=_gd();{action}')
             elif mcycle.type == 'iowrite':
                 l(f'// -- M{i+1} (iowrite)')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 add(f'_iowrite({addr},{data});')
-                add(f'_wait();{action}')
+                add(f'_wait();{action};')
             elif mcycle.type == 'generic':
                 l(f'// -- M{i+1} (generic)')
                 add(f'{action}')
