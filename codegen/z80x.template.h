@@ -711,8 +711,6 @@ static inline uint64_t _z80_int0_step2(z80_t* cpu, uint64_t pins) {
 
 // IM0 step 3: refresh cycle and start executing loaded opcode
 static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
-    // step3 is a regular refresh cycle
-    pins = _z80_refresh(cpu, pins);
     // branch to interrupt 'payload' instruction (usually an RST)
     cpu->op = _z80_opstate_table[cpu->opcode];
     return pins;
@@ -720,12 +718,7 @@ static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
 
 // initiate a fetch machine cycle
 static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
-    if (0 == cpu->int_bits) {
-        // no interrupt, continue with next opcode
-        cpu->op.step = 0xFFFF;
-        pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-    }
-    else if (cpu->int_bits & Z80_NMI) {
+    if (cpu->int_bits & Z80_NMI) {
         // non-maskable interrupt starts with a regular M1 machine cycle
         cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_NMI];
         cpu->int_bits = 0;
@@ -740,6 +733,11 @@ static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
         cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_INT_IM0 + cpu->im];
         cpu->int_bits = 0;
         // NOTE: PC is not incremented, and no pins are activated here
+    }
+    else {
+        // no interrupt, continue with next opcode
+        cpu->op.step = 0xFFFF;
+        pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     }
     cpu->prefix_state = 0;
     return pins;

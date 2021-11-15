@@ -1173,7 +1173,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     { 1430, 0 },  // CB 00: cb (M:1 T:4 steps:1)
     { 1431, 0 },  // CB 01: cbhl (M:3 T:11 steps:8)
     { 1439, 0 },  // CB 02: ddfdcb (M:6 T:18 steps:15)
-    { 1454, 0 },  //  03: int_im0 (M:5 T:9 steps:6)
+    { 1454, 0 },  //  03: int_im0 (M:6 T:9 steps:6)
     { 1460, 0 },  //  04: int_im1 (M:7 T:16 steps:13)
     { 1473, 0 },  //  05: int_im2 (M:9 T:22 steps:19)
     { 1492, 0 },  //  06: nmi (M:5 T:14 steps:11)
@@ -1230,8 +1230,6 @@ static inline uint64_t _z80_int0_step2(z80_t* cpu, uint64_t pins) {
 
 // IM0 step 3: refresh cycle and start executing loaded opcode
 static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
-    // step3 is a regular refresh cycle
-    pins = _z80_refresh(cpu, pins);
     // branch to interrupt 'payload' instruction (usually an RST)
     cpu->op = _z80_opstate_table[cpu->opcode];
     return pins;
@@ -1239,12 +1237,7 @@ static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
 
 // initiate a fetch machine cycle
 static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
-    if (0 == cpu->int_bits) {
-        // no interrupt, continue with next opcode
-        cpu->op.step = 0xFFFF;
-        pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-    }
-    else if (cpu->int_bits & Z80_NMI) {
+    if (cpu->int_bits & Z80_NMI) {
         // non-maskable interrupt starts with a regular M1 machine cycle
         cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_NMI];
         cpu->int_bits = 0;
@@ -1259,6 +1252,11 @@ static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
         cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_INT_IM0 + cpu->im];
         cpu->int_bits = 0;
         // NOTE: PC is not incremented, and no pins are activated here
+    }
+    else {
+        // no interrupt, continue with next opcode
+        cpu->op.step = 0xFFFF;
+        pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     }
     cpu->prefix_state = 0;
     return pins;
@@ -4183,7 +4181,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- overlapped
         case 1454: _fetch();break;
         
-        //  00: int_im0 (M:5 T:9)
+        //  00: int_im0 (M:6 T:9)
         // -- generic
         case 1455: pins=_z80_int012_step0(cpu,pins);break;
         // -- generic
@@ -4191,8 +4189,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- generic
         case 1457: _wait();pins=_z80_int0_step2(cpu,pins);break;
         // -- generic
-        case 1458: pins=_z80_int0_step3(cpu,pins);break;
-        case 1459: break;
+        case 1458: pins=_z80_refresh(cpu,pins);break;
+        // -- generic
+        case 1459: pins=_z80_int0_step3(cpu,pins);break;
         // -- overlapped
         case 1460: _fetch();break;
         
