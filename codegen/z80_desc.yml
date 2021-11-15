@@ -661,9 +661,9 @@ cbhl:
 ddfdcb:
   flags: { special: true }
   mcycles:
-    # load d-offset, the first tcycle was overlapped from fetch_cb!
-    - { type: generic, tcycles: 1, action: "_wait();" }
-    - { type: generic, tcycles: 1, action: "_z80_ddfdcb_addr(cpu, pins)" }
+    # load d-offset, the first mread tcycle was overlapped from fetch_cb!
+    - { type: generic, tcycles: 1, action: "_wait();_mread(cpu->pc++)" }
+    - { type: generic, tcycles: 1, action: "_z80_ddfdcb_addr(cpu,pins)" }
     # load opcode
     - { type: mread, ab: $PC++, tcycles: 5, dst: $DLATCH, action: "_z80_ddfdcb_opcode(cpu,$DLATCH)" }
     # read operand

@@ -720,10 +720,15 @@ static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
 
 // initiate a fetch machine cycle
 static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
-    // need to handle interrupt?
-    if (cpu->int_bits & Z80_NMI) {
+    if (0 == cpu->int_bits) {
+        // no interrupt, continue with next opcode
+        cpu->op.step = 0xFFFF;
+        pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+    }
+    else if (cpu->int_bits & Z80_NMI) {
         // non-maskable interrupt starts with a regular M1 machine cycle
         cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_NMI];
+        cpu->int_bits = 0;
         // NOTE: PC is *not* incremented!
         pins = _z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
     }
@@ -733,15 +738,10 @@ static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
         // pins M1|IOQR to request a special byte which is handled differently
         // depending on interrupt mode
         cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_INT_IM0 + cpu->im];
+        cpu->int_bits = 0;
         // NOTE: PC is not incremented, and no pins are activated here
     }
-    else {
-        // no interrupt, continue with next opcode
-        cpu->op.step = 0xFFFF;
-        pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-    }
     cpu->prefix_state = 0;
-    cpu->int_bits = 0;
     return pins;
 }
 
@@ -757,8 +757,6 @@ static inline uint64_t _z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t pref
                 // loads the d-offset first and then the opcode in a 
                 // regular memory read machine cycle
                 cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_DDFDCB];
-                // set pins for a regular read machine cycle to read d-offset
-                pins = _z80_set_ab_x(pins, cpu->pc++, Z80_MREQ|Z80_RD);
             }
             else {
                 // this is a regular CB-prefixed instruction, continue
