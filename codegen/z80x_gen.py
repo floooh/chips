@@ -305,7 +305,7 @@ def build_pip(op: Op) -> int:
         elif mcycle.type == 'ioread':
             tcycles([0,1,1,1], mcycle.tcycles)
         elif mcycle.type == 'iowrite':
-            tcycles([1,0,1,0], mcycle.tcycles)
+            tcycles([0,1,1,0], mcycle.tcycles)
         elif mcycle.type == 'generic':
             tcycles([1], mcycle.tcycles)
         elif mcycle.type == 'overlapped':
