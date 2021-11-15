@@ -2,7 +2,7 @@ import yaml, copy
 from string import Template
 from typing import Optional, TypeVar, Any
 
-FIRST_DECODER_STEP = 7
+FIRST_DECODER_STEP = 22
 DESC_PATH  = 'z80_desc.yml'
 TEMPL_PATH = 'z80x.template.h'
 OUT_PATH   = '../chips/z80x.h'
@@ -25,7 +25,6 @@ class Op:
         self.opcode: int = -1
         self.prefix: str = ''
         self.single: bool = False
-        self.pip: int = 0
         self.num_cycles = 0
         self.num_steps = 0
         self.decoder_offset: int = 0
@@ -218,7 +217,11 @@ def parse_opdescs():
                 if (mc_tcycles < 1) or (mc_tcycles > 7):
                     err(f'invalid mcycle len: {mc_tcycles}')
                 if mc_type == 'fetch':
+                    if mc_tcycles != 4:
+                        err('fetch ticks must have exactly 4 tcycles')
                     mc_tcycles -= OVERLAPPED_FETCH_TCYCLES
+                if mc_type == 'overlapped' and mc_tcycles != 1:
+                    err('overlapped ticks must have exactly 1 tcycle!')
                 mc = MCycle(mc_type, mc_tcycles, mc_desc)
                 op.mcycles.append(mc)
             if num_fetch == 0:
@@ -281,50 +284,23 @@ def expand_optable():
     stampout_op('', 0, OP_INDEX_INT_IM2, unwrap(find_opdesc('int_im2')))
     stampout_op('', 0, OP_INDEX_NMI, unwrap(find_opdesc('nmi')))
 
-# build the execution pipeline bitmask for a given instruction
-def build_pip(op: Op) -> int:
-    pip = 0
-    cycle = 0
-
-    def tcycles(bits: list[int], total: int):
-        nonlocal cycle
-        nonlocal pip
-        for i in range(0,total):
-            if i < len(bits):
-                if bits[i] != 0:
-                    pip |=  (1<<(i + cycle))
-        cycle += total
-
+# compute number of tcycles in an instruction
+def compute_tcycles(op: Op) -> int:
+    cycles = 0
     for mcycle in op.mcycles:
-        if mcycle.type == 'fetch':
-            tcycles([], mcycle.tcycles - 1)
-        elif mcycle.type == 'mread':
-            tcycles([1,1,1], mcycle.tcycles)
-        elif mcycle.type == 'mwrite':
-            tcycles([0,1,0], mcycle.tcycles)
-        elif mcycle.type == 'ioread':
-            tcycles([0,1,1,1], mcycle.tcycles)
-        elif mcycle.type == 'iowrite':
-            tcycles([0,1,1,0], mcycle.tcycles)
-        elif mcycle.type == 'generic':
-            tcycles([1], mcycle.tcycles)
-        elif mcycle.type == 'overlapped':
-            # the final overlapped tcycle is actually the first tcycle
-            # of the next instruction and only initiates a memory fetch
-            tcycles([1], mcycle.tcycles)
-    op.num_cycles = cycle + 1
-    return pip
+        cycles += mcycle.tcycles
+    return cycles
 
 # generate code for one op
 def gen_decoder():
     global indent
-    indent = 3
+    indent = 2
     decoder_step = FIRST_DECODER_STEP
 
     def add(action: str):
         nonlocal decoder_step
         nonlocal step
-        l(f'case 0x{decoder_step:04X}: {action} break;')
+        l(f'case {decoder_step:4}: {action}break;')
         decoder_step += 1
         step += 1
     
@@ -335,7 +311,7 @@ def gen_decoder():
             continue
 
         step = 0
-        op.pip = build_pip(op)
+        op.num_cycles = compute_tcycles(op)
         op.decoder_offset = decoder_step
 
         l('')
@@ -345,35 +321,50 @@ def gen_decoder():
             if mcycle.type == 'fetch':
                 pass
             elif mcycle.type == 'mread':
-                l(f'// -- M{i+1}')
+                l(f'// -- mread')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 add('')
                 add(f'_wait();_mread({addr});')
                 add(f'{store}=_gd();{action}')
+                for _ in range(3,mcycle.tcycles):
+                    add('')
             elif mcycle.type == 'mwrite':
-                l(f'// -- M{i+1}')
+                l(f'// -- mwrite')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
+                add('')
                 add(f'_wait();_mwrite({addr},{data});{action};')
+                add('')
+                for _ in range(3,mcycle.tcycles):
+                    add('')
             elif mcycle.type == 'ioread':
-                l(f'// -- M{i+1} (ioread)')
+                l(f'// -- ioread')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 add('')
+                add('')
                 add(f'_wait();_ioread({addr});')
                 add(f'{store}=_gd();{action}')
+                for _ in range(4,mcycle.tcycles):
+                    add('')
             elif mcycle.type == 'iowrite':
-                l(f'// -- M{i+1} (iowrite)')
+                l(f'// -- iowrite')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
+                add('')
                 add(f'_iowrite({addr},{data});')
                 add(f'_wait();{action};')
+                add('')
+                for _ in range(4,mcycle.tcycles):
+                    add('')
             elif mcycle.type == 'generic':
-                l(f'// -- M{i+1} (generic)')
+                l(f'// -- generic')
                 add(f'{action}')
+                for _ in range(1,mcycle.tcycles):
+                    add('')
             elif mcycle.type == 'overlapped':
-                l(f'// -- OVERLAP')
+                l(f'// -- overlapped')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 post_action = (f"{mcycle.items['post_action']};" if 'post_action' in mcycle.items else '')
                 if 'prefix' in mcycle.items:
@@ -382,11 +373,6 @@ def gen_decoder():
                     fetch = '_fetch();'
                 add(f'{action}{fetch}{post_action}')
         op.num_steps = step
-        # the number of steps must match the number of step-bits in the
-        # execution pipeline
-        step_pip = op.pip
-        if step != bin(step_pip).count('1'):
-            err(f"Pipeline vs steps mismatch in '{op.name}(0x{op.opcode:02X})': {step_pip:b} vs {op.num_steps}")
 
 def pip_table_to_string() -> str:
     global indent
@@ -406,14 +392,14 @@ def pip_table_to_string() -> str:
             flags += '_Z80_OPSTATE_FLAGS_IMM8'
         if flags == '':
             flags = '0'
-        res += tab() + f'{{ 0x{op.pip:08X}, 0x{op.decoder_offset-1:04X}, {flags} }},' 
+        res += tab() + f'{{ {op.decoder_offset-1:4}, {flags} }},' 
         res += f'  // {op.prefix.upper()} {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
     return res
 
 def write_result():
     with open(TEMPL_PATH, 'r') as templf:
         templ = Template(templf.read())
-        c_src = templ.safe_substitute(decode_block=out_lines, pip_table_block=pip_table_to_string())
+        c_src = templ.safe_substitute(decode_block=out_lines, op_table_block=pip_table_to_string())
         with open(OUT_PATH, 'w') as outf:
             outf.write(c_src)
 
