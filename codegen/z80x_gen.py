@@ -1,6 +1,5 @@
 import yaml, copy
 from string import Template
-from typing import Optional, TypeVar, Any
 
 FIRST_DECODER_STEP = 22
 DESC_PATH  = 'z80_desc.yml'
@@ -10,28 +9,28 @@ TAB_WIDTH  = 4
 
 # a machine cycle description
 class MCycle:
-    def __init__(self, type: str, tcycles: int, items: dict[str,str]):
+    def __init__(self, type, tcycles, items):
         self.type = type
         self.tcycles = tcycles
         self.items = items
 
 # an opcode description
 class Op:
-    def __init__(self, name:str, cond:str, flags: dict[str,Any]):
-        self.name: str = name
-        self.cond: str = cond
+    def __init__(self, name, cond, flags):
+        self.name = name
+        self.cond = cond
         self.cond_compiled = compile(cond, '<string>', 'eval')
-        self.flags: dict[str,Any] = flags
-        self.opcode: int = -1
-        self.prefix: str = ''
-        self.single: bool = False
+        self.flags = flags
+        self.opcode = -1
+        self.prefix = ''
+        self.single = False
         self.num_cycles = 0
         self.num_steps = 0
-        self.decoder_offset: int = 0
-        self.first_op_index: int = -1
-        self.mcycles: list[MCycle] = []
+        self.decoder_offset = 0
+        self.first_op_index = -1
+        self.mcycles = []
 
-OP_PATTERNS: list[Op] = []
+OP_PATTERNS = []
 
 OP_INDEX_CB = 512
 OP_INDEX_CBHL = 513
@@ -47,7 +46,7 @@ NUM_SPECIAL_OPS = 7
 # 256..511: ED prefix opcodes
 # 512..514: special decoder blocks for CB-prefix
 # 515..519: special decoder blocks for interrupt handling
-OPS: list[Optional[Op]] = [None for _ in range(0,2*256 + NUM_SPECIAL_OPS)]
+OPS = [None for _ in range(0,2*256 + NUM_SPECIAL_OPS)]
 
 # a fetch machine cycle is processed as 2 parts because it overlaps
 # with the 'action' of the previous instruction
@@ -97,24 +96,23 @@ im_map = [ '0', '0', '1', '2', '0', '0', '1', '2' ]
 def err(msg: str):
     raise BaseException(msg)
 
-T = TypeVar('T')
-def unwrap(maybe_value: Optional[T]) -> T:
+def unwrap(maybe_value):
     if maybe_value is None:
         err('Expected valid value, found None')
     return maybe_value
 
 # append a source code line
-indent: int = 0
-out_lines: str = ''
+indent = 0
+out_lines = ''
 
-def tab() -> str:
+def tab():
     return ' ' * TAB_WIDTH * indent
 
-def l(s: str) :
+def l(s) :
     global out_lines
     out_lines += tab() + s + '\n'
 
-def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
+def map_comment(inp, y, z, p, q):
     return inp\
         .replace('$RY', r_comment[y])\
         .replace('$RZ', r_comment[z])\
@@ -128,7 +126,7 @@ def map_comment(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('$Y*8', f'{y*8:X}h')\
         .replace('$Y', f'{y}')
 
-def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
+def map_cpu(inp, y, z, p, q):
     return inp\
         .replace('$ADDR', 'cpu->addr')\
         .replace('$ALU(', alu_map[y])\
@@ -171,7 +169,7 @@ def map_cpu(inp:str, y:int, z:int, p:int, q:int) -> str:
         .replace('$IM', 'cpu->im')\
         .replace('$Y*8', f'0x{y*8:02X}')\
 
-def flag(op: Op, flag: str) -> bool:
+def flag(op, flag):
     if flag in op.flags:
         return op.flags[flag]
     else:
@@ -185,7 +183,7 @@ def parse_opdescs():
                 op_desc['cond'] = 'True'
             if 'mcycles' not in op_desc:
                 err(f"op '{op_name}' has no mcycles!")
-            flags: dict[str,Any] = {}
+            flags = {}
             if 'flags' in op_desc:
                 flags = op_desc['flags']
             op = Op(op_name,op_desc['cond'], flags)
@@ -230,20 +228,20 @@ def parse_opdescs():
                 op.mcycles.append(MCycle('overlapped', OVERLAPPED_FETCH_TCYCLES, {}))
             OP_PATTERNS.append(op)
 
-def find_opdesc(name: str) -> Optional[Op]:
+def find_opdesc(name):
     for op_desc in OP_PATTERNS:
         if op_desc.name == name:
             return op_desc
     return None
 
-def stampout_mcycle_items(mcycle_items: dict[str,str], y: int, z: int, p: int, q: int) -> dict[str,str]:
-    res: dict[str,str] = {}
+def stampout_mcycle_items(mcycle_items, y, z, p, q):
+    res = {}
     for key,val in mcycle_items.items():
         if type(val) == str:
             res[key] = map_cpu(val, y, z, p, q)
     return res
 
-def stampout_op(prefix: str, opcode: int, op_index: int, op_desc: Op):
+def stampout_op(prefix, opcode, op_index, op_desc):
     #  76 543 210
     # |xx|yyy|zzz|
     #    |ppq|
@@ -285,7 +283,7 @@ def expand_optable():
     stampout_op('', 0, OP_INDEX_NMI, unwrap(find_opdesc('nmi')))
 
 # compute number of tcycles in an instruction
-def compute_tcycles(op: Op) -> int:
+def compute_tcycles(op):
     cycles = 0
     for mcycle in op.mcycles:
         cycles += mcycle.tcycles
@@ -297,7 +295,7 @@ def gen_decoder():
     indent = 2
     decoder_step = FIRST_DECODER_STEP
 
-    def add(action: str):
+    def add(action):
         nonlocal decoder_step
         nonlocal step
         l(f'case {decoder_step:4}: {action}break;')
@@ -374,10 +372,10 @@ def gen_decoder():
                 add(f'{action}{fetch}{post_action}')
         op.num_steps = step
 
-def pip_table_to_string() -> str:
+def pip_table_to_string():
     global indent
     indent = 1
-    res: str = ''
+    res = ''
     for op_index,maybe_op in enumerate(OPS):
         op = unwrap(maybe_op)
         # map redundant 'single' ops to the original
