@@ -298,10 +298,17 @@ def gen_decoder():
     def add(action):
         nonlocal decoder_step
         nonlocal step
-        l(f'case {decoder_step:4}: {action}break;')
+        l(f'case {decoder_step:4}: {action}goto step_next;')
         decoder_step += 1
         step += 1
     
+    def add_fetch(action):
+        nonlocal decoder_step
+        nonlocal step
+        l(f'case {decoder_step:4}: {action}goto fetch_next;')
+        decoder_step += 1
+        step += 1
+
     for op_index,maybe_op in enumerate(OPS):
         op = unwrap(maybe_op)
         # ignore duplicate ops if they are flagged as 'single'
@@ -315,7 +322,7 @@ def gen_decoder():
         l('')
         l(f'// {op.prefix.upper()} {op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
-            action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
+            action = (f"{mcycle.items['action']}" if 'action' in mcycle.items else '')
             if mcycle.type == 'fetch':
                 pass
             elif mcycle.type == 'mread':
@@ -324,7 +331,7 @@ def gen_decoder():
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 add('')
                 add(f'_wait();_mread({addr});')
-                add(f'{store}=_gd();{action}')
+                add(f'{store}=_gd();{action};')
                 for _ in range(3,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'mwrite':
@@ -343,7 +350,7 @@ def gen_decoder():
                 add('')
                 add('')
                 add(f'_wait();_ioread({addr});')
-                add(f'{store}=_gd();{action}')
+                add(f'{store}=_gd();{action};')
                 for _ in range(4,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'iowrite':
@@ -358,18 +365,23 @@ def gen_decoder():
                     add('')
             elif mcycle.type == 'generic':
                 l(f'// -- generic')
-                add(f'{action}')
+                add(f'{action};')
                 for _ in range(1,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'overlapped':
                 l(f'// -- overlapped')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
-                post_action = (f"{mcycle.items['post_action']};" if 'post_action' in mcycle.items else '')
-                if 'prefix' in mcycle.items:
-                    fetch = f"_fetch_{mcycle.items['prefix']}();"
+                if 'post_action' in mcycle.items:
+                    # if a post-action is defined we can jump to the common fetch block but
+                    # instead squeeze the fetch before the fetch action
+                    post_action = (f"{mcycle.items['post_action']}" if 'post_action' in mcycle.items else '')
+                    add(f"{action};pins=_z80_fetch(cpu,pins);{post_action};")
+                elif 'prefix' in mcycle.items:
+                    # likewise if this is a prefix instruction special case
+                    add(f"{action};_fetch_{mcycle.items['prefix']}();")
                 else:
-                    fetch = '_fetch();'
-                add(f'{action}{fetch}{post_action}')
+                    # regular case, jump to the shared fetch block after the 
+                    add_fetch(f'{action}')
         op.num_steps = step
 
 def pip_table_to_string():

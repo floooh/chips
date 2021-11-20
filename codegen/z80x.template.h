@@ -802,7 +802,6 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _gd()               _z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()        pins=_z80_fetch(cpu,pins)
 #define _fetch_dd()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_DD);
 #define _fetch_fd()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_FD);
 #define _fetch_ed()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_ED);
@@ -826,9 +825,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     pins &= ~(Z80_CTRL_PIN_MASK|Z80_RETI);
     switch (cpu->op.step) {
         // M1/T2: shared fetch machine cycle for all opcodes
-        case 0: _wait(); cpu->opcode = _gd(); break;
+        case 0: _wait(); cpu->opcode = _gd(); goto step_next;
         // M1/T3: refresh cycle
-        case 1: pins = _z80_refresh(cpu, pins); break;
+        case 1: pins = _z80_refresh(cpu, pins); goto step_next;
         // M1/T4: branch to instruction 'payload'
         case 2: {
             cpu->op = _z80_opstate_table[cpu->opcode + cpu->prefix_offset];
@@ -849,41 +848,41 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                     }
                 }
             }
-        } break;
+        } goto step_next;
         //=== optional d-loading cycle for (IX+d), (IY+d)
         //--- mread
-        case 3: break;
-        case 4: _wait();_mread(cpu->pc++); break;
-        case 5: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; break;
+        case 3: goto step_next;
+        case 4: _wait();_mread(cpu->pc++); goto step_next;
+        case 5: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
         //--- filler ticks
-        case 6: break;
-        case 7: break;
-        case 8: break;
-        case 9: break;
+        case 6: goto step_next;
+        case 7: goto step_next;
+        case 8: goto step_next;
+        case 9: goto step_next;
         case 10: {
             // branch to original instruction
             cpu->op = _z80_opstate_table[cpu->opcode];
-        } break;
+        } goto step_next;
         //=== special case d-loading cycle for (IX+d),n where the immediate load
         //    is hidden in the d-cycle load
         //--- mread for d offset
-        case 11: break;
-        case 12: _wait();_mread(cpu->pc++); break;
-        case 13: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; break;
+        case 11: goto step_next;
+        case 12: _wait();_mread(cpu->pc++); goto step_next;
+        case 13: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
         //--- mread for n
-        case 14: break;
-        case 15: _wait();_mread(cpu->pc++); break;
-        case 16: cpu->dlatch=_gd(); break;
+        case 14: goto step_next;
+        case 15: _wait();_mread(cpu->pc++); goto step_next;
+        case 16: cpu->dlatch=_gd(); goto step_next;
         //--- filler tick
-        case 17: break;
+        case 17: goto step_next;
         case 18: {
             // branch to ld (hl),n and skip the original mread cycle for loading 'n'
             cpu->op = _z80_opstate_table[cpu->opcode];
             cpu->op.step += 3;
-        } break;
+        } goto step_next;
         //=== special opcode fetch machine cycle for CB-prefixed instructions
-        case 19: _wait(); cpu->opcode = _gd(); break;
-        case 20: pins = _z80_refresh(cpu, pins); break;
+        case 19: _wait(); cpu->opcode = _gd(); goto step_next;
+        case 20: pins = _z80_refresh(cpu, pins); goto step_next;
         case 21: {
             if ((cpu->opcode & 7) == 6) {
                 // this is a (HL) instruction
@@ -893,10 +892,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             else {
                 cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_CB];
             }
-        } break;
+        } goto step_next;
 $decode_block
     }
-    cpu->op.step += 1;
+fetch_next: pins = _z80_fetch(cpu, pins);
+step_next:  cpu->op.step += 1;
 track_int_bits: {
         // track NMI 0 => 1 edge and current INT pin state, this will track the
         // relevant interrupt status up to the last instruction cycle and will
@@ -913,7 +913,6 @@ track_int_bits: {
 #undef _sad
 #undef _sadx
 #undef _gd
-#undef _fetch
 #undef _fetch_dd
 #undef _fetch_fd
 #undef _fetch_ed

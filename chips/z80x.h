@@ -1321,7 +1321,6 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _gd()               _z80_get_db(pins)
 
 // high level helper macros
-#define _fetch()        pins=_z80_fetch(cpu,pins)
 #define _fetch_dd()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_DD);
 #define _fetch_fd()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_FD);
 #define _fetch_ed()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_ED);
@@ -1345,9 +1344,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     pins &= ~(Z80_CTRL_PIN_MASK|Z80_RETI);
     switch (cpu->op.step) {
         // M1/T2: shared fetch machine cycle for all opcodes
-        case 0: _wait(); cpu->opcode = _gd(); break;
+        case 0: _wait(); cpu->opcode = _gd(); goto step_next;
         // M1/T3: refresh cycle
-        case 1: pins = _z80_refresh(cpu, pins); break;
+        case 1: pins = _z80_refresh(cpu, pins); goto step_next;
         // M1/T4: branch to instruction 'payload'
         case 2: {
             cpu->op = _z80_opstate_table[cpu->opcode + cpu->prefix_offset];
@@ -1368,41 +1367,41 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                     }
                 }
             }
-        } break;
+        } goto step_next;
         //=== optional d-loading cycle for (IX+d), (IY+d)
         //--- mread
-        case 3: break;
-        case 4: _wait();_mread(cpu->pc++); break;
-        case 5: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; break;
+        case 3: goto step_next;
+        case 4: _wait();_mread(cpu->pc++); goto step_next;
+        case 5: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
         //--- filler ticks
-        case 6: break;
-        case 7: break;
-        case 8: break;
-        case 9: break;
+        case 6: goto step_next;
+        case 7: goto step_next;
+        case 8: goto step_next;
+        case 9: goto step_next;
         case 10: {
             // branch to original instruction
             cpu->op = _z80_opstate_table[cpu->opcode];
-        } break;
+        } goto step_next;
         //=== special case d-loading cycle for (IX+d),n where the immediate load
         //    is hidden in the d-cycle load
         //--- mread for d offset
-        case 11: break;
-        case 12: _wait();_mread(cpu->pc++); break;
-        case 13: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; break;
+        case 11: goto step_next;
+        case 12: _wait();_mread(cpu->pc++); goto step_next;
+        case 13: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
         //--- mread for n
-        case 14: break;
-        case 15: _wait();_mread(cpu->pc++); break;
-        case 16: cpu->dlatch=_gd(); break;
+        case 14: goto step_next;
+        case 15: _wait();_mread(cpu->pc++); goto step_next;
+        case 16: cpu->dlatch=_gd(); goto step_next;
         //--- filler tick
-        case 17: break;
+        case 17: goto step_next;
         case 18: {
             // branch to ld (hl),n and skip the original mread cycle for loading 'n'
             cpu->op = _z80_opstate_table[cpu->opcode];
             cpu->op.step += 3;
-        } break;
+        } goto step_next;
         //=== special opcode fetch machine cycle for CB-prefixed instructions
-        case 19: _wait(); cpu->opcode = _gd(); break;
-        case 20: pins = _z80_refresh(cpu, pins); break;
+        case 19: _wait(); cpu->opcode = _gd(); goto step_next;
+        case 20: pins = _z80_refresh(cpu, pins); goto step_next;
         case 21: {
             if ((cpu->opcode & 7) == 6) {
                 // this is a (HL) instruction
@@ -1412,2861 +1411,2862 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             else {
                 cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_CB];
             }
-        } break;
+        } goto step_next;
         
         //  00: nop (M:1 T:4)
         // -- overlapped
-        case   22: _fetch();break;
+        case   22: goto fetch_next;
         
         //  01: ld bc,nn (M:3 T:10)
         // -- mread
-        case   23: break;
-        case   24: _wait();_mread(cpu->pc++);break;
-        case   25: cpu->c=_gd();break;
+        case   23: goto step_next;
+        case   24: _wait();_mread(cpu->pc++);goto step_next;
+        case   25: cpu->c=_gd();;goto step_next;
         // -- mread
-        case   26: break;
-        case   27: _wait();_mread(cpu->pc++);break;
-        case   28: cpu->b=_gd();break;
+        case   26: goto step_next;
+        case   27: _wait();_mread(cpu->pc++);goto step_next;
+        case   28: cpu->b=_gd();;goto step_next;
         // -- overlapped
-        case   29: _fetch();break;
+        case   29: goto fetch_next;
         
         //  02: ld (bc),a (M:2 T:7)
         // -- mwrite
-        case   30: break;
-        case   31: _wait();_mwrite(cpu->bc,cpu->a);cpu->wzl=cpu->c+1;cpu->wzh=cpu->a;;break;
-        case   32: break;
+        case   30: goto step_next;
+        case   31: _wait();_mwrite(cpu->bc,cpu->a);cpu->wzl=cpu->c+1;cpu->wzh=cpu->a;goto step_next;
+        case   32: goto step_next;
         // -- overlapped
-        case   33: _fetch();break;
+        case   33: goto fetch_next;
         
         //  03: inc bc (M:2 T:6)
         // -- generic
-        case   34: cpu->bc++;break;
-        case   35: break;
+        case   34: cpu->bc++;goto step_next;
+        case   35: goto step_next;
         // -- overlapped
-        case   36: _fetch();break;
+        case   36: goto fetch_next;
         
         //  04: inc b (M:1 T:4)
         // -- overlapped
-        case   37: cpu->b=_z80_inc8(cpu,cpu->b);_fetch();break;
+        case   37: cpu->b=_z80_inc8(cpu,cpu->b);goto fetch_next;
         
         //  05: dec b (M:1 T:4)
         // -- overlapped
-        case   38: cpu->b=_z80_dec8(cpu,cpu->b);_fetch();break;
+        case   38: cpu->b=_z80_dec8(cpu,cpu->b);goto fetch_next;
         
         //  06: ld b,n (M:2 T:7)
         // -- mread
-        case   39: break;
-        case   40: _wait();_mread(cpu->pc++);break;
-        case   41: cpu->b=_gd();break;
+        case   39: goto step_next;
+        case   40: _wait();_mread(cpu->pc++);goto step_next;
+        case   41: cpu->b=_gd();;goto step_next;
         // -- overlapped
-        case   42: _fetch();break;
+        case   42: goto fetch_next;
         
         //  07: rlca (M:1 T:4)
         // -- overlapped
-        case   43: _z80_rlca(cpu);_fetch();break;
+        case   43: _z80_rlca(cpu);goto fetch_next;
         
         //  08: ex af,af' (M:1 T:4)
         // -- overlapped
-        case   44: _z80_ex_af_af2(cpu);_fetch();break;
+        case   44: _z80_ex_af_af2(cpu);goto fetch_next;
         
         //  09: add hl,bc (M:2 T:11)
         // -- generic
-        case   45: _z80_add16(cpu,cpu->bc);break;
-        case   46: break;
-        case   47: break;
-        case   48: break;
-        case   49: break;
-        case   50: break;
-        case   51: break;
+        case   45: _z80_add16(cpu,cpu->bc);goto step_next;
+        case   46: goto step_next;
+        case   47: goto step_next;
+        case   48: goto step_next;
+        case   49: goto step_next;
+        case   50: goto step_next;
+        case   51: goto step_next;
         // -- overlapped
-        case   52: _fetch();break;
+        case   52: goto fetch_next;
         
         //  0A: ld a,(bc) (M:2 T:7)
         // -- mread
-        case   53: break;
-        case   54: _wait();_mread(cpu->bc);break;
-        case   55: cpu->a=_gd();cpu->wz=cpu->bc+1;break;
+        case   53: goto step_next;
+        case   54: _wait();_mread(cpu->bc);goto step_next;
+        case   55: cpu->a=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case   56: _fetch();break;
+        case   56: goto fetch_next;
         
         //  0B: dec bc (M:2 T:6)
         // -- generic
-        case   57: cpu->bc--;break;
-        case   58: break;
+        case   57: cpu->bc--;goto step_next;
+        case   58: goto step_next;
         // -- overlapped
-        case   59: _fetch();break;
+        case   59: goto fetch_next;
         
         //  0C: inc c (M:1 T:4)
         // -- overlapped
-        case   60: cpu->c=_z80_inc8(cpu,cpu->c);_fetch();break;
+        case   60: cpu->c=_z80_inc8(cpu,cpu->c);goto fetch_next;
         
         //  0D: dec c (M:1 T:4)
         // -- overlapped
-        case   61: cpu->c=_z80_dec8(cpu,cpu->c);_fetch();break;
+        case   61: cpu->c=_z80_dec8(cpu,cpu->c);goto fetch_next;
         
         //  0E: ld c,n (M:2 T:7)
         // -- mread
-        case   62: break;
-        case   63: _wait();_mread(cpu->pc++);break;
-        case   64: cpu->c=_gd();break;
+        case   62: goto step_next;
+        case   63: _wait();_mread(cpu->pc++);goto step_next;
+        case   64: cpu->c=_gd();;goto step_next;
         // -- overlapped
-        case   65: _fetch();break;
+        case   65: goto fetch_next;
         
         //  0F: rrca (M:1 T:4)
         // -- overlapped
-        case   66: _z80_rrca(cpu);_fetch();break;
+        case   66: _z80_rrca(cpu);goto fetch_next;
         
         //  10: djnz d (M:4 T:13)
         // -- generic
-        case   67: break;
+        case   67: ;goto step_next;
         // -- mread
-        case   68: break;
-        case   69: _wait();_mread(cpu->pc++);break;
-        case   70: cpu->dlatch=_gd();if(--cpu->b==0){_z80_skip(cpu,5);};break;
+        case   68: goto step_next;
+        case   69: _wait();_mread(cpu->pc++);goto step_next;
+        case   70: cpu->dlatch=_gd();if(--cpu->b==0){_z80_skip(cpu,5);};goto step_next;
         // -- generic
-        case   71: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;break;
-        case   72: break;
-        case   73: break;
-        case   74: break;
-        case   75: break;
+        case   71: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case   72: goto step_next;
+        case   73: goto step_next;
+        case   74: goto step_next;
+        case   75: goto step_next;
         // -- overlapped
-        case   76: _fetch();break;
+        case   76: goto fetch_next;
         
         //  11: ld de,nn (M:3 T:10)
         // -- mread
-        case   77: break;
-        case   78: _wait();_mread(cpu->pc++);break;
-        case   79: cpu->e=_gd();break;
+        case   77: goto step_next;
+        case   78: _wait();_mread(cpu->pc++);goto step_next;
+        case   79: cpu->e=_gd();;goto step_next;
         // -- mread
-        case   80: break;
-        case   81: _wait();_mread(cpu->pc++);break;
-        case   82: cpu->d=_gd();break;
+        case   80: goto step_next;
+        case   81: _wait();_mread(cpu->pc++);goto step_next;
+        case   82: cpu->d=_gd();;goto step_next;
         // -- overlapped
-        case   83: _fetch();break;
+        case   83: goto fetch_next;
         
         //  12: ld (de),a (M:2 T:7)
         // -- mwrite
-        case   84: break;
-        case   85: _wait();_mwrite(cpu->de,cpu->a);cpu->wzl=cpu->e+1;cpu->wzh=cpu->a;;break;
-        case   86: break;
+        case   84: goto step_next;
+        case   85: _wait();_mwrite(cpu->de,cpu->a);cpu->wzl=cpu->e+1;cpu->wzh=cpu->a;goto step_next;
+        case   86: goto step_next;
         // -- overlapped
-        case   87: _fetch();break;
+        case   87: goto fetch_next;
         
         //  13: inc de (M:2 T:6)
         // -- generic
-        case   88: cpu->de++;break;
-        case   89: break;
+        case   88: cpu->de++;goto step_next;
+        case   89: goto step_next;
         // -- overlapped
-        case   90: _fetch();break;
+        case   90: goto fetch_next;
         
         //  14: inc d (M:1 T:4)
         // -- overlapped
-        case   91: cpu->d=_z80_inc8(cpu,cpu->d);_fetch();break;
+        case   91: cpu->d=_z80_inc8(cpu,cpu->d);goto fetch_next;
         
         //  15: dec d (M:1 T:4)
         // -- overlapped
-        case   92: cpu->d=_z80_dec8(cpu,cpu->d);_fetch();break;
+        case   92: cpu->d=_z80_dec8(cpu,cpu->d);goto fetch_next;
         
         //  16: ld d,n (M:2 T:7)
         // -- mread
-        case   93: break;
-        case   94: _wait();_mread(cpu->pc++);break;
-        case   95: cpu->d=_gd();break;
+        case   93: goto step_next;
+        case   94: _wait();_mread(cpu->pc++);goto step_next;
+        case   95: cpu->d=_gd();;goto step_next;
         // -- overlapped
-        case   96: _fetch();break;
+        case   96: goto fetch_next;
         
         //  17: rla (M:1 T:4)
         // -- overlapped
-        case   97: _z80_rla(cpu);_fetch();break;
+        case   97: _z80_rla(cpu);goto fetch_next;
         
         //  18: jr d (M:3 T:12)
         // -- mread
-        case   98: break;
-        case   99: _wait();_mread(cpu->pc++);break;
-        case  100: cpu->dlatch=_gd();break;
+        case   98: goto step_next;
+        case   99: _wait();_mread(cpu->pc++);goto step_next;
+        case  100: cpu->dlatch=_gd();;goto step_next;
         // -- generic
-        case  101: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;break;
-        case  102: break;
-        case  103: break;
-        case  104: break;
-        case  105: break;
+        case  101: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  102: goto step_next;
+        case  103: goto step_next;
+        case  104: goto step_next;
+        case  105: goto step_next;
         // -- overlapped
-        case  106: _fetch();break;
+        case  106: goto fetch_next;
         
         //  19: add hl,de (M:2 T:11)
         // -- generic
-        case  107: _z80_add16(cpu,cpu->de);break;
-        case  108: break;
-        case  109: break;
-        case  110: break;
-        case  111: break;
-        case  112: break;
-        case  113: break;
+        case  107: _z80_add16(cpu,cpu->de);goto step_next;
+        case  108: goto step_next;
+        case  109: goto step_next;
+        case  110: goto step_next;
+        case  111: goto step_next;
+        case  112: goto step_next;
+        case  113: goto step_next;
         // -- overlapped
-        case  114: _fetch();break;
+        case  114: goto fetch_next;
         
         //  1A: ld a,(de) (M:2 T:7)
         // -- mread
-        case  115: break;
-        case  116: _wait();_mread(cpu->de);break;
-        case  117: cpu->a=_gd();cpu->wz=cpu->de+1;break;
+        case  115: goto step_next;
+        case  116: _wait();_mread(cpu->de);goto step_next;
+        case  117: cpu->a=_gd();cpu->wz=cpu->de+1;goto step_next;
         // -- overlapped
-        case  118: _fetch();break;
+        case  118: goto fetch_next;
         
         //  1B: dec de (M:2 T:6)
         // -- generic
-        case  119: cpu->de--;break;
-        case  120: break;
+        case  119: cpu->de--;goto step_next;
+        case  120: goto step_next;
         // -- overlapped
-        case  121: _fetch();break;
+        case  121: goto fetch_next;
         
         //  1C: inc e (M:1 T:4)
         // -- overlapped
-        case  122: cpu->e=_z80_inc8(cpu,cpu->e);_fetch();break;
+        case  122: cpu->e=_z80_inc8(cpu,cpu->e);goto fetch_next;
         
         //  1D: dec e (M:1 T:4)
         // -- overlapped
-        case  123: cpu->e=_z80_dec8(cpu,cpu->e);_fetch();break;
+        case  123: cpu->e=_z80_dec8(cpu,cpu->e);goto fetch_next;
         
         //  1E: ld e,n (M:2 T:7)
         // -- mread
-        case  124: break;
-        case  125: _wait();_mread(cpu->pc++);break;
-        case  126: cpu->e=_gd();break;
+        case  124: goto step_next;
+        case  125: _wait();_mread(cpu->pc++);goto step_next;
+        case  126: cpu->e=_gd();;goto step_next;
         // -- overlapped
-        case  127: _fetch();break;
+        case  127: goto fetch_next;
         
         //  1F: rra (M:1 T:4)
         // -- overlapped
-        case  128: _z80_rra(cpu);_fetch();break;
+        case  128: _z80_rra(cpu);goto fetch_next;
         
         //  20: jr nz,d (M:3 T:12)
         // -- mread
-        case  129: break;
-        case  130: _wait();_mread(cpu->pc++);break;
-        case  131: cpu->dlatch=_gd();if(!(_cc_nz)){_z80_skip(cpu,5);};break;
+        case  129: goto step_next;
+        case  130: _wait();_mread(cpu->pc++);goto step_next;
+        case  131: cpu->dlatch=_gd();if(!(_cc_nz)){_z80_skip(cpu,5);};goto step_next;
         // -- generic
-        case  132: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;break;
-        case  133: break;
-        case  134: break;
-        case  135: break;
-        case  136: break;
+        case  132: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  133: goto step_next;
+        case  134: goto step_next;
+        case  135: goto step_next;
+        case  136: goto step_next;
         // -- overlapped
-        case  137: _fetch();break;
+        case  137: goto fetch_next;
         
         //  21: ld hl,nn (M:3 T:10)
         // -- mread
-        case  138: break;
-        case  139: _wait();_mread(cpu->pc++);break;
-        case  140: cpu->hlx[cpu->hlx_idx].l=_gd();break;
+        case  138: goto step_next;
+        case  139: _wait();_mread(cpu->pc++);goto step_next;
+        case  140: cpu->hlx[cpu->hlx_idx].l=_gd();;goto step_next;
         // -- mread
-        case  141: break;
-        case  142: _wait();_mread(cpu->pc++);break;
-        case  143: cpu->hlx[cpu->hlx_idx].h=_gd();break;
+        case  141: goto step_next;
+        case  142: _wait();_mread(cpu->pc++);goto step_next;
+        case  143: cpu->hlx[cpu->hlx_idx].h=_gd();;goto step_next;
         // -- overlapped
-        case  144: _fetch();break;
+        case  144: goto fetch_next;
         
         //  22: ld (nn),hl (M:5 T:16)
         // -- mread
-        case  145: break;
-        case  146: _wait();_mread(cpu->pc++);break;
-        case  147: cpu->wzl=_gd();break;
+        case  145: goto step_next;
+        case  146: _wait();_mread(cpu->pc++);goto step_next;
+        case  147: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  148: break;
-        case  149: _wait();_mread(cpu->pc++);break;
-        case  150: cpu->wzh=_gd();break;
+        case  148: goto step_next;
+        case  149: _wait();_mread(cpu->pc++);goto step_next;
+        case  150: cpu->wzh=_gd();;goto step_next;
         // -- mwrite
-        case  151: break;
-        case  152: _wait();_mwrite(cpu->wz++,cpu->hlx[cpu->hlx_idx].l);;break;
-        case  153: break;
+        case  151: goto step_next;
+        case  152: _wait();_mwrite(cpu->wz++,cpu->hlx[cpu->hlx_idx].l);;goto step_next;
+        case  153: goto step_next;
         // -- mwrite
-        case  154: break;
-        case  155: _wait();_mwrite(cpu->wz,cpu->hlx[cpu->hlx_idx].h);;break;
-        case  156: break;
+        case  154: goto step_next;
+        case  155: _wait();_mwrite(cpu->wz,cpu->hlx[cpu->hlx_idx].h);;goto step_next;
+        case  156: goto step_next;
         // -- overlapped
-        case  157: _fetch();break;
+        case  157: goto fetch_next;
         
         //  23: inc hl (M:2 T:6)
         // -- generic
-        case  158: cpu->hlx[cpu->hlx_idx].hl++;break;
-        case  159: break;
+        case  158: cpu->hlx[cpu->hlx_idx].hl++;goto step_next;
+        case  159: goto step_next;
         // -- overlapped
-        case  160: _fetch();break;
+        case  160: goto fetch_next;
         
         //  24: inc h (M:1 T:4)
         // -- overlapped
-        case  161: cpu->hlx[cpu->hlx_idx].h=_z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  161: cpu->hlx[cpu->hlx_idx].h=_z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  25: dec h (M:1 T:4)
         // -- overlapped
-        case  162: cpu->hlx[cpu->hlx_idx].h=_z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  162: cpu->hlx[cpu->hlx_idx].h=_z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  26: ld h,n (M:2 T:7)
         // -- mread
-        case  163: break;
-        case  164: _wait();_mread(cpu->pc++);break;
-        case  165: cpu->hlx[cpu->hlx_idx].h=_gd();break;
+        case  163: goto step_next;
+        case  164: _wait();_mread(cpu->pc++);goto step_next;
+        case  165: cpu->hlx[cpu->hlx_idx].h=_gd();;goto step_next;
         // -- overlapped
-        case  166: _fetch();break;
+        case  166: goto fetch_next;
         
         //  27: daa (M:1 T:4)
         // -- overlapped
-        case  167: _z80_daa(cpu);_fetch();break;
+        case  167: _z80_daa(cpu);goto fetch_next;
         
         //  28: jr z,d (M:3 T:12)
         // -- mread
-        case  168: break;
-        case  169: _wait();_mread(cpu->pc++);break;
-        case  170: cpu->dlatch=_gd();if(!(_cc_z)){_z80_skip(cpu,5);};break;
+        case  168: goto step_next;
+        case  169: _wait();_mread(cpu->pc++);goto step_next;
+        case  170: cpu->dlatch=_gd();if(!(_cc_z)){_z80_skip(cpu,5);};goto step_next;
         // -- generic
-        case  171: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;break;
-        case  172: break;
-        case  173: break;
-        case  174: break;
-        case  175: break;
+        case  171: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  172: goto step_next;
+        case  173: goto step_next;
+        case  174: goto step_next;
+        case  175: goto step_next;
         // -- overlapped
-        case  176: _fetch();break;
+        case  176: goto fetch_next;
         
         //  29: add hl,hl (M:2 T:11)
         // -- generic
-        case  177: _z80_add16(cpu,cpu->hlx[cpu->hlx_idx].hl);break;
-        case  178: break;
-        case  179: break;
-        case  180: break;
-        case  181: break;
-        case  182: break;
-        case  183: break;
+        case  177: _z80_add16(cpu,cpu->hlx[cpu->hlx_idx].hl);goto step_next;
+        case  178: goto step_next;
+        case  179: goto step_next;
+        case  180: goto step_next;
+        case  181: goto step_next;
+        case  182: goto step_next;
+        case  183: goto step_next;
         // -- overlapped
-        case  184: _fetch();break;
+        case  184: goto fetch_next;
         
         //  2A: ld hl,(nn) (M:5 T:16)
         // -- mread
-        case  185: break;
-        case  186: _wait();_mread(cpu->pc++);break;
-        case  187: cpu->wzl=_gd();break;
+        case  185: goto step_next;
+        case  186: _wait();_mread(cpu->pc++);goto step_next;
+        case  187: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  188: break;
-        case  189: _wait();_mread(cpu->pc++);break;
-        case  190: cpu->wzh=_gd();break;
+        case  188: goto step_next;
+        case  189: _wait();_mread(cpu->pc++);goto step_next;
+        case  190: cpu->wzh=_gd();;goto step_next;
         // -- mread
-        case  191: break;
-        case  192: _wait();_mread(cpu->wz++);break;
-        case  193: cpu->hlx[cpu->hlx_idx].l=_gd();break;
+        case  191: goto step_next;
+        case  192: _wait();_mread(cpu->wz++);goto step_next;
+        case  193: cpu->hlx[cpu->hlx_idx].l=_gd();;goto step_next;
         // -- mread
-        case  194: break;
-        case  195: _wait();_mread(cpu->wz);break;
-        case  196: cpu->hlx[cpu->hlx_idx].h=_gd();break;
+        case  194: goto step_next;
+        case  195: _wait();_mread(cpu->wz);goto step_next;
+        case  196: cpu->hlx[cpu->hlx_idx].h=_gd();;goto step_next;
         // -- overlapped
-        case  197: _fetch();break;
+        case  197: goto fetch_next;
         
         //  2B: dec hl (M:2 T:6)
         // -- generic
-        case  198: cpu->hlx[cpu->hlx_idx].hl--;break;
-        case  199: break;
+        case  198: cpu->hlx[cpu->hlx_idx].hl--;goto step_next;
+        case  199: goto step_next;
         // -- overlapped
-        case  200: _fetch();break;
+        case  200: goto fetch_next;
         
         //  2C: inc l (M:1 T:4)
         // -- overlapped
-        case  201: cpu->hlx[cpu->hlx_idx].l=_z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  201: cpu->hlx[cpu->hlx_idx].l=_z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  2D: dec l (M:1 T:4)
         // -- overlapped
-        case  202: cpu->hlx[cpu->hlx_idx].l=_z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  202: cpu->hlx[cpu->hlx_idx].l=_z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  2E: ld l,n (M:2 T:7)
         // -- mread
-        case  203: break;
-        case  204: _wait();_mread(cpu->pc++);break;
-        case  205: cpu->hlx[cpu->hlx_idx].l=_gd();break;
+        case  203: goto step_next;
+        case  204: _wait();_mread(cpu->pc++);goto step_next;
+        case  205: cpu->hlx[cpu->hlx_idx].l=_gd();;goto step_next;
         // -- overlapped
-        case  206: _fetch();break;
+        case  206: goto fetch_next;
         
         //  2F: cpl (M:1 T:4)
         // -- overlapped
-        case  207: _z80_cpl(cpu);_fetch();break;
+        case  207: _z80_cpl(cpu);goto fetch_next;
         
         //  30: jr nc,d (M:3 T:12)
         // -- mread
-        case  208: break;
-        case  209: _wait();_mread(cpu->pc++);break;
-        case  210: cpu->dlatch=_gd();if(!(_cc_nc)){_z80_skip(cpu,5);};break;
+        case  208: goto step_next;
+        case  209: _wait();_mread(cpu->pc++);goto step_next;
+        case  210: cpu->dlatch=_gd();if(!(_cc_nc)){_z80_skip(cpu,5);};goto step_next;
         // -- generic
-        case  211: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;break;
-        case  212: break;
-        case  213: break;
-        case  214: break;
-        case  215: break;
+        case  211: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  212: goto step_next;
+        case  213: goto step_next;
+        case  214: goto step_next;
+        case  215: goto step_next;
         // -- overlapped
-        case  216: _fetch();break;
+        case  216: goto fetch_next;
         
         //  31: ld sp,nn (M:3 T:10)
         // -- mread
-        case  217: break;
-        case  218: _wait();_mread(cpu->pc++);break;
-        case  219: cpu->spl=_gd();break;
+        case  217: goto step_next;
+        case  218: _wait();_mread(cpu->pc++);goto step_next;
+        case  219: cpu->spl=_gd();;goto step_next;
         // -- mread
-        case  220: break;
-        case  221: _wait();_mread(cpu->pc++);break;
-        case  222: cpu->sph=_gd();break;
+        case  220: goto step_next;
+        case  221: _wait();_mread(cpu->pc++);goto step_next;
+        case  222: cpu->sph=_gd();;goto step_next;
         // -- overlapped
-        case  223: _fetch();break;
+        case  223: goto fetch_next;
         
         //  32: ld (nn),a (M:4 T:13)
         // -- mread
-        case  224: break;
-        case  225: _wait();_mread(cpu->pc++);break;
-        case  226: cpu->wzl=_gd();break;
+        case  224: goto step_next;
+        case  225: _wait();_mread(cpu->pc++);goto step_next;
+        case  226: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  227: break;
-        case  228: _wait();_mread(cpu->pc++);break;
-        case  229: cpu->wzh=_gd();break;
+        case  227: goto step_next;
+        case  228: _wait();_mread(cpu->pc++);goto step_next;
+        case  229: cpu->wzh=_gd();;goto step_next;
         // -- mwrite
-        case  230: break;
-        case  231: _wait();_mwrite(cpu->wz++,cpu->a);cpu->wzh=cpu->a;;break;
-        case  232: break;
+        case  230: goto step_next;
+        case  231: _wait();_mwrite(cpu->wz++,cpu->a);cpu->wzh=cpu->a;goto step_next;
+        case  232: goto step_next;
         // -- overlapped
-        case  233: _fetch();break;
+        case  233: goto fetch_next;
         
         //  33: inc sp (M:2 T:6)
         // -- generic
-        case  234: cpu->sp++;break;
-        case  235: break;
+        case  234: cpu->sp++;goto step_next;
+        case  235: goto step_next;
         // -- overlapped
-        case  236: _fetch();break;
+        case  236: goto fetch_next;
         
         //  34: inc (hl) (M:3 T:11)
         // -- mread
-        case  237: break;
-        case  238: _wait();_mread(cpu->addr);break;
-        case  239: cpu->dlatch=_gd();cpu->dlatch=_z80_inc8(cpu,cpu->dlatch);break;
-        case  240: break;
+        case  237: goto step_next;
+        case  238: _wait();_mread(cpu->addr);goto step_next;
+        case  239: cpu->dlatch=_gd();cpu->dlatch=_z80_inc8(cpu,cpu->dlatch);goto step_next;
+        case  240: goto step_next;
         // -- mwrite
-        case  241: break;
-        case  242: _wait();_mwrite(cpu->addr,cpu->dlatch);;break;
-        case  243: break;
+        case  241: goto step_next;
+        case  242: _wait();_mwrite(cpu->addr,cpu->dlatch);;goto step_next;
+        case  243: goto step_next;
         // -- overlapped
-        case  244: _fetch();break;
+        case  244: goto fetch_next;
         
         //  35: dec (hl) (M:3 T:11)
         // -- mread
-        case  245: break;
-        case  246: _wait();_mread(cpu->addr);break;
-        case  247: cpu->dlatch=_gd();cpu->dlatch=_z80_dec8(cpu,cpu->dlatch);break;
-        case  248: break;
+        case  245: goto step_next;
+        case  246: _wait();_mread(cpu->addr);goto step_next;
+        case  247: cpu->dlatch=_gd();cpu->dlatch=_z80_dec8(cpu,cpu->dlatch);goto step_next;
+        case  248: goto step_next;
         // -- mwrite
-        case  249: break;
-        case  250: _wait();_mwrite(cpu->addr,cpu->dlatch);;break;
-        case  251: break;
+        case  249: goto step_next;
+        case  250: _wait();_mwrite(cpu->addr,cpu->dlatch);;goto step_next;
+        case  251: goto step_next;
         // -- overlapped
-        case  252: _fetch();break;
+        case  252: goto fetch_next;
         
         //  36: ld (hl),n (M:3 T:10)
         // -- mread
-        case  253: break;
-        case  254: _wait();_mread(cpu->pc++);break;
-        case  255: cpu->dlatch=_gd();break;
+        case  253: goto step_next;
+        case  254: _wait();_mread(cpu->pc++);goto step_next;
+        case  255: cpu->dlatch=_gd();;goto step_next;
         // -- mwrite
-        case  256: break;
-        case  257: _wait();_mwrite(cpu->addr,cpu->dlatch);;break;
-        case  258: break;
+        case  256: goto step_next;
+        case  257: _wait();_mwrite(cpu->addr,cpu->dlatch);;goto step_next;
+        case  258: goto step_next;
         // -- overlapped
-        case  259: _fetch();break;
+        case  259: goto fetch_next;
         
         //  37: scf (M:1 T:4)
         // -- overlapped
-        case  260: _z80_scf(cpu);_fetch();break;
+        case  260: _z80_scf(cpu);goto fetch_next;
         
         //  38: jr c,d (M:3 T:12)
         // -- mread
-        case  261: break;
-        case  262: _wait();_mread(cpu->pc++);break;
-        case  263: cpu->dlatch=_gd();if(!(_cc_c)){_z80_skip(cpu,5);};break;
+        case  261: goto step_next;
+        case  262: _wait();_mread(cpu->pc++);goto step_next;
+        case  263: cpu->dlatch=_gd();if(!(_cc_c)){_z80_skip(cpu,5);};goto step_next;
         // -- generic
-        case  264: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;break;
-        case  265: break;
-        case  266: break;
-        case  267: break;
-        case  268: break;
+        case  264: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  265: goto step_next;
+        case  266: goto step_next;
+        case  267: goto step_next;
+        case  268: goto step_next;
         // -- overlapped
-        case  269: _fetch();break;
+        case  269: goto fetch_next;
         
         //  39: add hl,sp (M:2 T:11)
         // -- generic
-        case  270: _z80_add16(cpu,cpu->sp);break;
-        case  271: break;
-        case  272: break;
-        case  273: break;
-        case  274: break;
-        case  275: break;
-        case  276: break;
+        case  270: _z80_add16(cpu,cpu->sp);goto step_next;
+        case  271: goto step_next;
+        case  272: goto step_next;
+        case  273: goto step_next;
+        case  274: goto step_next;
+        case  275: goto step_next;
+        case  276: goto step_next;
         // -- overlapped
-        case  277: _fetch();break;
+        case  277: goto fetch_next;
         
         //  3A: ld a,(nn) (M:4 T:13)
         // -- mread
-        case  278: break;
-        case  279: _wait();_mread(cpu->pc++);break;
-        case  280: cpu->wzl=_gd();break;
+        case  278: goto step_next;
+        case  279: _wait();_mread(cpu->pc++);goto step_next;
+        case  280: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  281: break;
-        case  282: _wait();_mread(cpu->pc++);break;
-        case  283: cpu->wzh=_gd();break;
+        case  281: goto step_next;
+        case  282: _wait();_mread(cpu->pc++);goto step_next;
+        case  283: cpu->wzh=_gd();;goto step_next;
         // -- mread
-        case  284: break;
-        case  285: _wait();_mread(cpu->wz++);break;
-        case  286: cpu->a=_gd();break;
+        case  284: goto step_next;
+        case  285: _wait();_mread(cpu->wz++);goto step_next;
+        case  286: cpu->a=_gd();;goto step_next;
         // -- overlapped
-        case  287: _fetch();break;
+        case  287: goto fetch_next;
         
         //  3B: dec sp (M:2 T:6)
         // -- generic
-        case  288: cpu->sp--;break;
-        case  289: break;
+        case  288: cpu->sp--;goto step_next;
+        case  289: goto step_next;
         // -- overlapped
-        case  290: _fetch();break;
+        case  290: goto fetch_next;
         
         //  3C: inc a (M:1 T:4)
         // -- overlapped
-        case  291: cpu->a=_z80_inc8(cpu,cpu->a);_fetch();break;
+        case  291: cpu->a=_z80_inc8(cpu,cpu->a);goto fetch_next;
         
         //  3D: dec a (M:1 T:4)
         // -- overlapped
-        case  292: cpu->a=_z80_dec8(cpu,cpu->a);_fetch();break;
+        case  292: cpu->a=_z80_dec8(cpu,cpu->a);goto fetch_next;
         
         //  3E: ld a,n (M:2 T:7)
         // -- mread
-        case  293: break;
-        case  294: _wait();_mread(cpu->pc++);break;
-        case  295: cpu->a=_gd();break;
+        case  293: goto step_next;
+        case  294: _wait();_mread(cpu->pc++);goto step_next;
+        case  295: cpu->a=_gd();;goto step_next;
         // -- overlapped
-        case  296: _fetch();break;
+        case  296: goto fetch_next;
         
         //  3F: ccf (M:1 T:4)
         // -- overlapped
-        case  297: _z80_ccf(cpu);_fetch();break;
+        case  297: _z80_ccf(cpu);goto fetch_next;
         
         //  40: ld b,b (M:1 T:4)
         // -- overlapped
-        case  298: cpu->b=cpu->b;_fetch();break;
+        case  298: cpu->b=cpu->b;goto fetch_next;
         
         //  41: ld b,c (M:1 T:4)
         // -- overlapped
-        case  299: cpu->b=cpu->c;_fetch();break;
+        case  299: cpu->b=cpu->c;goto fetch_next;
         
         //  42: ld b,d (M:1 T:4)
         // -- overlapped
-        case  300: cpu->b=cpu->d;_fetch();break;
+        case  300: cpu->b=cpu->d;goto fetch_next;
         
         //  43: ld b,e (M:1 T:4)
         // -- overlapped
-        case  301: cpu->b=cpu->e;_fetch();break;
+        case  301: cpu->b=cpu->e;goto fetch_next;
         
         //  44: ld b,h (M:1 T:4)
         // -- overlapped
-        case  302: cpu->b=cpu->hlx[cpu->hlx_idx].h;_fetch();break;
+        case  302: cpu->b=cpu->hlx[cpu->hlx_idx].h;goto fetch_next;
         
         //  45: ld b,l (M:1 T:4)
         // -- overlapped
-        case  303: cpu->b=cpu->hlx[cpu->hlx_idx].l;_fetch();break;
+        case  303: cpu->b=cpu->hlx[cpu->hlx_idx].l;goto fetch_next;
         
         //  46: ld b,(hl) (M:2 T:7)
         // -- mread
-        case  304: break;
-        case  305: _wait();_mread(cpu->addr);break;
-        case  306: cpu->b=_gd();break;
+        case  304: goto step_next;
+        case  305: _wait();_mread(cpu->addr);goto step_next;
+        case  306: cpu->b=_gd();;goto step_next;
         // -- overlapped
-        case  307: _fetch();break;
+        case  307: goto fetch_next;
         
         //  47: ld b,a (M:1 T:4)
         // -- overlapped
-        case  308: cpu->b=cpu->a;_fetch();break;
+        case  308: cpu->b=cpu->a;goto fetch_next;
         
         //  48: ld c,b (M:1 T:4)
         // -- overlapped
-        case  309: cpu->c=cpu->b;_fetch();break;
+        case  309: cpu->c=cpu->b;goto fetch_next;
         
         //  49: ld c,c (M:1 T:4)
         // -- overlapped
-        case  310: cpu->c=cpu->c;_fetch();break;
+        case  310: cpu->c=cpu->c;goto fetch_next;
         
         //  4A: ld c,d (M:1 T:4)
         // -- overlapped
-        case  311: cpu->c=cpu->d;_fetch();break;
+        case  311: cpu->c=cpu->d;goto fetch_next;
         
         //  4B: ld c,e (M:1 T:4)
         // -- overlapped
-        case  312: cpu->c=cpu->e;_fetch();break;
+        case  312: cpu->c=cpu->e;goto fetch_next;
         
         //  4C: ld c,h (M:1 T:4)
         // -- overlapped
-        case  313: cpu->c=cpu->hlx[cpu->hlx_idx].h;_fetch();break;
+        case  313: cpu->c=cpu->hlx[cpu->hlx_idx].h;goto fetch_next;
         
         //  4D: ld c,l (M:1 T:4)
         // -- overlapped
-        case  314: cpu->c=cpu->hlx[cpu->hlx_idx].l;_fetch();break;
+        case  314: cpu->c=cpu->hlx[cpu->hlx_idx].l;goto fetch_next;
         
         //  4E: ld c,(hl) (M:2 T:7)
         // -- mread
-        case  315: break;
-        case  316: _wait();_mread(cpu->addr);break;
-        case  317: cpu->c=_gd();break;
+        case  315: goto step_next;
+        case  316: _wait();_mread(cpu->addr);goto step_next;
+        case  317: cpu->c=_gd();;goto step_next;
         // -- overlapped
-        case  318: _fetch();break;
+        case  318: goto fetch_next;
         
         //  4F: ld c,a (M:1 T:4)
         // -- overlapped
-        case  319: cpu->c=cpu->a;_fetch();break;
+        case  319: cpu->c=cpu->a;goto fetch_next;
         
         //  50: ld d,b (M:1 T:4)
         // -- overlapped
-        case  320: cpu->d=cpu->b;_fetch();break;
+        case  320: cpu->d=cpu->b;goto fetch_next;
         
         //  51: ld d,c (M:1 T:4)
         // -- overlapped
-        case  321: cpu->d=cpu->c;_fetch();break;
+        case  321: cpu->d=cpu->c;goto fetch_next;
         
         //  52: ld d,d (M:1 T:4)
         // -- overlapped
-        case  322: cpu->d=cpu->d;_fetch();break;
+        case  322: cpu->d=cpu->d;goto fetch_next;
         
         //  53: ld d,e (M:1 T:4)
         // -- overlapped
-        case  323: cpu->d=cpu->e;_fetch();break;
+        case  323: cpu->d=cpu->e;goto fetch_next;
         
         //  54: ld d,h (M:1 T:4)
         // -- overlapped
-        case  324: cpu->d=cpu->hlx[cpu->hlx_idx].h;_fetch();break;
+        case  324: cpu->d=cpu->hlx[cpu->hlx_idx].h;goto fetch_next;
         
         //  55: ld d,l (M:1 T:4)
         // -- overlapped
-        case  325: cpu->d=cpu->hlx[cpu->hlx_idx].l;_fetch();break;
+        case  325: cpu->d=cpu->hlx[cpu->hlx_idx].l;goto fetch_next;
         
         //  56: ld d,(hl) (M:2 T:7)
         // -- mread
-        case  326: break;
-        case  327: _wait();_mread(cpu->addr);break;
-        case  328: cpu->d=_gd();break;
+        case  326: goto step_next;
+        case  327: _wait();_mread(cpu->addr);goto step_next;
+        case  328: cpu->d=_gd();;goto step_next;
         // -- overlapped
-        case  329: _fetch();break;
+        case  329: goto fetch_next;
         
         //  57: ld d,a (M:1 T:4)
         // -- overlapped
-        case  330: cpu->d=cpu->a;_fetch();break;
+        case  330: cpu->d=cpu->a;goto fetch_next;
         
         //  58: ld e,b (M:1 T:4)
         // -- overlapped
-        case  331: cpu->e=cpu->b;_fetch();break;
+        case  331: cpu->e=cpu->b;goto fetch_next;
         
         //  59: ld e,c (M:1 T:4)
         // -- overlapped
-        case  332: cpu->e=cpu->c;_fetch();break;
+        case  332: cpu->e=cpu->c;goto fetch_next;
         
         //  5A: ld e,d (M:1 T:4)
         // -- overlapped
-        case  333: cpu->e=cpu->d;_fetch();break;
+        case  333: cpu->e=cpu->d;goto fetch_next;
         
         //  5B: ld e,e (M:1 T:4)
         // -- overlapped
-        case  334: cpu->e=cpu->e;_fetch();break;
+        case  334: cpu->e=cpu->e;goto fetch_next;
         
         //  5C: ld e,h (M:1 T:4)
         // -- overlapped
-        case  335: cpu->e=cpu->hlx[cpu->hlx_idx].h;_fetch();break;
+        case  335: cpu->e=cpu->hlx[cpu->hlx_idx].h;goto fetch_next;
         
         //  5D: ld e,l (M:1 T:4)
         // -- overlapped
-        case  336: cpu->e=cpu->hlx[cpu->hlx_idx].l;_fetch();break;
+        case  336: cpu->e=cpu->hlx[cpu->hlx_idx].l;goto fetch_next;
         
         //  5E: ld e,(hl) (M:2 T:7)
         // -- mread
-        case  337: break;
-        case  338: _wait();_mread(cpu->addr);break;
-        case  339: cpu->e=_gd();break;
+        case  337: goto step_next;
+        case  338: _wait();_mread(cpu->addr);goto step_next;
+        case  339: cpu->e=_gd();;goto step_next;
         // -- overlapped
-        case  340: _fetch();break;
+        case  340: goto fetch_next;
         
         //  5F: ld e,a (M:1 T:4)
         // -- overlapped
-        case  341: cpu->e=cpu->a;_fetch();break;
+        case  341: cpu->e=cpu->a;goto fetch_next;
         
         //  60: ld h,b (M:1 T:4)
         // -- overlapped
-        case  342: cpu->hlx[cpu->hlx_idx].h=cpu->b;_fetch();break;
+        case  342: cpu->hlx[cpu->hlx_idx].h=cpu->b;goto fetch_next;
         
         //  61: ld h,c (M:1 T:4)
         // -- overlapped
-        case  343: cpu->hlx[cpu->hlx_idx].h=cpu->c;_fetch();break;
+        case  343: cpu->hlx[cpu->hlx_idx].h=cpu->c;goto fetch_next;
         
         //  62: ld h,d (M:1 T:4)
         // -- overlapped
-        case  344: cpu->hlx[cpu->hlx_idx].h=cpu->d;_fetch();break;
+        case  344: cpu->hlx[cpu->hlx_idx].h=cpu->d;goto fetch_next;
         
         //  63: ld h,e (M:1 T:4)
         // -- overlapped
-        case  345: cpu->hlx[cpu->hlx_idx].h=cpu->e;_fetch();break;
+        case  345: cpu->hlx[cpu->hlx_idx].h=cpu->e;goto fetch_next;
         
         //  64: ld h,h (M:1 T:4)
         // -- overlapped
-        case  346: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].h;_fetch();break;
+        case  346: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].h;goto fetch_next;
         
         //  65: ld h,l (M:1 T:4)
         // -- overlapped
-        case  347: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].l;_fetch();break;
+        case  347: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].l;goto fetch_next;
         
         //  66: ld h,(hl) (M:2 T:7)
         // -- mread
-        case  348: break;
-        case  349: _wait();_mread(cpu->addr);break;
-        case  350: cpu->h=_gd();break;
+        case  348: goto step_next;
+        case  349: _wait();_mread(cpu->addr);goto step_next;
+        case  350: cpu->h=_gd();;goto step_next;
         // -- overlapped
-        case  351: _fetch();break;
+        case  351: goto fetch_next;
         
         //  67: ld h,a (M:1 T:4)
         // -- overlapped
-        case  352: cpu->hlx[cpu->hlx_idx].h=cpu->a;_fetch();break;
+        case  352: cpu->hlx[cpu->hlx_idx].h=cpu->a;goto fetch_next;
         
         //  68: ld l,b (M:1 T:4)
         // -- overlapped
-        case  353: cpu->hlx[cpu->hlx_idx].l=cpu->b;_fetch();break;
+        case  353: cpu->hlx[cpu->hlx_idx].l=cpu->b;goto fetch_next;
         
         //  69: ld l,c (M:1 T:4)
         // -- overlapped
-        case  354: cpu->hlx[cpu->hlx_idx].l=cpu->c;_fetch();break;
+        case  354: cpu->hlx[cpu->hlx_idx].l=cpu->c;goto fetch_next;
         
         //  6A: ld l,d (M:1 T:4)
         // -- overlapped
-        case  355: cpu->hlx[cpu->hlx_idx].l=cpu->d;_fetch();break;
+        case  355: cpu->hlx[cpu->hlx_idx].l=cpu->d;goto fetch_next;
         
         //  6B: ld l,e (M:1 T:4)
         // -- overlapped
-        case  356: cpu->hlx[cpu->hlx_idx].l=cpu->e;_fetch();break;
+        case  356: cpu->hlx[cpu->hlx_idx].l=cpu->e;goto fetch_next;
         
         //  6C: ld l,h (M:1 T:4)
         // -- overlapped
-        case  357: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].h;_fetch();break;
+        case  357: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].h;goto fetch_next;
         
         //  6D: ld l,l (M:1 T:4)
         // -- overlapped
-        case  358: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].l;_fetch();break;
+        case  358: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].l;goto fetch_next;
         
         //  6E: ld l,(hl) (M:2 T:7)
         // -- mread
-        case  359: break;
-        case  360: _wait();_mread(cpu->addr);break;
-        case  361: cpu->l=_gd();break;
+        case  359: goto step_next;
+        case  360: _wait();_mread(cpu->addr);goto step_next;
+        case  361: cpu->l=_gd();;goto step_next;
         // -- overlapped
-        case  362: _fetch();break;
+        case  362: goto fetch_next;
         
         //  6F: ld l,a (M:1 T:4)
         // -- overlapped
-        case  363: cpu->hlx[cpu->hlx_idx].l=cpu->a;_fetch();break;
+        case  363: cpu->hlx[cpu->hlx_idx].l=cpu->a;goto fetch_next;
         
         //  70: ld (hl),b (M:2 T:7)
         // -- mwrite
-        case  364: break;
-        case  365: _wait();_mwrite(cpu->addr,cpu->b);;break;
-        case  366: break;
+        case  364: goto step_next;
+        case  365: _wait();_mwrite(cpu->addr,cpu->b);;goto step_next;
+        case  366: goto step_next;
         // -- overlapped
-        case  367: _fetch();break;
+        case  367: goto fetch_next;
         
         //  71: ld (hl),c (M:2 T:7)
         // -- mwrite
-        case  368: break;
-        case  369: _wait();_mwrite(cpu->addr,cpu->c);;break;
-        case  370: break;
+        case  368: goto step_next;
+        case  369: _wait();_mwrite(cpu->addr,cpu->c);;goto step_next;
+        case  370: goto step_next;
         // -- overlapped
-        case  371: _fetch();break;
+        case  371: goto fetch_next;
         
         //  72: ld (hl),d (M:2 T:7)
         // -- mwrite
-        case  372: break;
-        case  373: _wait();_mwrite(cpu->addr,cpu->d);;break;
-        case  374: break;
+        case  372: goto step_next;
+        case  373: _wait();_mwrite(cpu->addr,cpu->d);;goto step_next;
+        case  374: goto step_next;
         // -- overlapped
-        case  375: _fetch();break;
+        case  375: goto fetch_next;
         
         //  73: ld (hl),e (M:2 T:7)
         // -- mwrite
-        case  376: break;
-        case  377: _wait();_mwrite(cpu->addr,cpu->e);;break;
-        case  378: break;
+        case  376: goto step_next;
+        case  377: _wait();_mwrite(cpu->addr,cpu->e);;goto step_next;
+        case  378: goto step_next;
         // -- overlapped
-        case  379: _fetch();break;
+        case  379: goto fetch_next;
         
         //  74: ld (hl),h (M:2 T:7)
         // -- mwrite
-        case  380: break;
-        case  381: _wait();_mwrite(cpu->addr,cpu->h);;break;
-        case  382: break;
+        case  380: goto step_next;
+        case  381: _wait();_mwrite(cpu->addr,cpu->h);;goto step_next;
+        case  382: goto step_next;
         // -- overlapped
-        case  383: _fetch();break;
+        case  383: goto fetch_next;
         
         //  75: ld (hl),l (M:2 T:7)
         // -- mwrite
-        case  384: break;
-        case  385: _wait();_mwrite(cpu->addr,cpu->l);;break;
-        case  386: break;
+        case  384: goto step_next;
+        case  385: _wait();_mwrite(cpu->addr,cpu->l);;goto step_next;
+        case  386: goto step_next;
         // -- overlapped
-        case  387: _fetch();break;
+        case  387: goto fetch_next;
         
         //  76: halt (M:1 T:4)
         // -- overlapped
-        case  388: pins=_z80_halt(cpu,pins);_fetch();break;
+        case  388: pins=_z80_halt(cpu,pins);goto fetch_next;
         
         //  77: ld (hl),a (M:2 T:7)
         // -- mwrite
-        case  389: break;
-        case  390: _wait();_mwrite(cpu->addr,cpu->a);;break;
-        case  391: break;
+        case  389: goto step_next;
+        case  390: _wait();_mwrite(cpu->addr,cpu->a);;goto step_next;
+        case  391: goto step_next;
         // -- overlapped
-        case  392: _fetch();break;
+        case  392: goto fetch_next;
         
         //  78: ld a,b (M:1 T:4)
         // -- overlapped
-        case  393: cpu->a=cpu->b;_fetch();break;
+        case  393: cpu->a=cpu->b;goto fetch_next;
         
         //  79: ld a,c (M:1 T:4)
         // -- overlapped
-        case  394: cpu->a=cpu->c;_fetch();break;
+        case  394: cpu->a=cpu->c;goto fetch_next;
         
         //  7A: ld a,d (M:1 T:4)
         // -- overlapped
-        case  395: cpu->a=cpu->d;_fetch();break;
+        case  395: cpu->a=cpu->d;goto fetch_next;
         
         //  7B: ld a,e (M:1 T:4)
         // -- overlapped
-        case  396: cpu->a=cpu->e;_fetch();break;
+        case  396: cpu->a=cpu->e;goto fetch_next;
         
         //  7C: ld a,h (M:1 T:4)
         // -- overlapped
-        case  397: cpu->a=cpu->hlx[cpu->hlx_idx].h;_fetch();break;
+        case  397: cpu->a=cpu->hlx[cpu->hlx_idx].h;goto fetch_next;
         
         //  7D: ld a,l (M:1 T:4)
         // -- overlapped
-        case  398: cpu->a=cpu->hlx[cpu->hlx_idx].l;_fetch();break;
+        case  398: cpu->a=cpu->hlx[cpu->hlx_idx].l;goto fetch_next;
         
         //  7E: ld a,(hl) (M:2 T:7)
         // -- mread
-        case  399: break;
-        case  400: _wait();_mread(cpu->addr);break;
-        case  401: cpu->a=_gd();break;
+        case  399: goto step_next;
+        case  400: _wait();_mread(cpu->addr);goto step_next;
+        case  401: cpu->a=_gd();;goto step_next;
         // -- overlapped
-        case  402: _fetch();break;
+        case  402: goto fetch_next;
         
         //  7F: ld a,a (M:1 T:4)
         // -- overlapped
-        case  403: cpu->a=cpu->a;_fetch();break;
+        case  403: cpu->a=cpu->a;goto fetch_next;
         
         //  80: add b (M:1 T:4)
         // -- overlapped
-        case  404: _z80_add8(cpu,cpu->b);_fetch();break;
+        case  404: _z80_add8(cpu,cpu->b);goto fetch_next;
         
         //  81: add c (M:1 T:4)
         // -- overlapped
-        case  405: _z80_add8(cpu,cpu->c);_fetch();break;
+        case  405: _z80_add8(cpu,cpu->c);goto fetch_next;
         
         //  82: add d (M:1 T:4)
         // -- overlapped
-        case  406: _z80_add8(cpu,cpu->d);_fetch();break;
+        case  406: _z80_add8(cpu,cpu->d);goto fetch_next;
         
         //  83: add e (M:1 T:4)
         // -- overlapped
-        case  407: _z80_add8(cpu,cpu->e);_fetch();break;
+        case  407: _z80_add8(cpu,cpu->e);goto fetch_next;
         
         //  84: add h (M:1 T:4)
         // -- overlapped
-        case  408: _z80_add8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  408: _z80_add8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  85: add l (M:1 T:4)
         // -- overlapped
-        case  409: _z80_add8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  409: _z80_add8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  86: add (hl) (M:2 T:7)
         // -- mread
-        case  410: break;
-        case  411: _wait();_mread(cpu->addr);break;
-        case  412: cpu->dlatch=_gd();break;
+        case  410: goto step_next;
+        case  411: _wait();_mread(cpu->addr);goto step_next;
+        case  412: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  413: _z80_add8(cpu,cpu->dlatch);_fetch();break;
+        case  413: _z80_add8(cpu,cpu->dlatch);goto fetch_next;
         
         //  87: add a (M:1 T:4)
         // -- overlapped
-        case  414: _z80_add8(cpu,cpu->a);_fetch();break;
+        case  414: _z80_add8(cpu,cpu->a);goto fetch_next;
         
         //  88: adc b (M:1 T:4)
         // -- overlapped
-        case  415: _z80_adc8(cpu,cpu->b);_fetch();break;
+        case  415: _z80_adc8(cpu,cpu->b);goto fetch_next;
         
         //  89: adc c (M:1 T:4)
         // -- overlapped
-        case  416: _z80_adc8(cpu,cpu->c);_fetch();break;
+        case  416: _z80_adc8(cpu,cpu->c);goto fetch_next;
         
         //  8A: adc d (M:1 T:4)
         // -- overlapped
-        case  417: _z80_adc8(cpu,cpu->d);_fetch();break;
+        case  417: _z80_adc8(cpu,cpu->d);goto fetch_next;
         
         //  8B: adc e (M:1 T:4)
         // -- overlapped
-        case  418: _z80_adc8(cpu,cpu->e);_fetch();break;
+        case  418: _z80_adc8(cpu,cpu->e);goto fetch_next;
         
         //  8C: adc h (M:1 T:4)
         // -- overlapped
-        case  419: _z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  419: _z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  8D: adc l (M:1 T:4)
         // -- overlapped
-        case  420: _z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  420: _z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  8E: adc (hl) (M:2 T:7)
         // -- mread
-        case  421: break;
-        case  422: _wait();_mread(cpu->addr);break;
-        case  423: cpu->dlatch=_gd();break;
+        case  421: goto step_next;
+        case  422: _wait();_mread(cpu->addr);goto step_next;
+        case  423: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  424: _z80_adc8(cpu,cpu->dlatch);_fetch();break;
+        case  424: _z80_adc8(cpu,cpu->dlatch);goto fetch_next;
         
         //  8F: adc a (M:1 T:4)
         // -- overlapped
-        case  425: _z80_adc8(cpu,cpu->a);_fetch();break;
+        case  425: _z80_adc8(cpu,cpu->a);goto fetch_next;
         
         //  90: sub b (M:1 T:4)
         // -- overlapped
-        case  426: _z80_sub8(cpu,cpu->b);_fetch();break;
+        case  426: _z80_sub8(cpu,cpu->b);goto fetch_next;
         
         //  91: sub c (M:1 T:4)
         // -- overlapped
-        case  427: _z80_sub8(cpu,cpu->c);_fetch();break;
+        case  427: _z80_sub8(cpu,cpu->c);goto fetch_next;
         
         //  92: sub d (M:1 T:4)
         // -- overlapped
-        case  428: _z80_sub8(cpu,cpu->d);_fetch();break;
+        case  428: _z80_sub8(cpu,cpu->d);goto fetch_next;
         
         //  93: sub e (M:1 T:4)
         // -- overlapped
-        case  429: _z80_sub8(cpu,cpu->e);_fetch();break;
+        case  429: _z80_sub8(cpu,cpu->e);goto fetch_next;
         
         //  94: sub h (M:1 T:4)
         // -- overlapped
-        case  430: _z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  430: _z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  95: sub l (M:1 T:4)
         // -- overlapped
-        case  431: _z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  431: _z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  96: sub (hl) (M:2 T:7)
         // -- mread
-        case  432: break;
-        case  433: _wait();_mread(cpu->addr);break;
-        case  434: cpu->dlatch=_gd();break;
+        case  432: goto step_next;
+        case  433: _wait();_mread(cpu->addr);goto step_next;
+        case  434: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  435: _z80_sub8(cpu,cpu->dlatch);_fetch();break;
+        case  435: _z80_sub8(cpu,cpu->dlatch);goto fetch_next;
         
         //  97: sub a (M:1 T:4)
         // -- overlapped
-        case  436: _z80_sub8(cpu,cpu->a);_fetch();break;
+        case  436: _z80_sub8(cpu,cpu->a);goto fetch_next;
         
         //  98: sbc b (M:1 T:4)
         // -- overlapped
-        case  437: _z80_sbc8(cpu,cpu->b);_fetch();break;
+        case  437: _z80_sbc8(cpu,cpu->b);goto fetch_next;
         
         //  99: sbc c (M:1 T:4)
         // -- overlapped
-        case  438: _z80_sbc8(cpu,cpu->c);_fetch();break;
+        case  438: _z80_sbc8(cpu,cpu->c);goto fetch_next;
         
         //  9A: sbc d (M:1 T:4)
         // -- overlapped
-        case  439: _z80_sbc8(cpu,cpu->d);_fetch();break;
+        case  439: _z80_sbc8(cpu,cpu->d);goto fetch_next;
         
         //  9B: sbc e (M:1 T:4)
         // -- overlapped
-        case  440: _z80_sbc8(cpu,cpu->e);_fetch();break;
+        case  440: _z80_sbc8(cpu,cpu->e);goto fetch_next;
         
         //  9C: sbc h (M:1 T:4)
         // -- overlapped
-        case  441: _z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  441: _z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  9D: sbc l (M:1 T:4)
         // -- overlapped
-        case  442: _z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  442: _z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  9E: sbc (hl) (M:2 T:7)
         // -- mread
-        case  443: break;
-        case  444: _wait();_mread(cpu->addr);break;
-        case  445: cpu->dlatch=_gd();break;
+        case  443: goto step_next;
+        case  444: _wait();_mread(cpu->addr);goto step_next;
+        case  445: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  446: _z80_sbc8(cpu,cpu->dlatch);_fetch();break;
+        case  446: _z80_sbc8(cpu,cpu->dlatch);goto fetch_next;
         
         //  9F: sbc a (M:1 T:4)
         // -- overlapped
-        case  447: _z80_sbc8(cpu,cpu->a);_fetch();break;
+        case  447: _z80_sbc8(cpu,cpu->a);goto fetch_next;
         
         //  A0: and b (M:1 T:4)
         // -- overlapped
-        case  448: _z80_and8(cpu,cpu->b);_fetch();break;
+        case  448: _z80_and8(cpu,cpu->b);goto fetch_next;
         
         //  A1: and c (M:1 T:4)
         // -- overlapped
-        case  449: _z80_and8(cpu,cpu->c);_fetch();break;
+        case  449: _z80_and8(cpu,cpu->c);goto fetch_next;
         
         //  A2: and d (M:1 T:4)
         // -- overlapped
-        case  450: _z80_and8(cpu,cpu->d);_fetch();break;
+        case  450: _z80_and8(cpu,cpu->d);goto fetch_next;
         
         //  A3: and e (M:1 T:4)
         // -- overlapped
-        case  451: _z80_and8(cpu,cpu->e);_fetch();break;
+        case  451: _z80_and8(cpu,cpu->e);goto fetch_next;
         
         //  A4: and h (M:1 T:4)
         // -- overlapped
-        case  452: _z80_and8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  452: _z80_and8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  A5: and l (M:1 T:4)
         // -- overlapped
-        case  453: _z80_and8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  453: _z80_and8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  A6: and (hl) (M:2 T:7)
         // -- mread
-        case  454: break;
-        case  455: _wait();_mread(cpu->addr);break;
-        case  456: cpu->dlatch=_gd();break;
+        case  454: goto step_next;
+        case  455: _wait();_mread(cpu->addr);goto step_next;
+        case  456: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  457: _z80_and8(cpu,cpu->dlatch);_fetch();break;
+        case  457: _z80_and8(cpu,cpu->dlatch);goto fetch_next;
         
         //  A7: and a (M:1 T:4)
         // -- overlapped
-        case  458: _z80_and8(cpu,cpu->a);_fetch();break;
+        case  458: _z80_and8(cpu,cpu->a);goto fetch_next;
         
         //  A8: xor b (M:1 T:4)
         // -- overlapped
-        case  459: _z80_xor8(cpu,cpu->b);_fetch();break;
+        case  459: _z80_xor8(cpu,cpu->b);goto fetch_next;
         
         //  A9: xor c (M:1 T:4)
         // -- overlapped
-        case  460: _z80_xor8(cpu,cpu->c);_fetch();break;
+        case  460: _z80_xor8(cpu,cpu->c);goto fetch_next;
         
         //  AA: xor d (M:1 T:4)
         // -- overlapped
-        case  461: _z80_xor8(cpu,cpu->d);_fetch();break;
+        case  461: _z80_xor8(cpu,cpu->d);goto fetch_next;
         
         //  AB: xor e (M:1 T:4)
         // -- overlapped
-        case  462: _z80_xor8(cpu,cpu->e);_fetch();break;
+        case  462: _z80_xor8(cpu,cpu->e);goto fetch_next;
         
         //  AC: xor h (M:1 T:4)
         // -- overlapped
-        case  463: _z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  463: _z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  AD: xor l (M:1 T:4)
         // -- overlapped
-        case  464: _z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  464: _z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  AE: xor (hl) (M:2 T:7)
         // -- mread
-        case  465: break;
-        case  466: _wait();_mread(cpu->addr);break;
-        case  467: cpu->dlatch=_gd();break;
+        case  465: goto step_next;
+        case  466: _wait();_mread(cpu->addr);goto step_next;
+        case  467: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  468: _z80_xor8(cpu,cpu->dlatch);_fetch();break;
+        case  468: _z80_xor8(cpu,cpu->dlatch);goto fetch_next;
         
         //  AF: xor a (M:1 T:4)
         // -- overlapped
-        case  469: _z80_xor8(cpu,cpu->a);_fetch();break;
+        case  469: _z80_xor8(cpu,cpu->a);goto fetch_next;
         
         //  B0: or b (M:1 T:4)
         // -- overlapped
-        case  470: _z80_or8(cpu,cpu->b);_fetch();break;
+        case  470: _z80_or8(cpu,cpu->b);goto fetch_next;
         
         //  B1: or c (M:1 T:4)
         // -- overlapped
-        case  471: _z80_or8(cpu,cpu->c);_fetch();break;
+        case  471: _z80_or8(cpu,cpu->c);goto fetch_next;
         
         //  B2: or d (M:1 T:4)
         // -- overlapped
-        case  472: _z80_or8(cpu,cpu->d);_fetch();break;
+        case  472: _z80_or8(cpu,cpu->d);goto fetch_next;
         
         //  B3: or e (M:1 T:4)
         // -- overlapped
-        case  473: _z80_or8(cpu,cpu->e);_fetch();break;
+        case  473: _z80_or8(cpu,cpu->e);goto fetch_next;
         
         //  B4: or h (M:1 T:4)
         // -- overlapped
-        case  474: _z80_or8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  474: _z80_or8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  B5: or l (M:1 T:4)
         // -- overlapped
-        case  475: _z80_or8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  475: _z80_or8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  B6: or (hl) (M:2 T:7)
         // -- mread
-        case  476: break;
-        case  477: _wait();_mread(cpu->addr);break;
-        case  478: cpu->dlatch=_gd();break;
+        case  476: goto step_next;
+        case  477: _wait();_mread(cpu->addr);goto step_next;
+        case  478: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  479: _z80_or8(cpu,cpu->dlatch);_fetch();break;
+        case  479: _z80_or8(cpu,cpu->dlatch);goto fetch_next;
         
         //  B7: or a (M:1 T:4)
         // -- overlapped
-        case  480: _z80_or8(cpu,cpu->a);_fetch();break;
+        case  480: _z80_or8(cpu,cpu->a);goto fetch_next;
         
         //  B8: cp b (M:1 T:4)
         // -- overlapped
-        case  481: _z80_cp8(cpu,cpu->b);_fetch();break;
+        case  481: _z80_cp8(cpu,cpu->b);goto fetch_next;
         
         //  B9: cp c (M:1 T:4)
         // -- overlapped
-        case  482: _z80_cp8(cpu,cpu->c);_fetch();break;
+        case  482: _z80_cp8(cpu,cpu->c);goto fetch_next;
         
         //  BA: cp d (M:1 T:4)
         // -- overlapped
-        case  483: _z80_cp8(cpu,cpu->d);_fetch();break;
+        case  483: _z80_cp8(cpu,cpu->d);goto fetch_next;
         
         //  BB: cp e (M:1 T:4)
         // -- overlapped
-        case  484: _z80_cp8(cpu,cpu->e);_fetch();break;
+        case  484: _z80_cp8(cpu,cpu->e);goto fetch_next;
         
         //  BC: cp h (M:1 T:4)
         // -- overlapped
-        case  485: _z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch();break;
+        case  485: _z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next;
         
         //  BD: cp l (M:1 T:4)
         // -- overlapped
-        case  486: _z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch();break;
+        case  486: _z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next;
         
         //  BE: cp (hl) (M:2 T:7)
         // -- mread
-        case  487: break;
-        case  488: _wait();_mread(cpu->addr);break;
-        case  489: cpu->dlatch=_gd();break;
+        case  487: goto step_next;
+        case  488: _wait();_mread(cpu->addr);goto step_next;
+        case  489: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  490: _z80_cp8(cpu,cpu->dlatch);_fetch();break;
+        case  490: _z80_cp8(cpu,cpu->dlatch);goto fetch_next;
         
         //  BF: cp a (M:1 T:4)
         // -- overlapped
-        case  491: _z80_cp8(cpu,cpu->a);_fetch();break;
+        case  491: _z80_cp8(cpu,cpu->a);goto fetch_next;
         
         //  C0: ret nz (M:4 T:11)
         // -- generic
-        case  492: if(!_cc_nz){_z80_skip(cpu,6);};break;
+        case  492: if(!_cc_nz){_z80_skip(cpu,6);};goto step_next;
         // -- mread
-        case  493: break;
-        case  494: _wait();_mread(cpu->sp++);break;
-        case  495: cpu->wzl=_gd();break;
+        case  493: goto step_next;
+        case  494: _wait();_mread(cpu->sp++);goto step_next;
+        case  495: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  496: break;
-        case  497: _wait();_mread(cpu->sp++);break;
-        case  498: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  496: goto step_next;
+        case  497: _wait();_mread(cpu->sp++);goto step_next;
+        case  498: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  499: _fetch();break;
+        case  499: goto fetch_next;
         
         //  C1: pop bc (M:3 T:10)
         // -- mread
-        case  500: break;
-        case  501: _wait();_mread(cpu->sp++);break;
-        case  502: cpu->c=_gd();break;
+        case  500: goto step_next;
+        case  501: _wait();_mread(cpu->sp++);goto step_next;
+        case  502: cpu->c=_gd();;goto step_next;
         // -- mread
-        case  503: break;
-        case  504: _wait();_mread(cpu->sp++);break;
-        case  505: cpu->b=_gd();break;
+        case  503: goto step_next;
+        case  504: _wait();_mread(cpu->sp++);goto step_next;
+        case  505: cpu->b=_gd();;goto step_next;
         // -- overlapped
-        case  506: _fetch();break;
+        case  506: goto fetch_next;
         
         //  C2: jp nz,nn (M:3 T:10)
         // -- mread
-        case  507: break;
-        case  508: _wait();_mread(cpu->pc++);break;
-        case  509: cpu->wzl=_gd();break;
+        case  507: goto step_next;
+        case  508: _wait();_mread(cpu->pc++);goto step_next;
+        case  509: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  510: break;
-        case  511: _wait();_mread(cpu->pc++);break;
-        case  512: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;};break;
+        case  510: goto step_next;
+        case  511: _wait();_mread(cpu->pc++);goto step_next;
+        case  512: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
-        case  513: _fetch();break;
+        case  513: goto fetch_next;
         
         //  C3: jp nn (M:3 T:10)
         // -- mread
-        case  514: break;
-        case  515: _wait();_mread(cpu->pc++);break;
-        case  516: cpu->wzl=_gd();break;
+        case  514: goto step_next;
+        case  515: _wait();_mread(cpu->pc++);goto step_next;
+        case  516: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  517: break;
-        case  518: _wait();_mread(cpu->pc++);break;
-        case  519: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  517: goto step_next;
+        case  518: _wait();_mread(cpu->pc++);goto step_next;
+        case  519: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  520: _fetch();break;
+        case  520: goto fetch_next;
         
         //  C4: call nz,nn (M:6 T:17)
         // -- mread
-        case  521: break;
-        case  522: _wait();_mread(cpu->pc++);break;
-        case  523: cpu->wzl=_gd();break;
+        case  521: goto step_next;
+        case  522: _wait();_mread(cpu->pc++);goto step_next;
+        case  523: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  524: break;
-        case  525: _wait();_mread(cpu->pc++);break;
-        case  526: cpu->wzh=_gd();if (!_cc_nz){_z80_skip(cpu,7);};break;
+        case  524: goto step_next;
+        case  525: _wait();_mread(cpu->pc++);goto step_next;
+        case  526: cpu->wzh=_gd();if (!_cc_nz){_z80_skip(cpu,7);};goto step_next;
         // -- generic
-        case  527: break;
+        case  527: ;goto step_next;
         // -- mwrite
-        case  528: break;
-        case  529: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  530: break;
+        case  528: goto step_next;
+        case  529: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  530: goto step_next;
         // -- mwrite
-        case  531: break;
-        case  532: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  533: break;
+        case  531: goto step_next;
+        case  532: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  533: goto step_next;
         // -- overlapped
-        case  534: _fetch();break;
+        case  534: goto fetch_next;
         
         //  C5: push bc (M:4 T:11)
         // -- generic
-        case  535: break;
+        case  535: ;goto step_next;
         // -- mwrite
-        case  536: break;
-        case  537: _wait();_mwrite(--cpu->sp,cpu->b);;break;
-        case  538: break;
+        case  536: goto step_next;
+        case  537: _wait();_mwrite(--cpu->sp,cpu->b);;goto step_next;
+        case  538: goto step_next;
         // -- mwrite
-        case  539: break;
-        case  540: _wait();_mwrite(--cpu->sp,cpu->c);;break;
-        case  541: break;
+        case  539: goto step_next;
+        case  540: _wait();_mwrite(--cpu->sp,cpu->c);;goto step_next;
+        case  541: goto step_next;
         // -- overlapped
-        case  542: _fetch();break;
+        case  542: goto fetch_next;
         
         //  C6: add n (M:2 T:7)
         // -- mread
-        case  543: break;
-        case  544: _wait();_mread(cpu->pc++);break;
-        case  545: cpu->dlatch=_gd();break;
+        case  543: goto step_next;
+        case  544: _wait();_mread(cpu->pc++);goto step_next;
+        case  545: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  546: _z80_add8(cpu,cpu->dlatch);_fetch();break;
+        case  546: _z80_add8(cpu,cpu->dlatch);goto fetch_next;
         
         //  C7: rst 0h (M:4 T:11)
         // -- generic
-        case  547: break;
+        case  547: ;goto step_next;
         // -- mwrite
-        case  548: break;
-        case  549: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  550: break;
+        case  548: goto step_next;
+        case  549: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  550: goto step_next;
         // -- mwrite
-        case  551: break;
-        case  552: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x00;cpu->pc=cpu->wz;;break;
-        case  553: break;
+        case  551: goto step_next;
+        case  552: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x00;cpu->pc=cpu->wz;goto step_next;
+        case  553: goto step_next;
         // -- overlapped
-        case  554: _fetch();break;
+        case  554: goto fetch_next;
         
         //  C8: ret z (M:4 T:11)
         // -- generic
-        case  555: if(!_cc_z){_z80_skip(cpu,6);};break;
+        case  555: if(!_cc_z){_z80_skip(cpu,6);};goto step_next;
         // -- mread
-        case  556: break;
-        case  557: _wait();_mread(cpu->sp++);break;
-        case  558: cpu->wzl=_gd();break;
+        case  556: goto step_next;
+        case  557: _wait();_mread(cpu->sp++);goto step_next;
+        case  558: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  559: break;
-        case  560: _wait();_mread(cpu->sp++);break;
-        case  561: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  559: goto step_next;
+        case  560: _wait();_mread(cpu->sp++);goto step_next;
+        case  561: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  562: _fetch();break;
+        case  562: goto fetch_next;
         
         //  C9: ret (M:3 T:10)
         // -- mread
-        case  563: break;
-        case  564: _wait();_mread(cpu->sp++);break;
-        case  565: cpu->wzl=_gd();break;
+        case  563: goto step_next;
+        case  564: _wait();_mread(cpu->sp++);goto step_next;
+        case  565: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  566: break;
-        case  567: _wait();_mread(cpu->sp++);break;
-        case  568: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  566: goto step_next;
+        case  567: _wait();_mread(cpu->sp++);goto step_next;
+        case  568: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  569: _fetch();break;
+        case  569: goto fetch_next;
         
         //  CA: jp z,nn (M:3 T:10)
         // -- mread
-        case  570: break;
-        case  571: _wait();_mread(cpu->pc++);break;
-        case  572: cpu->wzl=_gd();break;
+        case  570: goto step_next;
+        case  571: _wait();_mread(cpu->pc++);goto step_next;
+        case  572: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  573: break;
-        case  574: _wait();_mread(cpu->pc++);break;
-        case  575: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;};break;
+        case  573: goto step_next;
+        case  574: _wait();_mread(cpu->pc++);goto step_next;
+        case  575: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
-        case  576: _fetch();break;
+        case  576: goto fetch_next;
         
         //  CB: cb prefix (M:1 T:4)
         // -- overlapped
-        case  577: _fetch_cb();break;
+        case  577: ;_fetch_cb();goto step_next;
         
         //  CC: call z,nn (M:6 T:17)
         // -- mread
-        case  578: break;
-        case  579: _wait();_mread(cpu->pc++);break;
-        case  580: cpu->wzl=_gd();break;
+        case  578: goto step_next;
+        case  579: _wait();_mread(cpu->pc++);goto step_next;
+        case  580: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  581: break;
-        case  582: _wait();_mread(cpu->pc++);break;
-        case  583: cpu->wzh=_gd();if (!_cc_z){_z80_skip(cpu,7);};break;
+        case  581: goto step_next;
+        case  582: _wait();_mread(cpu->pc++);goto step_next;
+        case  583: cpu->wzh=_gd();if (!_cc_z){_z80_skip(cpu,7);};goto step_next;
         // -- generic
-        case  584: break;
+        case  584: ;goto step_next;
         // -- mwrite
-        case  585: break;
-        case  586: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  587: break;
+        case  585: goto step_next;
+        case  586: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  587: goto step_next;
         // -- mwrite
-        case  588: break;
-        case  589: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  590: break;
+        case  588: goto step_next;
+        case  589: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  590: goto step_next;
         // -- overlapped
-        case  591: _fetch();break;
+        case  591: goto fetch_next;
         
         //  CD: call nn (M:5 T:17)
         // -- mread
-        case  592: break;
-        case  593: _wait();_mread(cpu->pc++);break;
-        case  594: cpu->wzl=_gd();break;
+        case  592: goto step_next;
+        case  593: _wait();_mread(cpu->pc++);goto step_next;
+        case  594: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  595: break;
-        case  596: _wait();_mread(cpu->pc++);break;
-        case  597: cpu->wzh=_gd();break;
-        case  598: break;
+        case  595: goto step_next;
+        case  596: _wait();_mread(cpu->pc++);goto step_next;
+        case  597: cpu->wzh=_gd();;goto step_next;
+        case  598: goto step_next;
         // -- mwrite
-        case  599: break;
-        case  600: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  601: break;
+        case  599: goto step_next;
+        case  600: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  601: goto step_next;
         // -- mwrite
-        case  602: break;
-        case  603: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  604: break;
+        case  602: goto step_next;
+        case  603: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  604: goto step_next;
         // -- overlapped
-        case  605: _fetch();break;
+        case  605: goto fetch_next;
         
         //  CE: adc n (M:2 T:7)
         // -- mread
-        case  606: break;
-        case  607: _wait();_mread(cpu->pc++);break;
-        case  608: cpu->dlatch=_gd();break;
+        case  606: goto step_next;
+        case  607: _wait();_mread(cpu->pc++);goto step_next;
+        case  608: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  609: _z80_adc8(cpu,cpu->dlatch);_fetch();break;
+        case  609: _z80_adc8(cpu,cpu->dlatch);goto fetch_next;
         
         //  CF: rst 8h (M:4 T:11)
         // -- generic
-        case  610: break;
+        case  610: ;goto step_next;
         // -- mwrite
-        case  611: break;
-        case  612: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  613: break;
+        case  611: goto step_next;
+        case  612: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  613: goto step_next;
         // -- mwrite
-        case  614: break;
-        case  615: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x08;cpu->pc=cpu->wz;;break;
-        case  616: break;
+        case  614: goto step_next;
+        case  615: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x08;cpu->pc=cpu->wz;goto step_next;
+        case  616: goto step_next;
         // -- overlapped
-        case  617: _fetch();break;
+        case  617: goto fetch_next;
         
         //  D0: ret nc (M:4 T:11)
         // -- generic
-        case  618: if(!_cc_nc){_z80_skip(cpu,6);};break;
+        case  618: if(!_cc_nc){_z80_skip(cpu,6);};goto step_next;
         // -- mread
-        case  619: break;
-        case  620: _wait();_mread(cpu->sp++);break;
-        case  621: cpu->wzl=_gd();break;
+        case  619: goto step_next;
+        case  620: _wait();_mread(cpu->sp++);goto step_next;
+        case  621: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  622: break;
-        case  623: _wait();_mread(cpu->sp++);break;
-        case  624: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  622: goto step_next;
+        case  623: _wait();_mread(cpu->sp++);goto step_next;
+        case  624: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  625: _fetch();break;
+        case  625: goto fetch_next;
         
         //  D1: pop de (M:3 T:10)
         // -- mread
-        case  626: break;
-        case  627: _wait();_mread(cpu->sp++);break;
-        case  628: cpu->e=_gd();break;
+        case  626: goto step_next;
+        case  627: _wait();_mread(cpu->sp++);goto step_next;
+        case  628: cpu->e=_gd();;goto step_next;
         // -- mread
-        case  629: break;
-        case  630: _wait();_mread(cpu->sp++);break;
-        case  631: cpu->d=_gd();break;
+        case  629: goto step_next;
+        case  630: _wait();_mread(cpu->sp++);goto step_next;
+        case  631: cpu->d=_gd();;goto step_next;
         // -- overlapped
-        case  632: _fetch();break;
+        case  632: goto fetch_next;
         
         //  D2: jp nc,nn (M:3 T:10)
         // -- mread
-        case  633: break;
-        case  634: _wait();_mread(cpu->pc++);break;
-        case  635: cpu->wzl=_gd();break;
+        case  633: goto step_next;
+        case  634: _wait();_mread(cpu->pc++);goto step_next;
+        case  635: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  636: break;
-        case  637: _wait();_mread(cpu->pc++);break;
-        case  638: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;};break;
+        case  636: goto step_next;
+        case  637: _wait();_mread(cpu->pc++);goto step_next;
+        case  638: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
-        case  639: _fetch();break;
+        case  639: goto fetch_next;
         
         //  D3: out (n),a (M:3 T:11)
         // -- mread
-        case  640: break;
-        case  641: _wait();_mread(cpu->pc++);break;
-        case  642: cpu->wzl=_gd();cpu->wzh=cpu->a;break;
+        case  640: goto step_next;
+        case  641: _wait();_mread(cpu->pc++);goto step_next;
+        case  642: cpu->wzl=_gd();cpu->wzh=cpu->a;goto step_next;
         // -- iowrite
-        case  643: break;
-        case  644: _iowrite(cpu->wz,cpu->a);break;
-        case  645: _wait();cpu->wzl++;;break;
-        case  646: break;
+        case  643: goto step_next;
+        case  644: _iowrite(cpu->wz,cpu->a);goto step_next;
+        case  645: _wait();cpu->wzl++;goto step_next;
+        case  646: goto step_next;
         // -- overlapped
-        case  647: _fetch();break;
+        case  647: goto fetch_next;
         
         //  D4: call nc,nn (M:6 T:17)
         // -- mread
-        case  648: break;
-        case  649: _wait();_mread(cpu->pc++);break;
-        case  650: cpu->wzl=_gd();break;
+        case  648: goto step_next;
+        case  649: _wait();_mread(cpu->pc++);goto step_next;
+        case  650: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  651: break;
-        case  652: _wait();_mread(cpu->pc++);break;
-        case  653: cpu->wzh=_gd();if (!_cc_nc){_z80_skip(cpu,7);};break;
+        case  651: goto step_next;
+        case  652: _wait();_mread(cpu->pc++);goto step_next;
+        case  653: cpu->wzh=_gd();if (!_cc_nc){_z80_skip(cpu,7);};goto step_next;
         // -- generic
-        case  654: break;
+        case  654: ;goto step_next;
         // -- mwrite
-        case  655: break;
-        case  656: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  657: break;
+        case  655: goto step_next;
+        case  656: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  657: goto step_next;
         // -- mwrite
-        case  658: break;
-        case  659: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  660: break;
+        case  658: goto step_next;
+        case  659: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  660: goto step_next;
         // -- overlapped
-        case  661: _fetch();break;
+        case  661: goto fetch_next;
         
         //  D5: push de (M:4 T:11)
         // -- generic
-        case  662: break;
+        case  662: ;goto step_next;
         // -- mwrite
-        case  663: break;
-        case  664: _wait();_mwrite(--cpu->sp,cpu->d);;break;
-        case  665: break;
+        case  663: goto step_next;
+        case  664: _wait();_mwrite(--cpu->sp,cpu->d);;goto step_next;
+        case  665: goto step_next;
         // -- mwrite
-        case  666: break;
-        case  667: _wait();_mwrite(--cpu->sp,cpu->e);;break;
-        case  668: break;
+        case  666: goto step_next;
+        case  667: _wait();_mwrite(--cpu->sp,cpu->e);;goto step_next;
+        case  668: goto step_next;
         // -- overlapped
-        case  669: _fetch();break;
+        case  669: goto fetch_next;
         
         //  D6: sub n (M:2 T:7)
         // -- mread
-        case  670: break;
-        case  671: _wait();_mread(cpu->pc++);break;
-        case  672: cpu->dlatch=_gd();break;
+        case  670: goto step_next;
+        case  671: _wait();_mread(cpu->pc++);goto step_next;
+        case  672: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  673: _z80_sub8(cpu,cpu->dlatch);_fetch();break;
+        case  673: _z80_sub8(cpu,cpu->dlatch);goto fetch_next;
         
         //  D7: rst 10h (M:4 T:11)
         // -- generic
-        case  674: break;
+        case  674: ;goto step_next;
         // -- mwrite
-        case  675: break;
-        case  676: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  677: break;
+        case  675: goto step_next;
+        case  676: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  677: goto step_next;
         // -- mwrite
-        case  678: break;
-        case  679: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x10;cpu->pc=cpu->wz;;break;
-        case  680: break;
+        case  678: goto step_next;
+        case  679: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x10;cpu->pc=cpu->wz;goto step_next;
+        case  680: goto step_next;
         // -- overlapped
-        case  681: _fetch();break;
+        case  681: goto fetch_next;
         
         //  D8: ret c (M:4 T:11)
         // -- generic
-        case  682: if(!_cc_c){_z80_skip(cpu,6);};break;
+        case  682: if(!_cc_c){_z80_skip(cpu,6);};goto step_next;
         // -- mread
-        case  683: break;
-        case  684: _wait();_mread(cpu->sp++);break;
-        case  685: cpu->wzl=_gd();break;
+        case  683: goto step_next;
+        case  684: _wait();_mread(cpu->sp++);goto step_next;
+        case  685: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  686: break;
-        case  687: _wait();_mread(cpu->sp++);break;
-        case  688: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  686: goto step_next;
+        case  687: _wait();_mread(cpu->sp++);goto step_next;
+        case  688: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  689: _fetch();break;
+        case  689: goto fetch_next;
         
         //  D9: exx (M:1 T:4)
         // -- overlapped
-        case  690: _z80_exx(cpu);_fetch();break;
+        case  690: _z80_exx(cpu);goto fetch_next;
         
         //  DA: jp c,nn (M:3 T:10)
         // -- mread
-        case  691: break;
-        case  692: _wait();_mread(cpu->pc++);break;
-        case  693: cpu->wzl=_gd();break;
+        case  691: goto step_next;
+        case  692: _wait();_mread(cpu->pc++);goto step_next;
+        case  693: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  694: break;
-        case  695: _wait();_mread(cpu->pc++);break;
-        case  696: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;};break;
+        case  694: goto step_next;
+        case  695: _wait();_mread(cpu->pc++);goto step_next;
+        case  696: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
-        case  697: _fetch();break;
+        case  697: goto fetch_next;
         
         //  DB: in a,(n) (M:3 T:11)
         // -- mread
-        case  698: break;
-        case  699: _wait();_mread(cpu->pc++);break;
-        case  700: cpu->wzl=_gd();cpu->wzh=cpu->a;break;
+        case  698: goto step_next;
+        case  699: _wait();_mread(cpu->pc++);goto step_next;
+        case  700: cpu->wzl=_gd();cpu->wzh=cpu->a;goto step_next;
         // -- ioread
-        case  701: break;
-        case  702: break;
-        case  703: _wait();_ioread(cpu->wz++);break;
-        case  704: cpu->dlatch=_gd();break;
+        case  701: goto step_next;
+        case  702: goto step_next;
+        case  703: _wait();_ioread(cpu->wz++);goto step_next;
+        case  704: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  705: cpu->a=cpu->dlatch;_fetch();break;
+        case  705: cpu->a=cpu->dlatch;goto fetch_next;
         
         //  DC: call c,nn (M:6 T:17)
         // -- mread
-        case  706: break;
-        case  707: _wait();_mread(cpu->pc++);break;
-        case  708: cpu->wzl=_gd();break;
+        case  706: goto step_next;
+        case  707: _wait();_mread(cpu->pc++);goto step_next;
+        case  708: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  709: break;
-        case  710: _wait();_mread(cpu->pc++);break;
-        case  711: cpu->wzh=_gd();if (!_cc_c){_z80_skip(cpu,7);};break;
+        case  709: goto step_next;
+        case  710: _wait();_mread(cpu->pc++);goto step_next;
+        case  711: cpu->wzh=_gd();if (!_cc_c){_z80_skip(cpu,7);};goto step_next;
         // -- generic
-        case  712: break;
+        case  712: ;goto step_next;
         // -- mwrite
-        case  713: break;
-        case  714: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  715: break;
+        case  713: goto step_next;
+        case  714: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  715: goto step_next;
         // -- mwrite
-        case  716: break;
-        case  717: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  718: break;
+        case  716: goto step_next;
+        case  717: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  718: goto step_next;
         // -- overlapped
-        case  719: _fetch();break;
+        case  719: goto fetch_next;
         
         //  DD: dd prefix (M:1 T:4)
         // -- overlapped
-        case  720: _fetch_dd();break;
+        case  720: ;_fetch_dd();goto step_next;
         
         //  DE: sbc n (M:2 T:7)
         // -- mread
-        case  721: break;
-        case  722: _wait();_mread(cpu->pc++);break;
-        case  723: cpu->dlatch=_gd();break;
+        case  721: goto step_next;
+        case  722: _wait();_mread(cpu->pc++);goto step_next;
+        case  723: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  724: _z80_sbc8(cpu,cpu->dlatch);_fetch();break;
+        case  724: _z80_sbc8(cpu,cpu->dlatch);goto fetch_next;
         
         //  DF: rst 18h (M:4 T:11)
         // -- generic
-        case  725: break;
+        case  725: ;goto step_next;
         // -- mwrite
-        case  726: break;
-        case  727: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  728: break;
+        case  726: goto step_next;
+        case  727: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  728: goto step_next;
         // -- mwrite
-        case  729: break;
-        case  730: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x18;cpu->pc=cpu->wz;;break;
-        case  731: break;
+        case  729: goto step_next;
+        case  730: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x18;cpu->pc=cpu->wz;goto step_next;
+        case  731: goto step_next;
         // -- overlapped
-        case  732: _fetch();break;
+        case  732: goto fetch_next;
         
         //  E0: ret po (M:4 T:11)
         // -- generic
-        case  733: if(!_cc_po){_z80_skip(cpu,6);};break;
+        case  733: if(!_cc_po){_z80_skip(cpu,6);};goto step_next;
         // -- mread
-        case  734: break;
-        case  735: _wait();_mread(cpu->sp++);break;
-        case  736: cpu->wzl=_gd();break;
+        case  734: goto step_next;
+        case  735: _wait();_mread(cpu->sp++);goto step_next;
+        case  736: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  737: break;
-        case  738: _wait();_mread(cpu->sp++);break;
-        case  739: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  737: goto step_next;
+        case  738: _wait();_mread(cpu->sp++);goto step_next;
+        case  739: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  740: _fetch();break;
+        case  740: goto fetch_next;
         
         //  E1: pop hl (M:3 T:10)
         // -- mread
-        case  741: break;
-        case  742: _wait();_mread(cpu->sp++);break;
-        case  743: cpu->hlx[cpu->hlx_idx].l=_gd();break;
+        case  741: goto step_next;
+        case  742: _wait();_mread(cpu->sp++);goto step_next;
+        case  743: cpu->hlx[cpu->hlx_idx].l=_gd();;goto step_next;
         // -- mread
-        case  744: break;
-        case  745: _wait();_mread(cpu->sp++);break;
-        case  746: cpu->hlx[cpu->hlx_idx].h=_gd();break;
+        case  744: goto step_next;
+        case  745: _wait();_mread(cpu->sp++);goto step_next;
+        case  746: cpu->hlx[cpu->hlx_idx].h=_gd();;goto step_next;
         // -- overlapped
-        case  747: _fetch();break;
+        case  747: goto fetch_next;
         
         //  E2: jp po,nn (M:3 T:10)
         // -- mread
-        case  748: break;
-        case  749: _wait();_mread(cpu->pc++);break;
-        case  750: cpu->wzl=_gd();break;
+        case  748: goto step_next;
+        case  749: _wait();_mread(cpu->pc++);goto step_next;
+        case  750: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  751: break;
-        case  752: _wait();_mread(cpu->pc++);break;
-        case  753: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;};break;
+        case  751: goto step_next;
+        case  752: _wait();_mread(cpu->pc++);goto step_next;
+        case  753: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
-        case  754: _fetch();break;
+        case  754: goto fetch_next;
         
         //  E3: ex (sp),hl (M:5 T:19)
         // -- mread
-        case  755: break;
-        case  756: _wait();_mread(cpu->sp);break;
-        case  757: cpu->wzl=_gd();break;
+        case  755: goto step_next;
+        case  756: _wait();_mread(cpu->sp);goto step_next;
+        case  757: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  758: break;
-        case  759: _wait();_mread(cpu->sp+1);break;
-        case  760: cpu->wzh=_gd();break;
-        case  761: break;
+        case  758: goto step_next;
+        case  759: _wait();_mread(cpu->sp+1);goto step_next;
+        case  760: cpu->wzh=_gd();;goto step_next;
+        case  761: goto step_next;
         // -- mwrite
-        case  762: break;
-        case  763: _wait();_mwrite(cpu->sp+1,cpu->hlx[cpu->hlx_idx].h);;break;
-        case  764: break;
+        case  762: goto step_next;
+        case  763: _wait();_mwrite(cpu->sp+1,cpu->hlx[cpu->hlx_idx].h);;goto step_next;
+        case  764: goto step_next;
         // -- mwrite
-        case  765: break;
-        case  766: _wait();_mwrite(cpu->sp,cpu->hlx[cpu->hlx_idx].l);cpu->hlx[cpu->hlx_idx].hl=cpu->wz;;break;
-        case  767: break;
-        case  768: break;
-        case  769: break;
+        case  765: goto step_next;
+        case  766: _wait();_mwrite(cpu->sp,cpu->hlx[cpu->hlx_idx].l);cpu->hlx[cpu->hlx_idx].hl=cpu->wz;goto step_next;
+        case  767: goto step_next;
+        case  768: goto step_next;
+        case  769: goto step_next;
         // -- overlapped
-        case  770: _fetch();break;
+        case  770: goto fetch_next;
         
         //  E4: call po,nn (M:6 T:17)
         // -- mread
-        case  771: break;
-        case  772: _wait();_mread(cpu->pc++);break;
-        case  773: cpu->wzl=_gd();break;
+        case  771: goto step_next;
+        case  772: _wait();_mread(cpu->pc++);goto step_next;
+        case  773: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  774: break;
-        case  775: _wait();_mread(cpu->pc++);break;
-        case  776: cpu->wzh=_gd();if (!_cc_po){_z80_skip(cpu,7);};break;
+        case  774: goto step_next;
+        case  775: _wait();_mread(cpu->pc++);goto step_next;
+        case  776: cpu->wzh=_gd();if (!_cc_po){_z80_skip(cpu,7);};goto step_next;
         // -- generic
-        case  777: break;
+        case  777: ;goto step_next;
         // -- mwrite
-        case  778: break;
-        case  779: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  780: break;
+        case  778: goto step_next;
+        case  779: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  780: goto step_next;
         // -- mwrite
-        case  781: break;
-        case  782: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  783: break;
+        case  781: goto step_next;
+        case  782: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  783: goto step_next;
         // -- overlapped
-        case  784: _fetch();break;
+        case  784: goto fetch_next;
         
         //  E5: push hl (M:4 T:11)
         // -- generic
-        case  785: break;
+        case  785: ;goto step_next;
         // -- mwrite
-        case  786: break;
-        case  787: _wait();_mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].h);;break;
-        case  788: break;
+        case  786: goto step_next;
+        case  787: _wait();_mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].h);;goto step_next;
+        case  788: goto step_next;
         // -- mwrite
-        case  789: break;
-        case  790: _wait();_mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].l);;break;
-        case  791: break;
+        case  789: goto step_next;
+        case  790: _wait();_mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].l);;goto step_next;
+        case  791: goto step_next;
         // -- overlapped
-        case  792: _fetch();break;
+        case  792: goto fetch_next;
         
         //  E6: and n (M:2 T:7)
         // -- mread
-        case  793: break;
-        case  794: _wait();_mread(cpu->pc++);break;
-        case  795: cpu->dlatch=_gd();break;
+        case  793: goto step_next;
+        case  794: _wait();_mread(cpu->pc++);goto step_next;
+        case  795: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  796: _z80_and8(cpu,cpu->dlatch);_fetch();break;
+        case  796: _z80_and8(cpu,cpu->dlatch);goto fetch_next;
         
         //  E7: rst 20h (M:4 T:11)
         // -- generic
-        case  797: break;
+        case  797: ;goto step_next;
         // -- mwrite
-        case  798: break;
-        case  799: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  800: break;
+        case  798: goto step_next;
+        case  799: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  800: goto step_next;
         // -- mwrite
-        case  801: break;
-        case  802: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x20;cpu->pc=cpu->wz;;break;
-        case  803: break;
+        case  801: goto step_next;
+        case  802: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x20;cpu->pc=cpu->wz;goto step_next;
+        case  803: goto step_next;
         // -- overlapped
-        case  804: _fetch();break;
+        case  804: goto fetch_next;
         
         //  E8: ret pe (M:4 T:11)
         // -- generic
-        case  805: if(!_cc_pe){_z80_skip(cpu,6);};break;
+        case  805: if(!_cc_pe){_z80_skip(cpu,6);};goto step_next;
         // -- mread
-        case  806: break;
-        case  807: _wait();_mread(cpu->sp++);break;
-        case  808: cpu->wzl=_gd();break;
+        case  806: goto step_next;
+        case  807: _wait();_mread(cpu->sp++);goto step_next;
+        case  808: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  809: break;
-        case  810: _wait();_mread(cpu->sp++);break;
-        case  811: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  809: goto step_next;
+        case  810: _wait();_mread(cpu->sp++);goto step_next;
+        case  811: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  812: _fetch();break;
+        case  812: goto fetch_next;
         
         //  E9: jp hl (M:1 T:4)
         // -- overlapped
-        case  813: cpu->pc=cpu->hlx[cpu->hlx_idx].hl;_fetch();break;
+        case  813: cpu->pc=cpu->hlx[cpu->hlx_idx].hl;goto fetch_next;
         
         //  EA: jp pe,nn (M:3 T:10)
         // -- mread
-        case  814: break;
-        case  815: _wait();_mread(cpu->pc++);break;
-        case  816: cpu->wzl=_gd();break;
+        case  814: goto step_next;
+        case  815: _wait();_mread(cpu->pc++);goto step_next;
+        case  816: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  817: break;
-        case  818: _wait();_mread(cpu->pc++);break;
-        case  819: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;};break;
+        case  817: goto step_next;
+        case  818: _wait();_mread(cpu->pc++);goto step_next;
+        case  819: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
-        case  820: _fetch();break;
+        case  820: goto fetch_next;
         
         //  EB: ex de,hl (M:1 T:4)
         // -- overlapped
-        case  821: _z80_ex_de_hl(cpu);_fetch();break;
+        case  821: _z80_ex_de_hl(cpu);goto fetch_next;
         
         //  EC: call pe,nn (M:6 T:17)
         // -- mread
-        case  822: break;
-        case  823: _wait();_mread(cpu->pc++);break;
-        case  824: cpu->wzl=_gd();break;
+        case  822: goto step_next;
+        case  823: _wait();_mread(cpu->pc++);goto step_next;
+        case  824: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  825: break;
-        case  826: _wait();_mread(cpu->pc++);break;
-        case  827: cpu->wzh=_gd();if (!_cc_pe){_z80_skip(cpu,7);};break;
+        case  825: goto step_next;
+        case  826: _wait();_mread(cpu->pc++);goto step_next;
+        case  827: cpu->wzh=_gd();if (!_cc_pe){_z80_skip(cpu,7);};goto step_next;
         // -- generic
-        case  828: break;
+        case  828: ;goto step_next;
         // -- mwrite
-        case  829: break;
-        case  830: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  831: break;
+        case  829: goto step_next;
+        case  830: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  831: goto step_next;
         // -- mwrite
-        case  832: break;
-        case  833: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  834: break;
+        case  832: goto step_next;
+        case  833: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  834: goto step_next;
         // -- overlapped
-        case  835: _fetch();break;
+        case  835: goto fetch_next;
         
         //  ED: ed prefix (M:1 T:4)
         // -- overlapped
-        case  836: _fetch_ed();break;
+        case  836: ;_fetch_ed();goto step_next;
         
         //  EE: xor n (M:2 T:7)
         // -- mread
-        case  837: break;
-        case  838: _wait();_mread(cpu->pc++);break;
-        case  839: cpu->dlatch=_gd();break;
+        case  837: goto step_next;
+        case  838: _wait();_mread(cpu->pc++);goto step_next;
+        case  839: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  840: _z80_xor8(cpu,cpu->dlatch);_fetch();break;
+        case  840: _z80_xor8(cpu,cpu->dlatch);goto fetch_next;
         
         //  EF: rst 28h (M:4 T:11)
         // -- generic
-        case  841: break;
+        case  841: ;goto step_next;
         // -- mwrite
-        case  842: break;
-        case  843: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  844: break;
+        case  842: goto step_next;
+        case  843: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  844: goto step_next;
         // -- mwrite
-        case  845: break;
-        case  846: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x28;cpu->pc=cpu->wz;;break;
-        case  847: break;
+        case  845: goto step_next;
+        case  846: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x28;cpu->pc=cpu->wz;goto step_next;
+        case  847: goto step_next;
         // -- overlapped
-        case  848: _fetch();break;
+        case  848: goto fetch_next;
         
         //  F0: ret p (M:4 T:11)
         // -- generic
-        case  849: if(!_cc_p){_z80_skip(cpu,6);};break;
+        case  849: if(!_cc_p){_z80_skip(cpu,6);};goto step_next;
         // -- mread
-        case  850: break;
-        case  851: _wait();_mread(cpu->sp++);break;
-        case  852: cpu->wzl=_gd();break;
+        case  850: goto step_next;
+        case  851: _wait();_mread(cpu->sp++);goto step_next;
+        case  852: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  853: break;
-        case  854: _wait();_mread(cpu->sp++);break;
-        case  855: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  853: goto step_next;
+        case  854: _wait();_mread(cpu->sp++);goto step_next;
+        case  855: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  856: _fetch();break;
+        case  856: goto fetch_next;
         
         //  F1: pop af (M:3 T:10)
         // -- mread
-        case  857: break;
-        case  858: _wait();_mread(cpu->sp++);break;
-        case  859: cpu->f=_gd();break;
+        case  857: goto step_next;
+        case  858: _wait();_mread(cpu->sp++);goto step_next;
+        case  859: cpu->f=_gd();;goto step_next;
         // -- mread
-        case  860: break;
-        case  861: _wait();_mread(cpu->sp++);break;
-        case  862: cpu->a=_gd();break;
+        case  860: goto step_next;
+        case  861: _wait();_mread(cpu->sp++);goto step_next;
+        case  862: cpu->a=_gd();;goto step_next;
         // -- overlapped
-        case  863: _fetch();break;
+        case  863: goto fetch_next;
         
         //  F2: jp p,nn (M:3 T:10)
         // -- mread
-        case  864: break;
-        case  865: _wait();_mread(cpu->pc++);break;
-        case  866: cpu->wzl=_gd();break;
+        case  864: goto step_next;
+        case  865: _wait();_mread(cpu->pc++);goto step_next;
+        case  866: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  867: break;
-        case  868: _wait();_mread(cpu->pc++);break;
-        case  869: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;};break;
+        case  867: goto step_next;
+        case  868: _wait();_mread(cpu->pc++);goto step_next;
+        case  869: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
-        case  870: _fetch();break;
+        case  870: goto fetch_next;
         
         //  F3: di (M:1 T:4)
         // -- overlapped
-        case  871: cpu->iff1=cpu->iff2=false;;_fetch();break;
+        case  871: cpu->iff1=cpu->iff2=false;;goto fetch_next;
         
         //  F4: call p,nn (M:6 T:17)
         // -- mread
-        case  872: break;
-        case  873: _wait();_mread(cpu->pc++);break;
-        case  874: cpu->wzl=_gd();break;
+        case  872: goto step_next;
+        case  873: _wait();_mread(cpu->pc++);goto step_next;
+        case  874: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  875: break;
-        case  876: _wait();_mread(cpu->pc++);break;
-        case  877: cpu->wzh=_gd();if (!_cc_p){_z80_skip(cpu,7);};break;
+        case  875: goto step_next;
+        case  876: _wait();_mread(cpu->pc++);goto step_next;
+        case  877: cpu->wzh=_gd();if (!_cc_p){_z80_skip(cpu,7);};goto step_next;
         // -- generic
-        case  878: break;
+        case  878: ;goto step_next;
         // -- mwrite
-        case  879: break;
-        case  880: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  881: break;
+        case  879: goto step_next;
+        case  880: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  881: goto step_next;
         // -- mwrite
-        case  882: break;
-        case  883: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  884: break;
+        case  882: goto step_next;
+        case  883: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  884: goto step_next;
         // -- overlapped
-        case  885: _fetch();break;
+        case  885: goto fetch_next;
         
         //  F5: push af (M:4 T:11)
         // -- generic
-        case  886: break;
+        case  886: ;goto step_next;
         // -- mwrite
-        case  887: break;
-        case  888: _wait();_mwrite(--cpu->sp,cpu->a);;break;
-        case  889: break;
+        case  887: goto step_next;
+        case  888: _wait();_mwrite(--cpu->sp,cpu->a);;goto step_next;
+        case  889: goto step_next;
         // -- mwrite
-        case  890: break;
-        case  891: _wait();_mwrite(--cpu->sp,cpu->f);;break;
-        case  892: break;
+        case  890: goto step_next;
+        case  891: _wait();_mwrite(--cpu->sp,cpu->f);;goto step_next;
+        case  892: goto step_next;
         // -- overlapped
-        case  893: _fetch();break;
+        case  893: goto fetch_next;
         
         //  F6: or n (M:2 T:7)
         // -- mread
-        case  894: break;
-        case  895: _wait();_mread(cpu->pc++);break;
-        case  896: cpu->dlatch=_gd();break;
+        case  894: goto step_next;
+        case  895: _wait();_mread(cpu->pc++);goto step_next;
+        case  896: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  897: _z80_or8(cpu,cpu->dlatch);_fetch();break;
+        case  897: _z80_or8(cpu,cpu->dlatch);goto fetch_next;
         
         //  F7: rst 30h (M:4 T:11)
         // -- generic
-        case  898: break;
+        case  898: ;goto step_next;
         // -- mwrite
-        case  899: break;
-        case  900: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  901: break;
+        case  899: goto step_next;
+        case  900: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  901: goto step_next;
         // -- mwrite
-        case  902: break;
-        case  903: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x30;cpu->pc=cpu->wz;;break;
-        case  904: break;
+        case  902: goto step_next;
+        case  903: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x30;cpu->pc=cpu->wz;goto step_next;
+        case  904: goto step_next;
         // -- overlapped
-        case  905: _fetch();break;
+        case  905: goto fetch_next;
         
         //  F8: ret m (M:4 T:11)
         // -- generic
-        case  906: if(!_cc_m){_z80_skip(cpu,6);};break;
+        case  906: if(!_cc_m){_z80_skip(cpu,6);};goto step_next;
         // -- mread
-        case  907: break;
-        case  908: _wait();_mread(cpu->sp++);break;
-        case  909: cpu->wzl=_gd();break;
+        case  907: goto step_next;
+        case  908: _wait();_mread(cpu->sp++);goto step_next;
+        case  909: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  910: break;
-        case  911: _wait();_mread(cpu->sp++);break;
-        case  912: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  910: goto step_next;
+        case  911: _wait();_mread(cpu->sp++);goto step_next;
+        case  912: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  913: _fetch();break;
+        case  913: goto fetch_next;
         
         //  F9: ld sp,hl (M:2 T:6)
         // -- generic
-        case  914: cpu->sp=cpu->hlx[cpu->hlx_idx].hl;break;
-        case  915: break;
+        case  914: cpu->sp=cpu->hlx[cpu->hlx_idx].hl;goto step_next;
+        case  915: goto step_next;
         // -- overlapped
-        case  916: _fetch();break;
+        case  916: goto fetch_next;
         
         //  FA: jp m,nn (M:3 T:10)
         // -- mread
-        case  917: break;
-        case  918: _wait();_mread(cpu->pc++);break;
-        case  919: cpu->wzl=_gd();break;
+        case  917: goto step_next;
+        case  918: _wait();_mread(cpu->pc++);goto step_next;
+        case  919: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  920: break;
-        case  921: _wait();_mread(cpu->pc++);break;
-        case  922: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;};break;
+        case  920: goto step_next;
+        case  921: _wait();_mread(cpu->pc++);goto step_next;
+        case  922: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
-        case  923: _fetch();break;
+        case  923: goto fetch_next;
         
         //  FB: ei (M:1 T:4)
         // -- overlapped
-        case  924: cpu->iff1=cpu->iff2=false;_fetch();cpu->iff1=cpu->iff2=true;break;
+        case  924: cpu->iff1=cpu->iff2=false;;pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2=true;goto step_next;
         
         //  FC: call m,nn (M:6 T:17)
         // -- mread
-        case  925: break;
-        case  926: _wait();_mread(cpu->pc++);break;
-        case  927: cpu->wzl=_gd();break;
+        case  925: goto step_next;
+        case  926: _wait();_mread(cpu->pc++);goto step_next;
+        case  927: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  928: break;
-        case  929: _wait();_mread(cpu->pc++);break;
-        case  930: cpu->wzh=_gd();if (!_cc_m){_z80_skip(cpu,7);};break;
+        case  928: goto step_next;
+        case  929: _wait();_mread(cpu->pc++);goto step_next;
+        case  930: cpu->wzh=_gd();if (!_cc_m){_z80_skip(cpu,7);};goto step_next;
         // -- generic
-        case  931: break;
+        case  931: ;goto step_next;
         // -- mwrite
-        case  932: break;
-        case  933: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  934: break;
+        case  932: goto step_next;
+        case  933: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  934: goto step_next;
         // -- mwrite
-        case  935: break;
-        case  936: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;;break;
-        case  937: break;
+        case  935: goto step_next;
+        case  936: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next;
+        case  937: goto step_next;
         // -- overlapped
-        case  938: _fetch();break;
+        case  938: goto fetch_next;
         
         //  FD: fd prefix (M:1 T:4)
         // -- overlapped
-        case  939: _fetch_fd();break;
+        case  939: ;_fetch_fd();goto step_next;
         
         //  FE: cp n (M:2 T:7)
         // -- mread
-        case  940: break;
-        case  941: _wait();_mread(cpu->pc++);break;
-        case  942: cpu->dlatch=_gd();break;
+        case  940: goto step_next;
+        case  941: _wait();_mread(cpu->pc++);goto step_next;
+        case  942: cpu->dlatch=_gd();;goto step_next;
         // -- overlapped
-        case  943: _z80_cp8(cpu,cpu->dlatch);_fetch();break;
+        case  943: _z80_cp8(cpu,cpu->dlatch);goto fetch_next;
         
         //  FF: rst 38h (M:4 T:11)
         // -- generic
-        case  944: break;
+        case  944: ;goto step_next;
         // -- mwrite
-        case  945: break;
-        case  946: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case  947: break;
+        case  945: goto step_next;
+        case  946: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case  947: goto step_next;
         // -- mwrite
-        case  948: break;
-        case  949: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x38;cpu->pc=cpu->wz;;break;
-        case  950: break;
+        case  948: goto step_next;
+        case  949: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x38;cpu->pc=cpu->wz;goto step_next;
+        case  950: goto step_next;
         // -- overlapped
-        case  951: _fetch();break;
+        case  951: goto fetch_next;
         
         // ED 00: ed nop (M:1 T:4)
         // -- overlapped
-        case  952: _fetch();break;
+        case  952: goto fetch_next;
         
         // ED 40: in b,(c) (M:2 T:8)
         // -- ioread
-        case  953: break;
-        case  954: break;
-        case  955: _wait();_ioread(cpu->bc);break;
-        case  956: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;break;
+        case  953: goto step_next;
+        case  954: goto step_next;
+        case  955: _wait();_ioread(cpu->bc);goto step_next;
+        case  956: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case  957: cpu->b=_z80_in(cpu,cpu->dlatch);_fetch();break;
+        case  957: cpu->b=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 41: out (c),b (M:2 T:8)
         // -- iowrite
-        case  958: break;
-        case  959: _iowrite(cpu->bc,cpu->b);break;
-        case  960: _wait();cpu->wz=cpu->bc+1;;break;
-        case  961: break;
+        case  958: goto step_next;
+        case  959: _iowrite(cpu->bc,cpu->b);goto step_next;
+        case  960: _wait();cpu->wz=cpu->bc+1;goto step_next;
+        case  961: goto step_next;
         // -- overlapped
-        case  962: _fetch();break;
+        case  962: goto fetch_next;
         
         // ED 42: sbc hl,bc (M:2 T:11)
         // -- generic
-        case  963: _z80_sbc16(cpu,cpu->bc);break;
-        case  964: break;
-        case  965: break;
-        case  966: break;
-        case  967: break;
-        case  968: break;
-        case  969: break;
+        case  963: _z80_sbc16(cpu,cpu->bc);goto step_next;
+        case  964: goto step_next;
+        case  965: goto step_next;
+        case  966: goto step_next;
+        case  967: goto step_next;
+        case  968: goto step_next;
+        case  969: goto step_next;
         // -- overlapped
-        case  970: _fetch();break;
+        case  970: goto fetch_next;
         
         // ED 43: ld (nn),bc (M:5 T:16)
         // -- mread
-        case  971: break;
-        case  972: _wait();_mread(cpu->pc++);break;
-        case  973: cpu->wzl=_gd();break;
+        case  971: goto step_next;
+        case  972: _wait();_mread(cpu->pc++);goto step_next;
+        case  973: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case  974: break;
-        case  975: _wait();_mread(cpu->pc++);break;
-        case  976: cpu->wzh=_gd();break;
+        case  974: goto step_next;
+        case  975: _wait();_mread(cpu->pc++);goto step_next;
+        case  976: cpu->wzh=_gd();;goto step_next;
         // -- mwrite
-        case  977: break;
-        case  978: _wait();_mwrite(cpu->wz++,cpu->c);;break;
-        case  979: break;
+        case  977: goto step_next;
+        case  978: _wait();_mwrite(cpu->wz++,cpu->c);;goto step_next;
+        case  979: goto step_next;
         // -- mwrite
-        case  980: break;
-        case  981: _wait();_mwrite(cpu->wz,cpu->b);;break;
-        case  982: break;
+        case  980: goto step_next;
+        case  981: _wait();_mwrite(cpu->wz,cpu->b);;goto step_next;
+        case  982: goto step_next;
         // -- overlapped
-        case  983: _fetch();break;
+        case  983: goto fetch_next;
         
         // ED 44: neg (M:1 T:4)
         // -- overlapped
-        case  984: _z80_neg8(cpu);_fetch();break;
+        case  984: _z80_neg8(cpu);goto fetch_next;
         
         // ED 45: reti/retn (M:3 T:10)
         // -- mread
-        case  985: break;
-        case  986: _wait();_mread(cpu->sp++);break;
-        case  987: cpu->wzl=_gd();pins|=Z80_RETI;break;
+        case  985: goto step_next;
+        case  986: _wait();_mread(cpu->sp++);goto step_next;
+        case  987: cpu->wzl=_gd();pins|=Z80_RETI;goto step_next;
         // -- mread
-        case  988: break;
-        case  989: _wait();_mread(cpu->sp++);break;
-        case  990: cpu->wzh=_gd();cpu->pc=cpu->wz;break;
+        case  988: goto step_next;
+        case  989: _wait();_mread(cpu->sp++);goto step_next;
+        case  990: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case  991: _fetch();cpu->iff1=cpu->iff2;break;
+        case  991: ;pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_next;
         
         // ED 46: im 0 (M:1 T:4)
         // -- overlapped
-        case  992: cpu->im=0;_fetch();break;
+        case  992: cpu->im=0;goto fetch_next;
         
         // ED 47: ld i,a (M:2 T:5)
         // -- generic
-        case  993: break;
+        case  993: ;goto step_next;
         // -- overlapped
-        case  994: cpu->i=cpu->a;_fetch();break;
+        case  994: cpu->i=cpu->a;goto fetch_next;
         
         // ED 48: in c,(c) (M:2 T:8)
         // -- ioread
-        case  995: break;
-        case  996: break;
-        case  997: _wait();_ioread(cpu->bc);break;
-        case  998: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;break;
+        case  995: goto step_next;
+        case  996: goto step_next;
+        case  997: _wait();_ioread(cpu->bc);goto step_next;
+        case  998: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case  999: cpu->c=_z80_in(cpu,cpu->dlatch);_fetch();break;
+        case  999: cpu->c=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 49: out (c),c (M:2 T:8)
         // -- iowrite
-        case 1000: break;
-        case 1001: _iowrite(cpu->bc,cpu->c);break;
-        case 1002: _wait();cpu->wz=cpu->bc+1;;break;
-        case 1003: break;
+        case 1000: goto step_next;
+        case 1001: _iowrite(cpu->bc,cpu->c);goto step_next;
+        case 1002: _wait();cpu->wz=cpu->bc+1;goto step_next;
+        case 1003: goto step_next;
         // -- overlapped
-        case 1004: _fetch();break;
+        case 1004: goto fetch_next;
         
         // ED 4A: adc hl,bc (M:2 T:11)
         // -- generic
-        case 1005: _z80_adc16(cpu,cpu->bc);break;
-        case 1006: break;
-        case 1007: break;
-        case 1008: break;
-        case 1009: break;
-        case 1010: break;
-        case 1011: break;
+        case 1005: _z80_adc16(cpu,cpu->bc);goto step_next;
+        case 1006: goto step_next;
+        case 1007: goto step_next;
+        case 1008: goto step_next;
+        case 1009: goto step_next;
+        case 1010: goto step_next;
+        case 1011: goto step_next;
         // -- overlapped
-        case 1012: _fetch();break;
+        case 1012: goto fetch_next;
         
         // ED 4B: ld bc,(nn) (M:5 T:16)
         // -- mread
-        case 1013: break;
-        case 1014: _wait();_mread(cpu->pc++);break;
-        case 1015: cpu->wzl=_gd();break;
+        case 1013: goto step_next;
+        case 1014: _wait();_mread(cpu->pc++);goto step_next;
+        case 1015: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case 1016: break;
-        case 1017: _wait();_mread(cpu->pc++);break;
-        case 1018: cpu->wzh=_gd();break;
+        case 1016: goto step_next;
+        case 1017: _wait();_mread(cpu->pc++);goto step_next;
+        case 1018: cpu->wzh=_gd();;goto step_next;
         // -- mread
-        case 1019: break;
-        case 1020: _wait();_mread(cpu->wz++);break;
-        case 1021: cpu->c=_gd();break;
+        case 1019: goto step_next;
+        case 1020: _wait();_mread(cpu->wz++);goto step_next;
+        case 1021: cpu->c=_gd();;goto step_next;
         // -- mread
-        case 1022: break;
-        case 1023: _wait();_mread(cpu->wz);break;
-        case 1024: cpu->b=_gd();break;
+        case 1022: goto step_next;
+        case 1023: _wait();_mread(cpu->wz);goto step_next;
+        case 1024: cpu->b=_gd();;goto step_next;
         // -- overlapped
-        case 1025: _fetch();break;
+        case 1025: goto fetch_next;
         
         // ED 4E: im 0 (M:1 T:4)
         // -- overlapped
-        case 1026: cpu->im=0;_fetch();break;
+        case 1026: cpu->im=0;goto fetch_next;
         
         // ED 4F: ld r,a (M:2 T:5)
         // -- generic
-        case 1027: break;
+        case 1027: ;goto step_next;
         // -- overlapped
-        case 1028: cpu->r=cpu->a;_fetch();break;
+        case 1028: cpu->r=cpu->a;goto fetch_next;
         
         // ED 50: in d,(c) (M:2 T:8)
         // -- ioread
-        case 1029: break;
-        case 1030: break;
-        case 1031: _wait();_ioread(cpu->bc);break;
-        case 1032: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;break;
+        case 1029: goto step_next;
+        case 1030: goto step_next;
+        case 1031: _wait();_ioread(cpu->bc);goto step_next;
+        case 1032: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case 1033: cpu->d=_z80_in(cpu,cpu->dlatch);_fetch();break;
+        case 1033: cpu->d=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 51: out (c),d (M:2 T:8)
         // -- iowrite
-        case 1034: break;
-        case 1035: _iowrite(cpu->bc,cpu->d);break;
-        case 1036: _wait();cpu->wz=cpu->bc+1;;break;
-        case 1037: break;
+        case 1034: goto step_next;
+        case 1035: _iowrite(cpu->bc,cpu->d);goto step_next;
+        case 1036: _wait();cpu->wz=cpu->bc+1;goto step_next;
+        case 1037: goto step_next;
         // -- overlapped
-        case 1038: _fetch();break;
+        case 1038: goto fetch_next;
         
         // ED 52: sbc hl,de (M:2 T:11)
         // -- generic
-        case 1039: _z80_sbc16(cpu,cpu->de);break;
-        case 1040: break;
-        case 1041: break;
-        case 1042: break;
-        case 1043: break;
-        case 1044: break;
-        case 1045: break;
+        case 1039: _z80_sbc16(cpu,cpu->de);goto step_next;
+        case 1040: goto step_next;
+        case 1041: goto step_next;
+        case 1042: goto step_next;
+        case 1043: goto step_next;
+        case 1044: goto step_next;
+        case 1045: goto step_next;
         // -- overlapped
-        case 1046: _fetch();break;
+        case 1046: goto fetch_next;
         
         // ED 53: ld (nn),de (M:5 T:16)
         // -- mread
-        case 1047: break;
-        case 1048: _wait();_mread(cpu->pc++);break;
-        case 1049: cpu->wzl=_gd();break;
+        case 1047: goto step_next;
+        case 1048: _wait();_mread(cpu->pc++);goto step_next;
+        case 1049: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case 1050: break;
-        case 1051: _wait();_mread(cpu->pc++);break;
-        case 1052: cpu->wzh=_gd();break;
+        case 1050: goto step_next;
+        case 1051: _wait();_mread(cpu->pc++);goto step_next;
+        case 1052: cpu->wzh=_gd();;goto step_next;
         // -- mwrite
-        case 1053: break;
-        case 1054: _wait();_mwrite(cpu->wz++,cpu->e);;break;
-        case 1055: break;
+        case 1053: goto step_next;
+        case 1054: _wait();_mwrite(cpu->wz++,cpu->e);;goto step_next;
+        case 1055: goto step_next;
         // -- mwrite
-        case 1056: break;
-        case 1057: _wait();_mwrite(cpu->wz,cpu->d);;break;
-        case 1058: break;
+        case 1056: goto step_next;
+        case 1057: _wait();_mwrite(cpu->wz,cpu->d);;goto step_next;
+        case 1058: goto step_next;
         // -- overlapped
-        case 1059: _fetch();break;
+        case 1059: goto fetch_next;
         
         // ED 56: im 1 (M:1 T:4)
         // -- overlapped
-        case 1060: cpu->im=1;_fetch();break;
+        case 1060: cpu->im=1;goto fetch_next;
         
         // ED 57: ld a,i (M:2 T:5)
         // -- generic
-        case 1061: break;
+        case 1061: ;goto step_next;
         // -- overlapped
-        case 1062: cpu->a=cpu->i;cpu->f=_z80_sziff2_flags(cpu, cpu->i);_fetch();break;
+        case 1062: cpu->a=cpu->i;cpu->f=_z80_sziff2_flags(cpu, cpu->i);goto fetch_next;
         
         // ED 58: in e,(c) (M:2 T:8)
         // -- ioread
-        case 1063: break;
-        case 1064: break;
-        case 1065: _wait();_ioread(cpu->bc);break;
-        case 1066: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;break;
+        case 1063: goto step_next;
+        case 1064: goto step_next;
+        case 1065: _wait();_ioread(cpu->bc);goto step_next;
+        case 1066: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case 1067: cpu->e=_z80_in(cpu,cpu->dlatch);_fetch();break;
+        case 1067: cpu->e=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 59: out (c),e (M:2 T:8)
         // -- iowrite
-        case 1068: break;
-        case 1069: _iowrite(cpu->bc,cpu->e);break;
-        case 1070: _wait();cpu->wz=cpu->bc+1;;break;
-        case 1071: break;
+        case 1068: goto step_next;
+        case 1069: _iowrite(cpu->bc,cpu->e);goto step_next;
+        case 1070: _wait();cpu->wz=cpu->bc+1;goto step_next;
+        case 1071: goto step_next;
         // -- overlapped
-        case 1072: _fetch();break;
+        case 1072: goto fetch_next;
         
         // ED 5A: adc hl,de (M:2 T:11)
         // -- generic
-        case 1073: _z80_adc16(cpu,cpu->de);break;
-        case 1074: break;
-        case 1075: break;
-        case 1076: break;
-        case 1077: break;
-        case 1078: break;
-        case 1079: break;
+        case 1073: _z80_adc16(cpu,cpu->de);goto step_next;
+        case 1074: goto step_next;
+        case 1075: goto step_next;
+        case 1076: goto step_next;
+        case 1077: goto step_next;
+        case 1078: goto step_next;
+        case 1079: goto step_next;
         // -- overlapped
-        case 1080: _fetch();break;
+        case 1080: goto fetch_next;
         
         // ED 5B: ld de,(nn) (M:5 T:16)
         // -- mread
-        case 1081: break;
-        case 1082: _wait();_mread(cpu->pc++);break;
-        case 1083: cpu->wzl=_gd();break;
+        case 1081: goto step_next;
+        case 1082: _wait();_mread(cpu->pc++);goto step_next;
+        case 1083: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case 1084: break;
-        case 1085: _wait();_mread(cpu->pc++);break;
-        case 1086: cpu->wzh=_gd();break;
+        case 1084: goto step_next;
+        case 1085: _wait();_mread(cpu->pc++);goto step_next;
+        case 1086: cpu->wzh=_gd();;goto step_next;
         // -- mread
-        case 1087: break;
-        case 1088: _wait();_mread(cpu->wz++);break;
-        case 1089: cpu->e=_gd();break;
+        case 1087: goto step_next;
+        case 1088: _wait();_mread(cpu->wz++);goto step_next;
+        case 1089: cpu->e=_gd();;goto step_next;
         // -- mread
-        case 1090: break;
-        case 1091: _wait();_mread(cpu->wz);break;
-        case 1092: cpu->d=_gd();break;
+        case 1090: goto step_next;
+        case 1091: _wait();_mread(cpu->wz);goto step_next;
+        case 1092: cpu->d=_gd();;goto step_next;
         // -- overlapped
-        case 1093: _fetch();break;
+        case 1093: goto fetch_next;
         
         // ED 5E: im 2 (M:1 T:4)
         // -- overlapped
-        case 1094: cpu->im=2;_fetch();break;
+        case 1094: cpu->im=2;goto fetch_next;
         
         // ED 5F: ld a,r (M:2 T:5)
         // -- generic
-        case 1095: break;
+        case 1095: ;goto step_next;
         // -- overlapped
-        case 1096: cpu->a=cpu->r;cpu->f=_z80_sziff2_flags(cpu, cpu->r);_fetch();break;
+        case 1096: cpu->a=cpu->r;cpu->f=_z80_sziff2_flags(cpu, cpu->r);goto fetch_next;
         
         // ED 60: in h,(c) (M:2 T:8)
         // -- ioread
-        case 1097: break;
-        case 1098: break;
-        case 1099: _wait();_ioread(cpu->bc);break;
-        case 1100: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;break;
+        case 1097: goto step_next;
+        case 1098: goto step_next;
+        case 1099: _wait();_ioread(cpu->bc);goto step_next;
+        case 1100: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case 1101: cpu->hlx[cpu->hlx_idx].h=_z80_in(cpu,cpu->dlatch);_fetch();break;
+        case 1101: cpu->hlx[cpu->hlx_idx].h=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 61: out (c),h (M:2 T:8)
         // -- iowrite
-        case 1102: break;
-        case 1103: _iowrite(cpu->bc,cpu->hlx[cpu->hlx_idx].h);break;
-        case 1104: _wait();cpu->wz=cpu->bc+1;;break;
-        case 1105: break;
+        case 1102: goto step_next;
+        case 1103: _iowrite(cpu->bc,cpu->hlx[cpu->hlx_idx].h);goto step_next;
+        case 1104: _wait();cpu->wz=cpu->bc+1;goto step_next;
+        case 1105: goto step_next;
         // -- overlapped
-        case 1106: _fetch();break;
+        case 1106: goto fetch_next;
         
         // ED 62: sbc hl,hl (M:2 T:11)
         // -- generic
-        case 1107: _z80_sbc16(cpu,cpu->hl);break;
-        case 1108: break;
-        case 1109: break;
-        case 1110: break;
-        case 1111: break;
-        case 1112: break;
-        case 1113: break;
+        case 1107: _z80_sbc16(cpu,cpu->hl);goto step_next;
+        case 1108: goto step_next;
+        case 1109: goto step_next;
+        case 1110: goto step_next;
+        case 1111: goto step_next;
+        case 1112: goto step_next;
+        case 1113: goto step_next;
         // -- overlapped
-        case 1114: _fetch();break;
+        case 1114: goto fetch_next;
         
         // ED 63: ld (nn),hl (M:5 T:16)
         // -- mread
-        case 1115: break;
-        case 1116: _wait();_mread(cpu->pc++);break;
-        case 1117: cpu->wzl=_gd();break;
+        case 1115: goto step_next;
+        case 1116: _wait();_mread(cpu->pc++);goto step_next;
+        case 1117: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case 1118: break;
-        case 1119: _wait();_mread(cpu->pc++);break;
-        case 1120: cpu->wzh=_gd();break;
+        case 1118: goto step_next;
+        case 1119: _wait();_mread(cpu->pc++);goto step_next;
+        case 1120: cpu->wzh=_gd();;goto step_next;
         // -- mwrite
-        case 1121: break;
-        case 1122: _wait();_mwrite(cpu->wz++,cpu->l);;break;
-        case 1123: break;
+        case 1121: goto step_next;
+        case 1122: _wait();_mwrite(cpu->wz++,cpu->l);;goto step_next;
+        case 1123: goto step_next;
         // -- mwrite
-        case 1124: break;
-        case 1125: _wait();_mwrite(cpu->wz,cpu->h);;break;
-        case 1126: break;
+        case 1124: goto step_next;
+        case 1125: _wait();_mwrite(cpu->wz,cpu->h);;goto step_next;
+        case 1126: goto step_next;
         // -- overlapped
-        case 1127: _fetch();break;
+        case 1127: goto fetch_next;
         
         // ED 66: im 0 (M:1 T:4)
         // -- overlapped
-        case 1128: cpu->im=0;_fetch();break;
+        case 1128: cpu->im=0;goto fetch_next;
         
         // ED 67: rrd (M:4 T:14)
         // -- mread
-        case 1129: break;
-        case 1130: _wait();_mread(cpu->hl);break;
-        case 1131: cpu->dlatch=_gd();break;
+        case 1129: goto step_next;
+        case 1130: _wait();_mread(cpu->hl);goto step_next;
+        case 1131: cpu->dlatch=_gd();;goto step_next;
         // -- generic
-        case 1132: cpu->dlatch=_z80_rrd(cpu,cpu->dlatch);break;
-        case 1133: break;
-        case 1134: break;
-        case 1135: break;
+        case 1132: cpu->dlatch=_z80_rrd(cpu,cpu->dlatch);goto step_next;
+        case 1133: goto step_next;
+        case 1134: goto step_next;
+        case 1135: goto step_next;
         // -- mwrite
-        case 1136: break;
-        case 1137: _wait();_mwrite(cpu->hl,cpu->dlatch);cpu->wz=cpu->hl+1;;break;
-        case 1138: break;
+        case 1136: goto step_next;
+        case 1137: _wait();_mwrite(cpu->hl,cpu->dlatch);cpu->wz=cpu->hl+1;goto step_next;
+        case 1138: goto step_next;
         // -- overlapped
-        case 1139: _fetch();break;
+        case 1139: goto fetch_next;
         
         // ED 68: in l,(c) (M:2 T:8)
         // -- ioread
-        case 1140: break;
-        case 1141: break;
-        case 1142: _wait();_ioread(cpu->bc);break;
-        case 1143: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;break;
+        case 1140: goto step_next;
+        case 1141: goto step_next;
+        case 1142: _wait();_ioread(cpu->bc);goto step_next;
+        case 1143: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case 1144: cpu->hlx[cpu->hlx_idx].l=_z80_in(cpu,cpu->dlatch);_fetch();break;
+        case 1144: cpu->hlx[cpu->hlx_idx].l=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 69: out (c),l (M:2 T:8)
         // -- iowrite
-        case 1145: break;
-        case 1146: _iowrite(cpu->bc,cpu->hlx[cpu->hlx_idx].l);break;
-        case 1147: _wait();cpu->wz=cpu->bc+1;;break;
-        case 1148: break;
+        case 1145: goto step_next;
+        case 1146: _iowrite(cpu->bc,cpu->hlx[cpu->hlx_idx].l);goto step_next;
+        case 1147: _wait();cpu->wz=cpu->bc+1;goto step_next;
+        case 1148: goto step_next;
         // -- overlapped
-        case 1149: _fetch();break;
+        case 1149: goto fetch_next;
         
         // ED 6A: adc hl,hl (M:2 T:11)
         // -- generic
-        case 1150: _z80_adc16(cpu,cpu->hl);break;
-        case 1151: break;
-        case 1152: break;
-        case 1153: break;
-        case 1154: break;
-        case 1155: break;
-        case 1156: break;
+        case 1150: _z80_adc16(cpu,cpu->hl);goto step_next;
+        case 1151: goto step_next;
+        case 1152: goto step_next;
+        case 1153: goto step_next;
+        case 1154: goto step_next;
+        case 1155: goto step_next;
+        case 1156: goto step_next;
         // -- overlapped
-        case 1157: _fetch();break;
+        case 1157: goto fetch_next;
         
         // ED 6B: ld hl,(nn) (M:5 T:16)
         // -- mread
-        case 1158: break;
-        case 1159: _wait();_mread(cpu->pc++);break;
-        case 1160: cpu->wzl=_gd();break;
+        case 1158: goto step_next;
+        case 1159: _wait();_mread(cpu->pc++);goto step_next;
+        case 1160: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case 1161: break;
-        case 1162: _wait();_mread(cpu->pc++);break;
-        case 1163: cpu->wzh=_gd();break;
+        case 1161: goto step_next;
+        case 1162: _wait();_mread(cpu->pc++);goto step_next;
+        case 1163: cpu->wzh=_gd();;goto step_next;
         // -- mread
-        case 1164: break;
-        case 1165: _wait();_mread(cpu->wz++);break;
-        case 1166: cpu->l=_gd();break;
+        case 1164: goto step_next;
+        case 1165: _wait();_mread(cpu->wz++);goto step_next;
+        case 1166: cpu->l=_gd();;goto step_next;
         // -- mread
-        case 1167: break;
-        case 1168: _wait();_mread(cpu->wz);break;
-        case 1169: cpu->h=_gd();break;
+        case 1167: goto step_next;
+        case 1168: _wait();_mread(cpu->wz);goto step_next;
+        case 1169: cpu->h=_gd();;goto step_next;
         // -- overlapped
-        case 1170: _fetch();break;
+        case 1170: goto fetch_next;
         
         // ED 6E: im 0 (M:1 T:4)
         // -- overlapped
-        case 1171: cpu->im=0;_fetch();break;
+        case 1171: cpu->im=0;goto fetch_next;
         
         // ED 6F: rld (M:4 T:14)
         // -- mread
-        case 1172: break;
-        case 1173: _wait();_mread(cpu->hl);break;
-        case 1174: cpu->dlatch=_gd();break;
+        case 1172: goto step_next;
+        case 1173: _wait();_mread(cpu->hl);goto step_next;
+        case 1174: cpu->dlatch=_gd();;goto step_next;
         // -- generic
-        case 1175: cpu->dlatch=_z80_rld(cpu,cpu->dlatch);break;
-        case 1176: break;
-        case 1177: break;
-        case 1178: break;
+        case 1175: cpu->dlatch=_z80_rld(cpu,cpu->dlatch);goto step_next;
+        case 1176: goto step_next;
+        case 1177: goto step_next;
+        case 1178: goto step_next;
         // -- mwrite
-        case 1179: break;
-        case 1180: _wait();_mwrite(cpu->hl,cpu->dlatch);cpu->wz=cpu->hl+1;;break;
-        case 1181: break;
+        case 1179: goto step_next;
+        case 1180: _wait();_mwrite(cpu->hl,cpu->dlatch);cpu->wz=cpu->hl+1;goto step_next;
+        case 1181: goto step_next;
         // -- overlapped
-        case 1182: _fetch();break;
+        case 1182: goto fetch_next;
         
         // ED 70: in (c) (M:2 T:8)
         // -- ioread
-        case 1183: break;
-        case 1184: break;
-        case 1185: _wait();_ioread(cpu->bc);break;
-        case 1186: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;break;
+        case 1183: goto step_next;
+        case 1184: goto step_next;
+        case 1185: _wait();_ioread(cpu->bc);goto step_next;
+        case 1186: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case 1187: _z80_in(cpu,cpu->dlatch);_fetch();break;
+        case 1187: _z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 71: out (c),0 (M:2 T:8)
         // -- iowrite
-        case 1188: break;
-        case 1189: _iowrite(cpu->bc,0);break;
-        case 1190: _wait();cpu->wz=cpu->bc+1;;break;
-        case 1191: break;
+        case 1188: goto step_next;
+        case 1189: _iowrite(cpu->bc,0);goto step_next;
+        case 1190: _wait();cpu->wz=cpu->bc+1;goto step_next;
+        case 1191: goto step_next;
         // -- overlapped
-        case 1192: _fetch();break;
+        case 1192: goto fetch_next;
         
         // ED 72: sbc hl,sp (M:2 T:11)
         // -- generic
-        case 1193: _z80_sbc16(cpu,cpu->sp);break;
-        case 1194: break;
-        case 1195: break;
-        case 1196: break;
-        case 1197: break;
-        case 1198: break;
-        case 1199: break;
+        case 1193: _z80_sbc16(cpu,cpu->sp);goto step_next;
+        case 1194: goto step_next;
+        case 1195: goto step_next;
+        case 1196: goto step_next;
+        case 1197: goto step_next;
+        case 1198: goto step_next;
+        case 1199: goto step_next;
         // -- overlapped
-        case 1200: _fetch();break;
+        case 1200: goto fetch_next;
         
         // ED 73: ld (nn),sp (M:5 T:16)
         // -- mread
-        case 1201: break;
-        case 1202: _wait();_mread(cpu->pc++);break;
-        case 1203: cpu->wzl=_gd();break;
+        case 1201: goto step_next;
+        case 1202: _wait();_mread(cpu->pc++);goto step_next;
+        case 1203: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case 1204: break;
-        case 1205: _wait();_mread(cpu->pc++);break;
-        case 1206: cpu->wzh=_gd();break;
+        case 1204: goto step_next;
+        case 1205: _wait();_mread(cpu->pc++);goto step_next;
+        case 1206: cpu->wzh=_gd();;goto step_next;
         // -- mwrite
-        case 1207: break;
-        case 1208: _wait();_mwrite(cpu->wz++,cpu->spl);;break;
-        case 1209: break;
+        case 1207: goto step_next;
+        case 1208: _wait();_mwrite(cpu->wz++,cpu->spl);;goto step_next;
+        case 1209: goto step_next;
         // -- mwrite
-        case 1210: break;
-        case 1211: _wait();_mwrite(cpu->wz,cpu->sph);;break;
-        case 1212: break;
+        case 1210: goto step_next;
+        case 1211: _wait();_mwrite(cpu->wz,cpu->sph);;goto step_next;
+        case 1212: goto step_next;
         // -- overlapped
-        case 1213: _fetch();break;
+        case 1213: goto fetch_next;
         
         // ED 76: im 1 (M:1 T:4)
         // -- overlapped
-        case 1214: cpu->im=1;_fetch();break;
+        case 1214: cpu->im=1;goto fetch_next;
         
         // ED 78: in a,(c) (M:2 T:8)
         // -- ioread
-        case 1215: break;
-        case 1216: break;
-        case 1217: _wait();_ioread(cpu->bc);break;
-        case 1218: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;break;
+        case 1215: goto step_next;
+        case 1216: goto step_next;
+        case 1217: _wait();_ioread(cpu->bc);goto step_next;
+        case 1218: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case 1219: cpu->a=_z80_in(cpu,cpu->dlatch);_fetch();break;
+        case 1219: cpu->a=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 79: out (c),a (M:2 T:8)
         // -- iowrite
-        case 1220: break;
-        case 1221: _iowrite(cpu->bc,cpu->a);break;
-        case 1222: _wait();cpu->wz=cpu->bc+1;;break;
-        case 1223: break;
+        case 1220: goto step_next;
+        case 1221: _iowrite(cpu->bc,cpu->a);goto step_next;
+        case 1222: _wait();cpu->wz=cpu->bc+1;goto step_next;
+        case 1223: goto step_next;
         // -- overlapped
-        case 1224: _fetch();break;
+        case 1224: goto fetch_next;
         
         // ED 7A: adc hl,sp (M:2 T:11)
         // -- generic
-        case 1225: _z80_adc16(cpu,cpu->sp);break;
-        case 1226: break;
-        case 1227: break;
-        case 1228: break;
-        case 1229: break;
-        case 1230: break;
-        case 1231: break;
+        case 1225: _z80_adc16(cpu,cpu->sp);goto step_next;
+        case 1226: goto step_next;
+        case 1227: goto step_next;
+        case 1228: goto step_next;
+        case 1229: goto step_next;
+        case 1230: goto step_next;
+        case 1231: goto step_next;
         // -- overlapped
-        case 1232: _fetch();break;
+        case 1232: goto fetch_next;
         
         // ED 7B: ld sp,(nn) (M:5 T:16)
         // -- mread
-        case 1233: break;
-        case 1234: _wait();_mread(cpu->pc++);break;
-        case 1235: cpu->wzl=_gd();break;
+        case 1233: goto step_next;
+        case 1234: _wait();_mread(cpu->pc++);goto step_next;
+        case 1235: cpu->wzl=_gd();;goto step_next;
         // -- mread
-        case 1236: break;
-        case 1237: _wait();_mread(cpu->pc++);break;
-        case 1238: cpu->wzh=_gd();break;
+        case 1236: goto step_next;
+        case 1237: _wait();_mread(cpu->pc++);goto step_next;
+        case 1238: cpu->wzh=_gd();;goto step_next;
         // -- mread
-        case 1239: break;
-        case 1240: _wait();_mread(cpu->wz++);break;
-        case 1241: cpu->spl=_gd();break;
+        case 1239: goto step_next;
+        case 1240: _wait();_mread(cpu->wz++);goto step_next;
+        case 1241: cpu->spl=_gd();;goto step_next;
         // -- mread
-        case 1242: break;
-        case 1243: _wait();_mread(cpu->wz);break;
-        case 1244: cpu->sph=_gd();break;
+        case 1242: goto step_next;
+        case 1243: _wait();_mread(cpu->wz);goto step_next;
+        case 1244: cpu->sph=_gd();;goto step_next;
         // -- overlapped
-        case 1245: _fetch();break;
+        case 1245: goto fetch_next;
         
         // ED 7E: im 2 (M:1 T:4)
         // -- overlapped
-        case 1246: cpu->im=2;_fetch();break;
+        case 1246: cpu->im=2;goto fetch_next;
         
         // ED A0: ldi (M:4 T:12)
         // -- mread
-        case 1247: break;
-        case 1248: _wait();_mread(cpu->hl++);break;
-        case 1249: cpu->dlatch=_gd();break;
+        case 1247: goto step_next;
+        case 1248: _wait();_mread(cpu->hl++);goto step_next;
+        case 1249: cpu->dlatch=_gd();;goto step_next;
         // -- mwrite
-        case 1250: break;
-        case 1251: _wait();_mwrite(cpu->de++,cpu->dlatch);;break;
-        case 1252: break;
+        case 1250: goto step_next;
+        case 1251: _wait();_mwrite(cpu->de++,cpu->dlatch);;goto step_next;
+        case 1252: goto step_next;
         // -- generic
-        case 1253: _z80_ldi_ldd(cpu,cpu->dlatch);break;
-        case 1254: break;
+        case 1253: _z80_ldi_ldd(cpu,cpu->dlatch);goto step_next;
+        case 1254: goto step_next;
         // -- overlapped
-        case 1255: _fetch();break;
+        case 1255: goto fetch_next;
         
         // ED A1: cpi (M:3 T:12)
         // -- mread
-        case 1256: break;
-        case 1257: _wait();_mread(cpu->hl++);break;
-        case 1258: cpu->dlatch=_gd();break;
+        case 1256: goto step_next;
+        case 1257: _wait();_mread(cpu->hl++);goto step_next;
+        case 1258: cpu->dlatch=_gd();;goto step_next;
         // -- generic
-        case 1259: cpu->wz++;_z80_cpi_cpd(cpu,cpu->dlatch);break;
-        case 1260: break;
-        case 1261: break;
-        case 1262: break;
-        case 1263: break;
+        case 1259: cpu->wz++;_z80_cpi_cpd(cpu,cpu->dlatch);goto step_next;
+        case 1260: goto step_next;
+        case 1261: goto step_next;
+        case 1262: goto step_next;
+        case 1263: goto step_next;
         // -- overlapped
-        case 1264: _fetch();break;
+        case 1264: goto fetch_next;
         
         // ED A2: ini (M:4 T:12)
         // -- generic
-        case 1265: break;
+        case 1265: ;goto step_next;
         // -- ioread
-        case 1266: break;
-        case 1267: break;
-        case 1268: _wait();_ioread(cpu->bc);break;
-        case 1269: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;cpu->b--;;break;
+        case 1266: goto step_next;
+        case 1267: goto step_next;
+        case 1268: _wait();_ioread(cpu->bc);goto step_next;
+        case 1269: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;cpu->b--;;goto step_next;
         // -- mwrite
-        case 1270: break;
-        case 1271: _wait();_mwrite(cpu->hl++,cpu->dlatch);_z80_ini_ind(cpu,cpu->dlatch,cpu->c+1);;break;
-        case 1272: break;
+        case 1270: goto step_next;
+        case 1271: _wait();_mwrite(cpu->hl++,cpu->dlatch);_z80_ini_ind(cpu,cpu->dlatch,cpu->c+1);goto step_next;
+        case 1272: goto step_next;
         // -- overlapped
-        case 1273: _fetch();break;
+        case 1273: goto fetch_next;
         
         // ED A3: outi (M:4 T:12)
         // -- generic
-        case 1274: break;
+        case 1274: ;goto step_next;
         // -- mread
-        case 1275: break;
-        case 1276: _wait();_mread(cpu->hl++);break;
-        case 1277: cpu->dlatch=_gd();cpu->b--;break;
+        case 1275: goto step_next;
+        case 1276: _wait();_mread(cpu->hl++);goto step_next;
+        case 1277: cpu->dlatch=_gd();cpu->b--;goto step_next;
         // -- iowrite
-        case 1278: break;
-        case 1279: _iowrite(cpu->bc,cpu->dlatch);break;
-        case 1280: _wait();cpu->wz=cpu->bc+1;_z80_outi_outd(cpu,cpu->dlatch);;break;
-        case 1281: break;
+        case 1278: goto step_next;
+        case 1279: _iowrite(cpu->bc,cpu->dlatch);goto step_next;
+        case 1280: _wait();cpu->wz=cpu->bc+1;_z80_outi_outd(cpu,cpu->dlatch);goto step_next;
+        case 1281: goto step_next;
         // -- overlapped
-        case 1282: _fetch();break;
+        case 1282: goto fetch_next;
         
         // ED A8: ldd (M:4 T:12)
         // -- mread
-        case 1283: break;
-        case 1284: _wait();_mread(cpu->hl--);break;
-        case 1285: cpu->dlatch=_gd();break;
+        case 1283: goto step_next;
+        case 1284: _wait();_mread(cpu->hl--);goto step_next;
+        case 1285: cpu->dlatch=_gd();;goto step_next;
         // -- mwrite
-        case 1286: break;
-        case 1287: _wait();_mwrite(cpu->de--,cpu->dlatch);;break;
-        case 1288: break;
+        case 1286: goto step_next;
+        case 1287: _wait();_mwrite(cpu->de--,cpu->dlatch);;goto step_next;
+        case 1288: goto step_next;
         // -- generic
-        case 1289: _z80_ldi_ldd(cpu,cpu->dlatch);break;
-        case 1290: break;
+        case 1289: _z80_ldi_ldd(cpu,cpu->dlatch);goto step_next;
+        case 1290: goto step_next;
         // -- overlapped
-        case 1291: _fetch();break;
+        case 1291: goto fetch_next;
         
         // ED A9: cpd (M:3 T:12)
         // -- mread
-        case 1292: break;
-        case 1293: _wait();_mread(cpu->hl--);break;
-        case 1294: cpu->dlatch=_gd();break;
+        case 1292: goto step_next;
+        case 1293: _wait();_mread(cpu->hl--);goto step_next;
+        case 1294: cpu->dlatch=_gd();;goto step_next;
         // -- generic
-        case 1295: cpu->wz--;_z80_cpi_cpd(cpu,cpu->dlatch);break;
-        case 1296: break;
-        case 1297: break;
-        case 1298: break;
-        case 1299: break;
+        case 1295: cpu->wz--;_z80_cpi_cpd(cpu,cpu->dlatch);goto step_next;
+        case 1296: goto step_next;
+        case 1297: goto step_next;
+        case 1298: goto step_next;
+        case 1299: goto step_next;
         // -- overlapped
-        case 1300: _fetch();break;
+        case 1300: goto fetch_next;
         
         // ED AA: ind (M:4 T:12)
         // -- generic
-        case 1301: break;
+        case 1301: ;goto step_next;
         // -- ioread
-        case 1302: break;
-        case 1303: break;
-        case 1304: _wait();_ioread(cpu->bc);break;
-        case 1305: cpu->dlatch=_gd();cpu->wz=cpu->bc-1;cpu->b--;;break;
+        case 1302: goto step_next;
+        case 1303: goto step_next;
+        case 1304: _wait();_ioread(cpu->bc);goto step_next;
+        case 1305: cpu->dlatch=_gd();cpu->wz=cpu->bc-1;cpu->b--;;goto step_next;
         // -- mwrite
-        case 1306: break;
-        case 1307: _wait();_mwrite(cpu->hl--,cpu->dlatch);_z80_ini_ind(cpu,cpu->dlatch,cpu->c-1);;break;
-        case 1308: break;
+        case 1306: goto step_next;
+        case 1307: _wait();_mwrite(cpu->hl--,cpu->dlatch);_z80_ini_ind(cpu,cpu->dlatch,cpu->c-1);goto step_next;
+        case 1308: goto step_next;
         // -- overlapped
-        case 1309: _fetch();break;
+        case 1309: goto fetch_next;
         
         // ED AB: outd (M:4 T:12)
         // -- generic
-        case 1310: break;
+        case 1310: ;goto step_next;
         // -- mread
-        case 1311: break;
-        case 1312: _wait();_mread(cpu->hl--);break;
-        case 1313: cpu->dlatch=_gd();cpu->b--;break;
+        case 1311: goto step_next;
+        case 1312: _wait();_mread(cpu->hl--);goto step_next;
+        case 1313: cpu->dlatch=_gd();cpu->b--;goto step_next;
         // -- iowrite
-        case 1314: break;
-        case 1315: _iowrite(cpu->bc,cpu->dlatch);break;
-        case 1316: _wait();cpu->wz=cpu->bc-1;_z80_outi_outd(cpu,cpu->dlatch);;break;
-        case 1317: break;
+        case 1314: goto step_next;
+        case 1315: _iowrite(cpu->bc,cpu->dlatch);goto step_next;
+        case 1316: _wait();cpu->wz=cpu->bc-1;_z80_outi_outd(cpu,cpu->dlatch);goto step_next;
+        case 1317: goto step_next;
         // -- overlapped
-        case 1318: _fetch();break;
+        case 1318: goto fetch_next;
         
         // ED B0: ldir (M:5 T:17)
         // -- mread
-        case 1319: break;
-        case 1320: _wait();_mread(cpu->hl++);break;
-        case 1321: cpu->dlatch=_gd();break;
+        case 1319: goto step_next;
+        case 1320: _wait();_mread(cpu->hl++);goto step_next;
+        case 1321: cpu->dlatch=_gd();;goto step_next;
         // -- mwrite
-        case 1322: break;
-        case 1323: _wait();_mwrite(cpu->de++,cpu->dlatch);;break;
-        case 1324: break;
+        case 1322: goto step_next;
+        case 1323: _wait();_mwrite(cpu->de++,cpu->dlatch);;goto step_next;
+        case 1324: goto step_next;
         // -- generic
-        case 1325: if(!_z80_ldi_ldd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};break;
-        case 1326: break;
+        case 1325: if(!_z80_ldi_ldd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};goto step_next;
+        case 1326: goto step_next;
         // -- generic
-        case 1327: cpu->wz=--cpu->pc;--cpu->pc;;break;
-        case 1328: break;
-        case 1329: break;
-        case 1330: break;
-        case 1331: break;
+        case 1327: cpu->wz=--cpu->pc;--cpu->pc;;goto step_next;
+        case 1328: goto step_next;
+        case 1329: goto step_next;
+        case 1330: goto step_next;
+        case 1331: goto step_next;
         // -- overlapped
-        case 1332: _fetch();break;
+        case 1332: goto fetch_next;
         
         // ED B1: cpir (M:4 T:17)
         // -- mread
-        case 1333: break;
-        case 1334: _wait();_mread(cpu->hl++);break;
-        case 1335: cpu->dlatch=_gd();break;
+        case 1333: goto step_next;
+        case 1334: _wait();_mread(cpu->hl++);goto step_next;
+        case 1335: cpu->dlatch=_gd();;goto step_next;
         // -- generic
-        case 1336: cpu->wz++;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};break;
-        case 1337: break;
-        case 1338: break;
-        case 1339: break;
-        case 1340: break;
+        case 1336: cpu->wz++;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};goto step_next;
+        case 1337: goto step_next;
+        case 1338: goto step_next;
+        case 1339: goto step_next;
+        case 1340: goto step_next;
         // -- generic
-        case 1341: cpu->wz=--cpu->pc;--cpu->pc;break;
-        case 1342: break;
-        case 1343: break;
-        case 1344: break;
-        case 1345: break;
+        case 1341: cpu->wz=--cpu->pc;--cpu->pc;goto step_next;
+        case 1342: goto step_next;
+        case 1343: goto step_next;
+        case 1344: goto step_next;
+        case 1345: goto step_next;
         // -- overlapped
-        case 1346: _fetch();break;
+        case 1346: goto fetch_next;
         
         // ED B2: inir (M:5 T:17)
         // -- generic
-        case 1347: break;
+        case 1347: ;goto step_next;
         // -- ioread
-        case 1348: break;
-        case 1349: break;
-        case 1350: _wait();_ioread(cpu->bc);break;
-        case 1351: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;cpu->b--;;break;
+        case 1348: goto step_next;
+        case 1349: goto step_next;
+        case 1350: _wait();_ioread(cpu->bc);goto step_next;
+        case 1351: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;cpu->b--;;goto step_next;
         // -- mwrite
-        case 1352: break;
-        case 1353: _wait();_mwrite(cpu->hl++,cpu->dlatch);if (!_z80_ini_ind(cpu,cpu->dlatch,cpu->c+1)){_z80_skip(cpu,5);};;break;
-        case 1354: break;
+        case 1352: goto step_next;
+        case 1353: _wait();_mwrite(cpu->hl++,cpu->dlatch);if (!_z80_ini_ind(cpu,cpu->dlatch,cpu->c+1)){_z80_skip(cpu,5);};goto step_next;
+        case 1354: goto step_next;
         // -- generic
-        case 1355: cpu->wz=--cpu->pc;--cpu->pc;break;
-        case 1356: break;
-        case 1357: break;
-        case 1358: break;
-        case 1359: break;
+        case 1355: cpu->wz=--cpu->pc;--cpu->pc;goto step_next;
+        case 1356: goto step_next;
+        case 1357: goto step_next;
+        case 1358: goto step_next;
+        case 1359: goto step_next;
         // -- overlapped
-        case 1360: _fetch();break;
+        case 1360: goto fetch_next;
         
         // ED B3: otir (M:5 T:17)
         // -- generic
-        case 1361: break;
+        case 1361: ;goto step_next;
         // -- mread
-        case 1362: break;
-        case 1363: _wait();_mread(cpu->hl++);break;
-        case 1364: cpu->dlatch=_gd();cpu->b--;break;
+        case 1362: goto step_next;
+        case 1363: _wait();_mread(cpu->hl++);goto step_next;
+        case 1364: cpu->dlatch=_gd();cpu->b--;goto step_next;
         // -- iowrite
-        case 1365: break;
-        case 1366: _iowrite(cpu->bc,cpu->dlatch);break;
-        case 1367: _wait();cpu->wz=cpu->bc+1;if(!_z80_outi_outd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};;break;
-        case 1368: break;
+        case 1365: goto step_next;
+        case 1366: _iowrite(cpu->bc,cpu->dlatch);goto step_next;
+        case 1367: _wait();cpu->wz=cpu->bc+1;if(!_z80_outi_outd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};goto step_next;
+        case 1368: goto step_next;
         // -- generic
-        case 1369: cpu->wz=--cpu->pc;--cpu->pc;break;
-        case 1370: break;
-        case 1371: break;
-        case 1372: break;
-        case 1373: break;
+        case 1369: cpu->wz=--cpu->pc;--cpu->pc;goto step_next;
+        case 1370: goto step_next;
+        case 1371: goto step_next;
+        case 1372: goto step_next;
+        case 1373: goto step_next;
         // -- overlapped
-        case 1374: _fetch();break;
+        case 1374: goto fetch_next;
         
         // ED B8: lddr (M:5 T:17)
         // -- mread
-        case 1375: break;
-        case 1376: _wait();_mread(cpu->hl--);break;
-        case 1377: cpu->dlatch=_gd();break;
+        case 1375: goto step_next;
+        case 1376: _wait();_mread(cpu->hl--);goto step_next;
+        case 1377: cpu->dlatch=_gd();;goto step_next;
         // -- mwrite
-        case 1378: break;
-        case 1379: _wait();_mwrite(cpu->de--,cpu->dlatch);;break;
-        case 1380: break;
+        case 1378: goto step_next;
+        case 1379: _wait();_mwrite(cpu->de--,cpu->dlatch);;goto step_next;
+        case 1380: goto step_next;
         // -- generic
-        case 1381: if(!_z80_ldi_ldd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};break;
-        case 1382: break;
+        case 1381: if(!_z80_ldi_ldd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};goto step_next;
+        case 1382: goto step_next;
         // -- generic
-        case 1383: cpu->wz=--cpu->pc;--cpu->pc;;break;
-        case 1384: break;
-        case 1385: break;
-        case 1386: break;
-        case 1387: break;
+        case 1383: cpu->wz=--cpu->pc;--cpu->pc;;goto step_next;
+        case 1384: goto step_next;
+        case 1385: goto step_next;
+        case 1386: goto step_next;
+        case 1387: goto step_next;
         // -- overlapped
-        case 1388: _fetch();break;
+        case 1388: goto fetch_next;
         
         // ED B9: cpdr (M:4 T:17)
         // -- mread
-        case 1389: break;
-        case 1390: _wait();_mread(cpu->hl--);break;
-        case 1391: cpu->dlatch=_gd();break;
+        case 1389: goto step_next;
+        case 1390: _wait();_mread(cpu->hl--);goto step_next;
+        case 1391: cpu->dlatch=_gd();;goto step_next;
         // -- generic
-        case 1392: cpu->wz--;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};break;
-        case 1393: break;
-        case 1394: break;
-        case 1395: break;
-        case 1396: break;
+        case 1392: cpu->wz--;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};goto step_next;
+        case 1393: goto step_next;
+        case 1394: goto step_next;
+        case 1395: goto step_next;
+        case 1396: goto step_next;
         // -- generic
-        case 1397: cpu->wz=--cpu->pc;--cpu->pc;break;
-        case 1398: break;
-        case 1399: break;
-        case 1400: break;
-        case 1401: break;
+        case 1397: cpu->wz=--cpu->pc;--cpu->pc;goto step_next;
+        case 1398: goto step_next;
+        case 1399: goto step_next;
+        case 1400: goto step_next;
+        case 1401: goto step_next;
         // -- overlapped
-        case 1402: _fetch();break;
+        case 1402: goto fetch_next;
         
         // ED BA: indr (M:5 T:17)
         // -- generic
-        case 1403: break;
+        case 1403: ;goto step_next;
         // -- ioread
-        case 1404: break;
-        case 1405: break;
-        case 1406: _wait();_ioread(cpu->bc);break;
-        case 1407: cpu->dlatch=_gd();cpu->wz=cpu->bc-1;cpu->b--;;break;
+        case 1404: goto step_next;
+        case 1405: goto step_next;
+        case 1406: _wait();_ioread(cpu->bc);goto step_next;
+        case 1407: cpu->dlatch=_gd();cpu->wz=cpu->bc-1;cpu->b--;;goto step_next;
         // -- mwrite
-        case 1408: break;
-        case 1409: _wait();_mwrite(cpu->hl--,cpu->dlatch);if (!_z80_ini_ind(cpu,cpu->dlatch,cpu->c-1)){_z80_skip(cpu,5);};;break;
-        case 1410: break;
+        case 1408: goto step_next;
+        case 1409: _wait();_mwrite(cpu->hl--,cpu->dlatch);if (!_z80_ini_ind(cpu,cpu->dlatch,cpu->c-1)){_z80_skip(cpu,5);};goto step_next;
+        case 1410: goto step_next;
         // -- generic
-        case 1411: cpu->wz=--cpu->pc;--cpu->pc;break;
-        case 1412: break;
-        case 1413: break;
-        case 1414: break;
-        case 1415: break;
+        case 1411: cpu->wz=--cpu->pc;--cpu->pc;goto step_next;
+        case 1412: goto step_next;
+        case 1413: goto step_next;
+        case 1414: goto step_next;
+        case 1415: goto step_next;
         // -- overlapped
-        case 1416: _fetch();break;
+        case 1416: goto fetch_next;
         
         // ED BB: otdr (M:5 T:17)
         // -- generic
-        case 1417: break;
+        case 1417: ;goto step_next;
         // -- mread
-        case 1418: break;
-        case 1419: _wait();_mread(cpu->hl--);break;
-        case 1420: cpu->dlatch=_gd();cpu->b--;break;
+        case 1418: goto step_next;
+        case 1419: _wait();_mread(cpu->hl--);goto step_next;
+        case 1420: cpu->dlatch=_gd();cpu->b--;goto step_next;
         // -- iowrite
-        case 1421: break;
-        case 1422: _iowrite(cpu->bc,cpu->dlatch);break;
-        case 1423: _wait();cpu->wz=cpu->bc-1;if(!_z80_outi_outd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};;break;
-        case 1424: break;
+        case 1421: goto step_next;
+        case 1422: _iowrite(cpu->bc,cpu->dlatch);goto step_next;
+        case 1423: _wait();cpu->wz=cpu->bc-1;if(!_z80_outi_outd(cpu,cpu->dlatch)){_z80_skip(cpu,5);};goto step_next;
+        case 1424: goto step_next;
         // -- generic
-        case 1425: cpu->wz=--cpu->pc;--cpu->pc;break;
-        case 1426: break;
-        case 1427: break;
-        case 1428: break;
-        case 1429: break;
+        case 1425: cpu->wz=--cpu->pc;--cpu->pc;goto step_next;
+        case 1426: goto step_next;
+        case 1427: goto step_next;
+        case 1428: goto step_next;
+        case 1429: goto step_next;
         // -- overlapped
-        case 1430: _fetch();break;
+        case 1430: goto fetch_next;
         
         // CB 00: cb (M:1 T:4)
         // -- overlapped
-        case 1431: {uint8_t z=cpu->opcode&7;_z80_cb_action(cpu,z,z);};_fetch();break;
+        case 1431: {uint8_t z=cpu->opcode&7;_z80_cb_action(cpu,z,z);};goto fetch_next;
         
         // CB 00: cbhl (M:3 T:11)
         // -- mread
-        case 1432: break;
-        case 1433: _wait();_mread(cpu->hl);break;
-        case 1434: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,3);};break;
-        case 1435: break;
+        case 1432: goto step_next;
+        case 1433: _wait();_mread(cpu->hl);goto step_next;
+        case 1434: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,3);};goto step_next;
+        case 1435: goto step_next;
         // -- mwrite
-        case 1436: break;
-        case 1437: _wait();_mwrite(cpu->hl,cpu->dlatch);;break;
-        case 1438: break;
+        case 1436: goto step_next;
+        case 1437: _wait();_mwrite(cpu->hl,cpu->dlatch);;goto step_next;
+        case 1438: goto step_next;
         // -- overlapped
-        case 1439: _fetch();break;
+        case 1439: goto fetch_next;
         
         // CB 00: ddfdcb (M:6 T:18)
         // -- generic
-        case 1440: _wait();_mread(cpu->pc++);break;
+        case 1440: _wait();_mread(cpu->pc++);goto step_next;
         // -- generic
-        case 1441: _z80_ddfdcb_addr(cpu,pins);break;
+        case 1441: _z80_ddfdcb_addr(cpu,pins);goto step_next;
         // -- mread
-        case 1442: break;
-        case 1443: _wait();_mread(cpu->pc++);break;
-        case 1444: cpu->dlatch=_gd();_z80_ddfdcb_opcode(cpu,cpu->dlatch);break;
-        case 1445: break;
-        case 1446: break;
+        case 1442: goto step_next;
+        case 1443: _wait();_mread(cpu->pc++);goto step_next;
+        case 1444: cpu->dlatch=_gd();_z80_ddfdcb_opcode(cpu,cpu->dlatch);goto step_next;
+        case 1445: goto step_next;
+        case 1446: goto step_next;
         // -- mread
-        case 1447: break;
-        case 1448: _wait();_mread(cpu->addr);break;
-        case 1449: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,3);};break;
-        case 1450: break;
+        case 1447: goto step_next;
+        case 1448: _wait();_mread(cpu->addr);goto step_next;
+        case 1449: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,3);};goto step_next;
+        case 1450: goto step_next;
         // -- mwrite
-        case 1451: break;
-        case 1452: _wait();_mwrite(cpu->addr,cpu->dlatch);;break;
-        case 1453: break;
+        case 1451: goto step_next;
+        case 1452: _wait();_mwrite(cpu->addr,cpu->dlatch);;goto step_next;
+        case 1453: goto step_next;
         // -- overlapped
-        case 1454: _fetch();break;
+        case 1454: goto fetch_next;
         
         //  00: int_im0 (M:6 T:9)
         // -- generic
-        case 1455: pins=_z80_int012_step0(cpu,pins);break;
+        case 1455: pins=_z80_int012_step0(cpu,pins);goto step_next;
         // -- generic
-        case 1456: pins=_z80_int012_step1(cpu,pins);break;
+        case 1456: pins=_z80_int012_step1(cpu,pins);goto step_next;
         // -- generic
-        case 1457: _wait();pins=_z80_int0_step2(cpu,pins);break;
+        case 1457: _wait();pins=_z80_int0_step2(cpu,pins);goto step_next;
         // -- generic
-        case 1458: pins=_z80_refresh(cpu,pins);break;
+        case 1458: pins=_z80_refresh(cpu,pins);goto step_next;
         // -- generic
-        case 1459: pins=_z80_int0_step3(cpu,pins);break;
+        case 1459: pins=_z80_int0_step3(cpu,pins);goto step_next;
         // -- overlapped
-        case 1460: _fetch();break;
+        case 1460: goto fetch_next;
         
         //  00: int_im1 (M:7 T:16)
         // -- generic
-        case 1461: pins=_z80_int012_step0(cpu,pins);break;
+        case 1461: pins=_z80_int012_step0(cpu,pins);goto step_next;
         // -- generic
-        case 1462: pins=_z80_int012_step1(cpu,pins);break;
+        case 1462: pins=_z80_int012_step1(cpu,pins);goto step_next;
         // -- generic
-        case 1463: _wait();;break;
+        case 1463: _wait();;goto step_next;
         // -- generic
-        case 1464: pins=_z80_refresh(cpu,pins);break;
-        case 1465: break;
-        case 1466: break;
+        case 1464: pins=_z80_refresh(cpu,pins);goto step_next;
+        case 1465: goto step_next;
+        case 1466: goto step_next;
         // -- mwrite
-        case 1467: break;
-        case 1468: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case 1469: break;
+        case 1467: goto step_next;
+        case 1468: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case 1469: goto step_next;
         // -- mwrite
-        case 1470: break;
-        case 1471: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=cpu->pc=0x0038;;break;
-        case 1472: break;
+        case 1470: goto step_next;
+        case 1471: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=cpu->pc=0x0038;goto step_next;
+        case 1472: goto step_next;
         // -- overlapped
-        case 1473: _fetch();break;
+        case 1473: goto fetch_next;
         
         //  00: int_im2 (M:9 T:22)
         // -- generic
-        case 1474: pins=_z80_int012_step0(cpu,pins);break;
+        case 1474: pins=_z80_int012_step0(cpu,pins);goto step_next;
         // -- generic
-        case 1475: pins=_z80_int012_step1(cpu,pins);break;
+        case 1475: pins=_z80_int012_step1(cpu,pins);goto step_next;
         // -- generic
-        case 1476: _wait();cpu->dlatch=_z80_get_db(pins);break;
+        case 1476: _wait();cpu->dlatch=_z80_get_db(pins);goto step_next;
         // -- generic
-        case 1477: pins=_z80_refresh(cpu,pins);break;
-        case 1478: break;
-        case 1479: break;
+        case 1477: pins=_z80_refresh(cpu,pins);goto step_next;
+        case 1478: goto step_next;
+        case 1479: goto step_next;
         // -- mwrite
-        case 1480: break;
-        case 1481: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case 1482: break;
+        case 1480: goto step_next;
+        case 1481: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case 1482: goto step_next;
         // -- mwrite
-        case 1483: break;
-        case 1484: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wzl=cpu->dlatch;cpu->wzh=cpu->i;;;break;
-        case 1485: break;
+        case 1483: goto step_next;
+        case 1484: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wzl=cpu->dlatch;cpu->wzh=cpu->i;;goto step_next;
+        case 1485: goto step_next;
         // -- mread
-        case 1486: break;
-        case 1487: _wait();_mread(cpu->wz++);break;
-        case 1488: cpu->dlatch=_gd();break;
+        case 1486: goto step_next;
+        case 1487: _wait();_mread(cpu->wz++);goto step_next;
+        case 1488: cpu->dlatch=_gd();;goto step_next;
         // -- mread
-        case 1489: break;
-        case 1490: _wait();_mread(cpu->wz);break;
-        case 1491: cpu->wzh=_gd();cpu->wzl=cpu->dlatch;cpu->pc=cpu->wz;break;
+        case 1489: goto step_next;
+        case 1490: _wait();_mread(cpu->wz);goto step_next;
+        case 1491: cpu->wzh=_gd();cpu->wzl=cpu->dlatch;cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
-        case 1492: _fetch();break;
+        case 1492: goto fetch_next;
         
         //  00: nmi (M:5 T:14)
         // -- generic
-        case 1493: pins=_z80_nmi_step0(cpu,pins);break;
+        case 1493: pins=_z80_nmi_step0(cpu,pins);goto step_next;
         // -- generic
-        case 1494: pins=_z80_refresh(cpu,pins);break;
-        case 1495: break;
-        case 1496: break;
+        case 1494: pins=_z80_refresh(cpu,pins);goto step_next;
+        case 1495: goto step_next;
+        case 1496: goto step_next;
         // -- mwrite
-        case 1497: break;
-        case 1498: _wait();_mwrite(--cpu->sp,cpu->pch);;break;
-        case 1499: break;
+        case 1497: goto step_next;
+        case 1498: _wait();_mwrite(--cpu->sp,cpu->pch);;goto step_next;
+        case 1499: goto step_next;
         // -- mwrite
-        case 1500: break;
-        case 1501: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=cpu->pc=0x0066;;break;
-        case 1502: break;
+        case 1500: goto step_next;
+        case 1501: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=cpu->pc=0x0066;goto step_next;
+        case 1502: goto step_next;
         // -- overlapped
-        case 1503: _fetch();break;
+        case 1503: goto fetch_next;
 
     }
-    cpu->op.step += 1;
+fetch_next: pins = _z80_fetch(cpu, pins);
+step_next:  cpu->op.step += 1;
 track_int_bits: {
         // track NMI 0 => 1 edge and current INT pin state, this will track the
         // relevant interrupt status up to the last instruction cycle and will
@@ -4283,7 +4283,6 @@ track_int_bits: {
 #undef _sad
 #undef _sadx
 #undef _gd
-#undef _fetch
 #undef _fetch_dd
 #undef _fetch_fd
 #undef _fetch_ed
