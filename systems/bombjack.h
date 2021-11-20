@@ -212,10 +212,7 @@ typedef struct {
     } mainboard;
     struct {
         alignas(64) z80_t cpu;
-        struct {
-            ay38910_t ay;
-            uint64_t pins;
-        } psg[3];
+        ay38910_t psg[3];
         uint32_t tick_count;
         int vsync_count;
         mem_t mem;
@@ -367,7 +364,7 @@ void bombjack_init(bombjack_t* sys, const bombjack_desc_t* desc) {
         .magnitude = 0.2f,
     };
     for (int i = 0; i < 3; i++) {
-        ay38910_init(&sys->soundboard.psg[i].ay, &psg_desc);
+        ay38910_init(&sys->soundboard.psg[i], &psg_desc);
     }
 
     // dip switches
@@ -426,7 +423,7 @@ void bombjack_reset(bombjack_t* sys) {
     z80_reset(&sys->mainboard.cpu);
     z80_reset(&sys->soundboard.cpu);
     for (int i = 0; i < 3; i++) {
-        ay38910_reset(&sys->soundboard.psg[i].ay);
+        ay38910_reset(&sys->soundboard.psg[i]);
     }
 }
 
@@ -662,64 +659,47 @@ static uint64_t _bombjack_tick_soundboard(bombjack_t* sys, uint64_t pins) {
             mem_wr(&sys->soundboard.mem, addr, Z80_GET_DATA(pins));
         }
     }
+    else if (pins & Z80_IORQ) {
+        /*
+            For IO address decoding, see schematics page 9 and 10:
 
-    /*
-        The AY chips run at half frequency, in order for them not to miss
-        any IO requests from the CPU, we're buffering the AY chip-select pins
-        until the AY's are being ticked.
+            PSG1, PSG2 and PSG3 are selected through a
+            LS-138 1-of-4 decoder from address lines 4 and 7:
 
-        For IO address decoding, see schematics page 9 and 10:
+            A7 A4
+            0  0   -> PSG 1
+            0  1   -> PSG 2
+            1  0   -> PSG 3
+            1  1   -> not connected
 
-        PSG1, PSG2 and PSG3 are selected through a
-        LS-138 1-of-4 decoder from address lines 4 and 7:
-
-        A7 A4
-         0  0   -> PSG 1
-         0  1   -> PSG 2
-         1  0   -> PSG 3
-         1  1   -> not connected
-
-        A0 is connected to BC1(!) (I guess that's an error in the
-        schematics since these show BC2).
-    */
-    bool sample_ready = false;
-    for (int i = 0; i < 3; i++) {
-        uint64_t psg_pins = (sys->soundboard.psg[i].pins & ~Z80_PIN_MASK) | (pins & Z80_PIN_MASK);
-        // PSG IO address decoding
-        if ((pins & Z80_IORQ) && (((pins&Z80_A7)>>6)|((pins&Z80_A4)>>4)) == i) {
-            if (pins & Z80_WR) {
-                psg_pins |= AY38910_BDIR;
-            }
-            if (0 == (pins & Z80_A0)) {
-                psg_pins |= AY38910_BC1;
-            }
-        }
-        if (sys->soundboard.tick_count & 1) {
-            psg_pins = ay38910_tick(&sys->soundboard.psg[i].ay, psg_pins);
-            if ((i == 0) && (psg_pins & AY38910_SAMPLE)) {
-                sample_ready = true;
-            }
-            // after the AY has been ticked, clear the buffered AY chip select pins
-            psg_pins &= Z80_PIN_MASK;
-        }
-        sys->soundboard.psg[i].pins = psg_pins;
-    }
-    sys->soundboard.tick_count++;
-
-    // new audio sample ready?
-    if (sample_ready) {
-        float s = sys->soundboard.psg[0].ay.sample +
-                  sys->soundboard.psg[1].ay.sample +
-                  sys->soundboard.psg[2].ay.sample;
-        sys->audio.sample_buffer[sys->audio.sample_pos++] = s * sys->audio.volume;
-        if (sys->audio.sample_pos == sys->audio.num_samples) {
-            if (sys->audio.callback.func) {
-                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
-            }
-            sys->audio.sample_pos = 0;
+            A0 is connected to BC1(!) (I guess that's an error in the
+            schematics since these show BC2).
+        */
+        int psg_index = ((pins&Z80_A7)>>6) | ((pins&Z80_A4)>>4);
+        if (psg_index < 3) {
+            if (pins & Z80_WR) { pins |= AY38910_BDIR; }
+            if (0 == (pins & Z80_A0)) { pins |= AY38910_BC1; }
+            pins = ay38910_iorq(&sys->soundboard.psg[psg_index], pins) & Z80_PIN_MASK;
         }
     }
 
+    // tick the AY chips at half CPU frequency
+    if (sys->soundboard.tick_count++ & 1) {
+        ay38910_tick(&sys->soundboard.psg[2]);
+        ay38910_tick(&sys->soundboard.psg[1]);
+        if (ay38910_tick(&sys->soundboard.psg[0])) {
+            float s = sys->soundboard.psg[0].sample +
+                      sys->soundboard.psg[1].sample +
+                      sys->soundboard.psg[2].sample;
+            sys->audio.sample_buffer[sys->audio.sample_pos++] = s * sys->audio.volume;
+            if (sys->audio.sample_pos == sys->audio.num_samples) {
+                if (sys->audio.callback.func) {
+                    sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+                }
+                sys->audio.sample_pos = 0;
+            }
+        }
+    }
     return pins;
 }
 
