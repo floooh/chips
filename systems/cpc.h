@@ -197,12 +197,14 @@ typedef struct {
     uint8_t rom_os[0x4000];
     uint8_t rom_basic[0x4000];
     uint8_t rom_amsdos[0x4000];
-    // tape loading
+    // tape loading (FIXME: currently not implemented)
+    /*
     struct {
         int size; // tape_size is > 0 if a tape is inserted
         int pos;
         uint8_t buf[CPC_MAX_TAPE_SIZE];
     } tape;
+    */
     // floppy disc drive
     fdd_t fdd;
 } cpc_t;
@@ -227,10 +229,10 @@ cpc_joystick_type_t cpc_joystick_type(cpc_t* sys);
 void cpc_joystick(cpc_t* sys, uint8_t mask);
 // load a snapshot file (.sna or .bin) into the emulator
 bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
-// insert a tape file (.tap)
-bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
-// remove currently inserted tape
-void cpc_remove_tape(cpc_t* cpc);
+// insert a tape file (.tap) (FIXME: currently not implemented)
+//bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+// remove currently inserted tape (FIXME: currently not implemented)
+//void cpc_remove_tape(cpc_t* cpc);
 // insert a disk image file (.dsk)
 bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 // remove current disc
@@ -267,7 +269,6 @@ static void _cpc_psg_out(int port_id, uint8_t data, void* user_data);
 static uint8_t _cpc_psg_in(int port_id, void* user_data);
 static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_select, void* user_data);
-static void _cpc_cas_read(cpc_t* sys);
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data);
 static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void* user_data);
 static int _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_data);
@@ -540,23 +541,6 @@ uint32_t cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
     sys->pins = pins;
     kbd_update(&sys->kbd, micro_seconds);
     return num_ticks;
-
-    /* FIXME FIXME FIXME
-    // check if casread trap has been hit, and the right ROM is mapped in
-    trap_id = sys->cpu.trap_id;
-    if (trap_id == 1) {
-        if (sys->type == CPC_TYPE_6128) {
-            if (0 == (sys->ga.regs.config & (1<<2))) {
-                _cpc_cas_read(sys);
-            }
-        }
-        else {
-            // no memory mapping on KC Compact, 464 or 664
-            _cpc_cas_read(sys);
-        }
-        trap_id = 0;
-    }
-    */
 }
 
 void cpc_key_down(cpc_t* sys, int key_code) {
@@ -973,8 +957,12 @@ bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
 }
 
 /*=== CASSETTE TAPE FILE LOADING =============================================*/
-/* CPU trap handler to check for casread */
+/*
+ FIXME: implement tape loading through the hardware emulation instead of
+ OS function trapping.
+ 
 static int _cpc_trap_cb(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data) {
+    // CPU trap handler to check for casread
     (void)ticks;
     (void)pins;
     cpc_t* sys = (cpc_t*) user_data;
@@ -991,9 +979,7 @@ bool cpc_insert_tape(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     memcpy(sys->tape.buf, ptr, num_bytes);
     sys->tape.pos = 0;
     sys->tape.size = num_bytes;
-    /* FIXME FIXME FIXME
     z80_trap_cb(&sys->cpu, _cpc_trap_cb, sys);
-    */
     return true;
 }
 
@@ -1001,9 +987,7 @@ void cpc_remove_tape(cpc_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->tape.pos = 0;
     sys->tape.size = 0;
-    /* FIXME FIXME FIXME
     z80_trap_cb(&sys->cpu, 0, 0);
-    */
 }
 
 // the trapped OS casread function, reads one tape block into memory
@@ -1032,6 +1016,7 @@ static void _cpc_cas_read(cpc_t* sys) {
         cpc_remove_tape(sys);
     }
 }
+*/
 
 /*=== FLOPPY DISC SUPPORT ====================================================*/
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data) {
