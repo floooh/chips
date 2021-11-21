@@ -143,6 +143,14 @@ bool z80_opdone(z80_t* cpu);
 #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#if defined(__GNUC__)
+#define _Z80_UNREACHABLE __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define _Z80_UNREACHABLE __assume(0)
+#else
+#define _Z80_UNREACHABLE
+#endif
+
 // flags for z80_opstate.flags
 #define _Z80_OPSTATE_FLAGS_INDIRECT  (1<<0)  // this is a (HL)/(IX+d)/(IY+d) instruction
 #define _Z80_OPSTATE_FLAGS_IMM8 (1<<1)       // this is an 8-bit immediate load instruction
@@ -894,6 +902,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             }
         } goto step_next;
 $decode_block
+        default: _Z80_UNREACHABLE;
     }
 fetch_next: pins = _z80_fetch(cpu, pins);
 step_next:  cpu->op.step += 1;
