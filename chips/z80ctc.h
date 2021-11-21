@@ -60,48 +60,39 @@
         Puts the CTC instance into the reset state.
 
     ~~~C
-    uint64_t z80ctc_iorq(z80ctc_t* ctc, uint64_t pins)
-    ~~~
-        Call this when the CPU wants to perform an IO request on the CTC.
-        Takes a pin mask as input, and returns a potentially modified
-        pin mask.
-
-        The following input pins are read function:
-
-        - **M1**:       must be unset
-        - **IORQ|CE**:  must both be set
-        - **RD**:       must be set to read data from the CTC
-        - **WR**:       must be set to write data to the CTC
-        - **CS0|CS1**:  selects the CTC channels 0..3
-        - **D0..D7**:   the data to write to the CTC
-
-        The following output pins are potentially modified:
-
-        - **D0..D7**:   the data read from the CTC
-
-    ~~~C
     uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins)
     ~~~
         Perform a tick on the CTC, this function must be called
-        for every CPU tick. The CTC will check for external trigger
-        events (via the CLKTRG pins), update counters, and set the
-        ZCTO pins when counters reach zero.
+        for every CPU tick. Depending on the input pin mask and the current
+        CTC chip state, the CTC will perform IO requests from the CPU, check 
+        for external trigger events, perform the interrupt daisychain protocol,
+        and return a potentially modified 
+        
+        The CTC reads the following pins when an IO request should be performed:
 
-        The following input pins are read:
+        - **Z80CTC_CE|Z80CTC_IORQ**: performs an IO request
+        - **Z80CTC_RD, Z80CTC_RD**: read or write direction for IO requests
+        - **Z80CTC_CS0..Z80CTC_CS1**: selects the CTC channel 0..3 for IO requests
+        - **Z80CTC_D0..Z80CTC_D7**: the data byte for IO write requests
 
-        - **CLKTRG0..CLKTRG3**: used to inject an internal trigger/counter
-          event into the CTC
+        The following input pins can be used to inject external trigger/counter
+        events into the CTC:
+
+        - **Z80CTC_CLKTRG0..Z80CTC_CLKTRG3**
+
+        The following virtual pins are read as part of the interrupt daisychain
+        protocol:
+
+        - **Z80CTC_IEIO**: combined IEI/IEO pins, used to enable or disable interrupt
+          handling in "downstream chips"
+        - **Z80CTC_RETI**: virtual pin which is set when the CPU has decoded a RETI/RETN
+          instruction
         
         The following output pins are potentially modified:
 
-        - **ZCTO0..ZCTO2**: set when the channels 0..2 are in counter
-          mode and the countdown reaches 0
-
-    ~~~C
-    uint64_t z80ctc_int(z80ctc_t* ctc, uint64_t pins)
-    ~~~
-        Handle the daisychain interrupt protocol. See the z80.h
-        header for details.
+        - **Z80CTC_INT**: if the CTC wants to request an interrupt
+        - **Z80CTC_ZCTO0..ZCTO2**: when the channels 0..2 are in counter mode and the countdown reaches 0
+        - **Z80CTC_IEIO**: enable or disable interrupts for daisychain downstream chips
 
     ## Macros
 
@@ -116,8 +107,9 @@
     ~~~
         extract 8-bit data bus value from 64-bit pin mask (identical with
         Z80_GET_DATA() from the z80.h header)
-
-    ## zlib/libpng license
+#*/
+/*
+    zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
     This software is provided 'as-is', without any express or implied warranty.
@@ -134,7 +126,7 @@
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
         distribution. 
-#*/
+*/
 #include <stdint.h>
 #include <stdbool.h>
 
