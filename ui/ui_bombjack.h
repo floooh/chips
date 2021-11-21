@@ -299,7 +299,7 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
             case 1: desc.title = "AY-3-8910 (1)"; break;
             case 2: desc.title = "AY-3-8910 (2)"; break;
         }
-        desc.ay = &ui->bj->soundboard.psg[i].ay;
+        desc.ay = &ui->bj->soundboard.psg[i];
         desc.x = x;
         desc.y = y;
         UI_CHIP_INIT_DESC(&desc.chip_desc, "8910", 22, _ui_bombjack_psg_pins);

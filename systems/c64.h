@@ -486,7 +486,9 @@ static void _c64_init_memory_map(c64_t* sys);
 
 void c64_init(c64_t* sys, const c64_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= c64_max_display_size()));
+    if (desc->pixel_buffer.ptr) {
+        CHIPS_ASSERT(desc->pixel_buffer.size >= c64_max_display_size());
+    }
     if (desc->debug.callback.func) {
         CHIPS_ASSERT(desc->debug.stopped);
     }
