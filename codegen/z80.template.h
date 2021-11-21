@@ -1,6 +1,225 @@
 #pragma once
+/*#
+    # z80.h
+
+    A cycle-stepped Z80 emulator in a C header.
+
+    Do this:
+    ~~~~C
+    #define CHIPS_IMPL
+    ~~~~
+    before you include this file in *one* C or C++ file to create the 
+    implementation.
+
+    Optionally provide
+    ~~~C
+    #define CHIPS_ASSERT(x) your_own_asset_macro(x)
+    ~~~
+
+    ## Emulated Pins
+    ***********************************
+    *           +-----------+         *
+    * M1    <---|           |---> A0  *
+    * MREQ  <---|           |---> A1  *
+    * IORQ  <---|           |---> A2  *
+    * RD    <---|           |---> ..  *
+    * WR    <---|    Z80    |---> A15 *
+    * HALT  <---|           |         *
+    * WAIT  --->|           |<--> D0  *
+    * INT   --->|           |<--> D1  *
+    * RFSH  <---|           |<--> ... *
+    *           |           |<--> D7  *
+    *           +-----------+         *
+    ***********************************    
+
+    ## Functions
+
+    ~~~C
+    uint64_t z80_init(z80_t* cpu);
+    ~~~
+        Initializes a new z80_t instance, returns initial pin mask to start
+        execution at address 0.
+
+    ~~~C
+    uint64_t z80_reset(z80_t* cpu)
+    ~~~
+        Resets a z80_t instance, returns pin mask to start execution at 
+        address 0.
+
+    ~~~C
+    uint64_t z80_tick(z80_t* cpu, uint64_t pins)
+    ~~~
+        Step the z80_t instance for one clock cycle. 
+
+    ~~~C
+    uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc)
+    ~~~
+        Call this function to force execution to start at a specific
+        PC. Use the returned pin mask as argument into the next z80_tick() call.
+
+    ~~~C
+    bool z80_opdone(z80_t* cpu)
+    ~~~
+        Helper function to detect whether the z80_t instance has completed
+        an instruction.
+
+    ## HOWTO
+
+    Initialize a new z80_t instance and start ticking it:
+    ~~~C
+        z80_t cpu;
+        uint64_t pins = z80_init(&cpu);
+        while (!done) {
+            pins = z80_tick(&cpu, pins);
+        }
+    ~~~
+    Since there is no memory attached yet, the CPU will simply run whatever opcode
+    bytes are present on the data bus (in this case the data bus is zero, so the CPU
+    just runs throught the same NOP over and over).
+
+    Next, add some memory and inspect and modify the pin mask to handle memory accesses:
+    ~~~C
+        uint8_t mem[(1<<16)] = {0};
+        z80_t cpu;
+        uint64_t pins = z80_init(&cpu);
+        while (!done) {
+            pins = z80_tick(&cpu, pins);
+            if (pins & Z80_MREQ) {
+                const uint16_t addr = Z80_GET_ADDR(pins);
+                if (pins & Z80_RD) {
+                    uint8_t data = mem[addr];
+                    Z80_SET_DATA(pins, data);
+                }
+                else if (pins & Z80_WR) {
+                    uint8_t data = Z80_GET_DATA(pins);
+                    mem[addr] = data;
+                }
+            }
+        }
+    ~~~
+    The CPU will now run through the whole address space executing NOPs (because the memory is 
+    filled with 0s instead of a valid program). If there would be a valid Z80 program at memory
+    address 0, this would be executed instead.
+
+    IO requests are handled the same as memory requests, but instead of the MREQ pin, the 
+    IORQ pin must be checked:
+    ~~~C
+        uint8_t mem[(1<<16)] = {0};
+        z80_t cpu;
+        uint64_t pins = z80_init(&cpu);
+        while (!done) {
+            pins = z80_tick(&cpu, pins);
+            if (pins & Z80_MREQ) {
+                const uint16_t addr = Z80_GET_ADDR(pins);
+                if (pins & Z80_RD) {
+                    uint8_t data = mem[addr];
+                    Z80_SET_DATA(pins, data);
+                }
+                else if (pins & Z80_WR) {
+                    uint8_t data = Z80_GET_DATA(pins);
+                    mem[addr] = data;
+                }
+            }
+            else if (pins & Z80_IORQ) {
+                const uint16_t port = Z80_GET_ADDR(pins);
+                if (pins & Z80_RD) {
+                    // handle IO input request at port
+                    ...
+                }
+                else if (pins & Z80_RD) {
+                    // handle IO output request at port
+                    ...
+                }
+            }
+        }
+    ~~~
+
+    Handle interrupt acknowledge cycles by checking for Z80_IORQ|Z80_M1:
+    ~~~C
+        uint8_t mem[(1<<16)] = {0};
+        z80_t cpu;
+        uint64_t pins = z80_init(&cpu);
+        while (!done) {
+            pins = z80_tick(&cpu, pins);
+            if (pins & Z80_MREQ) {
+                const uint16_t addr = Z80_GET_ADDR(pins);
+                if (pins & Z80_RD) {
+                    uint8_t data = mem[addr];
+                    Z80_SET_DATA(pins, data);
+                }
+                else if (pins & Z80_WR) {
+                    uint8_t data = Z80_GET_DATA(pins);
+                    mem[addr] = data;
+                }
+            }
+            else if (pins & Z80_IORQ) {
+                const uint16_t addr = Z80_GET_ADDR(pins);
+                if (pins & Z80_M1) {
+                    // an interrupt acknowledge cycle, depending on the emulated system,
+                    // put either an instruction byte, or an interrupt vector on the data bus
+                    Z80_SET_DATA(pins, opcode_or_intvec);
+                }
+                else if (pins & Z80_RD) {
+                    // handle IO input request at port `addr`
+                    ...
+                }
+                else if (pins & Z80_RD) {
+                    // handle IO output request at port `addr`
+                    ...
+                }
+            }
+        }
+    ~~~
+
+    To request an interrupt, or inject a wait state just set the respective pin
+    (Z80_INT, Z80_NMI, Z80_WAIT), don't forget to clear the pin again later (the
+    details on when those pins are set and cleared depend heavily on the
+    emulated system).
+
+    !!! note
+        NOTE: The Z80_RES pin is currently not emulated. Instead call the `z80_reset()` function.
+
+    To emulate a whole computer system, add the per-tick code for the rest of the system to the
+    basic ticking code above.
+
+    If the emulated system uses the Z80 daisychain interrupt protocol (for instance when using
+    the Z80 family chips like the PIO or CTC), tick those chips in interrupt priority order and
+    set the Z80_IEIO pin before the highest priority chip in the daisychain is ticked:
+
+    ~~~C
+        ...
+        while (!done) {
+            pins = z80_tick(&cpu, pins);
+            ...
+            // tick Z80 family chips in 'daisychain order':
+            pins |= Z80_IEIO;
+            ...
+            pins = z80ctc_tick(&ctc, pins);
+            ...
+            pins = z80pio_tick(&pio, pins);
+            ...
+            // the Z80_INT pin will now be set if any of the chips wants to issue an interrupt request
+        }
+    ~~~
+#*/
 /*
-    FIXME
+    zlib/libpng license
+
+    Copyright (c) 2021 Andre Weissflog
+    This software is provided 'as-is', without any express or implied warranty.
+    In no event will the authors be held liable for any damages arising from the
+    use of this software.
+    Permission is granted to anyone to use this software for any purpose,
+    including commercial applications, and to alter it and redistribute it
+    freely, subject to the following restrictions:
+        1. The origin of this software must not be misrepresented; you must not
+        claim that you wrote the original software. If you use this software in a
+        product, an acknowledgment in the product documentation would be
+        appreciated but is not required.
+        2. Altered source versions must be plainly marked as such, and must not
+        be misrepresented as being the original software.
+        3. This notice may not be removed or altered from any source
+        distribution. 
 */
 #include <stdint.h>
 #include <stdbool.h>
