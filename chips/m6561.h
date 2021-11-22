@@ -112,7 +112,7 @@ extern "C" {
 #define M6561_DCADJ_BUFLEN (512)
 
 /* extract 8-bit data bus from 64-bit pins */
-#define M6561_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define M6561_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define M6561_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 

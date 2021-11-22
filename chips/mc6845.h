@@ -233,17 +233,17 @@ typedef struct {
 /* helper macros to extract address and data values from pin mask */
 
 /* extract 13-bit address bus from 64-bit pins */
-#define MC6845_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
+#define MC6845_GET_ADDR(p) ((uint16_t)((p)&0xFFFFULL))
 /* merge 13-bit address bus value into 64-bit pins */
-#define MC6845_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|((a)&0xFFFFULL));}
+#define MC6845_SET_ADDR(p,a) {p=(((p)&~0xFFFFULL)|((a)&0xFFFFULL));}
 /* extract 8-bit data bus from 64-bit pins */
-#define MC6845_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define MC6845_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define MC6845_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+#define MC6845_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 /* get 5-bit row-address from 64-bit pins */
-#define MC6845_GET_RA(p) ((uint8_t)((p&0x00FF000000000000ULL)>>48))
+#define MC6845_GET_RA(p) ((uint8_t)(((p)&0x00FF000000000000ULL)>>48))
 /* merge 5-bit row-address into 64-bit pins */
-#define MC6845_SET_RA(p,a) {p=((p&~0x00FF000000000000ULL)|(((a<<48)&)0x00FF000000000000ULL));}
+#define MC6845_SET_RA(p,a) {p=(((p)&~0x00FF000000000000ULL)|((((a)<<48)&)0x00FF000000000000ULL));}
 
 /* initialize a new mc6845 instance */
 void mc6845_init(mc6845_t* mc6845, mc6845_type_t type);

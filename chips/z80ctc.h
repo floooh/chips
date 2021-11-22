@@ -197,9 +197,9 @@ typedef struct {
 } z80ctc_t;
 
 // extract 8-bit data bus from 64-bit pins
-#define Z80CTC_GET_DATA(p) ((uint8_t)(p>>16))
+#define Z80CTC_GET_DATA(p) ((uint8_t)(((p)>>16)&0xFF))
 // merge 8-bit data bus value into 64-bit pins
-#define Z80CTC_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+#define Z80CTC_SET_DATA(p,d) {p=((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL);}
 
 // initialize a new Z80 CTC instance
 void z80ctc_init(z80ctc_t* ctc);

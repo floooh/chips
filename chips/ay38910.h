@@ -243,13 +243,13 @@ typedef struct {
 } ay38910_t;
 
 // extract 8-bit data bus from 64-bit pins
-#define AY38910_GET_DATA(p) ((uint8_t)(p>>16))
+#define AY38910_GET_DATA(p) ((uint8_t)((p)>>16))
 // merge 8-bit data bus value into 64-bit pins
-#define AY38910_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+#define AY38910_SET_DATA(p,d) {p=((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL);}
 // set 8-bit port A data on 64-bit pin mask
-#define AY38910_SET_PA(p,d) {p=((p&~0x00FF000000000000ULL)|((((uint64_t)d)&0xFFULL)<<48));}
+#define AY38910_SET_PA(p,d) {p=(((p)&~0x00FF000000000000ULL)|((((uint64_t)(d))&0xFFULL)<<48));}
 // set 8-bit port B data on 64-bit pin mask
-#define AY38910_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
+#define AY38910_SET_PB(p,d) {p=(((p)&~0xFF00000000000000ULL)|((((uint64_t)(d))&0xFFULL)<<56));}
 
 // initialize a AY-3-8910 instance
 void ay38910_init(ay38910_t* ay, const ay38910_desc_t* desc);
@@ -274,11 +274,6 @@ void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr);
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
 #endif
-
-// extract 8-bit data bus from 64-bit pins
-#define AY38910_DATA(p) ((uint8_t)(p>>16))
-// merge 8-bit data bus value into 64-bit pins
-#define AY38910_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
 
 // register width bit masks
 static const uint8_t _ay38910_reg_mask[AY38910_NUM_REGISTERS] = {
@@ -505,7 +500,7 @@ bool ay38910_tick(ay38910_t* ay) {
 
 uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
     if (pins & AY38910_BDIR) {
-        const uint8_t data = AY38910_DATA(pins);
+        const uint8_t data = AY38910_GET_DATA(pins);
         if (pins & AY38910_BC1) {
             // latch register address
             ay->addr = data;

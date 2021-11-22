@@ -107,7 +107,7 @@ extern "C" {
 #define M6569_NUM_MOBS (8)
 
 /* extract 8-bit data bus from 64-bit pins */
-#define M6569_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define M6569_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define M6569_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 

@@ -250,21 +250,21 @@ typedef struct {
 } z80pio_t;
 
 /* extract 8-bit data bus from 64-bit pins */
-#define Z80PIO_GET_DATA(p) ((uint8_t)(p>>16))
+#define Z80PIO_GET_DATA(p) ((uint8_t)(((p)>>16)&0xFF))
 /* merge 8-bit data bus value into 64-bit pins */
-#define Z80PIO_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+#define Z80PIO_SET_DATA(p,d) {p=((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL);}
 /* set 8-bit port A data on 64-bit pin mask */
-#define Z80PIO_SET_PA(p,d) {p=((p&~0x00FF000000000000ULL)|((((uint64_t)d)&0xFFULL)<<48));}
+#define Z80PIO_SET_PA(p,d) {p=(((p)&~0x00FF000000000000ULL)|((((uint64_t)(d))&0xFFULL)<<48));}
 /* set 8-bit port B data on 64-bit pin mask */
-#define Z80PIO_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
+#define Z80PIO_SET_PB(p,d) {p=(((p)&~0xFF00000000000000ULL)|((((uint64_t)(d))&0xFFULL)<<56));}
 /* set both port A and B */
-#define Z80PIO_SET_PAB(p,a,b) {p=(p&~0xFFFF000000000000ULL)|((((uint64_t)b)&0xFFULL)<<56)|((((uint64_t)a)&0xFFULL)<<48);}
+#define Z80PIO_SET_PAB(p,a,b) {p=((p)&~0xFFFF000000000000ULL)|((((uint64_t)(b))&0xFFULL)<<56)|((((uint64_t)(a))&0xFFULL)<<48);}
 /* extract port A data */
-#define Z80PIO_GET_PA(p) ((uint8_t)(p>>48))
+#define Z80PIO_GET_PA(p) ((uint8_t)((p)>>48))
 /* extract port B data */
-#define Z80PIO_GET_PB(p) ((uint8_t)(p>>56))
+#define Z80PIO_GET_PB(p) ((uint8_t)((p)>>56))
 /* get port data from pins by port index */
-#define Z80PIO_GET_PORT(p,pid) ((uint8_t)(p>>(48+pid*8)))
+#define Z80PIO_GET_PORT(p,pid) ((uint8_t)(p>>(48+(pid)*8)))
 
 /* initialize a new Z80 PIO instance */
 void z80pio_init(z80pio_t* pio);

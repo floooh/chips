@@ -260,7 +260,7 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t cpu_pins);
 #define _AM40010_MAX_FB_SIZE (AM40010_DBG_DISPLAY_WIDTH*AM40010_DBG_DISPLAY_HEIGHT*4)
 
 // extract 8-bit data bus from 64-bit pin mask
-#define _AM40010_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define _AM40010_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 
 // the first 32 bytes of the KC Compact color ROM
 static uint8_t _am40010_kcc_color_rom[32] = {

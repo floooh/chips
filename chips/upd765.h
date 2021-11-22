@@ -76,9 +76,9 @@ extern "C" {
 #define UPD765_CS   (1ULL<<40)  /* in: chip select */
 
 /* extract 8-bit data bus from 64-bit pins */
-#define UPD765_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define UPD765_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define UPD765_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+#define UPD765_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
 /* main status register bits */
 #define UPD765_STATUS_D0B   (1<<0)      /* FDD 0 busy */
