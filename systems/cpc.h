@@ -442,7 +442,7 @@ static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
                 const uint8_t ay_data = I8255_GET_PA(sys->ppi.pins);
                 AY38910_SET_DATA(ay_pins, ay_data);
                 ay_pins = ay38910_iorq(&sys->psg, ay_pins);
-                I8255_SET_PA(ppi_pins, AY38910_DATA(ay_pins));
+                I8255_SET_PA(ppi_pins, AY38910_GET_DATA(ay_pins));
             }
             ppi_pins |= I8255_PB1|I8255_PB2|I8255_PB3;  // "Amstrad"
             ppi_pins |= I8255_PB4;  // PAL (50Hz)
