@@ -2,8 +2,6 @@
 /*#
     # z80pio.h
 
-    FIXME FIXME FIXME!
-
     Header-only emulator for the Z80 PIO (Parallel Input/Output)
     written in C.
 
@@ -62,54 +60,36 @@
         5. Both port output registers are reset.
 
     ~~~C
-    uint64_t z80pio_iorq(z80pio_t* pio, uint64_t pins)
-    ~~~~
-        Performs an IO request on the PIO. Call this from the CPU
-        tick callback when the CPU executes an IO machine cycle
-        on a port address assigned to the PIO. This takes the
-        state of PIO pins as input (control pins and data bus), and 
-        returns a pin mask with new data-bus state.
-
-        The following input pins are read by the function:
-
-        - **M1**:       must be unset (otherwise this would be an interrupt request cycle)
-        - **IORQ|CE**:  must be set ('chip-enable')
-        - **RD**:       set for read/input operations
-        - **WR**:       set for write/output operations
-        - **CDSEL**:    set to read/write control byte, unset to read/write data byte
-        - **BASEL**:    set to select port B, unset to select port A
-        - **D0..D7**:   control- or data-byte to write into PIO
-
-        The following output pins may be modified by the function:
-
-        - **D0..D7**:   control- or data-byte read from PIO
-
-    ~~~C
-    void z80pio_write_port(z80pio_t* pio, int port_id, uint8_t data)
+    uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins)
     ~~~
-        Actively write a byte to PIO port A or B. This may trigger an interrupt.
+        Tick a Z80 PIO instance, call this for every CPU tick. Depending on the input
+        pin mask and internal state, the PIO will perform IO requests from the CPU,
+        check any input port conditions that might trigger, perform the 
+        interrupt daisychain protocol and returns a potentially modified
+        pin mask.
 
-    ~~~C
-    uint64_t z80pio_int(z80pio_t* pio, uint64_t pins)
-    ~~~
-        Handle the daisy-chain interrupt protocol. See the z80.h header
-        for details.
+        The PIO reads the following pins when an IO request should be performed:
 
-    ## Macros
+        - **Z80PIO_CE|Z80PIO_IORQ**: performs an IO request
+        - **Z80PIO_RD, Z80PIO_WR**: read or write direction for IO requests
+        - **Z80PIO_BASEL**: select port A or B
+        - **Z80PIO_CDSEL**: access control or data byte
+        - **Z80PIO_D0..Z80PIO_D7**: the data byte for IO write requests
 
-    ~~~C
-    Z80PIO_SET_DATA(p,d)
-    ~~~
-        set 8-bit data bus pins in 64-bit pin mask (identical with
-        Z80_SET_DATA() from the z80.h header)
+        The A/B port pins may trigger an interrupt depending on the current
+        PIO configuration:
 
-    ~~~C
-    Z80PIO_GET_DATA(p)
-    ~~~
-        extract 8-bit data bus value from 64-bit pin mask (identical with
-        Z80_GET_DATA() from the z80.h header)
+        - **Z80PIO_PA0..PA7, Z80PIO_PB0..PB7**
 
+        The following output are potentially modified:
 
+        - **Z80PIO_D0..Z80PIO_D7**: the resulting data byte of IO read requests
+        - **Z80PIO_INT**: if the PIO wants to request an interrupt
+        - **Z80PIO_PA0..PA7, Z80PIO_PB0..PB7**: may be modified depending on the
+          current PIO configuration
+        - **Z80PIO_IEIO**: enable or disable interrupts for daisychain downstream chips
+#*/
+/*
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog

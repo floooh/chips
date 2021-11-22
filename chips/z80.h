@@ -74,8 +74,8 @@
         }
     ~~~
     Since there is no memory attached yet, the CPU will simply run whatever opcode
-    bytes are present on the data bus (in this case the data bus is zero, so the CPU
-    just runs throught the same NOP over and over).
+    byte is present on the data bus (in this case the data bus is zero, so the CPU
+    just runs through the same NOP over and over).
 
     Next, add some memory and inspect and modify the pin mask to handle memory accesses:
     ~~~C

@@ -66,12 +66,12 @@
         for every CPU tick. Depending on the input pin mask and the current
         CTC chip state, the CTC will perform IO requests from the CPU, check 
         for external trigger events, perform the interrupt daisychain protocol,
-        and return a potentially modified 
+        and return a potentially modified pin mask.
         
         The CTC reads the following pins when an IO request should be performed:
 
         - **Z80CTC_CE|Z80CTC_IORQ**: performs an IO request
-        - **Z80CTC_RD, Z80CTC_RD**: read or write direction for IO requests
+        - **Z80CTC_RD, Z80CTC_WR**: read or write direction for IO requests
         - **Z80CTC_CS0..Z80CTC_CS1**: selects the CTC channel 0..3 for IO requests
         - **Z80CTC_D0..Z80CTC_D7**: the data byte for IO write requests
 
@@ -90,23 +90,10 @@
         
         The following output pins are potentially modified:
 
+        - **Z80CTC_D0..Z80CTC_D7**: the resulting data byte of IO read requests
         - **Z80CTC_INT**: if the CTC wants to request an interrupt
         - **Z80CTC_ZCTO0..ZCTO2**: when the channels 0..2 are in counter mode and the countdown reaches 0
         - **Z80CTC_IEIO**: enable or disable interrupts for daisychain downstream chips
-
-    ## Macros
-
-    ~~~C
-    Z80CTC_SET_DATA(p,d)
-    ~~~
-        set 8-bit data bus pins in 64-bit pin mask (identical with
-        Z80_SET_DATA() from the z80.h header)
-
-    ~~~C
-    Z80CTC_GET_DATA(p)
-    ~~~
-        extract 8-bit data bus value from 64-bit pin mask (identical with
-        Z80_GET_DATA() from the z80.h header)
 #*/
 /*
     zlib/libpng license
