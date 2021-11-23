@@ -54,7 +54,7 @@ djnz d:
   cond: (x == 0) and (y == 2) and (z == 0)
   mcycles:
     - { type: generic, tcycles: 1 }
-    - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(--$B==0){_z80_skip(cpu,5);}"}
+    - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(--$B==0){_skip(5);}"}
     - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC;" }
 
 jr d:
@@ -66,7 +66,7 @@ jr d:
 jr $CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
   mcycles:
-    - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(!($CC-4)){_z80_skip(cpu,5);}" }
+    - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(!($CC-4)){_skip(5);}" }
     - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC;" }
 
   # FIXME
@@ -234,7 +234,7 @@ ccf:
 ret $CC:
   cond: (x == 3) and (z == 0)
   mcycles:
-    - { type: generic, tcycles: 1, action: "if(!$CC){_z80_skip(cpu,6);}"}
+    - { type: generic, tcycles: 1, action: "if(!$CC){_skip(6);}"}
     - { type: mread, ab: $SP++, dst: $WZL }
     - { type: mread, ab: $SP++, dst: $WZH, action: "$PC=$WZ" }
 
@@ -331,7 +331,7 @@ call $CC,nn:
   cond: (x == 3) and (z == 4)
   mcycles:
     - { type: mread, ab: $PC++, dst: $WZL }
-    - { type: mread, ab: $PC++, dst: $WZH, action: "if (!$CC){_z80_skip(cpu,7);}" }
+    - { type: mread, ab: $PC++, dst: $WZH, action: "if (!$CC){_skip(7);}" }
     - { type: generic, tcycles: 1 }
     - { type: mwrite, ab: --$SP, db: $PCH }
     - { type: mwrite, ab: --$SP, db: $PCL, action: "$PC=$WZ" }
@@ -535,7 +535,7 @@ ldir:
   mcycles:
     - { type: mread, ab: "cpu->hl++", dst: $DLATCH }
     - { type: mwrite, ab: "cpu->de++", db: $DLATCH }
-    - { type: generic, tcycles: 2, action: "if(!_z80_ldi_ldd(cpu,$DLATCH)){_z80_skip(cpu,5);}"}
+    - { type: generic, tcycles: 2, action: "if(!_z80_ldi_ldd(cpu,$DLATCH)){_skip(5);}"}
     - { type: generic, tcycles: 5, action: "$WZ=--$PC;--$PC;" }
 
 lddr:
@@ -544,7 +544,7 @@ lddr:
   mcycles:
     - { type: mread, ab: "cpu->hl--", dst: $DLATCH }
     - { type: mwrite, ab: "cpu->de--", db: $DLATCH }
-    - { type: generic, tcycles: 2, action: "if(!_z80_ldi_ldd(cpu,$DLATCH)){_z80_skip(cpu,5);}"}
+    - { type: generic, tcycles: 2, action: "if(!_z80_ldi_ldd(cpu,$DLATCH)){_skip(5);}"}
     - { type: generic, tcycles: 5, action: "$WZ=--$PC;--$PC;" }
 
 cpi:
@@ -566,7 +566,7 @@ cpir:
   cond: (x == 2) and (y == 6) and (z == 1)
   mcycles:
     - { type: mread, ab: "cpu->hl++", dst: $DLATCH }
-    - { type: generic, tcycles: 5, action: "$WZ++;if(!_z80_cpi_cpd(cpu,$DLATCH)){_z80_skip(cpu,5);}"}
+    - { type: generic, tcycles: 5, action: "$WZ++;if(!_z80_cpi_cpd(cpu,$DLATCH)){_skip(5);}"}
     - { type: generic, tcycles: 5, action: "$WZ=--$PC;--$PC"}
 
 cpdr:
@@ -574,7 +574,7 @@ cpdr:
   cond: (x == 2) and (y == 7) and (z == 1)
   mcycles:
     - { type: mread, ab: "cpu->hl--", dst: $DLATCH }
-    - { type: generic, tcycles: 5, action: "$WZ--;if(!_z80_cpi_cpd(cpu,$DLATCH)){_z80_skip(cpu,5);}"}
+    - { type: generic, tcycles: 5, action: "$WZ--;if(!_z80_cpi_cpd(cpu,$DLATCH)){_skip(5);}"}
     - { type: generic, tcycles: 5, action: "$WZ=--$PC;--$PC"}
 
 ini:
@@ -599,7 +599,7 @@ inir:
   mcycles:
     - { type: generic, tcycles: 1 }
     - { type: ioread, ab: $BC, dst: $DLATCH, action: "$WZ=$BC+1;$B--;" }
-    - { type: mwrite, ab: "cpu->hl++", db: $DLATCH, action: "if (!_z80_ini_ind(cpu,$DLATCH,$C+1)){_z80_skip(cpu,5);}" }
+    - { type: mwrite, ab: "cpu->hl++", db: $DLATCH, action: "if (!_z80_ini_ind(cpu,$DLATCH,$C+1)){_skip(5);}" }
     - { type: generic, tcycles: 5, action: "$WZ=--$PC;--$PC"}
 
 indr:
@@ -608,7 +608,7 @@ indr:
   mcycles:
     - { type: generic, tcycles: 1 }
     - { type: ioread, ab: $BC, dst: $DLATCH, action: "$WZ=$BC-1;$B--;" }
-    - { type: mwrite, ab: "cpu->hl--", db: $DLATCH, action: "if (!_z80_ini_ind(cpu,$DLATCH,$C-1)){_z80_skip(cpu,5);}" }
+    - { type: mwrite, ab: "cpu->hl--", db: $DLATCH, action: "if (!_z80_ini_ind(cpu,$DLATCH,$C-1)){_skip(5);}" }
     - { type: generic, tcycles: 5, action: "$WZ=--$PC;--$PC"}
 
 outi:
@@ -633,7 +633,7 @@ otir:
   mcycles:
     - { type: generic, tcycles: 1 }
     - { type: mread, ab: "cpu->hl++", dst: $DLATCH, action: "$B--" }
-    - { type: iowrite, ab: $BC, db: $DLATCH, action: "$WZ=$BC+1;if(!_z80_outi_outd(cpu,$DLATCH)){_z80_skip(cpu,5);}"}
+    - { type: iowrite, ab: $BC, db: $DLATCH, action: "$WZ=$BC+1;if(!_z80_outi_outd(cpu,$DLATCH)){_skip(5);}"}
     - { type: generic, tcycles: 5, action: "$WZ=--$PC;--$PC"}
 
 otdr:
@@ -642,7 +642,7 @@ otdr:
   mcycles:
     - { type: generic, tcycles: 1 }
     - { type: mread, ab: "cpu->hl--", dst: $DLATCH, action: "$B--" }
-    - { type: iowrite, ab: $BC, db: $DLATCH, action: "$WZ=$BC-1;if(!_z80_outi_outd(cpu,$DLATCH)){_z80_skip(cpu,5);}"}
+    - { type: iowrite, ab: $BC, db: $DLATCH, action: "$WZ=$BC-1;if(!_z80_outi_outd(cpu,$DLATCH)){_skip(5);}"}
     - { type: generic, tcycles: 5, action: "$WZ=--$PC;--$PC"}
 
 #== CB prefix block ============================================================
@@ -655,7 +655,7 @@ cb:
 cbhl:
   flags: { special: true }
   mcycles:
-    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,6)){_z80_skip(cpu,3);}" }
+    - { type: mread, tcycles: 4, ab: "cpu->hl", dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,6)){_skip(3);}" }
     - { type: mwrite, ab: "cpu->hl", db: $DLATCH }
 
 ddfdcb:
@@ -667,7 +667,7 @@ ddfdcb:
     # load opcode
     - { type: mread, ab: $PC++, tcycles: 5, dst: $DLATCH, action: "_z80_ddfdcb_opcode(cpu,$DLATCH)" }
     # read operand
-    - { type: mread, ab: $ADDR, tcycles: 4, dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_z80_skip(cpu,3);}" }
+    - { type: mread, ab: $ADDR, tcycles: 4, dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_skip(3);}" }
     # write result back
     - { type: mwrite, ab: $ADDR, db: $DLATCH }
 

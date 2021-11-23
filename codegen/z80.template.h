@@ -410,10 +410,6 @@ bool z80_opdone(z80_t* cpu) {
     return (0 == cpu->op.step) && (cpu->prefix == 0);
 }
 
-static inline void _z80_skip(z80_t* cpu, int steps) {
-    cpu->op.step += steps;
-}
-
 static inline uint64_t _z80_halt(z80_t* cpu, uint64_t pins) {
     cpu->pc--;
     return pins | Z80_HALT;
@@ -809,6 +805,7 @@ static inline bool _z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
         case 5: val = cpu->l; break;
         case 6: val = cpu->dlatch; break;   // (HL)
         case 7: val = cpu->a; break;
+        default: _Z80_UNREACHABLE;
     }
     switch (x) {
         case 0: // rot/shift
@@ -821,6 +818,7 @@ static inline bool _z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
                 case 5: res = _z80_sra(cpu, val); break;
                 case 6: res = _z80_sll(cpu, val); break;
                 case 7: res = _z80_srl(cpu, val); break;
+                default: _Z80_UNREACHABLE;
             }
             break;
         case 1: // bit
@@ -839,6 +837,7 @@ static inline bool _z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
         case 3: // set
             res = val | (1 << y);
             break;
+        default: _Z80_UNREACHABLE;
     }
     // don't write result back for BIT
     if (x != 1) {
@@ -852,6 +851,7 @@ static inline bool _z80_cb_action(z80_t* cpu, uint8_t z0, uint8_t z1) {
             case 5: cpu->l = res; break;
             case 6: break;   // (HL)
             case 7: cpu->a = res; break;
+            default: _Z80_UNREACHABLE;
         }
         return true;
     }
@@ -942,75 +942,86 @@ static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
     return pins;
 }
 
-// initiate a fetch machine cycle
+// initiate a fetch machine cycle for regular (non-prefixed) instructions, or initiate interrupt handling
 static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
-    if (cpu->int_bits & Z80_NMI) {
+    cpu->prefix_state = 0;
+    // shortcut no interrupts requested
+    if (cpu->int_bits == 0) {
+        cpu->op.step = 0xFFFF;
+        return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+    }
+    else if (cpu->int_bits & Z80_NMI) {
         // non-maskable interrupt starts with a regular M1 machine cycle
         cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_NMI];
         cpu->int_bits = 0;
         // NOTE: PC is *not* incremented!
-        pins = _z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
+        return _z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
     }
-    else if ((cpu->int_bits & Z80_INT) && cpu->iff1) {
-        // maskable interrupts start with a special M1 machine cycle which
-        // doesn't fetch the next opcode, but instead activate the
-        // pins M1|IOQR to request a special byte which is handled differently
-        // depending on interrupt mode
-        cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_INT_IM0 + cpu->im];
-        cpu->int_bits = 0;
-        // NOTE: PC is not incremented, and no pins are activated here
+    else if (cpu->int_bits & Z80_INT) {
+        if (cpu->iff1) {
+            // maskable interrupts start with a special M1 machine cycle which
+            // doesn't fetch the next opcode, but instead activate the
+            // pins M1|IOQR to request a special byte which is handled differently
+            // depending on interrupt mode
+            cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_INT_IM0 + cpu->im];
+            cpu->int_bits = 0;
+            // NOTE: PC is not incremented, and no pins are activated here
+            return pins;
+        }
+        else {
+            // oops, maskable interrupt requested but disabled
+            cpu->op.step = 0xFFFF;
+            return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+        }
     }
     else {
-        // no interrupt, continue with next opcode
-        cpu->op.step = 0xFFFF;
+        _Z80_UNREACHABLE;
+        return pins;
+    }
+}
+
+static inline uint64_t _z80_fetch_cb(z80_t* cpu, uint64_t pins) {
+    cpu->prefix = (cpu->prefix & (_Z80_PREFIX_DD|_Z80_PREFIX_FD)) | _Z80_PREFIX_CB;
+    if (cpu->prefix & (_Z80_PREFIX_DD|_Z80_PREFIX_FD)) {
+        // this is a DD+CB / FD+CB instruction, continue
+        // execution on the special DDCB/FDCB decoder block which
+        // loads the d-offset first and then the opcode in a 
+        // regular memory read machine cycle
+        cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_DDFDCB];
+    }
+    else {
+        // this is a regular CB-prefixed instruction, continue
+        // execution on a special fetch machine cycle which doesn't
+        // handle DD/FD prefix and then branches either to the
+        // special CB or CBHL decoder block
+        cpu->op.step = 21; // => step 22
         pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     }
-    cpu->prefix_state = 0;
     return pins;
 }
 
-static inline uint64_t _z80_fetch_prefix(z80_t* cpu, uint64_t pins, uint8_t prefix) {
-    // reset the decoder to continue at step 0
+static inline uint64_t _z80_fetch_dd(z80_t* cpu, uint64_t pins) {
+    cpu->op.step = 2;   // => step 3
+    cpu->prefix_offset = 0;
+    cpu->hlx_idx = 1;
+    cpu->prefix = _Z80_PREFIX_DD;
+    return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+}
+
+static inline uint64_t _z80_fetch_fd(z80_t* cpu, uint64_t pins) {
+    cpu->op.step = 2;   // => step 3
+    cpu->prefix_offset = 0;
+    cpu->hlx_idx = 2;
+    cpu->prefix = _Z80_PREFIX_FD;
+    return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
+}
+
+static inline uint64_t _z80_fetch_ed(z80_t* cpu, uint64_t pins) {
     cpu->op.step = 0xFFFF;
-    switch (prefix) {
-        case _Z80_PREFIX_CB: // CB prefix preserves current DD/FD prefix
-            cpu->prefix |= _Z80_PREFIX_CB;
-            if (cpu->prefix & (_Z80_PREFIX_DD|_Z80_PREFIX_FD)) {
-                // this is a DD+CB / FD+CB instruction, continue
-                // execution on the special DDCB/FDCB decoder block which
-                // loads the d-offset first and then the opcode in a 
-                // regular memory read machine cycle
-                cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_DDFDCB];
-            }
-            else {
-                // this is a regular CB-prefixed instruction, continue
-                // execution on a special fetch machine cycle which doesn't
-                // handle DD/FD prefix and then branches either to the
-                // special CB or CBHL decoder block
-                cpu->op.step = 19 - 1; // => step 19
-                pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-            }
-            break;
-        case _Z80_PREFIX_DD:
-            cpu->prefix_offset = 0;
-            cpu->hlx_idx = 1;
-            cpu->prefix = _Z80_PREFIX_DD;
-            pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-            break;
-        case _Z80_PREFIX_ED: // ED prefix clears current DD/FD prefix
-            cpu->prefix_offset = 0x0100;
-            cpu->hlx_idx = 0;
-            cpu->prefix = _Z80_PREFIX_ED;
-            pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-            break;
-        case _Z80_PREFIX_FD:
-            cpu->prefix_offset = 0;
-            cpu->hlx_idx = 2;
-            cpu->prefix = _Z80_PREFIX_FD;
-            pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
-            break;
-    }
-    return pins;
+    cpu->prefix_offset = 0x0100;
+    cpu->hlx_idx = 0;
+    cpu->prefix = _Z80_PREFIX_ED;
+    return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
 }
 
 uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
@@ -1028,10 +1039,11 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _gd()               _z80_get_db(pins)
 
 // high level helper macros
-#define _fetch_dd()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_DD);
-#define _fetch_fd()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_FD);
-#define _fetch_ed()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_ED);
-#define _fetch_cb()     pins=_z80_fetch_prefix(cpu,pins,_Z80_PREFIX_CB);
+#define _skip(n)        cpu->op.step+=(n);
+#define _fetch_dd()     pins=_z80_fetch_dd(cpu,pins);
+#define _fetch_fd()     pins=_z80_fetch_fd(cpu,pins);
+#define _fetch_ed()     pins=_z80_fetch_ed(cpu,pins);
+#define _fetch_cb()     pins=_z80_fetch_cb(cpu,pins);
 #define _mread(ab)      _sax(ab,Z80_MREQ|Z80_RD)
 #define _mwrite(ab,d)   _sadx(ab,d,Z80_MREQ|Z80_WR)
 #define _ioread(ab)     _sax(ab,Z80_IORQ|Z80_RD)
@@ -1050,66 +1062,75 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     // process the next active tcycle
     pins &= ~(Z80_CTRL_PIN_MASK|Z80_RETI);
     switch (cpu->op.step) {
-        // M1/T2: shared fetch machine cycle for all opcodes
+        //=== shared fetch machine cycle for non-DD/FD-prefixed ops
+        // M1/T2: load opcode from data bus
         case 0: _wait(); cpu->opcode = _gd(); goto step_next;
         // M1/T3: refresh cycle
         case 1: pins = _z80_refresh(cpu, pins); goto step_next;
         // M1/T4: branch to instruction 'payload'
         case 2: {
             cpu->op = _z80_opstate_table[cpu->opcode + cpu->prefix_offset];
-            // if this is a (HL)/(IX+d)/(IY+d) instruction, insert
-            // d-load cycle if needed and compute effective address
+            // this is only needed for (HL) ops, but probably pointless to do a 
+            // conditional branch just for this
+            cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
+        } goto step_next;
+        //=== special fetch machine cycle for DD/FD-prefixed ops
+        // M1/T2: load opcode from data bus
+        case 3: _wait(); cpu->opcode = _gd(); goto step_next;
+        // M1/T3: refresh cycle
+        case 4: pins = _z80_refresh(cpu, pins); goto step_next;
+        // M1/T4: branch to instruction 'payload'
+        case 5: {
+            cpu->op = _z80_opstate_table[cpu->opcode];
+            cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
             if (cpu->op.flags & _Z80_OPSTATE_FLAGS_INDIRECT) {
-                cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
-                if (cpu->hlx_idx != _Z80_MAP_HL) {
-                    if (cpu->op.flags & _Z80_OPSTATE_FLAGS_IMM8) {
-                        // special case: if this is indirect+immediate (which is
-                        // just LD (HL),n, then the immediate-load is 'hidden' within
-                        // the 8-tcycle d-offset computation)
-                        cpu->op.step = 10;  // continue at step 11
-                    }
-                    else {
-                        // regular (IX+d)/(IY+d) instruction
-                        cpu->op.step = 2;   // continue at step 3
-                    }
+                if (cpu->op.flags & _Z80_OPSTATE_FLAGS_IMM8) {
+                    // special case: if this is indirect+immediate (which is
+                    // just LD (HL),n, then the immediate-load is 'hidden' within
+                    // the 8-tcycle d-offset computation)
+                    cpu->op.step = 13;  // continue at step 14
+                }
+                else {
+                    // regular (IX+d)/(IY+d) instruction
+                    cpu->op.step = 5;   // continue at step 6
                 }
             }
         } goto step_next;
         //=== optional d-loading cycle for (IX+d), (IY+d)
         //--- mread
-        case 3: goto step_next;
-        case 4: _wait();_mread(cpu->pc++); goto step_next;
-        case 5: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
-        //--- filler ticks
         case 6: goto step_next;
-        case 7: goto step_next;
-        case 8: goto step_next;
+        case 7: _wait();_mread(cpu->pc++); goto step_next;
+        case 8: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
+        //--- filler ticks
         case 9: goto step_next;
-        case 10: {
+        case 10: goto step_next;
+        case 11: goto step_next;
+        case 12: goto step_next;
+        case 13: {
             // branch to original instruction
             cpu->op = _z80_opstate_table[cpu->opcode];
         } goto step_next;
         //=== special case d-loading cycle for (IX+d),n where the immediate load
         //    is hidden in the d-cycle load
         //--- mread for d offset
-        case 11: goto step_next;
-        case 12: _wait();_mread(cpu->pc++); goto step_next;
-        case 13: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
-        //--- mread for n
         case 14: goto step_next;
         case 15: _wait();_mread(cpu->pc++); goto step_next;
-        case 16: cpu->dlatch=_gd(); goto step_next;
-        //--- filler tick
+        case 16: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
+        //--- mread for n
         case 17: goto step_next;
-        case 18: {
+        case 18: _wait();_mread(cpu->pc++); goto step_next;
+        case 19: cpu->dlatch=_gd(); goto step_next;
+        //--- filler tick
+        case 20: goto step_next;
+        case 21: {
             // branch to ld (hl),n and skip the original mread cycle for loading 'n'
             cpu->op = _z80_opstate_table[cpu->opcode];
             cpu->op.step += 3;
         } goto step_next;
         //=== special opcode fetch machine cycle for CB-prefixed instructions
-        case 19: _wait(); cpu->opcode = _gd(); goto step_next;
-        case 20: pins = _z80_refresh(cpu, pins); goto step_next;
-        case 21: {
+        case 22: _wait(); cpu->opcode = _gd(); goto step_next;
+        case 23: pins = _z80_refresh(cpu, pins); goto step_next;
+        case 24: {
             if ((cpu->opcode & 7) == 6) {
                 // this is a (HL) instruction
                 cpu->addr = cpu->hl;
