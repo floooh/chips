@@ -55,19 +55,19 @@ djnz d:
   mcycles:
     - { type: generic, tcycles: 1 }
     - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(--$B==0){_skip(5);}"}
-    - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC;" }
+    - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC" }
 
 jr d:
   cond: (x == 0) and (y == 3) and (z == 0)
   mcycles:
     - { type: mread, ab: $PC++, dst: $DLATCH }
-    - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC;" }
+    - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC" }
 
 jr $CC-4,d:
   cond: (x == 0) and (y >= 4) and (y <= 7) and (z == 0)
   mcycles:
     - { type: mread, ab: $PC++, dst: $DLATCH, action: "if(!($CC-4)){_skip(5);}" }
-    - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC;" }
+    - { type: generic, tcycles: 5, action: "$PC+=(int8_t)$DLATCH;$WZ=$PC" }
 
   # FIXME
 
@@ -317,7 +317,7 @@ di:
   mcycles:
     # NOTE: interrupts are never executed at the end of DI, no matter
     # what the previous IFF state was
-    - { type: overlapped, action: "cpu->iff1=cpu->iff2=false;"}
+    - { type: overlapped, action: "cpu->iff1=cpu->iff2=false"}
 
 ei:
   cond: (x == 3) and (y == 7) and (z == 3)
@@ -692,7 +692,7 @@ int_im1:
     # this issues an M1|IORQ cycle like IM0 and IM2, but ignores the result
     - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
     - { type: generic, tcycles: 1, action: "pins=_z80_int012_step1(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "_wait();"}
+    - { type: generic, tcycles: 1, action: "_wait()"}
     # a regular refresh cycle + one extra tcycle
     - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)" }
     # two regular write machine cycles to push PC on stack, and set PC to 0x0038
@@ -712,7 +712,7 @@ int_im2:
     - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)" }
     # two regular write machine cycles to push PC on stack, and set WZ to interrupt vector address
     - { type: mwrite, ab: --$SP, db: $PCH }
-    - { type: mwrite, ab: --$SP, db: $PCL, action: "$WZL=$DLATCH;$WZH=cpu->i;" }
+    - { type: mwrite, ab: --$SP, db: $PCL, action: "$WZL=$DLATCH;$WZH=cpu->i" }
     # two regular read machine cycles to read isr address
     - { type: mread, ab: $WZ++, dst: $DLATCH }
     - { type: mread, ab: $WZ, dst: $WZH, action: "$WZL=$DLATCH;$PC=$WZ" }

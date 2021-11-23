@@ -1593,7 +1593,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // conditional branch just for this
             cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
         } goto step_next;
-        //=== special fetch machine cycle for DD/FD-prefixed ops
+        //=== shared fetch machine cycle for DD/FD-prefixed ops
         // M1/T2: load opcode from data bus
         case 3: _wait(); cpu->opcode = _gd(); goto step_next;
         // M1/T3: refresh cycle
@@ -1626,7 +1626,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 11: goto step_next;
         case 12: goto step_next;
         case 13: {
-            // branch to original instruction
+            // branch to actual instruction
             cpu->op = _z80_opstate_table[cpu->opcode];
         } goto step_next;
         //=== special case d-loading cycle for (IX+d),n where the immediate load
@@ -1659,6 +1659,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                 cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_CB];
             }
         } goto step_next;
+        //=== from here on code-generated
         
         //  00: nop (M:1 T:4)
         // -- overlapped
@@ -1668,11 +1669,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case   26: goto step_next;
         case   27: _wait();_mread(cpu->pc++);goto step_next;
-        case   28: cpu->c=_gd();;goto step_next;
+        case   28: cpu->c=_gd();goto step_next;
         // -- mread
         case   29: goto step_next;
         case   30: _wait();_mread(cpu->pc++);goto step_next;
-        case   31: cpu->b=_gd();;goto step_next;
+        case   31: cpu->b=_gd();goto step_next;
         // -- overlapped
         case   32: goto fetch_next;
         
@@ -1703,7 +1704,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case   42: goto step_next;
         case   43: _wait();_mread(cpu->pc++);goto step_next;
-        case   44: cpu->b=_gd();;goto step_next;
+        case   44: cpu->b=_gd();goto step_next;
         // -- overlapped
         case   45: goto fetch_next;
         
@@ -1731,7 +1732,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case   56: goto step_next;
         case   57: _wait();_mread(cpu->bc);goto step_next;
-        case   58: cpu->a=_gd();cpu->wz=cpu->bc+1;;goto step_next;
+        case   58: cpu->a=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
         case   59: goto fetch_next;
         
@@ -1754,7 +1755,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case   65: goto step_next;
         case   66: _wait();_mread(cpu->pc++);goto step_next;
-        case   67: cpu->c=_gd();;goto step_next;
+        case   67: cpu->c=_gd();goto step_next;
         // -- overlapped
         case   68: goto fetch_next;
         
@@ -1768,9 +1769,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case   71: goto step_next;
         case   72: _wait();_mread(cpu->pc++);goto step_next;
-        case   73: cpu->dlatch=_gd();if(--cpu->b==0){_skip(5);};;goto step_next;
+        case   73: cpu->dlatch=_gd();if(--cpu->b==0){_skip(5);};goto step_next;
         // -- generic
-        case   74: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case   74: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next;
         case   75: goto step_next;
         case   76: goto step_next;
         case   77: goto step_next;
@@ -1782,11 +1783,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case   80: goto step_next;
         case   81: _wait();_mread(cpu->pc++);goto step_next;
-        case   82: cpu->e=_gd();;goto step_next;
+        case   82: cpu->e=_gd();goto step_next;
         // -- mread
         case   83: goto step_next;
         case   84: _wait();_mread(cpu->pc++);goto step_next;
-        case   85: cpu->d=_gd();;goto step_next;
+        case   85: cpu->d=_gd();goto step_next;
         // -- overlapped
         case   86: goto fetch_next;
         
@@ -1817,7 +1818,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case   96: goto step_next;
         case   97: _wait();_mread(cpu->pc++);goto step_next;
-        case   98: cpu->d=_gd();;goto step_next;
+        case   98: cpu->d=_gd();goto step_next;
         // -- overlapped
         case   99: goto fetch_next;
         
@@ -1829,9 +1830,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  101: goto step_next;
         case  102: _wait();_mread(cpu->pc++);goto step_next;
-        case  103: cpu->dlatch=_gd();;goto step_next;
+        case  103: cpu->dlatch=_gd();goto step_next;
         // -- generic
-        case  104: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  104: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next;
         case  105: goto step_next;
         case  106: goto step_next;
         case  107: goto step_next;
@@ -1855,7 +1856,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  118: goto step_next;
         case  119: _wait();_mread(cpu->de);goto step_next;
-        case  120: cpu->a=_gd();cpu->wz=cpu->de+1;;goto step_next;
+        case  120: cpu->a=_gd();cpu->wz=cpu->de+1;goto step_next;
         // -- overlapped
         case  121: goto fetch_next;
         
@@ -1878,7 +1879,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  127: goto step_next;
         case  128: _wait();_mread(cpu->pc++);goto step_next;
-        case  129: cpu->e=_gd();;goto step_next;
+        case  129: cpu->e=_gd();goto step_next;
         // -- overlapped
         case  130: goto fetch_next;
         
@@ -1890,9 +1891,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  132: goto step_next;
         case  133: _wait();_mread(cpu->pc++);goto step_next;
-        case  134: cpu->dlatch=_gd();if(!(_cc_nz)){_skip(5);};;goto step_next;
+        case  134: cpu->dlatch=_gd();if(!(_cc_nz)){_skip(5);};goto step_next;
         // -- generic
-        case  135: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  135: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next;
         case  136: goto step_next;
         case  137: goto step_next;
         case  138: goto step_next;
@@ -1904,11 +1905,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  141: goto step_next;
         case  142: _wait();_mread(cpu->pc++);goto step_next;
-        case  143: cpu->hlx[cpu->hlx_idx].l=_gd();;goto step_next;
+        case  143: cpu->hlx[cpu->hlx_idx].l=_gd();goto step_next;
         // -- mread
         case  144: goto step_next;
         case  145: _wait();_mread(cpu->pc++);goto step_next;
-        case  146: cpu->hlx[cpu->hlx_idx].h=_gd();;goto step_next;
+        case  146: cpu->hlx[cpu->hlx_idx].h=_gd();goto step_next;
         // -- overlapped
         case  147: goto fetch_next;
         
@@ -1916,11 +1917,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  148: goto step_next;
         case  149: _wait();_mread(cpu->pc++);goto step_next;
-        case  150: cpu->wzl=_gd();;goto step_next;
+        case  150: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  151: goto step_next;
         case  152: _wait();_mread(cpu->pc++);goto step_next;
-        case  153: cpu->wzh=_gd();;goto step_next;
+        case  153: cpu->wzh=_gd();goto step_next;
         // -- mwrite
         case  154: goto step_next;
         case  155: _wait();_mwrite(cpu->wz++,cpu->hlx[cpu->hlx_idx].l);goto step_next;
@@ -1951,7 +1952,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  166: goto step_next;
         case  167: _wait();_mread(cpu->pc++);goto step_next;
-        case  168: cpu->hlx[cpu->hlx_idx].h=_gd();;goto step_next;
+        case  168: cpu->hlx[cpu->hlx_idx].h=_gd();goto step_next;
         // -- overlapped
         case  169: goto fetch_next;
         
@@ -1963,9 +1964,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  171: goto step_next;
         case  172: _wait();_mread(cpu->pc++);goto step_next;
-        case  173: cpu->dlatch=_gd();if(!(_cc_z)){_skip(5);};;goto step_next;
+        case  173: cpu->dlatch=_gd();if(!(_cc_z)){_skip(5);};goto step_next;
         // -- generic
-        case  174: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  174: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next;
         case  175: goto step_next;
         case  176: goto step_next;
         case  177: goto step_next;
@@ -1989,19 +1990,19 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  188: goto step_next;
         case  189: _wait();_mread(cpu->pc++);goto step_next;
-        case  190: cpu->wzl=_gd();;goto step_next;
+        case  190: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  191: goto step_next;
         case  192: _wait();_mread(cpu->pc++);goto step_next;
-        case  193: cpu->wzh=_gd();;goto step_next;
+        case  193: cpu->wzh=_gd();goto step_next;
         // -- mread
         case  194: goto step_next;
         case  195: _wait();_mread(cpu->wz++);goto step_next;
-        case  196: cpu->hlx[cpu->hlx_idx].l=_gd();;goto step_next;
+        case  196: cpu->hlx[cpu->hlx_idx].l=_gd();goto step_next;
         // -- mread
         case  197: goto step_next;
         case  198: _wait();_mread(cpu->wz);goto step_next;
-        case  199: cpu->hlx[cpu->hlx_idx].h=_gd();;goto step_next;
+        case  199: cpu->hlx[cpu->hlx_idx].h=_gd();goto step_next;
         // -- overlapped
         case  200: goto fetch_next;
         
@@ -2024,7 +2025,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  206: goto step_next;
         case  207: _wait();_mread(cpu->pc++);goto step_next;
-        case  208: cpu->hlx[cpu->hlx_idx].l=_gd();;goto step_next;
+        case  208: cpu->hlx[cpu->hlx_idx].l=_gd();goto step_next;
         // -- overlapped
         case  209: goto fetch_next;
         
@@ -2036,9 +2037,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  211: goto step_next;
         case  212: _wait();_mread(cpu->pc++);goto step_next;
-        case  213: cpu->dlatch=_gd();if(!(_cc_nc)){_skip(5);};;goto step_next;
+        case  213: cpu->dlatch=_gd();if(!(_cc_nc)){_skip(5);};goto step_next;
         // -- generic
-        case  214: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  214: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next;
         case  215: goto step_next;
         case  216: goto step_next;
         case  217: goto step_next;
@@ -2050,11 +2051,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  220: goto step_next;
         case  221: _wait();_mread(cpu->pc++);goto step_next;
-        case  222: cpu->spl=_gd();;goto step_next;
+        case  222: cpu->spl=_gd();goto step_next;
         // -- mread
         case  223: goto step_next;
         case  224: _wait();_mread(cpu->pc++);goto step_next;
-        case  225: cpu->sph=_gd();;goto step_next;
+        case  225: cpu->sph=_gd();goto step_next;
         // -- overlapped
         case  226: goto fetch_next;
         
@@ -2062,11 +2063,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  227: goto step_next;
         case  228: _wait();_mread(cpu->pc++);goto step_next;
-        case  229: cpu->wzl=_gd();;goto step_next;
+        case  229: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  230: goto step_next;
         case  231: _wait();_mread(cpu->pc++);goto step_next;
-        case  232: cpu->wzh=_gd();;goto step_next;
+        case  232: cpu->wzh=_gd();goto step_next;
         // -- mwrite
         case  233: goto step_next;
         case  234: _wait();_mwrite(cpu->wz++,cpu->a);cpu->wzh=cpu->a;goto step_next;
@@ -2085,7 +2086,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  240: goto step_next;
         case  241: _wait();_mread(cpu->addr);goto step_next;
-        case  242: cpu->dlatch=_gd();cpu->dlatch=_z80_inc8(cpu,cpu->dlatch);;goto step_next;
+        case  242: cpu->dlatch=_gd();cpu->dlatch=_z80_inc8(cpu,cpu->dlatch);goto step_next;
         case  243: goto step_next;
         // -- mwrite
         case  244: goto step_next;
@@ -2098,7 +2099,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  248: goto step_next;
         case  249: _wait();_mread(cpu->addr);goto step_next;
-        case  250: cpu->dlatch=_gd();cpu->dlatch=_z80_dec8(cpu,cpu->dlatch);;goto step_next;
+        case  250: cpu->dlatch=_gd();cpu->dlatch=_z80_dec8(cpu,cpu->dlatch);goto step_next;
         case  251: goto step_next;
         // -- mwrite
         case  252: goto step_next;
@@ -2111,7 +2112,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  256: goto step_next;
         case  257: _wait();_mread(cpu->pc++);goto step_next;
-        case  258: cpu->dlatch=_gd();;goto step_next;
+        case  258: cpu->dlatch=_gd();goto step_next;
         // -- mwrite
         case  259: goto step_next;
         case  260: _wait();_mwrite(cpu->addr,cpu->dlatch);goto step_next;
@@ -2127,9 +2128,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  264: goto step_next;
         case  265: _wait();_mread(cpu->pc++);goto step_next;
-        case  266: cpu->dlatch=_gd();if(!(_cc_c)){_skip(5);};;goto step_next;
+        case  266: cpu->dlatch=_gd();if(!(_cc_c)){_skip(5);};goto step_next;
         // -- generic
-        case  267: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;;goto step_next;
+        case  267: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next;
         case  268: goto step_next;
         case  269: goto step_next;
         case  270: goto step_next;
@@ -2153,15 +2154,15 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  281: goto step_next;
         case  282: _wait();_mread(cpu->pc++);goto step_next;
-        case  283: cpu->wzl=_gd();;goto step_next;
+        case  283: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  284: goto step_next;
         case  285: _wait();_mread(cpu->pc++);goto step_next;
-        case  286: cpu->wzh=_gd();;goto step_next;
+        case  286: cpu->wzh=_gd();goto step_next;
         // -- mread
         case  287: goto step_next;
         case  288: _wait();_mread(cpu->wz++);goto step_next;
-        case  289: cpu->a=_gd();;goto step_next;
+        case  289: cpu->a=_gd();goto step_next;
         // -- overlapped
         case  290: goto fetch_next;
         
@@ -2184,7 +2185,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  296: goto step_next;
         case  297: _wait();_mread(cpu->pc++);goto step_next;
-        case  298: cpu->a=_gd();;goto step_next;
+        case  298: cpu->a=_gd();goto step_next;
         // -- overlapped
         case  299: goto fetch_next;
         
@@ -2220,7 +2221,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  307: goto step_next;
         case  308: _wait();_mread(cpu->addr);goto step_next;
-        case  309: cpu->b=_gd();;goto step_next;
+        case  309: cpu->b=_gd();goto step_next;
         // -- overlapped
         case  310: goto fetch_next;
         
@@ -2256,7 +2257,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  318: goto step_next;
         case  319: _wait();_mread(cpu->addr);goto step_next;
-        case  320: cpu->c=_gd();;goto step_next;
+        case  320: cpu->c=_gd();goto step_next;
         // -- overlapped
         case  321: goto fetch_next;
         
@@ -2292,7 +2293,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  329: goto step_next;
         case  330: _wait();_mread(cpu->addr);goto step_next;
-        case  331: cpu->d=_gd();;goto step_next;
+        case  331: cpu->d=_gd();goto step_next;
         // -- overlapped
         case  332: goto fetch_next;
         
@@ -2328,7 +2329,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  340: goto step_next;
         case  341: _wait();_mread(cpu->addr);goto step_next;
-        case  342: cpu->e=_gd();;goto step_next;
+        case  342: cpu->e=_gd();goto step_next;
         // -- overlapped
         case  343: goto fetch_next;
         
@@ -2364,7 +2365,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  351: goto step_next;
         case  352: _wait();_mread(cpu->addr);goto step_next;
-        case  353: cpu->h=_gd();;goto step_next;
+        case  353: cpu->h=_gd();goto step_next;
         // -- overlapped
         case  354: goto fetch_next;
         
@@ -2400,7 +2401,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  362: goto step_next;
         case  363: _wait();_mread(cpu->addr);goto step_next;
-        case  364: cpu->l=_gd();;goto step_next;
+        case  364: cpu->l=_gd();goto step_next;
         // -- overlapped
         case  365: goto fetch_next;
         
@@ -2496,7 +2497,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  402: goto step_next;
         case  403: _wait();_mread(cpu->addr);goto step_next;
-        case  404: cpu->a=_gd();;goto step_next;
+        case  404: cpu->a=_gd();goto step_next;
         // -- overlapped
         case  405: goto fetch_next;
         
@@ -2532,7 +2533,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  413: goto step_next;
         case  414: _wait();_mread(cpu->addr);goto step_next;
-        case  415: cpu->dlatch=_gd();;goto step_next;
+        case  415: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  416: _z80_add8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2568,7 +2569,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  424: goto step_next;
         case  425: _wait();_mread(cpu->addr);goto step_next;
-        case  426: cpu->dlatch=_gd();;goto step_next;
+        case  426: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  427: _z80_adc8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2604,7 +2605,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  435: goto step_next;
         case  436: _wait();_mread(cpu->addr);goto step_next;
-        case  437: cpu->dlatch=_gd();;goto step_next;
+        case  437: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  438: _z80_sub8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2640,7 +2641,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  446: goto step_next;
         case  447: _wait();_mread(cpu->addr);goto step_next;
-        case  448: cpu->dlatch=_gd();;goto step_next;
+        case  448: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  449: _z80_sbc8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2676,7 +2677,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  457: goto step_next;
         case  458: _wait();_mread(cpu->addr);goto step_next;
-        case  459: cpu->dlatch=_gd();;goto step_next;
+        case  459: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  460: _z80_and8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2712,7 +2713,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  468: goto step_next;
         case  469: _wait();_mread(cpu->addr);goto step_next;
-        case  470: cpu->dlatch=_gd();;goto step_next;
+        case  470: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  471: _z80_xor8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2748,7 +2749,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  479: goto step_next;
         case  480: _wait();_mread(cpu->addr);goto step_next;
-        case  481: cpu->dlatch=_gd();;goto step_next;
+        case  481: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  482: _z80_or8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2784,7 +2785,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  490: goto step_next;
         case  491: _wait();_mread(cpu->addr);goto step_next;
-        case  492: cpu->dlatch=_gd();;goto step_next;
+        case  492: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  493: _z80_cp8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2798,11 +2799,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  496: goto step_next;
         case  497: _wait();_mread(cpu->sp++);goto step_next;
-        case  498: cpu->wzl=_gd();;goto step_next;
+        case  498: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  499: goto step_next;
         case  500: _wait();_mread(cpu->sp++);goto step_next;
-        case  501: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  501: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  502: goto fetch_next;
         
@@ -2810,11 +2811,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  503: goto step_next;
         case  504: _wait();_mread(cpu->sp++);goto step_next;
-        case  505: cpu->c=_gd();;goto step_next;
+        case  505: cpu->c=_gd();goto step_next;
         // -- mread
         case  506: goto step_next;
         case  507: _wait();_mread(cpu->sp++);goto step_next;
-        case  508: cpu->b=_gd();;goto step_next;
+        case  508: cpu->b=_gd();goto step_next;
         // -- overlapped
         case  509: goto fetch_next;
         
@@ -2822,11 +2823,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  510: goto step_next;
         case  511: _wait();_mread(cpu->pc++);goto step_next;
-        case  512: cpu->wzl=_gd();;goto step_next;
+        case  512: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  513: goto step_next;
         case  514: _wait();_mread(cpu->pc++);goto step_next;
-        case  515: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;};;goto step_next;
+        case  515: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
         case  516: goto fetch_next;
         
@@ -2834,11 +2835,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  517: goto step_next;
         case  518: _wait();_mread(cpu->pc++);goto step_next;
-        case  519: cpu->wzl=_gd();;goto step_next;
+        case  519: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  520: goto step_next;
         case  521: _wait();_mread(cpu->pc++);goto step_next;
-        case  522: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  522: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  523: goto fetch_next;
         
@@ -2846,11 +2847,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  524: goto step_next;
         case  525: _wait();_mread(cpu->pc++);goto step_next;
-        case  526: cpu->wzl=_gd();;goto step_next;
+        case  526: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  527: goto step_next;
         case  528: _wait();_mread(cpu->pc++);goto step_next;
-        case  529: cpu->wzh=_gd();if (!_cc_nz){_skip(7);};;goto step_next;
+        case  529: cpu->wzh=_gd();if (!_cc_nz){_skip(7);};goto step_next;
         // -- generic
         case  530: goto step_next;
         // -- mwrite
@@ -2882,7 +2883,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  546: goto step_next;
         case  547: _wait();_mread(cpu->pc++);goto step_next;
-        case  548: cpu->dlatch=_gd();;goto step_next;
+        case  548: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  549: _z80_add8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -2906,11 +2907,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  559: goto step_next;
         case  560: _wait();_mread(cpu->sp++);goto step_next;
-        case  561: cpu->wzl=_gd();;goto step_next;
+        case  561: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  562: goto step_next;
         case  563: _wait();_mread(cpu->sp++);goto step_next;
-        case  564: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  564: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  565: goto fetch_next;
         
@@ -2918,11 +2919,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  566: goto step_next;
         case  567: _wait();_mread(cpu->sp++);goto step_next;
-        case  568: cpu->wzl=_gd();;goto step_next;
+        case  568: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  569: goto step_next;
         case  570: _wait();_mread(cpu->sp++);goto step_next;
-        case  571: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  571: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  572: goto fetch_next;
         
@@ -2930,11 +2931,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  573: goto step_next;
         case  574: _wait();_mread(cpu->pc++);goto step_next;
-        case  575: cpu->wzl=_gd();;goto step_next;
+        case  575: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  576: goto step_next;
         case  577: _wait();_mread(cpu->pc++);goto step_next;
-        case  578: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;};;goto step_next;
+        case  578: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
         case  579: goto fetch_next;
         
@@ -2946,11 +2947,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  581: goto step_next;
         case  582: _wait();_mread(cpu->pc++);goto step_next;
-        case  583: cpu->wzl=_gd();;goto step_next;
+        case  583: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  584: goto step_next;
         case  585: _wait();_mread(cpu->pc++);goto step_next;
-        case  586: cpu->wzh=_gd();if (!_cc_z){_skip(7);};;goto step_next;
+        case  586: cpu->wzh=_gd();if (!_cc_z){_skip(7);};goto step_next;
         // -- generic
         case  587: goto step_next;
         // -- mwrite
@@ -2968,11 +2969,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  595: goto step_next;
         case  596: _wait();_mread(cpu->pc++);goto step_next;
-        case  597: cpu->wzl=_gd();;goto step_next;
+        case  597: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  598: goto step_next;
         case  599: _wait();_mread(cpu->pc++);goto step_next;
-        case  600: cpu->wzh=_gd();;goto step_next;
+        case  600: cpu->wzh=_gd();goto step_next;
         case  601: goto step_next;
         // -- mwrite
         case  602: goto step_next;
@@ -2989,7 +2990,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  609: goto step_next;
         case  610: _wait();_mread(cpu->pc++);goto step_next;
-        case  611: cpu->dlatch=_gd();;goto step_next;
+        case  611: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  612: _z80_adc8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -3013,11 +3014,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  622: goto step_next;
         case  623: _wait();_mread(cpu->sp++);goto step_next;
-        case  624: cpu->wzl=_gd();;goto step_next;
+        case  624: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  625: goto step_next;
         case  626: _wait();_mread(cpu->sp++);goto step_next;
-        case  627: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  627: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  628: goto fetch_next;
         
@@ -3025,11 +3026,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  629: goto step_next;
         case  630: _wait();_mread(cpu->sp++);goto step_next;
-        case  631: cpu->e=_gd();;goto step_next;
+        case  631: cpu->e=_gd();goto step_next;
         // -- mread
         case  632: goto step_next;
         case  633: _wait();_mread(cpu->sp++);goto step_next;
-        case  634: cpu->d=_gd();;goto step_next;
+        case  634: cpu->d=_gd();goto step_next;
         // -- overlapped
         case  635: goto fetch_next;
         
@@ -3037,11 +3038,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  636: goto step_next;
         case  637: _wait();_mread(cpu->pc++);goto step_next;
-        case  638: cpu->wzl=_gd();;goto step_next;
+        case  638: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  639: goto step_next;
         case  640: _wait();_mread(cpu->pc++);goto step_next;
-        case  641: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;};;goto step_next;
+        case  641: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
         case  642: goto fetch_next;
         
@@ -3049,7 +3050,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  643: goto step_next;
         case  644: _wait();_mread(cpu->pc++);goto step_next;
-        case  645: cpu->wzl=_gd();cpu->wzh=cpu->a;;goto step_next;
+        case  645: cpu->wzl=_gd();cpu->wzh=cpu->a;goto step_next;
         // -- iowrite
         case  646: goto step_next;
         case  647: _iowrite(cpu->wz,cpu->a);goto step_next;
@@ -3062,11 +3063,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  651: goto step_next;
         case  652: _wait();_mread(cpu->pc++);goto step_next;
-        case  653: cpu->wzl=_gd();;goto step_next;
+        case  653: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  654: goto step_next;
         case  655: _wait();_mread(cpu->pc++);goto step_next;
-        case  656: cpu->wzh=_gd();if (!_cc_nc){_skip(7);};;goto step_next;
+        case  656: cpu->wzh=_gd();if (!_cc_nc){_skip(7);};goto step_next;
         // -- generic
         case  657: goto step_next;
         // -- mwrite
@@ -3098,7 +3099,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  673: goto step_next;
         case  674: _wait();_mread(cpu->pc++);goto step_next;
-        case  675: cpu->dlatch=_gd();;goto step_next;
+        case  675: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  676: _z80_sub8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -3122,11 +3123,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  686: goto step_next;
         case  687: _wait();_mread(cpu->sp++);goto step_next;
-        case  688: cpu->wzl=_gd();;goto step_next;
+        case  688: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  689: goto step_next;
         case  690: _wait();_mread(cpu->sp++);goto step_next;
-        case  691: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  691: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  692: goto fetch_next;
         
@@ -3138,11 +3139,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  694: goto step_next;
         case  695: _wait();_mread(cpu->pc++);goto step_next;
-        case  696: cpu->wzl=_gd();;goto step_next;
+        case  696: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  697: goto step_next;
         case  698: _wait();_mread(cpu->pc++);goto step_next;
-        case  699: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;};;goto step_next;
+        case  699: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
         case  700: goto fetch_next;
         
@@ -3150,7 +3151,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  701: goto step_next;
         case  702: _wait();_mread(cpu->pc++);goto step_next;
-        case  703: cpu->wzl=_gd();cpu->wzh=cpu->a;;goto step_next;
+        case  703: cpu->wzl=_gd();cpu->wzh=cpu->a;goto step_next;
         // -- ioread
         case  704: goto step_next;
         case  705: goto step_next;
@@ -3163,11 +3164,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  709: goto step_next;
         case  710: _wait();_mread(cpu->pc++);goto step_next;
-        case  711: cpu->wzl=_gd();;goto step_next;
+        case  711: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  712: goto step_next;
         case  713: _wait();_mread(cpu->pc++);goto step_next;
-        case  714: cpu->wzh=_gd();if (!_cc_c){_skip(7);};;goto step_next;
+        case  714: cpu->wzh=_gd();if (!_cc_c){_skip(7);};goto step_next;
         // -- generic
         case  715: goto step_next;
         // -- mwrite
@@ -3189,7 +3190,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  724: goto step_next;
         case  725: _wait();_mread(cpu->pc++);goto step_next;
-        case  726: cpu->dlatch=_gd();;goto step_next;
+        case  726: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  727: _z80_sbc8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -3213,11 +3214,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  737: goto step_next;
         case  738: _wait();_mread(cpu->sp++);goto step_next;
-        case  739: cpu->wzl=_gd();;goto step_next;
+        case  739: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  740: goto step_next;
         case  741: _wait();_mread(cpu->sp++);goto step_next;
-        case  742: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  742: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  743: goto fetch_next;
         
@@ -3225,11 +3226,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  744: goto step_next;
         case  745: _wait();_mread(cpu->sp++);goto step_next;
-        case  746: cpu->hlx[cpu->hlx_idx].l=_gd();;goto step_next;
+        case  746: cpu->hlx[cpu->hlx_idx].l=_gd();goto step_next;
         // -- mread
         case  747: goto step_next;
         case  748: _wait();_mread(cpu->sp++);goto step_next;
-        case  749: cpu->hlx[cpu->hlx_idx].h=_gd();;goto step_next;
+        case  749: cpu->hlx[cpu->hlx_idx].h=_gd();goto step_next;
         // -- overlapped
         case  750: goto fetch_next;
         
@@ -3237,11 +3238,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  751: goto step_next;
         case  752: _wait();_mread(cpu->pc++);goto step_next;
-        case  753: cpu->wzl=_gd();;goto step_next;
+        case  753: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  754: goto step_next;
         case  755: _wait();_mread(cpu->pc++);goto step_next;
-        case  756: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;};;goto step_next;
+        case  756: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
         case  757: goto fetch_next;
         
@@ -3249,11 +3250,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  758: goto step_next;
         case  759: _wait();_mread(cpu->sp);goto step_next;
-        case  760: cpu->wzl=_gd();;goto step_next;
+        case  760: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  761: goto step_next;
         case  762: _wait();_mread(cpu->sp+1);goto step_next;
-        case  763: cpu->wzh=_gd();;goto step_next;
+        case  763: cpu->wzh=_gd();goto step_next;
         case  764: goto step_next;
         // -- mwrite
         case  765: goto step_next;
@@ -3272,11 +3273,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  774: goto step_next;
         case  775: _wait();_mread(cpu->pc++);goto step_next;
-        case  776: cpu->wzl=_gd();;goto step_next;
+        case  776: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  777: goto step_next;
         case  778: _wait();_mread(cpu->pc++);goto step_next;
-        case  779: cpu->wzh=_gd();if (!_cc_po){_skip(7);};;goto step_next;
+        case  779: cpu->wzh=_gd();if (!_cc_po){_skip(7);};goto step_next;
         // -- generic
         case  780: goto step_next;
         // -- mwrite
@@ -3308,7 +3309,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  796: goto step_next;
         case  797: _wait();_mread(cpu->pc++);goto step_next;
-        case  798: cpu->dlatch=_gd();;goto step_next;
+        case  798: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  799: _z80_and8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -3332,11 +3333,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  809: goto step_next;
         case  810: _wait();_mread(cpu->sp++);goto step_next;
-        case  811: cpu->wzl=_gd();;goto step_next;
+        case  811: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  812: goto step_next;
         case  813: _wait();_mread(cpu->sp++);goto step_next;
-        case  814: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  814: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  815: goto fetch_next;
         
@@ -3348,11 +3349,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  817: goto step_next;
         case  818: _wait();_mread(cpu->pc++);goto step_next;
-        case  819: cpu->wzl=_gd();;goto step_next;
+        case  819: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  820: goto step_next;
         case  821: _wait();_mread(cpu->pc++);goto step_next;
-        case  822: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;};;goto step_next;
+        case  822: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
         case  823: goto fetch_next;
         
@@ -3364,11 +3365,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  825: goto step_next;
         case  826: _wait();_mread(cpu->pc++);goto step_next;
-        case  827: cpu->wzl=_gd();;goto step_next;
+        case  827: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  828: goto step_next;
         case  829: _wait();_mread(cpu->pc++);goto step_next;
-        case  830: cpu->wzh=_gd();if (!_cc_pe){_skip(7);};;goto step_next;
+        case  830: cpu->wzh=_gd();if (!_cc_pe){_skip(7);};goto step_next;
         // -- generic
         case  831: goto step_next;
         // -- mwrite
@@ -3390,7 +3391,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  840: goto step_next;
         case  841: _wait();_mread(cpu->pc++);goto step_next;
-        case  842: cpu->dlatch=_gd();;goto step_next;
+        case  842: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  843: _z80_xor8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -3414,11 +3415,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  853: goto step_next;
         case  854: _wait();_mread(cpu->sp++);goto step_next;
-        case  855: cpu->wzl=_gd();;goto step_next;
+        case  855: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  856: goto step_next;
         case  857: _wait();_mread(cpu->sp++);goto step_next;
-        case  858: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  858: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  859: goto fetch_next;
         
@@ -3426,11 +3427,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  860: goto step_next;
         case  861: _wait();_mread(cpu->sp++);goto step_next;
-        case  862: cpu->f=_gd();;goto step_next;
+        case  862: cpu->f=_gd();goto step_next;
         // -- mread
         case  863: goto step_next;
         case  864: _wait();_mread(cpu->sp++);goto step_next;
-        case  865: cpu->a=_gd();;goto step_next;
+        case  865: cpu->a=_gd();goto step_next;
         // -- overlapped
         case  866: goto fetch_next;
         
@@ -3438,27 +3439,27 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  867: goto step_next;
         case  868: _wait();_mread(cpu->pc++);goto step_next;
-        case  869: cpu->wzl=_gd();;goto step_next;
+        case  869: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  870: goto step_next;
         case  871: _wait();_mread(cpu->pc++);goto step_next;
-        case  872: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;};;goto step_next;
+        case  872: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
         case  873: goto fetch_next;
         
         //  F3: di (M:1 T:4)
         // -- overlapped
-        case  874: cpu->iff1=cpu->iff2=false;;goto fetch_next;
+        case  874: cpu->iff1=cpu->iff2=false;goto fetch_next;
         
         //  F4: call p,nn (M:6 T:17)
         // -- mread
         case  875: goto step_next;
         case  876: _wait();_mread(cpu->pc++);goto step_next;
-        case  877: cpu->wzl=_gd();;goto step_next;
+        case  877: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  878: goto step_next;
         case  879: _wait();_mread(cpu->pc++);goto step_next;
-        case  880: cpu->wzh=_gd();if (!_cc_p){_skip(7);};;goto step_next;
+        case  880: cpu->wzh=_gd();if (!_cc_p){_skip(7);};goto step_next;
         // -- generic
         case  881: goto step_next;
         // -- mwrite
@@ -3490,7 +3491,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  897: goto step_next;
         case  898: _wait();_mread(cpu->pc++);goto step_next;
-        case  899: cpu->dlatch=_gd();;goto step_next;
+        case  899: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  900: _z80_or8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -3514,11 +3515,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  910: goto step_next;
         case  911: _wait();_mread(cpu->sp++);goto step_next;
-        case  912: cpu->wzl=_gd();;goto step_next;
+        case  912: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  913: goto step_next;
         case  914: _wait();_mread(cpu->sp++);goto step_next;
-        case  915: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  915: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  916: goto fetch_next;
         
@@ -3533,11 +3534,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  920: goto step_next;
         case  921: _wait();_mread(cpu->pc++);goto step_next;
-        case  922: cpu->wzl=_gd();;goto step_next;
+        case  922: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  923: goto step_next;
         case  924: _wait();_mread(cpu->pc++);goto step_next;
-        case  925: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;};;goto step_next;
+        case  925: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;};goto step_next;
         // -- overlapped
         case  926: goto fetch_next;
         
@@ -3549,11 +3550,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  928: goto step_next;
         case  929: _wait();_mread(cpu->pc++);goto step_next;
-        case  930: cpu->wzl=_gd();;goto step_next;
+        case  930: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  931: goto step_next;
         case  932: _wait();_mread(cpu->pc++);goto step_next;
-        case  933: cpu->wzh=_gd();if (!_cc_m){_skip(7);};;goto step_next;
+        case  933: cpu->wzh=_gd();if (!_cc_m){_skip(7);};goto step_next;
         // -- generic
         case  934: goto step_next;
         // -- mwrite
@@ -3575,7 +3576,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  943: goto step_next;
         case  944: _wait();_mread(cpu->pc++);goto step_next;
-        case  945: cpu->dlatch=_gd();;goto step_next;
+        case  945: cpu->dlatch=_gd();goto step_next;
         // -- overlapped
         case  946: _z80_cp8(cpu,cpu->dlatch);goto fetch_next;
         
@@ -3631,11 +3632,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  974: goto step_next;
         case  975: _wait();_mread(cpu->pc++);goto step_next;
-        case  976: cpu->wzl=_gd();;goto step_next;
+        case  976: cpu->wzl=_gd();goto step_next;
         // -- mread
         case  977: goto step_next;
         case  978: _wait();_mread(cpu->pc++);goto step_next;
-        case  979: cpu->wzh=_gd();;goto step_next;
+        case  979: cpu->wzh=_gd();goto step_next;
         // -- mwrite
         case  980: goto step_next;
         case  981: _wait();_mwrite(cpu->wz++,cpu->c);goto step_next;
@@ -3655,11 +3656,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case  988: goto step_next;
         case  989: _wait();_mread(cpu->sp++);goto step_next;
-        case  990: cpu->wzl=_gd();pins|=Z80_RETI;;goto step_next;
+        case  990: cpu->wzl=_gd();pins|=Z80_RETI;goto step_next;
         // -- mread
         case  991: goto step_next;
         case  992: _wait();_mread(cpu->sp++);goto step_next;
-        case  993: cpu->wzh=_gd();cpu->pc=cpu->wz;;goto step_next;
+        case  993: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case  994: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_next;
         
@@ -3707,19 +3708,19 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1016: goto step_next;
         case 1017: _wait();_mread(cpu->pc++);goto step_next;
-        case 1018: cpu->wzl=_gd();;goto step_next;
+        case 1018: cpu->wzl=_gd();goto step_next;
         // -- mread
         case 1019: goto step_next;
         case 1020: _wait();_mread(cpu->pc++);goto step_next;
-        case 1021: cpu->wzh=_gd();;goto step_next;
+        case 1021: cpu->wzh=_gd();goto step_next;
         // -- mread
         case 1022: goto step_next;
         case 1023: _wait();_mread(cpu->wz++);goto step_next;
-        case 1024: cpu->c=_gd();;goto step_next;
+        case 1024: cpu->c=_gd();goto step_next;
         // -- mread
         case 1025: goto step_next;
         case 1026: _wait();_mread(cpu->wz);goto step_next;
-        case 1027: cpu->b=_gd();;goto step_next;
+        case 1027: cpu->b=_gd();goto step_next;
         // -- overlapped
         case 1028: goto fetch_next;
         
@@ -3767,11 +3768,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1050: goto step_next;
         case 1051: _wait();_mread(cpu->pc++);goto step_next;
-        case 1052: cpu->wzl=_gd();;goto step_next;
+        case 1052: cpu->wzl=_gd();goto step_next;
         // -- mread
         case 1053: goto step_next;
         case 1054: _wait();_mread(cpu->pc++);goto step_next;
-        case 1055: cpu->wzh=_gd();;goto step_next;
+        case 1055: cpu->wzh=_gd();goto step_next;
         // -- mwrite
         case 1056: goto step_next;
         case 1057: _wait();_mwrite(cpu->wz++,cpu->e);goto step_next;
@@ -3827,19 +3828,19 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1084: goto step_next;
         case 1085: _wait();_mread(cpu->pc++);goto step_next;
-        case 1086: cpu->wzl=_gd();;goto step_next;
+        case 1086: cpu->wzl=_gd();goto step_next;
         // -- mread
         case 1087: goto step_next;
         case 1088: _wait();_mread(cpu->pc++);goto step_next;
-        case 1089: cpu->wzh=_gd();;goto step_next;
+        case 1089: cpu->wzh=_gd();goto step_next;
         // -- mread
         case 1090: goto step_next;
         case 1091: _wait();_mread(cpu->wz++);goto step_next;
-        case 1092: cpu->e=_gd();;goto step_next;
+        case 1092: cpu->e=_gd();goto step_next;
         // -- mread
         case 1093: goto step_next;
         case 1094: _wait();_mread(cpu->wz);goto step_next;
-        case 1095: cpu->d=_gd();;goto step_next;
+        case 1095: cpu->d=_gd();goto step_next;
         // -- overlapped
         case 1096: goto fetch_next;
         
@@ -3887,11 +3888,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1118: goto step_next;
         case 1119: _wait();_mread(cpu->pc++);goto step_next;
-        case 1120: cpu->wzl=_gd();;goto step_next;
+        case 1120: cpu->wzl=_gd();goto step_next;
         // -- mread
         case 1121: goto step_next;
         case 1122: _wait();_mread(cpu->pc++);goto step_next;
-        case 1123: cpu->wzh=_gd();;goto step_next;
+        case 1123: cpu->wzh=_gd();goto step_next;
         // -- mwrite
         case 1124: goto step_next;
         case 1125: _wait();_mwrite(cpu->wz++,cpu->l);goto step_next;
@@ -3911,7 +3912,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1132: goto step_next;
         case 1133: _wait();_mread(cpu->hl);goto step_next;
-        case 1134: cpu->dlatch=_gd();;goto step_next;
+        case 1134: cpu->dlatch=_gd();goto step_next;
         // -- generic
         case 1135: cpu->dlatch=_z80_rrd(cpu,cpu->dlatch);goto step_next;
         case 1136: goto step_next;
@@ -3958,19 +3959,19 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1161: goto step_next;
         case 1162: _wait();_mread(cpu->pc++);goto step_next;
-        case 1163: cpu->wzl=_gd();;goto step_next;
+        case 1163: cpu->wzl=_gd();goto step_next;
         // -- mread
         case 1164: goto step_next;
         case 1165: _wait();_mread(cpu->pc++);goto step_next;
-        case 1166: cpu->wzh=_gd();;goto step_next;
+        case 1166: cpu->wzh=_gd();goto step_next;
         // -- mread
         case 1167: goto step_next;
         case 1168: _wait();_mread(cpu->wz++);goto step_next;
-        case 1169: cpu->l=_gd();;goto step_next;
+        case 1169: cpu->l=_gd();goto step_next;
         // -- mread
         case 1170: goto step_next;
         case 1171: _wait();_mread(cpu->wz);goto step_next;
-        case 1172: cpu->h=_gd();;goto step_next;
+        case 1172: cpu->h=_gd();goto step_next;
         // -- overlapped
         case 1173: goto fetch_next;
         
@@ -3982,7 +3983,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1175: goto step_next;
         case 1176: _wait();_mread(cpu->hl);goto step_next;
-        case 1177: cpu->dlatch=_gd();;goto step_next;
+        case 1177: cpu->dlatch=_gd();goto step_next;
         // -- generic
         case 1178: cpu->dlatch=_z80_rld(cpu,cpu->dlatch);goto step_next;
         case 1179: goto step_next;
@@ -4029,11 +4030,11 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1204: goto step_next;
         case 1205: _wait();_mread(cpu->pc++);goto step_next;
-        case 1206: cpu->wzl=_gd();;goto step_next;
+        case 1206: cpu->wzl=_gd();goto step_next;
         // -- mread
         case 1207: goto step_next;
         case 1208: _wait();_mread(cpu->pc++);goto step_next;
-        case 1209: cpu->wzh=_gd();;goto step_next;
+        case 1209: cpu->wzh=_gd();goto step_next;
         // -- mwrite
         case 1210: goto step_next;
         case 1211: _wait();_mwrite(cpu->wz++,cpu->spl);goto step_next;
@@ -4083,19 +4084,19 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1236: goto step_next;
         case 1237: _wait();_mread(cpu->pc++);goto step_next;
-        case 1238: cpu->wzl=_gd();;goto step_next;
+        case 1238: cpu->wzl=_gd();goto step_next;
         // -- mread
         case 1239: goto step_next;
         case 1240: _wait();_mread(cpu->pc++);goto step_next;
-        case 1241: cpu->wzh=_gd();;goto step_next;
+        case 1241: cpu->wzh=_gd();goto step_next;
         // -- mread
         case 1242: goto step_next;
         case 1243: _wait();_mread(cpu->wz++);goto step_next;
-        case 1244: cpu->spl=_gd();;goto step_next;
+        case 1244: cpu->spl=_gd();goto step_next;
         // -- mread
         case 1245: goto step_next;
         case 1246: _wait();_mread(cpu->wz);goto step_next;
-        case 1247: cpu->sph=_gd();;goto step_next;
+        case 1247: cpu->sph=_gd();goto step_next;
         // -- overlapped
         case 1248: goto fetch_next;
         
@@ -4107,7 +4108,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1250: goto step_next;
         case 1251: _wait();_mread(cpu->hl++);goto step_next;
-        case 1252: cpu->dlatch=_gd();;goto step_next;
+        case 1252: cpu->dlatch=_gd();goto step_next;
         // -- mwrite
         case 1253: goto step_next;
         case 1254: _wait();_mwrite(cpu->de++,cpu->dlatch);goto step_next;
@@ -4122,7 +4123,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1259: goto step_next;
         case 1260: _wait();_mread(cpu->hl++);goto step_next;
-        case 1261: cpu->dlatch=_gd();;goto step_next;
+        case 1261: cpu->dlatch=_gd();goto step_next;
         // -- generic
         case 1262: cpu->wz++;_z80_cpi_cpd(cpu,cpu->dlatch);goto step_next;
         case 1263: goto step_next;
@@ -4153,7 +4154,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1278: goto step_next;
         case 1279: _wait();_mread(cpu->hl++);goto step_next;
-        case 1280: cpu->dlatch=_gd();cpu->b--;;goto step_next;
+        case 1280: cpu->dlatch=_gd();cpu->b--;goto step_next;
         // -- iowrite
         case 1281: goto step_next;
         case 1282: _iowrite(cpu->bc,cpu->dlatch);goto step_next;
@@ -4166,7 +4167,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1286: goto step_next;
         case 1287: _wait();_mread(cpu->hl--);goto step_next;
-        case 1288: cpu->dlatch=_gd();;goto step_next;
+        case 1288: cpu->dlatch=_gd();goto step_next;
         // -- mwrite
         case 1289: goto step_next;
         case 1290: _wait();_mwrite(cpu->de--,cpu->dlatch);goto step_next;
@@ -4181,7 +4182,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1295: goto step_next;
         case 1296: _wait();_mread(cpu->hl--);goto step_next;
-        case 1297: cpu->dlatch=_gd();;goto step_next;
+        case 1297: cpu->dlatch=_gd();goto step_next;
         // -- generic
         case 1298: cpu->wz--;_z80_cpi_cpd(cpu,cpu->dlatch);goto step_next;
         case 1299: goto step_next;
@@ -4212,7 +4213,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1314: goto step_next;
         case 1315: _wait();_mread(cpu->hl--);goto step_next;
-        case 1316: cpu->dlatch=_gd();cpu->b--;;goto step_next;
+        case 1316: cpu->dlatch=_gd();cpu->b--;goto step_next;
         // -- iowrite
         case 1317: goto step_next;
         case 1318: _iowrite(cpu->bc,cpu->dlatch);goto step_next;
@@ -4225,7 +4226,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1322: goto step_next;
         case 1323: _wait();_mread(cpu->hl++);goto step_next;
-        case 1324: cpu->dlatch=_gd();;goto step_next;
+        case 1324: cpu->dlatch=_gd();goto step_next;
         // -- mwrite
         case 1325: goto step_next;
         case 1326: _wait();_mwrite(cpu->de++,cpu->dlatch);goto step_next;
@@ -4246,7 +4247,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1336: goto step_next;
         case 1337: _wait();_mread(cpu->hl++);goto step_next;
-        case 1338: cpu->dlatch=_gd();;goto step_next;
+        case 1338: cpu->dlatch=_gd();goto step_next;
         // -- generic
         case 1339: cpu->wz++;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_skip(5);};goto step_next;
         case 1340: goto step_next;
@@ -4289,7 +4290,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1365: goto step_next;
         case 1366: _wait();_mread(cpu->hl++);goto step_next;
-        case 1367: cpu->dlatch=_gd();cpu->b--;;goto step_next;
+        case 1367: cpu->dlatch=_gd();cpu->b--;goto step_next;
         // -- iowrite
         case 1368: goto step_next;
         case 1369: _iowrite(cpu->bc,cpu->dlatch);goto step_next;
@@ -4308,7 +4309,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1378: goto step_next;
         case 1379: _wait();_mread(cpu->hl--);goto step_next;
-        case 1380: cpu->dlatch=_gd();;goto step_next;
+        case 1380: cpu->dlatch=_gd();goto step_next;
         // -- mwrite
         case 1381: goto step_next;
         case 1382: _wait();_mwrite(cpu->de--,cpu->dlatch);goto step_next;
@@ -4329,7 +4330,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1392: goto step_next;
         case 1393: _wait();_mread(cpu->hl--);goto step_next;
-        case 1394: cpu->dlatch=_gd();;goto step_next;
+        case 1394: cpu->dlatch=_gd();goto step_next;
         // -- generic
         case 1395: cpu->wz--;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_skip(5);};goto step_next;
         case 1396: goto step_next;
@@ -4372,7 +4373,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1421: goto step_next;
         case 1422: _wait();_mread(cpu->hl--);goto step_next;
-        case 1423: cpu->dlatch=_gd();cpu->b--;;goto step_next;
+        case 1423: cpu->dlatch=_gd();cpu->b--;goto step_next;
         // -- iowrite
         case 1424: goto step_next;
         case 1425: _iowrite(cpu->bc,cpu->dlatch);goto step_next;
@@ -4395,7 +4396,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1435: goto step_next;
         case 1436: _wait();_mread(cpu->hl);goto step_next;
-        case 1437: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,6)){_skip(3);};;goto step_next;
+        case 1437: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,6)){_skip(3);};goto step_next;
         case 1438: goto step_next;
         // -- mwrite
         case 1439: goto step_next;
@@ -4412,13 +4413,13 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1445: goto step_next;
         case 1446: _wait();_mread(cpu->pc++);goto step_next;
-        case 1447: cpu->dlatch=_gd();_z80_ddfdcb_opcode(cpu,cpu->dlatch);;goto step_next;
+        case 1447: cpu->dlatch=_gd();_z80_ddfdcb_opcode(cpu,cpu->dlatch);goto step_next;
         case 1448: goto step_next;
         case 1449: goto step_next;
         // -- mread
         case 1450: goto step_next;
         case 1451: _wait();_mread(cpu->addr);goto step_next;
-        case 1452: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_skip(3);};;goto step_next;
+        case 1452: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_skip(3);};goto step_next;
         case 1453: goto step_next;
         // -- mwrite
         case 1454: goto step_next;
@@ -4447,7 +4448,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- generic
         case 1465: pins=_z80_int012_step1(cpu,pins);goto step_next;
         // -- generic
-        case 1466: _wait();;goto step_next;
+        case 1466: _wait();goto step_next;
         // -- generic
         case 1467: pins=_z80_refresh(cpu,pins);goto step_next;
         case 1468: goto step_next;
@@ -4480,16 +4481,16 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 1485: goto step_next;
         // -- mwrite
         case 1486: goto step_next;
-        case 1487: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wzl=cpu->dlatch;cpu->wzh=cpu->i;;goto step_next;
+        case 1487: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wzl=cpu->dlatch;cpu->wzh=cpu->i;goto step_next;
         case 1488: goto step_next;
         // -- mread
         case 1489: goto step_next;
         case 1490: _wait();_mread(cpu->wz++);goto step_next;
-        case 1491: cpu->dlatch=_gd();;goto step_next;
+        case 1491: cpu->dlatch=_gd();goto step_next;
         // -- mread
         case 1492: goto step_next;
         case 1493: _wait();_mread(cpu->wz);goto step_next;
-        case 1494: cpu->wzh=_gd();cpu->wzl=cpu->dlatch;cpu->pc=cpu->wz;;goto step_next;
+        case 1494: cpu->wzh=_gd();cpu->wzl=cpu->dlatch;cpu->pc=cpu->wz;goto step_next;
         // -- overlapped
         case 1495: goto fetch_next;
         

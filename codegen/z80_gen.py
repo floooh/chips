@@ -331,7 +331,7 @@ def gen_decoder():
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 add('')
                 add(f'_wait();_mread({addr});')
-                add(f'{store}=_gd();{action};')
+                add(f'{store}=_gd();{action}')
                 for _ in range(3,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'mwrite':

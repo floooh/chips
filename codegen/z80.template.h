@@ -1074,7 +1074,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             // conditional branch just for this
             cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
         } goto step_next;
-        //=== special fetch machine cycle for DD/FD-prefixed ops
+        //=== shared fetch machine cycle for DD/FD-prefixed ops
         // M1/T2: load opcode from data bus
         case 3: _wait(); cpu->opcode = _gd(); goto step_next;
         // M1/T3: refresh cycle
@@ -1107,7 +1107,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 11: goto step_next;
         case 12: goto step_next;
         case 13: {
-            // branch to original instruction
+            // branch to actual instruction
             cpu->op = _z80_opstate_table[cpu->opcode];
         } goto step_next;
         //=== special case d-loading cycle for (IX+d),n where the immediate load
@@ -1140,6 +1140,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
                 cpu->op = _z80_opstate_table[_Z80_OPSTATE_SLOT_CB];
             }
         } goto step_next;
+        //=== from here on code-generated
 $decode_block
         default: _Z80_UNREACHABLE;
     }
