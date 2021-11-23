@@ -393,16 +393,14 @@ def pip_table_to_string():
         # map redundant 'single' ops to the original
         if flag(op, 'single') and op.first_op_index != op_index:
             op = unwrap(OPS[op.first_op_index])
-        flags = ''
-        if flag(op, 'indirect'):
-            flags += '_Z80_OPSTATE_FLAGS_INDIRECT'
-        if flag(op, 'imm8'):
-            if flags != '':
-                flags += '|'
-            flags += '_Z80_OPSTATE_FLAGS_IMM8'
-        if flags == '':
-            flags = '0'
-        res += tab() + f'{{ {op.decoder_offset-1:4}, {flags} }},' 
+        step = f"{op.decoder_offset - 1:4}"
+        if flag(op, 'indirect') and flag(op, 'imm8'):
+            alt_step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"
+        elif flag(op, 'indirect'):
+            alt_step = "_Z80_OPSTATE_STEP_INDIRECT"
+        else:
+            alt_step = step
+        res += tab() + f'{{ {step}, {alt_step} }},' 
         res += f'  // {op.prefix.upper()} {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
     return res
 
