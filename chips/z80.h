@@ -4531,6 +4531,7 @@ track_int_bits: {
 #undef _sad
 #undef _sadx
 #undef _gd
+#undef _skip
 #undef _fetch_dd
 #undef _fetch_fd
 #undef _fetch_ed
