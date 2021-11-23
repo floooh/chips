@@ -1061,7 +1061,6 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _cc_m           (cpu->f&Z80_SF)
 
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
-    // process the next active tcycle
     pins &= ~(Z80_CTRL_PIN_MASK|Z80_RETI);
     switch (cpu->step) {
         //=== shared fetch machine cycle for non-DD/FD-prefixed ops
