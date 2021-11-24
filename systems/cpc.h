@@ -227,6 +227,8 @@ void cpc_set_joystick_type(cpc_t* sys, cpc_joystick_type_t type);
 cpc_joystick_type_t cpc_joystick_type(cpc_t* sys);
 // set joystick mask (combination of CPC_JOYSTICK_*)
 void cpc_joystick(cpc_t* sys, uint8_t mask);
+// get current joystick bitmask state
+uint8_t cpc_joystick_mask(cpc_t* sys);
 // load a snapshot file (.sna or .bin) into the emulator
 bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 // insert a tape file (.tap) (FIXME: currently not implemented)
@@ -237,6 +239,8 @@ bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 // remove current disc
 void cpc_remove_disc(cpc_t* cpc);
+// return true if a floppy disc is currently inserted
+bool cpc_disc_inserted(cpc_t* cpc);
 // if enabled, start calling the video-debugging-callback
 void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
 // get current display debug visualization enabled/disabled state
@@ -706,6 +710,11 @@ void cpc_joystick(cpc_t* sys, uint8_t mask) {
     sys->joy_joymask = mask;
 }
 
+uint8_t cpc_joystick_mask(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->kbd_joymask | sys->joy_joymask;
+}
+
 void cpc_enable_video_debugging(cpc_t* sys, bool enabled) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->ga.dbg_vis = enabled;
@@ -1098,11 +1107,18 @@ static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* o
 }
 
 bool cpc_insert_disc(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid);
     return fdd_cpc_insert_dsk(&sys->fdd, ptr, num_bytes);
 }
 
 void cpc_remove_disc(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
     fdd_eject_disc(&sys->fdd);
+}
+
+bool cpc_disc_inserted(cpc_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return fdd_disc_inserted(&sys->fdd);
 }
 
 int cpc_std_display_width(void) {
