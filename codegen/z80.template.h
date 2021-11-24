@@ -403,9 +403,7 @@ uint64_t z80_reset(z80_t* cpu) {
 bool z80_opdone(z80_t* cpu) {
     // because of the overlapped cycle, the result of the previous
     // instruction is only available in M1/T2
-    // FIXME: this (0 == step) is the reason why the CPC debugger doesn't work
-    // M1/T2 samples the wait pin!
-    return (0 == cpu->step) && (cpu->prefix == 0);
+    return ((cpu->pins & (Z80_M1|Z80_RD)) == (Z80_M1|Z80_RD)) && (cpu->prefix == 0);
 }
 
 static inline uint64_t _z80_halt(z80_t* cpu, uint64_t pins) {
