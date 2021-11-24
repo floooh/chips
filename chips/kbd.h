@@ -320,11 +320,11 @@ static void _kbd_update_scanout_masks(kbd_t* kbd) {
 
 void kbd_update(kbd_t* kbd, uint32_t frame_time_us) {
     CHIPS_ASSERT(kbd);
-    /* check for sticky keys that should be released */
+    // check for sticky keys that should be released
     for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
         key_state_t* k = &kbd->key_buffer[i];
         if (k->released) {
-            /* properly handle cur_time wraparound */
+            // properly handle cur_time wraparound
             if ((kbd->cur_time < k->pressed_time) ||
                 (kbd->cur_time > (k->pressed_time + kbd->sticky_time))) {
                 k->mask = 0;
@@ -380,13 +380,14 @@ void kbd_key_up(kbd_t* kbd, int key) {
 // scan keyboard matrix lines by column mask
 uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask) {
     if (column_mask != kbd->cur_column_mask) {
-        kbd->cur_column_mask = column_mask;
-        kbd->cur_scanout_line_mask = 0;
+        uint16_t m = 0;
         for (int col = 0; col < KBD_MAX_COLUMNS; col++) {
             if (column_mask & (1<<col)) {
-                kbd->cur_scanout_line_mask |= kbd->scanout_line_masks[col];
+                m |= kbd->scanout_line_masks[col];
             }
         }
+        kbd->cur_scanout_line_mask = m;
+        kbd->cur_column_mask = column_mask;
     }
     return kbd->cur_scanout_line_mask;
 }
@@ -394,13 +395,14 @@ uint16_t kbd_test_lines(kbd_t* kbd, uint16_t column_mask) {
 // scan keyboard matrix lines by column mask
 uint16_t kbd_test_columns(kbd_t* kbd, uint16_t line_mask) {
     if (line_mask != kbd->cur_line_mask) {
-        kbd->cur_line_mask = line_mask;
-        kbd->cur_scanout_column_mask = 0;
+        uint16_t m = 0;
         for (int line = 0; line < KBD_MAX_LINES; line++) {
             if (line_mask & (1<<line)) {
-                kbd->cur_scanout_column_mask |= kbd->scanout_column_masks[line];
+                m |= kbd->scanout_column_masks[line];
             }
         }
+        kbd->cur_scanout_column_mask = m;
+        kbd->cur_line_mask = line_mask;
     }
     return kbd->cur_scanout_column_mask;
 }
