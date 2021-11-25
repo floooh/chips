@@ -795,19 +795,25 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t pins) {
     }
     /* derive the 1 MHz CCLK signal from the sequencer, and perform
         the actions that need to happen at the CCLK tick
-        NOTE: the actual position where CCLK happens is important!
+        NOTE: the actual position where RDY and CCLK happens is important,
+        experiment with 0, 1, 2, 3.
+        
+        NOTE: Logon's Run crashes on rdy:1 and rdy:2
     */
-    const bool cclk = 0 == (ga->seq_tick_count & 3);
+    const bool rdy  = 3 != (ga->seq_tick_count & 3);
+    const bool cclk = 1 == (ga->seq_tick_count & 3);
+    if (rdy) {
+        // READY is connected to Z80 WAIT, this sets the WAIT pin
+        // in 3 out of 4 CPU clock cycles
+        pins |= AM40010_READY;
+    }
+    else {
+        pins &= ~AM40010_READY;
+    }
     if (cclk) {
         uint64_t crtc_pins = ga->cclk_cb(ga->user_data);
         _am40010_do_cclk(ga, crtc_pins);
         ga->crtc_pins = crtc_pins;
-        pins &= ~AM40010_READY;
-    }
-    else {
-        // READY is connected to Z80 WAIT, this sets the WAIT pin
-        // in 3 out of 4 CPU clock cycles
-        pins |= AM40010_READY;
     }
 
     // perform the per-4Mhz-tick actions, the AM40010_READY pin is also the Z80_WAIT pin
