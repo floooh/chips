@@ -1,7 +1,7 @@
 import yaml, copy
 from string import Template
 
-FIRST_DECODER_STEP = 25
+FIRST_DECODER_STEP = 28
 DESC_PATH  = 'z80_desc.yml'
 TEMPL_PATH = 'z80.template.h'
 OUT_PATH   = '../chips/z80.h'

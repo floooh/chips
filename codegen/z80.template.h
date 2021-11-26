@@ -277,10 +277,10 @@ extern "C" {
 #define Z80_PIN_MASK ((1ULL<<40)-1)
 
 // pin access helper macros
-#define Z80_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
-#define Z80_GET_ADDR(p) ((uint16_t)((p)&0xFFFF))
+#define Z80_MAKE_PINS(ctrl, addr, data) ((ctrl)|((data&0xFF)<<16)|((addr)&0xFFFFULL))
+#define Z80_GET_ADDR(p) ((uint16_t)(p))
 #define Z80_SET_ADDR(p,a) {p=((p)&~0xFFFF)|((a)&0xFFFF);}
-#define Z80_GET_DATA(p) ((uint8_t)(((p)>>16)&0xFF))
+#define Z80_GET_DATA(p) ((uint8_t)((p)>>16))
 #define Z80_SET_DATA(p,d) {p=((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL);}
 
 // status flags
@@ -301,22 +301,20 @@ typedef struct {
 
 // CPU state
 typedef struct {
-    uint16_t step;          // the currently active decoder step
-    uint64_t pins;          // last pin state, used for NMI detection
-    uint64_t int_bits;      // track INT and NMI state
+    uint16_t step;      // the currently active decoder step
+    uint16_t addr;      // effective address for (HL),(IX+d),(IY+d)
+    uint8_t dlatch;     // temporary store for data bus value
+    uint8_t opcode;     // current opcode
+    uint64_t pins;      // last pin state, used for NMI detection
+    uint64_t int_bits;  // track INT and NMI state
     union {
         struct {
-            uint16_t prefix_offset; // opstate table offset: 0x100 on ED prefix, 0x200 on CB prefix
             uint8_t hlx_idx;        // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
             uint8_t prefix;         // one of _Z80_PREFIX_*
         };
-        uint32_t prefix_state;
+        uint16_t prefix_state;
     };
-
     union { struct { uint8_t pcl; uint8_t pch; }; uint16_t pc; };
-    uint16_t addr;      // effective address for (HL),(IX+d),(IY+d)
-    uint8_t opcode;     // current opcode
-    uint8_t dlatch;     // temporary store for data bus value
 
     // NOTE: These unions are fine in C, but not C++.
     union { struct { uint8_t f; uint8_t a; }; uint16_t af; };
@@ -333,9 +331,9 @@ typedef struct {
     union { struct { uint8_t wzl; uint8_t wzh; }; uint16_t wz; };
     union { struct { uint8_t spl; uint8_t sph; }; uint16_t sp; };
     union { struct { uint8_t r; uint8_t i; }; uint16_t ir; };
+    uint16_t af2, bc2, de2, hl2; // shadow register bank
     uint8_t im;
     bool iff1, iff2;
-    uint16_t af2, bc2, de2, hl2; // shadow register bank
 } z80_t;
 
 // initialize a new Z80 instance and return initial pin mask
@@ -994,31 +992,28 @@ static inline uint64_t _z80_fetch_cb(z80_t* cpu, uint64_t pins) {
         // execution on a special fetch machine cycle which doesn't
         // handle DD/FD prefix and then branches either to the
         // special CB or CBHL decoder block
-        cpu->step = 21; // => step 22
+        cpu->step = 21; // => step 22: opcode fetch for CB prefixed instructions
         pins = _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
     }
     return pins;
 }
 
 static inline uint64_t _z80_fetch_dd(z80_t* cpu, uint64_t pins) {
-    cpu->step = 2;   // => step 3
-    cpu->prefix_offset = 0;
+    cpu->step = 2;   // => step 3: opcode fetch for DD/FD prefixed instructions
     cpu->hlx_idx = 1;
     cpu->prefix = _Z80_PREFIX_DD;
     return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
 }
 
 static inline uint64_t _z80_fetch_fd(z80_t* cpu, uint64_t pins) {
-    cpu->step = 2;   // => step 3
-    cpu->prefix_offset = 0;
+    cpu->step = 2;   // => step 3: opcode fetch for DD/FD prefixed instructions
     cpu->hlx_idx = 2;
     cpu->prefix = _Z80_PREFIX_FD;
     return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
 }
 
 static inline uint64_t _z80_fetch_ed(z80_t* cpu, uint64_t pins) {
-    cpu->step = 0xFFFF;
-    cpu->prefix_offset = 0x0100;
+    cpu->step = 24; // => step 25: opcode fetch for ED prefixed instructions
     cpu->hlx_idx = 0;
     cpu->prefix = _Z80_PREFIX_ED;
     return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
@@ -1068,7 +1063,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 1: pins = _z80_refresh(cpu, pins); goto step_next;
         // M1/T4: branch to instruction 'payload'
         case 2: {
-            cpu->step = _z80_opstate_table[cpu->opcode + cpu->prefix_offset].step;
+            cpu->step = _z80_opstate_table[cpu->opcode].step;
             // this is only needed for (HL) ops, but probably pointless to do a 
             // conditional branch just for this
             cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
@@ -1129,6 +1124,15 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             else {
                 cpu->step = _z80_opstate_table[_Z80_OPSTATE_SLOT_CB].step;
             }
+        } goto step_next;
+        //=== special opcode fetch machine cycle for ED-prefixed instructions
+        // M1/T2: load opcode from data bus
+        case 25: _wait(); cpu->opcode = _gd(); goto step_next;
+        // M1/T3: refresh cycle
+        case 26: pins = _z80_refresh(cpu, pins); goto step_next;
+        // M1/T4: branch to instruction 'payload'
+        case 27: {
+            cpu->step = _z80_opstate_table[cpu->opcode + 0x100].step;
         } goto step_next;
         //=== from here on code-generated
 $decode_block
