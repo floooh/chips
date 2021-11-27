@@ -140,6 +140,7 @@ void ui_fdd_draw(ui_fdd_t* win) {
                 ImGui::Text("Sides:  %d", disc->num_sides);
                 ImGui::Text("Tracks: %d", disc->num_tracks);
                 for (int side = 0; side < disc->num_sides; side++) {
+                    ImGui::PushID(side);
                     if (ImGui::CollapsingHeader(side == 0 ? "Side 1":"Side 2", ImGuiTreeNodeFlags_DefaultOpen)) {
                         for (int track_index = 0; track_index < disc->num_tracks; track_index++) {
                             const int bytes_per_line = 16;
@@ -183,6 +184,7 @@ void ui_fdd_draw(ui_fdd_t* win) {
                             }
                         }
                     }
+                    ImGui::PopID();
                 }
             }
             else {
