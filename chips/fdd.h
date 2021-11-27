@@ -122,9 +122,9 @@ bool fdd_disc_inserted(fdd_t* fdd);
 // seek to physical track (happens instantly), returns FDD_RESULT_*
 int fdd_seek_track(fdd_t* fdd, int track);
 // seek to sector on current physical track (happens instantly), returns FDD_RESULT_*
-int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
+int fdd_seek_sector(fdd_t* fdd, int side, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
 // read the next byte from the seeked-to sector, return FDD_RESULT_*
-int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data);
+int fdd_read(fdd_t* fdd, int side, uint8_t* out_data);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -246,14 +246,15 @@ int fdd_seek_track(fdd_t* fdd, int track) {
     }
 }
 
-int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
+int fdd_seek_sector(fdd_t* fdd, int side, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
     CHIPS_ASSERT(fdd);
-    CHIPS_ASSERT(h < FDD_MAX_SIDES);
+    CHIPS_ASSERT((side >= 0) && (side < FDD_MAX_SIDES));
+    (void)h;
     (void)c; // FIXME (?)
     (void)n; // FIXME (?)
     if (fdd->has_disc && fdd->motor_on) {
-        fdd->cur_side = h;
-        const fdd_track_t* track = &fdd->disc.tracks[h][fdd->cur_track_index];
+        fdd->cur_side = side;
+        const fdd_track_t* track = &fdd->disc.tracks[side][fdd->cur_track_index];
         for (int si = 0; si < track->num_sectors; si++) {
             const fdd_sector_t* sector = &track->sectors[si];
             if (sector->info.upd765.r == r) {
@@ -269,11 +270,11 @@ int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
     }
 }
 
-int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data) {
-    CHIPS_ASSERT(fdd && (h < FDD_MAX_SIDES) && out_data);
+int fdd_read(fdd_t* fdd, int side, uint8_t* out_data) {
+    CHIPS_ASSERT(fdd && (side >= 0) && (side < FDD_MAX_SIDES) && out_data);
     if (fdd->has_disc & fdd->motor_on) {
-        fdd->cur_side = h;
-        const fdd_sector_t* sector = &fdd->disc.tracks[h][fdd->cur_track_index].sectors[fdd->cur_sector_index];
+        fdd->cur_side = side;
+        const fdd_sector_t* sector = &fdd->disc.tracks[side][fdd->cur_track_index].sectors[fdd->cur_sector_index];
         if (fdd->cur_sector_pos < sector->data_size) {
             const int data_offset = sector->data_offset + fdd->cur_sector_pos;
             *out_data = fdd->data[data_offset];

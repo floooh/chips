@@ -100,6 +100,7 @@ static bool _fdd_cpc_parse_dsk(fdd_t* fdd, bool ext, const uint8_t* data, int da
     }
 
     /* copy the data blob to the local buffer */
+    CHIPS_ASSERT(data_size <= FDD_MAX_DISC_SIZE);
     fdd->data_size = data_size;
     memcpy(fdd->data, data, fdd->data_size);
 

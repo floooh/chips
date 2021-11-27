@@ -274,8 +274,8 @@ static uint8_t _cpc_psg_in(int port_id, void* user_data);
 static void _cpc_init_keymap(cpc_t* sys);
 static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_select, void* user_data);
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data);
-static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void* user_data);
-static int _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_data);
+static int _cpc_fdc_seeksector(int drive, int side, upd765_sectorinfo_t* inout_info, void* user_data);
+static int _cpc_fdc_read(int drive, int side, void* user_data, uint8_t* out_data);
 static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info);
 static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* out_info);
 
@@ -1032,16 +1032,16 @@ static int _cpc_fdc_seektrack(int drive, int track, void* user_data) {
     }
 }
 
-static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void* user_data) {
+static int _cpc_fdc_seeksector(int drive, int side, upd765_sectorinfo_t* inout_info, void* user_data) {
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
         const uint8_t c = inout_info->c;
         const uint8_t h = inout_info->h;
         const uint8_t r = inout_info->r;
         const uint8_t n = inout_info->n;
-        int res = fdd_seek_sector(&sys->fdd, c, h, r, n);
+        int res = fdd_seek_sector(&sys->fdd, side, c, h, r, n);
         if (res == UPD765_RESULT_SUCCESS) {
-            const fdd_sector_t* sector = &sys->fdd.disc.tracks[h][sys->fdd.cur_track_index].sectors[sys->fdd.cur_sector_index];
+            const fdd_sector_t* sector = &sys->fdd.disc.tracks[side][sys->fdd.cur_track_index].sectors[sys->fdd.cur_sector_index];
             inout_info->c = sector->info.upd765.c;
             inout_info->h = sector->info.upd765.h;
             inout_info->r = sector->info.upd765.r;
@@ -1056,10 +1056,10 @@ static int _cpc_fdc_seeksector(int drive, upd765_sectorinfo_t* inout_info, void*
     }
 }
 
-static int _cpc_fdc_read(int drive, uint8_t h, void* user_data, uint8_t* out_data) {
+static int _cpc_fdc_read(int drive, int side, void* user_data, uint8_t* out_data) {
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
-        return fdd_read(&sys->fdd, h, out_data);
+        return fdd_read(&sys->fdd, side, out_data);
     }
     else {
         return UPD765_RESULT_NOT_READY;
