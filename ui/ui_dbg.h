@@ -1764,15 +1764,15 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
             ImGui::SameLine(x);
             if (ticks > 0) {
                 if (is_pc_line) {
-                    ImGui::Text("%d/%d", win->dbg.cur_op_ticks, ticks);
+                    ImGui::Text("%2d/%d", win->dbg.cur_op_ticks, ticks);
                 }
                 else {
-                    ImGui::Text("%d", ticks);
+                    ImGui::Text(" %d", ticks);
                 }
             }
             else if (show_dasm) {
                 if (is_pc_line) {
-                    ImGui::Text("%d/?", win->dbg.cur_op_ticks);
+                    ImGui::Text("%2d/?", win->dbg.cur_op_ticks);
                 }
                 else {
                     ImGui::Text("?");
