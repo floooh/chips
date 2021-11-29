@@ -56,12 +56,12 @@ MEM_TCYCLES = 3
 IO_TCYCLES = 4
 
 # register mapping tables, see: http://www.z80.info/decoding.htm
-r_comment   = [ 'b', 'c', 'd', 'e', 'h', 'l', '(hl)', 'a' ]
-rp_comment  = [ 'bc', 'de', 'hl', 'sp' ]
-rp2_comment = [ 'bc', 'de', 'hl', 'af' ]
-alu_comment = [ 'add', 'adc', 'sub', 'sbc', 'and', 'xor', 'or', 'cp' ]
-rot_comment = [ 'rlc', 'rrc', 'rl', 'rr', 'sla', 'sra', 'sll', 'srl' ]
-cc_comment  = [ 'nz', 'z', 'nc', 'c', 'po', 'pe', 'p', 'm' ]
+r_comment   = [ 'B', 'C', 'D', 'E', 'H', 'L', '(HL)', 'A' ]
+rp_comment  = [ 'BC', 'DE', 'HL', 'SP' ]
+rp2_comment = [ 'BC', 'DE', 'HL', 'AF' ]
+alu_comment = [ 'ADD', 'ADC', 'SUB', 'SBC', 'AND', 'XOR', 'OR', 'CP' ]
+rot_comment = [ 'RLC', 'RRC', 'RL', 'RR', 'SLA', 'SRA', 'SLL', 'SRL' ]
+cc_comment  = [ 'NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M' ]
 
 r_map    = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->hlx[cpu->hlx_idx].l', 'XXX', 'cpu->a' ]
 rr_map   = [ 'cpu->b', 'cpu->c', 'cpu->d', 'cpu->e', 'cpu->h', 'cpu->l', 'XXX', 'cpu->a' ]
