@@ -916,7 +916,7 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     {  133,  133 },  //  1F: RRA (M:1 T:4 steps:1)
     {  134,  134 },  //  20: JR NZ,d (M:3 T:12 steps:9)
     {  143,  143 },  //  21: LD HL,nn (M:3 T:10 steps:7)
-    {  150,  150 },  //  22: LD (NN),HL (M:5 T:16 steps:13)
+    {  150,  150 },  //  22: LD (nn),HL (M:5 T:16 steps:13)
     {  163,  163 },  //  23: INC HL (M:2 T:6 steps:3)
     {  166,  166 },  //  24: INC H (M:1 T:4 steps:1)
     {  167,  167 },  //  25: DEC H (M:1 T:4 steps:1)
@@ -932,10 +932,10 @@ static const z80_opstate_t _z80_opstate_table[2*256 + _Z80_OPSTATE_NUM_SPECIAL_O
     {  212,  212 },  //  2F: CPL (M:1 T:4 steps:1)
     {  213,  213 },  //  30: JR NC,d (M:3 T:12 steps:9)
     {  222,  222 },  //  31: LD SP,nn (M:3 T:10 steps:7)
-    {  229,  229 },  //  32: LD (NN),A (M:4 T:13 steps:10)
+    {  229,  229 },  //  32: LD (nn),A (M:4 T:13 steps:10)
     {  239,  239 },  //  33: INC SP (M:2 T:6 steps:3)
-    {  242, _Z80_OPSTATE_STEP_INDIRECT },  //  34: INC (hl) (M:3 T:11 steps:8)
-    {  250, _Z80_OPSTATE_STEP_INDIRECT },  //  35: DEC (hl) (M:3 T:11 steps:8)
+    {  242, _Z80_OPSTATE_STEP_INDIRECT },  //  34: INC (HL) (M:3 T:11 steps:8)
+    {  250, _Z80_OPSTATE_STEP_INDIRECT },  //  35: DEC (HL) (M:3 T:11 steps:8)
     {  258, _Z80_OPSTATE_STEP_INDIRECT_IMM8 },  //  36: LD (HL),n (M:3 T:10 steps:7)
     {  265,  265 },  //  37: SCF (M:1 T:4 steps:1)
     {  266,  266 },  //  38: JR C,d (M:3 T:12 steps:9)
@@ -1907,7 +1907,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- overlapped
         case  150: goto fetch_next;
         
-        //  22: LD (NN),HL (M:5 T:16)
+        //  22: LD (nn),HL (M:5 T:16)
         // -- mread
         case  151: goto step_next;
         case  152: _wait();_mread(cpu->pc++);goto step_next;
@@ -2053,7 +2053,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- overlapped
         case  229: goto fetch_next;
         
-        //  32: LD (NN),A (M:4 T:13)
+        //  32: LD (nn),A (M:4 T:13)
         // -- mread
         case  230: goto step_next;
         case  231: _wait();_mread(cpu->pc++);goto step_next;
@@ -2076,7 +2076,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- overlapped
         case  242: goto fetch_next;
         
-        //  34: INC (hl) (M:3 T:11)
+        //  34: INC (HL) (M:3 T:11)
         // -- mread
         case  243: goto step_next;
         case  244: _wait();_mread(cpu->addr);goto step_next;
@@ -2089,7 +2089,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- overlapped
         case  250: goto fetch_next;
         
-        //  35: DEC (hl) (M:3 T:11)
+        //  35: DEC (HL) (M:3 T:11)
         // -- mread
         case  251: goto step_next;
         case  252: _wait();_mread(cpu->addr);goto step_next;

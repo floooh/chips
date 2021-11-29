@@ -96,7 +96,7 @@ LD (DE),A:
     # NOTE: WZH can also be 0 on Z80 clones (the VisualZ80 netlist also sets WZH to zero)
     - { type: mwrite, ab: $DE, db: $A, action: "$WZL=$E+1;$WZH=$A" }
 
-LD (NN),HL:
+LD (nn),HL:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 2)
   mcycles:
     - { type: mread, ab: $PC++, dst: $WZL }
@@ -104,7 +104,7 @@ LD (NN),HL:
     - { type: mwrite, ab: $WZ++, db: $L }
     - { type: mwrite, ab: $WZ, db: $H }
 
-LD (NN),A:
+LD (nn),A:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 3)
   mcycles:
     - { type: mread, ab: $PC++, dst: $WZL }
@@ -149,7 +149,7 @@ DEC $RP:
     - { type: generic, tcycles: 2, action: "$RP--" }
 
 # 8-bit inc/dec
-INC (hl):
+INC (HL):
   cond: (x == 0) and (y == 6) and (z == 4)
   flags: { indirect: true }
   mcycles:
@@ -161,7 +161,7 @@ INC $RY:
   mcycles:
     - { type: overlapped, action: "$RY=_z80_inc8(cpu,$RY)" }
 
-DEC (hl):
+DEC (HL):
   cond: (x == 0) and (y == 6) and (z == 5)
   flags: { indirect: true }
   mcycles:
