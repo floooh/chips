@@ -19,6 +19,7 @@ class Op:
         self.opcode = -1
         self.prefix = ''
         self.single = False
+        self.special_timing = False
 
 OP_PATTERNS = []
 
@@ -72,6 +73,10 @@ def parse_opdescs():
             op = Op(op_name,op_desc['cond'], flags)
             if 'prefix' in op_desc:
                 op.prefix = op_desc['prefix']
+            # check if this instruction has extra cycles
+            for mc_desc in op_desc['mcycles']:
+                if 'tcycles' in mc_desc:
+                    op.special_timing = True
             OP_PATTERNS.append(op)
 
 def find_opdesc(name):
@@ -127,34 +132,41 @@ def expand_optable():
         elif x == 3:
             op_name = map_comment(f"SET {y},$RZ", y, z, p, q)
         OPS[op_index] = Op(op_name, "True", {})
+        if z == 6:
+            OPS[op_index].special_timing = True
 
 # generate code for one op
 def write_table(offset, x):
-    font = 'font-family: Lucida Console, Courier New, monospace;'
-    border = "border: 1px solid black;border-collapse: collapse; padding: 10px;"
-    print(f'<table style="{border}{font}">')
+    font="font-size:80%;font-weight:bold;"
+    border = "border:1px solid black;border-collapse:collapse;padding:5px;"
+    default_color = "color:black;background-color:PaleGreen;"
+    special_color = "color:black;background-color:LightPink;"
+    hdr_color = "color:black;background-color:Gainsboro"
+    print('<style>')
+    print(f'.z80t {{ {border} }}')
+    print(f'.z80h {{ {border}{hdr_color} }}')
+    print(f'.z80c0 {{ {border}{font}{default_color} }}')
+    print(f'.z80c1 {{ {border}{font}{special_color} }}')
+    print('</style>')
+    print(f'<table class="z80t">')
     # header
-    print(f'<tr style="{border}">')
-    print(f'    <th style="{border}">x={x:02b}</th>')
+    print(f'<tr class="z80t">', end='')
+    print(f'<th class="z80h">x={x:02b}</th>', end='')
     for z in range(0,8):
-        print(f'    <th style="{border}">z={z:03b}</th>')
-    print("  </tr>")
+        print(f'<th class="z80h">z={z:03b}</th>', end='')
+    print("</tr>", end='')
     for y in range(0,8):
-        print(f'  <tr style="{border}">')
-        print(f'    <th style="{border}">y={y:03b}</th>')
+        print(f'<tr class="z80t">', end='')
+        print(f'<th class="z80h">y={y:03b}</th>', end='')
         for z in range(0,8):
             op_index = ((x<<6) | (y<<3) | (z)) + offset
             op = OPS[op_index]
-            print(f'    <td style="{border}">{op.name}</td>')
-        print("  </tr>")
-    print("</table><br>")
+            print(f'<td class="{"z80c1" if op.special_timing else "z80c0"}">{op.name}</td>', end='')
+        print("</tr>", end='')
+    print("\n</table><br>")
 
 if __name__=='__main__':
     parse_opdescs()
     expand_optable()
     for x in range(0,4):
-        write_table(0, x)
-    for x in range(0,4):
-        write_table(256, x)
-    for x in range(0,4):
-        write_table(512, x)
+         write_table(512, x)
