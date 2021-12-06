@@ -304,8 +304,8 @@ void m6526_reset(m6526_t* c) {
 
 /*--- port implementation ---*/
 static inline void _m6526_read_port_pins(m6526_t* c, uint64_t pins) {
-    c->pa.inp = (M6526_GET_PA(pins) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
-    c->pb.inp = (M6526_GET_PB(pins) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);
+    c->pa.inp = M6526_GET_PA(pins);
+    c->pb.inp = M6526_GET_PB(pins);
 }
 
 static inline uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
