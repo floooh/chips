@@ -184,8 +184,9 @@ typedef struct am40010_video_t {
     int intcnt;         // 6-bit counter updated at HSYNC falling egde
     int clkcnt;         // 4-bit counter updated at 1 MHz
     uint8_t mode;       // currently active mode updated at hsync
+    bool intr_next;     // request interrupt in next tick
+    bool intr;          // interrupt request active
     bool sync;          // state of the sync output pin
-    bool intr;          // interrupt flip-flop
 } am40010_video_t;
 
 // CRT beam tracking
@@ -572,6 +573,13 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     if (vs_rise) {
         ga->video.hscount = 0;
     }
+
+    // request interrupt?
+    if (ga->video.intr_next) {
+        ga->video.intr_next = false;
+        ga->video.intr = true;
+    }
+
     // ...on falling HSYNC
     if (hs_fall) {
 
@@ -582,14 +590,14 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
         // 2 HSYNCs after start of VSYNC, reset the interrupt counter
         if (ga->video.hscount == 2) {
             if (ga->video.intcnt >= 32) {
-                ga->video.intr = true;
+                ga->video.intr_next = true;
             }
             ga->video.intcnt = 0;
         }
 
         // if interrupt count reaches 52, it is reset to 0 and an interrupt is requested
         if (ga->video.intcnt == 52) {
-            ga->video.intr = true;
+            ga->video.intr_next = true;
             ga->video.intcnt = 0;
         }
     }
@@ -617,21 +625,6 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     ga->video.clkcnt = clkcnt;
 
     return ga->video.sync;
-}
-
-// perform the 4 MHz tick actions of the gate array
-static inline void _am40010_do_tick(am40010_t* ga, bool int_ack) {
-    // when the IRQ_RESET bit is set, reset the interrupt counter and clear the interrupt flipflop
-    if ((ga->regs.config & AM40010_CONFIG_IRQRESET) != 0) {
-        ga->regs.config &= ~AM40010_CONFIG_IRQRESET;
-        ga->video.intcnt = 0;
-        ga->video.intr = false;
-    }
-    // on M1|IORQ|INT set, clear the interrupt flip-flop, and bit 5 of the interrupt counter
-    if (int_ack && ga->video.intr) {
-       ga->video.intcnt &= 0x1F;
-       ga->video.intr = false;
-    }
 }
 
 static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_pins) {
@@ -822,11 +815,13 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t pins) {
         ga->regs.config &= ~AM40010_CONFIG_IRQRESET;
         ga->video.intcnt = 0;
         ga->video.intr = false;
+        ga->video.intr_next = false;
     }
     if (int_ack && ga->video.intr) {
         // on M1|IORQ|INT set, clear the interrupt flip-flop, and bit 5 of the interrupt counter
-       ga->video.intcnt &= 0x1F;
-       ga->video.intr = false;
+        ga->video.intcnt &= 0x1F;
+        ga->video.intr = false;
+        ga->video.intr_next = false;
     }
 
     // FIXME: drop .intr and directly set INT pin?
