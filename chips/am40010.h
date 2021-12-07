@@ -258,6 +258,14 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t cpu_pins);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#if defined(__GNUC__)
+#define _AM40010_UNREACHABLE __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define _AM40010_UNREACHABLE __assume(0)
+#else
+#define _AM40010_UNREACHABLE
+#endif
+
 #define _AM40010_MAX_FB_SIZE (AM40010_DBG_DISPLAY_WIDTH*AM40010_DBG_DISPLAY_HEIGHT*4)
 
 // extract 8-bit data bus from 64-bit pin mask
@@ -450,6 +458,8 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
                     }
                 }
                 break;
+
+            default: _AM40010_UNREACHABLE;
         }
     }
 
@@ -690,7 +700,22 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
                 }
             }
             break;
-        // FIXME: undocumented mode 3 (not on KC Compact)
+        case 3:
+            /*  undocumented mode 3:
+                160x200 @ 4 colors (2 pixels per byte)
+                pixel    bit mask
+                0:       |x|x|3|7|
+                1:       |x|x|2|6|
+            */
+            for (int i = 0; i < 2; i++) {
+                c = *src++;
+                p = ink[((c>>7)&0x1)|((c>>2)&0x2)];
+                *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
+                p = ink[((c>>6)&0x1)|((c>>1)&0x2)];
+                *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
+            }
+            break;
+        default: _AM40010_UNREACHABLE;
     }
 }
 
