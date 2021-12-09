@@ -654,11 +654,11 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
         
         // NMI is edge-triggered
         if (0 != ((pins & (pins ^ c->PINS)) & M6502_NMI)) {
-            c->nmi_pip |= 1;
+            c->nmi_pip |= 0x100;
         }
         // IRQ test is level triggered
         if ((pins & M6502_IRQ) && (0 == (c->P & M6502_IF))) {
-            c->irq_pip |= 1;
+            c->irq_pip |= 0x100;
         }
         
         // RDY pin is only checked during read cycles
@@ -681,10 +681,10 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
             //  - RES behaves slightly different than on a real 6502, we go
             //    into RES state as soon as the pin goes active, from there
             //    on, behaviour is 'standard'
-            if (0 != (c->irq_pip & 4)) {
+            if (0 != (c->irq_pip & 0x400)) {
                 c->brk_flags |= M6502_BRK_IRQ;
             }
-            if (0 != (c->nmi_pip & 0xFFFC)) {
+            if (0 != (c->nmi_pip & 0xFC00)) {
                 c->brk_flags |= M6502_BRK_NMI;
             }
             if (0 != (pins & M6502_RES)) {
@@ -694,8 +694,8 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
                 c->io_inp = 0;
                 c->io_pins = 0;
             }
-            c->irq_pip &= 3;
-            c->nmi_pip &= 3;
+            c->irq_pip &= 0x3FF;
+            c->nmi_pip &= 0x3FF;
 
             // if interrupt or reset was requested, force a BRK instruction
             if (c->brk_flags) {
