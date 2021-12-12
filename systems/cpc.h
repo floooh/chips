@@ -70,7 +70,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -166,7 +165,7 @@ typedef struct {
 
 // CPC emulator state
 typedef struct {
-    alignas(64) z80_t cpu;
+    z80_t cpu;
     ay38910_t psg;
     mc6845_t crtc;
     am40010_t ga;

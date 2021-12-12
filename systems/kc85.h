@@ -255,7 +255,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdalign.h>
 
 #if !(defined(CHIPS_KC85_TYPE_2) || defined(CHIPS_KC85_TYPE_3) || defined(CHIPS_KC85_TYPE_4))
 #error "Please define one of CHIPS_KC85_TYPE_2, CHIPS_KC85_TYPE_3 or CHIPS_KC85_TYPE_4 before including kc85.h!"
@@ -408,7 +407,7 @@ typedef struct {
 
 // KC85 emulator state
 typedef struct {
-    alignas(64) z80_t cpu;
+    z80_t cpu;
     z80ctc_t ctc;
     z80pio_t pio;
     beeper_t beeper_1;
@@ -645,7 +644,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     sys->audio.callback = desc->audio.callback;
     sys->audio.num_samples = _KC85_DEFAULT(desc->audio.num_samples, KC85_DEFAULT_AUDIO_SAMPLES);
     const beeper_desc_t beeper_desc = {
-        .tick_hz = sys->freq_hz,
+        .tick_hz = (int)sys->freq_hz,
         .sound_hz = _KC85_DEFAULT(desc->audio.sample_rate, 44100),
         .base_volume = _KC85_DEFAULT(desc->audio.volume, 0.6f),
     };

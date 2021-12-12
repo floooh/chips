@@ -60,7 +60,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -179,7 +178,7 @@ typedef struct {
 
 // the Namco arcade machine state
 typedef struct {
-    alignas(64) z80_t cpu;
+    z80_t cpu;
     uint8_t in0;    // inverted bits (active-low)
     uint8_t in1;    // inverted bits (active-low)
     uint8_t dsw1;   // dip-switches as-is (active-high)

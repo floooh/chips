@@ -59,7 +59,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -133,7 +132,7 @@ typedef struct {
 
 // Acorn Atom emulation state
 typedef struct {
-    alignas(64) m6502_t cpu;
+    m6502_t cpu;
     mc6847_t vdg;
     i8255_t ppi;
     m6522_t via;

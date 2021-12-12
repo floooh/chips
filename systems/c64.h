@@ -244,7 +244,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -372,7 +371,7 @@ typedef struct {
 
 // C64 emulator state
 typedef struct {
-    alignas(64) m6502_t cpu;
+    m6502_t cpu;
     m6526_t cia_1;
     m6526_t cia_2;
     m6569_t vic;

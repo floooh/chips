@@ -58,7 +58,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -156,7 +155,7 @@ typedef struct {
 
 // VIC-20 emulator state
 typedef struct {
-    alignas(64) m6502_t cpu;
+    m6502_t cpu;
     m6522_t via_1;
     m6522_t via_2;
     m6561_t vic;

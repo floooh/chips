@@ -53,7 +53,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -196,7 +195,7 @@ typedef struct {
 // the whole Bomb Jack arcade machine state
 typedef struct {
     struct {
-        alignas(64) z80_t cpu;
+        z80_t cpu;
         uint8_t p1;             // joystick 1 state
         uint8_t p2;             // joystick 2 state
         uint8_t sys;            // coins and start buttons
@@ -211,7 +210,7 @@ typedef struct {
         uint64_t pins;
     } mainboard;
     struct {
-        alignas(64) z80_t cpu;
+        z80_t cpu;
         ay38910_t psg[3];
         uint32_t tick_count;
         int vsync_count;

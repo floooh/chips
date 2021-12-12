@@ -70,7 +70,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -218,7 +217,7 @@ typedef struct {
 
 /* LC80 emulator state */
 typedef struct {
-    alignas(64) z80_t cpu;
+    z80_t cpu;
     z80ctc_t ctc;
     z80pio_t pio_sys;
     z80pio_t pio_usr;
