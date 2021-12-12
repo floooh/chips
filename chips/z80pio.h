@@ -285,6 +285,14 @@ uint64_t z80pio_tick(z80pio_t* pio, uint64_t pins);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#if defined(__GNUC__)
+#define _Z80PIO_UNREACHABLE __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define _Z80PIO_UNREACHABLE __assume(0)
+#else
+#define _Z80PIO_UNREACHABLE
+#endif
+
 void z80pio_init(z80pio_t* pio) {
     CHIPS_ASSERT(pio);
     memset(pio, 0, sizeof(z80pio_t));
@@ -401,6 +409,9 @@ void _z80pio_write_data(z80pio_t* pio, int port_id, uint8_t data) {
         case Z80PIO_MODE_BITCONTROL:
             p->output = data;
             break;
+        default:
+            _Z80PIO_UNREACHABLE;
+            break;
     }
 }
 
@@ -417,9 +428,10 @@ uint8_t _z80pio_read_data(z80pio_t* pio, int port_id) {
             return 0xFF;
         case Z80PIO_MODE_BITCONTROL:
             return (p->input & p->io_select) | (p->output & ~p->io_select);
+        default:
+            _Z80PIO_UNREACHABLE;
+            break;
     }
-    // can't happen
-    return 0xFF;
 }
 
 // set the PA and PB bits into the pin mask
@@ -441,6 +453,9 @@ uint64_t _z80pio_set_port_output_pins(z80pio_t* pio, uint64_t pins) {
             case Z80PIO_MODE_BITCONTROL:
                 // set input bits to 1
                 data = p->io_select | (p->output & ~p->io_select);
+                break;
+            default:
+                _Z80PIO_UNREACHABLE;
                 break;
         }
         if (port_id == 0) {
