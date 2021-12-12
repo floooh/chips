@@ -353,12 +353,10 @@ void ui_namco_draw(ui_namco_t* ui) {
 }
 
 namco_debug_t ui_namco_get_debug(ui_namco_t* ui) {
-    return (namco_debug_t){
-        .callback = {
-            .func = (namco_debug_func_t)ui_dbg_tick,
-            .user_data = &ui->dbg
-        },
-        .stopped = &ui->dbg.dbg.stopped,
-    };
+    namco_debug_t res = {};
+    res.callback.func = (namco_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 #endif // CHIPS_UI_IMPL

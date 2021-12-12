@@ -603,13 +603,11 @@ void ui_vic20_draw(ui_vic20_t* ui) {
 }
 
 vic20_debug_t ui_vic20_get_debug(ui_vic20_t* ui) {
-    return (vic20_debug_t){
-        .callback = {
-            .func = (vic20_debug_func_t) ui_dbg_tick,
-            .user_data = &ui->dbg
-        },
-        .stopped = &ui->dbg.dbg.stopped,
-    };
+    vic20_debug_t res = {};
+    res.callback.func = (vic20_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__

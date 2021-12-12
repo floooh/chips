@@ -487,13 +487,11 @@ void ui_zx_draw(ui_zx_t* ui) {
 }
 
 zx_debug_t ui_zx_get_debug(ui_zx_t* ui) {
-    return (zx_debug_t){
-        .callback = {
-            .func = (zx_debug_func_t)ui_dbg_tick,
-            .user_data = &ui->dbg,
-        },
-        .stopped = &ui->dbg.dbg.stopped
-    };
+    zx_debug_t res = {};
+    res.callback.func = (zx_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 #ifdef __clang__
 #pragma clang diagnostic pop

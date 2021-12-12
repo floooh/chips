@@ -750,13 +750,12 @@ void ui_c64_draw(ui_c64_t* ui) {
 }
 
 c64_debug_t ui_c64_get_debug(ui_c64_t* ui) {
-    return (c64_debug_t){
-        .callback = {
-            .func = (c64_debug_func_t) ui_dbg_tick,
-            .user_data = &ui->dbg
-        },
-        .stopped = &ui->dbg.dbg.stopped,
-    };
+    CHIPS_ASSERT(ui);
+    c64_debug_t res = {};
+    res.callback.func = (c64_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__

@@ -788,13 +788,11 @@ void ui_cpc_draw(ui_cpc_t* ui) {
 
 cpc_debug_t ui_cpc_get_debug(ui_cpc_t* ui) {
     CHIPS_ASSERT(ui);
-    return (cpc_debug_t){
-        .callback = {
-            .func = (cpc_debug_func_t) ui_dbg_tick,
-            .user_data = &ui->dbg
-        },
-        .stopped = &ui->dbg.dbg.stopped,
-    };
+    cpc_debug_t res = {};
+    res.callback.func = (cpc_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__

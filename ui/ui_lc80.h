@@ -1183,13 +1183,11 @@ void ui_lc80_draw(ui_lc80_t* ui) {
 }
 
 lc80_debug_t ui_lc80_get_debug(ui_lc80_t* ui) {
-    return (lc80_debug_t){
-        .callback = {
-            .func = (lc80_debug_func_t)ui_dbg_tick,
-            .user_data = &ui->win.dbg
-        },
-        .stopped = &ui->win.dbg.dbg.stopped,
-    };
+    lc80_debug_t res = {};
+    res.callback.func = (lc80_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->win.dbg;
+    res.stopped = &ui->win.dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__

@@ -500,13 +500,12 @@ void ui_atom_draw(ui_atom_t* ui) {
 }
 
 atom_debug_t ui_atom_get_debug(ui_atom_t* ui) {
-    return (atom_debug_t){
-        .callback = {
-            .func = (atom_debug_func_t) ui_dbg_tick,
-            .user_data = &ui->dbg
-        },
-        .stopped = &ui->dbg.dbg.stopped,
-    };
+    CHIPS_ASSERT(ui);
+    atom_debug_t res = {};
+    res.callback.func = (atom_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__

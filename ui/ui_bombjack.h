@@ -832,22 +832,15 @@ void ui_bombjack_draw(ui_bombjack_t* ui) {
 }
 
 bombjack_debug_t ui_bombjack_get_debug(ui_bombjack_t* ui) {
-    return (bombjack_debug_t){
-        .mainboard = {
-            .callback = {
-                .func = (bombjack_debug_func_t)ui_dbg_tick,
-                .user_data = &ui->main.dbg
-            },
-            .stopped = &ui->main.dbg.dbg.stopped
-        },
-        .soundboard = {
-            .callback = {
-                .func = (bombjack_debug_func_t)ui_dbg_tick,
-                .user_data = &ui->sound.dbg
-            },
-            .stopped = &ui->sound.dbg.dbg.stopped
-        }
-    };
+    CHIPS_ASSERT(ui);
+    bombjack_debug_t res = {};
+    res.mainboard.callback.func = (bombjack_debug_func_t)ui_dbg_tick;
+    res.mainboard.callback.user_data = &ui->main.dbg;
+    res.mainboard.stopped = &ui->main.dbg.dbg.stopped;
+    res.soundboard.callback.func = (bombjack_debug_func_t)ui_dbg_tick;
+    res.soundboard.callback.user_data = &ui->sound.dbg;
+    res.soundboard.stopped = &ui->sound.dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__

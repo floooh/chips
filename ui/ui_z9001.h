@@ -456,13 +456,11 @@ void ui_z9001_draw(ui_z9001_t* ui) {
 }
 
 z9001_debug_t ui_z9001_get_debug(ui_z9001_t* ui) {
-    return (z9001_debug_t){
-        .callback = {
-            .func = (z9001_debug_func_t)ui_dbg_tick,
-            .user_data = &ui->dbg
-        },
-        .stopped = &ui->dbg.dbg.stopped,
-    };
+    z9001_debug_t res;
+    res.callback.func = (z9001_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__
