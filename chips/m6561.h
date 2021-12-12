@@ -46,6 +46,7 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -124,7 +125,7 @@ typedef struct {
     /* pointer to RGBA8 framebuffer for generated image (optional) */
     uint32_t* rgba8_buffer;
     /* size of the RGBA framebuffer (optional) */
-    uint32_t rgba8_buffer_size;
+    size_t rgba8_buffer_size;
     /* visible CRT area blitted to rgba8_buffer (in pixels) */
     uint16_t vis_x, vis_y, vis_w, vis_h;
     /* the memory-fetch callback */

@@ -67,6 +67,7 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -158,7 +159,7 @@ typedef struct am40010_desc_t {
     const uint8_t* ram;                 // direct pointer to the gate-array-visible 4*16 KByte RAM banks
     uint32_t ram_size;                  // must be >= 64 KBytes
     uint32_t* rgba8_buffer;             // pointer to the RGBA8 output framebuffer
-    uint32_t rgba8_buffer_size;         // must be at least 1024*312*4 bytes
+    size_t rgba8_buffer_size;           // must be at least 1024*312*4 bytes
     void* user_data;                    // optional userdata for callbacks
 } am40010_desc_t;
 

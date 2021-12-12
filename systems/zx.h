@@ -276,14 +276,14 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
 
     const int audio_hz = _ZX_DEFAULT(desc->audio.sample_rate, 44100);
     beeper_init(&sys->beeper, &(beeper_desc_t){
-        .tick_hz = sys->freq_hz,
+        .tick_hz = (int)sys->freq_hz,
         .sound_hz = audio_hz,
         .base_volume = _ZX_DEFAULT(desc->audio.beeper_volume, 0.25f),
     });
     if (ZX_TYPE_128 == sys->type) {
         ay38910_init(&sys->ay, &(ay38910_desc_t){
             .type = AY38910_TYPE_8912,
-            .tick_hz = sys->freq_hz / 2,
+            .tick_hz = (int)sys->freq_hz / 2,
             .sound_hz = audio_hz,
             .magnitude = _ZX_DEFAULT(desc->audio.ay_volume, 0.5f)
         });

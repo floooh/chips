@@ -523,7 +523,7 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     m6569_init(&sys->vic, &(m6569_desc_t){
         .fetch_cb = _c64_vic_fetch,
         .rgba8_buffer = (uint32_t*) desc->pixel_buffer.ptr,
-        .rgba8_buffer_size = (uint32_t) desc->pixel_buffer.size,
+        .rgba8_buffer_size = desc->pixel_buffer.size,
         .vis_x = _C64_DISPLAY_X,
         .vis_y = _C64_DISPLAY_Y,
         .vis_w = _C64_STD_DISPLAY_WIDTH,

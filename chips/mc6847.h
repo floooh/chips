@@ -50,6 +50,7 @@
 */
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -202,7 +203,7 @@ typedef struct {
     /* pointer to an RGBA8 framebuffer where video image is written to */
     uint32_t* rgba8_buffer;
     /* size of rgba8_buffer in bytes (must be at least 320*244*4=312320 bytes) */
-    uint32_t rgba8_buffer_size;
+    size_t rgba8_buffer_size;
     /* memory-fetch callback */
     mc6847_fetch_t fetch_cb;
     /* optional user-data for the fetch callback */
