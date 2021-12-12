@@ -663,7 +663,7 @@ static inline bool _z80_cpi_cpd(z80_t* cpu, uint8_t val) {
     uint32_t res = (uint32_t) ((int)cpu->a - (int)val);
     cpu->bc -= 1;
     uint8_t f = (cpu->f & Z80_CF)|Z80_NF|_z80_sz_flags(res);
-    if ((res & 0xF) > (cpu->a & 0xF)) {
+    if ((res & 0xF) > ((uint32_t)cpu->a & 0xF)) {
         f |= Z80_HF;
         res--;
     }
@@ -782,7 +782,7 @@ static inline uint64_t _z80_set_ab_db_x(uint64_t pins, uint16_t ab, uint8_t db, 
 }
 
 static inline uint8_t _z80_get_db(uint64_t pins) {
-    return pins>>16;
+    return (uint8_t)(pins>>16);
 }
 
 // CB-prefix block action
