@@ -384,30 +384,41 @@ def gen_decoder():
                     add_fetch(f'{action}')
         op.num_steps = step
 
-def pip_table_to_string():
+def optable_to_string(type):
     global indent
     indent = 1
     res = ''
     for op_index,maybe_op in enumerate(OPS):
+        if (type == 'main' or type == 'ddfd') and op_index > 255:
+            continue
+        elif type == 'ed' and (op_index < 256 or op_index > 511):
+            continue
+        elif type == 'special' and op_index < 512:
+            continue
         op = unwrap(maybe_op)
         # map redundant 'single' ops to the original
         if flag(op, 'single') and op.first_op_index != op_index:
             op = unwrap(OPS[op.first_op_index])
-        step = f"{op.decoder_offset - 1:4}"
-        if flag(op, 'indirect') and flag(op, 'imm8'):
-            alt_step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"
-        elif flag(op, 'indirect'):
-            alt_step = "_Z80_OPSTATE_STEP_INDIRECT"
+        if type == 'ddfd' and flag(op, 'indirect') and flag(op, 'imm8'):
+            step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"
+        elif type == 'ddfd' and flag(op, 'indirect'):
+            step = "_Z80_OPSTATE_STEP_INDIRECT"
         else:
-            alt_step = step
-        res += tab() + f'{{ {step}, {alt_step} }},' 
-        res += f'  // {op.prefix.upper()} {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
+            step = f"{op.decoder_offset - 1:4}"
+        res += tab() + f'{step},' 
+        res += f'  // {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
     return res
 
 def write_result():
     with open(TEMPL_PATH, 'r') as templf:
         templ = Template(templf.read())
-        c_src = templ.safe_substitute(decode_block=out_lines, op_table_block=pip_table_to_string())
+        c_src = templ.safe_substitute(
+            decode_block = out_lines,
+            optable = optable_to_string('main'),
+            ddfd_optable = optable_to_string('ddfd'),
+            ed_optable = optable_to_string('ed'),
+            special_optable = optable_to_string('special'))
+
         with open(OUT_PATH, 'w') as outf:
             outf.write(c_src)
 
