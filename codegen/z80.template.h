@@ -844,11 +844,6 @@ static inline void _z80_ddfdcb_addr(z80_t* cpu, uint64_t pins) {
     cpu->wz = cpu->addr;
 }
 
-// load the opcode from data bus for DD+CB/FD+CB instructions
-static inline void _z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
-    cpu->opcode = oc;
-}
-
 // special case opstate table slots
 #define _Z80_OPSTATE_SLOT_CB        (0)
 #define _Z80_OPSTATE_SLOT_CBHL      (1)

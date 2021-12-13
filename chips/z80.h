@@ -844,11 +844,6 @@ static inline void _z80_ddfdcb_addr(z80_t* cpu, uint64_t pins) {
     cpu->wz = cpu->addr;
 }
 
-// load the opcode from data bus for DD+CB/FD+CB instructions
-static inline void _z80_ddfdcb_opcode(z80_t* cpu, uint8_t oc) {
-    cpu->opcode = oc;
-}
-
 // special case opstate table slots
 #define _Z80_OPSTATE_SLOT_CB        (0)
 #define _Z80_OPSTATE_SLOT_CBHL      (1)
@@ -4646,7 +4641,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1448: goto step_next;
         case 1449: _wait();_mread(cpu->pc++);goto step_next;
-        case 1450: cpu->dlatch=_gd();_z80_ddfdcb_opcode(cpu,cpu->dlatch);goto step_next;
+        case 1450: cpu->dlatch=_gd();cpu->opcode=cpu->dlatch;goto step_next;
         case 1451: goto step_next;
         case 1452: goto step_next;
         // -- mread

@@ -665,7 +665,7 @@ ddfdcb:
     - { type: generic, tcycles: 1, action: "_wait();_mread(cpu->pc++)" }
     - { type: generic, tcycles: 1, action: "_z80_ddfdcb_addr(cpu,pins)" }
     # load opcode
-    - { type: mread, ab: $PC++, tcycles: 5, dst: $DLATCH, action: "_z80_ddfdcb_opcode(cpu,$DLATCH)" }
+    - { type: mread, ab: $PC++, tcycles: 5, dst: $DLATCH, action: "cpu->opcode=$DLATCH" }
     # read operand
     - { type: mread, ab: $ADDR, tcycles: 4, dst: $DLATCH, action: "if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_skip(3);}" }
     # write result back
