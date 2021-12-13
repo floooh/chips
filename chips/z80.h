@@ -1839,10 +1839,6 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 4: pins = _z80_refresh(cpu, pins); goto step_next;
         // M1/T4: branch to instruction 'payload'
         case 5: {
-            // special case: if this is a prefixed indirect+immediate, which is
-            // just LD (IX/IY+d),n, then the immediate-load is 'hidden' within
-            // the 8-tcycle d-offset load+computation
-            // (this is encoded in the 'alt_step' table item)
             cpu->step = _z80_ddfd_optable[cpu->opcode];
             cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
         } goto step_next;
