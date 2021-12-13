@@ -300,15 +300,10 @@ typedef struct {
     uint16_t addr;      // effective address for (HL),(IX+d),(IY+d)
     uint8_t dlatch;     // temporary store for data bus value
     uint8_t opcode;     // current opcode
+    uint8_t hlx_idx;    // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
+    bool prefix_active; // true if any prefix currently active (only needed in z80_opdone())
     uint64_t pins;      // last pin state, used for NMI detection
     uint64_t int_bits;  // track INT and NMI state
-    union {
-        struct {
-            uint8_t hlx_idx;        // index into hlx[] for mapping hl to ix or iy (0: hl, 1: ix, 2: iy)
-            uint8_t prefix;         // one of _Z80_PREFIX_*
-        };
-        uint16_t prefix_state;
-    };
     union { struct { uint8_t pcl; uint8_t pch; }; uint16_t pc; };
 
     // NOTE: These unions are fine in C, but not C++.
@@ -367,13 +362,6 @@ bool z80_opdone(z80_t* cpu);
 #define _Z80_MAP_IX (1)
 #define _Z80_MAP_IY (2)
 
-// currently active prefix
-#define _Z80_PREFIX_NONE (0)
-#define _Z80_PREFIX_CB   (1<<0)
-#define _Z80_PREFIX_DD   (1<<1)
-#define _Z80_PREFIX_ED   (1<<2)
-#define _Z80_PREFIX_FD   (1<<3)
-
 uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
     // initial state as described in 'The Undocumented Z80 Documented'
@@ -396,7 +384,7 @@ uint64_t z80_reset(z80_t* cpu) {
 bool z80_opdone(z80_t* cpu) {
     // because of the overlapped cycle, the result of the previous
     // instruction is only available in M1/T2
-    return ((cpu->pins & (Z80_M1|Z80_RD)) == (Z80_M1|Z80_RD)) && (cpu->prefix == 0);
+    return ((cpu->pins & (Z80_M1|Z80_RD)) == (Z80_M1|Z80_RD)) && !cpu->prefix_active;
 }
 
 static inline uint64_t _z80_halt(z80_t* cpu, uint64_t pins) {
@@ -943,7 +931,8 @@ static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
 
 // initiate a fetch machine cycle for regular (non-prefixed) instructions, or initiate interrupt handling
 static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
-    cpu->prefix_state = 0;
+    cpu->hlx_idx = 0;
+    cpu->prefix_active = false;
     // shortcut no interrupts requested
     if (cpu->int_bits == 0) {
         cpu->step = 0xFFFF;
@@ -980,8 +969,8 @@ static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
 }
 
 static inline uint64_t _z80_fetch_cb(z80_t* cpu, uint64_t pins) {
-    cpu->prefix = (cpu->prefix & (_Z80_PREFIX_DD|_Z80_PREFIX_FD)) | _Z80_PREFIX_CB;
-    if (cpu->prefix & (_Z80_PREFIX_DD|_Z80_PREFIX_FD)) {
+    cpu->prefix_active = true;
+    if (cpu->hlx_idx > 0) {
         // this is a DD+CB / FD+CB instruction, continue
         // execution on the special DDCB/FDCB decoder block which
         // loads the d-offset first and then the opcode in a 
@@ -1002,21 +991,21 @@ static inline uint64_t _z80_fetch_cb(z80_t* cpu, uint64_t pins) {
 static inline uint64_t _z80_fetch_dd(z80_t* cpu, uint64_t pins) {
     cpu->step = 2;   // => step 3: opcode fetch for DD/FD prefixed instructions
     cpu->hlx_idx = 1;
-    cpu->prefix = _Z80_PREFIX_DD;
+    cpu->prefix_active = true;
     return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
 }
 
 static inline uint64_t _z80_fetch_fd(z80_t* cpu, uint64_t pins) {
     cpu->step = 2;   // => step 3: opcode fetch for DD/FD prefixed instructions
     cpu->hlx_idx = 2;
-    cpu->prefix = _Z80_PREFIX_FD;
+    cpu->prefix_active = true;
     return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
 }
 
 static inline uint64_t _z80_fetch_ed(z80_t* cpu, uint64_t pins) {
     cpu->step = 24; // => step 25: opcode fetch for ED prefixed instructions
     cpu->hlx_idx = 0;
-    cpu->prefix = _Z80_PREFIX_ED;
+    cpu->prefix_active = true;
     return _z80_set_ab_x(pins, cpu->pc++, Z80_M1|Z80_MREQ|Z80_RD);
 }
 
