@@ -4641,7 +4641,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- mread
         case 1448: goto step_next;
         case 1449: _wait();_mread(cpu->pc++);goto step_next;
-        case 1450: cpu->dlatch=_gd();cpu->opcode=cpu->dlatch;goto step_next;
+        case 1450: cpu->opcode=_gd();goto step_next;
         case 1451: goto step_next;
         case 1452: goto step_next;
         // -- mread
