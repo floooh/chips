@@ -722,7 +722,7 @@ nmi:
   flags: { special: true}
   mcycles:
     # simulate a regular opcode fetch machine cycle (with one extra tcycle)
-    - { type: generic, tcycles: 1, action: "cpu->iff1=false" }
+    - { type: generic, tcycles: 1, action: "_wait();cpu->iff1=false" }
     - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)"}
     # two regular write machine cycles to push PC on stack, and set PC to 0x0066
     - { type: mwrite, ab: --$SP, db: $PCH }

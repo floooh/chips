@@ -4684,7 +4684,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         
         //  00: nmi (M:5 T:14)
         // -- generic
-        case 1499: cpu->iff1=false;goto step_next;
+        case 1499: _wait();cpu->iff1=false;goto step_next;
         // -- generic
         case 1500: pins=_z80_refresh(cpu,pins);goto step_next;
         case 1501: goto step_next;
