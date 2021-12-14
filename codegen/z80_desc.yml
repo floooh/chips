@@ -678,20 +678,20 @@ int_im0:
   mcycles:
     # special machine cycle which replaces the opcode machine fetch,
     # issues an M1|IORQ cycle and uses the result as the next opcode
-    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step1(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "_wait();pins=_z80_int0_step2(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "cpu->iff1=cpu->iff2=false" }
+    - { type: generic, tcycles: 1, action: "pins|=(Z80_M1|Z80_IORQ)" }
+    - { type: generic, tcycles: 1, action: "_wait();cpu->opcode=_z80_get_db(pins)" }
     # combined refresh and branch to loaded instruction cycle
     - { type: generic, tcycles: 1, action: "pins=_z80_refresh(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "pins=_z80_int0_step3(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "cpu->step=_z80_optable[cpu->opcode]" }
 
 int_im1:
   flags: { special: true }
   mcycles:
     # special machine cycle which replaces the opcode machine fetch,
     # this issues an M1|IORQ cycle like IM0 and IM2, but ignores the result
-    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "cpu->iff1=cpu->iff2=false" }
+    - { type: generic, tcycles: 1, action: "pins|=(Z80_M1|Z80_IORQ)" }
     - { type: generic, tcycles: 1, action: "_wait()"}
     # a regular refresh cycle + one extra tcycle
     - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)" }
@@ -705,8 +705,8 @@ int_im2:
   mcycles:
     # special machine cycle which replaces the opcode machine fetch,
     # this issues an M1|IORQ cycle and uses the result as low byte of the interrupt vector
-    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step0(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "pins=_z80_int012_step1(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "cpu->iff1=cpu->iff2=false" }
+    - { type: generic, tcycles: 1, action: "pins|=(Z80_M1|Z80_IORQ)" }
     - { type: generic, tcycles: 1, action: "_wait();$DLATCH=_z80_get_db(pins)" }
     # a regular refresh cycle + one extra tcycle
     - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)" }
@@ -722,7 +722,7 @@ nmi:
   flags: { special: true}
   mcycles:
     # simulate a regular opcode fetch machine cycle (with one extra tcycle)
-    - { type: generic, tcycles: 1, action: "pins=_z80_nmi_step0(cpu,pins)" }
+    - { type: generic, tcycles: 1, action: "cpu->iff1=false" }
     - { type: generic, tcycles: 3, action: "pins=_z80_refresh(cpu,pins)"}
     # two regular write machine cycles to push PC on stack, and set PC to 0x0066
     - { type: mwrite, ab: --$SP, db: $PCH }

@@ -876,54 +876,6 @@ static inline uint64_t _z80_refresh(z80_t* cpu, uint64_t pins) {
     return pins;
 }
 
-// initiate M1 cycle of NMI
-static inline uint64_t _z80_nmi_step0(z80_t* cpu, uint64_t pins) {
-    // the next regular opcode which is on the data bus is ignored!
-
-    // disable interrupts
-    cpu->iff1 = false;
-
-    // if in HALT state, continue
-    if (pins & Z80_HALT) {
-        pins &= ~Z80_HALT;
-        cpu->pc++;
-    }
-    return pins;
-}
-
-// IM0..IM2 initial step
-static inline uint64_t _z80_int012_step0(z80_t* cpu, uint64_t pins) {
-    // disable interrupts
-    cpu->iff1 = cpu->iff2 = false;
-    // if in HALT state, continue
-    if (pins & Z80_HALT) {
-        pins &= ~Z80_HALT;
-        cpu->pc++;
-    }
-    return pins;
-}
-
-// IM0..IM2 step 1: issue M1|IORQ cycle
-static inline uint64_t _z80_int012_step1(z80_t* cpu, uint64_t pins) {
-    (void)cpu;
-    // issue M1|IORQ to get opcode byte
-    return pins | (Z80_M1|Z80_IORQ);
-}
-
-// IM0 step 2: load data bus into opcode
-static inline uint64_t _z80_int0_step2(z80_t* cpu, uint64_t pins) {
-    // store opcode byte
-    cpu->opcode = _z80_get_db(pins);
-    return pins;
-}
-
-// IM0 step 3: refresh cycle and start executing loaded opcode
-static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
-    // branch to interrupt 'payload' instruction (usually an RST)
-    cpu->step = _z80_optable[cpu->opcode];
-    return pins;
-}
-
 // initiate a fetch machine cycle for regular (non-prefixed) instructions, or initiate interrupt handling
 static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
     cpu->hlx_idx = 0;
@@ -937,6 +889,10 @@ static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
         // non-maskable interrupt starts with a regular M1 machine cycle
         cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_NMI];
         cpu->int_bits = 0;
+        if (pins & Z80_HALT) {
+            pins &= ~Z80_HALT;
+            cpu->pc++;
+        }
         // NOTE: PC is *not* incremented!
         return _z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
     }
@@ -948,6 +904,10 @@ static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
             // depending on interrupt mode
             cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_INT_IM0 + cpu->im];
             cpu->int_bits = 0;
+            if (pins & Z80_HALT) {
+                pins &= ~Z80_HALT;
+                cpu->pc++;
+            }
             // NOTE: PC is not incremented, and no pins are activated here
             return pins;
         }

@@ -1651,54 +1651,6 @@ static inline uint64_t _z80_refresh(z80_t* cpu, uint64_t pins) {
     return pins;
 }
 
-// initiate M1 cycle of NMI
-static inline uint64_t _z80_nmi_step0(z80_t* cpu, uint64_t pins) {
-    // the next regular opcode which is on the data bus is ignored!
-
-    // disable interrupts
-    cpu->iff1 = false;
-
-    // if in HALT state, continue
-    if (pins & Z80_HALT) {
-        pins &= ~Z80_HALT;
-        cpu->pc++;
-    }
-    return pins;
-}
-
-// IM0..IM2 initial step
-static inline uint64_t _z80_int012_step0(z80_t* cpu, uint64_t pins) {
-    // disable interrupts
-    cpu->iff1 = cpu->iff2 = false;
-    // if in HALT state, continue
-    if (pins & Z80_HALT) {
-        pins &= ~Z80_HALT;
-        cpu->pc++;
-    }
-    return pins;
-}
-
-// IM0..IM2 step 1: issue M1|IORQ cycle
-static inline uint64_t _z80_int012_step1(z80_t* cpu, uint64_t pins) {
-    (void)cpu;
-    // issue M1|IORQ to get opcode byte
-    return pins | (Z80_M1|Z80_IORQ);
-}
-
-// IM0 step 2: load data bus into opcode
-static inline uint64_t _z80_int0_step2(z80_t* cpu, uint64_t pins) {
-    // store opcode byte
-    cpu->opcode = _z80_get_db(pins);
-    return pins;
-}
-
-// IM0 step 3: refresh cycle and start executing loaded opcode
-static inline uint64_t _z80_int0_step3(z80_t* cpu, uint64_t pins) {
-    // branch to interrupt 'payload' instruction (usually an RST)
-    cpu->step = _z80_optable[cpu->opcode];
-    return pins;
-}
-
 // initiate a fetch machine cycle for regular (non-prefixed) instructions, or initiate interrupt handling
 static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
     cpu->hlx_idx = 0;
@@ -1712,6 +1664,10 @@ static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
         // non-maskable interrupt starts with a regular M1 machine cycle
         cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_NMI];
         cpu->int_bits = 0;
+        if (pins & Z80_HALT) {
+            pins &= ~Z80_HALT;
+            cpu->pc++;
+        }
         // NOTE: PC is *not* incremented!
         return _z80_set_ab_x(pins, cpu->pc, Z80_M1|Z80_MREQ|Z80_RD);
     }
@@ -1723,6 +1679,10 @@ static inline uint64_t _z80_fetch(z80_t* cpu, uint64_t pins) {
             // depending on interrupt mode
             cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_INT_IM0 + cpu->im];
             cpu->int_bits = 0;
+            if (pins & Z80_HALT) {
+                pins &= ~Z80_HALT;
+                cpu->pc++;
+            }
             // NOTE: PC is not incremented, and no pins are activated here
             return pins;
         }
@@ -4658,23 +4618,23 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         
         //  00: int_im0 (M:6 T:9)
         // -- generic
-        case 1461: pins=_z80_int012_step0(cpu,pins);goto step_next;
+        case 1461: cpu->iff1=cpu->iff2=false;goto step_next;
         // -- generic
-        case 1462: pins=_z80_int012_step1(cpu,pins);goto step_next;
+        case 1462: pins|=(Z80_M1|Z80_IORQ);goto step_next;
         // -- generic
-        case 1463: _wait();pins=_z80_int0_step2(cpu,pins);goto step_next;
+        case 1463: _wait();cpu->opcode=_z80_get_db(pins);goto step_next;
         // -- generic
         case 1464: pins=_z80_refresh(cpu,pins);goto step_next;
         // -- generic
-        case 1465: pins=_z80_int0_step3(cpu,pins);goto step_next;
+        case 1465: cpu->step=_z80_optable[cpu->opcode];goto step_next;
         // -- overlapped
         case 1466: goto fetch_next;
         
         //  00: int_im1 (M:7 T:16)
         // -- generic
-        case 1467: pins=_z80_int012_step0(cpu,pins);goto step_next;
+        case 1467: cpu->iff1=cpu->iff2=false;goto step_next;
         // -- generic
-        case 1468: pins=_z80_int012_step1(cpu,pins);goto step_next;
+        case 1468: pins|=(Z80_M1|Z80_IORQ);goto step_next;
         // -- generic
         case 1469: _wait();goto step_next;
         // -- generic
@@ -4694,9 +4654,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         
         //  00: int_im2 (M:9 T:22)
         // -- generic
-        case 1480: pins=_z80_int012_step0(cpu,pins);goto step_next;
+        case 1480: cpu->iff1=cpu->iff2=false;goto step_next;
         // -- generic
-        case 1481: pins=_z80_int012_step1(cpu,pins);goto step_next;
+        case 1481: pins|=(Z80_M1|Z80_IORQ);goto step_next;
         // -- generic
         case 1482: _wait();cpu->dlatch=_z80_get_db(pins);goto step_next;
         // -- generic
@@ -4724,7 +4684,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         
         //  00: nmi (M:5 T:14)
         // -- generic
-        case 1499: pins=_z80_nmi_step0(cpu,pins);goto step_next;
+        case 1499: cpu->iff1=false;goto step_next;
         // -- generic
         case 1500: pins=_z80_refresh(cpu,pins);goto step_next;
         case 1501: goto step_next;
