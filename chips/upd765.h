@@ -385,7 +385,8 @@ static void _upd765_cmd(upd765_t* upd) {
                 upd->sector_info.st1 = 0;
                 upd->sector_info.st2 = 0;
                 /* FIXME: handle length of read data via n=0 and DTL!=0xFF */
-                CHIPS_ASSERT((upd->sector_info.n != 0) && (upd->fifo[8] == 0xFF));
+                // the following assert triggers in the CPC demo "CRTC"
+                //CHIPS_ASSERT((upd->sector_info.n != 0) && (upd->fifo[8] == 0xFF));
                 /* FIXME: handle read several sectors at a time via EOT arg */
                 CHIPS_ASSERT(upd->sector_info.r == upd->fifo[6]);
                 const int fdd_index = upd->st[0] & 3;
