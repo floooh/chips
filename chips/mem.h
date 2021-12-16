@@ -268,7 +268,7 @@ void mem_layer_wr(mem_t* mem, int layer, uint16_t addr, uint8_t data);
 
 void mem_init(mem_t* m) {
     CHIPS_ASSERT(m);
-    memset(m, 0, sizeof(*m));
+    *m = (mem_t){0};
     memset(&m->unmapped_page, 0xFF, sizeof(m->unmapped_page));
     mem_unmap_all(m);
 }

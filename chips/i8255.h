@@ -221,19 +221,19 @@ typedef struct {
 } i8255_t;
 
 /* extract 8-bit data bus from 64-bit pins */
-#define I8255_GET_DATA(p) ((uint8_t)(p>>16))
+#define I8255_GET_DATA(p) ((uint8_t)((p)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define I8255_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+#define I8255_SET_DATA(p,d) {p=((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL);}
 /* extract port pins */
-#define I8255_GET_PA(p) ((uint8_t)(p>>48))
-#define I8255_GET_PB(p) ((uint8_t)(p>>56))
-#define I8255_GET_PC(p) ((uint8_t)(p>>8))
+#define I8255_GET_PA(p) ((uint8_t)((p)>>48))
+#define I8255_GET_PB(p) ((uint8_t)((p)>>56))
+#define I8255_GET_PC(p) ((uint8_t)((p)>>8))
 /* set port pins into pin mask */
-#define I8255_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFFULL)|((a&0xFFULL)<<48);}
-#define I8255_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFFULL)|((b&0xFFULL)<<56);}
-#define I8255_SET_PC(p,c) {p=(p&0xFFFFFFFFFFFF00FFULL)|((c&0xFFULL)<<8);}
-#define I8255_SET_PCHI(p,c) {p=(p&0xFFFFFFFFFFFF0FFFULL)|((c&0xF0ULL)<<8);}
-#define I8255_SET_PCLO(p,c) {p=(p&0xFFFFFFFFFFFFF0FFULL)|((c&0x0FULL)<<8);}
+#define I8255_SET_PA(p,a) {p=((p)&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
+#define I8255_SET_PB(p,b) {p=((p)&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
+#define I8255_SET_PC(p,c) {p=((p)&0xFFFFFFFFFFFF00FFULL)|(((c)&0xFFULL)<<8);}
+#define I8255_SET_PCHI(p,c) {p=((p)&0xFFFFFFFFFFFF0FFFULL)|(((c)&0xF0ULL)<<8);}
+#define I8255_SET_PCLO(p,c) {p=((p)&0xFFFFFFFFFFFFF0FFULL)|(((c)&0x0FULL)<<8);}
 
 /* initialize a new i8255_t instance */
 void i8255_init(i8255_t* ppi);

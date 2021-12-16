@@ -52,50 +52,50 @@ extern "C" {
 #define FDD_MAX_TRACK_SIZE (FDD_MAX_SECTORS*FDD_MAX_SECTOR_SIZE)
 #define FDD_MAX_DISC_SIZE (FDD_MAX_SIDES*FDD_MAX_TRACKS*FDD_MAX_TRACK_SIZE)
 
-/* result bits (compatible with UPD765_RESULT_*) */
+// result bits (compatible with UPD765_RESULT_*)
 #define FDD_RESULT_SUCCESS (0)
 #define FDD_RESULT_NOT_READY (1<<0)
 #define FDD_RESULT_NOT_FOUND (1<<1)
 #define FDD_RESULT_END_OF_SECTOR (1<<2)
 
-/* UPD765 disc controller overlay of the sector info bytes */
+// UPD765 disc controller overlay of the sector info bytes
 typedef struct {
-    uint8_t c;      /* cylinder number (track number) */
-    uint8_t h;      /* head address (side) */
-    uint8_t r;      /* record (sector number) */
-    uint8_t n;      /* number (sector size) */
-    uint8_t st1;    /* ST1 status register result */
-    uint8_t st2;    /* ST2 status register result */
+    uint8_t c;      // cylinder number (track number)
+    uint8_t h;      // head address (side)
+    uint8_t r;      // record (sector number)
+    uint8_t n;      // number (sector size)
+    uint8_t st1;    // ST1 status register result
+    uint8_t st2;    // ST2 status register result
 } fdd_upd765_sectorinfo_t;
 
-/* a sector description */
+// a sector description
 typedef struct {
     union {
         fdd_upd765_sectorinfo_t upd765;
         uint8_t raw[8];
     } info;
-    int data_offset;    /* start of sector data in disc data blob */
-    int data_size;      /* size in bytes of sector data drive data buffer */
+    int data_offset;    // start of sector data in disc data blob
+    int data_size;      // size in bytes of sector data drive data buffer
 } fdd_sector_t;
 
-/* a track description */
+// a track description
 typedef struct {
-    int data_offset;    /* offset of track data in disc data blob */
-    int data_size;      /* track data size in bytes */
-    int num_sectors;    /* number of sectors in track */
-    fdd_sector_t sectors[FDD_MAX_SECTORS];  /* the sector descriptions */
+    int data_offset;    // offset of track data in disc data blob
+    int data_size;      // track data size in bytes
+    int num_sectors;    // number of sectors in track
+    fdd_sector_t sectors[FDD_MAX_SECTORS];  // the sector descriptions
 } fdd_track_t;
 
-/* a disc description */
+// a disc description
 typedef struct {
-    bool formatted;         /* disc is formatted */
-    bool write_protected;   /* disc is write protected */
+    bool formatted;         // disc is formatted
+    bool write_protected;   // disc is write protected
     int num_sides;
     int num_tracks;
     fdd_track_t tracks[FDD_MAX_SIDES][FDD_MAX_TRACKS];
 } fdd_disc_t;
 
-/* a floppy disc drive description */
+// a floppy disc drive description
 typedef struct {
     int cur_side;
     int cur_track_index;
@@ -108,20 +108,23 @@ typedef struct {
     uint8_t data[FDD_MAX_DISC_SIZE];
 } fdd_t;
 
-/* initialize a floppy disc drive */
+// initialize a floppy disc drive
 void fdd_init(fdd_t* fdd);
-/* drive motor on/off */
+// drive motor on/off
 void fdd_motor(fdd_t* fdd, bool on);
-/* insert a disc, the disc structure and data will be copied */
+// insert a disc, the disc structure and data will be copied
 bool fdd_insert_disc(fdd_t* fdd, const fdd_disc_t* disc, const uint8_t* data, int data_size);
-/* eject current disc */
+// eject current disc
 void fdd_eject_disc(fdd_t* fdd);
-/* seek to physical track (happens instantly), returns FDD_RESULT_* */
+// return true if a disc is currently inserted
+bool fdd_disc_inserted(fdd_t* fdd);
+
+// seek to physical track (happens instantly), returns FDD_RESULT_*
 int fdd_seek_track(fdd_t* fdd, int track);
-/* seek to sector on current physical track (happens instantly), returns FDD_RESULT_* */
-int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
-/* read the next byte from the seeked-to sector, return FDD_RESULT_* */
-int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data);
+// seek to sector on current physical track (happens instantly), returns FDD_RESULT_*
+int fdd_seek_sector(fdd_t* fdd, int side, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
+// read the next byte from the seeked-to sector, return FDD_RESULT_*
+int fdd_read(fdd_t* fdd, int side, uint8_t* out_data);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -155,6 +158,11 @@ void fdd_eject_disc(fdd_t* fdd) {
     fdd->motor_on = false;
     memset(&fdd->disc, 0, sizeof(fdd->disc));
     memset(&fdd->data, 0, sizeof(fdd->data));
+}
+
+bool fdd_disc_inserted(fdd_t* fdd) {
+    CHIPS_ASSERT(fdd);
+    return fdd->has_disc;
 }
 
 bool _fdd_validate_disc(const fdd_disc_t* disc) {
@@ -238,14 +246,15 @@ int fdd_seek_track(fdd_t* fdd, int track) {
     }
 }
 
-int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
+int fdd_seek_sector(fdd_t* fdd, int side, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
     CHIPS_ASSERT(fdd);
-    CHIPS_ASSERT(h < FDD_MAX_SIDES);
+    CHIPS_ASSERT((side >= 0) && (side < FDD_MAX_SIDES));
+    (void)h;
     (void)c; // FIXME (?)
     (void)n; // FIXME (?)
     if (fdd->has_disc && fdd->motor_on) {
-        fdd->cur_side = h;
-        const fdd_track_t* track = &fdd->disc.tracks[h][fdd->cur_track_index];
+        fdd->cur_side = side;
+        const fdd_track_t* track = &fdd->disc.tracks[side][fdd->cur_track_index];
         for (int si = 0; si < track->num_sectors; si++) {
             const fdd_sector_t* sector = &track->sectors[si];
             if (sector->info.upd765.r == r) {
@@ -261,11 +270,11 @@ int fdd_seek_sector(fdd_t* fdd, uint8_t c, uint8_t h, uint8_t r, uint8_t n) {
     }
 }
 
-int fdd_read(fdd_t* fdd, uint8_t h, uint8_t* out_data) {
-    CHIPS_ASSERT(fdd && (h < FDD_MAX_SIDES) && out_data);
+int fdd_read(fdd_t* fdd, int side, uint8_t* out_data) {
+    CHIPS_ASSERT(fdd && (side >= 0) && (side < FDD_MAX_SIDES) && out_data);
     if (fdd->has_disc & fdd->motor_on) {
-        fdd->cur_side = h;
-        const fdd_sector_t* sector = &fdd->disc.tracks[h][fdd->cur_track_index].sectors[fdd->cur_sector_index];
+        fdd->cur_side = side;
+        const fdd_sector_t* sector = &fdd->disc.tracks[side][fdd->cur_track_index].sectors[fdd->cur_sector_index];
         if (fdd->cur_sector_pos < sector->data_size) {
             const int data_offset = sector->data_offset + fdd->cur_sector_pos;
             *out_data = fdd->data[data_offset];

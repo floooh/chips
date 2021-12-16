@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UTIL_IMPL
     ~~~
     before you include this file in *one* C or C++ file to create the 
     implementation.
@@ -87,7 +87,7 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UTIL_IMPL
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
@@ -489,4 +489,4 @@ uint16_t z80dasm_op(uint16_t pc, z80dasm_input_t in_cb, z80dasm_output_t out_cb,
 #undef _MRd
 #undef _IMM16
 #undef _IMM8
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UTIL_IMPL */

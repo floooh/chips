@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -65,14 +65,14 @@ void ui_util_b32(const char* label, uint32_t val);
 /* get an ImGui style color (ImGuiCol_*) with overall alpha applied */
 uint32_t ui_util_color(int imgui_color);
 /* inject the common options menu */
-void ui_util_options_menu(double time_ms);
+void ui_util_options_menu(void);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -82,6 +82,10 @@ void ui_util_options_menu(double time_ms);
 #endif
 #include <string.h> /* memset */
 #include <stdio.h>  /* sscanf */
+#ifndef CHIPS_ASSERT
+    #include <assert.h>
+    #define CHIPS_ASSERT(c) assert(c)
+#endif
 
 uint16_t ui_util_input_u16(const char* label, uint16_t val) {
     char buf[5];
@@ -127,7 +131,7 @@ void ui_util_u8(const char* label, uint8_t val) {
     ImGui::Text("%s", label); ImGui::SameLine(); ImGui::Text("%02X", val);
 }
 
-void ui_util_u8(const char* label, uint16_t val) {
+void ui_util_u16(const char* label, uint16_t val) {
     ImGui::Text("%s", label); ImGui::SameLine(); ImGui::Text("%04X", val);
 }
 
@@ -166,7 +170,7 @@ uint32_t ui_util_color(int imgui_color) {
     return ImColor(c);
 }
 
-void ui_util_options_menu(double time_ms, bool stopped) {
+void ui_util_options_menu(void) {
     if (ImGui::BeginMenu("Options")) {
         ImGui::SliderFloat("UI Alpha", &ImGui::GetStyle().Alpha, 0.1f, 1.0f);
         ImGui::SliderFloat("BG Alpha", &ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w, 0.1f, 1.0f);
@@ -183,15 +187,9 @@ void ui_util_options_menu(double time_ms, bool stopped) {
         ImGui::EndMenu();
     }
     ImGui::SameLine(ImGui::GetWindowWidth() - 120);
-    if (stopped) {
-        ImGui::Text("emu: stopped");
-    }
-    else {
-        ImGui::Text("emu: %.2fms", time_ms);
-    }
 }
 
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

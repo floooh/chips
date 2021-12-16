@@ -6,10 +6,17 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
+
+    Define the KC85 type to build before including this header (both the
+    declaration and implementation):
+
+        CHIPS_KC85_TYPE_2
+        CHIPS_KC85_TYPE_3
+        CHIPS_KC85_TYPE_4
 
     Optionally provide the following macros with your own implementation
     
@@ -49,6 +56,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#if !(defined(CHIPS_KC85_TYPE_2) || defined(CHIPS_KC85_TYPE_3) || defined(CHIPS_KC85_TYPE_4))
+#error "Please define one of CHIPS_KC85_TYPE_2, CHIPS_KC85_TYPE_3 or CHIPS_KC85_TYPE_4 before including kc85.h!"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -83,7 +94,7 @@ void ui_kc85sys_draw(ui_kc85sys_t* win);
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -130,26 +141,29 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
             ImGui::Text("4: unused");
             ImGui::Text("5: Tape LED      %s", (v & KC85_PIO_A_TAPE_LED) ? "ON":"OFF");
             ImGui::Text("6: Tape Motor    %s", (v & KC85_PIO_A_TAPE_MOTOR) ? "ON":"OFF");
-            if (KC85_TYPE_2 == win->kc85->type) {
+            #if defined(CHIPS_KC85_TYPE_2)
                 ImGui::Text("7: unused");
-            }
-            else {
+            #else
                 ImGui::Text("7: BASIC ROM     %s", (v & KC85_PIO_A_BASIC_ROM) ? "ON":"OFF");
-            }
+            #endif
         }
         if (ImGui::CollapsingHeader("Port 89h (PIO B)", ImGuiTreeNodeFlags_DefaultOpen)) {
             const uint8_t v = win->kc85->pio_b;
-            ImGui::Text("0..4: Volume     %02Xh", (v & 0x1F));
-            if (KC85_TYPE_4 == win->kc85->type) {
+            #if defined(CHIPS_KC85_TYPE_4)
+                ImGui::Text("0: 'trueck'      %s", (v & 1) ? "ON":"OFF");
+                ImGui::Text("1..4: Volume     %02Xh", ((v>>1) & 0x0F));
+            #else
+                ImGui::Text("0..4: Volume     %02Xh", (v & 0x1F));
+            #endif
+            #if defined(CHIPS_KC85_TYPE_4)
                 ImGui::Text("5: RAM8          %s", (v & KC85_PIO_B_RAM8) ? "ON":"OFF");
                 ImGui::Text("6: RAM8          %s", (v & KC85_PIO_B_RAM8_RO) ? "R/W":"R/O");
-            }
-            else {
+            #else
                 ImGui::Text("5..6: unused");
-            }
+            #endif
             ImGui::Text("7: Blinking      %s", (v & KC85_PIO_B_BLINK_ENABLED) ? "ON":"OFF");
         }
-        if (KC85_TYPE_4 == win->kc85->type) {
+        #if defined(CHIPS_KC85_TYPE_4)
             if (ImGui::CollapsingHeader("Port 84h", ImGuiTreeNodeFlags_DefaultOpen)) {
                 const uint8_t v = win->kc85->io84;
                 ImGui::Text("0: Show image    %d", (v & KC85_IO84_SEL_VIEW_IMG) ? 0:1);
@@ -167,7 +181,7 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
                 ImGui::Text("2..6: unused");
                 ImGui::Text("7: CAOS ROM C    %s", (v & KC85_IO86_CAOS_ROM_C) ? "ON":"OFF");
             }
-        }
+        #endif
         if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Vert Count:    %d", win->kc85->v_count);
             ImGui::Text("Hori Tick:     %d", win->kc85->h_tick);
@@ -175,4 +189,4 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
     }
     ImGui::End();
 }
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

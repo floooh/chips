@@ -73,7 +73,7 @@ extern "C" {
     |  1 | 1 |  LATCH ADDRESS
 */
 
-/* 8 bits data/address bus shared with CPU data bus */
+// 8 bits data/address bus shared with CPU data bus
 #define AY38910_DA0 (1ULL<<16)
 #define AY38910_DA1 (1ULL<<17)
 #define AY38910_DA2 (1ULL<<18)
@@ -83,14 +83,17 @@ extern "C" {
 #define AY38910_DA6 (1ULL<<22)
 #define AY38910_DA7 (1ULL<<23)
 
-/* reset pin shared with CPU */
+// reset pin shared with CPU
 #define AY38910_RESET   (1ULL<<34)
 
-/* chip-specific pins start at position 44 */
+// chip-specific pins start at position 40
 #define AY38910_BDIR    (1ULL<<40)
 #define AY38910_BC1     (1ULL<<41)
 
-/* IO port pins */
+// virtual 'audio sample ready' pin
+#define AY38910_SAMPLE  (1ULL<<42)
+
+// IO port pins
 #define AY38910_IOA0    (1ULL<<48)
 #define AY38910_IOA1    (1ULL<<49)
 #define AY38910_IOA2    (1ULL<<50)
@@ -109,7 +112,7 @@ extern "C" {
 #define AY38910_IOB6    (1ULL<<62)
 #define AY38910_IOB7    (1ULL<<63)
 
-/* AY-3-8910 registers */
+// AY-3-8910 registers
 #define AY38910_REG_PERIOD_A_FINE       (0)
 #define AY38910_REG_PERIOD_A_COARSE     (1)
 #define AY38910_REG_PERIOD_B_FINE       (2)
@@ -124,39 +127,40 @@ extern "C" {
 #define AY38910_REG_ENV_PERIOD_FINE     (11)
 #define AY38910_REG_ENV_PERIOD_COARSE   (12)
 #define AY38910_REG_ENV_SHAPE_CYCLE     (13)
-#define AY38910_REG_IO_PORT_A           (14)    /* not on AY-3-8913 */
-#define AY38910_REG_IO_PORT_B           (15)    /* not on AY-3-8912/3 */
-/* number of registers */
+#define AY38910_REG_IO_PORT_A           (14)    // not on AY-3-8913
+#define AY38910_REG_IO_PORT_B           (15)    // not on AY-3-8912/3
+// number of registers
 #define AY38910_NUM_REGISTERS (16)
-/* error-accumulation precision boost */
+// error-accumulation precision boost
 #define AY38910_FIXEDPOINT_SCALE (16)
-/* number of channels */
+// number of channels
 #define AY38910_NUM_CHANNELS (3)
-/* DC adjustment buffer length */
+// DC adjustment buffer length
 #define AY38910_DCADJ_BUFLEN (512)
 
-/* IO port names */
+// IO port names
 #define AY38910_PORT_A (0)
 #define AY38910_PORT_B (1)
 
-/* envelope shape bits */
+// envelope shape bits
 #define AY38910_ENV_HOLD        (1<<0)
 #define AY38910_ENV_ALTERNATE   (1<<1)
 #define AY38910_ENV_ATTACK      (1<<2)
 #define AY38910_ENV_CONTINUE    (1<<3)
 
-/* callbacks for input/output on I/O ports */
+// callbacks for input/output on I/O ports
+// FIXME: these should be integrated into the tick function eventually
 typedef uint8_t (*ay38910_in_t)(int port_id, void* user_data);
 typedef void (*ay38910_out_t)(int port_id, uint8_t data, void* user_data);
 
-/* chip subtypes */
+// chip subtypes
 typedef enum {
     AY38910_TYPE_8910 = 0,
     AY38910_TYPE_8912,
     AY38910_TYPE_8913
 } ay38910_type_t;
 
-/* setup parameters for ay38910_init() call */
+// setup parameters for ay38910_init() call
 typedef struct {
     ay38910_type_t type;    /* the subtype (default 0 is AY-3-8910) */
     int tick_hz;            /* frequency at which ay38910_tick() will be called in Hz */
@@ -167,7 +171,7 @@ typedef struct {
     void* user_data;        /* optional user-data for callbacks */
 } ay38910_desc_t;
 
-/* a tone channel */
+// a tone channel
 typedef struct {
     uint16_t period;
     uint16_t counter;
@@ -176,7 +180,7 @@ typedef struct {
     uint32_t noise_disable;
 } ay38910_tone_t;
 
-/* the noise channel state */
+// the noise channel state
 typedef struct {
     uint16_t period;
     uint16_t counter;
@@ -184,7 +188,7 @@ typedef struct {
     uint32_t bit;
 } ay38910_noise_t;
 
-/* the envelope generator */
+// the envelope generator
 typedef struct {
     uint16_t period;
     uint16_t counter;
@@ -194,15 +198,15 @@ typedef struct {
     uint8_t shape_state;
 } ay38910_env_t;
 
-/* AY-3-8910 state */
+// AY-3-8910 state
 typedef struct {
-    ay38910_type_t type;        /* the chip flavour */
-    ay38910_in_t in_cb;         /* the port-input callback */
-    ay38910_out_t out_cb;       /* the port-output callback */
-    void* user_data;            /* optional user-data for callbacks */
-    uint32_t tick;              /* a tick counter for internal clock division */
-    uint8_t addr;               /* 4-bit address latch */
-    union {                     /* the register bank */
+    ay38910_type_t type;        // the chip flavour
+    ay38910_in_t in_cb;         // the port-input callback
+    ay38910_out_t out_cb;       // the port-output callback
+    void* user_data;            // optional user-data for callbacks
+    uint32_t tick;              // a tick counter for internal clock division
+    uint8_t addr;               // 4-bit address latch
+    union {                     // the register bank
         uint8_t reg[AY38910_NUM_REGISTERS];
         struct {
             uint8_t period_a_fine;
@@ -223,12 +227,12 @@ typedef struct {
             uint8_t port_b;
         };
     };
-    ay38910_tone_t tone[AY38910_NUM_CHANNELS];  /* the 3 tone channels */
-    ay38910_noise_t noise;                      /* the noise generator state */
-    ay38910_env_t env;                          /* the envelope generator state */
-    uint64_t pins;          /* last pin state for debug inspection */
+    ay38910_tone_t tone[AY38910_NUM_CHANNELS];  // the 3 tone channels
+    ay38910_noise_t noise;                      // the noise generator state
+    ay38910_env_t env;                          // the envelope generator state
+    uint64_t pins;          // last pin state for debug inspection
 
-    /* sample generation state */
+    // sample generation state
     int sample_period;
     int sample_counter;
     float mag;
@@ -238,26 +242,29 @@ typedef struct {
     float dcadj_buf[AY38910_DCADJ_BUFLEN];
 } ay38910_t;
 
-/* extract 8-bit data bus from 64-bit pins */
-#define AY38910_GET_DATA(p) ((uint8_t)(p>>16))
-/* merge 8-bit data bus value into 64-bit pins */
-#define AY38910_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
-/* set 8-bit port A data on 64-bit pin mask */
-#define AY38910_SET_PA(p,d) {p=((p&~0x00FF000000000000ULL)|((((uint64_t)d)&0xFFULL)<<48));}
-/* set 8-bit port B data on 64-bit pin mask */
-#define AY38910_SET_PB(p,d) {p=((p&~0xFF00000000000000ULL)|((((uint64_t)d)&0xFFULL)<<56));}
+// extract 8-bit data bus from 64-bit pins
+#define AY38910_GET_DATA(p) ((uint8_t)((p)>>16))
+// merge 8-bit data bus value into 64-bit pins
+#define AY38910_SET_DATA(p,d) {p=((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL);}
+// set 8-bit port A data on 64-bit pin mask
+#define AY38910_SET_PA(p,d) {p=(((p)&~0x00FF000000000000ULL)|((((uint64_t)(d))&0xFFULL)<<48));}
+// set 8-bit port B data on 64-bit pin mask
+#define AY38910_SET_PB(p,d) {p=(((p)&~0xFF00000000000000ULL)|((((uint64_t)(d))&0xFFULL)<<56));}
 
-/* initialize a AY-3-8910 instance */
+// initialize a AY-3-8910 instance
 void ay38910_init(ay38910_t* ay, const ay38910_desc_t* desc);
-/* reset an existing AY-3-8910 instance */
+// reset an existing AY-3-8910 instance
 void ay38910_reset(ay38910_t* ay);
-/* perform an IO request machine cycle */
+// perform an IO request
 uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins);
-/* tick the AY-3-8910, return true if a new sample is ready */
+// tick the AY-3-8910, return true if a new sample is ready
 bool ay38910_tick(ay38910_t* ay);
+// helper functions to directly write register values and update dependent state, not intended for regular operation!
+void ay38910_set_register(ay38910_t* ay, uint8_t addr, uint8_t data);
+void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -268,32 +275,27 @@ bool ay38910_tick(ay38910_t* ay);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-/* extract 8-bit data bus from 64-bit pins */
-#define AY38910_DATA(p) ((uint8_t)(p>>16))
-/* merge 8-bit data bus value into 64-bit pins */
-#define AY38910_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
-
-/* valid register content bitmasks */
+// register width bit masks
 static const uint8_t _ay38910_reg_mask[AY38910_NUM_REGISTERS] = {
-    0xFF,       /* AY38910_REG_PERIOD_A_FINE */
-    0x0F,       /* AY38910_REG_PERIOD_A_COARSE */
-    0xFF,       /* AY38910_REG_PERIOD_B_FINE */
-    0x0F,       /* AY38910_REG_PERIOD_B_COARSE */
-    0xFF,       /* AY38910_REG_PERIOD_C_FINE */
-    0x0F,       /* AY38910_REG_PERIOD_C_COARSE */
-    0x1F,       /* AY38910_REG_PERIOD_NOISE */
-    0xFF,       /* AY38910_REG_ENABLE */
-    0x1F,       /* AY38910_REG_AMP_A (0..3: 4-bit volume, 4: use envelope) */
-    0x1F,       /* AY38910_REG_AMP_B (0..3: 4-bit volume, 4: use envelope) */
-    0x1F,       /* AY38910_REG_AMP_C (0..3: 4-bit volume, 4: use envelope) */
-    0xFF,       /* AY38910_REG_ENV_PERIOD_FINE */
-    0xFF,       /* AY38910_REG_ENV_PERIOD_COARSE */
-    0x0F,       /* AY38910_REG_ENV_SHAPE_CYCLE */
-    0xFF,       /* AY38910_REG_IO_PORT_A */
-    0xFF,       /* AY38910_REG_IO_PORT_B */
+    0xFF,       // AY38910_REG_PERIOD_A_FINE
+    0x0F,       // AY38910_REG_PERIOD_A_COARSE
+    0xFF,       // AY38910_REG_PERIOD_B_FINE
+    0x0F,       // AY38910_REG_PERIOD_B_COARSE
+    0xFF,       // AY38910_REG_PERIOD_C_FINE
+    0x0F,       // AY38910_REG_PERIOD_C_COARSE
+    0x1F,       // AY38910_REG_PERIOD_NOISE
+    0xFF,       // AY38910_REG_ENABLE
+    0x1F,       // AY38910_REG_AMP_A (0..3: 4-bit volume, 4: use envelope)
+    0x1F,       // AY38910_REG_AMP_B (0..3: 4-bit volume, 4: use envelope)
+    0x1F,       // AY38910_REG_AMP_C (0..3: 4-bit volume, 4: use envelope)
+    0xFF,       // AY38910_REG_ENV_PERIOD_FINE
+    0xFF,       // AY38910_REG_ENV_PERIOD_COARSE
+    0x0F,       // AY38910_REG_ENV_SHAPE_CYCLE
+    0xFF,       // AY38910_REG_IO_PORT_A
+    0xFF,       // AY38910_REG_IO_PORT_B
 };
 
-/* volume table from: https://github.com/true-grue/ayumi/blob/master/ayumi.c */
+// volume table from: https://github.com/true-grue/ayumi/blob/master/ayumi.c
 static const float _ay38910_volumes[16] = {
   0.0f,
   0.00999465934234f,
@@ -313,34 +315,34 @@ static const float _ay38910_volumes[16] = {
   1.0f
 };
 
-/* canned envelope generator shapes */
+// canned envelope generator shapes
 static const uint8_t _ay38910_shapes[16][32] = {
-    /* CONTINUE ATTACK ALTERNATE HOLD */
-    /* 0 0 X X */
+    // CONTINUE ATTACK ALTERNATE HOLD
+    // 0 0 X X
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-    /* 0 1 X X */
+    // 0 1 X X
     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-    /* 1 0 0 0 */
+    // 1 0 0 0
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 },
-    /* 1 0 0 1 */
+    // 1 0 0 1
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-    /* 1 0 1 0 */
+    // 1 0 1 0
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
-    /* 1 0 1 1 */
+    // 1 0 1 1
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15 },
-    /* 1 1 0 0 */
+    // 1 1 0 0
     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
-    /* 1 1 0 1 */
+    // 1 1 0 1
     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15 },
-    /* 1 1 1 0 */
+    // 1 1 1 0
     { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 },
-    /* 1 1 1 1 */
+    // 1 1 1 1
     { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -357,7 +359,7 @@ static float _ay38910_dcadjust(ay38910_t* ay, float s) {
     return s - (ay->dcadj_sum / AY38910_DCADJ_BUFLEN);
 }
 
-/* update computed values after registers have been reprogrammed */
+// update computed values after registers have been reprogrammed
 static void _ay38910_update_values(ay38910_t* ay) {
     for (int i = 0; i < AY38910_NUM_CHANNELS; i++) {
         ay38910_tone_t* chn = &ay->tone[i];
@@ -369,23 +371,23 @@ static void _ay38910_update_values(ay38910_t* ay) {
         if (0 == chn->period) {
             chn->period = 1;
         }
-        /* a set 'enable bit' actually means 'disabled' */
+        // a set 'enable bit' actually means 'disabled'
         chn->tone_disable = (ay->enable>>i) & 1;
         chn->noise_disable = (ay->enable>>(3+i)) & 1;
     }
-    /* noise generator values */
+    // noise generator values
     ay->noise.period = ay->period_noise;
     if (ay->noise.period == 0) {
         ay->noise.period = 1;
     }
-    /* envelope generator values */
+    // envelope generator values
     ay->env.period = (ay->period_env_coarse<<8)|ay->period_env_fine;
     if (ay->env.period == 0) {
         ay->env.period = 1;
     }
 }
 
-/* reset the env shape generator, only called when env-shape register is updated */
+// reset the env shape generator, only called when env-shape register is updated
 static void _ay38910_restart_env_shape(ay38910_t* ay) {
     ay->env.shape_holding = false;
     ay->env.shape_counter = 0;
@@ -402,7 +404,7 @@ void ay38910_init(ay38910_t* ay, const ay38910_desc_t* desc) {
     CHIPS_ASSERT(desc->tick_hz > 0);
     CHIPS_ASSERT(desc->sound_hz > 0);
     memset(ay, 0, sizeof(*ay));
-    /* note: input and output callbacks are optional */
+    // note: input and output callbacks are optional
     ay->in_cb = desc->in_cb;
     ay->out_cb = desc->out_cb;
     ay->user_data = desc->user_data;
@@ -429,7 +431,7 @@ void ay38910_reset(ay38910_t* ay) {
 bool ay38910_tick(ay38910_t* ay) {
     ay->tick++;
     if ((ay->tick & 7) == 0) {
-        /* tick the tone channels */
+        // tick the tone channels
         for (int i = 0; i < AY38910_NUM_CHANNELS; i++) {
             ay38910_tone_t* chn = &ay->tone[i];
             if (++chn->counter >= chn->period) {
@@ -438,7 +440,7 @@ bool ay38910_tick(ay38910_t* ay) {
             }
         }
 
-        /* tick the noise channel */
+        // tick the noise channel
         if (++ay->noise.counter >= ay->noise.period) {
             ay->noise.counter = 0;
             ay->noise.bit ^= 1;
@@ -454,7 +456,7 @@ bool ay38910_tick(ay38910_t* ay) {
         }
     }
 
-    /* tick the envelope generator */
+    // tick the envelope generator
     if ((ay->tick & 15) == 0) {
         if (++ay->env.counter >= ay->env.period) {
             ay->env.counter = 0;
@@ -468,7 +470,7 @@ bool ay38910_tick(ay38910_t* ay) {
         }
     }
 
-    /* generate new sample? */
+    // generate new sample?
     ay->sample_counter -= AY38910_FIXEDPOINT_SCALE;
     if (ay->sample_counter <= 0) {
         ay->sample_counter += ay->sample_period;
@@ -477,11 +479,11 @@ bool ay38910_tick(ay38910_t* ay) {
             const ay38910_tone_t* chn = &ay->tone[i];
             float vol;
             if (0 == (ay->reg[AY38910_REG_AMP_A+i] & (1<<4))) {
-                /* fixed amplitude */
+                // fixed amplitude
                 vol = _ay38910_volumes[ay->reg[AY38910_REG_AMP_A+i] & 0x0F];
             }
             else {
-                /* envelope control */
+                // envelope control
                 vol = _ay38910_volumes[ay->env.shape_state];
             }
             int vol_enable = (chn->bit|chn->tone_disable) & ((ay->noise.rng&1)|(chn->noise_disable));
@@ -490,109 +492,134 @@ bool ay38910_tick(ay38910_t* ay) {
             }
         }
         ay->sample = _ay38910_dcadjust(ay, sm) * ay->mag;
-        return true;    /* new sample is ready */
+        return true; // new sample is ready
     }
-    /* fallthrough: no new sample ready yet */
+    // fallthrough: no new sample ready yet
     return false;
 }
 
 uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
-    if (pins & (AY38910_BDIR|AY38910_BC1)) {
-        if (pins & AY38910_BDIR) {
-            const uint8_t data = AY38910_DATA(pins);
-            if (pins & AY38910_BC1) {
-                /* latch address */
-                ay->addr = data;
-            }
-            else {
-                /* Write to register using the currently latched address.
-                   The whole 8-bit address is considered, the low 4 bits
-                   are the register index, and the upper bits are burned
-                   into the chip as a 'chip select' and are usually 0
-                   (this emulator assumes they are 0, so addresses greater
-                   are ignored for reading and writing)
+    if (pins & AY38910_BDIR) {
+        const uint8_t data = AY38910_GET_DATA(pins);
+        if (pins & AY38910_BC1) {
+            // latch register address
+            ay->addr = data;
+        }
+        else {
+            /* Write to register using the currently latched address.
+               The whole 8-bit address is considered, the low 4 bits
+               are the register index, and the upper bits are burned
+               into the chip as a 'chip select' and are usually 0
+               (this emulator assumes they are 0, so addresses greater
+               are ignored for reading and writing)
+            */
+            if (ay->addr < AY38910_NUM_REGISTERS) {
+                // write register content, and update dependent values
+                ay->reg[ay->addr] = data & _ay38910_reg_mask[ay->addr];
+                _ay38910_update_values(ay);
+                if (ay->addr == AY38910_REG_ENV_SHAPE_CYCLE) {
+                    _ay38910_restart_env_shape(ay);
+                }
+                /* Handle port output:
+
+                    If port A or B is in output mode, call the
+                    port output callback to notify the outer world
+                    about the new register value.
+
+                    input/output mode is defined by bits 6 and 7 of
+                    the 'enable' register
+                        bit6 = 1: port A in output mode
+                        bit7 = 1: port B in output mode
                 */
-                if (ay->addr < AY38910_NUM_REGISTERS) {
-                    /* write register content, and update dependent values */
-                    ay->reg[ay->addr] = data & _ay38910_reg_mask[ay->addr];
-                    _ay38910_update_values(ay);
-                    if (ay->addr == AY38910_REG_ENV_SHAPE_CYCLE) {
-                        _ay38910_restart_env_shape(ay);
-                    }
-                    /* Handle port output:
-
-                        If port A or B is in output mode, call the
-                        port output callback to notify the outer world
-                        about the new register value.
-
-                        input/output mode is defined by bits 6 and 7 of
-                        the 'enable' register
-                            bit6 = 1: port A in output mode
-                            bit7 = 1: port B in output mode
-                    */
-                    else if (ay->addr == AY38910_REG_IO_PORT_A) {
-                        if (ay->enable & (1<<6)) {
-                            if (ay->out_cb) {
-                                ay->out_cb(AY38910_PORT_A, ay->port_a, ay->user_data);
-                            }
+                else if (ay->addr == AY38910_REG_IO_PORT_A) {
+                    if (ay->enable & (1<<6)) {
+                        if (ay->out_cb) {
+                            ay->out_cb(AY38910_PORT_A, ay->port_a, ay->user_data);
                         }
                     }
-                    else if (ay->addr == AY38910_REG_IO_PORT_B) {
-                        if (ay->enable & (1<<7)) {
-                            if (ay->out_cb) {
-                                ay->out_cb(AY38910_PORT_B, ay->port_b, ay->user_data);
-                            }
+                }
+                else if (ay->addr == AY38910_REG_IO_PORT_B) {
+                    if (ay->enable & (1<<7)) {
+                        if (ay->out_cb) {
+                            ay->out_cb(AY38910_PORT_B, ay->port_b, ay->user_data);
                         }
                     }
                 }
             }
         }
-        else {
-            /* Read from register using the currently latched address.
-               See 'write' for why the latched address must be in the
-               valid register range to have an effect.
+    }
+    else {
+        /* Read from register using the currently latched address.
+           See 'write' for why the latched address must be in the
+           valid register range to have an effect.
+        */
+        if (ay->addr < AY38910_NUM_REGISTERS) {
+            /* Handle port input:
+
+                If port A or B is in input mode, first call the port
+                input callback to update the port register content.
+
+                input/output mode is defined by bits 6 and 7 of
+                the 'enable' register:
+                    bit6 = 0: port A in input mode
+                    bit7 = 0: port B in input mode
             */
-            if (ay->addr < AY38910_NUM_REGISTERS) {
-                /* Handle port input:
-
-                    If port A or B is in input mode, first call the port
-                    input callback to update the port register content.
-
-                    input/output mode is defined by bits 6 and 7 of
-                    the 'enable' register:
-                        bit6 = 0: port A in input mode
-                        bit7 = 0: port B in input mode
-                */
-                if (ay->addr == AY38910_REG_IO_PORT_A) {
-                    if ((ay->enable & (1<<6)) == 0) {
-                        if (ay->in_cb) {
-                            ay->port_a = ay->in_cb(AY38910_PORT_A, ay->user_data);
-                        }
-                        else {
-                            ay->port_a = 0xFF;
-                        }
+            if (ay->addr == AY38910_REG_IO_PORT_A) {
+                if ((ay->enable & (1<<6)) == 0) {
+                    if (ay->in_cb) {
+                        ay->port_a = ay->in_cb(AY38910_PORT_A, ay->user_data);
+                    }
+                    else {
+                        ay->port_a = 0xFF;
                     }
                 }
-                else if (ay->addr == AY38910_REG_IO_PORT_B) {
-                    if ((ay->enable & (1<<7)) == 0) {
-                        if (ay->in_cb) {
-                            ay->port_b = ay->in_cb(AY38910_PORT_B, ay->user_data);
-                        }
-                        else {
-                            ay->port_b = 0xFF;
-                        }
-                    }
-                }
-                /* read register content into data pins */
-                const uint8_t data = ay->reg[ay->addr];
-                AY38910_SET_DATA(pins, data);
             }
+            else if (ay->addr == AY38910_REG_IO_PORT_B) {
+                if ((ay->enable & (1<<7)) == 0) {
+                    if (ay->in_cb) {
+                        ay->port_b = ay->in_cb(AY38910_PORT_B, ay->user_data);
+                    }
+                    else {
+                        ay->port_b = 0xFF;
+                    }
+                }
+            }
+            // read register content into data pins
+            const uint8_t data = ay->reg[ay->addr];
+            AY38910_SET_DATA(pins, data);
         }
         AY38910_SET_PA(pins, ay->port_a);
         AY38910_SET_PB(pins, ay->port_b);
         ay->pins = pins;
     }
     return pins;
+}
+
+/*
+uint64_t ay38910_tick(ay38910_t* ay, uint64_t pins) {
+    if (pins & (AY38910_BDIR|AY38910_BC1)) {
+        pins = _ay38910_iorq(ay, pins);
+    }
+    pins = _ay38910_tick(ay, pins);
+    AY38910_SET_PA(pins, ay->port_a);
+    AY38910_SET_PB(pins, ay->port_b);
+    ay->pins = pins;
+    return pins;
+}
+*/
+
+void ay38910_set_register(ay38910_t* ay, uint8_t addr, uint8_t data) {
+    CHIPS_ASSERT(ay && (addr < AY38910_NUM_REGISTERS));
+    ay->reg[addr] = data & _ay38910_reg_mask[addr];
+    _ay38910_update_values(ay);
+    if (addr == AY38910_REG_ENV_SHAPE_CYCLE) {
+        _ay38910_restart_env_shape(ay);
+    }
+}
+
+void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr) {
+    CHIPS_ASSERT(ay && (addr < AY38910_NUM_REGISTERS));
+    ay->addr = addr;
 }
 
 #endif /* CHIPS_IMPL */

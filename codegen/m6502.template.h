@@ -331,11 +331,11 @@ uint8_t m6502_p(m6502_t* cpu);
 uint16_t m6502_pc(m6502_t* cpu);
 
 /* extract 16-bit address bus from 64-bit pins */
-#define M6502_GET_ADDR(p) ((uint16_t)(p&0xFFFFULL))
+#define M6502_GET_ADDR(p) ((uint16_t)((p)&0xFFFFULL))
 /* merge 16-bit address bus value into 64-bit pins */
-#define M6502_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|((a)&0xFFFFULL));}
+#define M6502_SET_ADDR(p,a) {p=(((p)&~0xFFFFULL)|((a)&0xFFFFULL));}
 /* extract 8-bit data bus from 64-bit pins */
-#define M6502_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define M6502_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define M6502_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 /* copy data bus value from other pin mask */
@@ -343,9 +343,9 @@ uint16_t m6502_pc(m6502_t* cpu);
 /* return a pin mask with control-pins, address and data bus */
 #define M6502_MAKE_PINS(ctrl, addr, data) ((ctrl)|(((data)<<16)&0xFF0000ULL)|((addr)&0xFFFFULL))
 /* set the port bits on the 64-bit pin mask */
-#define M6510_SET_PORT(p,d) {p=(((p)&~M6510_PORT_BITS)|((((uint64_t)d)<<32)&M6510_PORT_BITS));}
+#define M6510_SET_PORT(p,d) {p=(((p)&~M6510_PORT_BITS)|((((uint64_t)(d))<<32)&M6510_PORT_BITS));}
 /* M6510: check for IO port access to address 0 or 1 */
-#define M6510_CHECK_IO(p) ((p&0xFFFEULL)==0)
+#define M6510_CHECK_IO(p) (((p)&0xFFFEULL)==0)
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -654,11 +654,11 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
         
         // NMI is edge-triggered
         if (0 != ((pins & (pins ^ c->PINS)) & M6502_NMI)) {
-            c->nmi_pip |= 1;
+            c->nmi_pip |= 0x100;
         }
         // IRQ test is level triggered
         if ((pins & M6502_IRQ) && (0 == (c->P & M6502_IF))) {
-            c->irq_pip |= 1;
+            c->irq_pip |= 0x100;
         }
         
         // RDY pin is only checked during read cycles
@@ -681,10 +681,10 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
             //  - RES behaves slightly different than on a real 6502, we go
             //    into RES state as soon as the pin goes active, from there
             //    on, behaviour is 'standard'
-            if (0 != (c->irq_pip & 4)) {
+            if (0 != (c->irq_pip & 0x400)) {
                 c->brk_flags |= M6502_BRK_IRQ;
             }
-            if (0 != (c->nmi_pip & 0xFFFC)) {
+            if (0 != (c->nmi_pip & 0xFC00)) {
                 c->brk_flags |= M6502_BRK_NMI;
             }
             if (0 != (pins & M6502_RES)) {
@@ -694,8 +694,8 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
                 c->io_inp = 0;
                 c->io_pins = 0;
             }
-            c->irq_pip &= 3;
-            c->nmi_pip &= 3;
+            c->irq_pip &= 0x3FF;
+            c->nmi_pip &= 0x3FF;
 
             // if interrupt or reset was requested, force a BRK instruction
             if (c->brk_flags) {

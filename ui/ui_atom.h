@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -70,7 +70,7 @@ typedef struct {
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_atom_desc_t;
 
 typedef struct {
@@ -90,15 +90,15 @@ typedef struct {
 
 void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc);
 void ui_atom_discard(ui_atom_t* ui);
-void ui_atom_draw(ui_atom_t* ui, double time_ms);
-void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us);
+void ui_atom_draw(ui_atom_t* ui);
+atom_debug_t ui_atom_get_debug(ui_atom_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -112,7 +112,7 @@ void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
+static void _ui_atom_draw_menu(ui_atom_t* ui) {
     CHIPS_ASSERT(ui && ui->atom && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -166,7 +166,7 @@ static void _ui_atom_draw_menu(ui_atom_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
@@ -398,8 +398,8 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->atom->sample_buffer;
-        desc.num_samples = ui->atom->num_samples;
+        desc.sample_buffer = ui->atom->audio.sample_buffer;
+        desc.num_samples = ui->atom->audio.num_samples;
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->audio, &desc);
@@ -482,10 +482,10 @@ void ui_atom_discard(ui_atom_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_atom_draw(ui_atom_t* ui, double time_ms) {
+void ui_atom_draw(ui_atom_t* ui) {
     CHIPS_ASSERT(ui && ui->atom);
-    _ui_atom_draw_menu(ui, time_ms);
-    ui_audio_draw(&ui->audio, ui->atom->sample_pos);
+    _ui_atom_draw_menu(ui);
+    ui_audio_draw(&ui->audio, ui->atom->audio.sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
     ui_m6522_draw(&ui->via);
@@ -499,18 +499,16 @@ void ui_atom_draw(ui_atom_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-void ui_atom_exec(ui_atom_t* ui, uint32_t frame_time_us) {
-    CHIPS_ASSERT(ui && ui->atom);
-    uint32_t ticks_to_run = clk_us_to_ticks(ATOM_FREQUENCY, frame_time_us);
-    atom_t* atom = ui->atom;
-    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-        atom_tick(ui->atom);
-        ui_dbg_tick(&ui->dbg, atom->pins);
-    }
-    kbd_update(&ui->atom->kbd, frame_time_us);
+atom_debug_t ui_atom_get_debug(ui_atom_t* ui) {
+    CHIPS_ASSERT(ui);
+    atom_debug_t res = {};
+    res.callback.func = (atom_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

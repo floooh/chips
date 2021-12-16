@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -66,7 +66,7 @@ typedef struct {
     ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
     ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
     ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
 } ui_z1013_desc_t;
 
 typedef struct {
@@ -82,16 +82,15 @@ typedef struct {
 
 void ui_z1013_init(ui_z1013_t* ui, const ui_z1013_desc_t* desc);
 void ui_z1013_discard(ui_z1013_t* ui);
-void ui_z1013_draw(ui_z1013_t* ui, double time_ms);
-bool ui_z1013_before_exec(ui_z1013_t* ui);
-void ui_z1013_after_exec(ui_z1013_t* ui);
+void ui_z1013_draw(ui_z1013_t* ui);
+z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -105,7 +104,7 @@ void ui_z1013_after_exec(ui_z1013_t* ui);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_z1013_draw_menu(ui_z1013_t* ui, double time_ms) {
+static void _ui_z1013_draw_menu(ui_z1013_t* ui) {
     CHIPS_ASSERT(ui && ui->z1013 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -154,7 +153,7 @@ static void _ui_z1013_draw_menu(ui_z1013_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
@@ -187,15 +186,16 @@ static const ui_chip_pin_t _ui_z1013_cpu_pins[] = {
     { "D5",     5,      Z80_D5 },
     { "D6",     6,      Z80_D6 },
     { "D7",     7,      Z80_D7 },
-    { "M1",     9,      Z80_M1 },
-    { "MREQ",   10,     Z80_MREQ },
-    { "IORQ",   11,     Z80_IORQ },
-    { "RD",     12,     Z80_RD },
-    { "WR",     13,     Z80_WR },
+    { "M1",     8,      Z80_M1 },
+    { "MREQ",   9,      Z80_MREQ },
+    { "IORQ",   10,     Z80_IORQ },
+    { "RD",     11,     Z80_RD },
+    { "WR",     12,     Z80_WR },
+    { "RFSH",   13,     Z80_RFSH },
     { "HALT",   14,     Z80_HALT },
     { "INT",    15,     Z80_INT },
     { "NMI",    16,     Z80_NMI },
-    { "WAIT",   17,     Z80_WAIT_MASK },
+    { "WAIT",   17,     Z80_WAIT },
     { "A0",     18,     Z80_A0 },
     { "A1",     19,     Z80_A1 },
     { "A2",     20,     Z80_A2 },
@@ -358,9 +358,9 @@ void ui_z1013_discard(ui_z1013_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_z1013_draw(ui_z1013_t* ui, double time_ms) {
+void ui_z1013_draw(ui_z1013_t* ui) {
     CHIPS_ASSERT(ui && ui->z1013);
-    _ui_z1013_draw_menu(ui, time_ms);
+    _ui_z1013_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_z1013_update_memmap(ui);
     }
@@ -374,17 +374,15 @@ void ui_z1013_draw(ui_z1013_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-bool ui_z1013_before_exec(ui_z1013_t* ui) {
-    CHIPS_ASSERT(ui && ui->z1013);
-    return ui_dbg_before_exec(&ui->dbg);
-}
-
-void ui_z1013_after_exec(ui_z1013_t* ui) {
-    CHIPS_ASSERT(ui && ui->z1013);
-    ui_dbg_after_exec(&ui->dbg);
+z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui) {
+    z1013_debug_t res = {};
+    res.callback.func = (z1013_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

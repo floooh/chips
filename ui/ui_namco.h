@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -62,10 +62,10 @@ extern "C" {
 
 typedef struct {
     namco_t* sys;
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;                      /* user-defined hotkeys for ui_dbg_t */
+    ui_dbg_create_texture_t create_texture_cb;      // texture creation callback for ui_dbg_t
+    ui_dbg_update_texture_t update_texture_cb;      // texture update callback for ui_dbg_t
+    ui_dbg_destroy_texture_t destroy_texture_cb;    // texture destruction callback for ui_dbg_t
+    ui_dbg_keys_desc_t dbg_keys;                    // user-defined hotkeys for ui_dbg_t
 } ui_namco_desc_t;
 
 typedef struct {
@@ -80,16 +80,15 @@ typedef struct {
 
 void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* desc);
 void ui_namco_discard(ui_namco_t* ui);
-void ui_namco_draw(ui_namco_t* ui, double time_ms);
-bool ui_namco_before_exec(ui_namco_t* ui);
-void ui_namco_after_exec(ui_namco_t* ui);
+void ui_namco_draw(ui_namco_t* ui);
+namco_debug_t ui_namco_get_debug(ui_namco_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #if !defined(NAMCO_PACMAN) && !defined(NAMCO_PENGO)
 #error "Please define NAMCO_PACMAN or NAMCO_PENGO before including the implementation"
 #endif
@@ -115,15 +114,16 @@ static const ui_chip_pin_t _ui_namco_cpu_pins[] = {
     { "D5",     5,      Z80_D5 },
     { "D6",     6,      Z80_D6 },
     { "D7",     7,      Z80_D7 },
-    { "M1",     9,      Z80_M1 },
-    { "MREQ",   10,     Z80_MREQ },
-    { "IORQ",   11,     Z80_IORQ },
-    { "RD",     12,     Z80_RD },
-    { "WR",     13,     Z80_WR },
+    { "M1",     8,      Z80_M1 },
+    { "MREQ",   9,      Z80_MREQ },
+    { "IORQ",   10,     Z80_IORQ },
+    { "RD",     11,     Z80_RD },
+    { "WR",     12,     Z80_WR },
+    { "RFSH",   13,     Z80_RFSH },
     { "HALT",   14,     Z80_HALT },
     { "INT",    15,     Z80_INT },
     { "NMI",    16,     Z80_NMI },
-    { "WAIT",   17,     Z80_WAIT_MASK },
+    { "WAIT",   17,     Z80_WAIT },
     { "A0",     18,     Z80_A0 },
     { "A1",     19,     Z80_A1 },
     { "A2",     20,     Z80_A2 },
@@ -298,7 +298,7 @@ void ui_namco_discard(ui_namco_t* ui) {
 }
 
 
-static void _ui_namco_draw_menu(ui_namco_t* ui, double exec_time) {
+static void _ui_namco_draw_menu(ui_namco_t* ui) {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
             if (ImGui::MenuItem("Reboot")) {
@@ -334,14 +334,14 @@ static void _ui_namco_draw_menu(ui_namco_t* ui, double exec_time) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(exec_time, ui->dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
 
-void ui_namco_draw(ui_namco_t* ui, double time_ms) {
+void ui_namco_draw(ui_namco_t* ui) {
     CHIPS_ASSERT(ui && ui->sys);
-    _ui_namco_draw_menu(ui, time_ms);
+    _ui_namco_draw_menu(ui);
     ui_memmap_draw(&ui->memmap);
     ui_audio_draw(&ui->audio, ui->sys->sound.sample_pos);
     ui_dbg_draw(&ui->dbg);
@@ -352,14 +352,11 @@ void ui_namco_draw(ui_namco_t* ui, double time_ms) {
     }
 }
 
-bool ui_namco_before_exec(ui_namco_t* ui) {
-    CHIPS_ASSERT(ui && ui->sys);
-    return ui_dbg_before_exec(&ui->dbg);
+namco_debug_t ui_namco_get_debug(ui_namco_t* ui) {
+    namco_debug_t res = {};
+    res.callback.func = (namco_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
-
-void ui_namco_after_exec(ui_namco_t* ui) {
-    CHIPS_ASSERT(ui && ui->sys);
-    ui_dbg_after_exec(&ui->dbg);
-}
-
-#endif /* CHIPS_IMPL */
+#endif // CHIPS_UI_IMPL

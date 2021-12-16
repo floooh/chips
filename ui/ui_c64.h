@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -63,17 +63,17 @@
 extern "C" {
 #endif
 
-/* reboot callback */
+// reboot callback
 typedef void (*ui_c64_boot_cb)(c64_t* sys);
 
-/* setup params for ui_c64_init() */
+// setup params for ui_c64_init()
 typedef struct {
-    c64_t* c64;             /* pointer to c64_t instance to track */
-    ui_c64_boot_cb boot_cb; /* reboot callback function */
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    c64_t* c64;             // pointer to c64_t instance to track
+    ui_c64_boot_cb boot_cb; // reboot callback function
+    ui_dbg_create_texture_t create_texture_cb;      // texture creation callback for ui_dbg_t
+    ui_dbg_update_texture_t update_texture_cb;      // texture update callback for ui_dbg_t
+    ui_dbg_destroy_texture_t destroy_texture_cb;    // texture destruction callback for ui_dbg_t
+    ui_dbg_keys_desc_t dbg_keys;          // user-defined hotkeys for ui_dbg_t
 } ui_c64_desc_t;
 
 typedef struct {
@@ -96,15 +96,15 @@ typedef struct {
 
 void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc);
 void ui_c64_discard(ui_c64_t* ui);
-void ui_c64_draw(ui_c64_t* ui, double time_ms);
-void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us);
+void ui_c64_draw(ui_c64_t* ui);
+c64_debug_t ui_c64_get_debug(ui_c64_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -118,7 +118,7 @@ void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
+static void _ui_c64_draw_menu(ui_c64_t* ui) {
     CHIPS_ASSERT(ui && ui->c64 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -197,7 +197,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped || ui->c1541_dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
@@ -333,15 +333,12 @@ static void _ui_c64_update_memmap(ui_c64_t* ui) {
         ui_memmap_region(&ui->memmap, "RAM", 0x0000, 0x10000, true);
 }
 
-static int _ui_c64_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
-    (void)pc;
-    (void)ticks;
+static int _ui_c64_eval_bp(ui_dbg_t* dbg_win, int trap_id, uint64_t pins, void* user_data) {
     (void)pins;
     CHIPS_ASSERT(user_data);
     ui_c64_t* ui = (ui_c64_t*) user_data;
     c64_t* c64 = ui->c64;
     int scanline = c64->vic.rs.v_count;
-    int trap_id = 0;
     for (int i = 0; (i < dbg_win->dbg.num_breakpoints) && (trap_id == 0); i++) {
         const ui_dbg_breakpoint_t* bp = &dbg_win->dbg.breakpoints[i];
         if (bp->enabled) {
@@ -640,8 +637,8 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->c64->sample_buffer;
-        desc.num_samples = ui->c64->num_samples;
+        desc.sample_buffer = ui->c64->audio.sample_buffer;
+        desc.num_samples = ui->c64->audio.num_samples;
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->audio, &desc);
@@ -725,13 +722,13 @@ void ui_c64_discard(ui_c64_t* ui) {
     ui->c64 = 0;
 }
 
-void ui_c64_draw(ui_c64_t* ui, double time_ms) {
+void ui_c64_draw(ui_c64_t* ui) {
     CHIPS_ASSERT(ui && ui->c64);
-    _ui_c64_draw_menu(ui, time_ms);
+    _ui_c64_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_c64_update_memmap(ui);
     }
-    ui_audio_draw(&ui->audio, ui->c64->sample_pos);
+    ui_audio_draw(&ui->audio, ui->c64->audio.sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
     if (ui->c64->c1541.valid) {
@@ -752,18 +749,16 @@ void ui_c64_draw(ui_c64_t* ui, double time_ms) {
     }
 }
 
-void ui_c64_exec(ui_c64_t* ui, uint32_t frame_time_us) {
-    CHIPS_ASSERT(ui && ui->c64);
-    uint32_t ticks_to_run = clk_us_to_ticks(C64_FREQUENCY, frame_time_us);
-    c64_t* c64 = ui->c64;
-    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-        c64_tick(c64);
-        ui_dbg_tick(&ui->dbg, c64->pins);
-    }
-    kbd_update(&ui->c64->kbd, frame_time_us);
+c64_debug_t ui_c64_get_debug(ui_c64_t* ui) {
+    CHIPS_ASSERT(ui);
+    c64_debug_t res = {};
+    res.callback.func = (c64_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

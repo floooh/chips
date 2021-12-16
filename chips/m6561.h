@@ -46,6 +46,7 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -112,7 +113,7 @@ extern "C" {
 #define M6561_DCADJ_BUFLEN (512)
 
 /* extract 8-bit data bus from 64-bit pins */
-#define M6561_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define M6561_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
 #define M6561_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
@@ -124,7 +125,7 @@ typedef struct {
     /* pointer to RGBA8 framebuffer for generated image (optional) */
     uint32_t* rgba8_buffer;
     /* size of the RGBA framebuffer (optional) */
-    uint32_t rgba8_buffer_size;
+    size_t rgba8_buffer_size;
     /* visible CRT area blitted to rgba8_buffer (in pixels) */
     uint16_t vis_x, vis_y, vis_w, vis_h;
     /* the memory-fetch callback */

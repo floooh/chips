@@ -294,19 +294,19 @@ typedef struct {
 } m6522_t;
 
 /* extract 8-bit data bus from 64-bit pins */
-#define M6522_GET_DATA(p) ((uint8_t)(p>>16))
+#define M6522_GET_DATA(p) ((uint8_t)((p)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define M6522_SET_DATA(p,d) {p=((p&~0xFF0000)|(((d)&0xFF)<<16));}
+#define M6522_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 /* extract port A pins */
-#define M6522_GET_PA(p) ((uint8_t)(p>>48))
+#define M6522_GET_PA(p) ((uint8_t)((p)>>48))
 /* extract port B pins */
-#define M6522_GET_PB(p) ((uint8_t)(p>>56))
+#define M6522_GET_PB(p) ((uint8_t)((p)>>56))
 /* merge port A pins into pin mask */
-#define M6522_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
+#define M6522_SET_PA(p,a) {p=((p)&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
 /* merge port B pins into pin mask */
-#define M6522_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
+#define M6522_SET_PB(p,b) {p=((p)&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
 /* merge port A and B pins into pin mask */
-#define M6522_SET_PAB(p,a,b) {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
+#define M6522_SET_PAB(p,a,b) {p=((p)&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
 /* initialize a new 6522 instance */
 void m6522_init(m6522_t* m6522);

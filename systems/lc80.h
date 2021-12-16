@@ -69,12 +69,13 @@
 #*/
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* key codes (for lc80_key(), lc80_key_down(), lc80_key_up() */
+// key codes (for lc80_key(), lc80_key_down(), lc80_key_up()
 #define LC80_KEY_0      ('0')
 #define LC80_KEY_1      ('1')
 #define LC80_KEY_2      ('2')
@@ -101,7 +102,7 @@ extern "C" {
 #define LC80_KEY_LD     (0x03)
 #define LC80_KEY_EX     (0x20)
 
-/* U505D ROM chip pins */
+// U505D ROM chip pins
 #define LC80_U505_A0     (1ULL<<0)
 #define LC80_U505_A1     (1ULL<<1)
 #define LC80_U505_A2     (1ULL<<2)
@@ -123,7 +124,7 @@ extern "C" {
 #define LC80_U505_D7     (1ULL<<23)
 #define LC80_U505_CS     (1ULL<<24)
 
-/* U214 RAM chip pins */
+// U214 RAM chip pins
 #define LC80_U214_A0     (1ULL<<0)
 #define LC80_U214_A1     (1ULL<<1)
 #define LC80_U214_A2     (1ULL<<2)
@@ -139,10 +140,10 @@ extern "C" {
 #define LC80_U214_D2     (1ULL<<18)
 #define LC80_U214_D3     (1ULL<<19)
 #define LC80_U214_CS     (1ULL<<24)
-#define LC80_U214_WR     (1ULL<<28)     /* same as Z80_WR */
+#define LC80_U214_WR     (1ULL<<28)     // same as Z80_WR
 
-/* DS8205 / LS138 3-to-8 decoder pins */
-#define LC80_DS8205_Y0   (1<<0)      /* output pins */
+// DS8205 / LS138 3-to-8 decoder pins
+#define LC80_DS8205_Y0   (1<<0)      // output pins
 #define LC80_DS8205_Y1   (1<<1)
 #define LC80_DS8205_Y2   (1<<2)
 #define LC80_DS8205_Y3   (1<<3)
@@ -150,17 +151,17 @@ extern "C" {
 #define LC80_DS8205_Y5   (1<<5)
 #define LC80_DS8205_Y6   (1<<6)
 #define LC80_DS8205_Y7   (1<<7)
-#define LC80_DS8205_A    (1<<8)      /* select inputs */
+#define LC80_DS8205_A    (1<<8)      // select inputs
 #define LC80_DS8205_B    (1<<9)
 #define LC80_DS8205_C    (1<<10)
-#define LC80_DS8205_G1   (1<<11)     /* enable inputs */
+#define LC80_DS8205_G1   (1<<11)     // enable inputs
 #define LC80_DS8205_G2A  (1<<12)
 #define LC80_DS8205_G2B  (1<<13)
 #define LC80_DS8205_SELECT  (LC80_DS8205_A|LC80_DS8205_B|LC80_DS8205_C)
 #define LC80_DS8205_INPUTS  (LC80_DS8205_A|LC80_DS8205_B|LC80_DS8205_C|LC80_DS8205_G1|LC80_DS8205_G2A|LC80_DS8205_G2B)
 #define LC80_DS8205_OUTPUTS (0xFF)
 
-/* VQE23 2-digit LED state */
+// VQE23 2-digit LED state
 #define LC80_VQE23_A1    (1ULL<<0)
 #define LC80_VQE23_B1    (1ULL<<1)
 #define LC80_VQE23_C1    (1ULL<<2)
@@ -180,50 +181,68 @@ extern "C" {
 #define LC80_VQE23_K1    (1ULL<<16)
 #define LC80_VQE23_K2    (1ULL<<17)
 
-typedef void (*lc80_audio_callback_t)(const float* samples, int num_samples, void* user_data);
+typedef struct {
+    void (*func)(const float* samples, int num_samples, void* user_data);
+    void* user_data;
+} lc80_audio_callback_t;
+
 #define LC80_MAX_AUDIO_SAMPLES (1024)
 #define LC80_DEFAULT_AUDIO_SAMPLES (128)
 
-/* config parameters for lc80_init() */
+// debugging hook definitions
+typedef void (*lc80_debug_func_t)(void* user_data, uint64_t pins);
 typedef struct {
-    /* optional userdata pointer for callbacks */
-    void* user_data;
+    struct {
+        lc80_debug_func_t func;
+        void* user_data;
+    } callback;
+    bool* stopped;
+} lc80_debug_t;
 
-    /* audio output config (if you don't want audio, set audio_cb to zero) */
-    lc80_audio_callback_t audio_cb;     /* called when audio_num_samples are ready */
-    int audio_num_samples;              /* default is LC80_DEFAULT_AUDIO_SAMPLES */
-    int audio_sample_rate;              /* playback sample rate, default is 44100 */
-    float audio_volume;                 /* audio volume (0.0 .. 1.0), default is 0.3 */
+// config parameters for lc80_init()
+typedef struct {
+    lc80_debug_t debug;     // optional debugger hook
 
-    /* ROM image (must be single 2KByte image) */
-    const void* rom_ptr;
-    int rom_size;
+    // audio output config (if you don't want audio, set audio_cb to zero)
+    struct {
+        lc80_audio_callback_t callback; // called when audio_num_samples are ready
+        int num_samples;                // default is LC80_DEFAULT_AUDIO_SAMPLES
+        int sample_rate;                // playback sample rate, default is 44100
+        float volume;                   // audio volume (0.0 .. 1.0), default is 0.4
+    } audio;
+
+    // ROM image (must be single 2KByte image)
+    struct { const void* ptr; size_t size; } rom;
 } lc80_desc_t;
 
 /* LC80 emulator state */
 typedef struct {
-    bool valid;
-
     z80_t cpu;
     z80ctc_t ctc;
     z80pio_t pio_sys;
     z80pio_t pio_usr;
-    uint32_t vqe23[3];          /* state of the 2-digit LED modules */
-    uint32_t u505;              /* pin state of the 2 U505D ROM chips */
-    uint32_t u214[2];           /* pin state of the 2 U214D RAM chips */
-    uint32_t ds8205[2];         /* pin state of the 2 DS8205 3-to-8 decoders (equiv LS138) */
+    uint32_t vqe23[3];          // state of the 2-digit LED modules
+    uint32_t u505;              // pin state of the 2 U505D ROM chips
+    uint32_t u214[2];           // pin state of the 2 U214D RAM chips
+    uint32_t ds8205[2];         // pin state of the 2 DS8205 3-to-8 decoders (equiv LS138)
+    uint8_t pio_b;              // last PIO port B state
+    beeper_t beeper;
     bool reset;
     bool nmi;
 
-    beeper_t beeper;
-    clk_t clk;
-    kbd_t kbd;
+    bool valid;
+    uint64_t pins;
+    lc80_debug_t debug;
 
-    void* user_data;
-    lc80_audio_callback_t audio_cb;
-    int num_samples;
-    int sample_pos;
-    float sample_buffer[LC80_MAX_AUDIO_SAMPLES];
+    kbd_t kbd;
+    uint32_t freq_hz;
+
+    struct {
+        lc80_audio_callback_t callback;
+        int num_samples;
+        int sample_pos;
+        float sample_buffer[LC80_MAX_AUDIO_SAMPLES];
+    } audio;
 
     uint8_t ram[0x0400];
     uint8_t rom[0x0800];
@@ -232,10 +251,10 @@ typedef struct {
 void lc80_init(lc80_t* sys, const lc80_desc_t* desc);
 void lc80_discard(lc80_t* sys);
 void lc80_reset(lc80_t* sys);
-void lc80_exec(lc80_t* sys, uint32_t micro_seconds);
+uint32_t lc80_exec(lc80_t* sys, uint32_t micro_seconds);
 void lc80_key_down(lc80_t* sys, int key_code);
 void lc80_key_up(lc80_t* sys, int key_code);
-void lc80_key(lc80_t* sys, int key_code);       /* down + up */
+void lc80_key(lc80_t* sys, int key_code);       // down + up
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -249,54 +268,34 @@ void lc80_key(lc80_t* sys, int key_code);       /* down + up */
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _LC80_DEFAULT(val,def) (((val) != 0) ? (val) : (def));
-
-static uint64_t _lc80_tick(int num, uint64_t pins, void* user_data);
-static uint8_t _lc80_pio_sys_in(int port_id, void* user_data);
-static void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data);
-static uint8_t _lc80_pio_usr_in(int port_id, void* user_data);
-static void _lc80_pio_usr_out(int port_id, uint8_t data, void* user_data);
+#define _LC80_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
 
 void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
     
     memset(sys, 0, sizeof(lc80_t));
     sys->valid = true;
-    sys->user_data = desc->user_data;
+    sys->debug = desc->debug;
     
-    CHIPS_ASSERT(desc->rom_ptr && (desc->rom_size == sizeof(sys->rom)));
-    memcpy(sys->rom, desc->rom_ptr, sizeof(sys->rom));
+    CHIPS_ASSERT(desc->rom.ptr && (desc->rom.size == sizeof(sys->rom)));
+    memcpy(sys->rom, desc->rom.ptr, sizeof(sys->rom));
 
-    /* system clock is 900 kHz */
-    const uint32_t freq_hz = 900000;
-    clk_init(&sys->clk, freq_hz);
+    sys->freq_hz = 900000;
+    z80_init(&sys->cpu);
     z80ctc_init(&sys->ctc);
-
-    z80_desc_t cpu_desc;
-    memset(&cpu_desc, 0, sizeof(cpu_desc));
-    cpu_desc.tick_cb = _lc80_tick;
-    cpu_desc.user_data = sys;
-    z80_init(&sys->cpu, &cpu_desc);
-
-    z80pio_desc_t pio_desc;
-    memset(&pio_desc, 0, sizeof(pio_desc));
-    pio_desc.in_cb = _lc80_pio_sys_in;
-    pio_desc.out_cb = _lc80_pio_sys_out;
-    pio_desc.user_data = sys;
-    z80pio_init(&sys->pio_sys, &pio_desc);
-    pio_desc.in_cb = _lc80_pio_usr_in;
-    pio_desc.out_cb = _lc80_pio_usr_out;
-    z80pio_init(&sys->pio_usr, &pio_desc);
-
+    z80pio_init(&sys->pio_sys);
+    z80pio_init(&sys->pio_usr);
     for (int i = 0; i < 3; i++) {
         sys->vqe23[i] = 0x0000FFFF;
     }
-
-    sys->audio_cb = desc->audio_cb;
-    sys->num_samples = _LC80_DEFAULT(desc->audio_num_samples, LC80_DEFAULT_AUDIO_SAMPLES);
-    const int audio_hz = _LC80_DEFAULT(desc->audio_sample_rate, 44100);
-    const float audio_vol = _LC80_DEFAULT(desc->audio_volume, 0.3f);
-    beeper_init(&sys->beeper, freq_hz, audio_hz, audio_vol);
+    sys->audio.callback = desc->audio.callback;
+    sys->audio.num_samples = _LC80_DEFAULT(desc->audio.num_samples, LC80_DEFAULT_AUDIO_SAMPLES);
+    beeper_init(&sys->beeper, &(beeper_desc_t){
+        .tick_hz = sys->freq_hz,
+        .sound_hz = _LC80_DEFAULT(desc->audio.sample_rate, 44100),
+        .base_volume = 0.3f
+    });
 
     /* keyboard matrix:
           0   1   2   3   4   5
@@ -329,8 +328,8 @@ void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
         }
     }
 
-    /* execution starts at 0x0000 */
-    z80_set_pc(&sys->cpu, 0x0000);
+    // execution starts at 0x0000
+    sys->pins = z80_prefetch(&sys->cpu, 0x0000);
 }
 
 void lc80_discard(lc80_t* sys) {
@@ -347,55 +346,13 @@ void lc80_reset(lc80_t* sys) {
     z80pio_reset(&sys->pio_sys);
     z80pio_reset(&sys->pio_usr);
     beeper_reset(&sys->beeper);
-    z80_set_pc(&sys->cpu, 0x0000);
-}
-
-void lc80_exec(lc80_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    uint32_t ticks_to_run = clk_ticks_to_run(&sys->clk, micro_seconds);
-    uint32_t ticks_executed = z80_exec(&sys->cpu, ticks_to_run);
-    clk_ticks_executed(&sys->clk, ticks_executed);
-    kbd_update(&sys->kbd, micro_seconds);
-    if (sys->nmi) {
-        sys->nmi = false;
-    }
-    if (sys->reset) {
-        lc80_reset(sys);
-    }
-}
-
-void lc80_key_down(lc80_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    switch (key_code) {
-        case LC80_KEY_RES: sys->reset = true; break;
-        case LC80_KEY_NMI: sys->nmi = true; break;
-        default: kbd_key_down(&sys->kbd, key_code);
-    }
-}
-
-void lc80_key_up(lc80_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    switch (key_code) {
-        case LC80_KEY_RES:
-        case LC80_KEY_NMI:
-            /* not a bug */
-            break;
-        default:
-            kbd_key_up(&sys->kbd, key_code);
-            break;
-    }
-}
-
-void lc80_key(lc80_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    lc80_key_down(sys, key_code);
-    lc80_key_up(sys, key_code);
+    sys->pins = z80_prefetch(&sys->cpu, 0x0000);
 }
 
 #define _LC80_HI(pins,mask) (0!=(pins&mask))
 #define _LC80_LO(pins,mask) (0==(pins&mask))
 
-/* DS8205 (LS138) 3-to-8 decoder */
+// DS8205 (LS138) 3-to-8 decoder 
 static inline uint32_t _lc80_ds8205_tick(uint32_t inp) {
     /*
         enable = G1 && !G2A && !G2B
@@ -406,16 +363,43 @@ static inline uint32_t _lc80_ds8205_tick(uint32_t inp) {
     */
     uint32_t outp = inp & LC80_DS8205_INPUTS;
     if ((inp & (LC80_DS8205_G1|LC80_DS8205_G2A|LC80_DS8205_G2B)) == LC80_DS8205_G1) {
-        /* outputs enabled */
+        // outputs enabled
         uint8_t data = (1 << ((inp & LC80_DS8205_SELECT)>>8));
         outp |= data;
     }
     return outp;
 }
 
-/* LC80 CPU tick callback */
-uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
-    lc80_t* sys = (lc80_t*) user_data;
+// update a VQE23 2-digit LED display element
+static uint32_t _lc80_vqe23_write(uint32_t vqe23, int digit, uint8_t data) {
+    if (0 == digit) {
+        vqe23 &= ~0xFF;
+        if (data & (1<<2)) { vqe23 |= LC80_VQE23_A1; }
+        if (data & (1<<0)) { vqe23 |= LC80_VQE23_B1; }
+        if (data & (1<<5)) { vqe23 |= LC80_VQE23_C1; }
+        if (data & (1<<7)) { vqe23 |= LC80_VQE23_D1; }
+        if (data & (1<<6)) { vqe23 |= LC80_VQE23_E1; }
+        if (data & (1<<1)) { vqe23 |= LC80_VQE23_F1; }
+        if (data & (1<<3)) { vqe23 |= LC80_VQE23_G1; }
+        if (data & (1<<4)) { vqe23 |= LC80_VQE23_P1; }
+    }
+    else {
+        vqe23 &= ~0xFF00;
+        if (data & (1<<2)) { vqe23 |= LC80_VQE23_A2; }
+        if (data & (1<<0)) { vqe23 |= LC80_VQE23_B2; }
+        if (data & (1<<5)) { vqe23 |= LC80_VQE23_C2; }
+        if (data & (1<<7)) { vqe23 |= LC80_VQE23_D2; }
+        if (data & (1<<6)) { vqe23 |= LC80_VQE23_E2; }
+        if (data & (1<<1)) { vqe23 |= LC80_VQE23_F2; }
+        if (data & (1<<3)) { vqe23 |= LC80_VQE23_G2; }
+        if (data & (1<<4)) { vqe23 |= LC80_VQE23_P2; }
+    }
+    return vqe23;
+}
+
+// LC80 CPU tick callback
+uint64_t _lc80_tick(lc80_t* sys, uint64_t pins) {
+    pins = z80_tick(&sys->cpu, pins);
 
     /* Address decoding via the two DS8205 3-to-8 decoders (LS138 clones)
 
@@ -448,9 +432,9 @@ uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
     d210 = _lc80_ds8205_tick(d210);
     sys->ds8205[1] = d210;
 
-    /* ROM access? */
+    // ROM access?
     if (d209 & LC80_DS8205_Y4) {
-        /* Y4 output of D209 selects D202 (ROM1) */
+        // Y4 output of D209 selects D202 (ROM1)
         uint16_t addr = pins & 0x7FF;
         uint8_t data = sys->rom[addr];
         Z80_SET_DATA(pins, data);
@@ -467,16 +451,16 @@ uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
              are not socketed in a standard LC80
     */
     if (d210 & LC80_DS8205_Y4) {
-        /* Y4 output of D209 selects RAM bank 0 (D204 and D205, each 4 bit of data) */
+        // Y4 output of D209 selects RAM bank 0 (D204 and D205, each 4 bit of data)
         uint16_t addr = pins & 0x3FF;
         uint8_t data = 0xFF;
         if (pins & Z80_WR) {
-            /* RAM write access */
+            // RAM write access
             data = Z80_GET_DATA(pins);
             sys->ram[addr] = data;
         }
         else if (pins & Z80_RD) {
-            /* RAM read access */
+            // RAM read access
             data = sys->ram[addr];
             Z80_SET_DATA(pins, data);
         }
@@ -487,102 +471,40 @@ uint64_t _lc80_tick(int num_ticks, uint64_t pins, void* user_data) {
         sys->u214[0] = pins & (Z80_WR | 0x0F03FF);
         sys->u214[1] = (pins & (Z80_WR | 0x0003FF)) | ((pins & 0xF00000)>>4);
     }
-
-    /* System PIO */
-    uint64_t pio_sys_pins = pins;
-    if (0 == (pins & Z80_A3)) { pio_sys_pins |= Z80PIO_CE; }
-    if (pins & Z80_A0) { pio_sys_pins |= Z80PIO_BASEL; }
-    if (pins & Z80_A1) { pio_sys_pins |= Z80PIO_CDSEL; }
-    pins = z80pio_iorq(&sys->pio_sys, pio_sys_pins) & Z80_PIN_MASK;
-
-    /* User PIO */
-    uint64_t pio_usr_pins = pins;
-    if (0 == (pins & Z80_A2)) { pio_usr_pins |= Z80PIO_CE; }
-    if (pins & Z80_A0) { pio_usr_pins |= Z80PIO_BASEL; }
-    if (pins & Z80_A1) { pio_usr_pins |= Z80PIO_CDSEL; }
-    pins = z80pio_iorq(&sys->pio_usr, pio_usr_pins) & Z80_PIN_MASK;
-
-    /* CTC */
-    uint64_t ctc_pins = pins;
-    if (0 == (pins & Z80_A4)) { ctc_pins |= Z80CTC_CE; };
-    if (pins & Z80_A0) { ctc_pins |= Z80CTC_CS0; }
-    if (pins & Z80_A1) { ctc_pins |= Z80CTC_CS1; }
-    pins = z80ctc_iorq(&sys->ctc, ctc_pins) & Z80_PIN_MASK;
-
-    /* tick CTC and handle beeper */
-    for (int i = 0; i < num_ticks; i++) {
-        pins = z80ctc_tick(&sys->ctc, pins);
-        if (beeper_tick(&sys->beeper)) {
-            /* new audio sample ready */
-            sys->sample_buffer[sys->sample_pos++] = sys->beeper.sample;
-            if (sys->sample_pos == sys->num_samples) {
-                if (sys->audio_cb) {
-                    sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
-                }
-                sys->sample_pos = 0;
-            }
-        }
-    }
-
-    /* interrupt daisychain priority is: CTC => User PIO => System PIO */
-    Z80_DAISYCHAIN_BEGIN(pins)
+    
+    // tick CTC first (because it's the highest priority daisychain device
     {
-        pins = z80ctc_int(&sys->ctc, pins);
-        pins = z80pio_int(&sys->pio_usr, pins);
-        pins = z80pio_int(&sys->pio_sys, pins);
-    }
-    Z80_DAISYCHAIN_END(pins);
-
-    /* NMI? */
-    if (sys->nmi) {
-        pins |= Z80_NMI;
-    }
-    else {
-        pins &= ~Z80_NMI;
+        pins |= Z80_IEIO;
+        if (0 == (pins & Z80_A4)) { pins |= Z80CTC_CE; };
+        if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
+        if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
+        pins = z80ctc_tick(&sys->ctc, pins) & Z80_PIN_MASK;
     }
 
-    return (pins & Z80_PIN_MASK);
-}
-
-/* update a VQE23 2-digit LED display element */
-static uint32_t _lc80_vqe23_write(uint32_t vqe23, int digit, uint8_t data) {
-    if (0 == digit) {
-        vqe23 &= ~0xFF;
-        if (data & (1<<2)) { vqe23 |= LC80_VQE23_A1; }
-        if (data & (1<<0)) { vqe23 |= LC80_VQE23_B1; }
-        if (data & (1<<5)) { vqe23 |= LC80_VQE23_C1; }
-        if (data & (1<<7)) { vqe23 |= LC80_VQE23_D1; }
-        if (data & (1<<6)) { vqe23 |= LC80_VQE23_E1; }
-        if (data & (1<<1)) { vqe23 |= LC80_VQE23_F1; }
-        if (data & (1<<3)) { vqe23 |= LC80_VQE23_G1; }
-        if (data & (1<<4)) { vqe23 |= LC80_VQE23_P1; }
+    // tick user PIO (next in daisychain priority)
+    {
+        if (0 == (pins & Z80_A2)) { pins |= Z80PIO_CE; }
+        if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+        if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
+        // bits 4..7 of port B are keyboard matrix lines
+        const uint8_t kbd_lines = ~(kbd_scan_lines(&sys->kbd)<<4);
+        Z80PIO_SET_PAB(pins, 0xFF, kbd_lines);
+        pins = z80pio_tick(&sys->pio_usr, pins);
+        pins &= Z80_PIN_MASK;
     }
-    else {
-        vqe23 &= ~0xFF00;
-        if (data & (1<<2)) { vqe23 |= LC80_VQE23_A2; }
-        if (data & (1<<0)) { vqe23 |= LC80_VQE23_B2; }
-        if (data & (1<<5)) { vqe23 |= LC80_VQE23_C2; }
-        if (data & (1<<7)) { vqe23 |= LC80_VQE23_D2; }
-        if (data & (1<<6)) { vqe23 |= LC80_VQE23_E2; }
-        if (data & (1<<1)) { vqe23 |= LC80_VQE23_F2; }
-        if (data & (1<<3)) { vqe23 |= LC80_VQE23_G2; }
-        if (data & (1<<4)) { vqe23 |= LC80_VQE23_P2; }
-    }
-    return vqe23;
-}
 
-uint8_t _lc80_pio_sys_in(int port_id, void* user_data) {
-    (void)port_id;
-    (void)user_data;
-    // FIXME: TAPE IN
-    return 0xFF;
-}
+    // tick system PIO (lowest daisychain priority)
+    {
+        if (0 == (pins & Z80_A3)) { pins |= Z80PIO_CE; }
+        if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+        if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
+        Z80PIO_SET_PAB(pins, 0xFF, 0xFF);
+        pins = z80pio_tick(&sys->pio_sys, pins);
+        const uint8_t pio_a = Z80PIO_GET_PA(pins);
+        const uint8_t pio_b = Z80PIO_GET_PB(pins);
 
-void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data) {
-    lc80_t* sys = (lc80_t*) user_data;
-    if (port_id == 1) {
         /* TAPE OUT */
-        beeper_set(&sys->beeper, 0 == (data & (1<<1)));
+        beeper_set(&sys->beeper, 0 == (pio_b & (1<<1)));
 
         /* LED display update
 
@@ -590,72 +512,133 @@ void _lc80_pio_sys_out(int port_id, uint8_t data, void* user_data) {
             and all 8 bits of System PIO Port A select
             the 7 segments and decimal point.
         */
-        const uint8_t outp = sys->pio_sys.port[Z80PIO_PORT_A].output;
-        if (0 == (data & (1<<2))) {
-            sys->vqe23[0] = _lc80_vqe23_write(sys->vqe23[0], 0, outp);
-            sys->vqe23[0] |= LC80_VQE23_K1;
+        if (pio_b != sys->pio_b) {
+            sys->pio_b = pio_b;
+            if (0 == (pio_b & (1<<2))) {
+                sys->vqe23[0] = _lc80_vqe23_write(sys->vqe23[0], 0, pio_a);
+                sys->vqe23[0] |= LC80_VQE23_K1;
+            }
+            else {
+                sys->vqe23[0] &= ~LC80_VQE23_K1;
+            }
+            if (0 == (pio_b & (1<<3))) {
+                sys->vqe23[0] = _lc80_vqe23_write(sys->vqe23[0], 1, pio_a);
+                sys->vqe23[0] |= LC80_VQE23_K2;
+            }
+            else {
+                sys->vqe23[0] &= ~LC80_VQE23_K2;
+            }
+            if (0 == (pio_b & (1<<4))) {
+                sys->vqe23[1] = _lc80_vqe23_write(sys->vqe23[1], 0, pio_a);
+                sys->vqe23[1] |= LC80_VQE23_K1;
+            }
+            else {
+                sys->vqe23[1] &= ~LC80_VQE23_K1;
+            }
+            if (0 == (pio_b & (1<<5))) {
+                sys->vqe23[1] = _lc80_vqe23_write(sys->vqe23[1], 1, pio_a);
+                sys->vqe23[1] |= LC80_VQE23_K2;
+            }
+            else {
+                sys->vqe23[1] &= ~LC80_VQE23_K2;
+            }
+            if (0 == (pio_b & (1<<6))) {
+                sys->vqe23[2] = _lc80_vqe23_write(sys->vqe23[2], 0, pio_a);
+                sys->vqe23[2] |= LC80_VQE23_K1;
+            }
+            else {
+                sys->vqe23[2] &= ~LC80_VQE23_K1;
+            }
+            if (0 == (pio_b & (1<<7))) {
+                sys->vqe23[2] = _lc80_vqe23_write(sys->vqe23[2], 1, pio_a);
+                sys->vqe23[2] |= LC80_VQE23_K2;
+            }
+            else {
+                sys->vqe23[2] &= ~LC80_VQE23_K2;
+            }
         }
-        else {
-            sys->vqe23[0] &= ~LC80_VQE23_K1;
-        }
-        if (0 == (data & (1<<3))) {
-            sys->vqe23[0] = _lc80_vqe23_write(sys->vqe23[0], 1, outp);
-            sys->vqe23[0] |= LC80_VQE23_K2;
-        }
-        else {
-            sys->vqe23[0] &= ~LC80_VQE23_K2;
-        }
-        if (0 == (data & (1<<4))) {
-            sys->vqe23[1] = _lc80_vqe23_write(sys->vqe23[1], 0, outp);
-            sys->vqe23[1] |= LC80_VQE23_K1;
-        }
-        else {
-            sys->vqe23[1] &= ~LC80_VQE23_K1;
-        }
-        if (0 == (data & (1<<5))) {
-            sys->vqe23[1] = _lc80_vqe23_write(sys->vqe23[1], 1, outp);
-            sys->vqe23[1] |= LC80_VQE23_K2;
-        }
-        else {
-            sys->vqe23[1] &= ~LC80_VQE23_K2;
-        }
-        if (0 == (data & (1<<6))) {
-            sys->vqe23[2] = _lc80_vqe23_write(sys->vqe23[2], 0, outp);
-            sys->vqe23[2] |= LC80_VQE23_K1;
-        }
-        else {
-            sys->vqe23[2] &= ~LC80_VQE23_K1;
-        }
-        if (0 == (data & (1<<7))) {
-            sys->vqe23[2] = _lc80_vqe23_write(sys->vqe23[2], 1, outp);
-            sys->vqe23[2] |= LC80_VQE23_K2;
-        }
-        else {
-            sys->vqe23[2] &= ~LC80_VQE23_K2;
-        }
-        /* bits 2..7 of port B also double as input to the keyboard matrix */
-        uint8_t kbd_columns = ~(data >> 2) & 0x3F;
-        kbd_set_active_columns(&sys->kbd, kbd_columns);
-    }
-}
 
-uint8_t _lc80_pio_usr_in(int port_id, void* user_data) {
-    lc80_t* sys = (lc80_t*) user_data;
-    /* bits 4..7 of port B are keyboard matrix lines */
-    if (port_id == 1) {
-        uint8_t kbd_lines = ~(kbd_scan_lines(&sys->kbd)<<4);
-        return kbd_lines;
+        /* bits 2..7 of port B also double as input to the keyboard matrix */
+        uint8_t kbd_columns = ~(pio_b >> 2) & 0x3F;
+        kbd_set_active_columns(&sys->kbd, kbd_columns);
+
+        pins &= Z80_PIN_MASK;
+    }
+
+    // tick beeper
+    if (beeper_tick(&sys->beeper)) {
+        /* new audio sample ready */
+        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper.sample;
+        if (sys->audio.sample_pos == sys->audio.num_samples) {
+            if (sys->audio.callback.func) {
+                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+            }
+            sys->audio.sample_pos = 0;
+        }
+    }
+    if (sys->nmi) {
+        pins |= Z80_NMI;
     }
     else {
-        return 0xFF;
+        pins &= ~Z80_NMI;
+    }
+    return pins;
+}
+
+uint32_t lc80_exec(lc80_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
+    uint64_t pins = sys->pins;
+    if (0 == sys->debug.callback.func) {
+        // run without debugger hook
+        for (uint32_t tick = 0; tick < num_ticks; tick++) {
+            pins = _lc80_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debugger hook
+        for (uint32_t tick = 0; (tick < num_ticks) && !(*sys->debug.stopped); tick++) {
+            pins = _lc80_tick(sys, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
+        }
+    }
+    sys->pins = pins;
+    if (sys->nmi) {
+        sys->nmi = false;
+    }
+    if (sys->reset) {
+        lc80_reset(sys);
+    }
+    kbd_update(&sys->kbd, micro_seconds);
+    return num_ticks;
+}
+
+void lc80_key_down(lc80_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    switch (key_code) {
+        case LC80_KEY_RES: sys->reset = true; break;
+        case LC80_KEY_NMI: sys->nmi = true; break;
+        default: kbd_key_down(&sys->kbd, key_code);
     }
 }
 
-void _lc80_pio_usr_out(int port_id, uint8_t data, void* user_data) {
-    // FIXME
-    (void)port_id;
-    (void)data;
-    (void)user_data;
+void lc80_key_up(lc80_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    switch (key_code) {
+        case LC80_KEY_RES:
+        case LC80_KEY_NMI:
+            /* not a bug */
+            break;
+        default:
+            kbd_key_up(&sys->kbd, key_code);
+            break;
+    }
+}
+
+void lc80_key(lc80_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    lc80_key_down(sys, key_code);
+    lc80_key_up(sys, key_code);
 }
 
 #endif /* CHIPS_IMPL */

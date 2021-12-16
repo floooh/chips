@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -55,7 +55,7 @@
 extern "C" {
 #endif
 
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 struct MemoryEditor;
 #else
 typedef void MemoryEditor;
@@ -110,7 +110,7 @@ void ui_memedit_draw(ui_memedit_t* win);
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -670,4 +670,4 @@ void ui_memedit_draw_content(ui_memedit_t* win) {
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

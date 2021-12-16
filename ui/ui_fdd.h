@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -84,7 +84,7 @@ void ui_fdd_draw(ui_fdd_t* win);
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -140,6 +140,7 @@ void ui_fdd_draw(ui_fdd_t* win) {
                 ImGui::Text("Sides:  %d", disc->num_sides);
                 ImGui::Text("Tracks: %d", disc->num_tracks);
                 for (int side = 0; side < disc->num_sides; side++) {
+                    ImGui::PushID(side);
                     if (ImGui::CollapsingHeader(side == 0 ? "Side 1":"Side 2", ImGuiTreeNodeFlags_DefaultOpen)) {
                         for (int track_index = 0; track_index < disc->num_tracks; track_index++) {
                             const int bytes_per_line = 16;
@@ -183,6 +184,7 @@ void ui_fdd_draw(ui_fdd_t* win) {
                             }
                         }
                     }
+                    ImGui::PopID();
                 }
             }
             else {
@@ -192,4 +194,4 @@ void ui_fdd_draw(ui_fdd_t* win) {
     }
     ImGui::End();
 }
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

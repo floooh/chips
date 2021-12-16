@@ -29,36 +29,48 @@
 extern "C" {
 #endif
 
-/* error-accumulation precision boost */
+// error-accumulation precision boost
 #define BEEPER_FIXEDPOINT_SCALE (16)
-/* DC adjust buffer size */
+// DC adjust buffer size
 #define BEEPER_DCADJ_BUFLEN (512)
 
-/* beeper state */
+// initialization parameters
+typedef struct {
+    int tick_hz;
+    int sound_hz;
+    float base_volume;
+} beeper_desc_t;
+
+// beeper state
 typedef struct {
     int state;
     int period;
     int counter;
-    float mag;
+    float base_volume;
+    float volume;
     float sample;
     float dcadj_sum;
     uint32_t dcadj_pos;
     float dcadj_buf[BEEPER_DCADJ_BUFLEN];
 } beeper_t;
 
-/* initialize beeper instance */
-void beeper_init(beeper_t* beeper, int tick_hz, int sound_hz, float magnitude);
-/* reset the beeper instance */
+// initialize beeper instance
+void beeper_init(beeper_t* beeper, const beeper_desc_t* desc);
+// reset the beeper instance
 void beeper_reset(beeper_t* beeper);
-/* set current on/off state */
+// set current on/off state
 static inline void beeper_set(beeper_t* beeper, bool state) {
     beeper->state = state ? 1 : 0;
 }
-/* toggle current state (on->off or off->on) */
+// toggle current state (on->off or off->on)
 static inline void beeper_toggle(beeper_t* beeper) {
     beeper->state = !beeper->state;
 }
-/* tick the beeper, return true if a new sample is ready */
+// set current volume 0.0 to 1.0
+static inline void beeper_set_volume(beeper_t* beeper, float vol) {
+    beeper->volume = vol;
+}
+// tick the beeper, return true if a new sample is ready
 bool beeper_tick(beeper_t* beeper);
 
 #ifdef __cplusplus
@@ -72,13 +84,15 @@ bool beeper_tick(beeper_t* beeper);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-void beeper_init(beeper_t* b, int tick_hz, int sound_hz, float magnitude) {
-    CHIPS_ASSERT(b);
-    CHIPS_ASSERT((tick_hz > 0) && (sound_hz > 0));
-    memset(b, 0, sizeof(*b));
-    b->period = (tick_hz * BEEPER_FIXEDPOINT_SCALE) / sound_hz;
-    b->counter = b->period;
-    b->mag = magnitude;
+void beeper_init(beeper_t* b, const beeper_desc_t* desc) {
+    CHIPS_ASSERT(b && desc);
+    CHIPS_ASSERT((desc->tick_hz > 0) && (desc->sound_hz > 0));
+    *b = (beeper_t){
+        .period = (desc->tick_hz * BEEPER_FIXEDPOINT_SCALE) / desc->sound_hz,
+        .counter = b->period,
+        .base_volume = desc->base_volume,
+        .volume = 1.0f,
+    };
 }
 
 void beeper_reset(beeper_t* b) {
@@ -106,7 +120,7 @@ bool beeper_tick(beeper_t* bp) {
     bp->counter -= BEEPER_FIXEDPOINT_SCALE;
     if (bp->counter <= 0) {
         bp->counter += bp->period;
-        bp->sample = _beeper_dcadjust(bp, (float)bp->state) * bp->mag;
+        bp->sample = _beeper_dcadjust(bp, (float)bp->state) * bp->volume * bp->base_volume;
         return true;
     }
     return false;

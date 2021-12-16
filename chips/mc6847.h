@@ -50,6 +50,7 @@
 */
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -159,9 +160,9 @@ extern "C" {
 /* merge 13-bit address bus value into 64-bit pins */
 #define MC6847_SET_ADDR(p,a) {p=((p&~0xFFFFULL)|((a)&0xFFFFULL));}
 /* extract 8-bit data bus from 64-bit pins */
-#define MC6847_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define MC6847_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define MC6847_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+#define MC6847_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
 /* public constants */
 #define MC6847_VBLANK_LINES         (13)    /* 13 lines vblank at top of screen */
@@ -202,7 +203,7 @@ typedef struct {
     /* pointer to an RGBA8 framebuffer where video image is written to */
     uint32_t* rgba8_buffer;
     /* size of rgba8_buffer in bytes (must be at least 320*244*4=312320 bytes) */
-    uint32_t rgba8_buffer_size;
+    size_t rgba8_buffer_size;
     /* memory-fetch callback */
     mc6847_fetch_t fetch_cb;
     /* optional user-data for the fetch callback */

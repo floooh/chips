@@ -76,9 +76,9 @@ extern "C" {
 #define UPD765_CS   (1ULL<<40)  /* in: chip select */
 
 /* extract 8-bit data bus from 64-bit pins */
-#define UPD765_GET_DATA(p) ((uint8_t)((p&0xFF0000ULL)>>16))
+#define UPD765_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define UPD765_SET_DATA(p,d) {p=((p&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
+#define UPD765_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
 /* main status register bits */
 #define UPD765_STATUS_D0B   (1<<0)      /* FDD 0 busy */
@@ -192,9 +192,9 @@ typedef struct {
 /* callback to seek to a phyiscal track */
 typedef int (*upd765_seektrack_cb)(int drive, int track, void* user_data);
 /* callback to seek to a sector on current physical track */
-typedef int (*upd765_seeksector_cb)(int drive, upd765_sectorinfo_t* inout_info, void* user_data);
+typedef int (*upd765_seeksector_cb)(int drive, int side, upd765_sectorinfo_t* inout_info, void* user_data);
 /* callback to read the next sector data byte */
-typedef int (*upd765_read_cb)(int drive, uint8_t h, void* user_data, uint8_t* out_data);
+typedef int (*upd765_read_cb)(int drive, int side, void* user_data, uint8_t* out_data);
 /* callback to read info about first sector on current reack */
 typedef int (*upd765_trackinfo_cb)(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info);
 /* callback to get info about disk drive (called on SENSE_DRIVE_STATUS command) */
@@ -385,11 +385,13 @@ static void _upd765_cmd(upd765_t* upd) {
                 upd->sector_info.st1 = 0;
                 upd->sector_info.st2 = 0;
                 /* FIXME: handle length of read data via n=0 and DTL!=0xFF */
-                CHIPS_ASSERT((upd->sector_info.n != 0) && (upd->fifo[8] == 0xFF));
+                // the following assert triggers in the CPC demo "CRTC"
+                //CHIPS_ASSERT((upd->sector_info.n != 0) && (upd->fifo[8] == 0xFF));
                 /* FIXME: handle read several sectors at a time via EOT arg */
                 CHIPS_ASSERT(upd->sector_info.r == upd->fifo[6]);
                 const int fdd_index = upd->st[0] & 3;
-                const int res = upd->seeksector_cb(fdd_index, &upd->sector_info, upd->user_data);
+                const int side = (upd->st[0] & 4) >> 2;
+                const int res = upd->seeksector_cb(fdd_index, side, &upd->sector_info, upd->user_data);
                 if (UPD765_RESULT_SUCCESS == res) {
                     _upd765_to_phase_exec(upd);
                 }
@@ -409,8 +411,8 @@ static void _upd765_cmd(upd765_t* upd) {
         case UPD765_CMD_READ_ID:
             {
                 const int fdd_index = upd->fifo[1] & 3;
-                const int head_index = (upd->fifo[1] & 4) >> 2;
-                const int res = upd->trackinfo_cb(fdd_index, head_index, upd->user_data, &upd->sector_info);
+                const int side = (upd->fifo[1] & 4) >> 2;
+                const int res = upd->trackinfo_cb(fdd_index, side, upd->user_data, &upd->sector_info);
                 upd->st[0] = upd->fifo[1] & 7;
                 upd->st[1] = upd->sector_info.st1;
                 upd->st[2] = upd->sector_info.st2;
@@ -535,7 +537,8 @@ static uint8_t _upd765_exec_rd(upd765_t* upd) {
             {
                 /* read next sector data byte from FDD */
                 const int fdd_index = upd->st[0] & 3;
-                const int res = upd->read_cb(fdd_index, upd->sector_info.h, upd->user_data, &data);
+                const int side = (upd->st[0] & 4) >> 2;
+                const int res = upd->read_cb(fdd_index, side, upd->user_data, &data);
                 if (res != UPD765_RESULT_SUCCESS) {
                     if (res & UPD765_RESULT_NOT_READY) {
                         upd->st[0] |= UPD765_ST0_NR;

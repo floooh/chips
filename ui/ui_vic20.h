@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -62,17 +62,17 @@
 extern "C" {
 #endif
 
-/* reboot callback */
+// reboot callback
 typedef void (*ui_vic20_boot_cb)(vic20_t* sys);
 
-/* setup params for ui_c64_init() */
+// setup params for ui_c64_init()
 typedef struct {
-    vic20_t* vic20;             /* pointer to vic20_t instance to track */
-    ui_vic20_boot_cb boot_cb;   /* reboot callback function */
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keydesc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    vic20_t* vic20;             // pointer to vic20_t instance to track
+    ui_vic20_boot_cb boot_cb;   // reboot callback function
+    ui_dbg_create_texture_t create_texture_cb;      // texture creation callback for ui_dbg_t
+    ui_dbg_update_texture_t update_texture_cb;      // texture update callback for ui_dbg_t
+    ui_dbg_destroy_texture_t destroy_texture_cb;    // texture destruction callback for ui_dbg_t
+    ui_dbg_keys_desc_t dbg_keys;    // user-defined hotkeys for ui_dbg_t
 } ui_vic20_desc_t;
 
 typedef struct {
@@ -94,15 +94,15 @@ typedef struct {
 
 void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* desc);
 void ui_vic20_discard(ui_vic20_t* ui);
-void ui_vic20_draw(ui_vic20_t* ui, double time_ms);
-void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us);
+void ui_vic20_draw(ui_vic20_t* ui);
+vic20_debug_t ui_vic20_get_debug(ui_vic20_t* ui);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -116,7 +116,7 @@ void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us);
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
+static void _ui_vic20_draw_menu(ui_vic20_t* ui) {
     CHIPS_ASSERT(ui && ui->vic20 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
@@ -178,16 +178,16 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui, double time_ms) {
             }
             ImGui::EndMenu();
         }
-        ui_util_options_menu(time_ms, ui->dbg.dbg.stopped);
+        ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
 }
 
-/* keep disassembler layer at the start */
-#define _UI_VIC20_MEMLAYER_CPU    (0)     /* CPU visible mapping */
-#define _UI_VIC20_MEMLAYER_VIC    (1)     /* VIC visible mapping */
-#define _UI_VIC20_MEMLAYER_COLOR  (2)     /* special static color RAM */
-#define _UI_VIC20_CODELAYER_NUM   (1)     /* number of valid layers for disassembler */
+// keep disassembler layer at the start
+#define _UI_VIC20_MEMLAYER_CPU    (0)     // CPU visible mapping
+#define _UI_VIC20_MEMLAYER_VIC    (1)     // VIC visible mapping
+#define _UI_VIC20_MEMLAYER_COLOR  (2)     // special static color RAM
+#define _UI_VIC20_CODELAYER_NUM   (1)     // number of valid layers for disassembler
 #define _UI_VIC20_MEMLAYER_NUM    (3)
 
 static const char* _ui_vic20_memlayer_names[_UI_VIC20_MEMLAYER_NUM] = {
@@ -204,7 +204,7 @@ static uint8_t _ui_vic20_mem_read(int layer, uint16_t addr, void* user_data) {
         case _UI_VIC20_MEMLAYER_VIC:
             return mem_rd(&vic20->mem_vic, addr);
         case _UI_VIC20_MEMLAYER_COLOR:
-            /* static COLOR RAM */
+            // static COLOR RAM
             return vic20->color_ram[addr & 0x3FF];
         default:
             return 0xFF;
@@ -223,7 +223,7 @@ static void _ui_vic20_mem_write(int layer, uint16_t addr, uint8_t data, void* us
             mem_wr(&vic20->mem_vic, addr, data);
             break;
         case _UI_VIC20_MEMLAYER_COLOR:
-            /* static COLOR RAM */
+            // static COLOR RAM
             vic20->color_ram[addr & 0x3FF] = data;
             break;
     }
@@ -249,30 +249,29 @@ static void _ui_vic20_update_memmap(ui_vic20_t* ui) {
         ui_memmap_region(&ui->memmap, "KERNAL", 0xE000, 0x2000, true);
 }
 
-static int _ui_vic20_eval_bp(ui_dbg_t* dbg_win, uint16_t pc, int ticks, uint64_t pins, void* user_data) {
-    (void)pc; (void)ticks; (void)pins;
+static int _ui_vic20_eval_bp(ui_dbg_t* dbg_win, int trap_id, uint64_t pins, void* user_data) {
+    (void)pins;
     CHIPS_ASSERT(user_data);
     ui_vic20_t* ui = (ui_vic20_t*) user_data;
     vic20_t* vic20 = ui->vic20;
     int scanline = vic20->vic.rs.v_count;
-    int trap_id = 0;
     for (int i = 0; (i < dbg_win->dbg.num_breakpoints) && (trap_id == 0); i++) {
         const ui_dbg_breakpoint_t* bp = &dbg_win->dbg.breakpoints[i];
         if (bp->enabled) {
             switch (bp->type) {
-                /* scanline number */
+                // scanline number
                 case UI_DBG_BREAKTYPE_USER+0:
                     if ((ui->dbg_scanline != scanline) && (scanline == bp->val)) {
                         trap_id = UI_DBG_BP_BASE_TRAPID + i;
                     }
                     break;
-                /* next scanline */
+                // next scanline
                 case UI_DBG_BREAKTYPE_USER+1:
                     if (ui->dbg_scanline != scanline) {
                         trap_id = UI_DBG_BP_BASE_TRAPID + i;
                     }
                     break;
-                /* next frame */
+                // next frame
                 case UI_DBG_BREAKTYPE_USER+2:
                     if ((ui->dbg_scanline != scanline) && (scanline == 0)) {
                         trap_id = UI_DBG_BP_BASE_TRAPID + i;
@@ -464,8 +463,8 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     {
         ui_audio_desc_t desc = {0};
         desc.title = "Audio Output";
-        desc.sample_buffer = ui->vic20->sample_buffer;
-        desc.num_samples = ui->vic20->num_samples;
+        desc.sample_buffer = ui->vic20->audio.sample_buffer;
+        desc.num_samples = ui->vic20->audio.num_samples;
         desc.x = x;
         desc.y = y;
         ui_audio_init(&ui->audio, &desc);
@@ -579,9 +578,9 @@ void ui_vic20_draw_system(ui_vic20_t* ui) {
     ImGui::End();
 }
 
-void ui_vic20_draw(ui_vic20_t* ui, double time_ms) {
+void ui_vic20_draw(ui_vic20_t* ui) {
     CHIPS_ASSERT(ui && ui->vic20);
-    _ui_vic20_draw_menu(ui, time_ms);
+    _ui_vic20_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_vic20_update_memmap(ui);
     }
@@ -589,7 +588,7 @@ void ui_vic20_draw(ui_vic20_t* ui, double time_ms) {
     if (ui->c1530.valid) {
         ui_c1530_draw(&ui->c1530);
     }
-    ui_audio_draw(&ui->audio, ui->vic20->sample_pos);
+    ui_audio_draw(&ui->audio, ui->vic20->audio.sample_pos);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
     ui_m6522_draw(&ui->via[0]);
@@ -603,21 +602,18 @@ void ui_vic20_draw(ui_vic20_t* ui, double time_ms) {
     ui_dbg_draw(&ui->dbg);
 }
 
-void ui_vic20_exec(ui_vic20_t* ui, uint32_t frame_time_us) {
-    CHIPS_ASSERT(ui && ui->vic20);
-    uint32_t ticks_to_run = clk_us_to_ticks(VIC20_FREQUENCY, frame_time_us);
-    vic20_t* vic20 = ui->vic20;
-    for (uint32_t i = 0; (i < ticks_to_run) && (!ui->dbg.dbg.stopped); i++) {
-        vic20_tick(vic20);
-        ui_dbg_tick(&ui->dbg, vic20->pins);
-    }
-    kbd_update(&ui->vic20->kbd, frame_time_us);
+vic20_debug_t ui_vic20_get_debug(ui_vic20_t* ui) {
+    vic20_debug_t res = {};
+    res.callback.func = (vic20_debug_func_t)ui_dbg_tick;
+    res.callback.user_data = &ui->dbg;
+    res.stopped = &ui->dbg.dbg.stopped;
+    return res;
 }
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */
 
 
 

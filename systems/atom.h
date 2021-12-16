@@ -58,127 +58,149 @@
 */
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define ATOM_FREQUENCY (1000000)
-#define ATOM_MAX_AUDIO_SAMPLES (1024)       /* max number of audio samples in internal sample buffer */
-#define ATOM_DEFAULT_AUDIO_SAMPLES (128)    /* default number of samples in internal sample buffer */
-#define ATOM_MAX_TAPE_SIZE (1<<16)          /* max size of tape file in bytes */
+#define ATOM_MAX_AUDIO_SAMPLES (1024)       // max number of audio samples in internal sample buffer
+#define ATOM_DEFAULT_AUDIO_SAMPLES (128)    // default number of samples in internal sample buffer
+#define ATOM_MAX_TAPE_SIZE (1<<16)          // max size of tape file in bytes
 
-/* joystick emulation types */
+// joystick emulation types
 typedef enum {
     ATOM_JOYSTICKTYPE_NONE,
     ATOM_JOYSTICKTYPE_MMC
 } atom_joystick_type_t;
 
-/* joystick mask bits */
+// joystick mask bits
 #define ATOM_JOYSTICK_RIGHT (1<<0)
 #define ATOM_JOYSTICK_LEFT  (1<<1)
 #define ATOM_JOYSTICK_DOWN  (1<<2)
 #define ATOM_JOYSTICK_UP    (1<<3)
 #define ATOM_JOYSTICK_BTN   (1<<4)
 
-/* audio sample data callback */
-typedef void (*atom_audio_callback_t)(const float* samples, int num_samples, void* user_data);
-
-/* configuration parameters for atom_init() */
+// audio sample data callback
 typedef struct {
-    atom_joystick_type_t joystick_type;     /* what joystick type to emulate, default is ATOM_JOYSTICK_NONE */
-
-    /* video output config */
-    void* pixel_buffer;         /* pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes */
-    int pixel_buffer_size;      /* size of the pixel buffer in bytes */
-
-    /* optional user-data for callbacks */
+    void (*func)(const float* samples, int num_samples, void* user_data);
     void* user_data;
+} atom_audio_callback_t;
 
-    /* audio output config (if you don't want audio, set audio_cb to zero) */
-    atom_audio_callback_t audio_cb;   /* called when audio_num_samples are ready */
-    int audio_num_samples;          /* default is ZX_AUDIO_NUM_SAMPLES */
-    int audio_sample_rate;          /* playback sample rate, default is 44100 */
-    float audio_volume;             /* audio volume: 0.0..1.0, default is 0.25 */
+// debugging hook definitions
+typedef void (*atom_debug_func_t)(void* user_data, uint64_t pins);
+typedef struct {
+    struct {
+        atom_debug_func_t func;
+        void* user_data;
+    } callback;
+    bool* stopped;
+} atom_debug_t;
 
-    /* ROM images */
-    const void* rom_abasic;
-    const void* rom_afloat;
-    const void* rom_dosrom;
-    int rom_abasic_size;
-    int rom_afloat_size;
-    int rom_dosrom_size;
+typedef struct {
+    const void* ptr;
+    size_t size;
+} atom_rom_image_t;
+
+// configuration parameters for atom_init()
+typedef struct {
+    atom_joystick_type_t joystick_type;     // what joystick type to emulate, default is ATOM_JOYSTICK_NONE
+    atom_debug_t debug;                     // optional debug callback and userdata ptr
+
+    // video output config
+    struct {
+        void* ptr;                          // pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes
+        size_t size;                        // size of the pixel buffer in bytes
+    } pixel_buffer;
+
+    // audio output config
+    struct {
+        atom_audio_callback_t callback;     // called when audio_num_samples are ready
+        int num_samples;                    // output sample buffer size, default is ATOM_DEFAULT_AUDIO_SAMPLES
+        int sample_rate;                    // playback sample rate, default is 44100
+        float volume;                       // audio volume: 0.0..1.0, default is 0.25
+    } audio;
+
+    // ROM images
+    struct {
+        atom_rom_image_t abasic;
+        atom_rom_image_t afloat;
+        atom_rom_image_t dosrom;
+    } roms;
 } atom_desc_t;
 
-/* Acorn Atom emulation state */
+// Acorn Atom emulation state
 typedef struct {
-    uint64_t pins;
     m6502_t cpu;
     mc6847_t vdg;
     i8255_t ppi;
     m6522_t via;
     beeper_t beeper;
+    atom_debug_t debug;
+    uint64_t pins;
     bool valid;
     int counter_2_4khz;
     int period_2_4khz;
     bool state_2_4khz;
     atom_joystick_type_t joystick_type;
-    uint8_t kbd_joymask;        /* joystick mask from keyboard-joystick-emulation */
-    uint8_t joy_joymask;        /* joystick mask from calls to atom_joystick() */
+    uint8_t kbd_joymask;        // joystick mask from keyboard-joystick-emulation
+    uint8_t joy_joymask;        // joystick mask from calls to atom_joystick()
     uint8_t mmc_cmd;
     uint8_t mmc_latch;
     mem_t mem;
     kbd_t kbd;
-    void* user_data;
-    atom_audio_callback_t audio_cb;
-    int num_samples;
-    int sample_pos;
-    float sample_buffer[ATOM_MAX_AUDIO_SAMPLES];
+    struct {
+        atom_audio_callback_t callback;
+        int num_samples;
+        int sample_pos;
+        float sample_buffer[ATOM_MAX_AUDIO_SAMPLES];
+    } audio;
     uint8_t ram[0xA000];
     uint8_t rom_abasic[0x2000];
     uint8_t rom_afloat[0x1000];
     uint8_t rom_dosrom[0x1000];
-    /* tape loading */
-    int tape_size;  /* tape_size is > 0 if a tape is inserted */
-    int tape_pos;
-    uint8_t tape_buf[ATOM_MAX_TAPE_SIZE];
+    // tape loading
+    struct {
+        int size;  // tape_size is > 0 if a tape is inserted
+        int pos;
+        uint8_t buf[ATOM_MAX_TAPE_SIZE];
+    } tape;
 } atom_t;
 
-/* initialize a new Atom instance */
+// initialize a new Atom instance
 void atom_init(atom_t* sys, const atom_desc_t* desc);
-/* discard Atom instance */
+// discard Atom instance
 void atom_discard(atom_t* sys);
-/* get the standard framebuffer width and height in pixels */
+// reset Atom instance
+void atom_reset(atom_t* sys);
+// run Atom instance for a number of microseconds
+uint32_t atom_exec(atom_t* sys, uint32_t micro_seconds);
+// get the standard framebuffer width and height in pixels
 int atom_std_display_width(void);
 int atom_std_display_height(void);
-/* get the maximum framebuffer size in number of bytes */
-int atom_max_display_size(void);
-/* get the current framebuffer width and height in pixels */
+// get the maximum framebuffer size in number of bytes
+size_t atom_max_display_size(void);
+// get the current framebuffer width and height in pixels
 int atom_display_width(atom_t* sys);
 int atom_display_height(atom_t* sys);
-/* reset Atom instance */
-void atom_reset(atom_t* sys);
-/* execute a single tick */
-void atom_tick(atom_t* sys);
-/* run Atom instance for a number of microseconds */
-void atom_exec(atom_t* sys, uint32_t micro_seconds);
-/* send a key down event */
+// send a key down event
 void atom_key_down(atom_t* sys, int key_code);
-/* send a key up event */
+// send a key up event
 void atom_key_up(atom_t* sys, int key_code);
-/* enable/disable joystick emulation */
+// enable/disable joystick emulation
 void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type);
-/* get current joystick emulation type */
+// get current joystick emulation type
 atom_joystick_type_t atom_joystick_type(atom_t* sys);
-/* set joystick mask (combination of ATOM_JOYSTICK_*) */
+// set joystick mask (combination of ATOM_JOYSTICK_*)
 void atom_joystick(atom_t* sys, uint8_t mask);
-/* insert a tape for loading (must be an Atom TAP file), data will be copied */
+// insert a tape for loading (must be an Atom TAP file), data will be copied
 bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes);
-/* remove tape */
+// remove tape
 void atom_remove_tape(atom_t* sys);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -191,55 +213,53 @@ void atom_remove_tape(atom_t* sys);
 
 #define _ATOM_ROM_DOSROM_SIZE (0x1000)
 
-static uint64_t _atom_tick(atom_t* sys, uint64_t pins);
 static uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data);
 static void _atom_init_keymap(atom_t* sys);
 static void _atom_init_memorymap(atom_t* sys);
 static uint64_t _atom_osload(atom_t* sys, uint64_t pins);
 
 #define _ATOM_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
-#define _ATOM_CLEAR(val) memset(&val, 0, sizeof(val))
 
 void atom_init(atom_t* sys, const atom_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer && (desc->pixel_buffer_size >= atom_max_display_size()));
-
+    CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= atom_max_display_size()));
+    if (desc->debug.callback.func) {
+        CHIPS_ASSERT(desc->debug.stopped);
+    }
     memset(sys, 0, sizeof(atom_t));
     sys->valid = true;
     sys->joystick_type = desc->joystick_type;
-    sys->user_data = desc->user_data;
-    sys->audio_cb = desc->audio_cb;
-    sys->num_samples = _ATOM_DEFAULT(desc->audio_num_samples, ATOM_DEFAULT_AUDIO_SAMPLES);
-    CHIPS_ASSERT(sys->num_samples <= ATOM_MAX_AUDIO_SAMPLES);
-    CHIPS_ASSERT(desc->rom_abasic && (desc->rom_abasic_size == sizeof(sys->rom_abasic)));
-    memcpy(sys->rom_abasic, desc->rom_abasic, sizeof(sys->rom_abasic));
-    CHIPS_ASSERT(desc->rom_afloat && (desc->rom_afloat_size == sizeof(sys->rom_afloat)));
-    memcpy(&sys->rom_afloat, desc->rom_afloat, sizeof(sys->rom_afloat));
-    CHIPS_ASSERT(desc->rom_dosrom && (desc->rom_dosrom_size == sizeof(sys->rom_dosrom)));
-    memcpy(&sys->rom_dosrom, desc->rom_dosrom, sizeof(sys->rom_dosrom));
-
-    /* initialize the hardware */
+    sys->audio.callback = desc->audio.callback;
+    sys->audio.num_samples = _ATOM_DEFAULT(desc->audio.num_samples, ATOM_DEFAULT_AUDIO_SAMPLES);
+    CHIPS_ASSERT(sys->audio.num_samples <= ATOM_MAX_AUDIO_SAMPLES);
+    sys->debug = desc->debug;
     sys->period_2_4khz = ATOM_FREQUENCY / 4800;
 
-    m6502_desc_t cpu_desc;
-    _ATOM_CLEAR(cpu_desc);
-    sys->pins = m6502_init(&sys->cpu, &cpu_desc);
+    // copy ROM fonts
+    CHIPS_ASSERT(desc->roms.abasic.ptr && (desc->roms.abasic.size == sizeof(sys->rom_abasic)));
+    memcpy(sys->rom_abasic, desc->roms.abasic.ptr, sizeof(sys->rom_abasic));
+    CHIPS_ASSERT(desc->roms.afloat.ptr && (desc->roms.afloat.size == sizeof(sys->rom_afloat)));
+    memcpy(&sys->rom_afloat, desc->roms.afloat.ptr, sizeof(sys->rom_afloat));
+    CHIPS_ASSERT(desc->roms.dosrom.ptr && (desc->roms.dosrom.size == sizeof(sys->rom_dosrom)));
+    memcpy(&sys->rom_dosrom, desc->roms.dosrom.ptr, sizeof(sys->rom_dosrom));
 
-    mc6847_desc_t vdg_desc;
-    _ATOM_CLEAR(vdg_desc);
-    vdg_desc.tick_hz = ATOM_FREQUENCY;
-    vdg_desc.rgba8_buffer = (uint32_t*) desc->pixel_buffer;
-    vdg_desc.rgba8_buffer_size = desc->pixel_buffer_size;
-    vdg_desc.fetch_cb = _atom_vdg_fetch;
-    vdg_desc.user_data = sys;
-    mc6847_init(&sys->vdg, &vdg_desc);
-
+    /* initialize the hardware */
+    sys->pins = m6502_init(&sys->cpu, &(m6502_desc_t){0});
+    mc6847_init(&sys->vdg, &(mc6847_desc_t){
+        .tick_hz = ATOM_FREQUENCY,
+        .rgba8_buffer = (uint32_t*) desc->pixel_buffer.ptr,
+        .rgba8_buffer_size = desc->pixel_buffer.size,
+        .fetch_cb = _atom_vdg_fetch,
+        .user_data = sys,
+    });
     i8255_init(&sys->ppi);
     m6522_init(&sys->via);
 
-    const int audio_hz = _ATOM_DEFAULT(desc->audio_sample_rate, 44100);
-    const float audio_vol = _ATOM_DEFAULT(desc->audio_volume, 0.5f);
-    beeper_init(&sys->beeper, ATOM_FREQUENCY, audio_hz, audio_vol);
+    beeper_init(&sys->beeper, &(beeper_desc_t){
+        .tick_hz = ATOM_FREQUENCY,
+        .sound_hz =_ATOM_DEFAULT(desc->audio.sample_rate, 44100),
+        .base_volume = _ATOM_DEFAULT(desc->audio.volume, 0.5f),
+    });
 
     /* setup memory map and keyboard matrix */
     _atom_init_memorymap(sys);
@@ -249,30 +269,6 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
 void atom_discard(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
-}
-
-int atom_std_display_width(void) {
-    return MC6847_DISPLAY_WIDTH;
-}
-
-int atom_std_display_height(void) {
-    return MC6847_DISPLAY_HEIGHT;
-}
-
-int atom_max_display_size(void) {
-    return MC6847_DISPLAY_WIDTH * MC6847_DISPLAY_HEIGHT * 4;
-}
-
-int atom_display_width(atom_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    (void)sys;
-    return MC6847_DISPLAY_WIDTH;
-}
-
-int atom_display_height(atom_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    (void)sys;
-    return MC6847_DISPLAY_HEIGHT;
 }
 
 void atom_reset(atom_t* sys) {
@@ -285,75 +281,7 @@ void atom_reset(atom_t* sys) {
     sys->state_2_4khz = false;
 }
 
-void atom_tick(atom_t* sys) {
-    sys->pins = _atom_tick(sys, sys->pins);
-}
-
-void atom_exec(atom_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    uint32_t num_ticks = clk_us_to_ticks(ATOM_FREQUENCY, micro_seconds);
-    for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
-        sys->pins = _atom_tick(sys, sys->pins);
-    }
-    kbd_update(&sys->kbd, micro_seconds);
-}
-
-void atom_key_down(atom_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    switch (sys->joystick_type) {
-        case ATOM_JOYSTICKTYPE_NONE:
-            kbd_key_down(&sys->kbd, key_code);
-            break;
-        case ATOM_JOYSTICKTYPE_MMC:
-            switch (key_code) {
-                case 0x20:  sys->kbd_joymask |= ATOM_JOYSTICK_BTN; break;
-                case 0x08:  sys->kbd_joymask |= ATOM_JOYSTICK_LEFT; break;
-                case 0x09:  sys->kbd_joymask |= ATOM_JOYSTICK_RIGHT; break;
-                case 0x0A:  sys->kbd_joymask |= ATOM_JOYSTICK_DOWN; break;
-                case 0x0B:  sys->kbd_joymask |= ATOM_JOYSTICK_UP; break;
-                default:    kbd_key_down(&sys->kbd, key_code); break;
-            }
-            break;
-    }
-}
-
-void atom_key_up(atom_t* sys, int key_code) {
-    CHIPS_ASSERT(sys && sys->valid);
-    switch (sys->joystick_type) {
-        case ATOM_JOYSTICKTYPE_NONE:
-            kbd_key_up(&sys->kbd, key_code);
-            break;
-        case ATOM_JOYSTICKTYPE_MMC:
-            switch (key_code) {
-                case 0x20:  sys->kbd_joymask &= ~ATOM_JOYSTICK_BTN; break;
-                case 0x08:  sys->kbd_joymask &= ~ATOM_JOYSTICK_LEFT; break;
-                case 0x09:  sys->kbd_joymask &= ~ATOM_JOYSTICK_RIGHT; break;
-                case 0x0A:  sys->kbd_joymask &= ~ATOM_JOYSTICK_DOWN; break;
-                case 0x0B:  sys->kbd_joymask &= ~ATOM_JOYSTICK_UP; break;
-                default:    kbd_key_up(&sys->kbd, key_code); break;
-            }
-            break;
-    }
-}
-
-void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->joystick_type = type;
-}
-
-atom_joystick_type_t atom_joystick_type(atom_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->joystick_type;
-}
-
-void atom_joystick(atom_t* sys, uint8_t mask) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->joy_joymask = mask;
-}
-
-/* CPU tick callback */
 uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
-
     /* tick the CPU */
     cpu_pins = m6502_tick(&sys->cpu, cpu_pins);
 
@@ -367,12 +295,12 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
     /* update beeper */
     if (beeper_tick(&sys->beeper)) {
         /* new audio sample ready */
-        sys->sample_buffer[sys->sample_pos++] = sys->beeper.sample;
-        if (sys->sample_pos == sys->num_samples) {
-            if (sys->audio_cb) {
-                sys->audio_cb(sys->sample_buffer, sys->num_samples, sys->user_data);
+        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper.sample;
+        if (sys->audio.sample_pos == sys->audio.num_samples) {
+            if (sys->audio.callback.func) {
+                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
             }
-            sys->sample_pos = 0;
+            sys->audio.sample_pos = 0;
         }
     }
 
@@ -411,7 +339,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
                     sys->mmc_cmd = M6502_GET_DATA(cpu_pins);
                 }
             }
-        } 
+        }
         else if ((addr >= 0xB800) && (addr < 0xBC00)) {
             /* 6522 VIA: http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_6522.htm */
             via_pins |= M6522_CS1;
@@ -501,7 +429,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
     /* check if the trapped OSLoad function was hit to implement tape file loading
         http://ladybug.xs4all.nl/arlet/fpga/6502/kernel.dis
     */
-    if (sys->tape_size > 0) {
+    if (sys->tape.size > 0) {
         const uint64_t trap_mask = M6502_SYNC|0xFFFF;
         const uint64_t trap_val  = M6502_SYNC|0xF96E;
         if ((cpu_pins & trap_mask) == trap_val) {
@@ -509,6 +437,28 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
         }
     }
     return cpu_pins;
+}
+
+uint32_t atom_exec(atom_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    uint32_t num_ticks = clk_us_to_ticks(ATOM_FREQUENCY, micro_seconds);
+    uint64_t pins = sys->pins;
+    if (0 == sys->debug.callback.func) {
+        // run without debug hook
+        for (uint32_t ticks = 0; ticks < num_ticks; ticks++) {
+            pins = _atom_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debug hook]
+        for (uint32_t ticks = 0; (ticks < num_ticks) && !(*sys->debug.stopped); ticks++) {
+            pins = _atom_tick(sys, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
+        }
+    }
+    sys->pins = pins;
+    kbd_update(&sys->kbd, micro_seconds);
+    return num_ticks;
 }
 
 uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data) {
@@ -528,6 +478,83 @@ uint64_t _atom_vdg_fetch(uint64_t pins, void* user_data) {
     if (data & (1<<6)) { pins |= (MC6847_AS|MC6847_INTEXT); }
     else               { pins &= ~(MC6847_AS|MC6847_INTEXT); }
     return pins;
+}
+
+void atom_key_down(atom_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    switch (sys->joystick_type) {
+        case ATOM_JOYSTICKTYPE_NONE:
+            kbd_key_down(&sys->kbd, key_code);
+            break;
+        case ATOM_JOYSTICKTYPE_MMC:
+            switch (key_code) {
+                case 0x20:  sys->kbd_joymask |= ATOM_JOYSTICK_BTN; break;
+                case 0x08:  sys->kbd_joymask |= ATOM_JOYSTICK_LEFT; break;
+                case 0x09:  sys->kbd_joymask |= ATOM_JOYSTICK_RIGHT; break;
+                case 0x0A:  sys->kbd_joymask |= ATOM_JOYSTICK_DOWN; break;
+                case 0x0B:  sys->kbd_joymask |= ATOM_JOYSTICK_UP; break;
+                default:    kbd_key_down(&sys->kbd, key_code); break;
+            }
+            break;
+    }
+}
+
+void atom_key_up(atom_t* sys, int key_code) {
+    CHIPS_ASSERT(sys && sys->valid);
+    switch (sys->joystick_type) {
+        case ATOM_JOYSTICKTYPE_NONE:
+            kbd_key_up(&sys->kbd, key_code);
+            break;
+        case ATOM_JOYSTICKTYPE_MMC:
+            switch (key_code) {
+                case 0x20:  sys->kbd_joymask &= ~ATOM_JOYSTICK_BTN; break;
+                case 0x08:  sys->kbd_joymask &= ~ATOM_JOYSTICK_LEFT; break;
+                case 0x09:  sys->kbd_joymask &= ~ATOM_JOYSTICK_RIGHT; break;
+                case 0x0A:  sys->kbd_joymask &= ~ATOM_JOYSTICK_DOWN; break;
+                case 0x0B:  sys->kbd_joymask &= ~ATOM_JOYSTICK_UP; break;
+                default:    kbd_key_up(&sys->kbd, key_code); break;
+            }
+            break;
+    }
+}
+
+void atom_set_joystick_type(atom_t* sys, atom_joystick_type_t type) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joystick_type = type;
+}
+
+atom_joystick_type_t atom_joystick_type(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->joystick_type;
+}
+
+void atom_joystick(atom_t* sys, uint8_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->joy_joymask = mask;
+}
+
+int atom_std_display_width(void) {
+    return MC6847_DISPLAY_WIDTH;
+}
+
+int atom_std_display_height(void) {
+    return MC6847_DISPLAY_HEIGHT;
+}
+
+size_t atom_max_display_size(void) {
+    return MC6847_DISPLAY_WIDTH * MC6847_DISPLAY_HEIGHT * 4;
+}
+
+int atom_display_width(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    (void)sys;
+    return MC6847_DISPLAY_WIDTH;
+}
+
+int atom_display_height(atom_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    (void)sys;
+    return MC6847_DISPLAY_HEIGHT;
 }
 
 static void _atom_init_keymap(atom_t* sys) {
@@ -621,16 +648,16 @@ bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
     if ((num_bytes < (int)sizeof(_atom_tap_header)) || (num_bytes > ATOM_MAX_TAPE_SIZE)) {
         return false;
     }
-    memcpy(sys->tape_buf, ptr, num_bytes);
-    sys->tape_pos = 0;
-    sys->tape_size = num_bytes;
+    memcpy(sys->tape.buf, ptr, num_bytes);
+    sys->tape.pos = 0;
+    sys->tape.size = num_bytes;
     return true;
 }
 
 void atom_remove_tape(atom_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    sys->tape_pos = 0;
-    sys->tape_size = 0;
+    sys->tape.pos = 0;
+    sys->tape.size = 0;
 }
 
 /*
@@ -677,27 +704,27 @@ uint64_t _atom_osload(atom_t* sys, uint64_t pins) {
 
     /* tape inserted? */
     uint16_t exec_addr = 0;
-    if ((sys->tape_size > 0) && (sys->tape_pos < sys->tape_size)) {
+    if ((sys->tape.size > 0) && (sys->tape.pos < sys->tape.size)) {
         /* read next tape chunk */
-        if ((int)(sys->tape_pos + sizeof(_atom_tap_header)) < sys->tape_size) {
-            const _atom_tap_header* hdr = (const _atom_tap_header*) &sys->tape_buf[sys->tape_pos];
-            sys->tape_pos += sizeof(_atom_tap_header);
+        if ((int)(sys->tape.pos + sizeof(_atom_tap_header)) < sys->tape.size) {
+            const _atom_tap_header* hdr = (const _atom_tap_header*) &sys->tape.buf[sys->tape.pos];
+            sys->tape.pos += sizeof(_atom_tap_header);
             exec_addr = hdr->exec_addr;
             uint16_t addr = hdr->load_addr;
             /* override file load address? */
             if (mem_rd(&sys->mem, 0xCD) & 0x80) {
                 addr = mem_rd16(&sys->mem, 0xCB);
             }
-            if ((sys->tape_pos + hdr->length) <= sys->tape_size) {
+            if ((sys->tape.pos + hdr->length) <= sys->tape.size) {
                 for (int i = 0; i < hdr->length; i++) {
-                    mem_wr(&sys->mem, addr++, sys->tape_buf[sys->tape_pos++]);
+                    mem_wr(&sys->mem, addr++, sys->tape.buf[sys->tape.pos++]);
                 }
                 success = true;
             }
         }
     }
     /* if tape at end, remove tape */
-    if (sys->tape_pos >= sys->tape_size) {
+    if (sys->tape.pos >= sys->tape.size) {
         atom_remove_tape(sys);
     }
     /* success/fail: set or clear bit 6 and clear bit 7 of 0xDD */

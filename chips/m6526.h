@@ -214,19 +214,19 @@ typedef struct {
 } m6526_t;
 
 /* extract 8-bit data bus from 64-bit pins */
-#define M6526_GET_DATA(p) ((uint8_t)(p>>16))
+#define M6526_GET_DATA(p) ((uint8_t)((p)>>16))
 /* merge 8-bit data bus value into 64-bit pins */
-#define M6526_SET_DATA(p,d) {p=((p&~0xFF0000)|((d&0xFF)<<16));}
+#define M6526_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 /* extract port A pins */
-#define M6526_GET_PA(p) ((uint8_t)(p>>48))
+#define M6526_GET_PA(p) ((uint8_t)((p)>>48))
 /* extract port B pins */
-#define M6526_GET_PB(p) ((uint8_t)(p>>56))
+#define M6526_GET_PB(p) ((uint8_t)((p)>>56))
 /* merge port A pins into pin mask */
-#define M6526_SET_PA(p,a) {p=(p&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
+#define M6526_SET_PA(p,a) {p=((p)&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
 /* merge port B pins into pin mask */
-#define M6526_SET_PB(p,b) {p=(p&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
+#define M6526_SET_PB(p,b) {p=((p)&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
 /* merge port A and B pins into pin mask */
-#define M6526_SET_PAB(p,a,b) {p=(p&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
+#define M6526_SET_PAB(p,a,b) {p=((p)&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
 /* initialize a new m6526_t instance */
 void m6526_init(m6526_t* c);
@@ -304,8 +304,8 @@ void m6526_reset(m6526_t* c) {
 
 /*--- port implementation ---*/
 static inline void _m6526_read_port_pins(m6526_t* c, uint64_t pins) {
-    c->pa.inp = (M6526_GET_PA(pins) & ~c->pa.ddr) | (c->pa.reg & c->pa.ddr);
-    c->pb.inp = (M6526_GET_PB(pins) & ~c->pb.ddr) | (c->pb.reg & c->pb.ddr);
+    c->pa.inp = M6526_GET_PA(pins);
+    c->pb.inp = M6526_GET_PB(pins);
 }
 
 static inline uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {

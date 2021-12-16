@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -58,6 +58,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#if !defined(UI_DBG_USE_Z80) && !defined(UI_DBG_USE_M6502)
+#error "please define UI_DBG_USE_Z80 or UI_DBG_USE_M6502"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -66,8 +70,7 @@ extern "C" {
 #define UI_DBG_MAX_BREAKPOINTS (32)
 #define UI_DBG_MAX_USER_BREAKTYPES (8)  /* max number of user breakpoint types */
 #define UI_DBG_STEP_TRAPID (128)        /* special trap id when step-mode active */
-#define UI_DBG_TICK_TRAPID (129)        /* special trap id when cycle-stepping */
-#define UI_DBG_BP_BASE_TRAPID (UI_DBG_TICK_TRAPID+1)   /* first CPU trap-id used for breakpoints */
+#define UI_DBG_BP_BASE_TRAPID (UI_DBG_STEP_TRAPID+1)   /* first CPU trap-id used for breakpoints */
 #define UI_DBG_MAX_STRLEN (32)
 #define UI_DBG_MAX_BINLEN (16)
 #define UI_DBG_NUM_LINES (256)
@@ -131,7 +134,7 @@ struct ui_dbg_t;
 /* callback for reading a byte from memory */
 typedef uint8_t (*ui_dbg_read_t)(int layer, uint16_t addr, void* user_data);
 /* callback for evaluating uer breakpoints, return breakpoint index, or -1 */
-typedef int (*ui_dbg_user_break_t)(ui_dbg_t* win, uint16_t pc, int ticks, uint64_t pins, void* user_data);
+typedef int (*ui_dbg_user_break_t)(struct ui_dbg_t* win, int trap_id, uint64_t pins, void* user_data);
 /* a callback to create a dynamic-update RGBA8 UI texture, needs to return an ImTextureID handle */
 typedef void* (*ui_dbg_create_texture_t)(int w, int h);
 /* callback to update a UI texture with new data */
@@ -140,20 +143,19 @@ typedef void (*ui_dbg_update_texture_t)(void* tex_handle, void* data, int data_b
 typedef void (*ui_dbg_destroy_texture_t)(void* tex_handle);
 
 /* user-defined hotkeys (all strings must be static) */
-typedef struct ui_dbg_keydesc_t {
-    int continue_keycode;
-    int break_keycode;
-    int step_over_keycode;
-    int step_into_keycode;
-    int step_tick_keycode;
-    int toggle_breakpoint_keycode;
-    const char* continue_name;
-    const char* break_name;
-    const char* step_over_name;
-    const char* step_into_name;
-    const char* step_tick_name;
-    const char* toggle_breakpoint_name;
-} ui_dbg_keydesc_t;
+typedef struct ui_dbg_key_desc_t {
+    int keycode;
+    const char* name;
+} ui_dbg_key_desc_t;
+
+typedef struct ui_dbg_keys_desc_t {
+    ui_dbg_key_desc_t cont;
+    ui_dbg_key_desc_t stop;
+    ui_dbg_key_desc_t step_over;
+    ui_dbg_key_desc_t step_into;
+    ui_dbg_key_desc_t step_tick;
+    ui_dbg_key_desc_t toggle_breakpoint;
+} ui_dbg_keys_desc_t;
 
 typedef struct ui_dbg_desc_t {
     const char* title;          /* window title */
@@ -161,8 +163,6 @@ typedef struct ui_dbg_desc_t {
     z80_t* z80;                 /* Z80 CPU to track */
     #elif defined(UI_DBG_USE_M6502)
     m6502_t* m6502;             /* 6502 CPU to track */
-    #else
-    #error "CPU TYPE"
     #endif
     ui_dbg_read_t read_cb;          /* callback to read memory */
     int read_layer;                 /* layer argument for read_cb */
@@ -174,7 +174,7 @@ typedef struct ui_dbg_desc_t {
     int x, y;                   /* initial window pos */
     int w, h;                   /* initial window size, or 0 for default size */
     bool open;                  /* initial open state */
-    ui_dbg_keydesc_t keys;      /* user-defined hotkeys */
+    ui_dbg_keys_desc_t keys;      /* user-defined hotkeys */
     ui_dbg_breaktype_t user_breaktypes[UI_DBG_MAX_USER_BREAKTYPES];  /* user-defined breakpoint types */
 } ui_dbg_desc_t;
 
@@ -191,23 +191,17 @@ typedef struct ui_dbg_dasm_t {
 typedef struct ui_dbg_state_t {
     #if defined(UI_DBG_USE_Z80)
     z80_t* z80;
-    z80_trap_t z80_trap_cb;
-    void* z80_trap_ud;
     #elif defined(UI_DBG_USE_M6502)
     m6502_t* m6502;
-    #else
-    #error "CPU TYPE"
     #endif
     bool stopped;
     int step_mode;
-    bool install_trap_cb;       /* whether to install the trap callback */
-    uint64_t cpu_pins;          /* last state of CPU pins */
-    uint32_t frame_id;          /* used in trap callback to detect when a new frame has started */
-    uint32_t trap_frame_id;
-    uint16_t next_pc;           /* PC of next instruction to be loaded */
-    int last_ticks;             /* last instruction tick count */
-    int last_trap_id;           /* can be used to identify breakpoint which caused trap */
+    uint64_t last_tick_pins;    // cpu pins in last tick 
+    uint32_t frame_id;          // used in trap callback to detect when a new frame has started
+    uint32_t cur_op_ticks;
+    uint16_t cur_op_pc;         // PC of current instruction
     uint16_t stepover_pc;
+    int last_trap_id;           // can be used to identify breakpoint which caused trap
     int delete_breakpoint_index;
     int num_breakpoints;
     ui_dbg_breakpoint_t breakpoints[UI_DBG_MAX_BREAKPOINTS];
@@ -233,7 +227,7 @@ typedef struct ui_dbg_uistate_t {
     bool show_ticks;
     bool show_history;
     bool request_scroll;
-    ui_dbg_keydesc_t keys;
+    ui_dbg_keys_desc_t keys;
     ui_dbg_line_t line_array[UI_DBG_NUM_LINES];
     int num_breaktypes;
     ui_dbg_breaktype_t breaktypes[UI_DBG_MAX_BREAKTYPES];
@@ -246,7 +240,7 @@ typedef struct ui_dbg_heatmapitem_t {
     uint32_t read_count;
     uint16_t ticks;         /* ticks of current instruction */
     uint16_t op_start;      /* set for followup instruction bytes */
-} ui_dbg_heapmap_item_t;
+} ui_dbg_heatmapitem_t;
 
 typedef struct ui_dbg_heatmap_t {
     int tex_width, tex_height;
@@ -270,8 +264,6 @@ typedef struct ui_dbg_history_t {
 
 typedef struct ui_dbg_t {
     bool valid;
-    uint32_t cpu_ticks;
-    uint32_t op_ticks;
     ui_dbg_read_t read_cb;
     int read_layer;
     ui_dbg_user_break_t break_cb;
@@ -292,11 +284,7 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
 void ui_dbg_discard(ui_dbg_t* win);
 /* render the ui_dbg_t UIs */
 void ui_dbg_draw(ui_dbg_t* win);
-/* only z80: call before executing system ticks, don't tick if function returns false */
-bool ui_dbg_before_exec(ui_dbg_t* win);
-/* only z80: call after executing system ticks */
-void ui_dbg_after_exec(ui_dbg_t* win);
-/* only m6502: call after ticking the system */
+/* call after ticking the system */
 void ui_dbg_tick(ui_dbg_t* win, uint64_t pins);
 /* call when resetting the emulated machine (re-initializes some data structures) */
 void ui_dbg_reset(ui_dbg_t* win);
@@ -308,14 +296,11 @@ void ui_dbg_reboot(ui_dbg_t* win);
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #include <string.h>
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
-#endif
-#if !defined(UI_DBG_USE_Z80) && !defined(UI_DBG_USE_M6502)
-#error "please define UI_DBG_USE_Z80 or UI_DBG_USE_M6502"
 #endif
 
 /*== GENERAL HELPERS =========================================================*/
@@ -339,7 +324,7 @@ static inline uint16_t _ui_dbg_read_word(ui_dbg_t* win, uint16_t addr) {
 }
 
 static inline uint16_t _ui_dbg_get_pc(ui_dbg_t* win) {
-    return win->dbg.next_pc;
+    return win->dbg.cur_op_pc;
 }
 
 /* disassembler callback to fetch the next instruction byte */
@@ -370,8 +355,6 @@ static inline uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
         z80dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
     #elif defined(UI_DBG_USE_M6502)
         m6502dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
-    #else
-    #error "CPU TYPE"
     #endif
     return win->dasm.cur_addr;
 }
@@ -385,8 +368,6 @@ static inline uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
         uint16_t next_pc = z80dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
     #elif defined(UI_DBG_USE_M6502)
         uint16_t next_pc = m6502dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
-    #else
-    #error "CPU TYPE"
     #endif
     return next_pc - pc;
 }
@@ -409,8 +390,6 @@ static bool _ui_dbg_is_stepover_op(uint8_t opcode) {
     #elif defined(UI_DBG_USE_M6502)
         /* on 6502, only JSR qualifies */
         return opcode == 0x20;
-    #else
-    #error "CPU TYPE"
     #endif
 }
 
@@ -484,8 +463,6 @@ static bool _ui_dbg_is_controlflow_op(uint8_t opcode0, uint8_t opcode1) {
             default:
                 return false;
         }
-    #else
-    #error "CPU TYPE"
     #endif
 }
 
@@ -625,28 +602,15 @@ static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     #elif defined(UI_DBG_USE_M6502)
         CHIPS_ASSERT(desc->m6502);
         dbg->m6502 = desc->m6502;
-    #else
-    #error "CPU TYPE"
     #endif
-    dbg->install_trap_cb = true;
     dbg->delete_breakpoint_index = -1;
 }
 
 static void _ui_dbg_dbgstate_reset(ui_dbg_t* win) {
     ui_dbg_state_t* dbg = &win->dbg;
-    #if defined(UI_DBG_USE_Z80)
-        dbg->z80_trap_cb = 0;
-        dbg->z80_trap_ud = 0;
-    #elif defined(UI_DBG_USE_M6502)
-        /* nothing */
-    #else
-    #error "CPU TYPE"
-    #endif
     dbg->stopped = false;
     dbg->step_mode = UI_DBG_STEPMODE_NONE;
-    dbg->install_trap_cb = true;
-    dbg->next_pc = 0;
-    dbg->last_ticks = 0;
+    dbg->cur_op_pc = 0;
     dbg->last_trap_id = 0;
 }
 
@@ -654,28 +618,12 @@ static void _ui_dbg_dbgstate_reboot(ui_dbg_t* win) {
     _ui_dbg_dbgstate_reset(win);
 }
 
-/* breakpoint evaluation callback, this is installed as CPU trap callback when needed */
-static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data) {
-    ui_dbg_t* win = (ui_dbg_t*) user_data;
-    int trap_id = 0;
-    
-    /* check stepping modes and breakpoint */
+// evaluate per-opcode breakpoints, called at the start of a new instrucion
+static int _ui_dbg_eval_op_breakpoints(ui_dbg_t* win, int trap_id, uint16_t pc) {
     if (win->dbg.step_mode != UI_DBG_STEPMODE_NONE) {
         switch (win->dbg.step_mode) {
             case UI_DBG_STEPMODE_INTO:
-                #if defined(UI_DBG_USE_Z80)
-                /* stop when PC has changed */
-                if (pc != win->dbg.next_pc) {
-                    trap_id = UI_DBG_STEP_TRAPID;
-                }
-                #elif defined(UI_DBG_USE_M6502)
-                /* stop on new instruction */
-                if (pins & M6502_SYNC) {
-                    trap_id = UI_DBG_STEP_TRAPID;
-                }
-                #else
-                #error "CPU TYPE"
-                #endif
+                trap_id = UI_DBG_STEP_TRAPID;
                 break;
             case UI_DBG_STEPMODE_OVER:
                 #if defined(UI_DBG_USE_Z80)
@@ -683,17 +631,14 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
                 #elif defined(UI_DBG_USE_M6502)
-                if ((pins & M6502_SYNC) && (pc == win->dbg.stepover_pc)) {
+                if (pc == win->dbg.stepover_pc) {
                     trap_id = UI_DBG_STEP_TRAPID;
                 }
-                #else
-                #error "CPU TYPE"
                 #endif
                 break;
         }
     }
     else {
-        uint64_t rising_pins = pins & (pins ^ win->dbg.cpu_pins);
         for (int i = 0; (i < win->dbg.num_breakpoints) && (trap_id == 0); i++) {
             const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
             if (bp->enabled) {
@@ -721,7 +666,7 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
                             }
                         }
                         break;
-
+                    
                     case UI_DBG_BREAKTYPE_WORD:
                         {
                             uint16_t val = (int) _ui_dbg_read_word(win, bp->addr);
@@ -739,118 +684,70 @@ static int _ui_dbg_bp_eval(uint16_t pc, uint32_t ticks, uint64_t pins, void* use
                             }
                         }
                         break;
-
-                    case UI_DBG_BREAKTYPE_IRQ:
-                        #if defined(UI_DBG_USE_Z80)
-                            if (Z80_INT & rising_pins) {
-                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                            }
-                        #elif defined(UI_DBG_USE_M6502)
-                            if (M6502_IRQ & rising_pins) {
-                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                            }
-                        #else
-                        #error "CPU TYPE"
-                        #endif
-                        break;
-
-                    case UI_DBG_BREAKTYPE_NMI:
-                        #if defined(UI_DBG_USE_Z80)
-                            if (Z80_NMI & rising_pins) {
-                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                            }
-                        #elif defined(UI_DBG_USE_M6502)
-                            if (M6502_NMI & rising_pins) {
-                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                            }
-                        #else
-                        #error "CPU TYPE"
-                        #endif
-                        break;
-
-                    #if defined(UI_DBG_USE_Z80)
-                    case UI_DBG_BREAKTYPE_OUT:
-                        if ((pins & Z80_CTRL_MASK) == (Z80_IORQ|Z80_WR)) {
-                            const uint16_t mask = bp->val;
-                            if ((Z80_GET_ADDR(pins) & mask) == (bp->addr & mask)) {
-                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                            }
-                        }
-                        break;
-
-                    case UI_DBG_BREAKTYPE_IN:
-                        if ((pins & Z80_CTRL_MASK) == (Z80_IORQ|Z80_RD)) {
-                            const uint16_t mask = bp->val;
-                            if ((Z80_GET_ADDR(pins) & mask) == (bp->addr & mask)) {
-                                trap_id = UI_DBG_BP_BASE_TRAPID + i;
-                            }
-                        }
-                        break;
-                    #endif
                 }
             }
         }
     }
-    /* call optional user-breakpoint evaluation callback */
-    if ((0 == trap_id) && win->break_cb) {
-        trap_id = win->break_cb(win, pc, ticks, pins, win->user_data);
-    }
-    /* track execution */
-    if (pc != win->dbg.next_pc) {
-        /* first byte of an instruction */
-        win->heatmap.items[pc].op_count++;
-        win->heatmap.items[pc].op_start = 0;
-        int op_len = _ui_dbg_disasm_len(win, pc);
-        for (int i = 1; i < op_len; i++) {
-            win->heatmap.items[(pc + i) & 0xFFFF].op_start = pc;
-        }
-        /* update last instruction's ticks */
-        if (win->dbg.trap_frame_id == win->dbg.frame_id) {
-            win->heatmap.items[win->dbg.next_pc].ticks = ticks - win->dbg.last_ticks;
-        }
-        else {
-            win->heatmap.items[win->dbg.next_pc].ticks = ticks;
-        }
-        /* add PC to history */
-        _ui_dbg_history_push(win, pc);
-    }
-    #if defined(UI_DBG_USE_Z80)
-        if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_RD)) {
-            const uint16_t addr = Z80_GET_ADDR(pins);
-            win->heatmap.items[addr].read_count++;
-        }
-        else if ((pins & Z80_CTRL_MASK) == (Z80_MREQ|Z80_WR)) {
-            const uint16_t addr = Z80_GET_ADDR(pins);
-            win->heatmap.items[addr].write_count++;
-        }
-    #elif defined(UI_DBG_USE_M6502)
-        /* every tick on 6502 is either a read or a write */
-        const uint16_t addr = M6502_GET_ADDR(pins);
-        if (0 != (pins & M6502_RW)) {
-            win->heatmap.items[addr].read_count++;
-        }
-        else {
-            win->heatmap.items[addr].write_count++;
-        }
-    #else
-    #error "CPU TYPE"
-    #endif
-    win->dbg.next_pc = pc;
-    win->dbg.trap_frame_id = win->dbg.frame_id;
-    win->dbg.last_ticks = ticks;
-    win->dbg.cpu_pins = pins;
+    return trap_id;
+}
 
-    /* call original trap callback if exists */
-    if (0 == trap_id) {
-        #if defined(UI_DBG_USE_Z80)
-            if (win->dbg.z80_trap_cb) {
-                trap_id = win->dbg.z80_trap_cb(pc, ticks, pins, win->dbg.z80_trap_ud);
+//  evaluate per-tick breakpoints, only call this if is dbg.step_mode is UI_DBG_STEPMODE_NONE!
+static int _ui_dbg_eval_tick_breakpoints(ui_dbg_t* win, int trap_id, uint64_t pins) {
+    uint64_t rising_pins = pins & (pins ^ win->dbg.last_tick_pins);
+    for (int i = 0; (i < win->dbg.num_breakpoints) && (trap_id == 0); i++) {
+        const ui_dbg_breakpoint_t* bp = &win->dbg.breakpoints[i];
+        if (bp->enabled) {
+            switch (bp->type) {
+                case UI_DBG_BREAKTYPE_IRQ:
+                    #if defined(UI_DBG_USE_Z80)
+                        if (Z80_INT & rising_pins) {
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                        }
+                    #elif defined(UI_DBG_USE_M6502)
+                        if (M6502_IRQ & rising_pins) {
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                        }
+                    #endif
+                    break;
+
+                case UI_DBG_BREAKTYPE_NMI:
+                    #if defined(UI_DBG_USE_Z80)
+                        if (Z80_NMI & rising_pins) {
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                        }
+                    #elif defined(UI_DBG_USE_M6502)
+                        if (M6502_NMI & rising_pins) {
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                        }
+                    #endif
+                    break;
+
+                #if defined(UI_DBG_USE_Z80)
+                case UI_DBG_BREAKTYPE_OUT:
+                    if ((pins & Z80_CTRL_PIN_MASK) == (Z80_IORQ|Z80_WR)) {
+                        const uint16_t mask = bp->val;
+                        if ((Z80_GET_ADDR(pins) & mask) == (bp->addr & mask)) {
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                        }
+                    }
+                    break;
+
+                case UI_DBG_BREAKTYPE_IN:
+                    if ((pins & Z80_CTRL_PIN_MASK) == (Z80_IORQ|Z80_RD)) {
+                        const uint16_t mask = bp->val;
+                        if ((Z80_GET_ADDR(pins) & mask) == (bp->addr & mask)) {
+                            trap_id = UI_DBG_BP_BASE_TRAPID + i;
+                        }
+                    }
+                    break;
+                #endif
             }
-        #elif defined(UI_DBG_USE_M6502)
-            /* nothing */
-        #else
-        #error "CPU TYPE"
-        #endif
+        }
+    }
+    
+    // call optional user-breakpoint evaluation callback
+    if ((0 == trap_id) && win->break_cb) {
+        trap_id = win->break_cb(win, trap_id, pins, win->user_data);
     }
     return trap_id;
 }
@@ -1173,6 +1070,39 @@ static void _ui_dbg_heatmap_clear_rw(ui_dbg_t* win) {
     }
 }
 
+static void _ui_dbg_heatmap_record_op(ui_dbg_t* win, uint16_t pc) {
+    // record per-op heatmap events
+    win->heatmap.items[pc].op_count++;
+    win->heatmap.items[pc].op_start = 0;
+    int op_len = _ui_dbg_disasm_len(win, pc);
+    for (int i = 1; i < op_len; i++) {
+        win->heatmap.items[(pc + i) & 0xFFFF].op_start = pc;
+    }
+    // update last instruction's ticks
+    win->heatmap.items[win->dbg.cur_op_pc].ticks = win->dbg.cur_op_ticks;
+}
+
+static void _ui_dbg_heatmap_record_tick(ui_dbg_t* win, uint64_t pins) {
+    #if defined(UI_DBG_USE_Z80)
+        if ((pins & Z80_CTRL_PIN_MASK) == (Z80_MREQ|Z80_RD)) {
+            const uint16_t addr = Z80_GET_ADDR(pins);
+            win->heatmap.items[addr].read_count++;
+        }
+        else if ((pins & Z80_CTRL_PIN_MASK) == (Z80_MREQ|Z80_WR)) {
+            const uint16_t addr = Z80_GET_ADDR(pins);
+            win->heatmap.items[addr].write_count++;
+        }
+    #elif defined(UI_DBG_USE_M6502)
+        const uint16_t addr = M6502_GET_ADDR(pins);
+        if (0 != (pins & M6502_RW)) {
+            win->heatmap.items[addr].read_count++;
+        }
+        else {
+            win->heatmap.items[addr].write_count++;
+        }
+    #endif
+}
+
 static void _ui_dbg_heatmap_update(ui_dbg_t* win) {
     const int frame_chunk_height = 64;
     int y0 = win->heatmap.cur_y;
@@ -1330,7 +1260,7 @@ static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui->open = desc->open;
     ui->init_x = (float) desc->x;
     ui->init_y = (float) desc->y;
-    ui->init_w = (float) ((desc->w == 0) ? 370 : desc->w);
+    ui->init_w = (float) ((desc->w == 0) ? 380 : desc->w);
     ui->init_h = (float) ((desc->h == 0) ? 440 : desc->h);
     ui->show_regs = true;
     ui->show_buttons = true;
@@ -1401,22 +1331,21 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
     bool delete_all_bp = false;
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Debug")) {
-            if (ImGui::MenuItem("Break", win->ui.keys.break_name, false, !win->dbg.stopped)) {
+            if (ImGui::MenuItem("Break", win->ui.keys.stop.name, false, !win->dbg.stopped)) {
                 _ui_dbg_break(win);
             }
-            if (ImGui::MenuItem("Continue", win->ui.keys.continue_name, false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Continue", win->ui.keys.cont.name, false, win->dbg.stopped)) {
                 _ui_dbg_continue(win);
             }
-            if (ImGui::MenuItem("Step Over", win->ui.keys.step_over_name, false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Step Over", win->ui.keys.step_over.name, false, win->dbg.stopped)) {
                 _ui_dbg_step_over(win);
             }
-            if (ImGui::MenuItem("Step Into", win->ui.keys.step_into_name, false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Step Into", win->ui.keys.step_into.name, false, win->dbg.stopped)) {
                 _ui_dbg_step_into(win);
             }
-            if (ImGui::MenuItem("Tick", win->ui.keys.step_tick_name, false, win->dbg.stopped)) {
+            if (ImGui::MenuItem("Tick", win->ui.keys.step_tick.name, false, win->dbg.stopped)) {
                 _ui_dbg_step_tick(win);
             }
-            ImGui::MenuItem("Install CPU Debug Hook", 0, &win->dbg.install_trap_cb);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Breakpoints")) {
@@ -1470,40 +1399,39 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         for (int i = 0; i < 5; i++) {
             ImGui::SetColumnWidth(i, 72);
         }
-        z80_set_af(c, ui_util_input_u16("AF", z80_af(c))); ImGui::NextColumn();
-        z80_set_bc(c, ui_util_input_u16("BC", z80_bc(c))); ImGui::NextColumn();
-        z80_set_de(c, ui_util_input_u16("DE", z80_de(c))); ImGui::NextColumn();
-        z80_set_hl(c, ui_util_input_u16("HL", z80_hl(c))); ImGui::NextColumn();
-        z80_set_hl(c, ui_util_input_u16("WZ", z80_hl(c))); ImGui::NextColumn();
-        z80_set_af_(c, ui_util_input_u16("AF'", z80_af_(c))); ImGui::NextColumn();
-        z80_set_bc_(c, ui_util_input_u16("BC'", z80_bc_(c))); ImGui::NextColumn();
-        z80_set_de_(c, ui_util_input_u16("DE'", z80_de_(c))); ImGui::NextColumn();
-        z80_set_hl_(c, ui_util_input_u16("HL'", z80_hl_(c))); ImGui::NextColumn();
-        z80_set_i(c, ui_util_input_u8("I", z80_i(c))); ImGui::NextColumn();
-        z80_set_ix(c, ui_util_input_u16("IX", z80_ix(c))); ImGui::NextColumn();
-        z80_set_iy(c, ui_util_input_u16("IY", z80_iy(c))); ImGui::NextColumn();
-        z80_set_sp(c, ui_util_input_u16("SP", z80_sp(c))); ImGui::NextColumn();
-        z80_set_pc(c, ui_util_input_u16("PC", z80_pc(c))); ImGui::NextColumn();
-        z80_set_r(c, ui_util_input_u8("R", z80_r(c))); ImGui::NextColumn();
-        z80_set_im(c, ui_util_input_u8("IM", z80_im(c))); ImGui::SameLine(); ImGui::NextColumn();
+        c->af  = ui_util_input_u16("AF", c->af); ImGui::NextColumn();
+        c->bc  = ui_util_input_u16("BC", c->bc); ImGui::NextColumn();
+        c->de  = ui_util_input_u16("DE", c->de); ImGui::NextColumn();
+        c->hl  = ui_util_input_u16("HL", c->hl); ImGui::NextColumn();
+        c->wz  = ui_util_input_u16("WZ", c->wz); ImGui::NextColumn();
+        c->af2 = ui_util_input_u16("AF'", c->af2); ImGui::NextColumn();
+        c->bc2 = ui_util_input_u16("BC'", c->bc2); ImGui::NextColumn();
+        c->de2 = ui_util_input_u16("DE'", c->de2); ImGui::NextColumn();
+        c->hl2 = ui_util_input_u16("HL'", c->hl2); ImGui::NextColumn();
+        c->i   = ui_util_input_u8("I", c->i); ImGui::NextColumn();
+        c->ix  = ui_util_input_u16("IX", c->ix); ImGui::NextColumn();
+        c->iy  = ui_util_input_u16("IY", c->iy); ImGui::NextColumn();
+        c->sp  = ui_util_input_u16("SP", c->sp); ImGui::NextColumn();
+        c->pc  = ui_util_input_u16("PC", c->pc); ImGui::NextColumn();
+        c->r   = ui_util_input_u8("R", c->r); ImGui::NextColumn();
+        c->im  = ui_util_input_u8("IM", c->im); ImGui::SameLine(); ImGui::NextColumn();
         ImGui::AlignTextToFramePadding();
-        if (z80_iff1(c)) { ImGui::Text("IFF1"); }
-        else             { ImGui::TextDisabled("IFF1"); }
+        if (c->iff1) { ImGui::Text("IFF1"); }
+        else         { ImGui::TextDisabled("IFF1"); }
         ImGui::NextColumn();
         ImGui::AlignTextToFramePadding();
-        if (z80_iff2(c)) { ImGui::Text("IFF2"); }
-        else             { ImGui::TextDisabled("IFF2"); }
+        if (c->iff2) { ImGui::Text("IFF2"); }
+        else         { ImGui::TextDisabled("IFF2"); }
         ImGui::NextColumn();
-        const uint8_t f = z80_f(c);
         char f_str[9] = {
-            (f & Z80_SF) ? 'S':'-',
-            (f & Z80_ZF) ? 'Z':'-',
-            (f & Z80_YF) ? 'X':'-',
-            (f & Z80_HF) ? 'H':'-',
-            (f & Z80_XF) ? 'Y':'-',
-            (f & Z80_VF) ? 'V':'-',
-            (f & Z80_NF) ? 'N':'-',
-            (f & Z80_CF) ? 'C':'-',
+            (c->f & Z80_SF) ? 'S':'-',
+            (c->f & Z80_ZF) ? 'Z':'-',
+            (c->f & Z80_YF) ? 'X':'-',
+            (c->f & Z80_HF) ? 'H':'-',
+            (c->f & Z80_XF) ? 'Y':'-',
+            (c->f & Z80_VF) ? 'V':'-',
+            (c->f & Z80_NF) ? 'N':'-',
+            (c->f & Z80_CF) ? 'C':'-',
             0,
         };
         ImGui::AlignTextToFramePadding();
@@ -1540,8 +1468,6 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         ImGui::AlignTextToFramePadding();
         ImGui::Text("%s", p_str);
         ImGui::EndChild();
-    #else
-    #error "CPU TYPE"
     #endif
     ImGui::Separator();
 }
@@ -1550,35 +1476,33 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
 static void _ui_dbg_handle_input(ui_dbg_t* win) {
     /* unused hotkeys are defined as 0 and will never be triggered */
     if (win->dbg.stopped) {
-        if (0 != win->ui.keys.continue_keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.continue_keycode)) {
+        if (0 != win->ui.keys.cont.keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.cont.keycode)) {
                 _ui_dbg_continue(win);
             }
         }
-        if (0 != win->ui.keys.step_over_keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_over_keycode)) {
+        if (0 != win->ui.keys.step_over.keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_over.keycode)) {
                 _ui_dbg_step_over(win);
             }
         }
-        if (0 != win->ui.keys.step_into_keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_into_keycode)) {
+        if (0 != win->ui.keys.step_into.keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_into.keycode)) {
                 _ui_dbg_step_into(win);
             }
         }
-        #if defined(UI_DBG_USE_M6502)
-        if (0 != win->ui.keys.step_tick_keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_tick_keycode)) {
+        if (0 != win->ui.keys.step_tick.keycode) {
+            if (ImGui::IsKeyPressed(win->ui.keys.step_tick.keycode)) {
                 _ui_dbg_step_tick(win);
             }
         }
-        #endif
     }
     else {
-        if (ImGui::IsKeyPressed(win->ui.keys.break_keycode)) {
+        if (ImGui::IsKeyPressed(win->ui.keys.stop.keycode)) {
             _ui_dbg_break(win);
         }
     }
-    if (ImGui::IsKeyPressed(win->ui.keys.toggle_breakpoint_keycode)) {
+    if (ImGui::IsKeyPressed(win->ui.keys.toggle_breakpoint.keycode)) {
         _ui_dbg_bp_toggle_exec(win, _ui_dbg_get_pc(win));
     }
 }
@@ -1589,30 +1513,28 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
     }
     char str[32];
     if (win->dbg.stopped || (win->dbg.step_mode != UI_DBG_STEPMODE_NONE)) {
-        snprintf(str, sizeof(str), "Continue (%s)", _ui_dbg_str_or_def(win->ui.keys.continue_name, "-"));
+        snprintf(str, sizeof(str), "Continue (%s)", _ui_dbg_str_or_def(win->ui.keys.cont.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_continue(win);
         }
         ImGui::SameLine();
-        snprintf(str, sizeof(str), "Over (%s)", _ui_dbg_str_or_def(win->ui.keys.step_over_name, "-"));
+        snprintf(str, sizeof(str), "Over (%s)", _ui_dbg_str_or_def(win->ui.keys.step_over.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_over(win);
         }
         ImGui::SameLine();
-        snprintf(str, sizeof(str), "Into (%s)", _ui_dbg_str_or_def(win->ui.keys.step_into_name, "-"));
+        snprintf(str, sizeof(str), "Into (%s)", _ui_dbg_str_or_def(win->ui.keys.step_into.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_into(win);
         }
         ImGui::SameLine();
-        #if defined(UI_DBG_USE_M6502)
-        snprintf(str, sizeof(str), "Tick (%s)", _ui_dbg_str_or_def(win->ui.keys.step_tick_name, "-"));
+        snprintf(str, sizeof(str), "Tick (%s)", _ui_dbg_str_or_def(win->ui.keys.step_tick.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_step_tick(win);
         }
-        #endif
     }
     else {
-        snprintf(str, sizeof(str), "Break (%s)", _ui_dbg_str_or_def(win->ui.keys.break_name, "-"));
+        snprintf(str, sizeof(str), "Break (%s)", _ui_dbg_str_or_def(win->ui.keys.stop.name, "-"));
         if (ImGui::Button(str)) {
             _ui_dbg_break(win);
         }
@@ -1836,37 +1758,25 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         }
 
         /* tick count */
-        #if defined(UI_DBG_USE_M6502)
         x += glyph_width * (is_pc_line ? 18:20);
-        #else
-        x += glyph_width * 20;
-        #endif
         if (win->ui.show_ticks) {
             int ticks = win->heatmap.items[start_addr].ticks;
             ImGui::SameLine(x);
             if (ticks > 0) {
-                #if defined(UI_DBG_USE_M6502)
                 if (is_pc_line) {
-                    ImGui::Text("%d/%d", win->op_ticks, ticks);
+                    ImGui::Text("%2d/%d", win->dbg.cur_op_ticks, ticks);
                 }
                 else {
-                    ImGui::Text("%d", ticks);
+                    ImGui::Text(" %d", ticks);
                 }
-                #else
-                ImGui::Text("%d", ticks);
-                #endif
             }
             else if (show_dasm) {
-                #if defined(UI_DBG_USE_M6502)
                 if (is_pc_line) {
-                    ImGui::Text("%d/?", win->op_ticks);
+                    ImGui::Text("%2d/?", win->dbg.cur_op_ticks);
                 }
                 else {
                     ImGui::Text("?");
                 }
-                #else
-                ImGui::Text("?");
-                #endif
             }
             else {
                 ImGui::Text(" ");
@@ -1941,86 +1851,44 @@ void ui_dbg_reboot(ui_dbg_t* win) {
     _ui_dbg_history_reboot(win);
 }
 
-bool ui_dbg_before_exec(ui_dbg_t* win) {
-    #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
-        CHIPS_ASSERT(win && win->valid);
-        if (win->dbg.install_trap_cb) {
-            win->dbg.frame_id++;
-            if (!win->dbg.stopped) {
-                #if defined(UI_DBG_USE_Z80)
-                    win->dbg.z80_trap_cb = win->dbg.z80->trap_cb;
-                    win->dbg.z80_trap_ud = win->dbg.z80->trap_user_data;
-                    z80_trap_cb(win->dbg.z80, _ui_dbg_bp_eval, win);
-                #elif defined(UI_DBG_USE_M6502)
-                    /* nothing */
-                #else
-                #error "CPU TYPE"
-                #endif
-            }
-            return !win->dbg.stopped;
-        }
-        else {
-            return true;
-        }
-    #else
-        return false;
-    #endif
-}
-
-void ui_dbg_after_exec(ui_dbg_t* win) {
-    #if defined(UI_DBG_USE_Z80) || defined(UI_DBG_USE_M6502)
-        CHIPS_ASSERT(win && win->valid);
-        /* uninstall our trap callback, but only if it hasn't been overwritten */
-        int trap_id = 0;
-        #if defined(UI_DBG_USE_Z80)
-            if (win->dbg.z80->trap_cb == _ui_dbg_bp_eval) {
-                z80_trap_cb(win->dbg.z80, win->dbg.z80_trap_cb, win->dbg.z80_trap_ud);
-            }
-            win->dbg.z80_trap_cb = 0;
-            win->dbg.z80_trap_ud = 0;
-            trap_id = win->dbg.z80->trap_id;
-        #elif defined(UI_DBG_USE_M6502)
-            /* nothing */
-        #else
-        #error "CPU TYPE"
-        #endif
-        if (trap_id >= UI_DBG_STEP_TRAPID) {
-            win->dbg.stopped = true;
-            win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
-            ImGui::SetWindowFocus(win->ui.title);
-            win->ui.open = true;
-        }
-        win->dbg.last_trap_id = trap_id;
-    #endif
-}
-
 void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
-    #if defined(UI_DBG_USE_M6502)
+    int trap_id = 0;
     if (win->dbg.step_mode == UI_DBG_STEPMODE_TICK) {
+        trap_id = UI_DBG_STEP_TRAPID;
+    }
+    // evaluate per-op breakpoints
+    #if defined(UI_DBG_USE_M6502)
+        const bool new_op = pins & M6502_SYNC;
+    #elif defined(UI_DBG_USE_Z80)
+        const bool new_op = z80_opdone(win->dbg.z80);
+    #endif
+    if (new_op) {
+        const uint16_t pc = pins & 0xFFFF;
+        trap_id = _ui_dbg_eval_op_breakpoints(win, trap_id, pc);
+        _ui_dbg_heatmap_record_op(win, pc);
+        _ui_dbg_history_push(win, pc);
+        win->dbg.cur_op_ticks = 0;
+        win->dbg.cur_op_pc = pc;
+    }
+    if (win->dbg.step_mode == UI_DBG_STEPMODE_NONE) {
+        trap_id = _ui_dbg_eval_tick_breakpoints(win, trap_id, pins);
+    }
+    _ui_dbg_heatmap_record_tick(win, pins);
+    win->dbg.cur_op_ticks++;
+    win->dbg.last_tick_pins = pins;
+
+    if (trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
+        ImGui::SetWindowFocus(win->ui.title);
+        win->ui.open = true;
     }
-    if (pins & M6502_SYNC) {
-        win->op_ticks = 0;
-        uint16_t pc = M6502_GET_ADDR(pins);
-        win->dbg.last_trap_id = _ui_dbg_bp_eval(pc, win->cpu_ticks, pins, win);
-        if (win->dbg.last_trap_id >= UI_DBG_STEP_TRAPID) {
-            win->dbg.stopped = true;
-            win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
-            ImGui::SetWindowFocus(win->ui.title);
-            win->ui.open = true;
-        }
-    }
-    win->cpu_ticks++;
-    win->op_ticks++;
-    #else
-    (void)win;
-    (void)pins;
-    #endif
+    win->dbg.last_trap_id = trap_id;
 }
 
 void ui_dbg_draw(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid && win->ui.title);
+    win->dbg.frame_id++;
     if (!(win->ui.open || win->ui.show_heatmap || win->ui.show_breakpoints || win->ui.show_history)) {
         return;
     }
@@ -2029,4 +1897,4 @@ void ui_dbg_draw(ui_dbg_t* win) {
     _ui_dbg_history_draw(win);
     _ui_dbg_bp_draw(win);
 }
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */

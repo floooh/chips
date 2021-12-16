@@ -6,7 +6,7 @@
 
     Do this:
     ~~~C
-    #define CHIPS_IMPL
+    #define CHIPS_UI_IMPL
     ~~~
     before you include this file in *one* C++ file to create the 
     implementation.
@@ -89,7 +89,7 @@ void ui_m6561_draw(ui_m6561_t* win);
 #endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
-#ifdef CHIPS_IMPL
+#ifdef CHIPS_UI_IMPL
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
@@ -274,4 +274,4 @@ void ui_m6561_draw(ui_m6561_t* win) {
     ImGui::End();
 }
 
-#endif /* CHIPS_IMPL */
+#endif /* CHIPS_UI_IMPL */
