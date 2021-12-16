@@ -453,13 +453,23 @@ NEG:
   mcycles:
     - { type: overlapped, action: "_z80_neg8(cpu)"}
 
-RETI/RETN:
+RETI:
   prefix: ed
-  cond: (x == 1) and (z == 5)
+  cond: (x == 1) and (y != 0) and (z == 5)
   flags: { single: true }
   mcycles:
     # virtual RETI pin must be set as early as possible
     - { type: mread, ab: $SP++, dst: $WZL, action: "pins|=Z80_RETI" }
+    - { type: mread, ab: $SP++, dst: $WZH, action: "$PC=$WZ" }
+    - { type: overlapped, post_action: "cpu->iff1=cpu->iff2"}
+
+
+RETN:
+  prefix: ed
+  cond: (x == 1) and (y == 0) and (z == 5)
+  mcycles:
+    # virtual RETI will not be set
+    - { type: mread, ab: $SP++, dst: $WZL }
     - { type: mread, ab: $SP++, dst: $WZH, action: "$PC=$WZ" }
     - { type: overlapped, post_action: "cpu->iff1=cpu->iff2"}
 
