@@ -18,7 +18,8 @@ For schematics, manuals and research material, see: https://github.com/floooh/em
   various improvements mainly in the Amstrad CPC emulation. Accompanying
   blog post upcoming. A snapshot of the old emulator is under the git tag
   **pre-cycle-stepped-z80** both in the [chip](https://github.com/floooh/chips/tags)
-  and [chips-test](https://github.com/floooh/chips-test/tags) repo.
+  and [chips-test](https://github.com/floooh/chips-test/tags) repo. PS: blog post is here:
+  https://floooh.github.io/2021/12/17/cycle-stepped-z80.html
 
 * **14-May-2020**: A small breaking change in kbd.h: the function ```kbd_update()```
     now takes a new argument ```uint32_t frame_time_us``` which is the
