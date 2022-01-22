@@ -126,7 +126,7 @@
                     // handle IO input request at port
                     ...
                 }
-                else if (pins & Z80_RD) {
+                else if (pins & Z80_WR) {
                     // handle IO output request at port
                     ...
                 }
@@ -163,7 +163,7 @@
                     // handle IO input request at port `addr`
                     ...
                 }
-                else if (pins & Z80_RD) {
+                else if (pins & Z80_WR) {
                     // handle IO output request at port `addr`
                     ...
                 }
