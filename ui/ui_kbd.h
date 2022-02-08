@@ -213,7 +213,7 @@ static void _ui_kbd_draw_plane_combo(ui_kbd_t* win) {
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Modifier:");
     ImGui::SameLine();
-    ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth());
+    ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
     ImGui::Combo("##mod_keys", &win->cur_layer, win->layers, win->num_layers);
     ImGui::PopItemWidth();
 }

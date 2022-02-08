@@ -330,7 +330,7 @@ static void _ui_dasm_draw_controls(ui_dasm_t* win) {
     }
     ImGui::SameLine();
     ImGui::SameLine();
-    ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth());
+    ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
     ImGui::Combo("##layer", &win->cur_layer, win->layers, win->num_layers);
     ImGui::PopItemWidth();
 }

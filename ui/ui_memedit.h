@@ -562,7 +562,7 @@ struct MemoryEditor
 
         /*--- BEGIN ui_memedit.h changes */
         if (NumLayers > 1) {
-            ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth());
+            ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
             ImGui::Combo("##layer", &CurLayer, Layers, NumLayers);
             ImGui::PopItemWidth();
         }
