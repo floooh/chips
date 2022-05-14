@@ -144,7 +144,7 @@ typedef void (*ui_dbg_destroy_texture_t)(void* tex_handle);
 
 /* user-defined hotkeys (all strings must be static) */
 typedef struct ui_dbg_key_desc_t {
-    int keycode;
+    int keycode;    // ImGuiKey_*
     const char* name;
 } ui_dbg_key_desc_t;
 
