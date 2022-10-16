@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -65,7 +65,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -204,8 +204,11 @@ typedef struct {
         uint8_t buf[CPC_MAX_TAPE_SIZE];
     } tape;
     */
-    // floppy disc drive
-    fdd_t fdd;
+    // floppy disc drives
+    union {
+        fdd_t fdd;
+        fdd_t fdds[2];
+    };
 } cpc_t;
 
 // initialize a new CPC instance
@@ -236,10 +239,16 @@ bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
 //void cpc_remove_tape(cpc_t* cpc);
 // insert a disk image file (.dsk)
 bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+// insert a disk image file (.dsk) in drive 0 (A:) or 1 (B:)
+bool cpc_insert_disc_in_drive(cpc_t* cpc, int drive, const uint8_t* ptr, int num_bytes);
 // remove current disc
 void cpc_remove_disc(cpc_t* cpc);
+// remove current disc in drive 0 (A:) or 1 (B:)
+void cpc_remove_disc_in_drive(cpc_t* cpc, int drive);
 // return true if a floppy disc is currently inserted
 bool cpc_disc_inserted(cpc_t* cpc);
+// return true if a floppy disc is currently inserted in drive 0 (A:) or 1 (B:)
+bool cpc_disc_inserted_in_drive(cpc_t* cpc, int drive);
 // if enabled, start calling the video-debugging-callback
 void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
 // get current display debug visualization enabled/disabled state
@@ -346,7 +355,8 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         .driveinfo_cb = _cpc_fdc_driveinfo,
         .user_data = sys,
     });
-    fdd_init(&sys->fdd);
+    fdd_init(&sys->fdds[0]);
+    fdd_init(&sys->fdds[1]);
 
     _cpc_init_keymap(sys);
 
@@ -504,7 +514,8 @@ static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
         // Floppy Disk Interface
         if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == 0) {
             if (cpu_pins & Z80_WR) {
-                fdd_motor(&sys->fdd, 0 != (Z80_GET_DATA(cpu_pins) & 1));
+                fdd_motor(&sys->fdds[0], 0 != (Z80_GET_DATA(cpu_pins) & 1));
+                fdd_motor(&sys->fdds[1], 0 != (Z80_GET_DATA(cpu_pins) & 1));
             }
         }
         else if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
@@ -728,7 +739,7 @@ bool cpc_video_debugging_enabled(cpc_t* sys) {
 static void _cpc_init_keymap(cpc_t* sys) {
     /*
         http://cpctech.cpc-live.com/docs/keyboard.html
-    
+
         CPC has a 10 columns by 8 lines keyboard matrix. The 10 columns
         are lit up by bits 0..3 of PPI port C connected to a 74LS145
         BCD decoder, and the lines are read through port A of the
@@ -844,7 +855,7 @@ static bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
 static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     const _cpc_sna_header* hdr = (const _cpc_sna_header*) ptr;
     ptr += sizeof(_cpc_sna_header);
-    
+
     // copy 64 or 128 KByte memory dump
     const uint16_t dump_size = hdr->dump_size_h<<8 | hdr->dump_size_l;
     const uint32_t dump_num_bytes = (dump_size == 64) ? 0x10000 : 0x20000;
@@ -962,7 +973,7 @@ bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
 /*
  FIXME: implement tape loading through the hardware emulation instead of
  OS function trapping.
- 
+
 static int _cpc_trap_cb(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data) {
     // CPU trap handler to check for casread
     (void)ticks;
@@ -1022,9 +1033,9 @@ static void _cpc_cas_read(cpc_t* sys) {
 
 /*=== FLOPPY DISC SUPPORT ====================================================*/
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data) {
-    if (0 == drive) {
+    if (1 >= drive) {
         cpc_t* sys = (cpc_t*) user_data;
-        return fdd_seek_track(&sys->fdd, track);
+        return fdd_seek_track(&sys->fdds[drive], track);
     }
     else {
         return UPD765_RESULT_NOT_READY;
@@ -1032,15 +1043,16 @@ static int _cpc_fdc_seektrack(int drive, int track, void* user_data) {
 }
 
 static int _cpc_fdc_seeksector(int drive, int side, upd765_sectorinfo_t* inout_info, void* user_data) {
-    if (0 == drive) {
+    if (1 >= drive) {
         cpc_t* sys = (cpc_t*) user_data;
+        fdd_t *fdd = &sys->fdds[drive];
         const uint8_t c = inout_info->c;
         const uint8_t h = inout_info->h;
         const uint8_t r = inout_info->r;
         const uint8_t n = inout_info->n;
-        int res = fdd_seek_sector(&sys->fdd, side, c, h, r, n);
+        int res = fdd_seek_sector(fdd, side, c, h, r, n);
         if (res == UPD765_RESULT_SUCCESS) {
-            const fdd_sector_t* sector = &sys->fdd.disc.tracks[side][sys->fdd.cur_track_index].sectors[sys->fdd.cur_sector_index];
+            const fdd_sector_t* sector = &fdd->disc.tracks[side][fdd->cur_track_index].sectors[fdd->cur_sector_index];
             inout_info->c = sector->info.upd765.c;
             inout_info->h = sector->info.upd765.h;
             inout_info->r = sector->info.upd765.r;
@@ -1056,9 +1068,9 @@ static int _cpc_fdc_seeksector(int drive, int side, upd765_sectorinfo_t* inout_i
 }
 
 static int _cpc_fdc_read(int drive, int side, void* user_data, uint8_t* out_data) {
-    if (0 == drive) {
+    if (1 >= drive) {
         cpc_t* sys = (cpc_t*) user_data;
-        return fdd_read(&sys->fdd, side, out_data);
+        return fdd_read(&sys->fdds[drive], side, out_data);
     }
     else {
         return UPD765_RESULT_NOT_READY;
@@ -1067,12 +1079,13 @@ static int _cpc_fdc_read(int drive, int side, void* user_data, uint8_t* out_data
 
 static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info) {
     CHIPS_ASSERT((side >= 0) && (side < 2));
-    if (0 == drive) {
+    if (1 >= drive) {
         cpc_t* sys = (cpc_t*) user_data;
-        if (sys->fdd.has_disc && sys->fdd.motor_on) {
+        fdd_t *fdd = &sys->fdds[drive];
+        if (fdd->has_disc && fdd->motor_on) {
             // FIXME: this should be a fdd_ call
-            out_info->physical_track = sys->fdd.cur_track_index;
-            const fdd_sector_t* sector = &sys->fdd.disc.tracks[side][sys->fdd.cur_track_index].sectors[0];
+            out_info->physical_track = fdd->cur_track_index;
+            const fdd_sector_t* sector = &fdd->disc.tracks[side][fdd->cur_track_index].sectors[0];
             out_info->c = sector->info.upd765.c;
             out_info->h = sector->info.upd765.h;
             out_info->r = sector->info.upd765.r;
@@ -1087,12 +1100,13 @@ static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_secto
 
 static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* out_info) {
     cpc_t* sys = (cpc_t*) user_data;
-    if ((0 == drive) && sys->fdd.has_disc) {
-        out_info->physical_track = sys->fdd.cur_track_index;
-        out_info->sides = sys->fdd.disc.num_sides;
-        out_info->head = sys->fdd.cur_side;
-        out_info->ready = sys->fdd.motor_on;
-        out_info->write_protected = sys->fdd.disc.write_protected;
+    if ((1 >= drive) && sys->fdds[drive].has_disc) {
+        fdd_t *fdd = &sys->fdds[drive];
+        out_info->physical_track = fdd->cur_track_index;
+        out_info->sides = fdd->disc.num_sides;
+        out_info->head = fdd->cur_side;
+        out_info->ready = fdd->motor_on;
+        out_info->write_protected = fdd->disc.write_protected;
         out_info->fault = false;
     }
     else {
@@ -1106,18 +1120,30 @@ static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* o
 }
 
 bool cpc_insert_disc(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return fdd_cpc_insert_dsk(&sys->fdd, ptr, num_bytes);
+    return cpc_insert_disc_in_drive(sys, 0, ptr, num_bytes);
+}
+
+bool cpc_insert_disc_in_drive(cpc_t* sys, int drive, const uint8_t* ptr, int num_bytes) {
+    CHIPS_ASSERT(sys && sys->valid && 1 >= drive);
+    return fdd_cpc_insert_dsk(&sys->fdds[drive], ptr, num_bytes);
 }
 
 void cpc_remove_disc(cpc_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    fdd_eject_disc(&sys->fdd);
+    cpc_remove_disc_in_drive(sys, 0);
+}
+
+void cpc_remove_disc_in_drive(cpc_t* sys, int drive) {
+    CHIPS_ASSERT(sys && sys->valid && 1 >= drive);
+    fdd_eject_disc(&sys->fdds[drive]);
 }
 
 bool cpc_disc_inserted(cpc_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return fdd_disc_inserted(&sys->fdd);
+    return cpc_disc_inserted_in_drive(sys, 0);
+}
+
+bool cpc_disc_inserted_in_drive(cpc_t* sys, int drive) {
+    CHIPS_ASSERT(sys && sys->valid && 1 >= drive);
+    return fdd_disc_inserted(&sys->fdds[drive]);
 }
 
 int cpc_std_display_width(void) {
