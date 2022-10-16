@@ -171,6 +171,7 @@ extern "C" {
 #define MC6847_BOTTOM_BORDER_LINES  (26)    /* 26 lines bottom border */
 #define MC6847_VRETRACE_LINES       (6)     /* 6 'lines' for vertical retrace */
 #define MC6847_ALL_LINES            (262)   /* all of the above */
+#define MC6847_TICKS_PER_SCANLINE   (228)   /* number of ticks per scan line */
 #define MC6847_DISPLAY_START        (MC6847_VBLANK_LINES+MC6847_TOP_BORDER_LINES)
 #define MC6847_DISPLAY_END          (MC6847_DISPLAY_START+MC6847_DISPLAY_LINES)
 #define MC6847_BOTTOM_BORDER_END    (MC6847_DISPLAY_END+MC6847_BOTTOM_BORDER_LINES)
@@ -187,8 +188,8 @@ extern "C" {
 /* horizontal border width */
 #define MC6847_BORDER_PIXELS ((MC6847_DISPLAY_WIDTH-MC6847_IMAGE_WIDTH)/2)
 
-/* the MC6847 is always clocked at 3.579 MHz */
-#define MC6847_TICK_HZ (3579545)
+/* the MC6847 is normally clocked at 3.579 MHz */
+#define MC6847_STANDARD_TICK_HZ (3579545)
 
 /* fixed point precision for more precise error accumulation */
 #define MC6847_FIXEDPOINT_SCALE (16)
@@ -200,11 +201,14 @@ typedef uint64_t (*mc6847_fetch_t)(uint64_t pins, void* user_data);
 typedef struct {
     /* the CPU tick rate in hz */
     int tick_hz;
+    /* the MC6847 tick rate in hz */
+    int mc6847_tick_hz;
     /* pointer to an RGBA8 framebuffer where video image is written to */
     uint32_t* rgba8_buffer;
     /* size of rgba8_buffer in bytes (must be at least 320*244*4=312320 bytes) */
     size_t rgba8_buffer_size;
     /* memory-fetch callback */
+    uint32_t *palette;
     mc6847_fetch_t fetch_cb;
     /* optional user-data for the fetch callback */
     void* user_data;
@@ -224,12 +228,16 @@ typedef struct {
     uint32_t alnum_orange;
     uint32_t alnum_dark_orange;
 
+    /* border color, picked only at end of active area */
+    uint32_t border_color;
+
     /* internal counters */
     int h_count;
     int h_sync_start;
     int h_sync_end;
     int h_period;
     int l_count;
+    int h_fetchpos;
 
     /* true during field-sync */
     bool fs;
@@ -269,26 +277,22 @@ void mc6847_init(mc6847_t* vdg, const mc6847_desc_t* desc) {
     CHIPS_ASSERT(desc->rgba8_buffer);
     CHIPS_ASSERT(desc->rgba8_buffer_size >= (MC6847_DISPLAY_WIDTH*MC6847_DISPLAY_HEIGHT*sizeof(uint32_t)));
     CHIPS_ASSERT(desc->fetch_cb);
-    CHIPS_ASSERT((desc->tick_hz > 0) && (desc->tick_hz < MC6847_TICK_HZ));
+    CHIPS_ASSERT(desc->tick_hz > 0);
+    CHIPS_ASSERT(desc->mc6847_tick_hz > 0);
 
     memset(vdg, 0, sizeof(*vdg));
     vdg->rgba8_buffer = desc->rgba8_buffer;
     vdg->fetch_cb = desc->fetch_cb;
     vdg->user_data = desc->user_data;
 
-    /* compute counter periods, the MC6847 is always clocked at 3.579 MHz,
-       and the frequency of how the tick function is called must be 
-       communicated to the init function
-
-       one scanline is 228 3.5 MC6847 ticks
-    */
-    int64_t tmp = (228LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / MC6847_TICK_HZ;
+    /* compute counter periods */
+    int64_t tmp = (((int64_t) MC6847_TICKS_PER_SCANLINE) * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / desc->mc6847_tick_hz;
     vdg->h_period = (int) tmp;
     /* hsync starts at tick 10 of a scanline */
-    tmp = (10LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / MC6847_TICK_HZ;
+    tmp = (10LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / desc->mc6847_tick_hz;
     vdg->h_sync_start = (int) tmp;
     /* hsync is 16 ticks long */
-    tmp = (26LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / MC6847_TICK_HZ;
+    tmp = (26LL * desc->tick_hz * MC6847_FIXEDPOINT_SCALE) / desc->mc6847_tick_hz;
     vdg->h_sync_end = (int) tmp;
 
     /* the default graphics mode color palette
@@ -313,21 +317,33 @@ void mc6847_init(mc6847_t* vdg, const mc6847_desc_t* desc) {
 
         color intensities are slightly boosted
     */
-    vdg->palette[0] = _MC6847_RGBA(19, 146, 11);      /* green */
-    vdg->palette[1] = _MC6847_RGBA(155, 150, 10);     /* yellow */
-    vdg->palette[2] = _MC6847_RGBA(2, 22, 175);       /* blue */
-    vdg->palette[3] = _MC6847_RGBA(155, 22, 7);       /* red */
-    vdg->palette[4] = _MC6847_RGBA(141, 150, 154);    /* buff */
-    vdg->palette[5] = _MC6847_RGBA(15, 143, 155);     /* cyan */
-    vdg->palette[6] = _MC6847_RGBA(139, 39, 155);     /* cyan */
-    vdg->palette[7] = _MC6847_RGBA(140, 31, 11);      /* orange */
+    if(desc->palette == NULL) {
+      vdg->palette[0] = _MC6847_RGBA(19, 146, 11);      /* green */
+      vdg->palette[1] = _MC6847_RGBA(155, 150, 10);     /* yellow */
+      vdg->palette[2] = _MC6847_RGBA(2, 22, 175);       /* blue */
+      vdg->palette[3] = _MC6847_RGBA(155, 22, 7);       /* red */
+      vdg->palette[4] = _MC6847_RGBA(141, 150, 154);    /* buff */
+      vdg->palette[5] = _MC6847_RGBA(15, 143, 155);     /* cyan */
+      vdg->palette[6] = _MC6847_RGBA(139, 39, 155);     /* cyan */
+      vdg->palette[7] = _MC6847_RGBA(140, 31, 11);      /* orange */
 
-    /* black level color, and alpha-numeric display mode colors */
-    vdg->black = 0xFF111111;
-    vdg->alnum_green = _MC6847_RGBA(19, 146, 11);
-    vdg->alnum_dark_green = 0xFF002400;
-    vdg->alnum_orange = _MC6847_RGBA(140, 31, 11);
-    vdg->alnum_dark_orange = 0xFF000E22;
+      /* black level color, and alpha-numeric display mode colors */
+      vdg->black = 0xFF111111;
+      vdg->alnum_green = _MC6847_RGBA(19, 146, 11);
+      vdg->alnum_dark_green = 0xFF002400;
+      vdg->alnum_orange = _MC6847_RGBA(140, 31, 11);
+      vdg->alnum_dark_orange = 0xFF000E22;
+    } else {
+      /* custom palette */ 
+      for(int i=0; i<8; i++) { 
+         vdg->palette[i] = desc->palette[i];
+      }
+      vdg->black = desc->palette[8];
+      vdg->alnum_green = desc->palette[9];
+      vdg->alnum_dark_green = desc->palette[10];
+      vdg->alnum_orange = desc->palette[11];
+      vdg->alnum_dark_orange = desc->palette[12];
+    }  
 }
 
 void mc6847_reset(mc6847_t* vdg) {
@@ -421,20 +437,20 @@ static inline uint32_t _mc6847_border_color(mc6847_t* vdg, uint64_t pins) {
 
 static void _mc6847_decode_border(mc6847_t* vdg, uint64_t pins, int y) {
     uint32_t* dst = &(vdg->rgba8_buffer[y * MC6847_DISPLAY_WIDTH]);
-    uint32_t c = _mc6847_border_color(vdg, pins);
     for (int x = 0; x < MC6847_DISPLAY_WIDTH; x++) {
-        *dst++ = c;
+        *dst++ = vdg->border_color;
     }
 }
 
 static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
     uint32_t* dst = &(vdg->rgba8_buffer[(y+MC6847_TOP_BORDER_LINES) * MC6847_DISPLAY_WIDTH]);
-    uint32_t bc = _mc6847_border_color(vdg, pins);
+    vdg->border_color = _mc6847_border_color(vdg, pins);
+
     void* ud = vdg->user_data;
 
     /* left border */
     for (int i = 0; i < MC6847_BORDER_PIXELS; i++) {
-        *dst++ = bc;
+        *dst++ = vdg->border_color;
     }
 
     /* visible scanline */
@@ -456,6 +472,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
             uint32_t fg_color = (pins & MC6847_CSS) ? vdg->palette[4] : vdg->palette[0];
             for (int x = 0; x < bytes_per_row; x++) {
                 MC6847_SET_ADDR(pins, addr++);
+                vdg->h_fetchpos = x;
                 pins = vdg->fetch_cb(pins, ud);
                 uint8_t m = MC6847_GET_DATA(pins);
                 for (int p = 7; p >= 0; p--) {
@@ -482,6 +499,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
             uint16_t addr = (y / row_height) * bytes_per_row;
             for (int x = 0; x < bytes_per_row; x++) {
                 MC6847_SET_ADDR(pins, addr++);
+                vdg->h_fetchpos = x;
                 pins = vdg->fetch_cb(pins, ud);
                 uint8_t m = MC6847_GET_DATA(pins);
                 for (int p = 6; p >= 0; p -= 2) {
@@ -507,6 +525,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
         uint32_t alnum_bg = (pins & MC6847_CSS) ? vdg->alnum_dark_orange : vdg->alnum_dark_green;
         for (int x = 0; x < 32; x++) {
             MC6847_SET_ADDR(pins, addr++);
+            vdg->h_fetchpos = x;
             pins = vdg->fetch_cb(pins, ud);
             uint8_t chr = MC6847_GET_DATA(pins);
             if (pins & MC6847_AS) {
@@ -569,7 +588,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, int y) {
 
     /* right border */
     for (int i = 0; i < MC6847_BORDER_PIXELS; i++) {
-        *dst++ = bc;
+        *dst++ = vdg->border_color;
     }
 
     return pins;
