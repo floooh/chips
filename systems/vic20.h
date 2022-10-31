@@ -255,13 +255,15 @@ int vic20_display_height(vic20_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _VIC20_STD_DISPLAY_WIDTH (232)  /* actually 229, but rounded up to 8x */
-#define _VIC20_STD_DISPLAY_HEIGHT (272)
+/* checked on CRT PAL display */
+#define _VIC20_DISPLAY_X (5*8)
+#define _VIC20_DISPLAY_Y (6*8)
+#define _VIC20_STD_DISPLAY_WIDTH  (208)
+#define _VIC20_STD_DISPLAY_HEIGHT (264)
+
 #define _VIC20_DBG_DISPLAY_WIDTH ((_M6561_HTOTAL+1)*4)
 #define _VIC20_DBG_DISPLAY_HEIGHT (_M6561_VTOTAL+1)
 #define _VIC20_DISPLAY_SIZE (_VIC20_DBG_DISPLAY_WIDTH*_VIC20_DBG_DISPLAY_HEIGHT*4)
-#define _VIC20_DISPLAY_X (32)
-#define _VIC20_DISPLAY_Y (8)
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data);
 static void _vic20_init_key_map(vic20_t* sys);
