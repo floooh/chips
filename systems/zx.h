@@ -836,17 +836,86 @@ typedef struct {
     uint8_t page_nr;
 } _zx_z80_page_header;
 
-int zx_quicksave_size(zx_t* sys, bool compress) {
-    if (compress) {
-        // FIXME: compressed not supported yet
-        return false;  
+static int _zx_compress(zx_t* sys, int read, int num_bytes, uint8_t* dest, int dest_bytes) {
+    const int read_end = read + num_bytes;
+    int write = 0;
+    bool was_ed = false;
+    while (read < read_end) {
+        const uint8_t byte = sys->ram[read >> 14][read & 0x3FFF];
+        read++;
+        uint8_t count = 1;
+        while (read < read_end && sys->ram[read >> 14][read & 0x3FFF] == byte && count < 255) {
+            read++;
+            count++;
+        }
+        if ((byte == 0xED && count >= 2) || (byte != 0xED && count >= 5)) {
+            if (was_ed) {
+                if (write + 5 > dest_bytes) {
+                    return 0;
+                }
+                if (dest != NULL) {
+                    dest[write] = byte;
+                    dest[write + 1] = 0xED; dest[write + 2] = 0xED;
+                    dest[write + 3] = count - 1; dest[write + 4] = byte;
+                }
+                write += 5;
+                was_ed = false;
+            }
+            else {
+                if (write + 4 > dest_bytes) {
+                    return 0;
+                }
+                if (dest != NULL) {
+                    dest[write] = 0xED; dest[write + 1] = 0xED;
+                    dest[write + 2] = count; dest[write + 3] = byte;
+                }
+                write += 4;
+            }
+        }
+        else {
+            if (write + count > dest_bytes) {
+                return 0;
+            }
+            if (dest != NULL) {
+                for (uint8_t i = 0; i < count; i++) {
+                    dest[write + i] = byte;
+                }
+            }
+            write += count;
+            was_ed = byte == 0xED;
+        }
     }
+    return write;
+}
+
+int zx_quicksave_size(zx_t* sys, bool compress) {
     int size = sizeof(_zx_z80_header);
     if (sys->type == ZX_TYPE_48K) {
-        size += 0x4000 * 3;
+        if (compress) {
+            int comp = _zx_compress(sys, 0, 0x4000 * 3, NULL, INT_MAX);
+            if (comp == 0) {
+                return 0;
+            }
+            size += comp + 4;
+        }
+        else {
+            size += 0x4000 * 3;
+        }
     }
     else if (sys->type == ZX_TYPE_128) {
-        size += sizeof(_zx_z80_ext_header) + (sizeof(_zx_z80_page_header) + 0x4000) * 8;
+        size += sizeof(_zx_z80_ext_header) + sizeof(_zx_z80_page_header) * 8;
+        if (compress) {
+            for (uint8_t i = 0; i < 8; i++) {
+                int comp = _zx_compress(sys, 0x4000 * i, 0x4000, NULL, INT_MAX);
+                if (comp == 0) {
+                    return 0;
+                }
+                size += comp;
+            }
+        }
+        else {
+            size += 0x4000 * 8;
+        }
     }
     return size;
 }
