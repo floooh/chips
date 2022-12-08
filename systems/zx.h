@@ -949,6 +949,7 @@ bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress) {
     hdr->SP_h = sys->cpu.sp >> 8; hdr->SP_l = sys->cpu.sp;
     hdr->I = sys->cpu.i;
     hdr->R = sys->cpu.r & 0x7F; hdr->flags0 |= (sys->cpu.r>>7) & 1;
+    hdr->flags0 |= (compress && sys->type == ZX_TYPE_48K) ? 0x20 : 0x00;
     hdr->IFF2 = sys->cpu.iff2;
     hdr->EI = sys->cpu.iff1;
     hdr->flags1 |= sys->cpu.im;
