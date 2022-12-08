@@ -921,6 +921,7 @@ bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress) {
         for (uint8_t i = 0; i < AY38910_NUM_REGISTERS; i++) {
             ext_hdr->audio[i] = sys->ay.reg[i];
         }
+        ext_hdr->rom_0000_1fff = 0xFF;
         ext_hdr->rom_2000_3fff = 0xFF;
         for (uint8_t i = 0; i < 8; i++) {
             if (_zx_overflow(ptr, sizeof(_zx_z80_page_header), end_ptr)) {
