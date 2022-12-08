@@ -911,8 +911,8 @@ bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress) {
         _zx_z80_ext_header* ext_hdr = (_zx_z80_ext_header*) ptr;
         ptr += sizeof(*ext_hdr);
         memset(ext_hdr, 0, sizeof(*ext_hdr));
-        ext_hdr->len_h = sizeof(*ext_hdr)>>8;
-        ext_hdr->len_l = sizeof(*ext_hdr);
+        ext_hdr->len_h = (sizeof(*ext_hdr) - 2)>>8;
+        ext_hdr->len_l = sizeof(*ext_hdr) - 2;
         ext_hdr->PC_h = sys->cpu.pc >> 8; ext_hdr->PC_l = sys->cpu.pc;
         ext_hdr->hw_mode = 4;
         ext_hdr->out_7ffd = sys->last_7ffd_out;
