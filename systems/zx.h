@@ -924,15 +924,12 @@ bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress) {
         ext_hdr->rom_0000_1fff = 0xFF;
         ext_hdr->rom_2000_3fff = 0xFF;
         for (uint8_t i = 0; i < 8; i++) {
-            if (_zx_overflow(ptr, sizeof(_zx_z80_page_header), end_ptr)) {
+            if (_zx_overflow(ptr, sizeof(_zx_z80_page_header) + 0x4000, end_ptr)) {
                 return false;
             }
             _zx_z80_page_header* page_hdr = (_zx_z80_page_header*) ptr;
             ptr += sizeof(*page_hdr);
             page_hdr->page_nr = i + 3;
-            if (_zx_overflow(ptr, 0x4000, end_ptr)) {
-                return false;
-            }
             memcpy(ptr, sys->ram[i], 0x4000);
             page_hdr->len_h = 0xFF; page_hdr->len_l = 0xFF;
             ptr += 0x4000;
