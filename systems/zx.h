@@ -816,6 +816,7 @@ typedef struct {
     uint8_t audio[16];
     uint8_t tlow_l;
     uint8_t tlow_h;
+    uint8_t thi;
     uint8_t spectator_flags;
     uint8_t mgt_rom_paged;
     uint8_t multiface_rom_paged;
