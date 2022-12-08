@@ -155,6 +155,7 @@ typedef struct {
     uint32_t tick_count;
     uint8_t last_mem_config;    // last out to 0x7FFD
     uint8_t last_fe_out;        // last out value to 0xFE port
+    uint8_t last_7ffd_out;      // last out value to 0x7FFD port
     uint8_t blink_counter;      // incremented on each vblank
     int frame_scan_lines;
     int top_border_scanlines;
@@ -200,8 +201,11 @@ void zx_set_joystick_type(zx_t* sys, zx_joystick_type_t type);
 zx_joystick_type_t zx_joystick_type(zx_t* sys);
 // set joystick mask (combination of ZX_JOYSTICK_*)
 void zx_joystick(zx_t* sys, uint8_t mask);
+// save a ZX Z80 file with the emulator state
+int zx_quicksave_size(zx_t* sys, bool compress);
+bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress);
 // load a ZX Z80 file into the emulator
-bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes); 
+bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes);
 // get the standard framebuffer width and height in pixels
 int zx_std_display_width(void);
 int zx_std_display_height(void);
@@ -516,7 +520,9 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
             /* Spectrum 128 memory control (0.............0.)
                 http://8bit.yarek.pl/computer/zx.128/
             */
-            _zx_update_memory_map_zx128(sys, Z80_GET_DATA(pins));
+            const uint8_t data = Z80_GET_DATA(pins);
+            sys->last_7ffd_out = data;
+            _zx_update_memory_map_zx128(sys, data);
         }
         else if (((pins & (Z80_A15|Z80_A1)) == Z80_A15) && (sys->type == ZX_TYPE_128)) {
             // AY-3-8912 access (1*............0.)
@@ -829,8 +835,112 @@ typedef struct {
     uint8_t page_nr;
 } _zx_z80_page_header;
 
+int zx_quicksave_size(zx_t* sys, bool compress) {
+    if (compress) {
+        // FIXME: compressed not supported yet
+        return false;  
+    }
+    int size = sizeof(_zx_z80_header);
+    if (sys->type == ZX_TYPE_48K) {
+        size += 0x4000 * 3;
+    }
+    else if (sys->type == ZX_TYPE_128) {
+        size += sizeof(_zx_z80_ext_header) + (sizeof(_zx_z80_page_header) + 0x4000) * 8;
+    }
+    return size;
+}
+
 static bool _zx_overflow(const uint8_t* ptr, intptr_t num_bytes, const uint8_t* end_ptr) {
     return (ptr + num_bytes) > end_ptr;
+}
+
+bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress) {
+    if (compress) {
+        // FIXME: compressed not supported yet
+        return false;  
+    }
+    const uint8_t* end_ptr = ptr + num_bytes;
+    if (_zx_overflow(ptr, sizeof(_zx_z80_header), end_ptr)) {
+        return false;
+    }
+    _zx_z80_header* hdr = (_zx_z80_header*) ptr;
+    ptr += sizeof(*hdr);
+    memset(hdr, 0, sizeof(*hdr));
+    hdr->A = sys->cpu.a; hdr->F = sys->cpu.f;
+    hdr->B = sys->cpu.b; hdr->C = sys->cpu.c;
+    hdr->D = sys->cpu.d; hdr->E = sys->cpu.e;
+    hdr->H = sys->cpu.h; hdr->L = sys->cpu.l;
+    hdr->IX_h = sys->cpu.ix >> 8; hdr->IX_l = sys->cpu.ix;
+    hdr->IY_h = sys->cpu.iy >> 8; hdr->IY_l = sys->cpu.iy;
+    hdr->A_ = sys->cpu.af2 >> 8; hdr->F_ = sys->cpu.af2;
+    hdr->B_ = sys->cpu.bc2 >> 8; hdr->C_ = sys->cpu.bc2;
+    hdr->D_ = sys->cpu.de2 >> 8; hdr->E_ = sys->cpu.de2;
+    hdr->H_ = sys->cpu.hl2 >> 8; hdr->L_ = sys->cpu.hl2;
+    hdr->SP_h = sys->cpu.sp >> 8; hdr->SP_l = sys->cpu.sp;
+    hdr->I = sys->cpu.i;
+    hdr->R = sys->cpu.r & 0x7F; hdr->flags0 |= (sys->cpu.r>>7) & 1;
+    hdr->IFF2 = sys->cpu.iff2;
+    hdr->EI = sys->cpu.iff1;
+    hdr->flags1 |= sys->cpu.im;
+    switch (sys->border_color) {
+        default:
+        case 0xFF000000 & 0xFFD7D7D7: hdr->flags0 |= 0<<1; break;
+        case 0xFFFF0000 & 0xFFD7D7D7: hdr->flags0 |= 1<<1; break;
+        case 0xFF0000FF & 0xFFD7D7D7: hdr->flags0 |= 2<<1; break;
+        case 0xFFFF00FF & 0xFFD7D7D7: hdr->flags0 |= 3<<1; break;
+        case 0xFF00FF00 & 0xFFD7D7D7: hdr->flags0 |= 4<<1; break;
+        case 0xFFFFFF00 & 0xFFD7D7D7: hdr->flags0 |= 5<<1; break;
+        case 0xFF00FFFF & 0xFFD7D7D7: hdr->flags0 |= 6<<1; break;
+        case 0xFFFFFFFF & 0xFFD7D7D7: hdr->flags0 |= 7<<1; break;
+    }
+    if (sys->type == ZX_TYPE_48K) {
+        hdr->PC_h = sys->cpu.pc >> 8; hdr->PC_l = sys->cpu.pc;
+        if (_zx_overflow(ptr, 0x4000 * 3, end_ptr)) {
+            return false;
+        }
+        memcpy(ptr, sys->ram[0], 0x4000);
+        memcpy(ptr + 0x4000 * 1, sys->ram[1], 0x4000);
+        memcpy(ptr + 0x4000 * 2, sys->ram[2], 0x4000);
+        ptr += 0x4000 * 3;
+    }
+    else if (sys->type == ZX_TYPE_128) {
+        if (_zx_overflow(ptr, sizeof(_zx_z80_ext_header), end_ptr)) {
+            return false;
+        }
+        _zx_z80_ext_header* ext_hdr = (_zx_z80_ext_header*) ptr;
+        ptr += sizeof(*ext_hdr);
+        memset(ext_hdr, 0, sizeof(*ext_hdr));
+        ext_hdr->len_h = sizeof(*ext_hdr)>>8;
+        ext_hdr->len_l = sizeof(*ext_hdr);
+        ext_hdr->PC_h = sys->cpu.pc >> 8; ext_hdr->PC_l = sys->cpu.pc;
+        ext_hdr->hw_mode = 4;
+        ext_hdr->out_7ffd = sys->last_7ffd_out;
+        ext_hdr->flags = 0x07;
+        ext_hdr->out_fffd = sys->ay.addr;
+        for (uint8_t i = 0; i < AY38910_NUM_REGISTERS; i++) {
+            ext_hdr->audio[i] = sys->ay.reg[i];
+        }
+        ext_hdr->rom_2000_3fff = 0xFF;
+        for (uint8_t i = 0; i < 8; i++) {
+            if (_zx_overflow(ptr, sizeof(_zx_z80_page_header), end_ptr)) {
+                return false;
+            }
+            _zx_z80_page_header* page_hdr = (_zx_z80_page_header*) ptr;
+            ptr += sizeof(*page_hdr);
+            page_hdr->page_nr = i + 3;
+            if (_zx_overflow(ptr, 0x4000, end_ptr)) {
+                return false;
+            }
+            memcpy(ptr, sys->ram[i], 0x4000);
+            page_hdr->len_h = 0xFF; page_hdr->len_l = 0xFF;
+            ptr += 0x4000;
+        }
+    }
+    else {
+        return false;
+    }
+
+    return true;
 }
 
 bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
@@ -896,8 +1006,10 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
             dst_ptr = sys->ram[page_index];
         }
         if (0xFFFF == src_len) {
-            // FIXME: uncompressed not supported yet
-            return false;
+            if (_zx_overflow(ptr, 0x4000, end_ptr)) {
+                return false;
+            }
+            memcpy(dst_ptr, ptr, 0x4000);
         }
         else {
             // compressed
@@ -978,6 +1090,7 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
             }
             ay38910_set_addr_latch(&sys->ay, ext_hdr->out_fffd);
             _zx_update_memory_map_zx128(sys, ext_hdr->out_7ffd);
+            sys->last_7ffd_out = ext_hdr->out_7ffd;
         }
     }
     else {
