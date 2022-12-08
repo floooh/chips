@@ -925,10 +925,6 @@ static bool _zx_overflow(const uint8_t* ptr, intptr_t num_bytes, const uint8_t* 
 }
 
 bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress) {
-    if (compress) {
-        // FIXME: compressed not supported yet
-        return false;  
-    }
     const uint8_t* end_ptr = ptr + num_bytes;
     if (_zx_overflow(ptr, sizeof(_zx_z80_header), end_ptr)) {
         return false;
