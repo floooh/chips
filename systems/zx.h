@@ -929,9 +929,9 @@ bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress) {
             }
             _zx_z80_page_header* page_hdr = (_zx_z80_page_header*) ptr;
             ptr += sizeof(*page_hdr);
+            page_hdr->len_h = 0xFF; page_hdr->len_l = 0xFF;
             page_hdr->page_nr = i + 3;
             memcpy(ptr, sys->ram[i], 0x4000);
-            page_hdr->len_h = 0xFF; page_hdr->len_l = 0xFF;
             ptr += 0x4000;
         }
     }
