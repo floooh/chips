@@ -966,13 +966,26 @@ bool zx_quicksave(zx_t* sys, uint8_t* ptr, int num_bytes, bool compress) {
     }
     if (sys->type == ZX_TYPE_48K) {
         hdr->PC_h = sys->cpu.pc >> 8; hdr->PC_l = sys->cpu.pc;
-        if (_zx_overflow(ptr, 0x4000 * 3, end_ptr)) {
-            return false;
+        if (compress) {
+            int comp = _zx_compress(sys, 0, 0x4000 * 3, ptr, (int)(end_ptr - ptr));
+            if (comp == 0) {
+                return false;
+            }
+            ptr += comp;
+            if (_zx_overflow(ptr, 4, end_ptr)) {
+                return false;
+            }
+            *ptr++ = 0x00; *ptr++ = 0xED; *ptr++ = 0xED; *ptr++ = 0x00;
         }
-        memcpy(ptr, sys->ram[0], 0x4000);
-        memcpy(ptr + 0x4000 * 1, sys->ram[1], 0x4000);
-        memcpy(ptr + 0x4000 * 2, sys->ram[2], 0x4000);
-        ptr += 0x4000 * 3;
+        else {
+            if (_zx_overflow(ptr, 0x4000 * 3, end_ptr)) {
+                return false;
+            }
+            memcpy(ptr, sys->ram[0], 0x4000);
+            memcpy(ptr + 0x4000 * 1, sys->ram[1], 0x4000);
+            memcpy(ptr + 0x4000 * 2, sys->ram[2], 0x4000);
+            ptr += 0x4000 * 3;
+        }
     }
     else if (sys->type == ZX_TYPE_128) {
         if (_zx_overflow(ptr, sizeof(_zx_z80_ext_header), end_ptr)) {
