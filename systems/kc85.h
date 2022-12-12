@@ -6,7 +6,7 @@
 
     #define CHIPS_IMPL
 
-    before you include this file in *one* C file to create the 
+    before you include this file in *one* C file to create the
     implementation.
 
     Define the KC85 type to build before including this header (both the
@@ -17,7 +17,7 @@
         CHIPS_KC85_TYPE_4
 
     Optionally provide the following macros with your own implementation
-    
+
     CHIPS_ASSERT(c)
         your own assert macro (default: assert(c))
 
@@ -79,7 +79,7 @@
         accesses to this RAM block are visible as 'display needling' artefacts.
 
         (NOTE: the slow video memory access is not emulation, display needling
-        is emulated, but I haven't verified against real hardware 
+        is emulated, but I haven't verified against real hardware
         whether it actually looks correct)
 
     ### Special Operating System Conditions
@@ -87,7 +87,7 @@
         - the index register IX is reserved for operating system use
           and must not be changed while interrupts are enabled
         - only interrupt mode IM2 is supported
-    
+
     ### Interrupt Vectors:
         - 01E4:     PIO-A (cassette tape input)
         - 01E6:     PIO-B (keyboard input)
@@ -95,10 +95,10 @@
         - 01EA:     CTC-1 (cassette tape output)
         - 01EC:     CTC-2 (timer interrupt used for sound length)
 
-    ## IO Port Map: 
+    ## IO Port Map:
         - 80:   Expansion module control (OUT: write module control byte,
-                IN: read module id in slot). The upper 8 bits on the 
-                address bus identify the module slot (in the base 
+                IN: read module id in slot). The upper 8 bits on the
+                address bus identify the module slot (in the base
                 unit the two slot addresses are 08 and 0C).
         - 88:   PIO port A, data
         - 89:   PIO port B, data
@@ -108,7 +108,7 @@
         - 8D:   CTC channel 1
         - 8E:   CTC channel 2
         - 8F:   CTC channel 3
-        
+
         The PIO port A and B bits are used to control bank switching and
         other hardware features:
 
@@ -132,11 +132,11 @@
         - CTC-1:    sound output (right?)
         - CTC-2:    foreground color blink frequency, timer for cassette input
         - CTC-3:    timer for keyboard input
-            
+
     ## The Module System:
 
     The emulator supports the most common RAM- and ROM-modules,
-    but doesn't emulate special-hardware modules like the V24 or 
+    but doesn't emulate special-hardware modules like the V24 or
     A/D converter module.
 
     The module system works with 4 byte values:
@@ -145,7 +145,7 @@
     - The **module id**, this is a fixed value that identifies a module type.
       All 16 KByte ROM application modules had the same id.
       The module id can be queried by reading from port 80, with the
-      slot address in the upper 8 bit of the 16-bit port address (so 
+      slot address in the upper 8 bit of the 16-bit port address (so
       to query what module is in slot C, you would do an IN A,(C),
       with the value 0C80 in BC). If no module is in the slot, the value
       FF would be written to A, otherwise the module's id byte.
@@ -154,7 +154,7 @@
       this essentially clamps a module's address to a 'round' 8- or
       16 KByte value (these are the 2 values I've seen in the wild)
     - The module control byte, this controls whether a module is currently
-      active (bit 0), write-protected (bit 1), and at what address the 
+      active (bit 0), write-protected (bit 1), and at what address the
       module is mapped into the 16-bit address space (upper 3 bits)
 
     The module system is controlled with the SWITCH command, for instance
@@ -174,7 +174,7 @@
     ## The KC85/3
 
     The KC85/3 had the same hardware as the KC85/2 but came with a builtin
-    8 KByte BASIC ROM at address C000..DFFF, and the OS was bumped to 
+    8 KByte BASIC ROM at address C000..DFFF, and the OS was bumped to
     CAOS 3.1, now taking up a full 8 KBytes. Despite being just a minor
     update to the KC85/2, the KC85/3 was (most likely) the most popular
     model of the KC85/2 family.
@@ -189,14 +189,14 @@
     - Improved color attribute resolution (8x1 pixels instead of 8x4)
     - An additional per-pixel color mode which allowed to assign each
       individual pixel one of 4 hardwired colors at full 320x256
-      resolution, this was realized by using 1 bit from the 
+      resolution, this was realized by using 1 bit from the
       pixel-bank and the other bit from the color-bank, so setting
       one pixel required 2 memory accesses and a bank switch. Maybe
       this was the reason why this mode was hardly used.
     - Improved '90-degree-rotated' video memory layout, the 320x256
       pixel video memory was organized as 40 vertical stacks of 256 bytes,
       and the entire video memory was linear, this was perfectly suited
-      to the Z80's 8+8 bit register pairs. The upper 8-bit register 
+      to the Z80's 8+8 bit register pairs. The upper 8-bit register
       (for instance H) would hold the 'x coordinate' (columns 0 to 39),
       and the lower 8-bit register (L) the y coordinate (lines 0 to 255).
     - 64 KByte video memory was organized into 4 16-KByte banks, 2 banks
@@ -211,7 +211,7 @@
 
     New bits in PIO port B:
         - bit 5:    enable the 2 stacked RAM banks at address 8000
-        - bit 6:    write protect RAM bank at address 8000 
+        - bit 6:    write protect RAM bank at address 8000
 
     Output port 84:
         - bit 0:    select  the pixel/color bank pair 0 or 1 for display
@@ -250,7 +250,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -302,6 +302,19 @@ extern "C" {
 #define KC85_IO84_MEMORY_BITS   (KC85_IO84_SEL_CPU_COLOR|KC85_IO84_SEL_CPU_IMG|KC85_IO84_SEL_RAM8)
 #define KC85_IO86_MEMORY_BITS   (KC85_IO86_RAM4|KC85_IO86_RAM4_RO|KC85_IO86_CAOS_ROM_C)
 
+typedef struct {
+    // the required overall framebuffer dimensions, may include debug visualization
+    // width will be a multiple of 2^N
+    struct {
+        int width, height;
+        size_t size_bytes;
+    } framebuffer;
+    // the currently visible area in the framebuffer rectangle
+    struct {
+        int x, y, width, height;
+    } screen;
+} kc85_display_info_t;
+
 // audio sample callback
 typedef struct {
     void (*func)(const float* samples, int num_samples, void* user_data);
@@ -327,17 +340,14 @@ typedef struct {
 typedef struct {
     const void* ptr;
     size_t size;
-} kc85_rom_image_t;
+} kc85_range_t;
 
 // config parameters for kc85_init()
 typedef struct {
     kc85_debug_t debug;         // optional debugger hook
 
     // video output config (if you don't need display decoding, set pixel_buffer to 0)
-    struct {
-        void* ptr;      // pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes
-        size_t size;    // size of the pixel buffer in bytes
-    } pixel_buffer;
+    kc85_range_t framebuffer;
 
     // audio output config (if you don't want audio, set audio_cb to zero)
     struct {
@@ -353,15 +363,15 @@ typedef struct {
     // ROM images
     struct {
         #if defined(CHIPS_KC85_TYPE_2)
-            kc85_rom_image_t caos22;    // CAOS 2.2 (used in KC85/2)
+            kc85_range_t caos22;    // CAOS 2.2 (used in KC85/2)
         #elif defined(CHIPS_KC85_TYPE_3)
-            kc85_rom_image_t caos31;    // CAOS 3.1 (used in KC85/3)
+            kc85_range_t caos31;    // CAOS 3.1 (used in KC85/3)
         #elif defined(CHIPS_KC85_TYPE_4)
-            kc85_rom_image_t caos42c;   // CAOS 4.2 at 0xC000 (KC85/4)
-            kc85_rom_image_t caos42e;   // CAOS 4.2 at 0xE000 (KC85/4)
+            kc85_range_t caos42c;   // CAOS 4.2 at 0xC000 (KC85/4)
+            kc85_range_t caos42e;   // CAOS 4.2 at 0xE000 (KC85/4)
         #endif
         #if defined(CHIPS_KC85_TYPE_3) || defined(CHIPS_KC85_TYPE_4)
-            kc85_rom_image_t kcbasic;   // same BASIC version for KC85/3 and KC85/4
+            kc85_range_t kcbasic;   // same BASIC version for KC85/3 and KC85/4
         #endif
     } roms;
 } kc85_desc_t;
@@ -397,7 +407,7 @@ typedef struct {
 } kc85_slot_t;
 
 /* KC85 expansion system state:
-    NOTE that each expansion slot needs its own memory-mapping layer starting 
+    NOTE that each expansion slot needs its own memory-mapping layer starting
     at layer 1 (layer 0 is used by the base system)
 */
 typedef struct {
@@ -433,7 +443,7 @@ typedef struct {
     bool valid;
     kc85_debug_t debug;
 
-    uint32_t* pixel_buffer;
+    uint32_t* fb;
     struct {
         kc85_audio_callback_t callback;
         int num_samples;
@@ -459,16 +469,10 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc);
 void kc85_discard(kc85_t* sys);
 // reset a KC85 instance
 void kc85_reset(kc85_t* sys);
+// query information about display requirements, can be called with nullptr
+kc85_display_info_t kc85_query_display_info(kc85_t* sys);
 // run KC85 emulation for a given number of microseconds, returns number of ticks executed
 uint32_t kc85_exec(kc85_t* sys, uint32_t micro_seconds);
-// get the standard framebuffer width and height in pixels
-int kc85_std_display_width(void);
-int kc85_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-size_t kc85_max_display_size(void);
-// get the current framebuffer width and height in pixels
-int kc85_display_width(kc85_t* sys);
-int kc85_display_height(kc85_t* sys);
 // send a key-down event
 void kc85_key_down(kc85_t* sys, int key_code);
 // send a key-up event
@@ -514,15 +518,23 @@ bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _KC85_DISPLAY_WIDTH (320)
-#define _KC85_DISPLAY_HEIGHT (256)
-#define _KC85_DISPLAY_SIZE (_KC85_DISPLAY_WIDTH*_KC85_DISPLAY_HEIGHT*4)
 #if defined(CHIPS_KC85_TYPE_4)
 #define _KC85_FREQUENCY (1770000)
 #else
 #define _KC85_FREQUENCY (1750000)
 #endif
 #define _KC85_IRM0_PAGE (4)
+#define _KC85_FRAMEBUFFER_WIDTH (512)   // multiple of 256
+#define _KC85_FRAMEBUFFER_HEIGHT (256)  // FIXME: allow border?
+#define _KC85_FRAMEBUFFER_SIZE_BYTES (_KC85_FRAMEBUFFER_WIDTH * _KC85_FRAMEBUFFER_HEIGHT * 4)
+#define _KC85_DISPLAY_WIDTH (320)
+#define _KC85_DISPLAY_HEIGHT (256)
+#if defined(CHIPS_KC85_TYPE4)
+#define _KC85_SCANLINE_TICKS (113)
+#else
+#define _KC85_SCANLINE_TICKS (112)
+#endif
+#define _KC85_NUM_SCANLINES (312)
 
 /*
     IO address decoding.
@@ -591,13 +603,13 @@ static inline uint32_t _kc85_xorshift32(uint32_t x) {
 
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _KC85_DISPLAY_SIZE)));
+    CHIPS_ASSERT((0 == desc->framebuffer.ptr) || (desc->framebuffer.ptr && (desc->framebuffer.size >= _KC85_FRAMEBUFFER_SIZE_BYTES)));
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(kc85_t));
     sys->valid = true;
     sys->freq_hz = _KC85_FREQUENCY;
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
+    sys->fb = (uint32_t*) desc->framebuffer.ptr;
     sys->patch_callback = desc->patch_callback;
     sys->debug = desc->debug;
 
@@ -748,7 +760,7 @@ static inline void _kc85_decode_8pixels(uint32_t* ptr, uint8_t pixels, uint8_t c
     ptr[4] = pixels & 0x08 ? fg : bg;
     ptr[5] = pixels & 0x04 ? fg : bg;
     ptr[6] = pixels & 0x02 ? fg : bg;
-    ptr[7] = pixels & 0x01 ? fg : bg;   
+    ptr[7] = pixels & 0x01 ? fg : bg;
 }
 
 #if defined(CHIPS_KC85_TYPE_2) || defined(CHIPS_KC85_TYPE_3)
@@ -770,8 +782,8 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
         // decode visible 8-pixel group
         uint32_t x = sys->h_tick>>1;
         uint32_t y = sys->v_count;
-        if (sys->pixel_buffer && (y < 256) && (x < 40)) {
-            uint32_t* dst_ptr = &(sys->pixel_buffer[y*_KC85_DISPLAY_WIDTH + x*8]);
+        if (sys->fb && (y < 256) && (x < 40)) {
+            uint32_t* dst_ptr = &(sys->fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
             uint32_t pixel_offset, color_offset;
             if (x < 0x20) {
                 // left 256x256 area
@@ -794,10 +806,10 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
     }
     // scanline and frame update
     sys->h_tick++;
-    if (sys->h_tick >= 112) {
+    if (sys->h_tick >= _KC85_SCANLINE_TICKS) {
         sys->h_tick = 0;
         sys->v_count++;
-        if (sys->v_count == 312) {
+        if (sys->v_count == _KC85_NUM_SCANLINES) {
             sys->v_count = 0;
             // vertical sync, trigger CTC CLKTRG2 input for video blinking effect
             pins |= Z80CTC_CLKTRG2;
@@ -825,8 +837,8 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
             uint32_t x = sys->h_tick>>1;
             uint32_t y = sys->v_count;
-            if (sys->pixel_buffer && (y < 256) && (x < 40)) {
-                uint32_t* dst_ptr = &(sys->pixel_buffer[y*_KC85_DISPLAY_WIDTH + x*8]);
+            if (sys->fb && (y < 256) && (x < 40)) {
+                uint32_t* dst_ptr = &(sys->fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
                 uint32_t irm_index = (sys->io84 & 1) * 2;
                 const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
                 const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE + irm_index + 1];
@@ -841,8 +853,8 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             // KC85/4 "hicolor" mode
             uint32_t x = sys->h_tick>>1;
             uint32_t y = sys->v_count;
-            if (sys->pixel_buffer && (y < 256) && (x < 40)) {
-                uint32_t* dst = &(sys->pixel_buffer[y*_KC85_DISPLAY_WIDTH + x*8]);
+            if (sys->fb && (y < 256) && (x < 40)) {
+                uint32_t* dst = &(sys->fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
                 uint32_t irm_index = (sys->io84 & 1) * 2;
                 const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
                 const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE + irm_index + 1];
@@ -868,10 +880,10 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
 
     // advance raster counters
     sys->h_tick++;
-    if (sys->h_tick >= 113) {
+    if (sys->h_tick >= _KC85_SCANLINE_TICKS) {
         sys->h_tick = 0;
         sys->v_count++;
-        if (sys->v_count == 312) {
+        if (sys->v_count == _KC85_NUM_SCANLINES) {
             sys->v_count = 0;
             pins |= Z80CTC_CLKTRG2;
         }
@@ -1113,7 +1125,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
            mem_map_rom(&sys->mem, 0, 0xC000, 0x1000, sys->rom_caos_c);
        }
     #endif // KC85/4
-    
+
     // let the module system update it's memory mapping
     _kc85_exp_update_memory_mapping(sys);
 }
@@ -1504,8 +1516,8 @@ static void _kc85_exp_update_memory_mapping(kc85_t* sys) {
             continue;
         }
 
-        /* each slot gets its own memory system mapping layer, 
-           layer 0 is used by computer base unit 
+        /* each slot gets its own memory system mapping layer,
+           layer 0 is used by computer base unit
         */
         const int layer = i + 1;
         mem_unmap_layer(&sys->mem, layer);
@@ -1707,26 +1719,22 @@ void kc85_key_up(kc85_t* sys, int key_code) {
     kbd_key_up(&sys->kbd, key_code);
 }
 
-int kc85_std_display_width(void) {
-    return _KC85_DISPLAY_WIDTH;
-}
-
-int kc85_std_display_height(void) {
-    return _KC85_DISPLAY_HEIGHT;
-}
-
-size_t kc85_max_display_size(void) {
-    return _KC85_DISPLAY_SIZE;
-}
-
-int kc85_display_width(kc85_t* sys) {
+kc85_display_info_t kc85_query_display_info(kc85_t* sys) {
+    // no runtime-dynamic display properties so far
     (void)sys;
-    return _KC85_DISPLAY_WIDTH;
-}
-
-int kc85_display_height(kc85_t* sys) {
-    (void)sys;
-    return _KC85_DISPLAY_HEIGHT;
+    return (kc85_display_info_t) {
+        .framebuffer = {
+            .width = _KC85_FRAMEBUFFER_WIDTH,
+            .height = _KC85_FRAMEBUFFER_HEIGHT,
+            .size_bytes = _KC85_FRAMEBUFFER_SIZE_BYTES,
+        },
+        .screen = {
+            .x = 0,
+            .y = 0,
+            .width = _KC85_DISPLAY_WIDTH,
+            .height = _KC85_DISPLAY_HEIGHT,
+        }
+    };
 }
 
 #endif /* CHIPS_IMPL */
