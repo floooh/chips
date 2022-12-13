@@ -202,14 +202,10 @@ typedef struct {
 
 /* a memory instance is a 2-dimensional table of memory pages */
 typedef struct {
-    /* memory-mapped layers, layer 0 is highest priority */
-    mem_page_t layers[MEM_NUM_LAYERS][MEM_NUM_PAGES];
     /* the pages that are actually visible to the emulated CPU */
     mem_page_t page_table[MEM_NUM_PAGES];
-    /* a dummy page for currently unmapped memory */
-    uint8_t unmapped_page[MEM_PAGE_SIZE];
-    /* a write-only 'junk table' for writes to ROM areas */
-    uint8_t junk_page[MEM_PAGE_SIZE];
+    /* memory-mapped layers, layer 0 is highest priority */
+    mem_page_t layers[MEM_NUM_LAYERS][MEM_NUM_PAGES];
 } mem_t;
 
 /* initialize a new mem instance */
@@ -266,10 +262,15 @@ void mem_layer_wr(mem_t* mem, int layer, uint16_t addr, uint8_t data);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+// a dummy page for currently unmapped memory
+static uint8_t _mem_unmapped_page[MEM_PAGE_SIZE];
+// a write-only 'junk table' for writes to ROM areas
+static uint8_t _mem_junk_page[MEM_PAGE_SIZE];
+
 void mem_init(mem_t* m) {
     CHIPS_ASSERT(m);
     *m = (mem_t){0};
-    memset(&m->unmapped_page, 0xFF, sizeof(m->unmapped_page));
+    memset(_mem_unmapped_page, 0xFF, sizeof(_mem_unmapped_page));
     mem_unmap_all(m);
 }
 
@@ -289,8 +290,8 @@ static void _mem_update_page_table(mem_t* m, int page_index) {
     }
     else {
         /* no mapping exists for this page, set to special 'unmapped page' */
-        m->page_table[page_index].read_ptr = m->unmapped_page;
-        m->page_table[page_index].write_ptr = m->junk_page;
+        m->page_table[page_index].read_ptr = _mem_unmapped_page;
+        m->page_table[page_index].write_ptr = _mem_junk_page;
     }
 }
 
@@ -313,7 +314,7 @@ static void _mem_map(mem_t* m, int layer, uint16_t addr, uint32_t size, const ui
             page->write_ptr = write_ptr + offset;
         }
         else {
-            page->write_ptr = m->junk_page;
+            page->write_ptr = _mem_junk_page;
         }
         _mem_update_page_table(m, page_index);
     }
