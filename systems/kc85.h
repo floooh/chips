@@ -264,11 +264,11 @@
 extern "C" {
 #endif
 
-#define KC85_MAX_AUDIO_SAMPLES (1024)       // max number of audio samples in internal sample buffer
-#define KC85_DEFAULT_AUDIO_SAMPLES (128)    // default number of samples in internal sample buffer
-#define KC85_MAX_TAPE_SIZE (64 * 1024)      // max size of a snapshot file in bytes
-#define KC85_NUM_SLOTS (2)                  // 2 expansion slots in main unit, each needs one mem_t layer!
-#define KC85_EXP_BUFSIZE (KC85_NUM_SLOTS*64*1024) // expansion system buffer size (64 KB per slot)
+#define KC85_MAX_AUDIO_SAMPLES (1024U)      // max number of audio samples in internal sample buffer
+#define KC85_DEFAULT_AUDIO_SAMPLES (128U)   // default number of samples in internal sample buffer
+#define KC85_MAX_TAPE_SIZE (64U * 1024U)    // max size of a snapshot file in bytes
+#define KC85_NUM_SLOTS (2U)                 // 2 expansion slots in main unit, each needs one mem_t layer!
+#define KC85_EXP_BUFSIZE (KC85_NUM_SLOTS*64U*1024U) // expansion system buffer size (64 KB per slot)
 
 // IO bits
 #define KC85_PIO_A_CAOS_ROM        (1<<0)
@@ -395,7 +395,7 @@ typedef struct {
     uint8_t id;                     // id of currently inserted module
     bool writable;                  // RAM or ROM module
     uint8_t addr_mask;              // the module's address mask
-    int size;                       // the module's byte size
+    uint32_t size;                  // the module's byte size
 } kc85_module_t;
 
 // KC85 expansion slot
@@ -480,7 +480,7 @@ void kc85_key_up(kc85_t* sys, int key_code);
 // insert a RAM module (slot must be 0x08 or 0x0C)
 bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type);
 // insert a ROM module (slot must be 0x08 or 0x0C)
-bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type, const void* rom_ptr, int rom_size);
+bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type, kc85_range_t rom_data);
 // remove module in slot
 bool kc85_remove_module(kc85_t* sys, uint8_t slot);
 // get a descriptive module name by module type
@@ -496,7 +496,7 @@ bool kc85_slot_cpu_visible(kc85_t* sys, uint8_t slot_addr);
 // compute the current CPU address of module in slot (0 if no active module in slot)
 uint16_t kc85_slot_cpu_addr(kc85_t* sys, uint8_t slot_addr);
 // get byte-size of module in slot (0 if no module in slot)
-int kc85_slot_mod_size(kc85_t* sys, uint8_t slot_addr);
+uint32_t kc85_slot_mod_size(kc85_t* sys, uint8_t slot_addr);
 // get descriptive name of module in slot ("NONE" if no module in slot)
 const char* kc85_slot_mod_name(kc85_t* sys, uint8_t slot_addr);
 // get short name of module slot slot
@@ -504,7 +504,7 @@ const char* kc85_slot_mod_short_name(kc85_t* sys, uint8_t slot_addr);
 // get a slot's control byte
 uint8_t kc85_slot_ctrl(kc85_t* sys, uint8_t slot_addr);
 // load a .KCC or .TAP snapshot file into the emulator
-bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes);
+bool kc85_quickload(kc85_t* sys, kc85_range_t data);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -638,7 +638,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     #if !defined(CHIPS_KC85_TYPE_4)
         uint32_t r = 0x6D98302B;
         uint8_t* ptr = &sys->ram[0][0];
-        for (int i = 0; i < (int)sizeof(sys->ram);) {
+        for (size_t i = 0; i < sizeof(sys->ram);) {
             r = _kc85_xorshift32(r);
             ptr[i++] = r;
             ptr[i++] = (r>>8);
@@ -801,7 +801,6 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             uint8_t color_bits = color_ram[color_offset];
             bool force_bg = (blink_bg && (color_bits & 0x80)) | cpu_access;
             _kc85_decode_8pixels(dst_ptr, pixel_bits, color_bits, force_bg);
-            cpu_access = false;
         }
     }
     // scanline and frame update
@@ -1156,7 +1155,7 @@ static void _kc85_handle_keyboard(kc85_t* sys) {
 
     // get the first valid key code from the key buffer
     uint8_t key_code = 0;
-    for (int i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
+    for (size_t i = 0; i < KBD_MAX_PRESSED_KEYS; i++) {
         if (sys->kbd.key_buffer[i].key != 0) {
             key_code = sys->kbd.key_buffer[i].key;
             break;
@@ -1215,7 +1214,7 @@ static void _kc85_exp_init(kc85_t* sys) {
     CHIPS_ASSERT(2 == KC85_NUM_SLOTS);
     sys->exp.slot[0].addr = 0x08;
     sys->exp.slot[1].addr = 0x0C;
-    for (int i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
         sys->exp.slot[i].mod.id = 0xFF;
     }
 }
@@ -1253,7 +1252,7 @@ const char* kc85_mod_short_name(kc85_module_type_t mod_type) {
 
 kc85_slot_t* kc85_slot_by_addr(kc85_t* sys, uint8_t slot_addr) {
     CHIPS_ASSERT(sys && sys->valid);
-    for (int i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
         kc85_slot_t* slot = &sys->exp.slot[i];
         if (slot_addr == slot->addr) {
             return slot;
@@ -1296,7 +1295,7 @@ uint16_t kc85_slot_cpu_addr(kc85_t* sys, uint8_t slot_addr) {
     }
 }
 
-int kc85_slot_mod_size(kc85_t* sys, uint8_t slot_addr) {
+uint32_t kc85_slot_mod_size(kc85_t* sys, uint8_t slot_addr) {
     CHIPS_ASSERT(sys && sys->valid);
     kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     if (slot) {
@@ -1368,7 +1367,7 @@ static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
     const uint32_t bytes_to_free = free_slot->mod.size;
     CHIPS_ASSERT(sys->exp.buf_top >= bytes_to_free);
     sys->exp.buf_top -= bytes_to_free;
-    for (int i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
         kc85_slot_t* slot = &sys->exp.slot[i];
         // no module in slot: nothing to do
         if (slot->mod.type == KC85_MODULE_NONE) {
@@ -1386,7 +1385,7 @@ static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
     }
 }
 
-static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, const void* rom_ptr, int rom_size) {
+static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, kc85_range_t rom_data) {
     kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     if (!slot) {
         return false;
@@ -1434,11 +1433,11 @@ static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type
     }
 
     // copy optional ROM image, or clear RAM
-    if (rom_ptr) {
-        if (rom_size != slot->mod.size) {
+    if (rom_data.ptr) {
+        if (rom_data.size != slot->mod.size) {
             return false;
         }
-        memcpy(&sys->exp_buf[slot->buf_offset], rom_ptr, slot->mod.size);
+        memcpy(&sys->exp_buf[slot->buf_offset], rom_data.ptr, slot->mod.size);
     }
     else {
         memset(&sys->exp_buf[slot->buf_offset], 0, slot->mod.size);
@@ -1453,13 +1452,13 @@ static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type
 bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type) {
     CHIPS_ASSERT(sys && sys->valid && (type != KC85_MODULE_NONE));
     kc85_remove_module(sys, slot_addr);
-    return _kc85_insert_module(sys, slot_addr, type, 0, 0);
+    return _kc85_insert_module(sys, slot_addr, type, (kc85_range_t){0});
 }
 
-bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, const void* rom_ptr, int rom_size) {
+bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, kc85_range_t rom_data) {
     CHIPS_ASSERT(sys && sys->valid && (type != KC85_MODULE_NONE));
     kc85_remove_module(sys, slot_addr);
-    return _kc85_insert_module(sys, slot_addr, type, rom_ptr, rom_size);
+    return _kc85_insert_module(sys, slot_addr, type, rom_data);
 }
 
 bool kc85_remove_module(kc85_t* sys, uint8_t slot_addr) {
@@ -1508,7 +1507,7 @@ static uint8_t _kc85_exp_module_id(kc85_t* sys, uint8_t slot_addr) {
 }
 
 static void _kc85_exp_update_memory_mapping(kc85_t* sys) {
-    for (int i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
         const kc85_slot_t* slot = &sys->exp.slot[i];
 
         // nothing to do if no module in slot
@@ -1519,7 +1518,7 @@ static void _kc85_exp_update_memory_mapping(kc85_t* sys) {
         /* each slot gets its own memory system mapping layer,
            layer 0 is used by computer base unit
         */
-        const int layer = i + 1;
+        const size_t layer = i + 1;
         mem_unmap_layer(&sys->mem, layer);
 
         // module is only active if bit 0 in control byte is set
@@ -1590,11 +1589,11 @@ static void _kc85_invoke_patch_callback(kc85_t* sys, const _kc85_kcc_header* hdr
 }
 
 /* KCC files cannot really be identified since they have no magic number */
-static bool _kc85_is_valid_kcc(const uint8_t* ptr, int num_bytes) {
-    if (num_bytes <= (int) sizeof (_kc85_kcc_header)) {
+static bool _kc85_is_valid_kcc(kc85_range_t data) {
+    if (data.size <= sizeof(_kc85_kcc_header)) {
         return false;
     }
-    const _kc85_kcc_header* hdr = (const _kc85_kcc_header*) ptr;
+    const _kc85_kcc_header* hdr = (const _kc85_kcc_header*) data.ptr;
     if (hdr->num_addr > 3) {
         return false;
     }
@@ -1609,19 +1608,19 @@ static bool _kc85_is_valid_kcc(const uint8_t* ptr, int num_bytes) {
             return false;
         }
     }
-    int required_len = (end_addr - load_addr) + sizeof(_kc85_kcc_header);
-    if (required_len > num_bytes) {
+    size_t required_len = (end_addr - load_addr) + sizeof(_kc85_kcc_header);
+    if (required_len > data.size) {
         return false;
     }
     /* could be a KCC file */
     return true;
 }
 
-static bool _kc85_load_kcc(kc85_t* sys, const uint8_t* ptr) {
-    const _kc85_kcc_header* hdr = (_kc85_kcc_header*) ptr;
+static bool _kc85_load_kcc(kc85_t* sys, kc85_range_t data) {
+    const _kc85_kcc_header* hdr = (_kc85_kcc_header*) data.ptr;
     uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
     uint16_t end_addr  = hdr->end_addr_h<<8 | hdr->end_addr_l;
-    ptr += sizeof(_kc85_kcc_header);
+    const uint8_t* ptr = (const uint8_t*)data.ptr + sizeof(_kc85_kcc_header);
     while (addr < end_addr) {
         /* data is continuous */
         mem_wr(&sys->mem, addr++, *ptr++);
@@ -1641,13 +1640,13 @@ typedef struct {
     _kc85_kcc_header kcc;   /* from here on identical with KCC */
 } _kc85_kctap_header;
 
-static bool _kc85_is_valid_kctap(const uint8_t* ptr, int num_bytes) {
-    if (num_bytes <= (int) sizeof (_kc85_kctap_header)) {
+static bool _kc85_is_valid_kctap(kc85_range_t data) {
+    if (data.size <= sizeof(_kc85_kctap_header)) {
         return false;
     }
-    const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) ptr;
+    const _kc85_kctap_header* hdr = (const _kc85_kctap_header*)data.ptr;
     static uint8_t sig[16] = { 0xC3,'K','C','-','T','A','P','E',0x20,'b','y',0x20,'A','F','.',0x20 };
-    for (int i = 0; i < 16; i++) {
+    for (size_t i = 0; i < 16; i++) {
         if (sig[i] != hdr->sig[i]) {
             return false;
         }
@@ -1666,23 +1665,23 @@ static bool _kc85_is_valid_kctap(const uint8_t* ptr, int num_bytes) {
             return false;
         }
     }
-    int required_len = (end_addr - load_addr) + sizeof(_kc85_kctap_header);
-    if (required_len > num_bytes) {
+    size_t required_len = (end_addr - load_addr) + sizeof(_kc85_kctap_header);
+    if (required_len > data.size) {
         return false;
     }
     /* this appears to be a valid KC TAP file */
     return true;
 }
 
-static bool _kc85_load_kctap(kc85_t* sys, const uint8_t* ptr) {
-    const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) ptr;
+static bool _kc85_load_kctap(kc85_t* sys, kc85_range_t data) {
+    const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) data.ptr;
     uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
     uint16_t end_addr  = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
-    ptr += sizeof(_kc85_kctap_header);
+    const uint8_t* ptr = (const uint8_t*)data.ptr + sizeof(_kc85_kctap_header);
     while (addr < end_addr) {
         /* each block is 1 lead-byte + 128 bytes data */
         ptr++;
-        for (int i = 0; i < 128; i++) {
+        for (size_t i = 0; i < 128; i++) {
             mem_wr(&sys->mem, addr++, *ptr++);
         }
     }
@@ -1694,14 +1693,14 @@ static bool _kc85_load_kctap(kc85_t* sys, const uint8_t* ptr) {
     return true;
 }
 
-bool kc85_quickload(kc85_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid && ptr);
+bool kc85_quickload(kc85_t* sys, kc85_range_t data) {
+    CHIPS_ASSERT(sys && sys->valid && data.ptr);
     /* first check for KC-TAP format, since this can be properly identified */
-    if (_kc85_is_valid_kctap(ptr, num_bytes)) {
-        return _kc85_load_kctap(sys, ptr);
+    if (_kc85_is_valid_kctap(data)) {
+        return _kc85_load_kctap(sys, data);
     }
-    else if (_kc85_is_valid_kcc(ptr, num_bytes)) {
-        return _kc85_load_kcc(sys, ptr);
+    else if (_kc85_is_valid_kcc(data)) {
+        return _kc85_load_kcc(sys, data);
     }
     else {
         /* not a known file type, or not enough data */
