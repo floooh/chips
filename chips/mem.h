@@ -213,10 +213,35 @@ static void _mem_update_page_table(mem_t* m, size_t page_index) {
     if (layer_index != MEM_NUM_LAYERS) { 
         /* found a valid mapping */
 
-//        m->page_table[page_index].read_ptr = m->layers[layer_index][page_index].read_ptr;
-//        m->page_table[page_index].write_ptr = m->layers[layer_index][page_index].write_ptr;
+        /*
+            FIXME FIXME FIXME
 
-        m->page_table[page_index] = m->layers[layer_index][page_index];
+            The following lines triggers a code generation problem in Xcode 14.2
+            (also 14.0 and 14.1) resulting in a nullptr access because this line
+            doesn't seem to be executed resulting in all read_ptr/write_ptr to be
+            zero. Happens when called from within _kc85_update_memory_map() with
+            at least -O2. After 2 days of investigation it's still unclear whether
+            this is a bug in Clang or actual UB. A few facts from the investigation:
+
+            - compiling with -fwrapv fixes the problem (yet no case of
+              signed integer overflow could be found going up the callstack,
+              UBSAN is also clean) - frwrapv seems to disable any loop unrolling
+              optimizations
+            - replacing the struct assignment below with memcpy fixes the problem
+            - __attribute__((noinline)) fixes the problem
+            - compiling with UBSAN fixes the problem(!!!) (but neither UBSAN nor
+              ASAN trigger anything)
+            - compiling with more recent clang versions (e.g. to WASM with Emscripten
+              or 'zig cc' also fixes the problem (but in the case of 'zig cc' it might
+              also be because zig uses different default compilation options?
+
+            TODO: check again once Xcode 15 is released (assuming this finally updated
+            clang)
+        */
+        // m->page_table[page_index] = m->layers[layer_index][page_index];
+
+        m->page_table[page_index].read_ptr = m->layers[layer_index][page_index].read_ptr;
+        m->page_table[page_index].write_ptr = m->layers[layer_index][page_index].write_ptr;
     }
     else {
         /* no mapping exists for this page, set to special 'unmapped page' */
