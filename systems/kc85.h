@@ -346,7 +346,7 @@ typedef struct {
 typedef struct {
     kc85_debug_t debug;         // optional debugger hook
 
-    // video output config (if you don't need display decoding, set pixel_buffer to 0)
+    // video output config (if you don't need display decoding, set framebuffer.ptr to 0)
     kc85_range_t framebuffer;
 
     // audio output config (if you don't want audio, set audio_cb to zero)
@@ -418,32 +418,32 @@ typedef struct {
 // KC85 emulator state
 typedef struct {
     z80_t cpu;
-    z80ctc_t ctc;
-    z80pio_t pio;
-    beeper_t beeper_1;
-    beeper_t beeper_2;
-
+    mem_t mem;
+    struct {
+        uint16_t h_tick;
+        uint16_t v_count;
+        bool blink_flag;        // foreground color blinking flag toggled by CTC
+        uint32_t* fb;
+    } video;
     uint8_t pio_a;          // current PIO-A value, used for bankswitching
     uint8_t pio_b;          // current PIO-B value, used for bankswitching
     #if defined(CHIPS_KC85_TYPE_4)
         uint8_t io84;           // byte latch at port 0x84, only on KC85/4
         uint8_t io86;           // byte latch at port 0x86, only on KC85/4
     #endif
-    bool blink_flag;        // foreground color blinking flag toggled by CTC
-
-    uint32_t h_tick;        // video timing generator counter
-    uint32_t v_count;
+    z80ctc_t ctc;
+    beeper_t beeper_1;
+    beeper_t beeper_2;
+    z80pio_t pio;
+    kc85_exp_t exp;         // expansion module system
 
     uint64_t pins;
     uint64_t freq_hz;
     kbd_t kbd;
-    mem_t mem;
-    kc85_exp_t exp;         // expansion module system
 
     bool valid;
     kc85_debug_t debug;
 
-    uint32_t* fb;
     struct {
         kc85_audio_callback_t callback;
         int num_samples;
@@ -609,7 +609,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     memset(sys, 0, sizeof(kc85_t));
     sys->valid = true;
     sys->freq_hz = _KC85_FREQUENCY;
-    sys->fb = (uint32_t*) desc->framebuffer.ptr;
+    sys->video.fb = (uint32_t*) desc->framebuffer.ptr;
     sys->patch_callback = desc->patch_callback;
     sys->debug = desc->debug;
 
@@ -777,13 +777,13 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
         }
     }
     // every 2 CPU ticks, 8 pixels are decoded
-    if (sys->h_tick & 1) {
-        bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
+    if (sys->video.h_tick & 1) {
+        bool blink_bg = sys->video.blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
         // decode visible 8-pixel group
-        uint32_t x = sys->h_tick>>1;
-        uint32_t y = sys->v_count;
-        if (sys->fb && (y < 256) && (x < 40)) {
-            uint32_t* dst_ptr = &(sys->fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
+        uint32_t x = sys->video.h_tick>>1;
+        uint32_t y = sys->video.v_count;
+        if (sys->video.fb && (y < 256) && (x < 40)) {
+            uint32_t* dst_ptr = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
             uint32_t pixel_offset, color_offset;
             if (x < 0x20) {
                 // left 256x256 area
@@ -804,12 +804,12 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
         }
     }
     // scanline and frame update
-    sys->h_tick++;
-    if (sys->h_tick >= _KC85_SCANLINE_TICKS) {
-        sys->h_tick = 0;
-        sys->v_count++;
-        if (sys->v_count == _KC85_NUM_SCANLINES) {
-            sys->v_count = 0;
+    sys->video.h_tick++;
+    if (sys->video.h_tick >= _KC85_SCANLINE_TICKS) {
+        sys->video.h_tick = 0;
+        sys->video.v_count++;
+        if (sys->video.v_count == _KC85_NUM_SCANLINES) {
+            sys->video.v_count = 0;
             // vertical sync, trigger CTC CLKTRG2 input for video blinking effect
             pins |= Z80CTC_CLKTRG2;
         }
@@ -928,9 +928,22 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         }
         // CTC channel 2 trigger controls video blink frequency
         if (pins & Z80CTC_ZCTO2) {
-            sys->blink_flag = !sys->blink_flag;
+            sys->video.blink_flag = !sys->video.blink_flag;
         }
         pins &= Z80_PIN_MASK;
+    }
+
+    // tick the audio beepers
+    beeper_tick(&sys->beeper_1);
+    if (beeper_tick(&sys->beeper_2)) {
+        // new audio sample ready
+        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
+        if (sys->audio.sample_pos == sys->audio.num_samples) {
+            if (sys->audio.callback.func) {
+                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+            }
+            sys->audio.sample_pos = 0;
+        }
     }
 
     // tick the PIO
@@ -1007,19 +1020,6 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         }
     }
     #endif
-
-    // tick the audio beepers
-    beeper_tick(&sys->beeper_1);
-    if (beeper_tick(&sys->beeper_2)) {
-        // new audio sample ready
-        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
-        if (sys->audio.sample_pos == sys->audio.num_samples) {
-            if (sys->audio.callback.func) {
-                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
-            }
-            sys->audio.sample_pos = 0;
-        }
-    }
 
     return pins;
 }
