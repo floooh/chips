@@ -346,10 +346,10 @@ typedef struct {
 typedef struct {
     kc85_debug_t debug;         // optional debugger hook
 
-    // video output config (if you don't need display decoding, set framebuffer.ptr to 0)
+    // video output config
     kc85_range_t framebuffer;
 
-    // audio output config (if you don't want audio, set audio_cb to zero)
+    // audio output config
     struct {
         kc85_audio_callback_t callback; // called when audio_num_samples are ready
         int num_samples;                // default is KC85_DEFAULT_AUDIO_SAMPLES
@@ -603,7 +603,8 @@ static inline uint32_t _kc85_xorshift32(uint32_t x) {
 
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT((0 == desc->framebuffer.ptr) || (desc->framebuffer.ptr && (desc->framebuffer.size >= _KC85_FRAMEBUFFER_SIZE_BYTES)));
+    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= _KC85_FRAMEBUFFER_SIZE_BYTES));
+    CHIPS_ASSERT(desc->audio.callback);
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(kc85_t));
@@ -782,7 +783,7 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
         // decode visible 8-pixel group
         uint32_t x = sys->video.h_tick>>1;
         uint32_t y = sys->video.v_count;
-        if (sys->video.fb && (y < 256) && (x < 40)) {
+        if ((y < 256) && (x < 40)) {
             uint32_t* dst_ptr = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
             uint32_t pixel_offset, color_offset;
             if (x < 0x20) {
@@ -836,7 +837,7 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
             uint32_t x = sys->h_tick>>1;
             uint32_t y = sys->v_count;
-            if (sys->fb && (y < 256) && (x < 40)) {
+            if ((y < 256) && (x < 40)) {
                 uint32_t* dst_ptr = &(sys->fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
                 uint32_t irm_index = (sys->io84 & 1) * 2;
                 const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
@@ -852,7 +853,7 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             // KC85/4 "hicolor" mode
             uint32_t x = sys->h_tick>>1;
             uint32_t y = sys->v_count;
-            if (sys->fb && (y < 256) && (x < 40)) {
+            if ((y < 256) && (x < 40)) {
                 uint32_t* dst = &(sys->fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
                 uint32_t irm_index = (sys->io84 & 1) * 2;
                 const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
@@ -939,9 +940,7 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         // new audio sample ready
         sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
         if (sys->audio.sample_pos == sys->audio.num_samples) {
-            if (sys->audio.callback.func) {
-                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
-            }
+            sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
             sys->audio.sample_pos = 0;
         }
     }
