@@ -604,7 +604,7 @@ static inline uint32_t _kc85_xorshift32(uint32_t x) {
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= _KC85_FRAMEBUFFER_SIZE_BYTES));
-    CHIPS_ASSERT(desc->audio.callback);
+    CHIPS_ASSERT(desc->audio.callback.func);
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(kc85_t));
@@ -764,47 +764,7 @@ static inline void _kc85_decode_8pixels(uint32_t* ptr, uint8_t pixels, uint8_t c
     ptr[7] = pixels & 0x01 ? fg : bg;
 }
 
-#if defined(CHIPS_KC85_TYPE_2) || defined(CHIPS_KC85_TYPE_3)
-static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
-    /* emulate display needling on KC85/2 and /3, this happens when the
-       CPU accesses video memory, which will force the background color
-       a short duration
-    */
-    bool cpu_access = false;
-    if (0 != (pins & Z80_WR)) {
-        uint16_t addr = Z80_GET_ADDR(pins);
-        if ((addr >= 0x8000) && (addr < 0xC000)) {
-            cpu_access = true;
-        }
-    }
-    // every 2 CPU ticks, 8 pixels are decoded
-    if (sys->video.h_tick & 1) {
-        bool blink_bg = sys->video.blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
-        // decode visible 8-pixel group
-        uint32_t x = sys->video.h_tick>>1;
-        uint32_t y = sys->video.v_count;
-        if ((y < 256) && (x < 40)) {
-            uint32_t* dst_ptr = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
-            uint32_t pixel_offset, color_offset;
-            if (x < 0x20) {
-                // left 256x256 area
-                pixel_offset = x | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>4)&0xF)<<9);
-                color_offset = x | (((y>>2)&0x3f)<<5);
-            }
-            else {
-                // right 64x256 area
-                pixel_offset = 0x2000 + ((x&0x7) | (((y>>4)&0x3)<<3) | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>6)&0x3)<<9));
-                color_offset = 0x0800 + ((x&0x7) | (((y>>4)&0x3)<<3) | (((y>>2)&0x3)<<5) | (((y>>6)&0x3)<<7));
-            }
-            const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE];
-            const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE] + 0x2800;
-            uint8_t pixel_bits = pixel_ram[pixel_offset];
-            uint8_t color_bits = color_ram[color_offset];
-            bool force_bg = (blink_bg && (color_bits & 0x80)) | cpu_access;
-            _kc85_decode_8pixels(dst_ptr, pixel_bits, color_bits, force_bg);
-        }
-    }
-    // scanline and frame update
+static inline uint64_t _kc85_update_raster_counters(kc85_t* sys, uint64_t pins) {
     sys->video.h_tick++;
     if (sys->video.h_tick >= _KC85_SCANLINE_TICKS) {
         sys->video.h_tick = 0;
@@ -816,6 +776,43 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
         }
     }
     return pins;
+}
+
+#if defined(CHIPS_KC85_TYPE_2) || defined(CHIPS_KC85_TYPE_3)
+static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
+    // every 2 CPU ticks, 8 pixels are decoded
+    if (sys->video.h_tick & 1) {
+        // decode visible 8-pixel group
+        uint16_t x = sys->video.h_tick>>1;
+        uint16_t y = sys->video.v_count;
+        if ((y < 256) && (x < 40)) {
+            uint32_t* dst_ptr = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
+            uint32_t pixel_offset, color_offset;
+            if (x & 0x20) {
+                // right 64x256 area
+                pixel_offset = 0x2000 + ((x&0x7) | (((y>>4)&0x3)<<3) | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>6)&0x3)<<9));
+                color_offset = 0x3000 + ((x&0x7) | (((y>>4)&0x3)<<3) | (((y>>2)&0x3)<<5) | (((y>>6)&0x3)<<7));
+            }
+            else {
+                // left 256x256 area
+                pixel_offset = x | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>4)&0xF)<<9);
+                color_offset = 0x2800 + (x | (((y>>2)&0x3f)<<5));
+            }
+            uint8_t pixel_bits = sys->ram[_KC85_IRM0_PAGE][pixel_offset];
+            uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE][color_offset];
+
+            // emulate display needling on KC85/2 and /3, this happens when the
+            // CPU accesses video memory, which will force the background color
+            // a short duration
+
+            // same as (pins & Z80_WR) && (addr >= 0x8000) && (addr < 0xC000)
+            bool cpu_access = (pins & (Z80_WR | 0xC000)) == (Z80_WR | 0x8000);
+            bool blink_bg = sys->video.blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
+            bool force_bg = (blink_bg && (color_bits & 0x80)) | cpu_access;
+            _kc85_decode_8pixels(dst_ptr, pixel_bits, color_bits, force_bg);
+        }
+    }
+    return _kc85_update_raster_counters(sys, pins);
 }
 #endif // KC85/2,/3
 
@@ -831,40 +828,32 @@ static uint32_t _kc85_hicolor[4] = {
 
 static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
     // decode 8 pixels every second tick
-    if (sys->h_tick & 1) {
-        if (sys->io84 & KC85_IO84_HICOLOR) {
-            // regular KC85/4 video mode
-            bool blink_bg = sys->blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
-            uint32_t x = sys->h_tick>>1;
-            uint32_t y = sys->v_count;
-            if ((y < 256) && (x < 40)) {
-                uint32_t* dst_ptr = &(sys->fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
-                uint32_t irm_index = (sys->io84 & 1) * 2;
-                const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
-                const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE + irm_index + 1];
-                uint32_t offset = (x<<8) | y;
-                uint8_t pixel_bits = pixel_ram[offset];
-                uint8_t color_bits = color_ram[offset];
-                bool force_bg = blink_bg && (color_bits & 0x80); // no bus contention on KC85/4
-                _kc85_decode_8pixels(dst_ptr, pixel_bits, color_bits, force_bg);
+    if (sys->video.h_tick & 1) {
+        uint16_t x = sys->video.h_tick>>1;
+        uint16_t y = sys->video.v_count;
+        if ((y < 256) && (x < 40)) {
+            uint32_t* dst = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
+            size_t irm_index = (sys->io84 & 1) * 2;
+            size_t offset = (x<<8) | y;
+            uint8_t p0 = sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
+            uint8_t p1 = sys->ram[_KC85_IRM0_PAGE + irm_index + 1][offset];
+            if (sys->io84 & KC85_IO84_HICOLOR) {
+                // regular KC85/4 video mode
+                // p0: the pixel bits
+                // p1: the color bits
+                bool blink_bg = sys->video.blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
+                bool force_bg = blink_bg && (p1 & 0x80); // no bus contention on KC85/4
+                _kc85_decode_8pixels(dst, p0, p1, force_bg);
             }
-        }
-        else {
-            // KC85/4 "hicolor" mode
-            uint32_t x = sys->h_tick>>1;
-            uint32_t y = sys->v_count;
-            if ((y < 256) && (x < 40)) {
-                uint32_t* dst = &(sys->fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
-                uint32_t irm_index = (sys->io84 & 1) * 2;
-                const uint8_t* pixel_ram = sys->ram[_KC85_IRM0_PAGE + irm_index];
-                const uint8_t* color_ram = sys->ram[_KC85_IRM0_PAGE + irm_index + 1];
-                uint32_t offset = (x<<8) | y;
-                uint8_t p0 = pixel_ram[offset];
-                uint8_t p1 = color_ram[offset];
+            else {
                 /*
+                    KC85/4 "hicolor" mode
                     Decode 8 pixels for the "HICOLOR" mode with 2-bits per-pixel color.
                     p0 and p1 are the two bitplanes (taken from the pixel and color RAM
                     bank). The color palette is hardwired.
+
+                    p0: 8 bits from first IRM page
+                    p1: 8 bits from second IRM page
                 */
                 dst[0] = _kc85_hicolor[((p0>>7)&1)|((p1>>6)&2)];
                 dst[1] = _kc85_hicolor[((p0>>6)&1)|((p1>>5)&2)];
@@ -877,180 +866,9 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             }
         }
     }
-
-    // advance raster counters
-    sys->h_tick++;
-    if (sys->h_tick >= _KC85_SCANLINE_TICKS) {
-        sys->h_tick = 0;
-        sys->v_count++;
-        if (sys->v_count == _KC85_NUM_SCANLINES) {
-            sys->v_count = 0;
-            pins |= Z80CTC_CLKTRG2;
-        }
-    }
-    return pins;
+    return _kc85_update_raster_counters(sys, pins);
 }
 #endif
-
-static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
-    // tick the CPU
-    pins = z80_tick(&sys->cpu, pins) & Z80_PIN_MASK;
-
-    // handle memory requests
-    if (pins & Z80_MREQ) {
-        const uint16_t addr = Z80_GET_ADDR(pins);
-        if (pins & Z80_RD) {
-            Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
-        }
-        else if (pins & Z80_WR) {
-            mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
-        }
-    }
-
-    // tick the video system, this may return Z80CTC_CLKTRG2 on VSYNC
-    pins = _kc85_tick_video(sys, pins);
-
-    // tick the CTC, NOTE: Z80CTC_CLKTRG2 may be set from video system
-    {
-        // set virtual IEIO pin because CTC is highest priority interrupt device
-        pins |= Z80_IEIO;
-        if ((pins & _KC85_CTC_SEL_MASK) == _KC85_CTC_SEL_PINS) {
-            pins |= Z80CTC_CE;
-        }
-        if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
-        if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
-        pins = z80ctc_tick(&sys->ctc, pins);
-        // CTC channels 0 and 1 triggers control audio frequencies
-        if (pins & Z80CTC_ZCTO0) {
-            beeper_toggle(&sys->beeper_1);
-        }
-        if (pins & Z80CTC_ZCTO1) {
-            beeper_toggle(&sys->beeper_2);
-        }
-        // CTC channel 2 trigger controls video blink frequency
-        if (pins & Z80CTC_ZCTO2) {
-            sys->video.blink_flag = !sys->video.blink_flag;
-        }
-        pins &= Z80_PIN_MASK;
-    }
-
-    // tick the audio beepers
-    beeper_tick(&sys->beeper_1);
-    if (beeper_tick(&sys->beeper_2)) {
-        // new audio sample ready
-        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
-        if (sys->audio.sample_pos == sys->audio.num_samples) {
-            sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
-            sys->audio.sample_pos = 0;
-        }
-    }
-
-    // tick the PIO
-    {
-        if ((pins & _KC85_PIO_SEL_MASK) == _KC85_PIO_SEL_PINS) {
-            pins |= Z80PIO_CE;
-        }
-        if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
-        if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
-        Z80PIO_SET_PAB(pins, 0xFF, 0xFF);
-        pins = z80pio_tick(&sys->pio, pins);
-        const uint8_t pio_a = Z80PIO_GET_PA(pins);
-        const uint8_t pio_b = Z80PIO_GET_PB(pins);
-        #if defined(CHIPS_KC85_TYPE_4)
-            // volume control on KC85/4
-            bool volume_dirty = (pio_b ^ sys->pio_b) & KC85_PIO_B_854_VOLUME_MASK;
-            if (volume_dirty) {
-                float vol = (((~pio_b) & KC85_PIO_B_854_VOLUME_MASK) >> 1) / 15.0f;
-                beeper_set_volume(&sys->beeper_1, vol);
-                beeper_set_volume(&sys->beeper_2, vol);
-            }
-        #else
-            // on KC85/2 and /3, PA4 is connected to CPU NMI pin
-            if (pio_a & KC85_PIO_A_NMI) { pins &= ~Z80_NMI; }
-            else                        { pins |= Z80_NMI; }
-        #endif
-        bool memory_mapping_dirty = ((pio_a ^ sys->pio_a) & KC85_PIO_A_MEMORY_BITS) ||
-                                    ((pio_b ^ sys->pio_b) & KC85_PIO_B_MEMORY_BITS);
-        sys->pio_a = pio_a;
-        sys->pio_b = pio_b;
-        if (memory_mapping_dirty) {
-            _kc85_update_memory_map(sys);
-        }
-        pins &= Z80_PIN_MASK;
-    }
-
-    // IO port 0x80: expansion module control, high byte of
-    // port address contains module slot address
-    if ((pins & _KC85_EXP_SEL_MASK) == _KC85_EXP_SEL_PINS) {
-        const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
-        if (pins & Z80_WR) {
-            // write new control byte and update the memory mapping
-            const uint8_t data = Z80_GET_DATA(pins);
-            if (_kc85_exp_write_ctrl(sys, slot_addr, data)) {
-                _kc85_update_memory_map(sys);
-            }
-        }
-        else if (pins & Z80_RD) {
-            // read module id in slot
-            Z80_SET_DATA(pins, _kc85_exp_module_id(sys, slot_addr));
-        }
-    }
-
-    // KC85/4 ports 0x84 and 0x86, these are write-only 8-bit latches
-    #if defined(CHIPS_KC85_TYPE_4)
-    if ((pins & _KC85_IO84_SEL_MASK) == _KC85_IO84_SEL_PINS) {
-        if (pins & Z80_WR) {
-            const uint8_t data = Z80_GET_DATA(pins);
-            bool memory_mapping_dirty = (data ^ sys->io84) & KC85_IO84_MEMORY_BITS;
-            sys->io84 = data;
-            if (memory_mapping_dirty) {
-                _kc85_update_memory_map(sys);
-            }
-        }
-    }
-    if ((pins & _KC85_IO86_SEL_MASK) == _KC85_IO86_SEL_PINS) {
-        if (pins & Z80_WR) {
-            const uint8_t data = Z80_GET_DATA(pins);
-            bool memory_mapping_dirty = (data ^ sys->io86) & KC85_IO86_MEMORY_BITS;
-            sys->io86 = data;
-            if (memory_mapping_dirty) {
-                _kc85_update_memory_map(sys);
-            }
-        }
-    }
-    #endif
-
-    return pins;
-}
-
-uint32_t kc85_exec(kc85_t* sys, uint32_t micro_seconds) {
-    CHIPS_ASSERT(sys && sys->valid);
-    const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
-    uint64_t pins = sys->pins;
-    if (0 == sys->debug.callback.func) {
-        // run without debug hook
-        for (uint32_t tick = 0; tick < num_ticks; tick++) {
-            pins = _kc85_tick(sys, pins);
-        }
-    }
-    else {
-        // run with debug hook
-        for (uint32_t tick = 0; (tick < num_ticks) && !(*sys->debug.stopped); tick++) {
-            pins = _kc85_tick(sys, pins);
-            sys->debug.callback.func(sys->debug.callback.user_data, pins);
-        }
-    }
-    sys->pins = pins;
-    kbd_update(&sys->kbd, micro_seconds);
-    _kc85_handle_keyboard(sys);
-    return num_ticks;
-}
-
-static void _kc85_init_memory_map(kc85_t* sys) {
-    mem_init(&sys->mem);
-    sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
-    _kc85_update_memory_map(sys);
-}
 
 static void _kc85_update_memory_map(kc85_t* sys) {
     mem_unmap_layer(&sys->mem, 0);
@@ -1126,6 +944,159 @@ static void _kc85_update_memory_map(kc85_t* sys) {
 
     // let the module system update it's memory mapping
     _kc85_exp_update_memory_mapping(sys);
+}
+
+static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
+    // tick the CPU
+    pins = z80_tick(&sys->cpu, pins) & Z80_PIN_MASK;
+
+    // handle memory requests
+    if (pins & Z80_MREQ) {
+        const uint16_t addr = Z80_GET_ADDR(pins);
+        if (pins & Z80_RD) {
+            Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
+        }
+        else if (pins & Z80_WR) {
+            mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
+        }
+    }
+
+    // tick the video system, this may return Z80CTC_CLKTRG2 on VSYNC
+    pins = _kc85_tick_video(sys, pins);
+
+    // tick the CTC, NOTE: Z80CTC_CLKTRG2 may be set from video system
+    {
+        // set virtual IEIO pin because CTC is highest priority interrupt device
+        pins |= Z80_IEIO;
+        if ((pins & _KC85_CTC_SEL_MASK) == _KC85_CTC_SEL_PINS) {
+            pins |= Z80CTC_CE;
+        }
+        if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
+        if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
+        pins = z80ctc_tick(&sys->ctc, pins);
+        // CTC channels 0 and 1 triggers control audio frequencies
+        if (pins & Z80CTC_ZCTO0) {
+            beeper_toggle(&sys->beeper_1);
+        }
+        if (pins & Z80CTC_ZCTO1) {
+            beeper_toggle(&sys->beeper_2);
+        }
+        // CTC channel 2 trigger controls video blink frequency
+        if (pins & Z80CTC_ZCTO2) {
+            sys->video.blink_flag = !sys->video.blink_flag;
+        }
+        pins &= Z80_PIN_MASK;
+    }
+
+    // tick the audio beepers
+    beeper_tick(&sys->beeper_1);
+    if (beeper_tick(&sys->beeper_2)) {
+        // new audio sample ready
+        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
+        if (sys->audio.sample_pos == sys->audio.num_samples) {
+            sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+            sys->audio.sample_pos = 0;
+        }
+    }
+
+    // tick the PIO
+    bool memory_mapping_dirty = false;
+    {
+        if ((pins & _KC85_PIO_SEL_MASK) == _KC85_PIO_SEL_PINS) {
+            pins |= Z80PIO_CE;
+        }
+        if (pins & Z80_A0) { pins |= Z80PIO_BASEL; }
+        if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
+        Z80PIO_SET_PAB(pins, 0xFF, 0xFF);
+        pins = z80pio_tick(&sys->pio, pins);
+        const uint8_t pio_a = Z80PIO_GET_PA(pins);
+        const uint8_t pio_b = Z80PIO_GET_PB(pins);
+        #if defined(CHIPS_KC85_TYPE_4)
+            // volume control on KC85/4
+            bool volume_dirty = (pio_b ^ sys->pio_b) & KC85_PIO_B_854_VOLUME_MASK;
+            if (volume_dirty) {
+                float vol = (((~pio_b) & KC85_PIO_B_854_VOLUME_MASK) >> 1) / 15.0f;
+                beeper_set_volume(&sys->beeper_1, vol);
+                beeper_set_volume(&sys->beeper_2, vol);
+            }
+        #else
+            // on KC85/2 and /3, PA4 is connected to CPU NMI pin
+            if (pio_a & KC85_PIO_A_NMI) { pins &= ~Z80_NMI; }
+            else                        { pins |= Z80_NMI; }
+        #endif
+        memory_mapping_dirty |= ((pio_a ^ sys->pio_a) & KC85_PIO_A_MEMORY_BITS);
+        sys->pio_a = pio_a;
+        memory_mapping_dirty |= ((pio_b ^ sys->pio_b) & KC85_PIO_B_MEMORY_BITS);
+        sys->pio_b = pio_b;
+        pins &= Z80_PIN_MASK;
+    }
+
+    // IO port 0x80: expansion module control, high byte of
+    // port address contains module slot address
+    if ((pins & _KC85_EXP_SEL_MASK) == _KC85_EXP_SEL_PINS) {
+        const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
+        if (pins & Z80_WR) {
+            // write new control byte and update the memory mapping
+            const uint8_t data = Z80_GET_DATA(pins);
+            memory_mapping_dirty |= _kc85_exp_write_ctrl(sys, slot_addr, data);
+        }
+        else if (pins & Z80_RD) {
+            // read module id in slot
+            Z80_SET_DATA(pins, _kc85_exp_module_id(sys, slot_addr));
+        }
+    }
+
+    // KC85/4 ports 0x84 and 0x86, these are write-only 8-bit latches
+    #if defined(CHIPS_KC85_TYPE_4)
+    if ((pins & _KC85_IO84_SEL_MASK) == _KC85_IO84_SEL_PINS) {
+        if (pins & Z80_WR) {
+            const uint8_t data = Z80_GET_DATA(pins);
+            memory_mapping_dirty |= (data ^ sys->io84) & KC85_IO84_MEMORY_BITS;
+            sys->io84 = data;
+        }
+    }
+    if ((pins & _KC85_IO86_SEL_MASK) == _KC85_IO86_SEL_PINS) {
+        if (pins & Z80_WR) {
+            const uint8_t data = Z80_GET_DATA(pins);
+            memory_mapping_dirty |= (data ^ sys->io86) & KC85_IO86_MEMORY_BITS;
+            sys->io86 = data;
+        }
+    }
+    #endif
+
+    if (memory_mapping_dirty) {
+        _kc85_update_memory_map(sys);
+    }
+    return pins;
+}
+
+uint32_t kc85_exec(kc85_t* sys, uint32_t micro_seconds) {
+    CHIPS_ASSERT(sys && sys->valid);
+    const uint32_t num_ticks = clk_us_to_ticks(sys->freq_hz, micro_seconds);
+    uint64_t pins = sys->pins;
+    if (0 == sys->debug.callback.func) {
+        // run without debug hook
+        for (uint32_t tick = 0; tick < num_ticks; tick++) {
+            pins = _kc85_tick(sys, pins);
+        }
+    }
+    else {
+        // run with debug hook
+        for (uint32_t tick = 0; (tick < num_ticks) && !(*sys->debug.stopped); tick++) {
+            pins = _kc85_tick(sys, pins);
+            sys->debug.callback.func(sys->debug.callback.user_data, pins);
+        }
+    }
+    sys->pins = pins;
+    kbd_update(&sys->kbd, micro_seconds);
+    _kc85_handle_keyboard(sys);
+    return num_ticks;
+}
+
+static void _kc85_init_memory_map(kc85_t* sys) {
+    mem_init(&sys->mem);
+    sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
+    _kc85_update_memory_map(sys);
 }
 
 /*
