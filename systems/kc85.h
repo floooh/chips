@@ -719,6 +719,14 @@ static inline void _kc85_decode_8pixels(uint8_t* dst, uint8_t pixels, uint8_t co
         bits 2..0: background color
 
         index 0 is background color, index 1 is foreground color
+
+        NOTE: using 'bit twiddling' to compose spread the 8 pixels into an uint64_t
+        and writing this as a single 64-bit values doesn't appear to result
+        in a performance advantage, also see:
+
+        https://www.godbolt.org/z/7dsW4v6vr
+
+        (and this bit twiddling code is even still missing reversing the pixel bit order)
     */
     const uint8_t bg = 0x10 | (colors & 0x7);
     const uint8_t fg = force_bg ? bg : ((colors>>3) & 0xF);
