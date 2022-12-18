@@ -8,7 +8,7 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Define the KC85 type to build before including this header (both the
@@ -19,7 +19,7 @@
         CHIPS_KC85_TYPE_4
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -51,7 +51,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -183,8 +183,8 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
             }
         #endif
         if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("Vert Count:    %d", win->kc85->v_count);
-            ImGui::Text("Hori Tick:     %d", win->kc85->h_tick);
+            ImGui::Text("Vert Count:    %d", win->kc85->video.v_count);
+            ImGui::Text("Hori Tick:     %d", win->kc85->video.h_tick);
         }
     }
     ImGui::End();

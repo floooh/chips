@@ -8,7 +8,7 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Define the KC85 type to build before including this header (both the
@@ -19,7 +19,7 @@
         CHIPS_KC85_TYPE_4
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -41,7 +41,7 @@
     - ui_dbg.h
     - ui_memedit.h
     - ui_memmap.h
-    
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
@@ -58,7 +58,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -191,7 +191,7 @@ static void _ui_kc85_update_memmap(ui_kc85_t* ui) {
             ui_memmap_region(&ui->memmap, "CAOS ROM", 0xE000, 0x2000, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
     #else
         /* KC85/4 memory map */
-        const uint8_t pio_b = ui->kc85->pio_b;        
+        const uint8_t pio_b = ui->kc85->pio_b;
         const uint8_t io86  = ui->kc85->io86;
         const uint8_t io84  = ui->kc85->io84;
         ui_memmap_layer(&ui->memmap, "System 0");
@@ -213,7 +213,7 @@ static void _ui_kc85_update_memmap(ui_kc85_t* ui) {
         ui_memmap_layer(&ui->memmap, "System 5");
             ui_memmap_region(&ui->memmap, "RAM8 BANK1", 0x8000, 0x4000, (0 != (pio_b & KC85_PIO_B_RAM8)) && (0 != (io84 & KC85_IO84_SEL_RAM8)));
     #endif
-    for (int i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
         const uint8_t slot_addr = ui->kc85->exp.slot[i].addr;
         ui_memmap_layer(&ui->memmap, slot_addr == 0x08 ? "Slot 08" : "Slot 0C");
         if (kc85_slot_occupied(ui->kc85, slot_addr)) {
