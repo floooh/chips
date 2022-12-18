@@ -279,8 +279,6 @@ extern "C" {
 #define KC85_PIO_A_TAPE_LED        (1<<5)
 #define KC85_PIO_A_TAPE_MOTOR      (1<<6)
 #define KC85_PIO_A_BASIC_ROM       (1<<7)
-#define KC85_PIO_B_853_VOLUME_MASK ((1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4))
-#define KC85_PIO_B_854_VOLUME_MASK ((1<<1)|(1<<2)|(1<<3)|(1<<4))
 #define KC85_PIO_B_RAM8            (1<<5)  // KC85/4 only
 #define KC85_PIO_B_RAM8_RO         (1<<6)  // KC85/4 only
 #define KC85_PIO_B_BLINK_ENABLED   (1<<7)
@@ -531,7 +529,7 @@ bool kc85_quickload(kc85_t* sys, kc85_range_t data);
 #define _KC85_FRAMEBUFFER_SIZE_BYTES (_KC85_FRAMEBUFFER_WIDTH * _KC85_FRAMEBUFFER_HEIGHT * 4)
 #define _KC85_DISPLAY_WIDTH (320)
 #define _KC85_DISPLAY_HEIGHT (256)
-#if defined(CHIPS_KC85_TYPE4)
+#if defined(CHIPS_KC85_TYPE_4)
 #define _KC85_SCANLINE_TICKS (113)
 #else
 #define _KC85_SCANLINE_TICKS (112)
@@ -1004,12 +1002,19 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         const uint8_t pio_a = Z80PIO_GET_PA(pins);
         const uint8_t pio_b = Z80PIO_GET_PB(pins);
         #if defined(CHIPS_KC85_TYPE_4)
-            // volume control on KC85/4
-            bool volume_dirty = (pio_b ^ sys->pio_b) & KC85_PIO_B_854_VOLUME_MASK;
-            if (volume_dirty) {
-                float vol = (((~pio_b) & KC85_PIO_B_854_VOLUME_MASK) >> 1) / 15.0f;
+            // volume and symmetry-flip-flop control on KC85/4
+            uint8_t vol_sym_changed = (pio_b ^ sys->pio_b) & 0x1F;
+            if (0 != vol_sym_changed) {
+                float vol = (((~pio_b) & 0x1F) >> 1) / 15.0f;
                 beeper_set_volume(&sys->beeper_1, vol);
                 beeper_set_volume(&sys->beeper_2, vol);
+                // FIXME: not entirely sure if this is how the real hardware works
+                // we'll reset the beeper 'flip-flop' to zero when bit 0 of PIO-B
+                // flips from 0 to 1
+                if (0 != (pio_b & vol_sym_changed & 1)) {
+                    beeper_set(&sys->beeper_1, false);
+                    beeper_set(&sys->beeper_2, false);
+                }
             }
         #else
             // on KC85/2 and /3, PA4 is connected to CPU NMI pin
