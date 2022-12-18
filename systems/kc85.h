@@ -424,7 +424,7 @@ typedef struct {
     struct {
         uint16_t h_tick;
         uint16_t v_count;
-        bool blink_flag;        // foreground color blinking flag toggled by CTC
+        uint8_t blink;      // foreground color blinking flag toggled by CTC, alternatives between 0 and 0x80
         uint8_t* fb;
     } video;
     uint8_t pio_a;          // current PIO-A value, used for bankswitching
@@ -711,7 +711,9 @@ void kc85_reset(kc85_t* sys) {
     sys->pins = z80_prefetch(&sys->cpu, 0xE000);
 }
 
-static inline void _kc85_decode_8pixels(uint8_t* dst, uint8_t pixels, uint8_t colors, bool force_bg) {
+#define CHIPS_KC85_USE_BIT_TWIDDLING (1)
+
+static inline void _kc85_decode_8pixels(uint8_t* dst, uint8_t pixels, uint8_t colors) {
     /*
         select foreground- and background color:
         bit 7: blinking
@@ -728,21 +730,38 @@ static inline void _kc85_decode_8pixels(uint8_t* dst, uint8_t pixels, uint8_t co
 
         (and this bit twiddling code is even still missing reversing the pixel bit order)
     */
-    const uint8_t bg = 0x10 | (colors & 0x7);
-    const uint8_t fg = force_bg ? bg : ((colors>>3) & 0xF);
-    dst[0] = pixels & 0x80 ? fg : bg;
-    dst[1] = pixels & 0x40 ? fg : bg;
-    dst[2] = pixels & 0x20 ? fg : bg;
-    dst[3] = pixels & 0x10 ? fg : bg;
-    dst[4] = pixels & 0x08 ? fg : bg;
-    dst[5] = pixels & 0x04 ? fg : bg;
-    dst[6] = pixels & 0x02 ? fg : bg;
-    dst[7] = pixels & 0x01 ? fg : bg;
+    #if CHIPS_KC85_USE_BIT_TWIDDLING
+        // courtesy of ryg: https://mastodon.gamedev.place/@rygorous/109531596140414988
+        static const uint32_t lut32[16] = {
+            0x00000000, 0xff000000, 0x00ff0000, 0xffff0000,
+            0x0000ff00, 0xff00ff00, 0x00ffff00, 0xffffff00,
+            0x000000ff, 0xff0000ff, 0x00ff00ff, 0xffff00ff,
+            0x0000ffff, 0xff00ffff, 0x00ffffff, 0xffffffff,
+        };
+        const uint32_t colors32 = colors * 0x01010101u;
+        const uint32_t bg32 = 0x10101010 | (colors32 & 0x07070707);
+        const uint32_t fg32 = (colors32 >> 3) & 0x0F0F0F0F;
+        const uint32_t xor32 = bg32 ^ fg32;
+        uint32_t* dst32 = (uint32_t*)dst;
+        dst32[0] = bg32 ^ (xor32 & lut32[pixels >> 4]);
+        dst32[1] = bg32 ^ (xor32 & lut32[pixels & 0xf]);
+    #else
+        const uint8_t bg = 0x10 | (colors & 0x7);
+        const uint8_t fg = (colors>>3) & 0xF;
+        dst[0] = pixels & 0x80 ? fg : bg;
+        dst[1] = pixels & 0x40 ? fg : bg;
+        dst[2] = pixels & 0x20 ? fg : bg;
+        dst[3] = pixels & 0x10 ? fg : bg;
+        dst[4] = pixels & 0x08 ? fg : bg;
+        dst[5] = pixels & 0x04 ? fg : bg;
+        dst[6] = pixels & 0x02 ? fg : bg;
+        dst[7] = pixels & 0x01 ? fg : bg;
+    #endif
 }
 
 static inline uint64_t _kc85_update_raster_counters(kc85_t* sys, uint64_t pins) {
     sys->video.h_tick++;
-    if (sys->video.h_tick >= _KC85_SCANLINE_TICKS) {
+    if (sys->video.h_tick == _KC85_SCANLINE_TICKS) {
         sys->video.h_tick = 0;
         sys->video.v_count++;
         if (sys->video.v_count == _KC85_NUM_SCANLINES) {
@@ -758,7 +777,6 @@ static inline uint64_t _kc85_update_raster_counters(kc85_t* sys, uint64_t pins) 
 static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
     // every 2 CPU ticks, 8 pixels are decoded
     if (sys->video.h_tick & 1) {
-        // decode visible 8-pixel group
         uint16_t x = sys->video.h_tick>>1;
         uint16_t y = sys->video.v_count;
         if ((y < 256) && (x < 40)) {
@@ -773,19 +791,20 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
                 pixel_offset = x | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>4)&0xF)<<9);
                 color_offset = 0x2800 + (x | (((y>>2)&0x3f)<<5));
             }
-            uint8_t pixel_bits = sys->ram[_KC85_IRM0_PAGE][pixel_offset];
-            uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE][color_offset];
-
-            // emulate display needling on KC85/2 and /3, this happens when the
+            //
+            // fg_blank: the color blink flag on pio_b and on the color attribute are conveniently both at (1<<7)
+            //
+            // cpu_access: emulate display needling on KC85/2 and /3, this happens when the
             // CPU accesses video memory, which will force the background color
             // a short duration
-
+            //
+            uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE][color_offset];
+            bool fg_blank = 0 != (color_bits & sys->video.blink & sys->pio_b & (1<<7));
             // same as (pins & Z80_WR) && (addr >= 0x8000) && (addr < 0xC000)
             bool cpu_access = (pins & (Z80_WR | 0xC000)) == (Z80_WR | 0x8000);
-            bool blink_bg = sys->video.blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
-            bool force_bg = (blink_bg && (color_bits & 0x80)) | cpu_access;
+            uint8_t pixel_bits = (fg_blank || cpu_access) ? 0 : sys->ram[_KC85_IRM0_PAGE][pixel_offset];
             uint8_t* dst = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
-            _kc85_decode_8pixels(dst, pixel_bits, color_bits, force_bg);
+            _kc85_decode_8pixels(dst, pixel_bits, color_bits);
         }
     }
     return _kc85_update_raster_counters(sys, pins);
@@ -793,6 +812,27 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
 #endif // KC85/2,/3
 
 #if defined(CHIPS_KC85_TYPE_4)
+
+static inline void _kc85_decode_hicolor_8pixels(uint8_t* dst, uint8_t p0, uint8_t p1) {
+    /*
+        KC85/4 "hicolor" mode
+        Decode 8 pixels for the "HICOLOR" mode with 2-bits per-pixel color.
+        p0 and p1 are the two bitplanes (taken from the pixel and color RAM
+        bank). The color palette is hardwired.
+
+        p0: 8 bits from first IRM page
+        p1: 8 bits from second IRM page
+    */
+    // FIXME: come up with an alternative 'bit-twiddling hack'
+    dst[0] = 0x20 | ((p0>>7)&1)|((p1>>6)&2);
+    dst[1] = 0x20 | ((p0>>6)&1)|((p1>>5)&2);
+    dst[2] = 0x20 | ((p0>>5)&1)|((p1>>4)&2);
+    dst[3] = 0x20 | ((p0>>4)&1)|((p1>>3)&2);
+    dst[4] = 0x20 | ((p0>>3)&1)|((p1>>2)&2);
+    dst[5] = 0x20 | ((p0>>2)&1)|((p1>>1)&2);
+    dst[6] = 0x20 | ((p0>>1)&1)|((p1>>0)&2);
+    dst[7] = 0x20 | ((p0>>0)&1)|((p1<<1)&2);
+}
 
 static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
     // decode 8 pixels every second tick
@@ -802,35 +842,19 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
         if ((y < 256) && (x < 40)) {
             size_t irm_index = (sys->io84 & 1) * 2;
             size_t offset = (x<<8) | y;
-            uint8_t p0 = sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
-            uint8_t p1 = sys->ram[_KC85_IRM0_PAGE + irm_index + 1][offset];
+            uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE + irm_index + 1][offset];
             uint8_t* dst = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
             if (sys->io84 & KC85_IO84_HICOLOR) {
                 // regular KC85/4 video mode
-                // p0: the pixel bits
-                // p1: the color bits
-                bool blink_bg = sys->video.blink_flag && (sys->pio_b & KC85_PIO_B_BLINK_ENABLED);
-                bool force_bg = blink_bg && (p1 & 0x80); // no bus contention on KC85/4
-                _kc85_decode_8pixels(dst, p0, p1, force_bg);
+                bool fg_blank = 0 != (color_bits & sys->video.blink & sys->pio_b & (1<<7));
+                uint8_t pixel_bits = fg_blank ? 0 : sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
+                _kc85_decode_8pixels(dst, pixel_bits, color_bits);
             }
             else {
-                /*
-                    KC85/4 "hicolor" mode
-                    Decode 8 pixels for the "HICOLOR" mode with 2-bits per-pixel color.
-                    p0 and p1 are the two bitplanes (taken from the pixel and color RAM
-                    bank). The color palette is hardwired.
-
-                    p0: 8 bits from first IRM page
-                    p1: 8 bits from second IRM page
-                */
-                dst[0] = 0x20 | ((p0>>7)&1)|((p1>>6)&2);
-                dst[1] = 0x20 | ((p0>>6)&1)|((p1>>5)&2);
-                dst[2] = 0x20 | ((p0>>5)&1)|((p1>>4)&2);
-                dst[3] = 0x20 | ((p0>>4)&1)|((p1>>3)&2);
-                dst[4] = 0x20 | ((p0>>3)&1)|((p1>>2)&2);
-                dst[5] = 0x20 | ((p0>>2)&1)|((p1>>1)&2);
-                dst[6] = 0x20 | ((p0>>1)&1)|((p1>>0)&2);
-                dst[7] = 0x20 | ((p0>>0)&1)|((p1<<1)&2);
+                // hicolor mode
+                uint8_t p0 = sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
+                uint8_t p1 = color_bits;
+                _kc85_decode_hicolor_8pixels(dst, p0, p1);
             }
         }
     }
@@ -951,7 +975,7 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         }
         // CTC channel 2 trigger controls video blink frequency
         if (pins & Z80CTC_ZCTO2) {
-            sys->video.blink_flag = !sys->video.blink_flag;
+            sys->video.blink ^= 0x80;
         }
         pins &= Z80_PIN_MASK;
     }
