@@ -126,33 +126,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
     CHIPS_ASSERT(ui && ui->kc85 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
-            if (ImGui::BeginMenu("Save Snapshot")) {
-                for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
-                    char buf[128];
-                    if (ui->snapshot.slots[slot_index].valid) {
-                        snprintf(buf, sizeof(buf), "* Slot %zu##save", slot_index);
-                    }
-                    else {
-                        snprintf(buf, sizeof(buf), "Slot %zu##save", slot_index);
-                    }
-                    if (ImGui::MenuItem(buf)) {
-                        ui_snapshot_save_slot(&ui->snapshot, slot_index);
-                    }
-                }
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Load Snapshot")) {
-                for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
-                    if (ui->snapshot.slots[slot_index].valid) {
-                        char buf[128];
-                        snprintf(buf, sizeof(buf), "Slot %zu##load", slot_index);
-                        if (ImGui::MenuItem(buf)) {
-                            ui_snapshot_load_slot(&ui->snapshot, slot_index);
-                        }
-                    }
-                }
-                ImGui::EndMenu();
-            }
+            ui_snapshot_menus(&ui->snapshot);
             if (ImGui::MenuItem("Reset")) {
                 kc85_reset(ui->kc85);
                 ui_dbg_reset(&ui->dbg);

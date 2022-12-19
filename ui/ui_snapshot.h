@@ -82,6 +82,7 @@ typedef struct {
 typedef struct {
     ui_snapshot_save_t save_cb;
     ui_snapshot_load_t load_cb;
+    void* empty_slot_texture;
 } ui_snapshot_desc_t;
 
 // snapshot system state
@@ -93,6 +94,8 @@ typedef struct {
 
 // initialize the snapshot instance
 void ui_snapshot_init(ui_snapshot_t* state, const ui_snapshot_desc_t* desc);
+// inject snap menu UI
+void ui_snapshot_menus(ui_snapshot_t* state);
 // called from UI when a snapshot should be saved
 void ui_snapshot_save_slot(ui_snapshot_t* state, size_t slot_index);
 // called from UI when a snapshot should be loaded
@@ -118,6 +121,55 @@ void ui_snapshot_init(ui_snapshot_t* state, const ui_snapshot_desc_t* desc) {
     memset(state, 0, sizeof(ui_snapshot_t));
     state->save_cb = desc->save_cb;
     state->load_cb = desc->load_cb;
+    for (size_t i = 0; i < UI_SNAPSHOT_MAX_SLOTS; i++) {
+        state->slots[i].info.screenshot.texture = desc->empty_slot_texture;
+    }
+}
+
+void ui_snapshot_menus(ui_snapshot_t* state) {
+    CHIPS_ASSERT(state);
+    if (ImGui::BeginMenu("Save Snapshot")) {
+        for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
+            ImTextureID screenshot = state->slots[slot_index].info.screenshot.texture;
+            if (screenshot) {
+                ImGui::PushID(slot_index);
+                const ImVec2 pos = ImGui::GetCursorPos();
+                bool pressed = ImGui::Selectable("##savesnapshot", false, 0, (ImVec2){ 128.0f, 96.0f });
+                ImGui::SetCursorPos(pos);
+                ImGui::Image(screenshot, (ImVec2){ 128.0f, 96.0f });
+                if (pressed) {
+                    ui_snapshot_save_slot(state, slot_index);
+                }
+                if ((slot_index + 1) & 1) {
+                    ImGui::SameLine();
+                }
+                ImGui::PopID();
+            }
+        }
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Load Snapshot")) {
+        for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
+            if (state->slots[slot_index].valid) {
+                ImTextureID screenshot = state->slots[slot_index].info.screenshot.texture;
+                if (screenshot) {
+                    ImGui::PushID(slot_index);
+                    const ImVec2 pos = ImGui::GetCursorPos();
+                    bool pressed = ImGui::Selectable("##loadsnapshot", false, 0, (ImVec2){ 128.0f, 96.0f });
+                    ImGui::SetCursorPos(pos);
+                    ImGui::Image(screenshot, (ImVec2){ 128.0f, 96.0f });
+                    if (pressed) {
+                        ui_snapshot_load_slot(state, slot_index);
+                    }
+                    if ((slot_index + 1) & 1) {
+                        ImGui::SameLine();
+                    }
+                    ImGui::PopID();
+                }
+            }
+        }
+        ImGui::EndMenu();
+    }
 }
 
 void ui_snapshot_save_slot(ui_snapshot_t* state, size_t slot_index) {
@@ -139,7 +191,10 @@ bool ui_snapshot_load_slot(ui_snapshot_t* state, size_t slot_index) {
 ui_snapshot_slot_info_t ui_snapshot_update_slot_info(ui_snapshot_t* state, size_t slot_index, const ui_snapshot_slot_info_t* slot_info) {
     CHIPS_ASSERT(state && slot_info);
     CHIPS_ASSERT(slot_index < UI_SNAPSHOT_MAX_SLOTS);
-    ui_snapshot_slot_info_t prev_info = state->slots[slot_index].info;
+    ui_snapshot_slot_info_t prev_info = {};
+    if (state->slots[slot_index].valid) {
+        prev_info = state->slots[slot_index].info;
+    }
     state->slots[slot_index].valid = true;
     state->slots[slot_index].info = *slot_info;
     return prev_info;
