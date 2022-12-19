@@ -41,6 +41,7 @@
     - ui_dbg.h
     - ui_memedit.h
     - ui_memmap.h
+    - ui_snapshot.h
 
     ## zlib/libpng license
 
@@ -76,11 +77,10 @@ typedef void (*ui_kc85_boot_t)(kc85_t* sys);
 
 typedef struct {
     kc85_t* kc85;
-    ui_kc85_boot_t boot_cb; /* user-provided callback to reboot */
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_kc85_boot_t boot_cb;                 // user-provided callback to reboot
+    ui_dbg_texture_callbacks_t dbg_texture; // user-provided texture create/update/destroy callbacks
+    ui_dbg_keys_desc_t dbg_keys;            // user-defined hotkeys for ui_dbg_t
+    ui_snapshot_desc_t snapshot;            // snapshot system creation params
 } ui_kc85_desc_t;
 
 typedef struct {
@@ -95,6 +95,7 @@ typedef struct {
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
+    ui_snapshot_t snapshot;
 } ui_kc85_t;
 
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc);
@@ -111,7 +112,7 @@ kc85_debug_t ui_kc85_get_debug(ui_kc85_t* ui);
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
-#include <string.h> /* memset */
+#include <string.h> // memset
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
@@ -125,6 +126,33 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
     CHIPS_ASSERT(ui && ui->kc85 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
+            if (ImGui::BeginMenu("Save Snapshot")) {
+                for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
+                    char buf[128];
+                    if (ui->snapshot.slots[slot_index].valid) {
+                        snprintf(buf, sizeof(buf), "* Slot %zu##save", slot_index);
+                    }
+                    else {
+                        snprintf(buf, sizeof(buf), "Slot %zu##save", slot_index);
+                    }
+                    if (ImGui::MenuItem(buf)) {
+                        ui_snapshot_save_slot(&ui->snapshot, slot_index);
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Load Snapshot")) {
+                for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
+                    if (ui->snapshot.slots[slot_index].valid) {
+                        char buf[128];
+                        snprintf(buf, sizeof(buf), "Slot %zu##load", slot_index);
+                        if (ImGui::MenuItem(buf)) {
+                            ui_snapshot_load_slot(&ui->snapshot, slot_index);
+                        }
+                    }
+                }
+                ImGui::EndMenu();
+            }
             if (ImGui::MenuItem("Reset")) {
                 kc85_reset(ui->kc85);
                 ui_dbg_reset(&ui->dbg);
@@ -213,7 +241,7 @@ static void _ui_kc85_update_memmap(ui_kc85_t* ui) {
         ui_memmap_layer(&ui->memmap, "System 5");
             ui_memmap_region(&ui->memmap, "RAM8 BANK1", 0x8000, 0x4000, (0 != (pio_b & KC85_PIO_B_RAM8)) && (0 != (io84 & KC85_IO84_SEL_RAM8)));
     #endif
-    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_EXP_NUM_SLOTS; i++) {
         const uint8_t slot_addr = ui->kc85->exp.slot[i].addr;
         ui_memmap_layer(&ui->memmap, slot_addr == 0x08 ? "Slot 08" : "Slot 0C");
         if (kc85_slot_occupied(ui->kc85, slot_addr)) {
@@ -352,9 +380,9 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->kc85);
     CHIPS_ASSERT(ui_desc->boot_cb);
-    CHIPS_ASSERT(ui_desc->create_texture_cb && ui_desc->update_texture_cb && ui_desc->destroy_texture_cb);
     ui->kc85 = ui_desc->kc85;
     ui->boot_cb = ui_desc->boot_cb;
+    ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};
@@ -363,9 +391,7 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.y = y;
         desc.z80 = &ui->kc85->cpu;
         desc.read_cb = _ui_kc85_mem_read;
-        desc.create_texture_cb = ui_desc->create_texture_cb;
-        desc.update_texture_cb = ui_desc->update_texture_cb;
-        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.texture_cbs = ui_desc->dbg_texture;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui->kc85;
         ui_dbg_init(&ui->dbg, &desc);
