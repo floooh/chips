@@ -8,12 +8,12 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macro with your own implementation
     (default: assert(c))
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -61,7 +61,7 @@
 
     Each layer is an array of 64 page items (one page item covers 1 KByte of memory).
 
-    The CPU sees the highest priority valid page items (where layer 0 is 
+    The CPU sees the highest priority valid page items (where layer 0 is
     highest priority and layer 3 is lowest priority).
 
     Each page item consists of two host system pointers, one for read access,
@@ -98,7 +98,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -122,7 +122,7 @@ extern "C" {
 
 /* a memory page item maps a chunk of emulator memory to host memory */
 typedef struct {
-    const uint8_t* read_ptr;
+    uint8_t* read_ptr;
     uint8_t* write_ptr;
 } mem_page_t;
 
@@ -176,6 +176,11 @@ uint8_t mem_layer_rd(mem_t* mem, size_t layer, uint16_t addr);
 /* write a byte to a specific layer (slow!) */
 void mem_layer_wr(mem_t* mem, size_t layer, uint16_t addr, uint8_t data);
 
+/* convert any internal pointers to offsets (helper function for serialization) */
+void mem_pointers_to_offsets(mem_t* mem, void* base);
+/* ...and the reverse */
+void mem_offsets_to_pointers(mem_t* mem, void* base);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
@@ -210,7 +215,7 @@ static void _mem_update_page_table(mem_t* m, size_t page_index) {
             break;
         }
     }
-    if (layer_index != MEM_NUM_LAYERS) { 
+    if (layer_index != MEM_NUM_LAYERS) {
         /* found a valid mapping */
 
         /*
@@ -264,7 +269,7 @@ static void _mem_map(mem_t* m, size_t layer, uint16_t addr, uint32_t size, const
         const uint16_t page_index = ((addr+offset) & MEM_ADDR_MASK) >> MEM_PAGE_SHIFT;
         CHIPS_ASSERT(page_index <= MEM_NUM_PAGES);
         mem_page_t* page = &m->layers[layer][page_index];
-        page->read_ptr = read_ptr + offset;
+        page->read_ptr = (uint8_t*)read_ptr + offset;
         if (0 != write_ptr) {
             page->write_ptr = write_ptr + offset;
         }
@@ -295,7 +300,7 @@ void mem_unmap_layer(mem_t* m, size_t layer) {
     CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
     for (size_t page_index = 0; page_index < MEM_NUM_PAGES; page_index++) {
         mem_page_t* page = &m->layers[layer][page_index];
-        page->read_ptr = 0; 
+        page->read_ptr = 0;
         page->write_ptr = 0;
         _mem_update_page_table(m, page_index);
     }
@@ -305,7 +310,7 @@ void mem_unmap_all(mem_t* m) {
     for (size_t layer_index = 0; layer_index < MEM_NUM_LAYERS; layer_index++) {
         for (size_t page_index = 0; page_index < MEM_NUM_PAGES; page_index++) {
             mem_page_t* page = &m->layers[layer_index][page_index];
-            page->read_ptr = 0; 
+            page->read_ptr = 0;
             page->write_ptr = 0;
         }
     }
@@ -317,7 +322,7 @@ void mem_unmap_all(mem_t* m) {
 uint8_t* mem_readptr(mem_t* m, uint16_t addr) {
     CHIPS_ASSERT(m);
     return (uint8_t*) &(m->page_table[addr>>MEM_PAGE_SHIFT].read_ptr[addr&MEM_PAGE_MASK]);
-} 
+}
 
 void mem_write_range(mem_t* m, uint16_t addr, const uint8_t* src, uint32_t num_bytes) {
     for (size_t i = 0; i < num_bytes; i++) {
@@ -339,6 +344,73 @@ void mem_layer_wr(mem_t* mem, size_t layer, uint16_t addr, uint8_t data) {
     CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
     if (mem->layers[layer][addr>>MEM_PAGE_SHIFT].write_ptr) {
         mem->layers[layer][addr>>MEM_PAGE_SHIFT].write_ptr[addr&MEM_PAGE_MASK] = data;
+    }
+}
+
+#define MEM_SPECIAL_OFFSET_NULLPTR (-1)
+#define MEM_SPECIAL_OFFSET_UNMAPPED_PAGE (-2)
+#define MEM_SPECIAL_OFFSET_JUNK_PAGE (-3)
+
+static void mem_ptr_to_offset(uint8_t** ptr_ptr, uint8_t* base) {
+    uint8_t* ptr = *ptr_ptr;
+    if (ptr == 0) {
+        *ptr_ptr = (uint8_t*)(intptr_t)MEM_SPECIAL_OFFSET_NULLPTR;
+    }
+    else if (ptr == _mem_unmapped_page) {
+        *ptr_ptr = (uint8_t*)(intptr_t)MEM_SPECIAL_OFFSET_UNMAPPED_PAGE;
+    }
+    else if (ptr == _mem_junk_page) {
+        *ptr_ptr = (uint8_t*)(intptr_t)MEM_SPECIAL_OFFSET_JUNK_PAGE;
+    }
+    else {
+        CHIPS_ASSERT(base <= *ptr_ptr);
+        *ptr_ptr = (uint8_t*) (*ptr_ptr - base);
+    }
+}
+
+static void mem_offset_to_ptr(uint8_t** ptr_ptr, uint8_t* base) {
+    intptr_t offset = (intptr_t)*ptr_ptr;
+    switch (offset) {
+        case MEM_SPECIAL_OFFSET_NULLPTR:
+            *ptr_ptr = 0;
+            break;
+        case MEM_SPECIAL_OFFSET_UNMAPPED_PAGE:
+            *ptr_ptr = _mem_unmapped_page;
+            break;
+        case MEM_SPECIAL_OFFSET_JUNK_PAGE:
+            *ptr_ptr = _mem_junk_page;
+            break;
+        default:
+            *ptr_ptr = (base + offset);
+            break;
+    }
+}
+
+void mem_pointers_to_offsets(mem_t* mem, void* base) {
+    uint8_t* base8 = (uint8_t*)base;
+    for (size_t page = 0; page < MEM_NUM_PAGES; page++) {
+        mem_ptr_to_offset(&mem->page_table[page].read_ptr, base8);
+        mem_ptr_to_offset(&mem->page_table[page].write_ptr, base8);
+    }
+    for (size_t layer = 0; layer < MEM_NUM_LAYERS; layer++) {
+        for (size_t page = 0; page < MEM_NUM_PAGES; page++) {
+            mem_ptr_to_offset(&mem->layers[layer][page].read_ptr, base8);
+            mem_ptr_to_offset(&mem->layers[layer][page].write_ptr, base8);
+        }
+    }
+}
+
+void mem_offsets_to_pointers(mem_t* mem, void* base) {
+    uint8_t* base8 = (uint8_t*)base;
+    for (size_t page = 0; page < MEM_NUM_PAGES; page++) {
+        mem_offset_to_ptr(&mem->page_table[page].read_ptr, base8);
+        mem_offset_to_ptr(&mem->page_table[page].write_ptr, base8);
+    }
+    for (size_t layer = 0; layer < MEM_NUM_LAYERS; layer++) {
+        for (size_t page = 0; page < MEM_NUM_PAGES; page++) {
+            mem_offset_to_ptr(&mem->layers[layer][page].read_ptr, base8);
+            mem_offset_to_ptr(&mem->layers[layer][page].write_ptr, base8);
+        }
     }
 }
 
