@@ -264,11 +264,21 @@
 extern "C" {
 #endif
 
+#if defined(CHIPS_KC85_TYPE_2)
+#define KC85_TYPE_ID (0x00020000)
+#elif defined(CHIPS_KC85_TYPE_3)
+#define KC85_TYPE_ID (0x00030000)
+#elif defined(CHIPS_KC85_TYPE_4)
+#define KC85_TYPE_ID (0x00040000)
+#endif
+
+// bump this whenever the kc85_t struct layout changes
+#define KC85_SNAPSHOT_VERSION (KC85_TYPE_ID | 0x0001)
+
 #define KC85_MAX_AUDIO_SAMPLES (1024U)      // max number of audio samples in internal sample buffer
 #define KC85_DEFAULT_AUDIO_SAMPLES (128U)   // default number of samples in internal sample buffer
-#define KC85_MAX_TAPE_SIZE (64U * 1024U)    // max size of a snapshot file in bytes
-#define KC85_NUM_SLOTS (2U)                 // 2 expansion slots in main unit, each needs one mem_t layer!
-#define KC85_EXP_BUFSIZE (KC85_NUM_SLOTS*64U*1024U) // expansion system buffer size (64 KB per slot)
+#define KC85_EXP_NUM_SLOTS (2U)             // 2 expansion slots in main unit, each needs one mem_t layer!
+#define KC85_EXP_BUFSIZE (KC85_EXP_NUM_SLOTS*64U*1024U) // expansion system buffer size (64 KB per slot)
 
 // IO bits
 #define KC85_PIO_A_CAOS_ROM        (1<<0)
@@ -411,8 +421,8 @@ typedef struct {
     at layer 1 (layer 0 is used by the base system)
 */
 typedef struct {
-    kc85_slot_t slot[KC85_NUM_SLOTS];   // slots 0x08 and 0x0C in KC85 main unit
-    uint32_t buf_top;                   // offset of free area in expansion buffer (kc85_t.exp_buf[])
+    kc85_slot_t slot[KC85_EXP_NUM_SLOTS];   // slots 0x08 and 0x0C in KC85 main unit
+    uint32_t buf_top;                       // offset of free area in expansion buffer (kc85_t.exp_buf[])
 } kc85_exp_t;
 
 // KC85 emulator state
@@ -505,6 +515,10 @@ const char* kc85_slot_mod_short_name(kc85_t* sys, uint8_t slot_addr);
 uint8_t kc85_slot_ctrl(kc85_t* sys, uint8_t slot_addr);
 // load a .KCC or .TAP snapshot file into the emulator
 bool kc85_quickload(kc85_t* sys, kc85_range_t data);
+// take snapshot, patches any pointers to zero, returns a snapshot version
+uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst);
+// load a snapshot, returns false if snapshot version doesn't match
+bool kc85_load_snapshot(kc85_t* sys, uint32_t version, kc85_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -1178,10 +1192,10 @@ static void _kc85_handle_keyboard(kc85_t* sys) {
 /*=== EXPANSION MODULE SUBSYSTEM =============================================*/
 static void _kc85_exp_init(kc85_t* sys) {
     // assumes that the entire kc85_t struct was memory cleared already!
-    CHIPS_ASSERT(2 == KC85_NUM_SLOTS);
+    CHIPS_ASSERT(2 == KC85_EXP_NUM_SLOTS);
     sys->exp.slot[0].addr = 0x08;
     sys->exp.slot[1].addr = 0x0C;
-    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_EXP_NUM_SLOTS; i++) {
         sys->exp.slot[i].mod.id = 0xFF;
     }
 }
@@ -1219,7 +1233,7 @@ const char* kc85_mod_short_name(kc85_module_type_t mod_type) {
 
 kc85_slot_t* kc85_slot_by_addr(kc85_t* sys, uint8_t slot_addr) {
     CHIPS_ASSERT(sys && sys->valid);
-    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_EXP_NUM_SLOTS; i++) {
         kc85_slot_t* slot = &sys->exp.slot[i];
         if (slot_addr == slot->addr) {
             return slot;
@@ -1334,7 +1348,7 @@ static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
     const uint32_t bytes_to_free = free_slot->mod.size;
     CHIPS_ASSERT(sys->exp.buf_top >= bytes_to_free);
     sys->exp.buf_top -= bytes_to_free;
-    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_EXP_NUM_SLOTS; i++) {
         kc85_slot_t* slot = &sys->exp.slot[i];
         // no module in slot: nothing to do
         if (slot->mod.type == KC85_MODULE_NONE) {
@@ -1474,7 +1488,7 @@ static uint8_t _kc85_exp_module_id(kc85_t* sys, uint8_t slot_addr) {
 }
 
 static void _kc85_exp_update_memory_mapping(kc85_t* sys) {
-    for (size_t i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_EXP_NUM_SLOTS; i++) {
         const kc85_slot_t* slot = &sys->exp.slot[i];
 
         // nothing to do if no module in slot
@@ -1751,6 +1765,41 @@ kc85_display_info_t kc85_display_info(kc85_t* sys) {
             .size = sizeof(_kc85_pal)
         }
     };
+}
+
+uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    memcpy(dst, sys, sizeof(kc85_t));
+    // patch any external pointers to zero and replace internal
+    // pointers with offsets
+    dst->video.fb = 0;
+    dst->debug.callback.func = 0;
+    dst->debug.callback.user_data = 0;
+    dst->audio.callback.func = 0;
+    dst->audio.callback.user_data = 0;
+    dst->patch_callback.func = 0;
+    dst->patch_callback.user_data = 0;
+    mem_pointers_to_offsets(&dst->mem, sys);
+    return KC85_SNAPSHOT_VERSION;
+}
+
+// load a snapshot, returns false if snapshot version doesn't match
+bool kc85_load_snapshot(kc85_t* sys, uint32_t version, kc85_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != KC85_SNAPSHOT_VERSION) {
+        return false;
+    }
+    // intermediate copy
+    static kc85_t im;
+    memcpy(&im, src, sizeof(kc85_t));
+    // patch pointers
+    im.video.fb = sys->video.fb;
+    im.debug.callback = sys->debug.callback;
+    im.audio.callback = sys->audio.callback;
+    im.patch_callback = sys->patch_callback;
+    mem_offsets_to_pointers(&im.mem, sys);
+    memcpy(sys, &im, sizeof(kc85_t));
+    return true;
 }
 
 #endif /* CHIPS_IMPL */
