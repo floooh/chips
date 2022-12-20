@@ -57,10 +57,6 @@ typedef void (*ui_snapshot_save_t)(size_t slot_index);
 typedef bool (*ui_snapshot_load_t)(size_t slot_index);
 
 typedef struct {
-    char str[64];   // zero-terminated string
-} ui_snapshot_name_t;
-
-typedef struct {
     void* texture;  // an abstract texture object as ImTextureID
     int width;      // width of texture in pixels
     int height;     // height of texture in pixels
@@ -68,7 +64,6 @@ typedef struct {
 
 // describe a snapshot slot to the ui
 typedef struct {
-    ui_snapshot_name_t name;
     ui_snapshot_screenshot_t screenshot;
 } ui_snapshot_slot_info_t;
 
