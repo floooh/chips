@@ -1775,6 +1775,7 @@ uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst) {
     dst->video.fb = 0;
     dst->debug.callback.func = 0;
     dst->debug.callback.user_data = 0;
+    dst->debug.stopped = 0;
     dst->audio.callback.func = 0;
     dst->audio.callback.user_data = 0;
     dst->patch_callback.func = 0;
@@ -1794,7 +1795,7 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, kc85_t* src) {
     memcpy(&im, src, sizeof(kc85_t));
     // patch pointers
     im.video.fb = sys->video.fb;
-    im.debug.callback = sys->debug.callback;
+    im.debug = sys->debug;
     im.audio.callback = sys->audio.callback;
     im.patch_callback = sys->patch_callback;
     mem_offsets_to_pointers(&im.mem, sys);
