@@ -992,17 +992,6 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         pins &= Z80_PIN_MASK;
     }
 
-    // tick the audio beepers
-    beeper_tick(&sys->beeper_1);
-    if (beeper_tick(&sys->beeper_2)) {
-        // new audio sample ready
-        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
-        if (sys->audio.sample_pos == sys->audio.num_samples) {
-            sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
-            sys->audio.sample_pos = 0;
-        }
-    }
-
     // tick the PIO
     bool memory_mapping_dirty = false;
     {
@@ -1022,13 +1011,11 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
                 float vol = (((~pio_b) & 0x1F) >> 1) / 15.0f;
                 beeper_set_volume(&sys->beeper_1, vol);
                 beeper_set_volume(&sys->beeper_2, vol);
-                // FIXME: not entirely sure if this is how the real hardware works
-                // we'll reset the beeper 'flip-flop' to zero when bit 0 of PIO-B
-                // flips from 0 to 1
-                if (0 != (pio_b & vol_sym_changed & 1)) {
-                    beeper_set(&sys->beeper_1, false);
-                    beeper_set(&sys->beeper_2, false);
-                }
+            }
+            // PIO-B bit 0 cleared forces the audio beeper flip flop to low
+            if (0 == (pio_b & 1)) {
+                beeper_set(&sys->beeper_1, false);
+                beeper_set(&sys->beeper_2, false);
             }
         #else
             // on KC85/2 and /3, PA4 is connected to CPU NMI pin
@@ -1040,6 +1027,17 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         memory_mapping_dirty |= ((pio_b ^ sys->pio_b) & KC85_PIO_B_MEMORY_BITS);
         sys->pio_b = pio_b;
         pins &= Z80_PIN_MASK;
+    }
+
+    // tick the audio beepers
+    beeper_tick(&sys->beeper_1);
+    if (beeper_tick(&sys->beeper_2)) {
+        // new audio sample ready
+        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
+        if (sys->audio.sample_pos == sys->audio.num_samples) {
+            sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+            sys->audio.sample_pos = 0;
+        }
     }
 
     // IO port 0x80: expansion module control, high byte of
