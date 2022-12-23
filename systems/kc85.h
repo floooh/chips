@@ -310,6 +310,12 @@ extern "C" {
 #define KC85_IO84_MEMORY_BITS   (KC85_IO84_SEL_CPU_COLOR|KC85_IO84_SEL_CPU_IMG|KC85_IO84_SEL_RAM8)
 #define KC85_IO86_MEMORY_BITS   (KC85_IO86_RAM4|KC85_IO86_RAM4_RO|KC85_IO86_CAOS_ROM_C)
 
+// pin mask aliases
+#define KC85_FLIPFLOP_BEEPER_1  (Z80CTC_ZCTO0)
+#define KC85_FLIPFLOP_BEEPER_2  (Z80CTC_ZCTO1)
+#define KC85_FLIPFLOP_BLINK     (Z80CTC_ZCTO2)
+#define KC85_FLIPFLOP_MASK      (KC85_FLIPFLOP_BEEPER_1|KC85_FLIPFLOP_BEEPER_2|KC85_FLIPFLOP_BLINK)
+
 typedef struct {
     const void* ptr;
     size_t size;
@@ -432,7 +438,6 @@ typedef struct {
     struct {
         uint16_t h_tick;
         uint16_t v_count;
-        uint8_t blink;      // foreground color blinking flag toggled by CTC, alternatives between 0 and 0x80
         uint8_t* fb;
     } video;
     uint8_t pio_a;          // current PIO-A value, used for bankswitching
@@ -442,6 +447,7 @@ typedef struct {
         uint8_t io86;           // byte latch at port 0x86, only on KC85/4
     #endif
     z80ctc_t ctc;
+    uint64_t flip_flops;    // audio and blink flip flop bits controlled by CTC
     beeper_t beeper_1;
     beeper_t beeper_2;
     z80pio_t pio;
@@ -811,7 +817,7 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             // a short duration
             //
             uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE][color_offset];
-            bool fg_blank = 0 != (color_bits & sys->video.blink & sys->pio_b & (1<<7));
+            bool fg_blank = 0 != (color_bits & (sys->flip_flops >> (Z80CTC_BIT_ZCTO2-7)) & sys->pio_b & (1<<7));
             // same as (pins & Z80_WR) && (addr >= 0x8000) && (addr < 0xC000)
             bool cpu_access = (pins & (Z80_WR | 0xC000)) == (Z80_WR | 0x8000);
             uint8_t pixel_bits = (fg_blank || cpu_access) ? 0 : sys->ram[_KC85_IRM0_PAGE][pixel_offset];
@@ -858,7 +864,7 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             uint8_t* dst = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
             if (sys->io84 & KC85_IO84_HICOLOR) {
                 // regular KC85/4 video mode
-                bool fg_blank = 0 != (color_bits & sys->video.blink & sys->pio_b & (1<<7));
+                bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & sys->pio_b & (1<<7));
                 uint8_t pixel_bits = fg_blank ? 0 : sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
                 _kc85_decode_8pixels(dst, pixel_bits, color_bits);
             }
@@ -978,17 +984,8 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         if (pins & Z80_A0) { pins |= Z80CTC_CS0; }
         if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
         pins = z80ctc_tick(&sys->ctc, pins);
-        // CTC channels 0 and 1 triggers control audio frequencies
-        if (pins & Z80CTC_ZCTO0) {
-            beeper_toggle(&sys->beeper_1);
-        }
-        if (pins & Z80CTC_ZCTO1) {
-            beeper_toggle(&sys->beeper_2);
-        }
-        // CTC channel 2 trigger controls video blink frequency
-        if (pins & Z80CTC_ZCTO2) {
-            sys->video.blink ^= 0x80;
-        }
+        // toggle audio and blink flip flops
+        sys->flip_flops ^= (pins & KC85_FLIPFLOP_MASK);
         pins &= Z80_PIN_MASK;
     }
 
@@ -1014,8 +1011,7 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
             }
             // PIO-B bit 0 cleared forces the audio beeper flip flop to low
             if (0 == (pio_b & 1)) {
-                beeper_set(&sys->beeper_1, false);
-                beeper_set(&sys->beeper_2, false);
+                sys->flip_flops &= ~(KC85_FLIPFLOP_BEEPER_1|KC85_FLIPFLOP_BEEPER_2);
             }
         #else
             // on KC85/2 and /3, PA4 is connected to CPU NMI pin
@@ -1030,6 +1026,8 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
     }
 
     // tick the audio beepers
+    beeper_set(&sys->beeper_1, sys->flip_flops & KC85_FLIPFLOP_BEEPER_1);
+    beeper_set(&sys->beeper_2, sys->flip_flops & KC85_FLIPFLOP_BEEPER_2);
     beeper_tick(&sys->beeper_1);
     if (beeper_tick(&sys->beeper_2)) {
         // new audio sample ready
