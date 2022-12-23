@@ -49,7 +49,7 @@
     ~~~C
     void z80pio_reset(z80pio_t* pio)
     ~~~
-        Reset the Z80 PIO instance. 
+        Reset the Z80 PIO instance.
 
         The reset state performs the following functions:
         1. Both port mask registers are reset to inhibit all port data bits.
@@ -64,7 +64,7 @@
     ~~~
         Tick a Z80 PIO instance, call this for every CPU tick. Depending on the input
         pin mask and internal state, the PIO will perform IO requests from the CPU,
-        check any input port conditions that might trigger, perform the 
+        check any input port conditions that might trigger, perform the
         interrupt daisychain protocol and returns a potentially modified
         pin mask.
 
@@ -106,7 +106,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -116,8 +116,8 @@ extern "C" {
 #endif
 
 /*
-    Pin definitions. 
-    
+    Pin definitions.
+
     All pin locations from 0 to 39 are shared with the CPU. Chip-type
     specific pins start at position 40. This enables efficient bus-sharing
     with the CPU and other Z80-family chips.
@@ -132,42 +132,73 @@ extern "C" {
 */
 
 /* control pins directly shared with CPU */
-#define Z80PIO_M1       (1ULL<<24)      /* CPU Machine Cycle One, same as Z80_M1 */
-#define Z80PIO_IORQ     (1ULL<<26)      /* IO Request from CPU, same as Z80_IORQ */
-#define Z80PIO_RD       (1ULL<<27)      /* Read Cycle Status from CPU, same as Z80_RD */
-#define Z80PIO_INT      (1ULL<<30)      /* Interrupt Request, same as Z80_INT */
+#define Z80PIO_PIN_M1    (24)      /* CPU Machine Cycle One, same as Z80_M1 */
+#define Z80PIO_PIN_IORQ  (26)      /* IO Request from CPU, same as Z80_IORQ */
+#define Z80PIO_PIN_RD    (27)      /* Read Cycle Status from CPU, same as Z80_RD */
+#define Z80PIO_PIN_INT   (30)      /* Interrupt Request, same as Z80_INT */
 
 /* Z80 interrupt daisy chain shared pins */
-#define Z80PIO_IEIO     (1ULL<<37)      /* combined Interrupt Enable In/Out (same as Z80_IEIO) */
-#define Z80PIO_RETI     (1ULL<<38)      /* CPU has decoded a RETI instruction (same as Z80_RETI) */
+#define Z80PIO_PIN_IEIO  (37)      /* combined Interrupt Enable In/Out (same as Z80_IEIO) */
+#define Z80PIO_PIN_RETI  (38)      /* CPU has decoded a RETI instruction (same as Z80_RETI) */
 
 /* PIO specific pins start at bit 40 */
-#define Z80PIO_CE       (1ULL<<40)      /* Chip Enable */
-#define Z80PIO_BASEL    (1ULL<<41)      /* Port A/B Select (inactive: A, active: B) */
-#define Z80PIO_CDSEL    (1ULL<<42)      /* Control/Data Select (inactive: data, active: control) */
-#define Z80PIO_ARDY     (1ULL<<43)      /* Port A Ready */
-#define Z80PIO_BRDY     (1ULL<<44)      /* Port B Ready */
-#define Z80PIO_ASTB     (1ULL<<45)      /* Port A Strobe */
-#define Z80PIO_BSTB     (1ULL<<46)      /* Port B Strobe */
+#define Z80PIO_PIN_CE    (40)      /* Chip Enable */
+#define Z80PIO_PIN_BASEL (41)      /* Port A/B Select (inactive: A, active: B) */
+#define Z80PIO_PIN_CDSEL (42)      /* Control/Data Select (inactive: data, active: control) */
+#define Z80PIO_PIN_ARDY  (43)      /* Port A Ready */
+#define Z80PIO_PIN_BRDY  (44)      /* Port B Ready */
+#define Z80PIO_PIN_ASTB  (45)      /* Port A Strobe */
+#define Z80PIO_PIN_BSTB  (46)      /* Port B Strobe */
 
 /* A/B 8-bit port pins */
-#define Z80PIO_PA0      (1ULL<<48)
-#define Z80PIO_PA1      (1ULL<<49)
-#define Z80PIO_PA2      (1ULL<<50)
-#define Z80PIO_PA3      (1ULL<<51)
-#define Z80PIO_PA4      (1ULL<<52)
-#define Z80PIO_PA5      (1ULL<<53)
-#define Z80PIO_PA6      (1ULL<<54)
-#define Z80PIO_PA7      (1ULL<<55)
+#define Z80PIO_PIN_PA0   (48)
+#define Z80PIO_PIN_PA1   (49)
+#define Z80PIO_PIN_PA2   (50)
+#define Z80PIO_PIN_PA3   (51)
+#define Z80PIO_PIN_PA4   (52)
+#define Z80PIO_PIN_PA5   (53)
+#define Z80PIO_PIN_PA6   (54)
+#define Z80PIO_PIN_PA7   (55)
 
-#define Z80PIO_PB0      (1ULL<<56)
-#define Z80PIO_PB1      (1ULL<<57)
-#define Z80PIO_PB2      (1ULL<<58)
-#define Z80PIO_PB3      (1ULL<<59)
-#define Z80PIO_PB4      (1ULL<<60)
-#define Z80PIO_PB5      (1ULL<<61)
-#define Z80PIO_PB6      (1ULL<<62)
-#define Z80PIO_PB7      (1ULL<<63)
+#define Z80PIO_PIN_PB0   (56)
+#define Z80PIO_PIN_PB1   (57)
+#define Z80PIO_PIN_PB2   (58)
+#define Z80PIO_PIN_PB3   (59)
+#define Z80PIO_PIN_PB4   (60)
+#define Z80PIO_PIN_PB5   (61)
+#define Z80PIO_PIN_PB6   (62)
+#define Z80PIO_PIN_PB7   (63)
+
+// pin bit masks
+#define Z80PIO_M1       (1ULL<<Z80PIO_PIN_M1)
+#define Z80PIO_IORQ     (1ULL<<Z80PIO_PIN_IORQ)
+#define Z80PIO_RD       (1ULL<<Z80PIO_PIN_RD)
+#define Z80PIO_INT      (1ULL<<Z80PIO_PIN_INT)
+#define Z80PIO_IEIO     (1ULL<<Z80PIO_PIN_IEIO)
+#define Z80PIO_RETI     (1ULL<<Z80PIO_PIN_RETI)
+#define Z80PIO_CE       (1ULL<<Z80PIO_PIN_CE)
+#define Z80PIO_BASEL    (1ULL<<Z80PIO_PIN_BASEL)
+#define Z80PIO_CDSEL    (1ULL<<Z80PIO_PIN_CDSEL)
+#define Z80PIO_ARDY     (1ULL<<Z80PIO_PIN_ARDY)
+#define Z80PIO_BRDY     (1ULL<<Z80PIO_PIN_BRDY)
+#define Z80PIO_ASTB     (1ULL<<Z80PIO_PIN_ASTB)
+#define Z80PIO_BSTB     (1ULL<<Z80PIO_PIN_BSTB)
+#define Z80PIO_PA0      (1ULL<<Z80PIO_PIN_PA0)
+#define Z80PIO_PA1      (1ULL<<Z80PIO_PIN_PA1)
+#define Z80PIO_PA2      (1ULL<<Z80PIO_PIN_PA2)
+#define Z80PIO_PA3      (1ULL<<Z80PIO_PIN_PA3)
+#define Z80PIO_PA4      (1ULL<<Z80PIO_PIN_PA4)
+#define Z80PIO_PA5      (1ULL<<Z80PIO_PIN_PA5)
+#define Z80PIO_PA6      (1ULL<<Z80PIO_PIN_PA6)
+#define Z80PIO_PA7      (1ULL<<Z80PIO_PIN_PA7)
+#define Z80PIO_PB0      (1ULL<<Z80PIO_PIN_PB0)
+#define Z80PIO_PB1      (1ULL<<Z80PIO_PIN_PB1)
+#define Z80PIO_PB2      (1ULL<<Z80PIO_PIN_PB2)
+#define Z80PIO_PB3      (1ULL<<Z80PIO_PIN_PB3)
+#define Z80PIO_PB4      (1ULL<<Z80PIO_PIN_PB4)
+#define Z80PIO_PB5      (1ULL<<Z80PIO_PIN_PB5)
+#define Z80PIO_PB6      (1ULL<<Z80PIO_PIN_PB6)
+#define Z80PIO_PB7      (1ULL<<Z80PIO_PIN_PB7)
 
 /* Port Names */
 #define Z80PIO_PORT_A       (0)
@@ -179,7 +210,7 @@ extern "C" {
 
     The operating mode of a port is established by writing a control word
     to the PIO in the following format:
- 
+
      D7 D6 D5 D4 D3 D2 D1 D0
     |M1|M0| x| x| 1| 1| 1| 1|
 
@@ -202,7 +233,7 @@ extern "C" {
     D5 (HIGH/LOW)       port data polarity during port monitoring (only Mode 3)
     D4 (MASK FOLLOWS)   if set, the next control word are the port monitoring mask (only Mode 3)
 
-    (*) if an interrupt is pending when the enable flag is set, it will then be 
+    (*) if an interrupt is pending when the enable flag is set, it will then be
         enabled on the onto the CPU interrupt request line
     (*) setting bit D4 during any mode of operation will cause any pending
         interrupt to be reset
@@ -326,7 +357,7 @@ void _z80pio_write_ctrl(z80pio_t* pio, int port_id, uint8_t data) {
         p->io_select = data;
         p->int_enabled = (p->int_control & Z80PIO_INTCTRL_EI) ? true:false;
         p->expect_io_select = false;
-    } 
+    }
     else if (p->expect_int_mask) {
         /* followup interrupt mask */
         p->int_mask = data;
