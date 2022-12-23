@@ -8,7 +8,7 @@
     ~~~~C
     #define CHIPS_IMPL
     ~~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide
@@ -30,7 +30,7 @@
     * NMI   --->|           |<--> ... *
     * RFSH  <---|           |<--> D7  *
     *           +-----------+         *
-    ***********************************    
+    ***********************************
 
     ## Functions
 
@@ -43,13 +43,13 @@
     ~~~C
     uint64_t z80_reset(z80_t* cpu)
     ~~~
-        Resets a z80_t instance, returns pin mask to start execution at 
+        Resets a z80_t instance, returns pin mask to start execution at
         address 0.
 
     ~~~C
     uint64_t z80_tick(z80_t* cpu, uint64_t pins)
     ~~~
-        Step the z80_t instance for one clock cycle. 
+        Step the z80_t instance for one clock cycle.
 
     ~~~C
     uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc)
@@ -97,11 +97,11 @@
             }
         }
     ~~~
-    The CPU will now run through the whole address space executing NOPs (because the memory is 
+    The CPU will now run through the whole address space executing NOPs (because the memory is
     filled with 0s instead of a valid program). If there would be a valid Z80 program at memory
     address 0, this would be executed instead.
 
-    IO requests are handled the same as memory requests, but instead of the MREQ pin, the 
+    IO requests are handled the same as memory requests, but instead of the MREQ pin, the
     IORQ pin must be checked:
     ~~~C
         uint8_t mem[(1<<16)] = {0};
@@ -219,7 +219,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -229,49 +229,88 @@ extern "C" {
 #endif
 
 // address pins
-#define Z80_A0  (1ULL<<0)
-#define Z80_A1  (1ULL<<1)
-#define Z80_A2  (1ULL<<2)
-#define Z80_A3  (1ULL<<3)
-#define Z80_A4  (1ULL<<4)
-#define Z80_A5  (1ULL<<5)
-#define Z80_A6  (1ULL<<6)
-#define Z80_A7  (1ULL<<7)
-#define Z80_A8  (1ULL<<8)
-#define Z80_A9  (1ULL<<9)
-#define Z80_A10 (1ULL<<10)
-#define Z80_A11 (1ULL<<11)
-#define Z80_A12 (1ULL<<12)
-#define Z80_A13 (1ULL<<13)
-#define Z80_A14 (1ULL<<14)
-#define Z80_A15 (1ULL<<15)
+#define Z80_PIN_A0  (0)
+#define Z80_PIN_A1  (1)
+#define Z80_PIN_A2  (2)
+#define Z80_PIN_A3  (3)
+#define Z80_PIN_A4  (4)
+#define Z80_PIN_A5  (5)
+#define Z80_PIN_A6  (6)
+#define Z80_PIN_A7  (7)
+#define Z80_PIN_A8  (8)
+#define Z80_PIN_A9  (9)
+#define Z80_PIN_A10 (10)
+#define Z80_PIN_A11 (11)
+#define Z80_PIN_A12 (12)
+#define Z80_PIN_A13 (13)
+#define Z80_PIN_A14 (14)
+#define Z80_PIN_A15 (15)
 
 // data pins
-#define Z80_D0  (1ULL<<16)
-#define Z80_D1  (1ULL<<17)
-#define Z80_D2  (1ULL<<18)
-#define Z80_D3  (1ULL<<19)
-#define Z80_D4  (1ULL<<20)
-#define Z80_D5  (1ULL<<21)
-#define Z80_D6  (1ULL<<22)
-#define Z80_D7  (1ULL<<23)
+#define Z80_PIN_D0  (16)
+#define Z80_PIN_D1  (17)
+#define Z80_PIN_D2  (18)
+#define Z80_PIN_D3  (19)
+#define Z80_PIN_D4  (20)
+#define Z80_PIN_D5  (21)
+#define Z80_PIN_D6  (22)
+#define Z80_PIN_D7  (23)
 
 // control pins
-#define Z80_M1    (1ULL<<24)        // machine cycle 1
-#define Z80_MREQ  (1ULL<<25)        // memory request
-#define Z80_IORQ  (1ULL<<26)        // input/output request
-#define Z80_RD    (1ULL<<27)        // read
-#define Z80_WR    (1ULL<<28)        // write
-#define Z80_HALT  (1ULL<<29)        // halt state
-#define Z80_INT   (1ULL<<30)        // interrupt request
-#define Z80_RES   (1ULL<<31)        // reset requested
-#define Z80_NMI   (1ULL<<32)        // non-maskable interrupt
-#define Z80_WAIT  (1ULL<<33)        // wait requested
-#define Z80_RFSH  (1ULL<<34)        // refresh
+#define Z80_PIN_M1    (24)        // machine cycle 1
+#define Z80_PIN_MREQ  (25)        // memory request
+#define Z80_PIN_IORQ  (26)        // input/output request
+#define Z80_PIN_RD    (27)        // read
+#define Z80_PIN_WR    (28)        // write
+#define Z80_PIN_HALT  (29)        // halt state
+#define Z80_PIN_INT   (30)        // interrupt request
+#define Z80_PIN_RES   (31)        // reset requested
+#define Z80_PIN_NMI   (32)        // non-maskable interrupt
+#define Z80_PIN_WAIT  (33)        // wait requested
+#define Z80_PIN_RFSH  (34)        // refresh
 
 // virtual pins (for interrupt daisy chain protocol)
-#define Z80_IEIO    (1ULL<<37)      // unified daisy chain 'Interrupt Enable In+Out'
-#define Z80_RETI    (1ULL<<38)      // cpu has decoded a RETI instruction
+#define Z80_PIN_IEIO  (37)      // unified daisy chain 'Interrupt Enable In+Out'
+#define Z80_PIN_RETI  (38)      // cpu has decoded a RETI instruction
+
+// pin bit masks
+#define Z80_A0    (1ULL<<Z80_PIN_A0)
+#define Z80_A1    (1ULL<<Z80_PIN_A1)
+#define Z80_A2    (1ULL<<Z80_PIN_A2)
+#define Z80_A3    (1ULL<<Z80_PIN_A3)
+#define Z80_A4    (1ULL<<Z80_PIN_A4)
+#define Z80_A5    (1ULL<<Z80_PIN_A5)
+#define Z80_A6    (1ULL<<Z80_PIN_A6)
+#define Z80_A7    (1ULL<<Z80_PIN_A7)
+#define Z80_A8    (1ULL<<Z80_PIN_A8)
+#define Z80_A9    (1ULL<<Z80_PIN_A9)
+#define Z80_A10   (1ULL<<Z80_PIN_A10)
+#define Z80_A11   (1ULL<<Z80_PIN_A11)
+#define Z80_A12   (1ULL<<Z80_PIN_A12)
+#define Z80_A13   (1ULL<<Z80_PIN_A13)
+#define Z80_A14   (1ULL<<Z80_PIN_A14)
+#define Z80_A15   (1ULL<<Z80_PIN_A15)
+#define Z80_D0    (1ULL<<Z80_PIN_D0)
+#define Z80_D1    (1ULL<<Z80_PIN_D1)
+#define Z80_D2    (1ULL<<Z80_PIN_D2)
+#define Z80_D3    (1ULL<<Z80_PIN_D3)
+#define Z80_D4    (1ULL<<Z80_PIN_D4)
+#define Z80_D5    (1ULL<<Z80_PIN_D5)
+#define Z80_D6    (1ULL<<Z80_PIN_D6)
+#define Z80_D7    (1ULL<<Z80_PIN_D7)
+#define Z80_M1    (1ULL<<Z80_PIN_M1)
+#define Z80_MREQ  (1ULL<<Z80_PIN_MREQ)
+#define Z80_IORQ  (1ULL<<Z80_PIN_IORQ)
+#define Z80_RD    (1ULL<<Z80_PIN_RD)
+#define Z80_WR    (1ULL<<Z80_PIN_WR)
+#define Z80_HALT  (1ULL<<Z80_PIN_HALT)
+#define Z80_INT   (1ULL<<Z80_PIN_INT)
+#define Z80_RES   (1ULL<<Z80_PIN_RES)
+#define Z80_NMI   (1ULL<<Z80_PIN_NMI)
+#define Z80_WAIT  (1ULL<<Z80_PIN_WAIT)
+#define Z80_RFSH  (1ULL<<Z80_PIN_RFSH)
+#define Z80_IEIO  (1ULL<<Z80_PIN_IEIO)
+#define Z80_RETI  (1ULL<<Z80_PIN_RETI)
 
 #define Z80_CTRL_PIN_MASK (Z80_M1|Z80_MREQ|Z80_IORQ|Z80_RD|Z80_WR|Z80_RFSH)
 #define Z80_PIN_MASK ((1ULL<<40)-1)
@@ -432,12 +471,12 @@ static inline uint8_t _z80_sub_flags(uint8_t acc, uint8_t val, uint32_t res) {
 }
 
 static inline uint8_t _z80_cp_flags(uint8_t acc, uint8_t val, uint32_t res) {
-    return Z80_NF | 
+    return Z80_NF |
         _z80_sz_flags(res) |
         (val & (Z80_YF|Z80_XF)) |
         ((res >> 8) & Z80_CF) |
         ((acc ^ val ^ res) & Z80_HF) |
-        ((((val ^ acc) & (res ^ acc)) >> 5) & Z80_VF);    
+        ((((val ^ acc) & (res ^ acc)) >> 5) & Z80_VF);
 }
 
 static inline uint8_t _z80_sziff2_flags(z80_t* cpu, uint8_t val) {
@@ -601,7 +640,7 @@ static inline void _z80_add16(z80_t* cpu, uint16_t val) {
     const uint32_t res = acc + val;
     cpu->hlx[cpu->hlx_idx].hl = res;
     cpu->f = (cpu->f & (Z80_SF|Z80_ZF|Z80_VF)) |
-             (((acc ^ res ^ val)>>8)&Z80_HF) | 
+             (((acc ^ res ^ val)>>8)&Z80_HF) |
              ((res >> 16) & Z80_CF) |
              ((res >> 8) & (Z80_YF|Z80_XF));
 }
@@ -625,7 +664,7 @@ static inline void _z80_sbc16(z80_t* cpu, uint16_t val) {
     cpu->wz = acc + 1;
     const uint32_t res = acc - val - (cpu->f & Z80_CF);
     cpu->hl = res;
-    cpu->f = (Z80_NF | (((val ^ acc) & (acc ^ res) & 0x8000) >> 13)) | 
+    cpu->f = (Z80_NF | (((val ^ acc) & (acc ^ res) & 0x8000) >> 13)) |
              (((acc ^ res ^ val) >> 8) & Z80_HF) |
              ((res >> 16) & Z80_CF) |
              ((res >> 8) & (Z80_SF|Z80_YF|Z80_XF)) |
@@ -928,7 +967,7 @@ static inline uint64_t _z80_fetch_cb(z80_t* cpu, uint64_t pins) {
     if (cpu->hlx_idx > 0) {
         // this is a DD+CB / FD+CB instruction, continue
         // execution on the special DDCB/FDCB decoder block which
-        // loads the d-offset first and then the opcode in a 
+        // loads the d-offset first and then the opcode in a
         // regular memory read machine cycle
         cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_DDFDCB];
     }
