@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -60,7 +60,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -70,12 +70,35 @@
 extern "C" {
 #endif
 
+// bump this whenever the z1013_t struct layout changes
+#define Z1013_SNAPSHOT_VERSION (0x0001)
+
 // Z1013 model types
 typedef enum {
     Z1013_TYPE_64,      // Z1013.64 (default, latest model with 2 MHz and 64 KB RAM, new ROM)
     Z1013_TYPE_16,      // Z1013.16 (2 MHz model with 16 KB RAM, new ROM)
     Z1013_TYPE_01,      // Z1013.01 (original model, 1 MHz, 16 KB RAM)
 } z1013_type_t;
+
+typedef struct {
+    void* ptr;
+    size_t size;
+} z1013_range_t;
+
+typedef struct {
+    // the required overall framebuffer dimensions, may include debug visualization
+    // width will be a multiple of 2^N
+    struct {
+        int width, height;
+        size_t size_bytes;
+    } framebuffer;
+    // the currently visible area in the framebuffer rectangle
+    struct {
+        int x, y, width, height;
+    } screen;
+    // the color palette as RGBA8, 2 colors (black and white)
+    z1013_range_t palette;
+} z1013_display_info_t;
 
 // debugging hook definitions
 typedef void (*z1013_debug_func_t)(void* user_data, uint64_t pins);
@@ -87,35 +110,27 @@ typedef struct {
     bool* stopped;
 } z1013_debug_t;
 
-typedef struct {
-    const void* ptr;
-    size_t size;
-} z1013_rom_image_t;
-
 // configuration parameters for z1013_setup()
 typedef struct {
     z1013_type_t type;          // default is Z1013_TYPE_64
     z1013_debug_t debug;        // optional debug callback and userdata ptr
 
     // video output config
-    struct {
-        void* ptr;          // pointer to a linear RGBA8 pixel buffer, at least 256*256*4 bytes
-        size_t size;        // size of the pixel buffer in bytes
-    } pixel_buffer;
+    z1013_range_t framebuffer;
 
     // ROM images
     struct {
-        z1013_rom_image_t mon202;
-        z1013_rom_image_t mon_a2;
-        z1013_rom_image_t font;
+        z1013_range_t mon202;
+        z1013_range_t mon_a2;
+        z1013_range_t font;
     } roms;
 } z1013_desc_t;
 
 // Z1013 emulator state
 typedef struct {
     z80_t cpu;
-    z80pio_t pio;
     mem_t mem;
+    z80pio_t pio;
     z1013_debug_t debug;
     uint64_t pins;
     z1013_type_t type;
@@ -136,22 +151,20 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc);
 void z1013_discard(z1013_t* sys);
 // reset Z1013 instance
 void z1013_reset(z1013_t* sys);
+// query information about display requirements, can be called with nullptr
+z1013_display_info_t z1013_display_info(z1013_t* sys);
 // run the Z1013 instance for a given number of microseconds, returns number of executed ticks
 uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds);
-// get the standard framebuffer width and height in pixels
-int z1013_std_display_width(void);
-int z1013_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-size_t z1013_max_display_size(void);
-// get the current framebuffer width and height in pixels
-int z1013_display_width(z1013_t* sys);
-int z1013_display_height(z1013_t* sys);
 // send a key-down event
 void z1013_key_down(z1013_t* sys, int key_code);
 // send a key-up event
 void z1013_key_up(z1013_t* sys, int key_code);
 // load a "KC .z80" file into the emulator
 bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
+// take snapshot, patches any pointers to zero, returns a snapshot version
+uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst);
+// load a snapshot, returns false if snapshot version doesn't match
+bool z1013_load_snapshot(z1013_t* sys, uint32_t version, z1013_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -165,9 +178,11 @@ bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
 #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#define _Z1013_FRAMEBUFFER_WIDTH (256)
+#define _Z1013_FRAMEBUFFER_HEIGHT (256)
+#define _Z1013_FRAMEBUFFER_SIZE_BYTES (_Z1013_FRAMEBUFFER_WIDTH*_Z1013_FRAMEBUFFER_HEIGHT*4)
 #define _Z1013_DISPLAY_WIDTH (256)
 #define _Z1013_DISPLAY_HEIGHT (256)
-#define _Z1013_DISPLAY_SIZE (_Z1013_DISPLAY_WIDTH*_Z1013_DISPLAY_HEIGHT*4)
 
 /*
     IO address decoding.
@@ -259,7 +274,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
         kbd_register_modifier(&sys->kbd, 0, 0, 3);
         kbd_register_modifier(&sys->kbd, 1, 1, 3);
         kbd_register_modifier(&sys->kbd, 2, 2, 3);
-        kbd_register_modifier(&sys->kbd, 3, 3, 3);       
+        kbd_register_modifier(&sys->kbd, 3, 3, 3);
         const char* keymap =
             // no shift
             "@ABCDEFG"  "HIJKLMNO"  "PQRSTUVW"  "        "
@@ -296,7 +311,7 @@ void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
         // ctrl key modifier is column 6 line 5
         const int ctrl = 1, ctrl_mask = (1<<ctrl);
         kbd_register_modifier(&sys->kbd, ctrl, 6, 5);
-        const char* keymap = 
+        const char* keymap =
             // no shift
             "13579-  QETUO@  ADGJL*  YCBM.^  24680[  WRZIP]  SFHK+\\  XVN,/_  "
             // shift
