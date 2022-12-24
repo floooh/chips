@@ -273,7 +273,7 @@ extern "C" {
 #endif
 
 // bump this whenever the kc85_t struct layout changes
-#define KC85_SNAPSHOT_VERSION (KC85_TYPE_ID | 0x0001)
+#define KC85_SNAPSHOT_VERSION (KC85_TYPE_ID | 0x0002)
 
 #define KC85_MAX_AUDIO_SAMPLES (1024U)      // max number of audio samples in internal sample buffer
 #define KC85_DEFAULT_AUDIO_SAMPLES (128U)   // default number of samples in internal sample buffer
@@ -281,17 +281,17 @@ extern "C" {
 #define KC85_EXP_BUFSIZE (KC85_EXP_NUM_SLOTS*64U*1024U) // expansion system buffer size (64 KB per slot)
 
 // IO bits
-#define KC85_PIO_A_CAOS_ROM        (1<<0)
-#define KC85_PIO_A_RAM             (1<<1)
-#define KC85_PIO_A_IRM             (1<<2)
-#define KC85_PIO_A_RAM_RO          (1<<3)
-#define KC85_PIO_A_NMI             (1<<4)   // KC84/2,3 only: trigger an NMI
-#define KC85_PIO_A_TAPE_LED        (1<<5)
-#define KC85_PIO_A_TAPE_MOTOR      (1<<6)
-#define KC85_PIO_A_BASIC_ROM       (1<<7)
-#define KC85_PIO_B_RAM8            (1<<5)  // KC85/4 only
-#define KC85_PIO_B_RAM8_RO         (1<<6)  // KC85/4 only
-#define KC85_PIO_B_BLINK_ENABLED   (1<<7)
+#define KC85_PIO_CAOS_ROM        Z80PIO_PA0
+#define KC85_PIO_RAM             Z80PIO_PA1
+#define KC85_PIO_IRM             Z80PIO_PA2
+#define KC85_PIO_RAM_RO          Z80PIO_PA3
+#define KC85_PIO_NMI             Z80PIO_PA4   // KC84/2,3 only: trigger an NMI
+#define KC85_PIO_TAPE_LED        Z80PIO_PA5
+#define KC85_PIO_TAPE_MOTOR      Z80PIO_PA6
+#define KC85_PIO_BASIC_ROM       Z80PIO_PA7
+#define KC85_PIO_RAM8            Z80PIO_PB5  // KC85/4 only
+#define KC85_PIO_RAM8_RO         Z80PIO_PB6  // KC85/4 only
+#define KC85_PIO_BLINK_ENABLED   Z80PIO_PB7
 
 // KC85/4 only IO latches
 #define KC85_IO84_SEL_VIEW_IMG     (1<<0)  // 0: display img0, 1: display img1
@@ -305,8 +305,7 @@ extern "C" {
 #define KC85_IO86_CAOS_ROM_C       (1<<7)
 
 // PIO and IO latch bit masks which affect the memory mapping
-#define KC85_PIO_A_MEMORY_BITS  (KC85_PIO_A_CAOS_ROM|KC85_PIO_A_RAM|KC85_PIO_A_IRM|KC85_PIO_A_RAM_RO|KC85_PIO_A_BASIC_ROM)
-#define KC85_PIO_B_MEMORY_BITS  (KC85_PIO_B_RAM8|KC85_PIO_B_RAM8_RO)
+#define KC85_PIO_MEMORY_BITS  (KC85_PIO_CAOS_ROM|KC85_PIO_RAM|KC85_PIO_IRM|KC85_PIO_RAM_RO|KC85_PIO_BASIC_ROM|KC85_PIO_RAM8|KC85_PIO_RAM8_RO)
 #define KC85_IO84_MEMORY_BITS   (KC85_IO84_SEL_CPU_COLOR|KC85_IO84_SEL_CPU_IMG|KC85_IO84_SEL_RAM8)
 #define KC85_IO86_MEMORY_BITS   (KC85_IO86_RAM4|KC85_IO86_RAM4_RO|KC85_IO86_CAOS_ROM_C)
 
@@ -314,7 +313,6 @@ extern "C" {
 #define KC85_FLIPFLOP_BEEPER_1  (Z80CTC_ZCTO0)
 #define KC85_FLIPFLOP_BEEPER_2  (Z80CTC_ZCTO1)
 #define KC85_FLIPFLOP_BLINK     (Z80CTC_ZCTO2)
-#define KC85_FLIPFLOP_MASK      (KC85_FLIPFLOP_BEEPER_1|KC85_FLIPFLOP_BEEPER_2|KC85_FLIPFLOP_BLINK)
 
 typedef struct {
     const void* ptr;
@@ -440,8 +438,7 @@ typedef struct {
         uint16_t v_count;
         uint8_t* fb;
     } video;
-    uint8_t pio_a;          // current PIO-A value, used for bankswitching
-    uint8_t pio_b;          // current PIO-B value, used for bankswitching
+    uint64_t pio_pins;
     #if defined(CHIPS_KC85_TYPE_4)
         uint8_t io84;           // byte latch at port 0x84, only on KC85/4
         uint8_t io86;           // byte latch at port 0x86, only on KC85/4
@@ -671,7 +668,6 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     // initialize the hardware
     z80_init(&sys->cpu);
     z80ctc_init(&sys->ctc);
-    sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
     z80pio_init(&sys->pio);
 
     sys->audio.callback = desc->audio.callback;
@@ -715,14 +711,12 @@ void kc85_reset(kc85_t* sys) {
     z80pio_reset(&sys->pio);
     beeper_reset(&sys->beeper_1);
     beeper_reset(&sys->beeper_2);
-    sys->pio_a = 0;
-    sys->pio_b = 0;
     #if defined(CHIPS_KC85_TYPE_4)
         sys->io84 = 0;
         sys->io86 = 0;
     #endif
     _kc85_exp_reset(sys);
-    sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
+    sys->pio_pins = KC85_PIO_RAM | KC85_PIO_RAM_RO | KC85_PIO_IRM | KC85_PIO_CAOS_ROM;
     _kc85_update_memory_map(sys);
 
     // execution after reset starts at 0xE000
@@ -809,15 +803,12 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
                 pixel_offset = x | (((y>>2)&0x3)<<5) | ((y&0x3)<<7) | (((y>>4)&0xF)<<9);
                 color_offset = 0x2800 + (x | (((y>>2)&0x3f)<<5));
             }
-            //
-            // fg_blank: the color blink flag on pio_b and on the color attribute are conveniently both at (1<<7)
-            //
             // cpu_access: emulate display needling on KC85/2 and /3, this happens when the
             // CPU accesses video memory, which will force the background color
             // a short duration
             //
             uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE][color_offset];
-            bool fg_blank = 0 != (color_bits & (sys->flip_flops >> (Z80CTC_BIT_ZCTO2-7)) & sys->pio_b & (1<<7));
+            bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & (sys->pio_pins>>(Z80PIO_PIN_PB7-7)) & (1<<7));
             // same as (pins & Z80_WR) && (addr >= 0x8000) && (addr < 0xC000)
             bool cpu_access = (pins & (Z80_WR | 0xC000)) == (Z80_WR | 0x8000);
             uint8_t pixel_bits = (fg_blank || cpu_access) ? 0 : sys->ram[_KC85_IRM0_PAGE][pixel_offset];
@@ -864,7 +855,7 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             uint8_t* dst = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
             if (sys->io84 & KC85_IO84_HICOLOR) {
                 // regular KC85/4 video mode
-                bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & sys->pio_b & (1<<7));
+                bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & (sys->pio_pins>>(Z80PIO_PIN_PB7-7)) & (1<<7));
                 uint8_t pixel_bits = fg_blank ? 0 : sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
                 _kc85_decode_8pixels(dst, pixel_bits, color_bits);
             }
@@ -882,30 +873,31 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
 
 static void _kc85_update_memory_map(kc85_t* sys) {
     mem_unmap_layer(&sys->mem, 0);
+    const uint64_t pio_pins = sys->pio_pins;
 
     // all models have 16 KB builtin RAM at 0x0000 and 8 KB ROM at 0xE000
-    if (sys->pio_a & KC85_PIO_A_RAM) {
-        if (sys->pio_a & KC85_PIO_A_RAM_RO) {
+    if (pio_pins & KC85_PIO_RAM) {
+        if (pio_pins & KC85_PIO_RAM_RO) {
             mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[0]);
         }
         else {
             mem_map_rom(&sys->mem, 0, 0x0000, 0x4000, sys->ram[0]);
         }
     }
-    if (sys->pio_a & KC85_PIO_A_CAOS_ROM) {
+    if (pio_pins & KC85_PIO_CAOS_ROM) {
         mem_map_rom(&sys->mem, 0, 0xE000, 0x2000, sys->rom_caos_e);
     }
 
     // KC85/3 and KC85/4: builtin 8 KB BASIC ROM at 0xC000
     #if !defined(CHIPS_KC85_TYPE_2)
-        if (sys->pio_a & KC85_PIO_A_BASIC_ROM) {
+        if (pio_pins & KC85_PIO_BASIC_ROM) {
             mem_map_rom(&sys->mem, 0, 0xC000, 0x2000, sys->rom_basic);
         }
     #endif
 
     #if !defined(CHIPS_KC85_TYPE_4) // KC85/2 and /3
         // 16 KB Video RAM at 0x8000
-        if (sys->pio_a & KC85_PIO_A_IRM) {
+        if (pio_pins & KC85_PIO_IRM) {
             mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[_KC85_IRM0_PAGE]);
         }
     #else // KC84/4
@@ -919,10 +911,10 @@ static void _kc85_update_memory_map(kc85_t* sys) {
             }
         }
         // 16 KB RAM at 0x8000 (2 banks)
-        if (sys->pio_b & KC85_PIO_B_RAM8) {
+        if (pio_pins & KC85_PIO_RAM8) {
             // select one of two RAM banks
             uint8_t* ram8_ptr = (sys->io84 & KC85_IO84_SEL_RAM8) ? sys->ram[3] : sys->ram[2];
-            if (sys->pio_b & KC85_PIO_B_RAM8_RO) {
+            if (pio_pins & KC85_PIO_RAM8_RO) {
                 mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, ram8_ptr);
             }
             else {
@@ -932,7 +924,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
         /* video memory is 4 banks, 2 for pixels, 2 for colors,
             the area at 0xA800 to 0xBFFF is always mapped to IRM0!
         */
-        if (sys->pio_a & KC85_PIO_A_IRM) {
+        if (pio_pins & KC85_PIO_IRM) {
             uint32_t irm_index = (sys->io84 & 6)>>1;
             uint8_t* irm_ptr = sys->ram[_KC85_IRM0_PAGE + irm_index];
             /* on the KC85, an access to IRM banks other than the
@@ -985,7 +977,7 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         if (pins & Z80_A1) { pins |= Z80CTC_CS1; }
         pins = z80ctc_tick(&sys->ctc, pins);
         // toggle audio and blink flip flops
-        sys->flip_flops ^= (pins & KC85_FLIPFLOP_MASK);
+        sys->flip_flops ^= pins;
         pins &= Z80_PIN_MASK;
     }
 
@@ -999,29 +991,25 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         if (pins & Z80_A1) { pins |= Z80PIO_CDSEL; }
         Z80PIO_SET_PAB(pins, 0xFF, 0xFF);
         pins = z80pio_tick(&sys->pio, pins);
-        const uint8_t pio_a = Z80PIO_GET_PA(pins);
-        const uint8_t pio_b = Z80PIO_GET_PB(pins);
         #if defined(CHIPS_KC85_TYPE_4)
             // volume and symmetry-flip-flop control on KC85/4
-            uint8_t vol_sym_changed = (pio_b ^ sys->pio_b) & 0x1F;
-            if (0 != vol_sym_changed) {
-                float vol = (((~pio_b) & 0x1F) >> 1) / 15.0f;
+            if (((pins ^ sys->pio_pins)>>Z80PIO_PIN_PB1) & 0x0F) {
+                // volume has changed
+                float vol = ((~pins >> Z80PIO_PIN_PB1) & 0x0F) / 15.0f;
                 beeper_set_volume(&sys->beeper_1, vol);
                 beeper_set_volume(&sys->beeper_2, vol);
             }
             // PIO-B bit 0 cleared forces the audio beeper flip flop to low
-            if (0 == (pio_b & 1)) {
+            if (0 == (pins & Z80PIO_PB0)) {
                 sys->flip_flops &= ~(KC85_FLIPFLOP_BEEPER_1|KC85_FLIPFLOP_BEEPER_2);
             }
         #else
             // on KC85/2 and /3, PA4 is connected to CPU NMI pin
-            if (pio_a & KC85_PIO_A_NMI) { pins &= ~Z80_NMI; }
-            else                        { pins |= Z80_NMI; }
+            if (pins & KC85_PIO_NMI) { pins &= ~Z80_NMI; }
+            else                     { pins |= Z80_NMI; }
         #endif
-        memory_mapping_dirty |= ((pio_a ^ sys->pio_a) & KC85_PIO_A_MEMORY_BITS);
-        sys->pio_a = pio_a;
-        memory_mapping_dirty |= ((pio_b ^ sys->pio_b) & KC85_PIO_B_MEMORY_BITS);
-        sys->pio_b = pio_b;
+        memory_mapping_dirty |= ((pins^sys->pio_pins) & KC85_PIO_MEMORY_BITS);
+        sys->pio_pins = pins;
         pins &= Z80_PIN_MASK;
     }
 
@@ -1041,7 +1029,7 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
     // IO port 0x80: expansion module control, high byte of
     // port address contains module slot address
     if ((pins & _KC85_EXP_SEL_MASK) == _KC85_EXP_SEL_PINS) {
-        const uint8_t slot_addr = Z80_GET_ADDR(pins)>>8;
+        const uint8_t slot_addr = pins>>Z80_PIN_A8;
         if (pins & Z80_WR) {
             // write new control byte and update the memory mapping
             const uint8_t data = Z80_GET_DATA(pins);
@@ -1102,7 +1090,7 @@ uint32_t kc85_exec(kc85_t* sys, uint32_t micro_seconds) {
 
 static void _kc85_init_memory_map(kc85_t* sys) {
     mem_init(&sys->mem);
-    sys->pio_a = KC85_PIO_A_RAM | KC85_PIO_A_RAM_RO | KC85_PIO_A_IRM | KC85_PIO_A_CAOS_ROM;
+    sys->pio_pins = KC85_PIO_RAM | KC85_PIO_RAM_RO | KC85_PIO_IRM | KC85_PIO_CAOS_ROM;
     _kc85_update_memory_map(sys);
 }
 

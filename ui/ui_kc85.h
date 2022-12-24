@@ -175,45 +175,44 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
 
 static void _ui_kc85_update_memmap(ui_kc85_t* ui) {
     CHIPS_ASSERT(ui && ui->kc85);
-    const uint8_t pio_a = ui->kc85->pio_a;
+    const uint64_t pio_pins = ui->kc85->pio_pins;
     ui_memmap_reset(&ui->memmap);
     #if defined(CHIPS_KC85_TYPE_2)
         /* KC85/2 memory map */
         ui_memmap_layer(&ui->memmap, "System");
-            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
-            ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_a & KC85_PIO_A_IRM));
-            ui_memmap_region(&ui->memmap, "CAOS ROM 1", 0xE000, 0x0800, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
-            ui_memmap_region(&ui->memmap, "CAOS ROM 2", 0xF000, 0x0800, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
+            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_pins & KC85_PIO_RAM));
+            ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_pins & KC85_PIO_IRM));
+            ui_memmap_region(&ui->memmap, "CAOS ROM 1", 0xE000, 0x0800, 0 != (pio_pins & KC85_PIO_CAOS_ROM));
+            ui_memmap_region(&ui->memmap, "CAOS ROM 2", 0xF000, 0x0800, 0 != (pio_pins & KC85_PIO_CAOS_ROM));
     #elif defined(CHIPS_KC85_TYPE_3)
         /* KC85/3 memory map */
         ui_memmap_layer(&ui->memmap, "System");
-            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
-            ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_a & KC85_PIO_A_IRM));
-            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_a & KC85_PIO_A_BASIC_ROM));
-            ui_memmap_region(&ui->memmap, "CAOS ROM", 0xE000, 0x2000, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
+            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_pins & KC85_PIO_RAM));
+            ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_pins & KC85_PIO_IRM));
+            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_pins & KC85_PIO_BASIC_ROM));
+            ui_memmap_region(&ui->memmap, "CAOS ROM", 0xE000, 0x2000, 0 != (pio_pins & KC85_PIO_CAOS_ROM));
     #else
         /* KC85/4 memory map */
-        const uint8_t pio_b = ui->kc85->pio_b;
         const uint8_t io86  = ui->kc85->io86;
         const uint8_t io84  = ui->kc85->io84;
         ui_memmap_layer(&ui->memmap, "System 0");
-            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
+            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_pins & KC85_PIO_RAM));
             ui_memmap_region(&ui->memmap, "RAM4", 0x4000, 0x4000, 0 != (io86 & KC85_IO86_RAM4));
-            ui_memmap_region(&ui->memmap, "IRM0 PIXELS", 0x8000, 0x2800, (0 != (pio_a & KC85_PIO_A_IRM)) && (0 == (io84 & 6)));
-            ui_memmap_region(&ui->memmap, "IRM0", 0xA800, 0x1800, 0 != (pio_a & KC85_PIO_A_IRM));
-            ui_memmap_region(&ui->memmap, "CAOS ROM E", 0xE000, 0x2000, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
+            ui_memmap_region(&ui->memmap, "IRM0 PIXELS", 0x8000, 0x2800, (0 != (pio_pins & KC85_PIO_IRM)) && (0 == (io84 & 6)));
+            ui_memmap_region(&ui->memmap, "IRM0", 0xA800, 0x1800, 0 != (pio_pins & KC85_PIO_IRM));
+            ui_memmap_region(&ui->memmap, "CAOS ROM E", 0xE000, 0x2000, 0 != (pio_pins & KC85_PIO_CAOS_ROM));
         ui_memmap_layer(&ui->memmap, "System 1");
-            ui_memmap_region(&ui->memmap, "IRM0 COLORS", 0x8000, 0x2800, (0 != (pio_a & KC85_PIO_A_IRM)) && (2 == (io84 & 6)));
+            ui_memmap_region(&ui->memmap, "IRM0 COLORS", 0x8000, 0x2800, (0 != (pio_pins & KC85_PIO_IRM)) && (2 == (io84 & 6)));
             ui_memmap_region(&ui->memmap, "CAOS ROM C", 0xC000, 0x1000, 0 != (io86 & KC85_IO86_CAOS_ROM_C));
         ui_memmap_layer(&ui->memmap, "System 2");
-            ui_memmap_region(&ui->memmap, "IRM1 PIXELS", 0x8000, 0x2800, (0 != (pio_a & KC85_PIO_A_IRM)) && (4 == (io84 & 6)));
-            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_a & KC85_PIO_A_BASIC_ROM));
+            ui_memmap_region(&ui->memmap, "IRM1 PIXELS", 0x8000, 0x2800, (0 != (pio_pins & KC85_PIO_IRM)) && (4 == (io84 & 6)));
+            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_pins & KC85_PIO_BASIC_ROM));
         ui_memmap_layer(&ui->memmap, "System 3");
-            ui_memmap_region(&ui->memmap, "IRM1 COLORS", 0x8000, 0x2800, (0 != (pio_a & KC85_PIO_A_IRM)) && (6 == (io84 & 6)));
+            ui_memmap_region(&ui->memmap, "IRM1 COLORS", 0x8000, 0x2800, (0 != (pio_pins & KC85_PIO_IRM)) && (6 == (io84 & 6)));
         ui_memmap_layer(&ui->memmap, "System 4");
-            ui_memmap_region(&ui->memmap, "RAM8 BANK0", 0x8000, 0x4000, (0 != (pio_b & KC85_PIO_B_RAM8)) && (0 == (io84 & KC85_IO84_SEL_RAM8)));
+            ui_memmap_region(&ui->memmap, "RAM8 BANK0", 0x8000, 0x4000, (0 != (pio_pins & KC85_PIO_RAM8)) && (0 == (io84 & KC85_IO84_SEL_RAM8)));
         ui_memmap_layer(&ui->memmap, "System 5");
-            ui_memmap_region(&ui->memmap, "RAM8 BANK1", 0x8000, 0x4000, (0 != (pio_b & KC85_PIO_B_RAM8)) && (0 != (io84 & KC85_IO84_SEL_RAM8)));
+            ui_memmap_region(&ui->memmap, "RAM8 BANK1", 0x8000, 0x4000, (0 != (pio_pins & KC85_PIO_RAM8)) && (0 != (io84 & KC85_IO84_SEL_RAM8)));
     #endif
     for (size_t i = 0; i < KC85_EXP_NUM_SLOTS; i++) {
         const uint8_t slot_addr = ui->kc85->exp.slot[i].addr;
