@@ -315,7 +315,7 @@ extern "C" {
 #define KC85_FLIPFLOP_BLINK     (Z80CTC_ZCTO2)
 
 typedef struct {
-    const void* ptr;
+    void* ptr;
     size_t size;
 } kc85_range_t;
 
@@ -1745,7 +1745,7 @@ kc85_display_info_t kc85_display_info(kc85_t* sys) {
             .height = _KC85_DISPLAY_HEIGHT,
         },
         .palette = {
-            .ptr = _kc85_pal,
+            .ptr = (void*)_kc85_pal,
             .size = sizeof(_kc85_pal)
         }
     };
