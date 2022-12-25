@@ -137,7 +137,7 @@ typedef struct {
     bool valid;
     uint16_t kbd_request_line_mask;
     int kbd_request_line_hilo_shift;
-    uint32_t* pixel_buffer;
+    uint8_t* fb;
     kbd_t kbd;
     uint64_t freq_hz;
     uint8_t ram[1<<16];
@@ -160,7 +160,7 @@ void z1013_key_down(z1013_t* sys, int key_code);
 // send a key-up event
 void z1013_key_up(z1013_t* sys, int key_code);
 // load a "KC .z80" file into the emulator
-bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes);
+bool z1013_quickload(z1013_t* sys, z1013_range_t data);
 // take snapshot, patches any pointers to zero, returns a snapshot version
 uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst);
 // load a snapshot, returns false if snapshot version doesn't match
@@ -221,16 +221,15 @@ bool z1013_load_snapshot(z1013_t* sys, uint32_t version, z1013_t* src);
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _Z1013_DISPLAY_SIZE));
-    if (desc->debug.callback.func) {
-        CHIPS_ASSERT(desc->debug.stopped);
-    }
+    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= _Z1013_FRAMEBUFFER_SIZE_BYTES));
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
+
     memset(sys, 0, sizeof(z1013_t));
-    sys->valid = true;
     sys->type = desc->type;
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
-    sys->debug = desc->debug;
+    sys->valid = true;
     sys->freq_hz = (Z1013_TYPE_01 == desc->type) ? 1000000 : 2000000;
+    sys->fb = (uint8_t*) desc->framebuffer.ptr;
+    sys->debug = desc->debug;
 
     // copy ROM dumps
     CHIPS_ASSERT(desc->roms.font.ptr && (desc->roms.font.size == sizeof(sys->rom_font)));
@@ -356,15 +355,14 @@ void z1013_reset(z1013_t* sys) {
 
 static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
     pins = z80_tick(&sys->cpu, pins) & Z80_PIN_MASK;
+
+    // handle memory requests
     if (pins & Z80_MREQ) {
-        // a memory request
         const uint16_t addr = Z80_GET_ADDR(pins);
         if (pins & Z80_RD) {
-            // read memory byte
             Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
         }
         else if (pins & Z80_WR) {
-            // write memory byte
             mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
         }
     }
@@ -402,17 +400,22 @@ static uint64_t _z1013_tick(z1013_t* sys, uint64_t pins) {
     we're cheating a bit and decode the entire frame in one go
 */
 static void _z1013_decode_vidmem(z1013_t* sys) {
-    uint32_t* dst = sys->pixel_buffer;
+    static const uint32_t lut32[16] = {
+        0x00000000, 0x01000000, 0x00010000, 0x01010000,
+        0x00000100, 0x01000100, 0x00010100, 0x01010100,
+        0x00000001, 0x01000001, 0x00010001, 0x01010001,
+        0x00000101, 0x01000101, 0x00010101, 0x01010101,
+    };
+    uint32_t* dst32 = (uint32_t*) sys->fb;
     const uint8_t* src = &sys->ram[0xEC00];   // the 32x32 framebuffer starts at EC00
     const uint8_t* font = sys->rom_font;
-    for (int y = 0; y < 32; y++) {
-        for (int py = 0; py < 8; py++) {
-            for (int x = 0; x < 32; x++) {
+    for (size_t y = 0; y < 32; y++) {
+        for (size_t py = 0; py < 8; py++) {
+            for (size_t x = 0; x < 32; x++) {
                 uint8_t chr = src[(y<<5) + x];
-                uint8_t bits = font[(chr<<3)|py];
-                for (int px = 7; px >=0; px--) {
-                    *dst++ = bits & (1<<px) ? 0xFFFFFFFF : 0xFF000000;
-                }
+                uint8_t pixels = font[(chr<<3)|py];
+                *dst32++ = lut32[pixels >> 4];
+                *dst32++ = lut32[pixels & 0xF];
             }
         }
     }
@@ -451,30 +454,6 @@ void z1013_key_up(z1013_t* sys, int key_code) {
     kbd_key_up(&sys->kbd, key_code);
 }
 
-int z1013_std_display_width(void) {
-    return _Z1013_DISPLAY_WIDTH;
-}
-
-int z1013_std_display_height(void) {
-    return _Z1013_DISPLAY_HEIGHT;
-}
-
-size_t z1013_max_display_size(void) {
-    return _Z1013_DISPLAY_SIZE;
-}
-
-int z1013_display_width(z1013_t* sys) {
-    (void)sys;
-    return _Z1013_DISPLAY_WIDTH;
-}
-
-int z1013_display_height(z1013_t* sys) {
-    (void)sys;
-    return _Z1013_DISPLAY_HEIGHT;
-}
-
-//=== FILE LOADING =============================================================
-
 typedef struct {
     uint8_t load_addr_l;
     uint8_t load_addr_h;
@@ -488,12 +467,13 @@ typedef struct {
     uint8_t name[16];
 } _z1013_kcz80_header;
 
-bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid && ptr);
-    if (num_bytes < (int)sizeof(_z1013_kcz80_header)) {
+bool z1013_quickload(z1013_t* sys, z1013_range_t data) {
+    CHIPS_ASSERT(sys && sys->valid && data.ptr);
+    if (data.size < sizeof(_z1013_kcz80_header)) {
         return false;
     }
-    const _z1013_kcz80_header* hdr = (const _z1013_kcz80_header*) ptr;
+    const uint8_t* ptr = (uint8_t*)data.ptr;
+    const _z1013_kcz80_header* hdr = (const _z1013_kcz80_header*)ptr;
     if ((hdr->d3[0] != 0xD3) || (hdr->d3[1] != 0xD3) || (hdr->d3[2] != 0xD3)) {
         return false;
     }
@@ -517,4 +497,59 @@ bool z1013_quickload(z1013_t* sys, const uint8_t* ptr, int num_bytes) {
     z80_prefetch(&sys->cpu, exec_addr);
     return true;
 }
+
+z1013_display_info_t z1013_display_info(z1013_t* sys) {
+    // no runtime-dynamic display properties
+    (void)sys;
+    static const uint32_t _z1013_pal[2] = {
+        0xFF000000, // black
+        0xFFFFFFFF, // white
+    };
+    return (z1013_display_info_t){
+        .framebuffer = {
+            .width = _Z1013_FRAMEBUFFER_WIDTH,
+            .height = _Z1013_FRAMEBUFFER_HEIGHT,
+            .size_bytes = _Z1013_FRAMEBUFFER_SIZE_BYTES,
+        },
+        .screen = {
+            .x = 0,
+            .y = 0,
+            .width = _Z1013_DISPLAY_WIDTH,
+            .height = _Z1013_DISPLAY_HEIGHT,
+        },
+        .palette = {
+            .ptr = (void*)_z1013_pal,
+            .size = sizeof(_z1013_pal)
+        }
+    };
+}
+
+uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    memcpy(dst, sys, sizeof(z1013_t));
+    // patch any external pointers to zero and replace internal
+    // pointers with offsets
+    dst->fb = 0;
+    dst->debug.callback.func = 0;
+    dst->debug.callback.user_data = 0;
+    dst->debug.stopped = 0;
+    mem_pointers_to_offsets(&dst->mem, sys);
+    return Z1013_SNAPSHOT_VERSION;
+}
+
+bool z1013_load_snapshot(z1013_t* sys, uint32_t version, z1013_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != Z1013_SNAPSHOT_VERSION) {
+        return false;
+    }
+    // intermediate copy
+    static z1013_t im;
+    memcpy(&im, src, sizeof(z1013_t));
+    im.fb = sys->fb;
+    im.debug = sys->debug;
+    mem_offsets_to_pointers(&im.mem, sys);
+    memcpy(sys, &im, sizeof(z1013_t));
+    return true;
+}
+
 #endif // CHIPS_IMPL
