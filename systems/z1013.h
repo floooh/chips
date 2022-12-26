@@ -114,8 +114,6 @@ typedef struct {
 typedef struct {
     z1013_type_t type;          // default is Z1013_TYPE_64
     z1013_debug_t debug;        // optional debug callback and userdata ptr
-
-    // video output config
     z1013_range_t framebuffer;
 
     // ROM images
@@ -164,7 +162,7 @@ bool z1013_quickload(z1013_t* sys, z1013_range_t data);
 // take snapshot, patches any pointers to zero, returns a snapshot version
 uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst);
 // load a snapshot, returns false if snapshot version doesn't match
-bool z1013_load_snapshot(z1013_t* sys, uint32_t version, z1013_t* src);
+bool z1013_load_snapshot(z1013_t* sys, uint32_t version, const z1013_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -180,7 +178,7 @@ bool z1013_load_snapshot(z1013_t* sys, uint32_t version, z1013_t* src);
 
 #define _Z1013_FRAMEBUFFER_WIDTH (256)
 #define _Z1013_FRAMEBUFFER_HEIGHT (256)
-#define _Z1013_FRAMEBUFFER_SIZE_BYTES (_Z1013_FRAMEBUFFER_WIDTH*_Z1013_FRAMEBUFFER_HEIGHT*4)
+#define _Z1013_FRAMEBUFFER_SIZE_BYTES (_Z1013_FRAMEBUFFER_WIDTH*_Z1013_FRAMEBUFFER_HEIGHT)
 #define _Z1013_DISPLAY_WIDTH (256)
 #define _Z1013_DISPLAY_HEIGHT (256)
 
@@ -526,7 +524,7 @@ z1013_display_info_t z1013_display_info(z1013_t* sys) {
 
 uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst) {
     CHIPS_ASSERT(sys && dst);
-    memcpy(dst, sys, sizeof(z1013_t));
+    *dst = *sys;
     // patch any external pointers to zero and replace internal
     // pointers with offsets
     dst->fb = 0;
@@ -537,18 +535,18 @@ uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst) {
     return Z1013_SNAPSHOT_VERSION;
 }
 
-bool z1013_load_snapshot(z1013_t* sys, uint32_t version, z1013_t* src) {
+bool z1013_load_snapshot(z1013_t* sys, uint32_t version, const z1013_t* src) {
     CHIPS_ASSERT(sys && src);
     if (version != Z1013_SNAPSHOT_VERSION) {
         return false;
     }
     // intermediate copy
     static z1013_t im;
-    memcpy(&im, src, sizeof(z1013_t));
+    im = *src;
     im.fb = sys->fb;
     im.debug = sys->debug;
     mem_offsets_to_pointers(&im.mem, sys);
-    memcpy(sys, &im, sizeof(z1013_t));
+    *sys = im;
     return true;
 }
 

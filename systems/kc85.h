@@ -521,7 +521,7 @@ bool kc85_quickload(kc85_t* sys, kc85_range_t data);
 // take snapshot, patches any pointers to zero, returns a snapshot version
 uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst);
 // load a snapshot, returns false if snapshot version doesn't match
-bool kc85_load_snapshot(kc85_t* sys, uint32_t version, kc85_t* src);
+bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -543,7 +543,7 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, kc85_t* src);
 #define _KC85_IRM0_PAGE (4)
 #define _KC85_FRAMEBUFFER_WIDTH (512)   // multiple of 256
 #define _KC85_FRAMEBUFFER_HEIGHT (256)  // FIXME: allow border?
-#define _KC85_FRAMEBUFFER_SIZE_BYTES (_KC85_FRAMEBUFFER_WIDTH * _KC85_FRAMEBUFFER_HEIGHT * 4)
+#define _KC85_FRAMEBUFFER_SIZE_BYTES (_KC85_FRAMEBUFFER_WIDTH * _KC85_FRAMEBUFFER_HEIGHT)
 #define _KC85_DISPLAY_WIDTH (320)
 #define _KC85_DISPLAY_HEIGHT (256)
 #if defined(CHIPS_KC85_TYPE_4)
@@ -1753,7 +1753,7 @@ kc85_display_info_t kc85_display_info(kc85_t* sys) {
 
 uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst) {
     CHIPS_ASSERT(sys && dst);
-    memcpy(dst, sys, sizeof(kc85_t));
+    *dst = *sys;
     // patch any external pointers to zero and replace internal
     // pointers with offsets
     dst->video.fb = 0;
@@ -1769,21 +1769,21 @@ uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst) {
 }
 
 // load a snapshot, returns false if snapshot version doesn't match
-bool kc85_load_snapshot(kc85_t* sys, uint32_t version, kc85_t* src) {
+bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src) {
     CHIPS_ASSERT(sys && src);
     if (version != KC85_SNAPSHOT_VERSION) {
         return false;
     }
     // intermediate copy
     static kc85_t im;
-    memcpy(&im, src, sizeof(kc85_t));
+    im = *src;
     // patch pointers
     im.video.fb = sys->video.fb;
     im.debug = sys->debug;
     im.audio.callback = sys->audio.callback;
     im.patch_callback = sys->patch_callback;
     mem_offsets_to_pointers(&im.mem, sys);
-    memcpy(sys, &im, sizeof(kc85_t));
+    *sys = im;
     return true;
 }
 
