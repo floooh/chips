@@ -87,7 +87,7 @@
 extern "C" {
 #endif
 
-// bump this whenever the z1013_t struct layout changes
+// bump this whenever the z9001_t struct layout changes
 #define Z9001_SNAPSHOT_VERSION (0x0001)
 
 #define Z9001_MAX_AUDIO_SAMPLES (1024)      // max number of audio samples in internal sample buffer
