@@ -66,6 +66,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,6 +74,12 @@ extern "C" {
 
 // bump this whenever the z1013_t struct layout changes
 #define Z1013_SNAPSHOT_VERSION (0x0001)
+
+#define Z1013_FRAMEBUFFER_WIDTH (256)
+#define Z1013_FRAMEBUFFER_HEIGHT (256)
+#define Z1013_FRAMEBUFFER_SIZE_BYTES (Z1013_FRAMEBUFFER_WIDTH * Z1013_FRAMEBUFFER_HEIGHT)
+#define Z1013_DISPLAY_WIDTH (256)
+#define Z1013_DISPLAY_HEIGHT (256)
 
 // Z1013 model types
 typedef enum {
@@ -85,7 +92,6 @@ typedef enum {
 typedef struct {
     z1013_type_t type;          // default is Z1013_TYPE_64
     chips_debug_t debug;        // optional debug callback and userdata ptr
-    chips_range_t framebuffer;
 
     // ROM images
     struct {
@@ -106,12 +112,12 @@ typedef struct {
     bool valid;
     uint16_t kbd_request_line_mask;
     int kbd_request_line_hilo_shift;
-    uint8_t* fb;
     kbd_t kbd;
     uint64_t freq_hz;
     uint8_t ram[1<<16];
     uint8_t rom_os[2048];
     uint8_t rom_font[2048];
+    alignas(64) uint8_t fb[Z1013_FRAMEBUFFER_SIZE_BYTES];
 } z1013_t;
 
 // initialize a new Z1013 instance
@@ -146,12 +152,6 @@ bool z1013_load_snapshot(z1013_t* sys, uint32_t version, const z1013_t* src);
 #include <assert.h>
 #define CHIPS_ASSERT(c) assert(c)
 #endif
-
-#define _Z1013_FRAMEBUFFER_WIDTH (256)
-#define _Z1013_FRAMEBUFFER_HEIGHT (256)
-#define _Z1013_FRAMEBUFFER_SIZE_BYTES (_Z1013_FRAMEBUFFER_WIDTH*_Z1013_FRAMEBUFFER_HEIGHT)
-#define _Z1013_DISPLAY_WIDTH (256)
-#define _Z1013_DISPLAY_HEIGHT (256)
 
 /*
     IO address decoding.
@@ -190,14 +190,12 @@ bool z1013_load_snapshot(z1013_t* sys, uint32_t version, const z1013_t* src);
 
 void z1013_init(z1013_t* sys, const z1013_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= _Z1013_FRAMEBUFFER_SIZE_BYTES));
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(z1013_t));
     sys->type = desc->type;
     sys->valid = true;
     sys->freq_hz = (Z1013_TYPE_01 == desc->type) ? 1000000 : 2000000;
-    sys->fb = (uint8_t*) desc->framebuffer.ptr;
     sys->debug = desc->debug;
 
     // copy ROM dumps
@@ -475,18 +473,22 @@ chips_display_info_t z1013_display_info(z1013_t* sys) {
         0xFFFFFFFF, // white
     };
     return (chips_display_info_t){
-        .framebuffer = {
+        .frame = {
             .dim = {
-                .width = _Z1013_FRAMEBUFFER_WIDTH,
-                .height = _Z1013_FRAMEBUFFER_HEIGHT,
+                .width = Z1013_FRAMEBUFFER_WIDTH,
+                .height = Z1013_FRAMEBUFFER_HEIGHT,
             },
-            .size_bytes = _Z1013_FRAMEBUFFER_SIZE_BYTES,
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = Z1013_FRAMEBUFFER_SIZE_BYTES,
+            },
+            .bytes_per_pixel = 1,
         },
         .screen = {
             .x = 0,
             .y = 0,
-            .width = _Z1013_DISPLAY_WIDTH,
-            .height = _Z1013_DISPLAY_HEIGHT,
+            .width = Z1013_DISPLAY_WIDTH,
+            .height = Z1013_DISPLAY_HEIGHT,
         },
         .palette = {
             .ptr = (void*)_z1013_pal,
@@ -500,7 +502,6 @@ uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst) {
     *dst = *sys;
     // patch any external pointers to zero and replace internal
     // pointers with offsets
-    dst->fb = 0;
     dst->debug.callback.func = 0;
     dst->debug.callback.user_data = 0;
     dst->debug.stopped = 0;
@@ -516,7 +517,6 @@ bool z1013_load_snapshot(z1013_t* sys, uint32_t version, const z1013_t* src) {
     // intermediate copy
     static z1013_t im;
     im = *src;
-    im.fb = sys->fb;
     im.debug = sys->debug;
     mem_offsets_to_pointers(&im.mem, sys);
     *sys = im;
