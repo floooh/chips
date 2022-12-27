@@ -90,7 +90,7 @@ typedef struct {
 void ui_z9001_init(ui_z9001_t* ui, const ui_z9001_desc_t* desc);
 void ui_z9001_discard(ui_z9001_t* ui);
 void ui_z9001_draw(ui_z9001_t* ui);
-z9001_debug_t ui_z9001_get_debug(ui_z9001_t* ui);
+chips_debug_t ui_z9001_get_debug(ui_z9001_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -456,9 +456,9 @@ void ui_z9001_draw(ui_z9001_t* ui) {
     ui_dbg_draw(&ui->dbg);
 }
 
-z9001_debug_t ui_z9001_get_debug(ui_z9001_t* ui) {
-    z9001_debug_t res;
-    res.callback.func = (z9001_debug_func_t)ui_dbg_tick;
+chips_debug_t ui_z9001_get_debug(ui_z9001_t* ui) {
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;

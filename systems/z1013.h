@@ -20,6 +20,7 @@
 
     You need to include the following headers before including z1013.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/z80pio.h
     - chips/mem.h
@@ -80,47 +81,17 @@ typedef enum {
     Z1013_TYPE_01,      // Z1013.01 (original model, 1 MHz, 16 KB RAM)
 } z1013_type_t;
 
-typedef struct {
-    void* ptr;
-    size_t size;
-} z1013_range_t;
-
-typedef struct {
-    // the required overall framebuffer dimensions, may include debug visualization
-    // width will be a multiple of 2^N
-    struct {
-        int width, height;
-        size_t size_bytes;
-    } framebuffer;
-    // the currently visible area in the framebuffer rectangle
-    struct {
-        int x, y, width, height;
-    } screen;
-    // the color palette as RGBA8, 2 colors (black and white)
-    z1013_range_t palette;
-} z1013_display_info_t;
-
-// debugging hook definitions
-typedef void (*z1013_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        z1013_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} z1013_debug_t;
-
 // configuration parameters for z1013_setup()
 typedef struct {
     z1013_type_t type;          // default is Z1013_TYPE_64
-    z1013_debug_t debug;        // optional debug callback and userdata ptr
-    z1013_range_t framebuffer;
+    chips_debug_t debug;        // optional debug callback and userdata ptr
+    chips_range_t framebuffer;
 
     // ROM images
     struct {
-        z1013_range_t mon202;
-        z1013_range_t mon_a2;
-        z1013_range_t font;
+        chips_range_t mon202;
+        chips_range_t mon_a2;
+        chips_range_t font;
     } roms;
 } z1013_desc_t;
 
@@ -129,7 +100,7 @@ typedef struct {
     z80_t cpu;
     mem_t mem;
     z80pio_t pio;
-    z1013_debug_t debug;
+    chips_debug_t debug;
     uint64_t pins;
     z1013_type_t type;
     bool valid;
@@ -150,7 +121,7 @@ void z1013_discard(z1013_t* sys);
 // reset Z1013 instance
 void z1013_reset(z1013_t* sys);
 // query information about display requirements, can be called with nullptr
-z1013_display_info_t z1013_display_info(z1013_t* sys);
+chips_display_info_t z1013_display_info(z1013_t* sys);
 // run the Z1013 instance for a given number of microseconds, returns number of executed ticks
 uint32_t z1013_exec(z1013_t* sys, uint32_t micro_seconds);
 // send a key-down event
@@ -158,7 +129,7 @@ void z1013_key_down(z1013_t* sys, int key_code);
 // send a key-up event
 void z1013_key_up(z1013_t* sys, int key_code);
 // load a "KC .z80" file into the emulator
-bool z1013_quickload(z1013_t* sys, z1013_range_t data);
+bool z1013_quickload(z1013_t* sys, chips_range_t data);
 // take snapshot, patches any pointers to zero, returns a snapshot version
 uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst);
 // load a snapshot, returns false if snapshot version doesn't match
@@ -465,7 +436,7 @@ typedef struct {
     uint8_t name[16];
 } _z1013_kcz80_header;
 
-bool z1013_quickload(z1013_t* sys, z1013_range_t data) {
+bool z1013_quickload(z1013_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid && data.ptr);
     if (data.size < sizeof(_z1013_kcz80_header)) {
         return false;
@@ -496,17 +467,19 @@ bool z1013_quickload(z1013_t* sys, z1013_range_t data) {
     return true;
 }
 
-z1013_display_info_t z1013_display_info(z1013_t* sys) {
+chips_display_info_t z1013_display_info(z1013_t* sys) {
     // no runtime-dynamic display properties
     (void)sys;
     static const uint32_t _z1013_pal[2] = {
         0xFF000000, // black
         0xFFFFFFFF, // white
     };
-    return (z1013_display_info_t){
+    return (chips_display_info_t){
         .framebuffer = {
-            .width = _Z1013_FRAMEBUFFER_WIDTH,
-            .height = _Z1013_FRAMEBUFFER_HEIGHT,
+            .dim = {
+                .width = _Z1013_FRAMEBUFFER_WIDTH,
+                .height = _Z1013_FRAMEBUFFER_HEIGHT,
+            },
             .size_bytes = _Z1013_FRAMEBUFFER_SIZE_BYTES,
         },
         .screen = {

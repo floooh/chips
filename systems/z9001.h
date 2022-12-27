@@ -20,6 +20,7 @@
 
     You need to include the following headers before including z9001.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/z80pio.h
     - chips/z80ctc.h
@@ -97,70 +98,26 @@ typedef enum {
     Z9001_TYPE_KC87,    // the revised KC87 with built-in BASIC and color module
 } z9001_type_t;
 
-typedef struct {
-    void* ptr;
-    size_t size;
-} z9001_range_t;
-
-typedef struct {
-    // the required overall framebuffer dimensions, may include debug visualization
-    // width will be a multiple of 2^N
-    struct {
-        int width, height;
-        size_t size_bytes;
-    } framebuffer;
-    // the currently visible area in the framebuffer rectangle
-    struct {
-        int x, y, width, height;
-    } screen;
-    // the color palette as RGBA8, 8 colors
-    z9001_range_t palette;
-} z9001_display_info_t;
-
-// audio sample callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} z9001_audio_callback_t;
-
-// debugging hook definitions
-typedef void (*z9001_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        z9001_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} z9001_debug_t;
-
 // configuration parameters for z9001_init()
 typedef struct {
     z9001_type_t type;                  // default is Z9001_TYPE_Z9001
-    z9001_debug_t debug;                // optional debug hook
-    z9001_range_t framebuffer;
-
-    // audio output config (if you don't want audio, set audio_cb to zero)
-    struct {
-        z9001_audio_callback_t callback; // called when audio_num_samples are ready
-        int num_samples;                // default is Z9001_DEFAULT_AUDIO_SAMPLES
-        int sample_rate;                // playback sample rate, default is 44100
-        float volume;                   // audio volume (0.0 .. 1.0), default is 0.4
-    } audio;
-
+    chips_debug_t debug;                // optional debug hook
+    chips_range_t framebuffer;
+    chips_audio_desc_t audio;
     struct {
         // Z9001 ROM images
         struct {
-            z9001_range_t os_1;
-            z9001_range_t os_2;
-            z9001_range_t font;
+            chips_range_t os_1;
+            chips_range_t os_2;
+            chips_range_t font;
             // optional BASIC module ROM
-            z9001_range_t basic;
+            chips_range_t basic;
         } z9001;
         // KC85 ROM images
         struct {
-            z9001_range_t os;
-            z9001_range_t basic;
-            z9001_range_t font;
+            chips_range_t os;
+            chips_range_t basic;
+            chips_range_t font;
         } kc87;
     } roms;
 } z9001_desc_t;
@@ -184,10 +141,10 @@ typedef struct {
 
     bool valid;
     bool z9001_has_basic_rom;
-    z9001_debug_t debug;
+    chips_debug_t debug;
 
     struct {
-        z9001_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[Z9001_MAX_AUDIO_SAMPLES];
@@ -204,7 +161,7 @@ void z9001_discard(z9001_t* sys);
 // reset Z9001 instance
 void z9001_reset(z9001_t* sys);
 // query information about display requirements, can be called with nullptr
-z9001_display_info_t z9001_display_info(z9001_t* sys);
+chips_display_info_t z9001_display_info(z9001_t* sys);
 // run Z9001 instance for a given number of microseconds, return number of executed ticks
 uint32_t z9001_exec(z9001_t* sys, uint32_t micro_seconds);
 // send a key-down event
@@ -212,7 +169,7 @@ void z9001_key_down(z9001_t* sys, int key_code);
 // send a key-up event
 void z9001_key_up(z9001_t* sys, int key_code);
 // load a KC TAP or KCC file into the emulator
-bool z9001_quickload(z9001_t* sys, z9001_range_t data);
+bool z9001_quickload(z9001_t* sys, chips_range_t data);
 // save a snapshot, patches any pointers to zero, returns a snapshot version
 uint32_t z9001_save_snapshot(z9001_t* sys, z9001_t* dst);
 // load a snapshot, returns false if snapshot version doesn't match
@@ -647,7 +604,7 @@ typedef struct {
 } _z9001_kcc_header;
 
 // KCC files cannot really be identified since they have no magic number
-static bool _z9001_is_valid_kcc(z9001_range_t data) {
+static bool _z9001_is_valid_kcc(chips_range_t data) {
     if (data.size <= sizeof(_z9001_kcc_header)) {
         return false;
     }
@@ -679,7 +636,7 @@ static bool _z9001_is_valid_kcc(z9001_range_t data) {
     return true;
 }
 
-static bool _z9001_load_kcc(z9001_t* sys, z9001_range_t data) {
+static bool _z9001_load_kcc(z9001_t* sys, chips_range_t data) {
     const uint8_t* ptr = data.ptr;
     const _z9001_kcc_header* hdr = (_z9001_kcc_header*)ptr;
     uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
@@ -699,7 +656,7 @@ typedef struct {
     _z9001_kcc_header kcc;  // from here on identical with KCC
 } _z9001_kctap_header;
 
-static bool _z9001_is_valid_kctap(z9001_range_t data) {
+static bool _z9001_is_valid_kctap(chips_range_t data) {
     if (data.size <= sizeof(_z9001_kctap_header)) {
         return false;
     }
@@ -732,7 +689,7 @@ static bool _z9001_is_valid_kctap(z9001_range_t data) {
     return true;
 }
 
-static bool _z9001_load_kctap(z9001_t* sys, z9001_range_t data) {
+static bool _z9001_load_kctap(z9001_t* sys, chips_range_t data) {
     const uint8_t* ptr = data.ptr;
     const _z9001_kctap_header* hdr = (const _z9001_kctap_header*)ptr;
     uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
@@ -752,7 +709,7 @@ static bool _z9001_load_kctap(z9001_t* sys, z9001_range_t data) {
     return true;
 }
 
-bool z9001_quickload(z9001_t* sys, z9001_range_t data) {
+bool z9001_quickload(z9001_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid && data.ptr);
     // first check for KC TAP, since this can be properly identified
     if (_z9001_is_valid_kctap(data)) {
@@ -767,7 +724,7 @@ bool z9001_quickload(z9001_t* sys, z9001_range_t data) {
     }
 }
 
-z9001_display_info_t z9001_display_info(z9001_t* sys) {
+chips_display_info_t z9001_display_info(z9001_t* sys) {
     // no runtime-dynamic display properties
     (void)sys;
     static const uint32_t _z9001_pal[8] = {
@@ -780,10 +737,12 @@ z9001_display_info_t z9001_display_info(z9001_t* sys) {
         0xFFFFFF00,     // cyan
         0xFFFFFFFF,     // white
     };
-    return (z9001_display_info_t){
+    return (chips_display_info_t){
         .framebuffer = {
-            .width = _Z9001_FRAMEBUFFER_WIDTH,
-            .height = _Z9001_FRAMEBUFFER_HEIGHT,
+            .dim = {
+                .width = _Z9001_FRAMEBUFFER_WIDTH,
+                .height = _Z9001_FRAMEBUFFER_HEIGHT,
+            },
             .size_bytes = _Z9001_FRAMEBUFFER_SIZE_BYTES,
         },
         .screen = {

@@ -84,7 +84,7 @@ typedef struct {
 void ui_z1013_init(ui_z1013_t* ui, const ui_z1013_desc_t* desc);
 void ui_z1013_discard(ui_z1013_t* ui);
 void ui_z1013_draw(ui_z1013_t* ui);
-z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui);
+chips_debug_t ui_z1013_get_debug(ui_z1013_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -374,9 +374,9 @@ void ui_z1013_draw(ui_z1013_t* ui) {
     ui_dbg_draw(&ui->dbg);
 }
 
-z1013_debug_t ui_z1013_get_debug(ui_z1013_t* ui) {
-    z1013_debug_t res = {};
-    res.callback.func = (z1013_debug_func_t)ui_dbg_tick;
+chips_debug_t ui_z1013_get_debug(ui_z1013_t* ui) {
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;
