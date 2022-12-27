@@ -101,7 +101,7 @@ typedef struct {
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc);
 void ui_kc85_discard(ui_kc85_t* ui);
 void ui_kc85_draw(ui_kc85_t* ui);
-kc85_debug_t ui_kc85_get_debug(ui_kc85_t* ui);
+chips_debug_t ui_kc85_get_debug(ui_kc85_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -497,9 +497,9 @@ void ui_kc85_draw(ui_kc85_t* ui) {
     ui_dbg_draw(&ui->dbg);
 }
 
-kc85_debug_t ui_kc85_get_debug(ui_kc85_t* ui) {
-    kc85_debug_t res = {};
-    res.callback.func = (kc85_debug_func_t)ui_dbg_tick;
+chips_debug_t ui_kc85_get_debug(ui_kc85_t* ui) {
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;

@@ -23,6 +23,7 @@
 
     You need to include the following headers before including kc85.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/z80ctc.h
     - chips/z80pio.h
@@ -314,62 +315,17 @@ extern "C" {
 #define KC85_FLIPFLOP_BEEPER_2  (Z80CTC_ZCTO1)
 #define KC85_FLIPFLOP_BLINK     (Z80CTC_ZCTO2)
 
-typedef struct {
-    void* ptr;
-    size_t size;
-} kc85_range_t;
-
-typedef struct {
-    // the required overall framebuffer dimensions, may include debug visualization
-    // width will be a multiple of 2^N
-    struct {
-        int width, height;
-        size_t size_bytes;
-    } framebuffer;
-    // the currently visible area in the framebuffer rectangle
-    struct {
-        int x, y, width, height;
-    } screen;
-    // the color palette, 16 entries on KC85/2,/3, 20 entries (+4 for HICOLOR) on KC85/4
-    kc85_range_t palette;
-} kc85_display_info_t;
-
-// audio sample callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} kc85_audio_callback_t;
-
 // callback to apply patches after a snapshot is loaded
 typedef struct {
     void (*func)(const char* snapshot_name, void* user_data);
     void* user_data;
 } kc85_patch_callback_t;
 
-// debugging hook definitions
-typedef void (*kc85_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        kc85_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} kc85_debug_t;
-
 // config parameters for kc85_init()
 typedef struct {
-    kc85_debug_t debug;         // optional debugger hook
-
-    // video output config
-    kc85_range_t framebuffer;
-
-    // audio output config
-    struct {
-        kc85_audio_callback_t callback; // called when audio_num_samples are ready
-        int num_samples;                // default is KC85_DEFAULT_AUDIO_SAMPLES
-        int sample_rate;                // playback sample rate, default is 44100
-        float volume;                   // audio volume (0.0 .. 1.0), default is 0.4
-    } audio;
+    chips_debug_t debug;
+    chips_range_t framebuffer;
+    chips_audio_desc_t audio;
 
     // an optional callback to be invoked after a snapshot file is loaded to apply patches
     kc85_patch_callback_t patch_callback;
@@ -377,15 +333,15 @@ typedef struct {
     // ROM images
     struct {
         #if defined(CHIPS_KC85_TYPE_2)
-            kc85_range_t caos22;    // CAOS 2.2 (used in KC85/2)
+            chips_range_t caos22;    // CAOS 2.2 (used in KC85/2)
         #elif defined(CHIPS_KC85_TYPE_3)
-            kc85_range_t caos31;    // CAOS 3.1 (used in KC85/3)
+            chips_range_t caos31;    // CAOS 3.1 (used in KC85/3)
         #elif defined(CHIPS_KC85_TYPE_4)
-            kc85_range_t caos42c;   // CAOS 4.2 at 0xC000 (KC85/4)
-            kc85_range_t caos42e;   // CAOS 4.2 at 0xE000 (KC85/4)
+            chips_range_t caos42c;   // CAOS 4.2 at 0xC000 (KC85/4)
+            chips_range_t caos42e;   // CAOS 4.2 at 0xE000 (KC85/4)
         #endif
         #if defined(CHIPS_KC85_TYPE_3) || defined(CHIPS_KC85_TYPE_4)
-            kc85_range_t kcbasic;   // same BASIC version for KC85/3 and KC85/4
+            chips_range_t kcbasic;   // same BASIC version for KC85/3 and KC85/4
         #endif
     } roms;
 } kc85_desc_t;
@@ -455,10 +411,10 @@ typedef struct {
     kbd_t kbd;
 
     bool valid;
-    kc85_debug_t debug;
+    chips_debug_t debug;
 
     struct {
-        kc85_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[KC85_MAX_AUDIO_SAMPLES];
@@ -483,7 +439,7 @@ void kc85_discard(kc85_t* sys);
 // reset a KC85 instance
 void kc85_reset(kc85_t* sys);
 // query information about display requirements, can be called with nullptr
-kc85_display_info_t kc85_display_info(kc85_t* sys);
+chips_display_info_t kc85_display_info(kc85_t* sys);
 // run KC85 emulation for a given number of microseconds, returns number of ticks executed
 uint32_t kc85_exec(kc85_t* sys, uint32_t micro_seconds);
 // send a key-down event
@@ -493,7 +449,7 @@ void kc85_key_up(kc85_t* sys, int key_code);
 // insert a RAM module (slot must be 0x08 or 0x0C)
 bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type);
 // insert a ROM module (slot must be 0x08 or 0x0C)
-bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type, kc85_range_t rom_data);
+bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot, kc85_module_type_t type, chips_range_t rom_data);
 // remove module in slot
 bool kc85_remove_module(kc85_t* sys, uint8_t slot);
 // get a descriptive module name by module type
@@ -517,7 +473,7 @@ const char* kc85_slot_mod_short_name(kc85_t* sys, uint8_t slot_addr);
 // get a slot's control byte
 uint8_t kc85_slot_ctrl(kc85_t* sys, uint8_t slot_addr);
 // load a .KCC or .TAP snapshot file into the emulator
-bool kc85_quickload(kc85_t* sys, kc85_range_t data);
+bool kc85_quickload(kc85_t* sys, chips_range_t data);
 // take snapshot, patches any pointers to zero, returns a snapshot version
 uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst);
 // load a snapshot, returns false if snapshot version doesn't match
@@ -1350,7 +1306,7 @@ static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
     }
 }
 
-static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, kc85_range_t rom_data) {
+static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, chips_range_t rom_data) {
     kc85_slot_t* slot = kc85_slot_by_addr(sys, slot_addr);
     if (!slot) {
         return false;
@@ -1417,10 +1373,10 @@ static bool _kc85_insert_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type
 bool kc85_insert_ram_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type) {
     CHIPS_ASSERT(sys && sys->valid && (type != KC85_MODULE_NONE));
     kc85_remove_module(sys, slot_addr);
-    return _kc85_insert_module(sys, slot_addr, type, (kc85_range_t){0});
+    return _kc85_insert_module(sys, slot_addr, type, (chips_range_t){0});
 }
 
-bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, kc85_range_t rom_data) {
+bool kc85_insert_rom_module(kc85_t* sys, uint8_t slot_addr, kc85_module_type_t type, chips_range_t rom_data) {
     CHIPS_ASSERT(sys && sys->valid && (type != KC85_MODULE_NONE));
     kc85_remove_module(sys, slot_addr);
     return _kc85_insert_module(sys, slot_addr, type, rom_data);
@@ -1554,7 +1510,7 @@ static void _kc85_invoke_patch_callback(kc85_t* sys, const _kc85_kcc_header* hdr
 }
 
 /* KCC files cannot really be identified since they have no magic number */
-static bool _kc85_is_valid_kcc(kc85_range_t data) {
+static bool _kc85_is_valid_kcc(chips_range_t data) {
     if (data.size <= sizeof(_kc85_kcc_header)) {
         return false;
     }
@@ -1581,7 +1537,7 @@ static bool _kc85_is_valid_kcc(kc85_range_t data) {
     return true;
 }
 
-static bool _kc85_load_kcc(kc85_t* sys, kc85_range_t data) {
+static bool _kc85_load_kcc(kc85_t* sys, chips_range_t data) {
     const _kc85_kcc_header* hdr = (_kc85_kcc_header*) data.ptr;
     uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
     uint16_t end_addr  = hdr->end_addr_h<<8 | hdr->end_addr_l;
@@ -1605,7 +1561,7 @@ typedef struct {
     _kc85_kcc_header kcc;   /* from here on identical with KCC */
 } _kc85_kctap_header;
 
-static bool _kc85_is_valid_kctap(kc85_range_t data) {
+static bool _kc85_is_valid_kctap(chips_range_t data) {
     if (data.size <= sizeof(_kc85_kctap_header)) {
         return false;
     }
@@ -1638,7 +1594,7 @@ static bool _kc85_is_valid_kctap(kc85_range_t data) {
     return true;
 }
 
-static bool _kc85_load_kctap(kc85_t* sys, kc85_range_t data) {
+static bool _kc85_load_kctap(kc85_t* sys, chips_range_t data) {
     const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) data.ptr;
     uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
     uint16_t end_addr  = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
@@ -1658,7 +1614,7 @@ static bool _kc85_load_kctap(kc85_t* sys, kc85_range_t data) {
     return true;
 }
 
-bool kc85_quickload(kc85_t* sys, kc85_range_t data) {
+bool kc85_quickload(kc85_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid && data.ptr);
     /* first check for KC-TAP format, since this can be properly identified */
     if (_kc85_is_valid_kctap(data)) {
@@ -1729,13 +1685,15 @@ static const uint32_t _kc85_pal[36] = {
     0xFFFFFFFF,     // white
 };
 
-kc85_display_info_t kc85_display_info(kc85_t* sys) {
+chips_display_info_t kc85_display_info(kc85_t* sys) {
     // no runtime-dynamic display properties so far
     (void)sys;
-    return (kc85_display_info_t) {
+    return (chips_display_info_t) {
         .framebuffer = {
-            .width = _KC85_FRAMEBUFFER_WIDTH,
-            .height = _KC85_FRAMEBUFFER_HEIGHT,
+            .dim = {
+                .width = _KC85_FRAMEBUFFER_WIDTH,
+                .height = _KC85_FRAMEBUFFER_HEIGHT,
+            },
             .size_bytes = _KC85_FRAMEBUFFER_SIZE_BYTES,
         },
         .screen = {
