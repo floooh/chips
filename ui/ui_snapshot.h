@@ -85,7 +85,7 @@ void ui_snapshot_save_slot(ui_snapshot_t* state, size_t slot_index);
 // called from UI when a snapshot should be loaded
 bool ui_snapshot_load_slot(ui_snapshot_t* state, size_t slot_index);
 // update snapshot info, returns previous slot info (usually called from within save callback)
-void* ui_snapshot_update_screenshot(ui_snapshot_t* state, size_t slot_index, void* screenshot_texture);
+void* ui_snapshot_set_screenshot(ui_snapshot_t* state, size_t slot_index, void* screenshot_texture);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -172,7 +172,7 @@ bool ui_snapshot_load_slot(ui_snapshot_t* state, size_t slot_index) {
     }
 }
 
-void* ui_snapshot_update_screenshot(ui_snapshot_t* state, size_t slot_index, void* screenshot_texture) {
+void* ui_snapshot_set_screenshot(ui_snapshot_t* state, size_t slot_index, void* screenshot_texture) {
     CHIPS_ASSERT(state && screenshot_texture);
     CHIPS_ASSERT(slot_index < UI_SNAPSHOT_MAX_SLOTS);
     void* prev_screenshot_texture = 0;
