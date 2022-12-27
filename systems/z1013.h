@@ -466,9 +466,7 @@ bool z1013_quickload(z1013_t* sys, chips_range_t data) {
 }
 
 chips_display_info_t z1013_display_info(z1013_t* sys) {
-    // no runtime-dynamic display properties
-    (void)sys;
-    static const uint32_t _z1013_pal[2] = {
+    static const uint32_t palette[2] = {
         0xFF000000, // black
         0xFFFFFFFF, // white
     };
@@ -491,8 +489,8 @@ chips_display_info_t z1013_display_info(z1013_t* sys) {
             .height = Z1013_DISPLAY_HEIGHT,
         },
         .palette = {
-            .ptr = (void*)_z1013_pal,
-            .size = sizeof(_z1013_pal)
+            .ptr = (void*)palette,
+            .size = sizeof(palette)
         }
     };
     CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));

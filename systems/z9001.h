@@ -81,6 +81,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -155,7 +156,7 @@ typedef struct {
     uint8_t ram[1<<16];
     uint8_t rom[0x4000];
     uint8_t rom_font[0x0800];   // 2 KB font ROM (not mapped into CPU address space)
-    uint8_t fb[Z9001_FRAMEBUFFER_SIZE_BYTES];
+    alignas(64) uint8_t fb[Z9001_FRAMEBUFFER_SIZE_BYTES];
 } z9001_t;
 
 // initialize a new Z9001 instance
@@ -721,9 +722,7 @@ bool z9001_quickload(z9001_t* sys, chips_range_t data) {
 }
 
 chips_display_info_t z9001_display_info(z9001_t* sys) {
-    // no runtime-dynamic display properties
-    (void)sys;
-    static const uint32_t _z9001_pal[8] = {
+    static const uint32_t palette[8] = {
         0xFF000000,     // black
         0xFF0000FF,     // red
         0xFF00FF00,     // green
@@ -752,8 +751,8 @@ chips_display_info_t z9001_display_info(z9001_t* sys) {
             .height = Z9001_DISPLAY_HEIGHT,
         },
         .palette = {
-            .ptr = (void*)_z9001_pal,
-            .size = sizeof(_z9001_pal)
+            .ptr = (void*)palette,
+            .size = sizeof(palette)
         }
     };
     CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));

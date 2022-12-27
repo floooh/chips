@@ -1638,55 +1638,52 @@ void kc85_key_up(kc85_t* sys, int key_code) {
     kbd_key_up(&sys->kbd, key_code);
 }
 
-static const uint32_t _kc85_pal[36] = {
-    // 16 foreground colors
-    0xFF000000,     // black
-    0xFFFF0000,     // blue
-    0xFF0000FF,     // red
-    0xFFFF00FF,     // magenta
-    0xFF00FF00,     // green
-    0xFFFFFF00,     // cyan
-    0xFF00FFFF,     // yellow
-    0xFFFFFFFF,     // white
-    0xFF000000,     // black #2
-    0xFFFF00A0,     // violet
-    0xFF00A0FF,     // orange
-    0xFFA000FF,     // purple
-    0xFFA0FF00,     // blueish green
-    0xFFFFA000,     // greenish blue
-    0xFF00FFA0,     // yellow-green
-    0xFFFFFFFF,     // white #2
-
-    // 8 background colors
-    0xFF000000,      // black
-    0xFFA00000,      // dark-blue
-    0xFF0000A0,      // dark-red
-    0xFFA000A0,      // dark-magenta
-    0xFF00A000,      // dark-green
-    0xFFA0A000,      // dark-cyan
-    0xFF00A0A0,      // dark-yellow
-    0xFFA0A0A0,      // gray
-
-    // padding to get next block at 2^N
-    0xFFFF00FF,
-    0xFFFF00FF,
-    0xFFFF00FF,
-    0xFFFF00FF,
-    0xFFFF00FF,
-    0xFFFF00FF,
-    0xFFFF00FF,
-    0xFFFF00FF,
-
-    // KC85/4 only: 4 extra HICOLOR colors
-    0xFF000000,     // black
-    0xFF0000FF,     // red
-    0xFFFFFF00,     // cyan
-    0xFFFFFFFF,     // white
-};
-
 chips_display_info_t kc85_display_info(kc85_t* sys) {
-    // no runtime-dynamic display properties so far
-    (void)sys;
+    static const uint32_t palette[36] = {
+        // 16 foreground colors
+        0xFF000000,     // black
+        0xFFFF0000,     // blue
+        0xFF0000FF,     // red
+        0xFFFF00FF,     // magenta
+        0xFF00FF00,     // green
+        0xFFFFFF00,     // cyan
+        0xFF00FFFF,     // yellow
+        0xFFFFFFFF,     // white
+        0xFF000000,     // black #2
+        0xFFFF00A0,     // violet
+        0xFF00A0FF,     // orange
+        0xFFA000FF,     // purple
+        0xFFA0FF00,     // blueish green
+        0xFFFFA000,     // greenish blue
+        0xFF00FFA0,     // yellow-green
+        0xFFFFFFFF,     // white #2
+
+        // 8 background colors
+        0xFF000000,      // black
+        0xFFA00000,      // dark-blue
+        0xFF0000A0,      // dark-red
+        0xFFA000A0,      // dark-magenta
+        0xFF00A000,      // dark-green
+        0xFFA0A000,      // dark-cyan
+        0xFF00A0A0,      // dark-yellow
+        0xFFA0A0A0,      // gray
+
+        // padding to get next block at 2^N
+        0xFFFF00FF,
+        0xFFFF00FF,
+        0xFFFF00FF,
+        0xFFFF00FF,
+        0xFFFF00FF,
+        0xFFFF00FF,
+        0xFFFF00FF,
+        0xFFFF00FF,
+
+        // KC85/4 only: 4 extra HICOLOR colors
+        0xFF000000,     // black
+        0xFF0000FF,     // red
+        0xFFFFFF00,     // cyan
+        0xFFFFFFFF,     // white
+    };
     const chips_display_info_t res = {
         .frame = {
             .dim = {
@@ -1706,8 +1703,8 @@ chips_display_info_t kc85_display_info(kc85_t* sys) {
             .height = KC85_DISPLAY_HEIGHT,
         },
         .palette = {
-            .ptr = (void*)_kc85_pal,
-            .size = sizeof(_kc85_pal)
+            .ptr = (void*)palette,
+            .size = sizeof(palette)
         }
     };
     CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
