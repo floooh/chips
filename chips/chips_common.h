@@ -45,9 +45,10 @@ typedef struct {
 
 typedef struct {
     struct {
-        chips_dim_t dim;    // framebuffer dimensions in pixels
-        size_t size_bytes;  // framebuffer size in bytes
-    } framebuffer;
+        chips_dim_t dim;        // framebuffer dimensions in pixels
+        chips_range_t buffer;
+        size_t bytes_per_pixel; // 1 or 4
+    } frame;
     chips_rect_t screen;
     chips_range_t palette;
 } chips_display_info_t;

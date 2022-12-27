@@ -256,6 +256,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #if !(defined(CHIPS_KC85_TYPE_2) || defined(CHIPS_KC85_TYPE_3) || defined(CHIPS_KC85_TYPE_4))
 #error "Please define one of CHIPS_KC85_TYPE_2, CHIPS_KC85_TYPE_3 or CHIPS_KC85_TYPE_4 before including kc85.h!"
@@ -280,6 +281,12 @@ extern "C" {
 #define KC85_DEFAULT_AUDIO_SAMPLES (128U)   // default number of samples in internal sample buffer
 #define KC85_EXP_NUM_SLOTS (2U)             // 2 expansion slots in main unit, each needs one mem_t layer!
 #define KC85_EXP_BUFSIZE (KC85_EXP_NUM_SLOTS*64U*1024U) // expansion system buffer size (64 KB per slot)
+
+#define KC85_FRAMEBUFFER_WIDTH (512)   // multiple of 256
+#define KC85_FRAMEBUFFER_HEIGHT (256)  // FIXME: allow border?
+#define KC85_FRAMEBUFFER_SIZE_BYTES (KC85_FRAMEBUFFER_WIDTH * KC85_FRAMEBUFFER_HEIGHT)
+#define KC85_DISPLAY_WIDTH (320)
+#define KC85_DISPLAY_HEIGHT (256)
 
 // IO bits
 #define KC85_PIO_CAOS_ROM        Z80PIO_PA0
@@ -324,7 +331,6 @@ typedef struct {
 // config parameters for kc85_init()
 typedef struct {
     chips_debug_t debug;
-    chips_range_t framebuffer;
     chips_audio_desc_t audio;
 
     // an optional callback to be invoked after a snapshot file is loaded to apply patches
@@ -392,7 +398,6 @@ typedef struct {
     struct {
         uint16_t h_tick;
         uint16_t v_count;
-        uint8_t* fb;
     } video;
     uint64_t pio_pins;
     #if defined(CHIPS_KC85_TYPE_4)
@@ -430,6 +435,7 @@ typedef struct {
     #endif
     uint8_t rom_caos_e[0x2000];         // 8 KByte CAOS ROM at 0xE000
     uint8_t exp_buf[KC85_EXP_BUFSIZE];  // expansion system RAM/ROM
+    alignas(64) uint8_t fb[KC85_FRAMEBUFFER_SIZE_BYTES];
 } kc85_t;
 
 // initialize a new KC85 instance
@@ -497,11 +503,6 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src);
 #define _KC85_FREQUENCY (1750000)
 #endif
 #define _KC85_IRM0_PAGE (4)
-#define _KC85_FRAMEBUFFER_WIDTH (512)   // multiple of 256
-#define _KC85_FRAMEBUFFER_HEIGHT (256)  // FIXME: allow border?
-#define _KC85_FRAMEBUFFER_SIZE_BYTES (_KC85_FRAMEBUFFER_WIDTH * _KC85_FRAMEBUFFER_HEIGHT)
-#define _KC85_DISPLAY_WIDTH (320)
-#define _KC85_DISPLAY_HEIGHT (256)
 #if defined(CHIPS_KC85_TYPE_4)
 #define _KC85_SCANLINE_TICKS (113)
 #else
@@ -576,14 +577,12 @@ static inline uint32_t _kc85_xorshift32(uint32_t x) {
 
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= _KC85_FRAMEBUFFER_SIZE_BYTES));
     CHIPS_ASSERT(desc->audio.callback.func);
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(kc85_t));
     sys->valid = true;
     sys->freq_hz = _KC85_FREQUENCY;
-    sys->video.fb = (uint8_t*) desc->framebuffer.ptr;
     sys->patch_callback = desc->patch_callback;
     sys->debug = desc->debug;
 
@@ -808,7 +807,7 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             size_t irm_index = (sys->io84 & 1) * 2;
             size_t offset = (x<<8) | y;
             uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE + irm_index + 1][offset];
-            uint8_t* dst = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
+            uint8_t* dst = &sys->fb[y * KC85_FRAMEBUFFER_WIDTH + x * 8];
             if (sys->io84 & KC85_IO84_HICOLOR) {
                 // regular KC85/4 video mode
                 bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & (sys->pio_pins>>(Z80PIO_PIN_PB7-7)) & (1<<7));
@@ -1689,18 +1688,22 @@ chips_display_info_t kc85_display_info(kc85_t* sys) {
     // no runtime-dynamic display properties so far
     (void)sys;
     return (chips_display_info_t) {
-        .framebuffer = {
+        .frame = {
             .dim = {
-                .width = _KC85_FRAMEBUFFER_WIDTH,
-                .height = _KC85_FRAMEBUFFER_HEIGHT,
+                .width = KC85_FRAMEBUFFER_WIDTH,
+                .height = KC85_FRAMEBUFFER_HEIGHT,
             },
-            .size_bytes = _KC85_FRAMEBUFFER_SIZE_BYTES,
+            .bytes_per_pixel = 1,
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = KC85_FRAMEBUFFER_SIZE_BYTES
+            }
         },
         .screen = {
             .x = 0,
             .y = 0,
-            .width = _KC85_DISPLAY_WIDTH,
-            .height = _KC85_DISPLAY_HEIGHT,
+            .width = KC85_DISPLAY_WIDTH,
+            .height = KC85_DISPLAY_HEIGHT,
         },
         .palette = {
             .ptr = (void*)_kc85_pal,
@@ -1714,7 +1717,6 @@ uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst) {
     *dst = *sys;
     // patch any external pointers to zero and replace internal
     // pointers with offsets
-    dst->video.fb = 0;
     dst->debug.callback.func = 0;
     dst->debug.callback.user_data = 0;
     dst->debug.stopped = 0;
@@ -1736,7 +1738,6 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src) {
     static kc85_t im;
     im = *src;
     // patch pointers
-    im.video.fb = sys->video.fb;
     im.debug = sys->debug;
     im.audio.callback = sys->audio.callback;
     im.patch_callback = sys->patch_callback;
