@@ -1687,7 +1687,7 @@ static const uint32_t _kc85_pal[36] = {
 chips_display_info_t kc85_display_info(kc85_t* sys) {
     // no runtime-dynamic display properties so far
     (void)sys;
-    return (chips_display_info_t) {
+    const chips_display_info_t res = {
         .frame = {
             .dim = {
                 .width = KC85_FRAMEBUFFER_WIDTH,
@@ -1710,6 +1710,8 @@ chips_display_info_t kc85_display_info(kc85_t* sys) {
             .size = sizeof(_kc85_pal)
         }
     };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    return res;
 }
 
 uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst) {

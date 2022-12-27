@@ -89,8 +89,13 @@ extern "C" {
 // bump this whenever the z1013_t struct layout changes
 #define Z9001_SNAPSHOT_VERSION (0x0001)
 
-#define Z9001_MAX_AUDIO_SAMPLES (1024)      /* max number of audio samples in internal sample buffer */
-#define Z9001_DEFAULT_AUDIO_SAMPLES (128)   /* default number of samples in internal sample buffer */
+#define Z9001_MAX_AUDIO_SAMPLES (1024)      // max number of audio samples in internal sample buffer
+#define Z9001_DEFAULT_AUDIO_SAMPLES (128)   // default number of samples in internal sample buffer
+#define Z9001_FRAMEBUFFER_WIDTH (512)
+#define Z9001_FRAMEBUFFER_HEIGHT (192)
+#define Z9001_FRAMEBUFFER_SIZE_BYTES (Z9001_FRAMEBUFFER_WIDTH * Z9001_FRAMEBUFFER_HEIGHT)
+#define Z9001_DISPLAY_WIDTH (320)
+#define Z9001_DISPLAY_HEIGHT (192)
 
 // Z9001/KC87 model types
 typedef enum {
@@ -102,7 +107,6 @@ typedef enum {
 typedef struct {
     z9001_type_t type;                  // default is Z9001_TYPE_Z9001
     chips_debug_t debug;                // optional debug hook
-    chips_range_t framebuffer;
     chips_audio_desc_t audio;
     struct {
         // Z9001 ROM images
@@ -137,7 +141,6 @@ typedef struct {
     // FIXME: uint8_t border_color;
     mem_t mem;
     kbd_t kbd;
-    uint8_t* fb;
 
     bool valid;
     bool z9001_has_basic_rom;
@@ -152,6 +155,7 @@ typedef struct {
     uint8_t ram[1<<16];
     uint8_t rom[0x4000];
     uint8_t rom_font[0x0800];   // 2 KB font ROM (not mapped into CPU address space)
+    uint8_t fb[Z9001_FRAMEBUFFER_SIZE_BYTES];
 } z9001_t;
 
 // initialize a new Z9001 instance
@@ -187,13 +191,6 @@ bool z9001_load_snapshot(z9001_t* sys, uint32_t version, const z9001_t* src);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _Z9001_FRAMEBUFFER_WIDTH (512)
-#define _Z9001_FRAMEBUFFER_HEIGHT (192)
-#define _Z9001_FRAMEBUFFER_SIZE_BYTES (_Z9001_FRAMEBUFFER_WIDTH * _Z9001_FRAMEBUFFER_HEIGHT)
-#define _Z9001_DISPLAY_WIDTH (320)
-#define _Z9001_DISPLAY_HEIGHT (192)
-#define _Z9001_FREQUENCY (2457600)
-
 // xorshift randomness for memory initialization
 static inline uint32_t _z9001_xorshift32(uint32_t x) {
     x ^= x<<13;
@@ -203,6 +200,7 @@ static inline uint32_t _z9001_xorshift32(uint32_t x) {
 }
 
 #define _Z9001_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
+#define _Z9001_FREQUENCY (2457600)
 
 // IO address decoding masks and pins
 #define _Z9001_IO_SEL_MASK (Z80_IORQ|Z80_M1|Z80_A7|Z80_A6)
@@ -219,13 +217,11 @@ static inline uint32_t _z9001_xorshift32(uint32_t x) {
 
 void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= _Z9001_FRAMEBUFFER_SIZE_BYTES));
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(z9001_t));
     sys->valid = true;
     sys->type = desc->type;
-    sys->fb = desc->framebuffer.ptr;
     sys->debug = desc->debug;
     if (desc->type == Z9001_TYPE_Z9001) {
         CHIPS_ASSERT(desc->roms.z9001.font.ptr && (desc->roms.z9001.font.size == sizeof(sys->rom_font)));
@@ -273,7 +269,7 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
         - KC87 has a 1 KB color buffer at 0xEC800
     */
     uint32_t r = 0x6D98302B;
-    for (int i = 0; i < (int)sizeof(sys->ram);) {
+    for (size_t i = 0; i < sizeof(sys->ram);) {
         r = _z9001_xorshift32(r);
         sys->ram[i++] = r;
         sys->ram[i++] = (r>>8);
@@ -511,7 +507,7 @@ static void _z9001_decode_vidmem(z9001_t* sys) {
         const uint8_t* font = sys->rom_font;
         for (size_t y = 0; y < 24; y++) {
             for (size_t py = 0; py < 8; py++) {
-                uint8_t* dst = sys->fb + (y * 8 + py) * _Z9001_FRAMEBUFFER_WIDTH;
+                uint8_t* dst = &sys->fb[(y * 8 + py) * Z9001_FRAMEBUFFER_WIDTH];
                 for (size_t x = 0; x < 40; x++, dst += 8) {
                     uint8_t chr = vidmem[offset+x];
                     uint8_t pixels = font[(chr<<3)|py];
@@ -531,7 +527,7 @@ static void _z9001_decode_vidmem(z9001_t* sys) {
         const uint8_t* font = sys->rom_font;
         for (size_t y = 0; y < 24; y++) {
             for (size_t py = 0; py < 8; py++) {
-                uint8_t* dst = sys->fb + (y * 8 + py) * _Z9001_FRAMEBUFFER_WIDTH;
+                uint8_t* dst = &sys->fb[(y * 8 + py) * Z9001_FRAMEBUFFER_WIDTH];
                 for (size_t x = 0; x < 40; x++, dst += 8) {
                     uint8_t chr = vidmem[offset + x];
                     uint8_t pixels = font[(chr<<3)|py];
@@ -737,25 +733,31 @@ chips_display_info_t z9001_display_info(z9001_t* sys) {
         0xFFFFFF00,     // cyan
         0xFFFFFFFF,     // white
     };
-    return (chips_display_info_t){
-        .framebuffer = {
+    const chips_display_info_t res = {
+        .frame = {
             .dim = {
-                .width = _Z9001_FRAMEBUFFER_WIDTH,
-                .height = _Z9001_FRAMEBUFFER_HEIGHT,
+                .width = Z9001_FRAMEBUFFER_WIDTH,
+                .height = Z9001_FRAMEBUFFER_HEIGHT,
             },
-            .size_bytes = _Z9001_FRAMEBUFFER_SIZE_BYTES,
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = Z9001_FRAMEBUFFER_SIZE_BYTES,
+            },
+            .bytes_per_pixel = 1,
         },
         .screen = {
             .x = 0,
             .y = 0,
-            .width = _Z9001_DISPLAY_WIDTH,
-            .height = _Z9001_DISPLAY_HEIGHT,
+            .width = Z9001_DISPLAY_WIDTH,
+            .height = Z9001_DISPLAY_HEIGHT,
         },
         .palette = {
             .ptr = (void*)_z9001_pal,
             .size = sizeof(_z9001_pal)
         }
     };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    return res;
 }
 
 uint32_t z9001_save_snapshot(z9001_t* sys, z9001_t* dst) {
@@ -763,7 +765,6 @@ uint32_t z9001_save_snapshot(z9001_t* sys, z9001_t* dst) {
     *dst = *sys;
     // patch any external pointers to zero and replace internal
     // pointers with offsets
-    dst->fb = 0;
     dst->debug.callback.func = 0;
     dst->debug.callback.user_data = 0;
     dst->debug.stopped = 0;
@@ -781,7 +782,6 @@ bool z9001_load_snapshot(z9001_t* sys, uint32_t version, const z9001_t* src) {
     // intermediate copy
     static z9001_t im;
     im = *src;
-    im.fb = sys->fb;
     im.debug = sys->debug;
     im.audio.callback = sys->audio.callback;
     mem_offsets_to_pointers(&im.mem, sys);

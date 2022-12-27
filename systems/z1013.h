@@ -472,7 +472,7 @@ chips_display_info_t z1013_display_info(z1013_t* sys) {
         0xFF000000, // black
         0xFFFFFFFF, // white
     };
-    return (chips_display_info_t){
+    const chips_display_info_t res = {
         .frame = {
             .dim = {
                 .width = Z1013_FRAMEBUFFER_WIDTH,
@@ -495,6 +495,8 @@ chips_display_info_t z1013_display_info(z1013_t* sys) {
             .size = sizeof(_z1013_pal)
         }
     };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    return res;
 }
 
 uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst) {
