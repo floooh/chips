@@ -66,6 +66,9 @@
 extern "C" {
 #endif
 
+// increase when namco_t memory layout changes
+#define NAMCO_SNAPSHOT_VERSION (1)
+
 #define NAMCO_MAX_AUDIO_SAMPLES (1024)
 #define NAMCO_DEFAULT_AUDIO_SAMPLES (128)
 #define NAMCO_FRAMEBUFFER_WIDTH (512)
@@ -995,6 +998,32 @@ chips_display_info_t namco_display_info(namco_t* sys) {
     CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
     CHIPS_ASSERT(((sys == 0) && (res.palette.ptr == 0)) || ((sys != 0) && (res.palette.ptr != 0)));
     return res;
+}
+
+uint32_t namco_save_snapshot(namco_t* sys, namco_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    dst->debug.callback.func = 0;
+    dst->debug.callback.user_data = 0;
+    dst->debug.stopped = 0;
+    dst->sound.callback.func = 0;
+    dst->sound.callback.user_data = 0;
+    mem_pointers_to_offsets(&dst->mem, sys);
+    return NAMCO_SNAPSHOT_VERSION;
+}
+
+bool namco_load_snapshot(namco_t* sys, uint32_t version, namco_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != NAMCO_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static namco_t im;
+    im = *src;
+    im.debug = sys->debug;
+    im.sound.callback = sys->sound.callback;
+    mem_offsets_to_pointers(&im.mem, sys);
+    *sys = im;
+    return true;
 }
 
 #endif // CHIPS_IMPL
