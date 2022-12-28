@@ -993,7 +993,8 @@ chips_display_info_t namco_display_info(namco_t* sys) {
         .palette = {
             .ptr = sys ?  sys->hw_colors : 0,
             .size = 32 * sizeof(uint32_t)
-        }
+        },
+        .portrait = true,
     };
     CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
     CHIPS_ASSERT(((sys == 0) && (res.palette.ptr == 0)) || ((sys != 0) && (res.palette.ptr != 0)));

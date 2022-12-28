@@ -51,6 +51,7 @@ typedef struct {
     } frame;
     chips_rect_t screen;
     chips_range_t palette;
+    bool portrait;
 } chips_display_info_t;
 
 typedef struct {
