@@ -717,7 +717,7 @@ static void _namco_decode_sprites(namco_t* sys) {
     const int max_sprite = 7;
     const int min_sprite = 0;
     #endif
-    for (size_t sprite_index = max_sprite; sprite_index >= min_sprite; --sprite_index) {
+    for (int sprite_index = max_sprite; sprite_index >= min_sprite; --sprite_index) {
         uint32_t py = sys->sprite_coords[sprite_index*2 + 0] - 31;
         uint32_t px = 272 - sys->sprite_coords[sprite_index*2 + 1];
         uint8_t shape = sys->main_ram[NAMCO_ADDR_SPRITES_ATTR + sprite_index*2 + 0];
