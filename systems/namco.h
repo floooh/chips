@@ -654,6 +654,7 @@ static inline void _namco_8x4(
     uint8_t* fb,
     uint8_t* tile_base,
     uint8_t* pal_base,
+    uint8_t* pal_rom,
     uint32_t tile_stride,
     uint32_t tile_offset,
     uint32_t px,
@@ -680,11 +681,10 @@ static inline void _namco_8x4(
             uint8_t p2_hi = (tile_base[tile_index]>>(7-xx)) & 1;
             uint8_t p2_lo = (tile_base[tile_index]>>(3-xx)) & 1;
             uint8_t p2 = (p2_hi<<1)|p2_lo;
-            uint8_t color = pal_base[(color_code<<2)|p2];
-            // FIXME
-            //if (opaque || (rgba != 0xFF000000)) {
-                fb[y * NAMCO_FRAMEBUFFER_WIDTH + x] = color;
-            //}
+            uint8_t hw_color = pal_base[(color_code<<2)|p2];
+            if (opaque || (pal_rom[hw_color] != 0)) {
+                fb[y * NAMCO_FRAMEBUFFER_WIDTH + x] = hw_color;
+            }
         }
     }
 }
@@ -698,8 +698,8 @@ static void _namco_decode_chars(namco_t* sys) {
             uint16_t offset = _namco_video_offset(x, y);
             uint8_t char_code = sys->video_ram[offset];
             uint8_t color_code = sys->color_ram[offset] & 0x1F;
-            _namco_8x4(sys->fb, tile_base, pal_base, 16, 8, x*8, y*8, char_code, color_code, true, false, false);
-            _namco_8x4(sys->fb, tile_base, pal_base, 16, 0, x*8+4, y*8, char_code, color_code, true, false, false);
+            _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 16, 8, x*8, y*8, char_code, color_code, true, false, false);
+            _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 16, 0, x*8+4, y*8, char_code, color_code, true, false, false);
         }
     }
 }
@@ -728,14 +728,14 @@ static void _namco_decode_sprites(namco_t* sys) {
         uint32_t fx1 = flip_x ? 8 : 4;
         uint32_t fx2 = flip_x ? 4 : 8;
         uint32_t fx3 = flip_x ? 0 :12;
-        _namco_8x4(sys->fb, tile_base, pal_base, 64, 8,  px+fx0, py+fy0, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(sys->fb, tile_base, pal_base, 64, 16, px+fx1, py+fy0, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(sys->fb, tile_base, pal_base, 64, 24, px+fx2, py+fy0, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(sys->fb, tile_base, pal_base, 64, 0,  px+fx3, py+fy0, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(sys->fb, tile_base, pal_base, 64, 40, px+fx0, py+fy1, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(sys->fb, tile_base, pal_base, 64, 48, px+fx1, py+fy1, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(sys->fb, tile_base, pal_base, 64, 56, px+fx2, py+fy1, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(sys->fb, tile_base, pal_base, 64, 32, px+fx3, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 8,  px+fx0, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 16, px+fx1, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 24, px+fx2, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 0,  px+fx3, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 40, px+fx0, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 48, px+fx1, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 56, px+fx2, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 32, px+fx3, py+fy1, char_code, color_code, false, flip_x, flip_y);
     }
 }
 
