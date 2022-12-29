@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -50,7 +50,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -64,11 +64,10 @@ typedef void (*ui_lc80_boot_t)(lc80_t* sys);
 
 typedef struct {
     lc80_t* sys;
-    ui_lc80_boot_t boot_cb; /* user-provided callback to reboot to different config */
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_lc80_boot_t boot_cb; // user-provided callback to reboot to different config
+    ui_dbg_texture_callbacks_t dbg_texture;     // texture create/update/destroy callback
+    ui_dbg_keys_desc_t dbg_keys;                // user-defined hotkeys for ui_dbg_t
+    ui_snapshot_desc_t snapshot;                // snapshot system creation params
 } ui_lc80_desc_t;
 
 typedef struct {
@@ -94,6 +93,7 @@ typedef struct {
         ui_memedit_t memedit[4];
         ui_dasm_t dasm[4];
         ui_dbg_t dbg;
+        ui_snapshot_t snapshot;
     } win;
     struct {
         ui_lc80_chip_t cpu;
@@ -113,7 +113,7 @@ typedef struct {
 void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* desc);
 void ui_lc80_discard(ui_lc80_t* ui);
 void ui_lc80_draw(ui_lc80_t* ui);
-lc80_debug_t ui_lc80_get_debug(ui_lc80_t* ui);
+chips_debug_t ui_lc80_get_debug(ui_lc80_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -705,6 +705,7 @@ static void _ui_lc80_draw_menu(ui_lc80_t* ui) {
     CHIPS_ASSERT(ui && ui->sys && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
+            ui_snapshot_menus(&ui->win.snapshot);
             if (ImGui::MenuItem("Reset")) {
                 lc80_reset(ui->sys);
                 ui_dbg_reset(&ui->win.dbg);
@@ -1046,6 +1047,7 @@ void _ui_lc80_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data)
 }
 
 static void _ui_lc80_init_windows(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
+    ui_snapshot_init(&ui->win.snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};
@@ -1054,9 +1056,7 @@ static void _ui_lc80_init_windows(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) 
         desc.y = y;
         desc.z80 = &ui->sys->cpu;
         desc.read_cb = _ui_lc80_mem_read;
-        desc.create_texture_cb = ui_desc->create_texture_cb;
-        desc.update_texture_cb = ui_desc->update_texture_cb;
-        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.texture_cbs = ui_desc->dbg_texture;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui->sys;
         ui_dbg_init(&ui->win.dbg, &desc);
@@ -1182,9 +1182,9 @@ void ui_lc80_draw(ui_lc80_t* ui) {
     _ui_lc80_draw_windows(ui);
 }
 
-lc80_debug_t ui_lc80_get_debug(ui_lc80_t* ui) {
-    lc80_debug_t res = {};
-    res.callback.func = (lc80_debug_func_t)ui_dbg_tick;
+chips_debug_t ui_lc80_get_debug(ui_lc80_t* ui) {
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->win.dbg;
     res.stopped = &ui->win.dbg.dbg.stopped;
     return res;

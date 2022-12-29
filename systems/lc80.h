@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -20,6 +20,7 @@
 
     You need to include the following headers before including lc80.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/z80ctc.h
     - chips/z80pio.h
@@ -48,7 +49,7 @@
     - 3x VQE23 2-digits LED display block (equiv ???)
 
     TODO: more details about the hardware and emulator
-        
+
     ## zlib/libpng license
 
     Copyright (c) 2019 Andre Weissflog
@@ -65,7 +66,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -74,6 +75,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// bump this whenever the lc80_t struct layout changes
+#define LC80_SNAPSHOT_VERSION (0x0001)
 
 // key codes (for lc80_key(), lc80_key_down(), lc80_key_up()
 #define LC80_KEY_0      ('0')
@@ -181,41 +185,17 @@ extern "C" {
 #define LC80_VQE23_K1    (1ULL<<16)
 #define LC80_VQE23_K2    (1ULL<<17)
 
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} lc80_audio_callback_t;
-
 #define LC80_MAX_AUDIO_SAMPLES (1024)
 #define LC80_DEFAULT_AUDIO_SAMPLES (128)
 
-// debugging hook definitions
-typedef void (*lc80_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        lc80_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} lc80_debug_t;
-
 // config parameters for lc80_init()
 typedef struct {
-    lc80_debug_t debug;     // optional debugger hook
-
-    // audio output config (if you don't want audio, set audio_cb to zero)
-    struct {
-        lc80_audio_callback_t callback; // called when audio_num_samples are ready
-        int num_samples;                // default is LC80_DEFAULT_AUDIO_SAMPLES
-        int sample_rate;                // playback sample rate, default is 44100
-        float volume;                   // audio volume (0.0 .. 1.0), default is 0.4
-    } audio;
-
-    // ROM image (must be single 2KByte image)
-    struct { const void* ptr; size_t size; } rom;
+    chips_debug_t debug;
+    chips_audio_desc_t audio;
+    chips_range_t rom;
 } lc80_desc_t;
 
-/* LC80 emulator state */
+// LC80 emulator state
 typedef struct {
     z80_t cpu;
     z80ctc_t ctc;
@@ -232,13 +212,13 @@ typedef struct {
 
     bool valid;
     uint64_t pins;
-    lc80_debug_t debug;
+    chips_debug_t debug;
 
     kbd_t kbd;
     uint32_t freq_hz;
 
     struct {
-        lc80_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[LC80_MAX_AUDIO_SAMPLES];
@@ -255,6 +235,8 @@ uint32_t lc80_exec(lc80_t* sys, uint32_t micro_seconds);
 void lc80_key_down(lc80_t* sys, int key_code);
 void lc80_key_up(lc80_t* sys, int key_code);
 void lc80_key(lc80_t* sys, int key_code);       // down + up
+uint32_t lc80_save_snapshot(lc80_t* sys, lc80_t* dst);  // capture snapshot, return snapshot layout version
+bool lc80_load_snapshot(lc80_t* sys, uint32_t version, lc80_t* src);    // load snapshot, return false if version didn't match
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -273,11 +255,11 @@ void lc80_key(lc80_t* sys, int key_code);       // down + up
 void lc80_init(lc80_t* sys, const lc80_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
-    
+
     memset(sys, 0, sizeof(lc80_t));
     sys->valid = true;
     sys->debug = desc->debug;
-    
+
     CHIPS_ASSERT(desc->rom.ptr && (desc->rom.size == sizeof(sys->rom)));
     memcpy(sys->rom, desc->rom.ptr, sizeof(sys->rom));
 
@@ -352,7 +334,7 @@ void lc80_reset(lc80_t* sys) {
 #define _LC80_HI(pins,mask) (0!=(pins&mask))
 #define _LC80_LO(pins,mask) (0==(pins&mask))
 
-// DS8205 (LS138) 3-to-8 decoder 
+// DS8205 (LS138) 3-to-8 decoder
 static inline uint32_t _lc80_ds8205_tick(uint32_t inp) {
     /*
         enable = G1 && !G2A && !G2B
@@ -471,7 +453,7 @@ uint64_t _lc80_tick(lc80_t* sys, uint64_t pins) {
         sys->u214[0] = pins & (Z80_WR | 0x0F03FF);
         sys->u214[1] = (pins & (Z80_WR | 0x0003FF)) | ((pins & 0xF00000)>>4);
     }
-    
+
     // tick CTC first (because it's the highest priority daisychain device
     {
         pins |= Z80_IEIO;
@@ -639,6 +621,30 @@ void lc80_key(lc80_t* sys, int key_code) {
     CHIPS_ASSERT(sys && sys->valid);
     lc80_key_down(sys, key_code);
     lc80_key_up(sys, key_code);
+}
+
+uint32_t lc80_save_snapshot(lc80_t* sys, lc80_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    dst->debug.callback.func = 0;
+    dst->debug.callback.user_data = 0;
+    dst->debug.stopped = 0;
+    dst->audio.callback.func = 0;
+    dst->audio.callback.user_data = 0;
+    return LC80_SNAPSHOT_VERSION;
+}
+
+bool lc80_load_snapshot(lc80_t* sys, uint32_t version, lc80_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != LC80_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static lc80_t im;
+    im = *src;
+    im.debug = sys->debug;
+    im.audio.callback = sys->audio.callback;
+    *sys = im;
+    return true;
 }
 
 #endif /* CHIPS_IMPL */
