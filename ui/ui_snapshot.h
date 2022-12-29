@@ -130,16 +130,23 @@ void ui_snapshot_menus(ui_snapshot_t* state) {
     if (ImGui::BeginMenu("Save Snapshot")) {
         for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
             const ui_snapshot_screenshot_t screenshot = state->slots[slot_index].screenshot;
+            ImGui::PushID(slot_index);
             if (screenshot.texture) {
-                ImGui::PushID(slot_index);
                 if (ui_snapshot_draw_menu_slot("##savesnapshot", screenshot)) {
                     ui_snapshot_save_slot(state, slot_index);
                 }
                 if ((slot_index + 1) & 1) {
                     ImGui::SameLine();
                 }
-                ImGui::PopID();
             }
+            else {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "%sSlot %d\n", state->slots[slot_index].valid ? "* ":"", (int)slot_index);
+                if (ImGui::MenuItem(buf)) {
+                    ui_snapshot_save_slot(state, slot_index);
+                }
+            }
+            ImGui::PopID();
         }
         ImGui::EndMenu();
     }
@@ -147,16 +154,23 @@ void ui_snapshot_menus(ui_snapshot_t* state) {
         for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
             if (state->slots[slot_index].valid) {
                 const ui_snapshot_screenshot_t screenshot = state->slots[slot_index].screenshot;
+                ImGui::PushID(slot_index);
                 if (screenshot.texture) {
-                    ImGui::PushID(slot_index);
                     if (ui_snapshot_draw_menu_slot("##loadsnapshot", screenshot)) {
                         ui_snapshot_load_slot(state, slot_index);
                     }
                     if ((slot_index + 1) & 1) {
                         ImGui::SameLine();
                     }
-                    ImGui::PopID();
                 }
+                else {
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "Slot %d\n", (int)slot_index);
+                    if (ImGui::MenuItem(buf)) {
+                        ui_snapshot_load_slot(state, slot_index);
+                    }
+                }
+                ImGui::PopID();
             }
         }
         ImGui::EndMenu();
