@@ -767,7 +767,7 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             // same as (pins & Z80_WR) && (addr >= 0x8000) && (addr < 0xC000)
             bool cpu_access = (pins & (Z80_WR | 0xC000)) == (Z80_WR | 0x8000);
             uint8_t pixel_bits = (fg_blank || cpu_access) ? 0 : sys->ram[_KC85_IRM0_PAGE][pixel_offset];
-            uint8_t* dst = &(sys->video.fb[y*_KC85_FRAMEBUFFER_WIDTH + x*8]);
+            uint8_t* dst = &(sys->fb[y*KC85_FRAMEBUFFER_WIDTH + x*8]);
             _kc85_decode_8pixels(dst, pixel_bits, color_bits);
         }
     }
