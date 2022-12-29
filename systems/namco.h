@@ -30,6 +30,7 @@
 
     You need to include the following headers before including namco.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/clk.h
     - chips/mem.h
