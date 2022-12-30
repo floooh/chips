@@ -11,11 +11,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -43,7 +43,7 @@
     * CS:   chips select (1: chip is active)
     * RS:   register select (0: select address register, 1: select register files)
     * RW:   read/write select (0: write, 1: read)
-    
+
     ## Not Emulated:
 
     * the E pin (enable)
@@ -58,7 +58,7 @@
       from the "FIGURE 11 - CRTC BLOCK DIAGRAM" image in the data sheet,
       and the timing diagrams "FIGURE 13 - CRTC HORIZONTAL TIMING" and
       "FIGURE 14 - CRTC VERTICAL TIMING"
-    * all the TOTAL register values (HTOTAL, VTOTAL, MAX_SCANLINE_ADDR) 
+    * all the TOTAL register values (HTOTAL, VTOTAL, MAX_SCANLINE_ADDR)
       which cause counters to restart are '+1' (so the wrap around happens
       at the value stored in the 'total' register plus one), this is
       illustrated in "FIGURE 12 - ILLUSTRATION OF THE SCREEN FORMAT"
@@ -87,7 +87,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -99,48 +99,84 @@ extern "C" {
 /* the address output pins share the same pin locations as the system address bus
    but they are only set in the output pins mask of mc6845_tick()
 */
-#define MC6845_MA0  (1ULL<<0)
-#define MC6845_MA1  (1ULL<<1)
-#define MC6845_MA2  (1ULL<<2)
-#define MC6845_MA3  (1ULL<<3)
-#define MC6845_MA4  (1ULL<<4)
-#define MC6845_MA5  (1ULL<<5)
-#define MC6845_MA6  (1ULL<<6)
-#define MC6845_MA7  (1ULL<<7)
-#define MC6845_MA8  (1ULL<<8)
-#define MC6845_MA9  (1ULL<<9)
-#define MC6845_MA10 (1ULL<<10)
-#define MC6845_MA11 (1ULL<<11)
-#define MC6845_MA12 (1ULL<<12)
-#define MC6845_MA13 (1ULL<<13)
+#define MC6845_PIN_MA0  (0)
+#define MC6845_PIN_MA1  (1)
+#define MC6845_PIN_MA2  (2)
+#define MC6845_PIN_MA3  (3)
+#define MC6845_PIN_MA4  (4)
+#define MC6845_PIN_MA5  (5)
+#define MC6845_PIN_MA6  (6)
+#define MC6845_PIN_MA7  (7)
+#define MC6845_PIN_MA8  (8)
+#define MC6845_PIN_MA9  (9)
+#define MC6845_PIN_MA10 (10)
+#define MC6845_PIN_MA11 (11)
+#define MC6845_PIN_MA12 (12)
+#define MC6845_PIN_MA13 (13)
 
-/* data bus pins */
-#define MC6845_D0   (1ULL<<16)
-#define MC6845_D1   (1ULL<<17)
-#define MC6845_D2   (1ULL<<18)
-#define MC6845_D3   (1ULL<<19)
-#define MC6845_D4   (1ULL<<20)
-#define MC6845_D5   (1ULL<<21)
-#define MC6845_D6   (1ULL<<22)
-#define MC6845_D7   (1ULL<<23)
+// data bus pins
+#define MC6845_PIN_D0   (16)
+#define MC6845_PIN_D1   (17)
+#define MC6845_PIN_D2   (18)
+#define MC6845_PIN_D3   (19)
+#define MC6845_PIN_D4   (20)
+#define MC6845_PIN_D5   (21)
+#define MC6845_PIN_D6   (22)
+#define MC6845_PIN_D7   (23)
 
-/* control pins */
-#define MC6845_CS       (1ULL<<40)     /* chip select */
-#define MC6845_RS       (1ULL<<41)     /* register select (active: data register, inactive: address register) */
-#define MC6845_RW       (1ULL<<42)     /* read/write (active: write, inactive: read) */
-#define MC6845_LPSTB    (1ULL<<43)     /* light pen strobe */
+// control pins
+#define MC6845_PIN_CS       (40)     // chip select
+#define MC6845_PIN_RS       (41)     // register select (active: data register, inactive: address register)
+#define MC6845_PIN_RW       (42)     // read/write (active: write, inactive: read)
+#define MC6845_PIN_LPSTB    (43)     // light pen strobe
 
-/* display status pins */
-#define MC6845_DE       (1ULL<<44)     /* display enable */
-#define MC6845_VS       (1ULL<<45)     /* vsync active */
-#define MC6845_HS       (1ULL<<46)     /* hsync active */
+// display status pins
+#define MC6845_PIN_DE       (44)     // display enable
+#define MC6845_PIN_VS       (45)     // vsync active
+#define MC6845_PIN_HS       (46)     // hsync active
 
-/* row-address output pins */
-#define MC6845_RA0      (1ULL<<48)
-#define MC6845_RA1      (1ULL<<49)
-#define MC6845_RA2      (1ULL<<50)
-#define MC6845_RA3      (1ULL<<51)
-#define MC6845_RA4      (1ULL<<52)
+// row-address output pins
+#define MC6845_PIN_RA0      (48)
+#define MC6845_PIN_RA1      (49)
+#define MC6845_PIN_RA2      (50)
+#define MC6845_PIN_RA3      (51)
+#define MC6845_PIN_RA4      (52)
+
+// pin bit masks
+#define MC6845_MA0  (1ULL<<MC6845_PIN_MA0)
+#define MC6845_MA1  (1ULL<<MC6845_PIN_MA1)
+#define MC6845_MA2  (1ULL<<MC6845_PIN_MA2)
+#define MC6845_MA3  (1ULL<<MC6845_PIN_MA3)
+#define MC6845_MA4  (1ULL<<MC6845_PIN_MA4)
+#define MC6845_MA5  (1ULL<<MC6845_PIN_MA5)
+#define MC6845_MA6  (1ULL<<MC6845_PIN_MA6)
+#define MC6845_MA7  (1ULL<<MC6845_PIN_MA7)
+#define MC6845_MA8  (1ULL<<MC6845_PIN_MA8)
+#define MC6845_MA9  (1ULL<<MC6845_PIN_MA9)
+#define MC6845_MA10 (1ULL<<MC6845_PIN_MA10)
+#define MC6845_MA11 (1ULL<<MC6845_PIN_MA11)
+#define MC6845_MA12 (1ULL<<MC6845_PIN_MA12)
+#define MC6845_MA13 (1ULL<<MC6845_PIN_MA13)
+#define MC6845_D0   (1ULL<<MC6845_PIN_D0)
+#define MC6845_D1   (1ULL<<MC6845_PIN_D1)
+#define MC6845_D2   (1ULL<<MC6845_PIN_D2)
+#define MC6845_D3   (1ULL<<MC6845_PIN_D3)
+#define MC6845_D4   (1ULL<<MC6845_PIN_D4)
+#define MC6845_D5   (1ULL<<MC6845_PIN_D5)
+#define MC6845_D6   (1ULL<<MC6845_PIN_D6)
+#define MC6845_D7   (1ULL<<MC6845_PIN_D7)
+#define MC6845_CS       (1ULL<<MC6845_PIN_CS)
+#define MC6845_RS       (1ULL<<MC6845_PIN_RS)
+#define MC6845_RW       (1ULL<<MC6845_PIN_RW)
+#define MC6845_LPSTB    (1ULL<<MC6845_PIN_LPSTB)
+#define MC6845_DE       (1ULL<<MC6845_PIN_DE)
+#define MC6845_VS       (1ULL<<MC6845_PIN_VS)
+#define MC6845_HS       (1ULL<<MC6845_PIN_HS)
+#define MC6845_RA0      (1ULL<<MC6845_PIN_RA0)
+#define MC6845_RA1      (1ULL<<MC6845_PIN_RA1)
+#define MC6845_RA2      (1ULL<<MC6845_PIN_RA2)
+#define MC6845_RA3      (1ULL<<MC6845_PIN_RA3)
+#define MC6845_RA4      (1ULL<<MC6845_PIN_RA4)
 
 /* I/O request pin mask (control and databus) */
 #define MC6845_IORQ_PINS (MC6845_D0|MC6845_D1|MC6845_D2|MC6845_D3|MC6845_D4|MC6845_D5|MC6845_D6|MC6845_D7|MC6845_CS|MC6845_RS|MC6845_RW|MC6845_LPSTB)
@@ -175,7 +211,7 @@ typedef enum {
 
 /* mc6845 state */
 typedef struct {
-    mc6845_type_t type;                       
+    mc6845_type_t type;
     /* currently selected register */
     uint8_t sel;
     /* register bank */
@@ -212,7 +248,7 @@ typedef struct {
     bool co_vspos;                  /* v_ctr == v_sync_pos */
     bool co_vswidth;                /* v_ctr == v_sync_width */
     bool co_raster;                 /* r_ctr == max_scanline_addr */
-    
+
     /* internal counters */
     uint8_t h_ctr;                  /* 8-bit horizontal counter */
     uint8_t hsync_ctr;              /* 4-bit horizontal sync-width counter */
@@ -342,13 +378,13 @@ static inline uint64_t _mc6845_pins(mc6845_t* c) {
 
 void mc6845_reset(mc6845_t* c) {
     /* reset behaviour:
-        - all counters in the CRTC are cleared and the device stops 
+        - all counters in the CRTC are cleared and the device stops
           the display operation
         - all the outputs are driven low
         - the control registers in the CRTC are not affected and
           remain unchanged
         - the CRTC resumes the display operation immediately after
-          the release of RESET. DE is not active until after 
+          the release of RESET. DE is not active until after
           the first VS pulse occurs.
     */
     c->ma = 0;
@@ -458,7 +494,7 @@ static inline void _mc6845_co_cmp_raster(mc6845_t* c) {
     }
     if (c->r_ctr >= (max_scanline + 1)) {
         c->co_raster = true;
-    } 
+    }
 }
 
 uint64_t mc6845_iorq(mc6845_t* c, uint64_t pins) {
@@ -582,7 +618,7 @@ static inline void _mc6845_scanline(mc6845_t* c) {
     /* special case TYPE 0, reload ma_row_start at each scanline of row 0 */
     if ((c->type == MC6845_TYPE_UM6845R) && (c->v_ctr == 0)) {
         c->ma_store = (c->start_addr_hi<<8) | c->start_addr_lo;
-        c->ma_row_start = c->ma_store; 
+        c->ma_row_start = c->ma_store;
     }
     if (c->vs) {
         _mc6845_co_cmp_vswidth(c);

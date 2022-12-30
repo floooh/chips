@@ -8,14 +8,18 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    ~~~C    
+    ~~~C
     CHIPS_ASSERT(c)
     ~~~
-    
+
+    Include the following files before am40010.h:
+
+        chips/chips_common.h
+
     ## Emulated Pins
 
     ************************************ *
@@ -44,7 +48,7 @@
     (TODO)
 
     ## Links
-    
+
     TODO
 
     ## zlib/libpng license
@@ -63,7 +67,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -75,60 +79,105 @@ extern "C" {
 
 #define AM40010_DISPLAY_WIDTH (768)
 #define AM40010_DISPLAY_HEIGHT (272)
-#define AM40010_DBG_DISPLAY_WIDTH (1024)
-#define AM40010_DBG_DISPLAY_HEIGHT (312)
+#define AM40010_FRAMEBUFFER_WIDTH (1024)
+#define AM40010_FRAMEBUFFER_HEIGHT (312)
+#define AM40010_FRAMEBUFFER_SIZE_BYTES (AM40010_FRAMEBUFFER_WIDTH * AM40010_FRAMEBUFFER_HEIGHT * 4)
 
 // Z80-compatible pins
-#define AM40010_A13     (1ULL<<13)
-#define AM40010_A14     (1ULL<<14)
-#define AM40010_A15     (1ULL<<15)
+#define AM40010_PIN_A13     (13)
+#define AM40010_PIN_A14     (14)
+#define AM40010_PIN_A15     (15)
 
-#define AM40010_D0      (1ULL<<16)
-#define AM40010_D1      (1ULL<<17)
-#define AM40010_D2      (1ULL<<18)
-#define AM40010_D3      (1ULL<<19)
-#define AM40010_D4      (1ULL<<20)
-#define AM40010_D5      (1ULL<<21)
-#define AM40010_D6      (1ULL<<22)
-#define AM40010_D7      (1ULL<<23)
+#define AM40010_PIN_D0      (16)
+#define AM40010_PIN_D1      (17)
+#define AM40010_PIN_D2      (18)
+#define AM40010_PIN_D3      (19)
+#define AM40010_PIN_D4      (20)
+#define AM40010_PIN_D5      (21)
+#define AM40010_PIN_D6      (22)
+#define AM40010_PIN_D7      (23)
 
-#define AM40010_M1      (1ULL<<24)
-#define AM40010_MREQ    (1ULL<<25)
-#define AM40010_IORQ    (1ULL<<26)
-#define AM40010_RD      (1ULL<<27)
-#define AM40010_WR      (1ULL<<28)
-#define AM40010_INT     (1ULL<<30)
-#define AM40010_WAIT    (1ULL<<33)
-#define AM40010_READY   (AM40010_WAIT)
+#define AM40010_PIN_M1      (24)
+#define AM40010_PIN_MREQ    (25)
+#define AM40010_PIN_IORQ    (26)
+#define AM40010_PIN_RD      (27)
+#define AM40010_PIN_WR      (28)
+#define AM40010_PIN_INT     (30)
+#define AM40010_PIN_WAIT    (33)
+#define AM40010_PIN_READY   (AM40010_PIN_WAIT)
 
 // MC6845 compatible pins
-#define AM40010_MA0     (1ULL<<0)
-#define AM40010_MA1     (1ULL<<1)
-#define AM40010_MA2     (1ULL<<2)
-#define AM40010_MA3     (1ULL<<3)
-#define AM40010_MA4     (1ULL<<4)
-#define AM40010_MA5     (1ULL<<5)
-#define AM40010_MA6     (1ULL<<6)
-#define AM40010_MA7     (1ULL<<7)
-#define AM40010_MA8     (1ULL<<8)
-#define AM40010_MA9     (1ULL<<9)
-#define AM40010_MA10    (1ULL<<10)
-#define AM40010_MA11    (1ULL<<11)
-#define AM40010_MA12    (1ULL<<12)
-#define AM40010_MA13    (1ULL<<13)
+#define AM40010_PIN_MA0     (0)
+#define AM40010_PIN_MA1     (1)
+#define AM40010_PIN_MA2     (2)
+#define AM40010_PIN_MA3     (3)
+#define AM40010_PIN_MA4     (4)
+#define AM40010_PIN_MA5     (5)
+#define AM40010_PIN_MA6     (6)
+#define AM40010_PIN_MA7     (7)
+#define AM40010_PIN_MA8     (8)
+#define AM40010_PIN_MA9     (9)
+#define AM40010_PIN_MA10    (10)
+#define AM40010_PIN_MA11    (11)
+#define AM40010_PIN_MA12    (12)
+#define AM40010_PIN_MA13    (13)
 
-#define AM40010_DE      (1ULL<<44)
-#define AM40010_VS      (1ULL<<45)
-#define AM40010_HS      (1ULL<<46)
+#define AM40010_PIN_DE      (44)
+#define AM40010_PIN_VS      (45)
+#define AM40010_PIN_HS      (46)
 
-#define AM40010_RA0     (1ULL<<48)
-#define AM40010_RA1     (1ULL<<49)
-#define AM40010_RA2     (1ULL<<50)
-#define AM40010_RA3     (1ULL<<51)
-#define AM40010_RA4     (1ULL<<52)
+#define AM40010_PIN_RA0     (48)
+#define AM40010_PIN_RA1     (49)
+#define AM40010_PIN_RA2     (50)
+#define AM40010_PIN_RA3     (51)
+#define AM40010_PIN_RA4     (52)
 
 // AM40010 specific pins (starting at pin 40)
-#define AM40010_SYNC    (1ULL<<41)
+#define AM40010_PIN_SYNC    (41)
+
+// pin masks
+#define AM40010_A13     (1ULL<<AM40010_PIN_A13)
+#define AM40010_A14     (1ULL<<AM40010_PIN_A14)
+#define AM40010_A15     (1ULL<<AM40010_PIN_A15)
+#define AM40010_D0      (1ULL<<AM40010_PIN_D0)
+#define AM40010_D1      (1ULL<<AM40010_PIN_D1)
+#define AM40010_D2      (1ULL<<AM40010_PIN_D2)
+#define AM40010_D3      (1ULL<<AM40010_PIN_D3)
+#define AM40010_D4      (1ULL<<AM40010_PIN_D4)
+#define AM40010_D5      (1ULL<<AM40010_PIN_D5)
+#define AM40010_D6      (1ULL<<AM40010_PIN_D6)
+#define AM40010_D7      (1ULL<<AM40010_PIN_D7)
+#define AM40010_M1      (1ULL<<AM40010_PIN_M1)
+#define AM40010_MREQ    (1ULL<<AM40010_PIN_MREQ)
+#define AM40010_IORQ    (1ULL<<AM40010_PIN_IORQ)
+#define AM40010_RD      (1ULL<<AM40010_PIN_RD)
+#define AM40010_WR      (1ULL<<AM40010_PIN_WR)
+#define AM40010_INT     (1ULL<<AM40010_PIN_INT)
+#define AM40010_WAIT    (1ULL<<AM40010_PIN_WAIT)
+#define AM40010_READY   (1ULL<<AM40010_PIN_READY)
+#define AM40010_MA0     (1ULL<<AM40010_PIN_MA0)
+#define AM40010_MA1     (1ULL<<AM40010_PIN_MA1)
+#define AM40010_MA2     (1ULL<<AM40010_PIN_MA2)
+#define AM40010_MA3     (1ULL<<AM40010_PIN_MA3)
+#define AM40010_MA4     (1ULL<<AM40010_PIN_MA4)
+#define AM40010_MA5     (1ULL<<AM40010_PIN_MA5)
+#define AM40010_MA6     (1ULL<<AM40010_PIN_MA6)
+#define AM40010_MA7     (1ULL<<AM40010_PIN_MA7)
+#define AM40010_MA8     (1ULL<<AM40010_PIN_MA8)
+#define AM40010_MA9     (1ULL<<AM40010_PIN_MA9)
+#define AM40010_MA10    (1ULL<<AM40010_PIN_MA10)
+#define AM40010_MA11    (1ULL<<AM40010_PIN_MA11)
+#define AM40010_MA12    (1ULL<<AM40010_PIN_MA12)
+#define AM40010_MA13    (1ULL<<AM40010_PIN_MA13)
+#define AM40010_DE      (1ULL<<AM40010_PIN_DE)
+#define AM40010_VS      (1ULL<<AM40010_PIN_VS)
+#define AM40010_HS      (1ULL<<AM40010_PIN_HS)
+#define AM40010_RA0     (1ULL<<AM40010_PIN_RA0)
+#define AM40010_RA1     (1ULL<<AM40010_PIN_RA1)
+#define AM40010_RA2     (1ULL<<AM40010_PIN_RA2)
+#define AM40010_RA3     (1ULL<<AM40010_PIN_RA3)
+#define AM40010_RA4     (1ULL<<AM40010_PIN_RA4)
+#define AM40010_SYNC    (1ULL<<AM40010_PIN_SYNC)
 
 // config register bits
 #define AM40010_CONFIG_MODE     ((1<<0)|(1<<1)) // video mode
@@ -156,10 +205,8 @@ typedef struct am40010_desc_t {
     am40010_cpc_type_t cpc_type;        // host system type (mainly for bank switching)
     am40010_bankswitch_t bankswitch_cb; // memory bank-switching callback
     am40010_cclk_t cclk_cb;             // the 1 MHz CCLK callback
-    const uint8_t* ram;                 // direct pointer to the gate-array-visible 4*16 KByte RAM banks
-    uint32_t ram_size;                  // must be >= 64 KBytes
-    uint32_t* rgba8_buffer;             // pointer to the RGBA8 output framebuffer
-    size_t rgba8_buffer_size;           // must be at least 1024*312*4 bytes
+    chips_range_t ram;                  // direct pointer to the gate-array-visible 4*16 KByte RAM banks
+    chips_range_t framebuffer;          // pointer to framebuffer (at least 1024 * 312 bytes)
     void* user_data;                    // optional userdata for callbacks
 } am40010_desc_t;
 
@@ -218,9 +265,9 @@ typedef struct am40010_t {
     am40010_bankswitch_t bankswitch_cb;
     am40010_cclk_t cclk_cb;
     const uint8_t* ram;
-    uint32_t* rgba8_buffer;
     void* user_data;
     uint64_t pins;              // only for debug inspection
+    uint32_t* fb;
 } am40010_t;
 
 void am40010_init(am40010_t* ga, const am40010_desc_t* desc);
@@ -232,8 +279,6 @@ void am40010_reset(am40010_t* ga);
 */
 void am40010_iorq(am40010_t* ga, uint64_t cpu_pins);
 /*
-    FIXME FIXME FIXME
-
     Call the tick function once per Z80 tcycle with the CPU pins. The am40010_tick
     function will call the CCLK callback as needed (at 1 MHz frequency),
     tick the MC6845 and AY-3-8910 from this callback.
@@ -241,8 +286,8 @@ void am40010_iorq(am40010_t* ga, uint64_t cpu_pins);
     am40010_tick() will return a new Z80 CPU pin mask with the following
     pins updated:
 
-        Z80_WAIT0..2    - the right number of wait states for this machine cycle
-        Z80_INT         - interrupt request from the gate array was triggered
+        AM40010_READY/Z80_WAIT - gate array wants the Z80 to wait
+        AM40010_INT/Z80_INT    - interrupt request from the gate array was triggered
 */
 uint64_t am40010_tick(am40010_t* ga, uint64_t cpu_pins);
 
@@ -367,14 +412,14 @@ static void _am40010_init_colors(am40010_t* ga) {
 void am40010_init(am40010_t* ga, const am40010_desc_t* desc) {
     CHIPS_ASSERT(ga && desc);
     CHIPS_ASSERT(desc->bankswitch_cb && desc->cclk_cb);
-    CHIPS_ASSERT(desc->rgba8_buffer && (desc->rgba8_buffer_size >= _AM40010_MAX_FB_SIZE));
-    CHIPS_ASSERT(desc->ram && (desc->ram_size >= (64*1024)));
+    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= AM40010_FRAMEBUFFER_SIZE_BYTES));
+    CHIPS_ASSERT(desc->ram.ptr && (desc->ram.size >= (64*1024)));
     memset(ga, 0, sizeof(am40010_t));
     ga->cpc_type = desc->cpc_type;
     ga->bankswitch_cb = desc->bankswitch_cb;
     ga->cclk_cb = desc->cclk_cb;
-    ga->ram = desc->ram;
-    ga->rgba8_buffer = desc->rgba8_buffer;
+    ga->ram = desc->ram.ptr;
+    ga->fb = desc->framebuffer.ptr;
     ga->user_data = desc->user_data;
     _am40010_init_regs(ga);
     _am40010_init_video(ga);
@@ -604,7 +649,7 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
             ga->video.intcnt = 0;
         }
     }
-    
+
     // SYNC and MODESYNC via 1 MHz 4-bit CLKCNT
     uint8_t clkcnt = ga->video.clkcnt;
     if (clkcnt == 7) {
@@ -634,9 +679,9 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
     /*
          compute the source address from current CRTC ma (memory address)
          and ra (raster address) like this:
-    
+
          |ma13|ma12|ra2|ra1|ra0|ma9|ma8|ma7|ma6|ma5|ma4|ma3|ma2|ma1|ma0|0|
-    
+
         Bits ma13 and m12 point to the 16 KByte page, and all
         other bits are the index into that page.
     */
@@ -717,8 +762,8 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
     if (ga->dbg_vis) {
         int dst_x = ga->crt.h_pos * 16;
         int dst_y = ga->crt.v_pos;
-        if ((dst_x <= (AM40010_DBG_DISPLAY_WIDTH-16)) && (dst_y < AM40010_DBG_DISPLAY_HEIGHT)) {
-            uint32_t* dst = &(ga->rgba8_buffer[dst_x + dst_y * AM40010_DBG_DISPLAY_WIDTH]);
+        if ((dst_x <= (AM40010_FRAMEBUFFER_WIDTH-16)) && (dst_y < AM40010_FRAMEBUFFER_HEIGHT)) {
+            uint32_t* dst = &(ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH]);
             uint8_t r = 0x22, g = 0x22, b = 0x22;
             if (crtc_pins & AM40010_HS) {
                 r = 0x55;
@@ -750,7 +795,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
         int dst_x = ga->crt.pos_x * 16;
         int dst_y = ga->crt.pos_y;
         bool black = ga->video.sync;
-        uint32_t* dst = &ga->rgba8_buffer[dst_x + dst_y * AM40010_DISPLAY_WIDTH];
+        uint32_t* dst = &ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH];
         if (crtc_pins & AM40010_DE) {
             _am40010_decode_pixels(ga, dst, crtc_pins);
         }
@@ -808,7 +853,7 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t pins) {
         the actions that need to happen at the CCLK tick
         NOTE: the actual position where RDY and CCLK happens is important,
         experiment with 0, 1, 2, 3.
-        
+
         NOTE: Logon's Run crashes on rdy:1 and rdy:2
     */
     const bool rdy  = 0 != (ga->seq_tick_count & 3);

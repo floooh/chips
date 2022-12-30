@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -46,7 +46,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -55,25 +55,39 @@
 extern "C" {
 #endif
 
-/* the A0 pin is usually connected to the address bus A0 pin */
-#define UPD765_A0   (1ULL<<0)  /* in: data/status register select */
+// the A0 pin is usually connected to the address bus A0 pin
+#define UPD765_PIN_A0   (0)  /* in: data/status register select */
 
-/* data bus pins (in/out) */
-#define UPD765_D0   (1ULL<<16)
-#define UPD765_D1   (1ULL<<17)
-#define UPD765_D2   (1ULL<<18)
-#define UPD765_D3   (1ULL<<19)
-#define UPD765_D4   (1ULL<<20)
-#define UPD765_D5   (1ULL<<21)
-#define UPD765_D6   (1ULL<<22)
-#define UPD765_D7   (1ULL<<23)
+// data bus pins (in/out)
+#define UPD765_PIN_D0   (16)
+#define UPD765_PIN_D1   (17)
+#define UPD765_PIN_D2   (18)
+#define UPD765_PIN_D3   (19)
+#define UPD765_PIN_D4   (20)
+#define UPD765_PIN_D5   (21)
+#define UPD765_PIN_D6   (22)
+#define UPD765_PIN_D7   (23)
 
-/* control pins shared with CPU */
-#define UPD765_RD   (1ULL<<27)  /* in: read data from controller */
-#define UPD765_WR   (1ULL<<28)  /* in: write data to controller */
+// control pins shared with CPU
+#define UPD765_PIN_RD   (27)  // in: read data from controller
+#define UPD765_PIN_WR   (28)  // in: write data to controller
 
-/* control pins */
-#define UPD765_CS   (1ULL<<40)  /* in: chip select */
+// control pins
+#define UPD765_PIN_CS   (40)  // in: chip select
+
+// pin bit masks
+#define UPD765_A0   (1ULL<<UPD765_PIN_A0)
+#define UPD765_D0   (1ULL<<UPD765_PIN_D0)
+#define UPD765_D1   (1ULL<<UPD765_PIN_D1)
+#define UPD765_D2   (1ULL<<UPD765_PIN_D2)
+#define UPD765_D3   (1ULL<<UPD765_PIN_D3)
+#define UPD765_D4   (1ULL<<UPD765_PIN_D4)
+#define UPD765_D5   (1ULL<<UPD765_PIN_D5)
+#define UPD765_D6   (1ULL<<UPD765_PIN_D6)
+#define UPD765_D7   (1ULL<<UPD765_PIN_D7)
+#define UPD765_RD   (1ULL<<UPD765_PIN_RD)
+#define UPD765_WR   (1ULL<<UPD765_PIN_WR)
+#define UPD765_CS   (1ULL<<UPD765_PIN_CS)
 
 /* extract 8-bit data bus from 64-bit pins */
 #define UPD765_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))

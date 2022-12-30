@@ -35,14 +35,14 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* load Amstrad CPC .dsk file format */
-bool fdd_cpc_insert_dsk(fdd_t* fdd, const uint8_t* data, int data_size);
+bool fdd_cpc_insert_dsk(fdd_t* fdd, chips_range_t data);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -89,9 +89,9 @@ typedef struct {
 } _fdd_cpc_dsk_sector_info;
 
 /* parse a standard .dsk image */
-static bool _fdd_cpc_parse_dsk(fdd_t* fdd, bool ext, const uint8_t* data, int data_size) {
+static bool _fdd_cpc_parse_dsk(fdd_t* fdd, bool ext, chips_range_t data) {
     CHIPS_ASSERT(fdd);
-    const _fdd_cpc_dsk_header* hdr = (_fdd_cpc_dsk_header*) data;
+    const _fdd_cpc_dsk_header* hdr = (_fdd_cpc_dsk_header*)data.ptr;
     if (hdr->num_sides > 2) {
         return false;
     }
@@ -100,16 +100,16 @@ static bool _fdd_cpc_parse_dsk(fdd_t* fdd, bool ext, const uint8_t* data, int da
     }
 
     /* copy the data blob to the local buffer */
-    CHIPS_ASSERT(data_size <= FDD_MAX_DISC_SIZE);
-    fdd->data_size = data_size;
-    memcpy(fdd->data, data, fdd->data_size);
+    CHIPS_ASSERT(data.size <= FDD_MAX_DISC_SIZE);
+    fdd->data_size = data.size;
+    memcpy(fdd->data, data.ptr, fdd->data_size);
 
     /* setup the disc structure */
     fdd_disc_t* disc = &fdd->disc;
     disc->formatted = true;
     disc->num_sides = hdr->num_sides;
     disc->num_tracks = hdr->num_tracks;
-    int data_offset = sizeof(_fdd_cpc_dsk_header);
+    size_t data_offset = sizeof(_fdd_cpc_dsk_header);
     for (int track_index = 0; track_index < disc->num_tracks; track_index++) {
         for (int side_index = 0; side_index < disc->num_sides; side_index++) {
             fdd_track_t* track = &disc->tracks[side_index][track_index];
@@ -126,13 +126,13 @@ static bool _fdd_cpc_parse_dsk(fdd_t* fdd, bool ext, const uint8_t* data, int da
                 if (0 != memcmp("Track-Info", track_info->magic, 10)) {
                     return false;
                 }
-                if ((data_offset + track_size) > data_size) {
+                if ((data_offset + track_size) > data.size) {
                     return false;
                 }
                 track->data_offset = data_offset;
                 track->data_size = track_size;
                 track->num_sectors = track_info->num_sectors;
-                int sector_data_offset = data_offset + 0x100;
+                size_t sector_data_offset = data_offset + 0x100;
                 const _fdd_cpc_dsk_sector_info* sector_infos = (const _fdd_cpc_dsk_sector_info*) (track_info+1);
                 for (int sector_index = 0; sector_index < track->num_sectors; sector_index++) {
                     fdd_sector_t* sector = &track->sectors[sector_index];
@@ -169,24 +169,24 @@ static bool _fdd_cpc_parse_dsk(fdd_t* fdd, bool ext, const uint8_t* data, int da
     return true;
 }
 
-bool fdd_cpc_insert_dsk(fdd_t* fdd, const uint8_t* data, int data_size) {
+bool fdd_cpc_insert_dsk(fdd_t* fdd, chips_range_t data) {
     CHIPS_ASSERT(fdd);
     CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_header) == 256);
     CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_track_info) == 24);
     CHIPS_ASSERT(sizeof(_fdd_cpc_dsk_sector_info) == 8);
-    CHIPS_ASSERT(data && (data_size > 0));
+    CHIPS_ASSERT(data.ptr && (data.size > 0));
     if (fdd->has_disc) {
         fdd_eject_disc(fdd);
     }
 
     /* check if the header is valid */
-    if (data_size > FDD_MAX_DISC_SIZE) {
+    if (data.size > FDD_MAX_DISC_SIZE) {
         return false;
     }
-    if (data_size <= (int)sizeof(_fdd_cpc_dsk_header)) {
+    if (data.size <= sizeof(_fdd_cpc_dsk_header)) {
         return false;
     }
-    const _fdd_cpc_dsk_header* hdr = (_fdd_cpc_dsk_header*) data;
+    const _fdd_cpc_dsk_header* hdr = (_fdd_cpc_dsk_header*) data.ptr;
     bool ext = false;
     bool valid = false;
     if (0 == memcmp(hdr->magic, "MV - CPC", 8)) {
@@ -197,7 +197,7 @@ bool fdd_cpc_insert_dsk(fdd_t* fdd, const uint8_t* data, int data_size) {
         ext = true;
     }
     if (valid) {
-        if (!_fdd_cpc_parse_dsk(fdd, ext, data, data_size)) {
+        if (!_fdd_cpc_parse_dsk(fdd, ext, data)) {
             fdd_eject_disc(fdd);
             return false;
         }
