@@ -147,8 +147,6 @@ typedef struct {
     cpc_joystick_type_t joystick_type;
     uint8_t kbd_joymask;
     uint8_t joy_joymask;
-    uint16_t casread_trap;
-    uint16_t casread_ret;
 
     kbd_t kbd;
     mem_t mem;
@@ -309,18 +307,6 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     fdd_init(&sys->fdd);
 
     _cpc_init_keymap(sys);
-
-    /* cassette tape loading
-        (http://www.cpcwiki.eu/index.php/Format:TAP_tape_image_file_format)
-    */
-    if (CPC_TYPE_464 == sys->type) {
-        sys->casread_trap = 0x2836;
-        sys->casread_ret  = 0x2872;
-    }
-    else {
-        sys->casread_trap = 0x29A6;
-        sys->casread_ret  = 0x29E2;
-    }
 }
 
 void cpc_discard(cpc_t* sys) {
@@ -1036,8 +1022,8 @@ chips_display_info_t cpc_display_info(cpc_t* sys) {
         .screen = {
             .x = 0,
             .y = 0,
-            .width = AM40010_DISPLAY_WIDTH,
-            .height = AM40010_DISPLAY_HEIGHT,
+            .width = (sys && sys->ga.dbg_vis) ? AM40010_FRAMEBUFFER_WIDTH : AM40010_DISPLAY_WIDTH,
+            .height = (sys && sys->ga.dbg_vis) ? AM40010_FRAMEBUFFER_HEIGHT : AM40010_DISPLAY_HEIGHT,
         },
         .palette = {
             .ptr = sys ? sys->ga.hw_colors : 0,
@@ -1048,4 +1034,59 @@ chips_display_info_t cpc_display_info(cpc_t* sys) {
     CHIPS_ASSERT(((sys == 0) && (res.palette.ptr == 0)) || ((sys != 0) && (res.palette.ptr != 0)));
     return res;
 }
+
+uint32_t cpc_save_snapshot(cpc_t* sys, cpc_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    dst->debug.callback.func = 0;
+    dst->debug.callback.user_data = 0;
+    dst->debug.stopped = 0;
+    dst->audio.callback.func = 0;
+    dst->audio.callback.user_data = 0;
+    dst->psg.in_cb = 0;
+    dst->psg.out_cb = 0;
+    dst->psg.user_data = 0;
+    dst->fdc.seektrack_cb = 0;
+    dst->fdc.seeksector_cb = 0;
+    dst->fdc.read_cb = 0;
+    dst->fdc.trackinfo_cb = 0;
+    dst->fdc.driveinfo_cb = 0;
+    dst->fdc.user_data = 0;
+    dst->ga.bankswitch_cb = 0;
+    dst->ga.cclk_cb = 0;
+    dst->ga.user_data = 0;
+    dst->ga.ram = 0;
+    dst->ga.fb = 0;
+    mem_pointers_to_offsets(&dst->mem, sys);
+    return CPC_SNAPSHOT_VERSION;
+}
+
+bool cpc_load_snapshot(cpc_t* sys, uint32_t version, cpc_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != CPC_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static cpc_t im;
+    im = *src;
+    im.debug = sys->debug;
+    im.audio.callback = sys->audio.callback;
+    im.psg.in_cb = sys->psg.in_cb;
+    im.psg.out_cb = sys->psg.out_cb;
+    im.psg.user_data = sys->psg.user_data;
+    im.fdc.seektrack_cb = sys->fdc.seektrack_cb;
+    im.fdc.seeksector_cb = sys->fdc.seeksector_cb;
+    im.fdc.read_cb = sys->fdc.read_cb;
+    im.fdc.trackinfo_cb = sys->fdc.trackinfo_cb;
+    im.fdc.driveinfo_cb = sys->fdc.driveinfo_cb;
+    im.fdc.user_data = sys->fdc.user_data;
+    im.ga.bankswitch_cb = sys->ga.bankswitch_cb;
+    im.ga.cclk_cb = sys->ga.cclk_cb;
+    im.ga.user_data = sys->ga.user_data;
+    im.ga.ram = sys->ga.ram;
+    im.ga.fb = sys->ga.fb;
+    mem_offsets_to_pointers(&im.mem, sys);
+    *sys = im;
+    return true;
+}
+
 #endif /* CHIPS_IMPL */

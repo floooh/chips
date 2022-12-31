@@ -82,7 +82,7 @@ extern "C" {
 #define AM40010_FRAMEBUFFER_WIDTH (1024)
 #define AM40010_FRAMEBUFFER_HEIGHT (312)
 #define AM40010_FRAMEBUFFER_SIZE_BYTES (AM40010_FRAMEBUFFER_WIDTH * AM40010_FRAMEBUFFER_HEIGHT)
-#define AM40010_NUM_HWCOLORS (32 + 1 + 31)  // 32 colors plus pure black plus debug visualization colors
+#define AM40010_NUM_HWCOLORS (32 + 32)  // 32 colors plus pure black plus debug visualization colors
 
 // Z80-compatible pins
 #define AM40010_PIN_A13     (13)
@@ -400,9 +400,35 @@ static void _am40010_init_hwcolors(am40010_t* ga) {
             ga->hw_colors[i] = c;
         }
     }
-    // pure black
-    ga->hw_colors[32] = 0xFF000000;
-    // FIXME: debug visualization colors
+
+    // debug visualization colors
+    for (size_t i = 0x20; i < 0x3F; i++) {
+        uint8_t r = 0x22, g = 0x22, b = 0x22;
+        if (i >= 0x30) {
+            // current ray position
+            r = 0xFF;
+            g = 0xFF;
+            b = 0xFF;
+        }
+        else {
+            if (i & 1) {
+                r = 0x55;   // HS set
+            }
+            if (i & 2) {
+                g = 0x55;   // VS set
+            }
+            if (i & 4) {
+                r = 0xFF;   // SYNC set
+            }
+            if (i & 8) {
+                g = 0xFF;   // INTR set
+            }
+        }
+        ga->hw_colors[i] = 0xFF000000 | (b << 16) | (g << 8) | r;
+    }
+
+    // pure black (for area outside border)
+    ga->hw_colors[0x3F] = 0xFF000000;
 }
 
 // initialize am40010_t instance
@@ -760,39 +786,51 @@ static void _am40010_decode_pixels(am40010_t* ga, uint8_t* dst, uint64_t crtc_pi
 // video signal generator, call this at 1 MHz frequency
 static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
     if (ga->dbg_vis) {
-        // FIXME: debug visualization
-        /*
         size_t dst_x = ga->crt.h_pos * 16;
         size_t dst_y = ga->crt.v_pos;
         if ((dst_x <= (AM40010_FRAMEBUFFER_WIDTH-16)) && (dst_y < AM40010_FRAMEBUFFER_HEIGHT)) {
             uint8_t* dst = &(ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH]);
-            uint8_t r = 0x22, g = 0x22, b = 0x22;
+            uint8_t* prev_dst;
+            if (dst == ga->fb) {
+                prev_dst = &(ga->fb[sizeof(ga->fb) - 17]);
+            }
+            else {
+                prev_dst = dst - 16;
+            }
+            uint8_t c = 0x20;
             if (crtc_pins & AM40010_HS) {
-                r = 0x55;
+                c |= 0x21;
             }
             if (crtc_pins & AM40010_VS) {
-                g = 0x55;
+                c |= 0x22;
             }
             if (ga->video.sync) {
-                r = 0xFF;
+                c |= 0x24;
             }
             if (ga->video.intr) {
-                g = 0xFF;
+                c |= 0x28;
             }
-            uint32_t c = (0xFF<<24) | (b<<16) | (g<<8) | r;
             if (crtc_pins & AM40010_DE) {
                 _am40010_decode_pixels(ga, dst, crtc_pins);
-                for (int i = 0; i < 16; i++) {
-                    dst[i] = (i & 1) ? dst[i] : c;
+                for (size_t i = 0; i < 16; i++) {
+                    if (0 == (i & 1)) {
+                        dst[i] = c ^ 0x10;
+                        prev_dst[i] ^= 0x10;
+                    }
                 }
             }
             else {
-                for (int i = 0; i < 16; i++) {
-                    *dst++ = (i == 0) ? 0xFF000000 : c;
+                for (size_t i = 0; i < 16; i++) {
+                    if (0 == (i & 1)) {
+                        dst[i] = c ^ 0x10;
+                        prev_dst[i] ^= 0x10;
+                    }
+                    else {
+                        dst[i] = 63;
+                    }
                 }
             }
         }
-        */
     }
     else if (ga->crt.visible) {
         size_t dst_x = ga->crt.pos_x * 16;
@@ -804,7 +842,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
         }
         else if (black) {
             for (int i = 0; i < 16; i++) {
-                *dst++ = 32;    // special 'pure black' hw color
+                *dst++ = 63;    // special 'pure black' hw color
             }
         }
         else {
