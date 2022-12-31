@@ -813,7 +813,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
             if (crtc_pins & AM40010_DE) {
                 _am40010_decode_pixels(ga, dst, crtc_pins);
                 for (size_t i = 0; i < 16; i++) {
-                    if (0 == (i & 1)) {
+                    if (0 == (i & 2)) {
                         dst[i] = c ^ 0x10;
                         prev_dst[i] ^= 0x10;
                     }
@@ -821,7 +821,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
             }
             else {
                 for (size_t i = 0; i < 16; i++) {
-                    if (0 == (i & 1)) {
+                    if (0 == (i & 2)) {
                         dst[i] = c ^ 0x10;
                         prev_dst[i] ^= 0x10;
                     }
