@@ -81,7 +81,8 @@ extern "C" {
 #define AM40010_DISPLAY_HEIGHT (272)
 #define AM40010_FRAMEBUFFER_WIDTH (1024)
 #define AM40010_FRAMEBUFFER_HEIGHT (312)
-#define AM40010_FRAMEBUFFER_SIZE_BYTES (AM40010_FRAMEBUFFER_WIDTH * AM40010_FRAMEBUFFER_HEIGHT * 4)
+#define AM40010_FRAMEBUFFER_SIZE_BYTES (AM40010_FRAMEBUFFER_WIDTH * AM40010_FRAMEBUFFER_HEIGHT)
+#define AM40010_NUM_HWCOLORS (32 + 1 + 31)  // 32 colors plus pure black plus debug visualization colors
 
 // Z80-compatible pins
 #define AM40010_PIN_A13     (13)
@@ -214,17 +215,9 @@ typedef struct am40010_desc_t {
 typedef struct am40010_registers_t {
     uint8_t inksel;     // 5 bits
     uint8_t config;     // bit4: IRQ reset, bit3: HROMEN, bit2: LROMEN, bit1+0: mode
-    uint8_t border;     // 6 bits, see also border_rgba8
-    uint8_t ink[16];    // 5 bits, see also ink_rgba8
+    uint8_t border;     // 5 bits
+    uint8_t ink[16];    // 5 bits
 } am40010_registers_t;
-
-// decoded RGBA8 colors
-typedef struct am40010_colors_t {
-    bool dirty;
-    uint32_t ink_rgba8[16];         // the current ink colors as RGBA8
-    uint32_t border_rgba8;          // the current border color as RGBA8
-    uint32_t hw_rgba8[32];          // the hardware color RGBA8 values
-} am40010_colors_t;
 
 // vsync/video/irq generation
 typedef struct am40010_video_t {
@@ -261,17 +254,18 @@ typedef struct am40010_t {
     am40010_registers_t regs;
     am40010_video_t video;
     am40010_crt_t crt;
-    am40010_colors_t colors;
     am40010_bankswitch_t bankswitch_cb;
     am40010_cclk_t cclk_cb;
     const uint8_t* ram;
     void* user_data;
     uint64_t pins;              // only for debug inspection
-    uint32_t* fb;
+    uint8_t* fb;                // decoded framebuffer pixels as hw palette indices
+    uint32_t hw_colors[AM40010_NUM_HWCOLORS]; // hardware colors (different for CPC and KCC)
 } am40010_t;
 
 void am40010_init(am40010_t* ga, const am40010_desc_t* desc);
 void am40010_reset(am40010_t* ga);
+
 /*
     Call the iorq function once per Z80 machine cycle when the
     IORQ and either RD or WR pins are set. This may call the
@@ -380,17 +374,17 @@ static void _am40010_init_crt(am40010_t* ga) {
     memset(&ga->crt, 0, sizeof(ga->crt));
 }
 
-// initialize the RGBA8 color caches, assumes already zero-initialized
-static void _am40010_init_colors(am40010_t* ga) {
+// initialize the hardware color palette
+static void _am40010_init_hwcolors(am40010_t* ga) {
     if (ga->cpc_type != AM40010_CPC_TYPE_KCCOMPACT) {
         // Amstrad CPC colors
-        for (int i = 0; i < 32; i++) {
-            ga->colors.hw_rgba8[i] = _am40010_cpc_colors[i];
+        for (size_t i = 0; i < 32; i++) {
+            ga->hw_colors[i] = _am40010_cpc_colors[i];
         }
     }
     else {
         // KC Compact colors
-        for (int i = 0; i < 32; i++) {
+        for (size_t i = 0; i < 32; i++) {
             uint32_t c = 0xFF000000;
             const uint8_t val = _am40010_kcc_color_rom[i];
             // color bits: xx|gg|rr|bb
@@ -403,9 +397,12 @@ static void _am40010_init_colors(am40010_t* ga) {
             else if (g != 0)   c |= 0x00007F00;    // half green
             if (r == 0x03)     c |= 0x000000FF;    // full red
             else if (r != 0)   c |= 0x0000007F;    // half red
-            ga->colors.hw_rgba8[i] = c;
+            ga->hw_colors[i] = c;
         }
     }
+    // pure black
+    ga->hw_colors[32] = 0xFF000000;
+    // FIXME: debug visualization colors
 }
 
 // initialize am40010_t instance
@@ -424,7 +421,7 @@ void am40010_init(am40010_t* ga, const am40010_desc_t* desc) {
     _am40010_init_regs(ga);
     _am40010_init_video(ga);
     _am40010_init_crt(ga);
-    _am40010_init_colors(ga);
+    _am40010_init_hwcolors(ga);
     ga->bankswitch_cb(ga->ram_config, ga->regs.config, ga->rom_select, ga->user_data);
 }
 
@@ -464,7 +461,6 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
                will only be made visible during the tick() function
             */
             case (1<<6):
-                ga->colors.dirty = true;
                 if (ga->regs.inksel & (1<<4)) {
                     ga->regs.border = data & 0x1F;
                 }
@@ -675,7 +671,7 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     return ga->video.sync;
 }
 
-static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_pins) {
+static void _am40010_decode_pixels(am40010_t* ga, uint8_t* dst, uint64_t crtc_pins) {
     /*
          compute the source address from current CRTC ma (memory address)
          and ra (raster address) like this:
@@ -690,8 +686,7 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
                           (((crtc_pins>>48) & 7) << 11);    // RA0..RA2
     const uint8_t* src = &(ga->ram[addr]);
     uint8_t c;
-    uint32_t p;
-    const uint32_t* ink = ga->colors.ink_rgba8;
+    uint8_t p;
     switch (ga->video.mode) {
         case 0:
             /*
@@ -700,11 +695,11 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
                 0:       |1|5|3|7|
                 1:       |0|4|2|6|
             */
-            for (int i = 0; i < 2; i++) {
+            for (size_t i = 0; i < 2; i++) {
                 c = *src++;
-                p = ink[((c>>7)&0x1)|((c>>2)&0x2)|((c>>3)&0x4)|((c<<2)&0x8)];
+                p = ga->regs.ink[((c>>7)&0x1)|((c>>2)&0x2)|((c>>3)&0x4)|((c<<2)&0x8)];
                 *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
-                p = ink[((c>>6)&0x1)|((c>>1)&0x2)|((c>>2)&0x4)|((c<<3)&0x8)];
+                p = ga->regs.ink[((c>>6)&0x1)|((c>>1)&0x2)|((c>>2)&0x4)|((c<<3)&0x8)];
                 *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
             }
             break;
@@ -717,25 +712,30 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
                 2:       |1|5|
                 3:       |0|4|
             */
-            for (int i = 0; i < 2; i++) {
+            for (size_t i = 0; i < 2; i++) {
                 c = *src++;
-                p = ink[((c>>2)&2)|((c>>7)&1)];
+                p = ga->regs.ink[((c>>2)&2)|((c>>7)&1)];
                 *dst++ = p; *dst++ = p;
-                p = ink[((c>>1)&2)|((c>>6)&1)];
+                p = ga->regs.ink[((c>>1)&2)|((c>>6)&1)];
                 *dst++ = p; *dst++ = p;
-                p = ink[((c>>0)&2)|((c>>5)&1)];
+                p = ga->regs.ink[((c>>0)&2)|((c>>5)&1)];
                 *dst++ = p; *dst++ = p;
-                p = ink[((c<<1)&2)|((c>>4)&1)];
+                p = ga->regs.ink[((c<<1)&2)|((c>>4)&1)];
                 *dst++ = p; *dst++ = p;
             }
             break;
         case 2:
             // 640x200 @ 2 colors (8 pixels per byte)
-            for (int i = 0; i < 2; i++) {
+            for (size_t i = 0; i < 2; i++) {
                 c = *src++;
-                for (int j = 7; j >= 0; j--) {
-                    *dst++ = ink[(c>>j)&1];
-                }
+                *dst++ = ga->regs.ink[(c>>7)&1];
+                *dst++ = ga->regs.ink[(c>>6)&1];
+                *dst++ = ga->regs.ink[(c>>5)&1];
+                *dst++ = ga->regs.ink[(c>>4)&1];
+                *dst++ = ga->regs.ink[(c>>3)&1];
+                *dst++ = ga->regs.ink[(c>>2)&1];
+                *dst++ = ga->regs.ink[(c>>1)&1];
+                *dst++ = ga->regs.ink[(c>>0)&1];
             }
             break;
         case 3:
@@ -745,11 +745,11 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
                 0:       |x|x|3|7|
                 1:       |x|x|2|6|
             */
-            for (int i = 0; i < 2; i++) {
+            for (size_t i = 0; i < 2; i++) {
                 c = *src++;
-                p = ink[((c>>7)&0x1)|((c>>2)&0x2)];
+                p = ga->regs.ink[((c>>7)&0x1)|((c>>2)&0x2)];
                 *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
-                p = ink[((c>>6)&0x1)|((c>>1)&0x2)];
+                p = ga->regs.ink[((c>>6)&0x1)|((c>>1)&0x2)];
                 *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
             }
             break;
@@ -760,10 +760,12 @@ static void _am40010_decode_pixels(am40010_t* ga, uint32_t* dst, uint64_t crtc_p
 // video signal generator, call this at 1 MHz frequency
 static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
     if (ga->dbg_vis) {
-        int dst_x = ga->crt.h_pos * 16;
-        int dst_y = ga->crt.v_pos;
+        // FIXME: debug visualization
+        /*
+        size_t dst_x = ga->crt.h_pos * 16;
+        size_t dst_y = ga->crt.v_pos;
         if ((dst_x <= (AM40010_FRAMEBUFFER_WIDTH-16)) && (dst_y < AM40010_FRAMEBUFFER_HEIGHT)) {
-            uint32_t* dst = &(ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH]);
+            uint8_t* dst = &(ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH]);
             uint8_t r = 0x22, g = 0x22, b = 0x22;
             if (crtc_pins & AM40010_HS) {
                 r = 0x55;
@@ -790,43 +792,31 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
                 }
             }
         }
+        */
     }
     else if (ga->crt.visible) {
-        int dst_x = ga->crt.pos_x * 16;
-        int dst_y = ga->crt.pos_y;
+        size_t dst_x = ga->crt.pos_x * 16;
+        size_t dst_y = ga->crt.pos_y;
         bool black = ga->video.sync;
-        uint32_t* dst = &ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH];
+        uint8_t* dst = &ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH];
         if (crtc_pins & AM40010_DE) {
             _am40010_decode_pixels(ga, dst, crtc_pins);
         }
         else if (black) {
             for (int i = 0; i < 16; i++) {
-                *dst++ = 0xFF000000;
+                *dst++ = 32;    // special 'pure black' hw color
             }
         }
         else {
-            uint32_t brd = ga->colors.border_rgba8;
             for (int i = 0; i < 16; i++) {
-                *dst++ = brd;
+                *dst++ = ga->regs.border;
             }
-        }
-    }
-}
-
-// make the selected colors visible by updating the color cache
-static inline void _am40010_update_colors(am40010_t* ga) {
-    if (ga->colors.dirty) {
-        ga->colors.dirty = false;
-        ga->colors.border_rgba8 = ga->colors.hw_rgba8[ga->regs.border];
-        for (int i = 0; i < 16; i++) {
-            ga->colors.ink_rgba8[i] = ga->colors.hw_rgba8[ga->regs.ink[i]];
         }
     }
 }
 
 // the actions which need to happen on CCLK (1 MHz frequency)
 static inline void _am40010_do_cclk(am40010_t* ga, uint64_t crtc_pins) {
-    _am40010_update_colors(ga);
     bool sync = _am40010_sync_irq(ga, crtc_pins);
     _am40010_crt_tick(ga, sync);
     _am40010_decode_video(ga, crtc_pins);

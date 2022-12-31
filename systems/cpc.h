@@ -835,7 +835,6 @@ static bool _cpc_load_sna(cpc_t* sys, chips_range_t data) {
     sys->cpu.de2 = (hdr->D_<<8) | hdr->E_;
     sys->cpu.hl2 = (hdr->H_<<8) | hdr->L_;
 
-    sys->ga.colors.dirty = true;
     for (int i = 0; i < 16; i++) {
         sys->ga.regs.ink[i] = hdr->pens[i] & 0x1F;
     }
@@ -1028,7 +1027,7 @@ chips_display_info_t cpc_display_info(cpc_t* sys) {
                 .width = AM40010_FRAMEBUFFER_WIDTH,
                 .height = AM40010_FRAMEBUFFER_HEIGHT,
             },
-            .bytes_per_pixel = 4,   // FIXME!
+            .bytes_per_pixel = 1,
             .buffer = {
                 .ptr = sys ? sys->fb : 0,
                 .size = AM40010_FRAMEBUFFER_SIZE_BYTES,
@@ -1040,11 +1039,13 @@ chips_display_info_t cpc_display_info(cpc_t* sys) {
             .width = AM40010_DISPLAY_WIDTH,
             .height = AM40010_DISPLAY_HEIGHT,
         },
-        // FIXME: palette
+        .palette = {
+            .ptr = sys ? sys->ga.hw_colors : 0,
+            .size = AM40010_NUM_HWCOLORS * sizeof(uint32_t)
+        }
     };
     CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    CHIPS_ASSERT(((sys == 0) && (res.palette.ptr == 0)) || ((sys != 0) && (res.palette.ptr != 0)));
     return res;
 }
-
-
 #endif /* CHIPS_IMPL */
