@@ -159,7 +159,7 @@ typedef struct {
     uint8_t ram[8][0x4000];
     uint8_t rom[2][0x4000];
     uint8_t junk[0x4000];
-    uint8_t fb[ZX_FRAMEBUFFER_SIZE_BYTES];
+    alignas(64) uint8_t fb[ZX_FRAMEBUFFER_SIZE_BYTES];
 } zx_t;
 
 // initialize a new ZX Spectrum instance
