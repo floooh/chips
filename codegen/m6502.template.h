@@ -245,12 +245,12 @@ extern "C" {
 #define M6502_PIN_RES   (30)      // request RESET
 
 // m6510 IO port pins
-#define M6510_P0        (32)
-#define M6510_P1        (33)
-#define M6510_P2        (34)
-#define M6510_P3        (35)
-#define M6510_P4        (36)
-#define M6510_P5        (37)
+#define M6510_PIN_P0        (32)
+#define M6510_PIN_P1        (33)
+#define M6510_PIN_P2        (34)
+#define M6510_PIN_P3        (35)
+#define M6510_PIN_P4        (36)
+#define M6510_PIN_P5        (37)
 
 // pin bit masks
 #define M6502_A0    (1ULL<<M6502_PIN_A0)
