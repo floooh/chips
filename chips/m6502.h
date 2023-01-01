@@ -5,7 +5,7 @@
     MOS Technology 6502 / 6510 CPU emulator.
 
     Project repo: https://github.com/floooh/chips/
-    
+
     NOTE: this file is code-generated from m6502.template.h and m6502_gen.py
     in the 'codegen' directory.
 
@@ -13,11 +13,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    ~~~C    
+    ~~~C
     CHIPS_ASSERT(c)
     ~~~
 
@@ -50,7 +50,7 @@
     of full instructions.
 
     To initialize the emulator, fill out a m6502_desc_t structure with
-    initialization parameters and then call m6502_init(). 
+    initialization parameters and then call m6502_init().
 
         ~~~C
         typedef struct {
@@ -115,7 +115,7 @@
     mask and continue calling the tick function. The interrupt sequence
     will be initiated at the end of the current or next instruction
     (depending on the exact cycle the interrupt pin has been set).
-    
+
     Unlike the M6502_RES pin, you are also responsible for clearing the
     interrupt pins (typically, the interrupt lines are cleared by the chip
     which requested the interrupt once the CPU reads a chip's interrupt
@@ -198,7 +198,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -207,50 +207,89 @@
 extern "C" {
 #endif
 
-/* address bus pins */
-#define M6502_A0    (1ULL<<0)
-#define M6502_A1    (1ULL<<1)
-#define M6502_A2    (1ULL<<2)
-#define M6502_A3    (1ULL<<3)
-#define M6502_A4    (1ULL<<4)
-#define M6502_A5    (1ULL<<5)
-#define M6502_A6    (1ULL<<6)
-#define M6502_A7    (1ULL<<7)
-#define M6502_A8    (1ULL<<8)
-#define M6502_A9    (1ULL<<9)
-#define M6502_A10   (1ULL<<10)
-#define M6502_A11   (1ULL<<11)
-#define M6502_A12   (1ULL<<12)
-#define M6502_A13   (1ULL<<13)
-#define M6502_A14   (1ULL<<14)
-#define M6502_A15   (1ULL<<15)
+// address bus pins
+#define M6502_PIN_A0    (0)
+#define M6502_PIN_A1    (1)
+#define M6502_PIN_A2    (2)
+#define M6502_PIN_A3    (3)
+#define M6502_PIN_A4    (4)
+#define M6502_PIN_A5    (5)
+#define M6502_PIN_A6    (6)
+#define M6502_PIN_A7    (7)
+#define M6502_PIN_A8    (8)
+#define M6502_PIN_A9    (9)
+#define M6502_PIN_A10   (10)
+#define M6502_PIN_A11   (11)
+#define M6502_PIN_A12   (12)
+#define M6502_PIN_A13   (13)
+#define M6502_PIN_A14   (14)
+#define M6502_PIN_A15   (15)
 
-/* data bus pins */
-#define M6502_D0    (1ULL<<16)
-#define M6502_D1    (1ULL<<17)
-#define M6502_D2    (1ULL<<18)
-#define M6502_D3    (1ULL<<19)
-#define M6502_D4    (1ULL<<20)
-#define M6502_D5    (1ULL<<21)
-#define M6502_D6    (1ULL<<22)
-#define M6502_D7    (1ULL<<23)
+// data bus pins
+#define M6502_PIN_D0    (16)
+#define M6502_PIN_D1    (17)
+#define M6502_PIN_D2    (18)
+#define M6502_PIN_D3    (19)
+#define M6502_PIN_D4    (20)
+#define M6502_PIN_D5    (21)
+#define M6502_PIN_D6    (22)
+#define M6502_PIN_D7    (23)
 
-/* control pins */
-#define M6502_RW    (1ULL<<24)      /* out: memory read or write access */
-#define M6502_SYNC  (1ULL<<25)      /* out: start of a new instruction */
-#define M6502_IRQ   (1ULL<<26)      /* in: maskable interrupt requested */
-#define M6502_NMI   (1ULL<<27)      /* in: non-maskable interrupt requested */
-#define M6502_RDY   (1ULL<<28)      /* in: freeze execution at next read cycle */
-#define M6510_AEC   (1ULL<<29)      /* in, m6510 only, put bus lines into tristate mode, not implemented */
-#define M6502_RES   (1ULL<<30)      /* request RESET */
+// control pins
+#define M6502_PIN_RW    (24)      // out: memory read or write access
+#define M6502_PIN_SYNC  (25)      // out: start of a new instruction
+#define M6502_PIN_IRQ   (26)      // in: maskable interrupt requested
+#define M6502_PIN_NMI   (27)      // in: non-maskable interrupt requested
+#define M6502_PIN_RDY   (28)      // in: freeze execution at next read cycle
+#define M6510_PIN_AEC   (29)      // in, m6510 only, put bus lines into tristate mode, not implemented
+#define M6502_PIN_RES   (30)      // request RESET
 
-/* m6510 IO port pins */
-#define M6510_P0    (1ULL<<32)
-#define M6510_P1    (1ULL<<33)
-#define M6510_P2    (1ULL<<34)
-#define M6510_P3    (1ULL<<35)
-#define M6510_P4    (1ULL<<36)
-#define M6510_P5    (1ULL<<37)
+// m6510 IO port pins
+#define M6510_P0        (32)
+#define M6510_P1        (33)
+#define M6510_P2        (34)
+#define M6510_P3        (35)
+#define M6510_P4        (36)
+#define M6510_P5        (37)
+
+// pin bit masks
+#define M6502_A0    (1ULL<<M6502_PIN_A0)
+#define M6502_A1    (1ULL<<M6502_PIN_A1)
+#define M6502_A2    (1ULL<<M6502_PIN_A2)
+#define M6502_A3    (1ULL<<M6502_PIN_A3)
+#define M6502_A4    (1ULL<<M6502_PIN_A4)
+#define M6502_A5    (1ULL<<M6502_PIN_A5)
+#define M6502_A6    (1ULL<<M6502_PIN_A6)
+#define M6502_A7    (1ULL<<M6502_PIN_A7)
+#define M6502_A8    (1ULL<<M6502_PIN_A8)
+#define M6502_A9    (1ULL<<M6502_PIN_A9)
+#define M6502_A10   (1ULL<<M6502_PIN_A10)
+#define M6502_A11   (1ULL<<M6502_PIN_A11)
+#define M6502_A12   (1ULL<<M6502_PIN_A12)
+#define M6502_A13   (1ULL<<M6502_PIN_A13)
+#define M6502_A14   (1ULL<<M6502_PIN_A14)
+#define M6502_A15   (1ULL<<M6502_PIN_A15)
+#define M6502_D0    (1ULL<<M6502_PIN_D0)
+#define M6502_D1    (1ULL<<M6502_PIN_D1)
+#define M6502_D2    (1ULL<<M6502_PIN_D2)
+#define M6502_D3    (1ULL<<M6502_PIN_D3)
+#define M6502_D4    (1ULL<<M6502_PIN_D4)
+#define M6502_D5    (1ULL<<M6502_PIN_D5)
+#define M6502_D6    (1ULL<<M6502_PIN_D6)
+#define M6502_D7    (1ULL<<M6502_PIN_D7)
+#define M6502_RW    (1ULL<<M6502_PIN_RW)
+#define M6502_SYNC  (1ULL<<M6502_PIN_SYNC)
+#define M6502_IRQ   (1ULL<<M6502_PIN_IRQ)
+#define M6502_NMI   (1ULL<<M6502_PIN_NMI)
+#define M6502_RDY   (1ULL<<M6502_PIN_RDY)
+#define M6510_AEC   (1ULL<<M6502_PIN_AEC)
+#define M6502_RES   (1ULL<<M6502_PIN_RES)
+#define M6510_P0    (1ULL<<M6510_PIN_P0)
+#define M6510_P1    (1ULL<<M6510_PIN_P1)
+#define M6510_P2    (1ULL<<M6510_PIN_P2)
+#define M6510_P3    (1ULL<<M6510_PIN_P3)
+#define M6510_P4    (1ULL<<M6510_PIN_P4)
+#define M6510_P5    (1ULL<<M6510_PIN_P5)
 #define M6510_PORT_BITS (M6510_P0|M6510_P1|M6510_P2|M6510_P3|M6510_P4|M6510_P5)
 
 /* bit mask for all CPU pins (up to bit pos 40) */
@@ -415,7 +454,7 @@ static inline void _m6502_adc(m6502_t* cpu, uint8_t val) {
             cpu->P |= M6502_CF;
         }
         cpu->A = sum & 0xFF;
-    }    
+    }
 }
 
 static inline void _m6502_sbc(m6502_t* cpu, uint8_t val) {
@@ -555,7 +594,7 @@ static inline void _m6502_arr(m6502_t* cpu) {
     }
 }
 
-/* undocumented SBX instruction: 
+/* undocumented SBX instruction:
     AND X register with accumulator and store result in X register, then
     subtract byte from X register (without borrow) where the
     subtract works like a CMP instruction
@@ -651,7 +690,7 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
 uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
     if (pins & (M6502_SYNC|M6502_IRQ|M6502_NMI|M6502_RDY|M6502_RES)) {
         // interrupt detection also works in RDY phases, but only NMI is "sticky"
-        
+
         // NMI is edge-triggered
         if (0 != ((pins & (pins ^ c->PINS)) & M6502_NMI)) {
             c->nmi_pip |= 0x100;
@@ -660,7 +699,7 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
         if ((pins & M6502_IRQ) && (0 == (c->P & M6502_IF))) {
             c->irq_pip |= 0x100;
         }
-        
+
         // RDY pin is only checked during read cycles
         if ((pins & (M6502_RW|M6502_RDY)) == (M6502_RW|M6502_RDY)) {
             M6510_SET_PORT(pins, c->io_pins);
@@ -672,7 +711,7 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
             // load new instruction into 'instruction register' and restart tick counter
             c->IR = _GD()<<3;
             _OFF(M6502_SYNC);
-            
+
             // check IRQ, NMI and RES state
             //  - IRQ is level-triggered and must be active in the full cycle
             //    before SYNC
