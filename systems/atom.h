@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -20,6 +20,7 @@
 
     You need to include the following headers before including atom.h:
 
+    - chips/chips_common.h
     - chips/m6502.h
     - chips/mc6847.h
     - chips/i8255.h
@@ -54,15 +55,19 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 */
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// bump snapshot version when memory layout of atom_t changes
+#define ATOM_SNAPSHOT_VERSION (1)
 
 #define ATOM_FREQUENCY (1000000)
 #define ATOM_MAX_AUDIO_SAMPLES (1024)       // max number of audio samples in internal sample buffer
@@ -82,51 +87,15 @@ typedef enum {
 #define ATOM_JOYSTICK_UP    (1<<3)
 #define ATOM_JOYSTICK_BTN   (1<<4)
 
-// audio sample data callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} atom_audio_callback_t;
-
-// debugging hook definitions
-typedef void (*atom_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        atom_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} atom_debug_t;
-
-typedef struct {
-    const void* ptr;
-    size_t size;
-} atom_rom_image_t;
-
 // configuration parameters for atom_init()
 typedef struct {
     atom_joystick_type_t joystick_type;     // what joystick type to emulate, default is ATOM_JOYSTICK_NONE
-    atom_debug_t debug;                     // optional debug callback and userdata ptr
-
-    // video output config
+    chips_debug_t debug;
+    chips_audio_desc_t audio;
     struct {
-        void* ptr;                          // pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes
-        size_t size;                        // size of the pixel buffer in bytes
-    } pixel_buffer;
-
-    // audio output config
-    struct {
-        atom_audio_callback_t callback;     // called when audio_num_samples are ready
-        int num_samples;                    // output sample buffer size, default is ATOM_DEFAULT_AUDIO_SAMPLES
-        int sample_rate;                    // playback sample rate, default is 44100
-        float volume;                       // audio volume: 0.0..1.0, default is 0.25
-    } audio;
-
-    // ROM images
-    struct {
-        atom_rom_image_t abasic;
-        atom_rom_image_t afloat;
-        atom_rom_image_t dosrom;
+        chips_range_t abasic;
+        chips_range_t afloat;
+        chips_range_t dosrom;
     } roms;
 } atom_desc_t;
 
@@ -137,7 +106,7 @@ typedef struct {
     i8255_t ppi;
     m6522_t via;
     beeper_t beeper;
-    atom_debug_t debug;
+    chips_debug_t debug;
     uint64_t pins;
     bool valid;
     int counter_2_4khz;
@@ -151,7 +120,7 @@ typedef struct {
     mem_t mem;
     kbd_t kbd;
     struct {
-        atom_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[ATOM_MAX_AUDIO_SAMPLES];
@@ -160,6 +129,7 @@ typedef struct {
     uint8_t rom_abasic[0x2000];
     uint8_t rom_afloat[0x1000];
     uint8_t rom_dosrom[0x1000];
+    uint8_t fb[MC6847_FRAMEBUFFER_SIZE_BYTES];
     // tape loading
     struct {
         int size;  // tape_size is > 0 if a tape is inserted
@@ -174,16 +144,10 @@ void atom_init(atom_t* sys, const atom_desc_t* desc);
 void atom_discard(atom_t* sys);
 // reset Atom instance
 void atom_reset(atom_t* sys);
+// query display information, can be called with nullptr
+chips_display_info_t atom_display_info(atom_t* sys);
 // run Atom instance for a number of microseconds
 uint32_t atom_exec(atom_t* sys, uint32_t micro_seconds);
-// get the standard framebuffer width and height in pixels
-int atom_std_display_width(void);
-int atom_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-size_t atom_max_display_size(void);
-// get the current framebuffer width and height in pixels
-int atom_display_width(atom_t* sys);
-int atom_display_height(atom_t* sys);
 // send a key down event
 void atom_key_down(atom_t* sys, int key_code);
 // send a key up event
@@ -195,9 +159,13 @@ atom_joystick_type_t atom_joystick_type(atom_t* sys);
 // set joystick mask (combination of ATOM_JOYSTICK_*)
 void atom_joystick(atom_t* sys, uint8_t mask);
 // insert a tape for loading (must be an Atom TAP file), data will be copied
-bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes);
+bool atom_insert_tape(atom_t* sys, chips_range_t data);
 // remove tape
 void atom_remove_tape(atom_t* sys);
+// take snapshot, patches pointers to zero, returns snapshot version
+uint32_t atom_save_snapshot(atom_t* sys, atom_t* dst);
+// load snapshot, returns false if snapshot version doesn't match
+bool atom_load_snapshot(atom_t* sys, uint32_t version, atom_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -222,10 +190,7 @@ static uint64_t _atom_osload(atom_t* sys, uint64_t pins);
 
 void atom_init(atom_t* sys, const atom_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= atom_max_display_size()));
-    if (desc->debug.callback.func) {
-        CHIPS_ASSERT(desc->debug.stopped);
-    }
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
     memset(sys, 0, sizeof(atom_t));
     sys->valid = true;
     sys->joystick_type = desc->joystick_type;
@@ -243,12 +208,14 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
     CHIPS_ASSERT(desc->roms.dosrom.ptr && (desc->roms.dosrom.size == sizeof(sys->rom_dosrom)));
     memcpy(&sys->rom_dosrom, desc->roms.dosrom.ptr, sizeof(sys->rom_dosrom));
 
-    /* initialize the hardware */
+    // initialize the hardware
     sys->pins = m6502_init(&sys->cpu, &(m6502_desc_t){0});
     mc6847_init(&sys->vdg, &(mc6847_desc_t){
         .tick_hz = ATOM_FREQUENCY,
-        .rgba8_buffer = (uint32_t*) desc->pixel_buffer.ptr,
-        .rgba8_buffer_size = desc->pixel_buffer.size,
+        .framebuffer = {
+            .ptr = &sys->fb,
+            .size = sizeof(sys->fb),
+        },
         .fetch_cb = _atom_vdg_fetch,
         .user_data = sys,
     });
@@ -261,7 +228,7 @@ void atom_init(atom_t* sys, const atom_desc_t* desc) {
         .base_volume = _ATOM_DEFAULT(desc->audio.volume, 0.5f),
     });
 
-    /* setup memory map and keyboard matrix */
+    // setup memory map and keyboard matrix
     _atom_init_memorymap(sys);
     _atom_init_keymap(sys);
 }
@@ -282,19 +249,19 @@ void atom_reset(atom_t* sys) {
 }
 
 uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
-    /* tick the CPU */
+    // tick the CPU
     cpu_pins = m6502_tick(&sys->cpu, cpu_pins);
 
-    /* tick the 2.4khz counter */
+    // tick the 2.4khz counter
     sys->counter_2_4khz++;
     if (sys->counter_2_4khz >= sys->period_2_4khz) {
         sys->state_2_4khz = !sys->state_2_4khz;
         sys->counter_2_4khz -= sys->period_2_4khz;
     }
 
-    /* update beeper */
+    // update beeper
     if (beeper_tick(&sys->beeper)) {
-        /* new audio sample ready */
+        // new audio sample ready
         sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper.sample;
         if (sys->audio.sample_pos == sys->audio.num_samples) {
             if (sys->audio.callback.func) {
@@ -304,13 +271,13 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
         }
     }
 
-    /* address decoding */
+    // address decoding
     const uint16_t addr = M6502_GET_ADDR(cpu_pins);
     uint64_t via_pins = cpu_pins & M6502_PIN_MASK;
     uint64_t ppi_pins = cpu_pins & M6502_PIN_MASK & ~(I8255_RD|I8255_WR|I8255_PC_PINS);
     uint64_t vdg_pins = 0;
     if ((addr >= 0xB000) && (addr < 0xC000)) {
-        /* memory-mapped IO area */
+        // memory-mapped IO area
         if ((addr >= 0xB000) && (addr < 0xB400)) {
             ppi_pins |= I8255_CS;
         }
@@ -320,7 +287,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
                 a quick'n'dirty hack for joystick input
             */
             if (cpu_pins & M6502_RW) {
-                /* read from MMC extension */
+                // read from MMC extension
                 if (addr == 0xB400) {
                     /* reading from 0xB400 returns a status/error code, the important
                         ones are STATUS_OK=0x3F, and STATUS_BUSY=0x80, STATUS_COMPLETE
@@ -329,36 +296,36 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
                     M6502_SET_DATA(cpu_pins, 0x3F);
                 }
                 else if ((addr == 0xB401) && (sys->mmc_cmd == 0xA2)) {
-                    /* read MMC joystick */
+                    // read MMC joystick
                     M6502_SET_DATA(cpu_pins, ~(sys->kbd_joymask | sys->joy_joymask));
                 }
             }
             else {
-                /* write to MMC extension */
+                // write to MMC extension
                 if (addr == 0xB400) {
                     sys->mmc_cmd = M6502_GET_DATA(cpu_pins);
                 }
             }
         }
         else if ((addr >= 0xB800) && (addr < 0xBC00)) {
-            /* 6522 VIA: http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_6522.htm */
+            // 6522 VIA: http://www.acornatom.nl/sites/fpga/www.howell1964.freeserve.co.uk/acorn/atom/amb/amb_6522.htm
             via_pins |= M6522_CS1;
         }
         else {
-            /* remaining IO space is for expansion devices */
+            // remaining IO space is for expansion devices
             if (cpu_pins & M6502_RW) {
                 M6502_SET_DATA(cpu_pins, 0x00);
             }
         }
     }
     else {
-        /* regular memory access */
+        // regular memory access
         if (cpu_pins & M6502_RW) {
-            /* memory read */
+            // memory read
             M6502_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
         }
         else {
-            /* memory access */
+            // memory access
             mem_wr(&sys->mem, addr, M6502_GET_DATA(cpu_pins));
         }
     }
@@ -411,7 +378,7 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
         }
     }
 
-    /* tick the VIA */
+    // tick the VIA
     {
         via_pins = m6522_tick(&sys->via, via_pins);
         if ((via_pins & (M6522_RW|M6522_CS1)) == (M6522_RW|M6522_CS1)) {
@@ -533,30 +500,6 @@ void atom_joystick(atom_t* sys, uint8_t mask) {
     sys->joy_joymask = mask;
 }
 
-int atom_std_display_width(void) {
-    return MC6847_DISPLAY_WIDTH;
-}
-
-int atom_std_display_height(void) {
-    return MC6847_DISPLAY_HEIGHT;
-}
-
-size_t atom_max_display_size(void) {
-    return MC6847_DISPLAY_WIDTH * MC6847_DISPLAY_HEIGHT * 4;
-}
-
-int atom_display_width(atom_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    (void)sys;
-    return MC6847_DISPLAY_WIDTH;
-}
-
-int atom_display_height(atom_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    (void)sys;
-    return MC6847_DISPLAY_HEIGHT;
-}
-
 static void _atom_init_keymap(atom_t* sys) {
     /*  setup the keyboard matrix
         the Atom has a 10x8 keyboard matrix, where the
@@ -569,7 +512,7 @@ static void _atom_init_keymap(atom_t* sys) {
     /* ctrl key is entire line 6 */
     const int ctrl = (1<<1); kbd_register_modifier_line(&sys->kbd, 1, 6);
     /* alpha-numeric keys */
-    const char* keymap = 
+    const char* keymap =
         /* no shift */
         "     ^]\\[ "/**/"3210      "/* */"-,;:987654"/**/"GFEDCBA@/."/**/"QPONMLKJIH"/**/" ZYXWVUTSR"
         /* shift */
@@ -640,17 +583,17 @@ typedef struct {
     uint16_t length;
 } _atom_tap_header;
 
-bool atom_insert_tape(atom_t* sys, const uint8_t* ptr, int num_bytes) {
+bool atom_insert_tape(atom_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid);
-    CHIPS_ASSERT(ptr);
+    CHIPS_ASSERT(data.ptr);
     atom_remove_tape(sys);
-    /* check for valid size */
-    if ((num_bytes < (int)sizeof(_atom_tap_header)) || (num_bytes > ATOM_MAX_TAPE_SIZE)) {
+    // check for valid size
+    if ((data.size < sizeof(_atom_tap_header)) || (data.size > ATOM_MAX_TAPE_SIZE)) {
         return false;
     }
-    memcpy(sys->tape.buf, ptr, num_bytes);
+    memcpy(sys->tape.buf, data.ptr, data.size);
     sys->tape.pos = 0;
-    sys->tape.size = num_bytes;
+    sys->tape.size = data.size;
     return true;
 }
 
@@ -752,6 +695,35 @@ uint64_t _atom_osload(atom_t* sys, uint64_t pins) {
         m6502_set_pc(&sys->cpu, 0xF9A1);
     }
     return pins;
+}
+
+chips_display_info_t atom_display_info(atom_t* sys) {
+    const chips_display_info_t res = {
+        .frame = {
+            .dim = {
+                .width = MC6847_FRAMEBUFFER_WIDTH,
+                .height = MC6847_FRAMEBUFFER_HEIGHT,
+            },
+            .bytes_per_pixel = 1,
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = MC6847_FRAMEBUFFER_SIZE_BYTES,
+            }
+        },
+        .screen = {
+            .x = 0,
+            .y = 0,
+            .width = MC6847_DISPLAY_WIDTH,
+            .height = MC6847_DISPLAY_HEIGHT,
+        },
+        .palette = {
+            .ptr = sys ? sys->vdg.hwcolors : 0,
+            .size = MC6847_HWCOLOR_NUM * sizeof(uint32_t)
+        }
+    };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    CHIPS_ASSERT(((sys == 0) && (res.palette.ptr == 0)) || ((sys != 0) && (res.palette.ptr != 0)));
+    return res;
 }
 
 #endif /* CHIPS_IMPL */
