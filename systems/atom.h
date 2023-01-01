@@ -296,8 +296,8 @@ uint64_t _atom_tick(atom_t* sys, uint64_t cpu_pins) {
                     M6502_SET_DATA(cpu_pins, 0x3F);
                 }
                 else if ((addr == 0xB401) && (sys->mmc_cmd == 0xA2)) {
-                    // read MMC joystick
-                    M6502_SET_DATA(cpu_pins, ~(sys->kbd_joymask | sys->joy_joymask));
+                    // read MMC joystick (NOTE: the unusual cast fixes an UBSAN warning)
+                    M6502_SET_DATA(cpu_pins, ((uint64_t)~(sys->kbd_joymask | sys->joy_joymask)));
                 }
             }
             else {
