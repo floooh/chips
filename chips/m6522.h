@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -38,7 +38,7 @@
     *           |           |           *
     *           +-----------+           *
     *************************************
-    
+
     ## How to use
 
     Call m6522_init() to initialize a new m6522_t instance (note that
@@ -108,7 +108,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -117,62 +117,100 @@
 extern "C" {
 #endif
 
-/* register select same as lower 4 shared address bus bits */
-#define M6522_RS0       (1ULL<<0)
-#define M6522_RS1       (1ULL<<1)
-#define M6522_RS2       (1ULL<<2)
-#define M6522_RS3       (1ULL<<3)
+// register select same as lower 4 shared address bus bits
+#define M6522_PIN_RS0       (0)
+#define M6522_PIN_RS1       (1)
+#define M6522_PIN_RS2       (2)
+#define M6522_PIN_RS3       (3)
+
+// data bus pins shared with CPU
+#define M6522_PIN_D0        (16)
+#define M6522_PIN_D1        (17)
+#define M6522_PIN_D2        (18)
+#define M6522_PIN_D3        (19)
+#define M6522_PIN_D4        (20)
+#define M6522_PIN_D5        (21)
+#define M6522_PIN_D6        (22)
+#define M6522_PIN_D7        (23)
+
+// control pins shared with CPU
+#define M6522_PIN_RW        (24)      // same as M6502_RW
+#define M6522_PIN_IRQ       (26)      // same as M6502_IRQ
+
+// control pins
+#define M6522_PIN_CS1       (40)      // chip-select 1, to select: CS1 high, CS2 low
+#define M6522_PIN_CS2       (41)      // chip-select 2
+
+#define M6522_PIN_CA1       (42)      // peripheral A control 1
+#define M6522_PIN_CA2       (43)      // peripheral A control 2
+#define M6522_PIN_CB1       (44)      // peripheral B control 1
+#define M6522_PIN_CB2       (45)      // peripheral B control 2
+
+// peripheral A port
+#define M6522_PIN_PA0       (48)
+#define M6522_PIN_PA1       (49)
+#define M6522_PIN_PA2       (50)
+#define M6522_PIN_PA3       (51)
+#define M6522_PIN_PA4       (52)
+#define M6522_PIN_PA5       (53)
+#define M6522_PIN_PA6       (54)
+#define M6522_PIN_PA7       (55)
+
+// peripheral B port
+#define M6522_PIN_PB0       (56)
+#define M6522_PIN_PB1       (57)
+#define M6522_PIN_PB2       (58)
+#define M6522_PIN_PB3       (59)
+#define M6522_PIN_PB4       (60)
+#define M6522_PIN_PB5       (61)
+#define M6522_PIN_PB6       (62)
+#define M6522_PIN_PB7       (63)
+
+// pin bit masks
+#define M6522_RS0       (1ULL<<M6522_PIN_RS0)
+#define M6522_RS1       (1ULL<<M6522_PIN_RS1)
+#define M6522_RS2       (1ULL<<M6522_PIN_RS2)
+#define M6522_RS3       (1ULL<<M6522_PIN_RS3)
 #define M6522_RS_PINS   (0x0FULL)
-
-/* data bus pins shared with CPU */
-#define M6522_D0        (1ULL<<16)
-#define M6522_D1        (1ULL<<17)
-#define M6522_D2        (1ULL<<18)
-#define M6522_D3        (1ULL<<19)
-#define M6522_D4        (1ULL<<20)
-#define M6522_D5        (1ULL<<21)
-#define M6522_D6        (1ULL<<22)
-#define M6522_D7        (1ULL<<23)
+#define M6522_D0        (1ULL<<M6522_PIN_D0)
+#define M6522_D1        (1ULL<<M6522_PIN_D1)
+#define M6522_D2        (1ULL<<M6522_PIN_D2)
+#define M6522_D3        (1ULL<<M6522_PIN_D3)
+#define M6522_D4        (1ULL<<M6522_PIN_D4)
+#define M6522_D5        (1ULL<<M6522_PIN_D5)
+#define M6522_D6        (1ULL<<M6522_PIN_D6)
+#define M6522_D7        (1ULL<<M6522_PIN_D7)
 #define M6522_DB_PINS   (0xFF0000ULL)
-
-/* control pins shared with CPU */
-#define M6522_RW        (1ULL<<24)      /* same as M6502_RW */
-#define M6522_IRQ       (1ULL<<26)      /* same as M6502_IRQ */
-
-/* control pins */
-#define M6522_CS1       (1ULL<<40)      /* chip-select 1, to select: CS1 high, CS2 low */
-#define M6522_CS2       (1ULL<<41)      /* chip-select 2 */
-
-#define M6522_CA1       (1ULL<<42)      /* peripheral A control 1 */
-#define M6522_CA2       (1ULL<<43)      /* peripheral A control 2 */
-#define M6522_CB1       (1ULL<<44)      /* peripheral B control 1 */
-#define M6522_CB2       (1ULL<<45)      /* peripheral B control 2 */
+#define M6522_RW        (1ULL<<M6522_PIN_RW)
+#define M6522_IRQ       (1ULL<<M6522_PIN_IRQ)
+#define M6522_CS1       (1ULL<<M6522_PIN_CS1)
+#define M6522_CS2       (1ULL<<M6522_PIN_CS2)
+#define M6522_CA1       (1ULL<<M6522_PIN_CA1)
+#define M6522_CA2       (1ULL<<M6522_PIN_CA2)
+#define M6522_CB1       (1ULL<<M6522_PIN_CB1)
+#define M6522_CB2       (1ULL<<M6522_PIN_CB2)
 #define M6522_CA_PINS   (M6522_CA1|M6522_CA2)
 #define M6522_CB_PINS   (M6522_CB1|M6522_CB2)
-
-/* peripheral A port */
-#define M6522_PA0       (1ULL<<48)
-#define M6522_PA1       (1ULL<<49)
-#define M6522_PA2       (1ULL<<50)
-#define M6522_PA3       (1ULL<<51)
-#define M6522_PA4       (1ULL<<52)
-#define M6522_PA5       (1ULL<<53)
-#define M6522_PA6       (1ULL<<54)
-#define M6522_PA7       (1ULL<<55)
+#define M6522_PA0       (1ULL<<M6522_PIN_PA0)
+#define M6522_PA1       (1ULL<<M6522_PIN_PA1)
+#define M6522_PA2       (1ULL<<M6522_PIN_PA2)
+#define M6522_PA3       (1ULL<<M6522_PIN_PA3)
+#define M6522_PA4       (1ULL<<M6522_PIN_PA4)
+#define M6522_PA5       (1ULL<<M6522_PIN_PA5)
+#define M6522_PA6       (1ULL<<M6522_PIN_PA6)
+#define M6522_PA7       (1ULL<<M6522_PIN_PA7)
 #define M6522_PA_PINS   (M6522_PA0|M6522_PA1|M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5|M6522_PA6|M6522_PA7)
-
-/* peripheral B port */
-#define M6522_PB0       (1ULL<<56)
-#define M6522_PB1       (1ULL<<57)
-#define M6522_PB2       (1ULL<<58)
-#define M6522_PB3       (1ULL<<59)
-#define M6522_PB4       (1ULL<<60)
-#define M6522_PB5       (1ULL<<61)
-#define M6522_PB6       (1ULL<<62)
-#define M6522_PB7       (1ULL<<63)
+#define M6522_PB0       (1ULL<<M6522_PIN_PB0)
+#define M6522_PB1       (1ULL<<M6522_PIN_PB1)
+#define M6522_PB2       (1ULL<<M6522_PIN_PB2)
+#define M6522_PB3       (1ULL<<M6522_PIN_PB3)
+#define M6522_PB4       (1ULL<<M6522_PIN_PB4)
+#define M6522_PB5       (1ULL<<M6522_PIN_PB5)
+#define M6522_PB6       (1ULL<<M6522_PIN_PB6)
+#define M6522_PB7       (1ULL<<M6522_PIN_PB7)
 #define M6522_PB_PINS   (M6522_PB0|M6522_PB1|M6522_PB2|M6522_PB3|M6522_PB4|M6522_PB5|M6522_PB6|M6522_PB7)
 
-/* register indices */
+// register indices
 #define M6522_REG_RB        (0)     /* input/output register B */
 #define M6522_REG_RA        (1)     /* input/output register A */
 #define M6522_REG_DDRB      (2)     /* data direction B */
@@ -191,7 +229,7 @@ extern "C" {
 #define M6522_REG_RA_NOH    (15)    /* input/output A without handshake */
 #define M6522_NUM_REGS      (16)
 
-/* PCR test macros (MAME naming) */
+// PCR test macros (MAME naming)
 #define M6522_PCR_CA1_LOW_TO_HIGH(c)   (c->pcr & 0x01)
 #define M6522_PCR_CA1_HIGH_TO_LOW(c)   (!(c->pcr & 0x01))
 #define M6522_PCR_CB1_LOW_TO_HIGH(c)   (c->pcr & 0x10)
@@ -217,7 +255,7 @@ extern "C" {
 #define M6522_PCR_CB2_FIX_OUTPUT(c)    ((c->pcr & 0xc0) == 0xc0)
 #define M6522_PCR_CB2_OUTPUT_LEVEL(c)  ((c->pcr & 0x20) >> 5)
 
-/* ACR test macros (MAME naming) */
+// ACR test macros (MAME naming)
 #define M6522_ACR_PA_LATCH_ENABLE(c)      (c->acr & 0x01)
 #define M6522_ACR_PB_LATCH_ENABLE(c)      (c->acr & 0x02)
 #define M6522_ACR_SR_DISABLED(c)          (!(c->acr & 0x1c))
@@ -232,7 +270,7 @@ extern "C" {
 #define M6522_ACR_T1_CONTINUOUS(c)        (c->acr & 0x40)
 #define M6522_ACR_T2_COUNT_PB6(c)         (c->acr & 0x20)
 
-/* interrupt bits */
+// interrupt bits
 #define M6522_IRQ_CA2      (1<<0)
 #define M6522_IRQ_CA1      (1<<1)
 #define M6522_IRQ_SR       (1<<2)
@@ -242,12 +280,12 @@ extern "C" {
 #define M6522_IRQ_T1       (1<<6)
 #define M6522_IRQ_ANY      (1<<7)
 
-/* delay-pipeline bit offsets */
+// delay-pipeline bit offsets
 #define M6522_PIP_TIMER_COUNT   (0)
 #define M6522_PIP_TIMER_LOAD    (8)
 #define M6522_PIP_IRQ           (0)
 
-/* I/O port state */
+// I/O port state
 typedef struct {
     uint8_t inpr;
     uint8_t outr;
@@ -261,7 +299,7 @@ typedef struct {
     bool c2_triggered;
 } m6522_port_t;
 
-/* timer state */
+// timer state
 typedef struct {
     uint16_t latch;     /* 16-bit initial value latch, NOTE: T2 only has an 8-bit latch */
     uint16_t counter;   /* 16-bit counter */
@@ -274,14 +312,14 @@ typedef struct {
     uint16_t pip;
 } m6522_timer_t;
 
-/* interrupt state (same as m6522_int_t) */
+// interrupt state (same as m6522_int_t)
 typedef struct {
     uint8_t ier;            /* interrupt enable register */
     uint8_t ifr;            /* interrupt flag register */
     uint16_t pip;
 } m6522_int_t;
 
-/* m6522 state */
+// m6522 state
 typedef struct {
     m6522_port_t pa;
     m6522_port_t pb;
@@ -293,30 +331,30 @@ typedef struct {
     uint64_t pins;
 } m6522_t;
 
-/* extract 8-bit data bus from 64-bit pins */
+// extract 8-bit data bus from 64-bit pins
 #define M6522_GET_DATA(p) ((uint8_t)((p)>>16))
-/* merge 8-bit data bus value into 64-bit pins */
+// merge 8-bit data bus value into 64-bit pins
 #define M6522_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
-/* extract port A pins */
+// extract port A pins
 #define M6522_GET_PA(p) ((uint8_t)((p)>>48))
-/* extract port B pins */
+// extract port B pins
 #define M6522_GET_PB(p) ((uint8_t)((p)>>56))
-/* merge port A pins into pin mask */
+// merge port A pins into pin mask
 #define M6522_SET_PA(p,a) {p=((p)&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
-/* merge port B pins into pin mask */
+// merge port B pins into pin mask
 #define M6522_SET_PB(p,b) {p=((p)&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
-/* merge port A and B pins into pin mask */
+// merge port A and B pins into pin mask
 #define M6522_SET_PAB(p,a,b) {p=((p)&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
-/* initialize a new 6522 instance */
+// initialize a new 6522 instance
 void m6522_init(m6522_t* m6522);
-/* reset an existing 6522 instance */
+// reset an existing 6522 instance
 void m6522_reset(m6522_t* m6522);
-/* tick the m6522 */
+// tick the m6522
 uint64_t m6522_tick(m6522_t* m6522, uint64_t pins);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -372,9 +410,9 @@ void m6522_init(m6522_t* c) {
 }
 
 /*
-    "The RESET input clears all internal registers to logic 0, 
+    "The RESET input clears all internal registers to logic 0,
     (except T1, T2 and SR). This places all peripheral interface lines
-    in the input state, disables the timers, shift registers etc. and 
+    in the input state, disables the timers, shift registers etc. and
     disables interrupting from the chip"
 */
 void m6522_reset(m6522_t* c) {
@@ -670,11 +708,11 @@ static uint8_t _m6522_read(m6522_t* c, uint8_t addr) {
                 /* FIXME: pulse output delay pipeline */
             }
             break;
-        
+
         case M6522_REG_DDRB:
             data = c->pb.ddr;
             break;
-        
+
         case M6522_REG_DDRA:
             data = c->pa.ddr;
             break;
@@ -747,7 +785,7 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
                 c->pb.c2_out = false;
             }
             break;
-        
+
         case M6522_REG_RA:
             c->pa.outr = data;
             _m6522_clear_pa_intr(c);
@@ -758,11 +796,11 @@ static void _m6522_write(m6522_t* c, uint8_t addr, uint8_t data) {
                 /* FIXME: pulse output delay pipeline */
             }
             break;
-        
+
         case M6522_REG_DDRB:
             c->pb.ddr = data;
             break;
-    
+
         case M6522_REG_DDRA:
             c->pa.ddr = data;
             break;
