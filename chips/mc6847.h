@@ -462,7 +462,7 @@ static inline uint8_t _mc6847_border_color(uint64_t pins) {
     }
 }
 
-static void _mc6847_decode_border(mc6847_t* vdg, uint64_t pins, int y) {
+static void _mc6847_decode_border(mc6847_t* vdg, uint64_t pins, size_t y) {
     uint8_t* dst = &(vdg->fb[y * MC6847_FRAMEBUFFER_WIDTH]);
     uint8_t c = _mc6847_border_color(pins);
     for (size_t x = 0; x < MC6847_DISPLAY_WIDTH; x++) {
