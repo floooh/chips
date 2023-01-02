@@ -217,8 +217,8 @@ bool vic20_is_tape_motor_on(vic20_t* sys);
 
 #define _VIC20_SCREEN_WIDTH (232) // actually 229, but rounded up to 8x
 #define _VIC20_SCREEN_HEIGHT (272)
-#define _VIC20_SCREEN_OFFSET_X (32)
-#define _VIC20_SCREEN_OFFSET_Y (8)
+#define _VIC20_SCREEN_X (32)
+#define _VIC20_SCREEN_Y (8)
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data);
 static void _vic20_init_key_map(vic20_t* sys);
@@ -763,9 +763,9 @@ void vic20_joystick(vic20_t* sys, uint8_t joy_mask) {
     _vic20_update_joymasks(sys);
 }
 
-bool vic20_insert_tape(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
+bool vic20_insert_tape(vic20_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
-    return c1530_insert_tape(&sys->c1530, ptr, num_bytes);
+    return c1530_insert_tape(&sys->c1530, data);
 }
 
 void vic20_remove_tape(vic20_t* sys) {
@@ -813,8 +813,8 @@ chips_display_info_t vic20_display_info(vic20_t* sys) {
     }
     else {
         res.screen = (chips_rect_t){
-            .x = _VIC20_SCREEN_OFFSET_X,
-            .y = _VIC20_SCREEN_OFFSET_Y,
+            .x = 0,
+            .y = 0,
             .width = _VIC20_SCREEN_WIDTH,
             .height = _VIC20_SCREEN_HEIGHT,
         };
