@@ -64,6 +64,9 @@
 extern "C" {
 #endif
 
+// bump snapshot version when vic20_t memory layout changes
+#define VIC20_SNAPSHOT_VERSION (1)
+
 #define VIC20_FREQUENCY (1108404)
 #define VIC20_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
 #define VIC20_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer
@@ -141,7 +144,6 @@ typedef struct {
     bool valid;
     chips_debug_t debug;
 
-    uint32_t* pixel_buffer;
     struct {
         chips_audio_callback_t callback;
         int num_samples;
@@ -202,6 +204,10 @@ void vic20_tape_play(vic20_t* sys);
 void vic20_tape_stop(vic20_t* sys);
 // return true if tape motor is on
 bool vic20_is_tape_motor_on(vic20_t* sys);
+// take a snapshot, patches pointers to zero or offsets, returns snapshot version
+uint32_t vic20_save_snapshot(vic20_t* sys, vic20_t* dst);
+// load a snapshot, returns false if snapshot version doesn't match
+bool vic20_load_snapshot(vic20_t* sys, uint32_t version, vic20_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -821,6 +827,50 @@ chips_display_info_t vic20_display_info(vic20_t* sys) {
     }
     CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
     return res;
+}
+
+uint32_t vic20_save_snapshot(vic20_t* sys, vic20_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    dst->debug.callback.func = 0;
+    dst->debug.callback.user_data = 0;
+    dst->debug.stopped = 0;
+    dst->audio.callback.func = 0;
+    dst->audio.callback.user_data = 0;
+    dst->cpu.in_cb = 0;
+    dst->cpu.out_cb = 0;
+    dst->cpu.user_data = 0;
+    dst->vic.fetch_cb = 0;
+    dst->vic.user_data = 0;
+    dst->vic.crt.fb = 0;
+    dst->c1530.cas_port = 0;
+    mem_pointers_to_offsets(&dst->mem_cpu, sys);
+    mem_pointers_to_offsets(&dst->mem_vic, sys);
+    mem_pointers_to_offsets(&dst->mem_cart, sys);
+    return VIC20_SNAPSHOT_VERSION;
+}
+
+bool vic20_load_snapshot(vic20_t* sys, uint32_t version, vic20_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != VIC20_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static vic20_t im;
+    im = *src;
+    im.debug = sys->debug;
+    im.audio.callback = sys->audio.callback;
+    im.cpu.in_cb = sys->cpu.in_cb;
+    im.cpu.out_cb = sys->cpu.out_cb;
+    im.cpu.user_data = sys->cpu.user_data;
+    im.vic.fetch_cb = sys->vic.fetch_cb;
+    im.vic.user_data = sys->vic.user_data;
+    im.vic.crt.fb = sys->vic.crt.fb;
+    im.c1530.cas_port = sys->c1530.cas_port;
+    mem_offsets_to_pointers(&im.mem_cpu, sys);
+    mem_offsets_to_pointers(&im.mem_vic, sys);
+    mem_offsets_to_pointers(&im.mem_cart, sys);
+    *sys = im;
+    return true;
 }
 
 #endif // CHIPS_IMPL
