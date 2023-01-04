@@ -65,6 +65,11 @@
 extern "C" {
 #endif
 
+#define M6569_FRAMEBUFFER_WIDTH (512)
+#define M6569_FRAMEBUFFER_HEIGHT (320)
+// FIXME!
+#define M6569_FRAMEBUFFER_SIZE_BYTES (sizeof(uint32_t) * M6569_FRAMEBUFFER_WIDTH * M6569_FRAMEBUFFER_HEIGHT)
+
 // address bus lines (with CS active A0..A6 is register address)
 #define M6569_PIN_A0    (0)
 #define M6569_PIN_A1    (1)
@@ -146,12 +151,10 @@ typedef uint16_t (*m6569_fetch_t)(uint16_t addr, void* user_data);
 
 // setup parameters for m6569_init() function
 typedef struct {
-    // pointer to RGBA8 framebuffer for generated image (optional)
-    uint32_t* rgba8_buffer;
-    // size of the RGBA framebuffer (must be at least 512x312, optional)
-    size_t rgba8_buffer_size;
-    // visible CRT area blitted to rgba8_buffer (in pixels)
-    uint16_t vis_x, vis_y, vis_w, vis_h;
+    // pointer and size of external framebuffer
+    chips_range_t framebuffer;
+    // visible CRT area decoded into framebuffer (in pixels)
+    chips_rect_t screen;
     // the memory-fetch callback
     m6569_fetch_t fetch_cb;
     // optional user-data for fetch callback
@@ -314,12 +317,10 @@ void m6569_init(m6569_t* vic, const m6569_desc_t* desc);
 void m6569_reset(m6569_t* vic);
 // tick the m6569 instance
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
-// get the visible display width in pixels
-int m6569_display_width(m6569_t* vic);
-// get the visible display height in pixels
-int m6569_display_height(m6569_t* vic);
+// get the visible screen rect in pixels
+chips_rect_t m6569_screen(m6569_t* vic);
 // get 32-bit RGBA8 value from color index (0..15)
-uint32_t m6569_color(int i);
+uint32_t m6569_color(size_t i);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -398,6 +399,7 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
 };
 
 /* internal implementation constants */
+#define _M6569_PIXELS_PER_TICK (8)
 #define _M6569_HTOTAL               (63)    /* 63 cycles per line (PAL) */
 #define _M6569_VTOTAL               (312)   /* 312 lines total (PAL) */
 #define _M6569_VRETRACEPOS          (303)   /* start of vertical beam retrace */
@@ -416,20 +418,20 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
 /*--- init -------------------------------------------------------------------*/
 static void _m6569_init_crt(m6569_crt_t* crt, const m6569_desc_t* desc) {
     /* vis area horizontal coords must be multiple of 8 */
-    CHIPS_ASSERT((desc->vis_x & 7) == 0);
-    CHIPS_ASSERT((desc->vis_w & 7) == 0);
-    crt->rgba8_buffer = desc->rgba8_buffer;
-    crt->vis_x0 = desc->vis_x/8;
-    crt->vis_y0 = desc->vis_y;
-    crt->vis_w = desc->vis_w/8;
-    crt->vis_h = desc->vis_h;
+    CHIPS_ASSERT((desc->screen.x & 7) == 0);
+    CHIPS_ASSERT((desc->screen.width & 7) == 0);
+    crt->rgba8_buffer = desc->framebuffer.ptr;
+    crt->vis_x0 = desc->screen.x / _M6569_PIXELS_PER_TICK;
+    crt->vis_y0 = desc->screen.y;
+    crt->vis_w = desc->screen.width / _M6569_PIXELS_PER_TICK;
+    crt->vis_h = desc->screen.height;
     crt->vis_x1 = crt->vis_x0 + crt->vis_w;
     crt->vis_y1 = crt->vis_y0 + crt->vis_h;
 }
 
 void m6569_init(m6569_t* vic, const m6569_desc_t* desc) {
     CHIPS_ASSERT(vic && desc);
-    CHIPS_ASSERT((0 == desc->rgba8_buffer) || (desc->rgba8_buffer_size >= (_M6569_HTOTAL*8*_M6569_VTOTAL*sizeof(uint32_t))));
+    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= M6569_FRAMEBUFFER_SIZE_BYTES));
     memset(vic, 0, sizeof(*vic));
     _m6569_init_crt(&vic->crt, desc);
     vic->mem.fetch_cb = desc->fetch_cb;
@@ -1650,12 +1652,11 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
 
     /*--- decode pixels into framebuffer -------------------------------------*/
     if (vic->crt.rgba8_buffer) {
-        int x, y, w;
+        int x, y;
         if (vic->debug_vis) {
             x = vic->rs.h_count;
             y = vic->rs.v_count;
-            w = _M6569_HTOTAL;
-            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;
+            uint32_t* dst = vic->crt.rgba8_buffer + (y * M6569_FRAMEBUFFER_WIDTH) + (x * _M6569_PIXELS_PER_TICK);
             _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
         }
         else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
@@ -1663,8 +1664,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         {
             const int x = vic->crt.x - vic->crt.vis_x0;
             const int y = vic->crt.y - vic->crt.vis_y0;
-            const int w = vic->crt.vis_w;
-            uint32_t* dst = vic->crt.rgba8_buffer + (y * w + x) * 8;
+            uint32_t* dst = vic->crt.rgba8_buffer + (y * M6569_FRAMEBUFFER_WIDTH) + (x * _M6569_PIXELS_PER_TICK);
             _m6569_decode_pixels(vic, g_data, dst, vic->rs.h_count);
         }
     }
@@ -1690,18 +1690,18 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     return pins;
 }
 
-int m6569_display_width(m6569_t* vic) {
+chips_rect_t m6569_screen(m6569_t* vic) {
     CHIPS_ASSERT(vic);
-    return 8 * (vic->debug_vis ? _M6569_HTOTAL : vic->crt.vis_w);
+    return (chips_rect_t){
+        .x = 0,
+        .y = 0,
+        .width = _M6569_PIXELS_PER_TICK * (vic->debug_vis ? _M6569_HTOTAL : vic->crt.vis_w),
+        .height = vic->debug_vis ? _M6569_VTOTAL : vic->crt.vis_h,
+    };
 }
 
-int m6569_display_height(m6569_t* vic) {
-    CHIPS_ASSERT(vic);
-    return vic->debug_vis ? _M6569_VTOTAL : vic->crt.vis_h;
-}
-
-uint32_t m6569_color(int i) {
-    CHIPS_ASSERT((i >= 0) && (i < 16));
+uint32_t m6569_color(size_t i) {
+    CHIPS_ASSERT(i < 16);
     return _m6569_colors[i];
 }
 #endif /* CHIPS_IMPL */

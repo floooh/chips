@@ -8,7 +8,7 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
@@ -20,6 +20,7 @@
 
     You need to include the following headers before including c64.h:
 
+    - chips/chips_common.h
     - chips/m6502.h
     - chips/m6522.h
     - chips/mem.h
@@ -40,7 +41,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -59,19 +60,14 @@ extern "C" {
 
 #define C1541_FREQUENCY (1000000)
 
-typedef struct {
-    void* ptr;
-    size_t size;
-} c1541_rom_image_t;
-
 // config params for c1541_init()
 typedef struct {
     // pointer to a shared byte with IEC serial bus line state
     uint8_t* iec_port;
     // rom images
     struct {
-        c1541_rom_image_t c000_dfff;
-        c1541_rom_image_t e000_ffff;
+        chips_range_t c000_dfff;
+        chips_range_t e000_ffff;
     } roms;
 } c1541_desc_t;
 
@@ -97,7 +93,7 @@ void c1541_reset(c1541_t* sys);
 // tick a c1541_t instance forward
 void c1541_tick(c1541_t* sys);
 // insert a disc image file (.d64)
-void c1541_insert_disc(c1541_t* sys, const uint8_t* ptr, int num_bytes);
+void c1541_insert_disc(c1541_t* sys, chips_range_t data);
 // remove current disc
 void c1541_remove_disc(c1541_t* sys);
 
@@ -166,11 +162,10 @@ void c1541_tick(c1541_t* sys) {
     sys->pins = pins;
 }
 
-void c1541_insert_disc(c1541_t* sys, const uint8_t* ptr, int num_bytes) {
+void c1541_insert_disc(c1541_t* sys, chips_range_t data) {
     // FIXME
     (void)sys;
-    (void)ptr;
-    (void)num_bytes;
+    (void)data;
 }
 
 void c1541_remove_disc(c1541_t* sys) {

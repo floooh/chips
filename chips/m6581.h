@@ -105,8 +105,8 @@ extern "C" {
 #define M6581_D6    (1ULL<<M6581_PIN_D6)
 #define M6581_D7    (1ULL<<M6581_PIN_D7)
 #define M6581_RW    (1ULL<<M6581_PIN_RW)
-#define M6581_CS        (1ULL<<M6581_CS)
-#define M6581_SAMPLE    (1ULL<<M6581_SAMPLE)
+#define M6581_CS        (1ULL<<M6581_PIN_CS)
+#define M6581_SAMPLE    (1ULL<<M6581_PIN_SAMPLE)
 
 // registers
 #define M6581_V1_FREQ_LO    (0)
