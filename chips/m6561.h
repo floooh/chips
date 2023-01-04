@@ -298,9 +298,9 @@ static void _m6561_init_crt(m6561_crt_t* crt, const m6561_desc_t* desc) {
     CHIPS_ASSERT((desc->screen.x & 7) == 0);
     CHIPS_ASSERT((desc->screen.width & 7) == 0);
     crt->fb = desc->framebuffer.ptr;
-    crt->vis_x0 = desc->screen.x/_M6561_PIXELS_PER_TICK;
+    crt->vis_x0 = desc->screen.x / _M6561_PIXELS_PER_TICK;
     crt->vis_y0 = desc->screen.y;
-    crt->vis_w = desc->screen.width/_M6561_PIXELS_PER_TICK;
+    crt->vis_w = desc->screen.width / _M6561_PIXELS_PER_TICK;
     crt->vis_h = desc->screen.height;
     crt->vis_x1 = crt->vis_x0 + crt->vis_w;
     crt->vis_y1 = crt->vis_y0 + crt->vis_h;
@@ -308,7 +308,7 @@ static void _m6561_init_crt(m6561_crt_t* crt, const m6561_desc_t* desc) {
 
 void m6561_init(m6561_t* vic, const m6561_desc_t* desc) {
     CHIPS_ASSERT(vic && desc && desc->fetch_cb);
-    CHIPS_ASSERT((0 == desc->framebuffer.ptr) || (desc->framebuffer.size >= M6561_FRAMEBUFFER_SIZE_BYTES));
+    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= M6561_FRAMEBUFFER_SIZE_BYTES));
     memset(vic, 0, sizeof(*vic));
     _m6561_init_crt(&vic->crt, desc);
     vic->border.enabled = _M6561_HBORDER|_M6561_VBORDER;
@@ -372,7 +372,7 @@ chips_rect_t m6561_screen(m6561_t* vic) {
 }
 
 uint32_t m6561_color(size_t i) {
-    CHIPS_ASSERT((i >= 0) && (i < 16));
+    CHIPS_ASSERT(i < 16);
     return _m6561_colors[i];
 }
 
