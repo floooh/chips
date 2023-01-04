@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    ~~~C    
+    ~~~C
     CHIPS_ASSERT(c)
     ~~~
 
@@ -55,7 +55,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -65,101 +65,130 @@
 extern "C" {
 #endif
 
-/* address bus lines (with CS active A0..A6 is register address) */
-#define M6569_A0    (1ULL<<0)
-#define M6569_A1    (1ULL<<1)
-#define M6569_A2    (1ULL<<2)
-#define M6569_A3    (1ULL<<3)
-#define M6569_A4    (1ULL<<4)
-#define M6569_A5    (1ULL<<5)
-#define M6569_A6    (1ULL<<6)
-#define M6569_A7    (1ULL<<7)
-#define M6569_A8    (1ULL<<8)
-#define M6569_A9    (1ULL<<9)
-#define M6569_A10   (1ULL<<10)
-#define M6569_A11   (1ULL<<11)
-#define M6569_A12   (1ULL<<12)
-#define M6569_A13   (1ULL<<13)
+// address bus lines (with CS active A0..A6 is register address)
+#define M6569_PIN_A0    (0)
+#define M6569_PIN_A1    (1)
+#define M6569_PIN_A2    (2)
+#define M6569_PIN_A3    (3)
+#define M6569_PIN_A4    (4)
+#define M6569_PIN_A5    (5)
+#define M6569_PIN_A6    (6)
+#define M6569_PIN_A7    (7)
+#define M6569_PIN_A8    (8)
+#define M6569_PIN_A9    (9)
+#define M6569_PIN_A10   (10)
+#define M6569_PIN_A11   (11)
+#define M6569_PIN_A12   (12)
+#define M6569_PIN_A13   (13)
 
-/* data bus pins D0..D7 */
-#define M6569_D0    (1ULL<<16)
-#define M6569_D1    (1ULL<<17)
-#define M6569_D2    (1ULL<<18)
-#define M6569_D3    (1ULL<<19)
-#define M6569_D4    (1ULL<<20)
-#define M6569_D5    (1ULL<<21)
-#define M6569_D6    (1ULL<<22)
-#define M6569_D7    (1ULL<<23)
+// data bus pins D0..D7
+#define M6569_PIN_D0    (16)
+#define M6569_PIN_D1    (17)
+#define M6569_PIN_D2    (18)
+#define M6569_PIN_D3    (19)
+#define M6569_PIN_D4    (20)
+#define M6569_PIN_D5    (21)
+#define M6569_PIN_D6    (22)
+#define M6569_PIN_D7    (23)
 
-/* shared control pins */
-#define M6569_RW    (1ULL<<24)      /* shared with m6502 CPU */
-#define M6569_IRQ   (1ULL<<26)      /* shared with m6502 CPU */
-#define M6569_BA    (1ULL<<28)      /* shared with m6502 RDY */
-#define M6569_AEC   (1ULL<<29)      /* shared with m6510 AEC */
+// shared control pins
+#define M6569_PIN_RW    (24)      // shared with m6502 CPU
+#define M6569_PIN_IRQ   (26)      // shared with m6502 CPU
+#define M6569_PIN_BA    (28)      // shared with m6502 RDY
+#define M6569_PIN_AEC   (29)      // shared with m6510 AEC
 
-/* chip-specific control pins */
-#define M6569_CS    (1ULL<<40)
+// chip-specific control pins
+#define M6569_PIN_CS    (40)
 
-/* number of registers */
+// pin bit masks
+#define M6569_A0    (1ULL<<M6569_PIN_A0)
+#define M6569_A1    (1ULL<<M6569_PIN_A1)
+#define M6569_A2    (1ULL<<M6569_PIN_A2)
+#define M6569_A3    (1ULL<<M6569_PIN_A3)
+#define M6569_A4    (1ULL<<M6569_PIN_A4)
+#define M6569_A5    (1ULL<<M6569_PIN_A5)
+#define M6569_A6    (1ULL<<M6569_PIN_A6)
+#define M6569_A7    (1ULL<<M6569_PIN_A7)
+#define M6569_A8    (1ULL<<M6569_PIN_A8)
+#define M6569_A9    (1ULL<<M6569_PIN_A9)
+#define M6569_A10   (1ULL<<M6569_PIN_A10)
+#define M6569_A11   (1ULL<<M6569_PIN_A11)
+#define M6569_A12   (1ULL<<M6569_PIN_A12)
+#define M6569_A13   (1ULL<<M6569_PIN_A13)
+#define M6569_D0    (1ULL<<M6569_PIN_D0)
+#define M6569_D1    (1ULL<<M6569_PIN_D1)
+#define M6569_D2    (1ULL<<M6569_PIN_D2)
+#define M6569_D3    (1ULL<<M6569_PIN_D3)
+#define M6569_D4    (1ULL<<M6569_PIN_D4)
+#define M6569_D5    (1ULL<<M6569_PIN_D5)
+#define M6569_D6    (1ULL<<M6569_PIN_D6)
+#define M6569_D7    (1ULL<<M6569_PIN_D7)
+#define M6569_RW    (1ULL<<M6569_PIN_RW)
+#define M6569_IRQ   (1ULL<<M6569_PIN_IRQ)
+#define M6569_BA    (1ULL<<M6569_PIN_BA)
+#define M6569_AEC   (1ULL<<M6569_PIN_AEC)
+#define M6569_CS    (1ULL<<M6569_PIN_CS)
+
+// number of registers
 #define M6569_NUM_REGS (64)
-/* register address mask */
+// register address mask
 #define M6569_REG_MASK (M6569_NUM_REGS-1)
-/* number of sprites */
+// number of sprites
 #define M6569_NUM_MOBS (8)
 
-/* extract 8-bit data bus from 64-bit pins */
+// extract 8-bit data bus from 64-bit pins
 #define M6569_GET_DATA(p) ((uint8_t)(((p)&0xFF0000ULL)>>16))
-/* merge 8-bit data bus value into 64-bit pins */
+// merge 8-bit data bus value into 64-bit pins
 #define M6569_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
-/* memory fetch callback, used to feed pixel- and color-data into the m6569 */
+// memory fetch callback, used to feed pixel- and color-data into the m6569
 typedef uint16_t (*m6569_fetch_t)(uint16_t addr, void* user_data);
 
-/* setup parameters for m6569_init() function */
+// setup parameters for m6569_init() function
 typedef struct {
-    /* pointer to RGBA8 framebuffer for generated image (optional) */
+    // pointer to RGBA8 framebuffer for generated image (optional)
     uint32_t* rgba8_buffer;
-    /* size of the RGBA framebuffer (must be at least 512x312, optional) */
+    // size of the RGBA framebuffer (must be at least 512x312, optional)
     size_t rgba8_buffer_size;
-    /* visible CRT area blitted to rgba8_buffer (in pixels) */
+    // visible CRT area blitted to rgba8_buffer (in pixels)
     uint16_t vis_x, vis_y, vis_w, vis_h;
-    /* the memory-fetch callback */
+    // the memory-fetch callback
     m6569_fetch_t fetch_cb;
-    /* optional user-data for fetch callback */
+    // optional user-data for fetch callback
     void* user_data;
 } m6569_desc_t;
 
-/* register bank */
+// register bank
 typedef struct {
     union {
         uint8_t regs[M6569_NUM_REGS];
         struct {
-            uint8_t mxy[M6569_NUM_MOBS][2];     /* sprite X/Y coords */
-            uint8_t mx8;                        /* x coordinate MSBs */
-            uint8_t ctrl_1;                     /* control register 1 */
-            uint8_t raster;                     /* raster counter */
-            uint8_t lightpen_xy[2];             /* lightpen coords */
-            uint8_t me;                         /* sprite enabled bits */
-            uint8_t ctrl_2;                     /* control register 2 */
-            uint8_t mye;                        /* sprite Y expansion */
-            uint8_t mem_ptrs;                   /* memory pointers */
-            uint8_t int_latch;                  /* interrupt latch */
-            uint8_t int_mask;                   /* interrupt-enabled mask */
-            uint8_t mdp;                        /* sprite data priority bits */
-            uint8_t mmc;                        /* sprite multicolor bits */
-            uint8_t mxe;                        /* sprite X expansion */
-            uint8_t mcm;                        /* sprite-sprite collision bits */
-            uint8_t mcd;                        /* sprite-data collision bits */
-            uint8_t ec;                         /* border color */
-            uint8_t bc[4];                      /* background colors */
-            uint8_t mm[2];                      /* sprite multicolor 0 */
-            uint8_t mc[8];                      /* sprite colors */
-            uint8_t unused[17];                 /* not writable, return 0xFF on read */
+            uint8_t mxy[M6569_NUM_MOBS][2];     // sprite X/Y coords
+            uint8_t mx8;                        // x coordinate MSBs
+            uint8_t ctrl_1;                     // control register 1
+            uint8_t raster;                     // raster counter
+            uint8_t lightpen_xy[2];             // lightpen coords
+            uint8_t me;                         // sprite enabled bits
+            uint8_t ctrl_2;                     // control register 2
+            uint8_t mye;                        // sprite Y expansion
+            uint8_t mem_ptrs;                   // memory pointers
+            uint8_t int_latch;                  // interrupt latch
+            uint8_t int_mask;                   // interrupt-enabled mask
+            uint8_t mdp;                        // sprite data priority bits
+            uint8_t mmc;                        // sprite multicolor bits
+            uint8_t mxe;                        // sprite X expansion
+            uint8_t mcm;                        // sprite-sprite collision bits
+            uint8_t mcd;                        // sprite-data collision bits
+            uint8_t ec;                         // border color
+            uint8_t bc[4];                      // background colors
+            uint8_t mm[2];                      // sprite multicolor 0
+            uint8_t mc[8];                      // sprite colors
+            uint8_t unused[17];                 // not writable, return 0xFF on read
         };
     };
 } m6569_registers_t;
 
-/* control- and interrupt-register bits */
+// control- and interrupt-register bits
 #define M6569_CTRL1_RST8    (1<<7)
 #define M6569_CTRL1_ECM     (1<<6)
 #define M6569_CTRL1_BMM     (1<<5)
@@ -170,104 +199,104 @@ typedef struct {
 #define M6569_CTRL2_MCM     (1<<4)
 #define M6569_CTRL2_CSEL    (1<<3)
 #define M6569_CTRL2_XSCROLL ((1<<2)|(1<<1)|(1<<0))
-#define M6569_INT_IRQ       (1<<7)      /* int_latch: interrupt requested */
-#define M6569_INT_ILP       (1<<3)      /* int_latch: lightpen interrupt */
-#define M6569_INT_IMMC      (1<<2)      /* int_latch: mob/mob collision interrupt */
-#define M6569_INT_IMBC      (1<<1)      /* int_latch: mob/bitmap collision interrupt */
-#define M6569_INT_IRST      (1<<0)      /* int_latch: raster interrupt */
-#define M6569_INT_ELP       (1<<3)      /* int_mask: lightpen interrupt enabled */
-#define M6569_INT_EMMC      (1<<2)      /* int_mask: mob/mob collision interrupt enabled */
-#define M6569_INT_EMBC      (1<<1)      /* int_mask: mob/bitmap collision interrupt enabled */
-#define M6569_INT_ERST      (1<<0)      /* int_mask: raster interrupt enabled */
+#define M6569_INT_IRQ       (1<<7)      // int_latch: interrupt requested
+#define M6569_INT_ILP       (1<<3)      // int_latch: lightpen interrupt
+#define M6569_INT_IMMC      (1<<2)      // int_latch: mob/mob collision interrupt
+#define M6569_INT_IMBC      (1<<1)      // int_latch: mob/bitmap collision interrupt
+#define M6569_INT_IRST      (1<<0)      // int_latch: raster interrupt
+#define M6569_INT_ELP       (1<<3)      // int_mask: lightpen interrupt enabled
+#define M6569_INT_EMMC      (1<<2)      // int_mask: mob/mob collision interrupt enabled
+#define M6569_INT_EMBC      (1<<1)      // int_mask: mob/bitmap collision interrupt enabled
+#define M6569_INT_ERST      (1<<0)      // int_mask: raster interrupt enabled
 
-/* raster unit state */
+// raster unit state
 typedef struct {
     uint8_t h_count;
     uint16_t v_count;
-    uint16_t v_irqline;     /* raster interrupt line, updated when ctrl_1 or raster is written */
-    uint16_t vc;            /* 10-bit video counter */
-    uint16_t vc_base;       /* 10-bit video counter base */
-    uint8_t rc;             /* 3-bit raster counter */
-    bool display_state;             /* true: in display state, false: in idle state */
-    bool badline;                   /* true when the badline state is active */
-    bool frame_badlines_enabled;    /* true when badlines are enabled in frame */
+    uint16_t v_irqline;     // raster interrupt line, updated when ctrl_1 or raster is written
+    uint16_t vc;            // 10-bit video counter
+    uint16_t vc_base;       // 10-bit video counter base
+    uint8_t rc;             // 3-bit raster counter
+    bool display_state;             // true: in display state, false: in idle state
+    bool badline;                   // true when the badline state is active
+    bool frame_badlines_enabled;    // true when badlines are enabled in frame
 } m6569_raster_unit_t;
 
-/* address generator / memory interface state */
+// address generator / memory interface state
 typedef struct {
-    uint16_t c_addr_or;     /* OR-mask for c-accesses, computed from mem_ptrs */
-    uint16_t g_addr_and;    /* AND-mask for g-accesses, computed from mem_ptrs */
-    uint16_t g_addr_or;     /* OR-mask for g-accesses, computed from ECM bit */
-    uint16_t i_addr;        /* address for i-accesses, 0x3FFF or 0x39FF (if ECM bit set) */
-    uint16_t p_addr_or;     /* OR-mask for p-accesses */
-    m6569_fetch_t fetch_cb; /* memory-fetch callback */
-    void* user_data;        /* optional user-data for fetch callback */
+    uint16_t c_addr_or;     // OR-mask for c-accesses, computed from mem_ptrs
+    uint16_t g_addr_and;    // AND-mask for g-accesses, computed from mem_ptrs
+    uint16_t g_addr_or;     // OR-mask for g-accesses, computed from ECM bit
+    uint16_t i_addr;        // address for i-accesses, 0x3FFF or 0x39FF (if ECM bit set)
+    uint16_t p_addr_or;     // OR-mask for p-accesses
+    m6569_fetch_t fetch_cb; // memory-fetch callback
+    void* user_data;        // optional user-data for fetch callback
 } m6569_memory_unit_t;
 
-/* video matrix state */
+// video matrix state
 typedef struct {
-    uint8_t vmli;           /* 6-bit 'vmli' video-matrix line buffer index */
+    uint8_t vmli;           // 6-bit 'vmli' video-matrix line buffer index
     uint8_t next_vmli;
-    uint16_t line[64];      /* 40x 8+4 bits line buffer (64 items because vmli is a 6-bit ctr) */
+    uint16_t line[64];      // 40x 8+4 bits line buffer (64 items because vmli is a 6-bit ctr)
 } m6569_video_matrix_t;
 
-/* border unit state */
+// border unit state
 typedef struct {
     uint16_t left, right, top, bottom;
-    bool main;          /* main border flip-flop */
-    bool vert;          /* vertical border flip flop */
-    uint8_t bc_index;   /* border color as palette index (not used, but may be useful for outside code) */
-    uint32_t bc_rgba8;  /* border color as RGBA8, updated when border color register is updated */
+    bool main;          // main border flip-flop
+    bool vert;          // vertical border flip flop
+    uint8_t bc_index;   // border color as palette index (not used, but may be useful for outside code)
+    uint32_t bc_rgba8;  // border color as RGBA8, updated when border color register is updated
 } m6569_border_unit_t;
 
-/* CRT state tracking */
+// CRT state tracking
 typedef struct {
-    uint16_t x, y;              /* beam pos reset on crt_retrace_h/crt_retrace_v zero */
-    uint16_t vis_x0, vis_y0, vis_x1, vis_y1;  /* the visible area */
-    uint16_t vis_w, vis_h;      /* width of visible area */
+    uint16_t x, y;              // beam pos reset on crt_retrace_h/crt_retrace_v zero
+    uint16_t vis_x0, vis_y0, vis_x1, vis_y1;  // the visible area
+    uint16_t vis_w, vis_h;      // width of visible area
     uint32_t* rgba8_buffer;
 } m6569_crt_t;
 
-/* graphics sequencer state */
+// graphics sequencer state
 typedef struct {
-    bool enabled;               /* true while g_accesses are happening */
-    uint8_t mode;               /* display mode 0..7 precomputed from ECM/BMM/MCM bits */
-    uint8_t count;              /* counts from 0..8 */
-    uint8_t shift;              /* current pixel shifter */
-    uint8_t outp;               /* current output byte (bit 7) */
-    uint8_t outp2;              /* current output byte at half frequency (bits 7 and 6) */
-    uint16_t c_data;            /* loaded from video matrix line buffer */
-    uint8_t bg_index[4];        /* background color as palette index (not used, but may be useful for outside code) */
-    uint32_t bg_rgba8[4];       /* background colors as RGBA8 */
+    bool enabled;               // true while g_accesses are happening
+    uint8_t mode;               // display mode 0..7 precomputed from ECM/BMM/MCM bits
+    uint8_t count;              // counts from 0..8
+    uint8_t shift;              // current pixel shifter
+    uint8_t outp;               // current output byte (bit 7)
+    uint8_t outp2;              // current output byte at half frequency (bits 7 and 6)
+    uint16_t c_data;            // loaded from video matrix line buffer
+    uint8_t bg_index[4];        // background color as palette index (not used, but may be useful for outside code)
+    uint32_t bg_rgba8[4];       // background colors as RGBA8
 } m6569_graphics_unit_t;
 
-/* sprite sequencer state */
+// sprite sequencer state
 typedef struct {
-    /* updated when setting sprite position registers */
-    uint8_t h_first[8];         /* first horizontal visible tick */
-    uint8_t h_last[8];          /* last horizontal visible tick */
-    uint8_t h_offset[8];        /* x-offset within 8-pixel raster */
-    uint8_t p_data[8];          /* the byte read by p_access memory fetch */
-    bool dma_enabled[8];        /* sprite dma is enabled */
-    bool disp_enabled[8];       /* sprite display is enabled */
-    bool expand[8];             /* expand flip-flop */
-    uint8_t mc[8];              /* 6-bit mob-data-counter */
-    uint8_t mc_base[8];         /* 6-bit mob-data-counter base */
-    uint8_t delay_count[8];     /* 0..7 delay pixels */
-    uint8_t outp2_count[8];     /* outp2 is updated when bit 0 is on */
-    uint8_t xexp_count[8];      /* if x stretched, only shift every second pixel tick */
-    uint32_t shift[8];          /* 24-bit shift register */
-    uint32_t outp[8];           /* current shifter output (bit 31) */
-    uint32_t outp2[8];          /* current shifter output at half frequency (bits 31 and 30) */
+    // updated when setting sprite position registers
+    uint8_t h_first[8];         // first horizontal visible tick
+    uint8_t h_last[8];          // last horizontal visible tick
+    uint8_t h_offset[8];        // x-offset within 8-pixel raster
+    uint8_t p_data[8];          // the byte read by p_access memory fetch
+    bool dma_enabled[8];        // sprite dma is enabled
+    bool disp_enabled[8];       // sprite display is enabled
+    bool expand[8];             // expand flip-flop
+    uint8_t mc[8];              // 6-bit mob-data-counter
+    uint8_t mc_base[8];         // 6-bit mob-data-counter base
+    uint8_t delay_count[8];     // 0..7 delay pixels
+    uint8_t outp2_count[8];     // outp2 is updated when bit 0 is on
+    uint8_t xexp_count[8];      // if x stretched, only shift every second pixel tick
+    uint32_t shift[8];          // 24-bit shift register
+    uint32_t outp[8];           // current shifter output (bit 31)
+    uint32_t outp2[8];          // current shifter output at half frequency (bits 31 and 30)
     uint32_t colors[8][4];      /* 0: unused, 1: multicolor0, 2: main color, 3: multicolor1
                                    the alpha channel is cleared and used as bitmask for sprites
                                    which produced a color
                                 */
 } m6569_sprite_unit_t;
 
-/* the m6569 state structure */
+// the m6569 state structure
 typedef struct {
-    bool debug_vis;             /* toggle this to switch debug visualization on/off */
+    bool debug_vis;             // toggle this to switch debug visualization on/off
     m6569_registers_t reg;
     m6569_crt_t crt;
     m6569_border_unit_t brd;
@@ -279,21 +308,21 @@ typedef struct {
     uint64_t pins;
 } m6569_t;
 
-/* initialize a new m6569_t instance */
+// initialize a new m6569_t instance
 void m6569_init(m6569_t* vic, const m6569_desc_t* desc);
-/* reset a m6569_t instance */
+// reset a m6569_t instance
 void m6569_reset(m6569_t* vic);
-/* tick the m6569 instance */
+// tick the m6569 instance
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins);
-/* get the visible display width in pixels */
+// get the visible display width in pixels
 int m6569_display_width(m6569_t* vic);
-/* get the visible display height in pixels */
+// get the visible display height in pixels
 int m6569_display_height(m6569_t* vic);
-/* get 32-bit RGBA8 value from color index (0..15) */
+// get 32-bit RGBA8 value from color index (0..15)
 uint32_t m6569_color(int i);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*--- IMPLEMENTATION ---------------------------------------------------------*/
@@ -749,7 +778,7 @@ static inline void _m6569_gunit_tick(m6569_t* vic, uint8_t g_data) {
     vic->gunit.shift <<= 1;
 }
 
-/* 
+/*
     graphics sequencer decoding functions for 1 pixel
 
     NOTE: the graphics sequencer returns alpha bits = 0 for background
@@ -839,7 +868,7 @@ static inline uint32_t _m6569_gunit_decode_mode4(m6569_t* vic) {
     }
     else {
         /* bg color selected by bits 6 and 7 of c_data */
-        /* FIXME: is the foreground/background selection right? 
+        /* FIXME: is the foreground/background selection right?
             values 00 and 01 would return as background color,
             and 10 and 11 as foreground color?
         */
@@ -932,7 +961,7 @@ static inline void _m6569_sunit_update_mcbase(m6569_t* vic) {
     be displayed). Otherwise the last line won't be displayed.
 
     This is different behaviour than described in the recipe!.
-    
+
     BUT: https://sourceforge.net/p/vice-emu/code/HEAD/tree/techdocs/VICII/VIC-Addendum.txt
     mentions this:
 
@@ -973,9 +1002,9 @@ static inline uint64_t _m6569_sunit_dma_aec(m6569_t* vic, uint32_t s_index, uint
 static inline uint32_t _m6569_sunit_decode(m6569_t* vic, uint8_t hpos) {
     /* this will tick all the sprite units and return the color
         of the highest-priority sprite color for the current pixel,
-        or 0 if the sprite units didn't produce a color 
+        or 0 if the sprite units didn't produce a color
 
-        NOTE: The alpha channel bits of the color are cleared, and 
+        NOTE: The alpha channel bits of the color are cleared, and
         instead a bit is set for the highest-priority sprite color
         which produced the color!
     */
@@ -1051,7 +1080,7 @@ static inline void _m6569_test_mob_data_col(m6569_t* vic, uint32_t bmc, uint32_t
     }
 }
 
-/* 
+/*
     The graphics/sprite color priority multiplexer.
 
     - the sprite color is 0 if the sprite unit didn't produce a color
@@ -1109,7 +1138,7 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint32_t* 
               produced the color, this is used to check the priority bit
               for this sprite
             - likewise the alpha channel bits for the graphics sequencer
-              are used to communicate whether the returned color is a 
+              are used to communicate whether the returned color is a
               background or foreground colors (fg: alpha == 0xFF, bg: alpha == 0)
 
         "The main border flip flop controls the border display. If it is set, the
