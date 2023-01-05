@@ -245,6 +245,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -377,7 +378,7 @@ typedef struct {
     uint8_t rom_char[0x1000];       // 4 KB character ROM image
     uint8_t rom_basic[0x2000];      // 8 KB BASIC ROM image
     uint8_t rom_kernal[0x2000];     // 8 KB KERNAL V3 ROM image
-    uint32_t fb[M6569_FRAMEBUFFER_WIDTH * M6569_FRAMEBUFFER_HEIGHT];
+    alignas(64) uint8_t fb[M6569_FRAMEBUFFER_SIZE_BYTES];
 
     c1530_t c1530;      // optional datassette
     c1541_t c1541;      // optional floppy drive
@@ -841,12 +842,12 @@ static void _c64_init_memory_map(c64_t* sys) {
         this is important at least for the value of the 'ghost byte' at 0x3FFF,
         which is 0xFF
     */
-    int i;
+    size_t i;
     for (i = 0; i < (1<<16);) {
-        for (int j = 0; j < 64; j++, i++) {
+        for (size_t j = 0; j < 64; j++, i++) {
             sys->ram[i] = 0x00;
         }
-        for (int j = 0; j < 64; j++, i++) {
+        for (size_t j = 0; j < 64; j++, i++) {
             sys->ram[i] = 0xFF;
         }
     }
@@ -1103,13 +1104,13 @@ chips_display_info_t c64_display_info(c64_t* sys) {
                 .width = M6569_FRAMEBUFFER_WIDTH,
                 .height = M6569_FRAMEBUFFER_HEIGHT,
             },
-            // FIXME
-            .bytes_per_pixel = 4,
+            .bytes_per_pixel = 1,
             .buffer = {
                 .ptr = sys ? sys->fb : 0,
                 .size = M6569_FRAMEBUFFER_SIZE_BYTES,
             }
-        }
+        },
+        .palette = m6569_palette(),
     };
     if (sys) {
         res.screen = m6569_screen(&sys->vic);
