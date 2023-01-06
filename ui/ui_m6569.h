@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -47,7 +47,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -243,7 +243,7 @@ static void _ui_m6569_draw_border_unit(const ui_m6569_t* win) {
         ImGui::Text("left:%04X right:%04X", brd->left, brd->right);
         ImGui::Text("top:%04X bottom:%04X", brd->top, brd->bottom);
         ImGui::Text("main:%s vert:%s", brd->main?"ON ":"OFF", brd->vert?"ON ":"OFF");
-        _ui_m6569_draw_color("border color: ", brd->bc_index);
+        _ui_m6569_draw_color("border color: ", brd->bc);
     }
 }
 
@@ -257,10 +257,10 @@ static void _ui_m6569_draw_graphics_unit(const ui_m6569_t* win) {
         ui_util_b8("shift: ", gu->shift);
         ui_util_b8("outp:  ", gu->outp);
         ui_util_b8("outp2: ", gu->outp2);
-        _ui_m6569_draw_color("bg0:", gu->bg_index[0]); ImGui::SameLine();
-        _ui_m6569_draw_color("bg1:", gu->bg_index[1]); ImGui::SameLine();
-        _ui_m6569_draw_color("bg2:", gu->bg_index[2]); ImGui::SameLine();
-        _ui_m6569_draw_color("bg3:", gu->bg_index[3]); 
+        _ui_m6569_draw_color("bg0:", gu->bg[0] & 0xFF); ImGui::SameLine();
+        _ui_m6569_draw_color("bg1:", gu->bg[1] & 0xFF); ImGui::SameLine();
+        _ui_m6569_draw_color("bg2:", gu->bg[2] & 0xFF); ImGui::SameLine();
+        _ui_m6569_draw_color("bg3:", gu->bg[3] & 0xFF);
     }
 }
 
@@ -288,16 +288,6 @@ static void _ui_m6569_draw_sprite_units(const ui_m6569_t* win) {
     }
 }
 
-static void _ui_m6569_tint_framebuffer(ui_m6569_t* win) {
-    uint32_t* ptr = win->vic->crt.rgba8_buffer;
-    if (ptr) {
-        const int num = m6569_display_width(win->vic) * m6569_display_height(win->vic);
-        for (int i = 0; i < num; i++) {
-            ptr[i] = ~ptr[i] | 0xFF0000F0;
-        }
-    }
-}
-
 void ui_m6569_draw(ui_m6569_t* win) {
     CHIPS_ASSERT(win && win->valid);
     if (!win->open) {
@@ -312,9 +302,6 @@ void ui_m6569_draw(ui_m6569_t* win) {
         ImGui::SameLine();
         ImGui::BeginChild("##m6569_state", ImVec2(0, 0), true);
         ImGui::Checkbox("Debug Visualization", &win->vic->debug_vis);
-        if (ImGui::Button("Tint Framebuffer")) {
-            _ui_m6569_tint_framebuffer(win);
-        }
         _ui_m6569_draw_hwcolors();
         _ui_m6569_draw_registers(win);
         _ui_m6569_draw_raster_unit(win);

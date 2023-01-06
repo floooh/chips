@@ -365,7 +365,6 @@ typedef struct {
     bool valid;
     chips_debug_t debug;
 
-    uint32_t* pixel_buffer;
     struct {
         chips_audio_callback_t callback;
         int num_samples;
@@ -418,6 +417,10 @@ void c64_tape_play(c64_t* sys);
 void c64_tape_stop(c64_t* sys);
 // return true if tape motor is on
 bool c64_is_tape_motor_on(c64_t* sys);
+// save a snapshot, patches pointers to zero and offsets, returns snapshot version
+uint32_t c64_save_snapshot(c64_t* sys, c64_t* dst);
+// load a snapshot, returns false if snapshot versions don't match
+bool c64_load_snapshot(c64_t* sys, uint32_t version, c64_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -1125,6 +1128,58 @@ chips_display_info_t c64_display_info(c64_t* sys) {
     };
     CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
     return res;
+}
+
+uint32_t c64_save_snapshot(c64_t* sys, c64_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    dst->debug.callback.func = 0;
+    dst->debug.callback.user_data = 0;
+    dst->debug.stopped = 0;
+    dst->audio.callback.func = 0;
+    dst->audio.callback.user_data = 0;
+    dst->cpu.in_cb = 0;
+    dst->cpu.out_cb = 0;
+    dst->cpu.user_data = 0;
+    dst->vic.mem.fetch_cb = 0;
+    dst->vic.mem.user_data = 0;
+    dst->vic.crt.fb = 0;
+    mem_pointers_to_offsets(&dst->mem_cpu, sys);
+    mem_pointers_to_offsets(&dst->mem_vic, sys);
+    dst->c1530.cas_port = 0;
+    dst->c1541.iec = 0;
+    dst->c1541.cpu.in_cb = 0;
+    dst->c1541.cpu.out_cb = 0;
+    dst->c1541.cpu.user_data = 0;
+    mem_pointers_to_offsets(&dst->c1541.mem, sys);
+    return C64_SNAPSHOT_VERSION;
+}
+
+bool c64_load_snapshot(c64_t* sys, uint32_t version, c64_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != C64_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static c64_t im;
+    im = *src;
+    im.debug = sys->debug;
+    im.audio.callback = sys->audio.callback;
+    im.cpu.in_cb = sys->cpu.in_cb;
+    im.cpu.out_cb = sys->cpu.out_cb;
+    im.cpu.user_data = sys->cpu.user_data;
+    im.vic.mem.fetch_cb = sys->vic.mem.fetch_cb;
+    im.vic.mem.user_data = sys->vic.mem.user_data;
+    im.vic.crt.fb = sys->vic.crt.fb;
+    mem_offsets_to_pointers(&im.mem_cpu, sys);
+    mem_offsets_to_pointers(&im.mem_vic, sys);
+    im.c1530.cas_port = sys->c1530.cas_port;
+    im.c1541.iec = sys->c1541.iec;
+    im.c1541.cpu.in_cb = sys->c1541.cpu.in_cb;
+    im.c1541.cpu.out_cb = sys->c1541.cpu.out_cb;
+    im.c1541.cpu.user_data = sys->c1541.cpu.user_data;
+    mem_offsets_to_pointers(&im.c1541.mem, sys);
+    *sys = im;
+    return true;
 }
 
 #endif /* CHIPS_IMPL */
