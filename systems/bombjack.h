@@ -754,7 +754,7 @@ static void _bombjack_decode_background(bombjack_t* sys) {
                 if (yy == 7) {
                     off += 8;
                 }
-                for (ssize_t xx = 15; xx >= 0; xx--) {
+                for (int xx = 15; xx >= 0; xx--) {
                     uint8_t pen = ((bm2>>xx)&1) | (((bm1>>xx)&1)<<1) | (((bm0>>xx)&1)<<2);
                     *ptr++ = sys->mainboard.palette[color_block | pen];
                 }
@@ -813,7 +813,7 @@ static void _bombjack_decode_foreground(bombjack_t* sys) {
                 uint8_t bm1 = sys->rom_chars[1][off];
                 uint8_t bm2 = sys->rom_chars[2][off];
                 off++;
-                for (ssize_t xx = 7; xx >= 0; xx--) {
+                for (int xx = 7; xx >= 0; xx--) {
                     uint8_t pen = ((bm2>>xx)&1) | (((bm1>>xx)&1)<<1) | (((bm0>>xx)&1)<<2);
                     if (pen) {
                         *ptr = sys->mainboard.palette[color_block | pen];
@@ -855,7 +855,7 @@ static void _bombjack_decode_foreground(bombjack_t* sys) {
 static void _bombjack_decode_sprites(bombjack_t* sys) {
     uint32_t* dst = sys->fb;
     // 24 hardware sprites, sprite 0 has highest priority
-    for (ssize_t sprite_nr = 23; sprite_nr >= 0; sprite_nr--) {
+    for (int sprite_nr = 23; sprite_nr >= 0; sprite_nr--) {
         // sprite RAM starts at 0x9820, RAM starts at 0x8000
         size_t addr = (0x9820 - 0x8000) + sprite_nr*4;
         uint8_t b0 = sys->main_ram[addr + 0];
@@ -884,7 +884,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
                 if ((y & 15) == 15) {
                     off += 32;
                 }
-                for (ssize_t x = 31; x >= 0; x--) {
+                for (int x = 31; x >= 0; x--) {
                     uint8_t pen = ((bm2>>x)&1) | (((bm1>>x)&1)<<1) | (((bm0>>x)&1)<<2);
                     if (0 != pen) {
                         CHIPS_ASSERT((ptr >= &sys->fb[0]) && (ptr < &sys->fb[BOMBJACK_FRAMEBUFFER_WIDTH*BOMBJACK_FRAMEBUFFER_HEIGHT]));
@@ -925,7 +925,7 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
                     }
                 }
                 else {
-                    for (ssize_t x=15; x>=0; x--) {
+                    for (int x=15; x>=0; x--) {
                         uint8_t pen = ((bm2>>x)&1) | (((bm1>>x)&1)<<1) | (((bm0>>x)&1)<<2);
                         if (0 != pen) {
                             CHIPS_ASSERT((ptr >= &sys->fb[0]) && (ptr < &sys->fb[BOMBJACK_FRAMEBUFFER_WIDTH*BOMBJACK_FRAMEBUFFER_HEIGHT]));

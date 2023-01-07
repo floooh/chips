@@ -501,7 +501,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, size_t y) 
                 MC6847_SET_ADDR(pins, addr++);
                 pins = vdg->fetch_cb(pins, ud);
                 uint8_t m = MC6847_GET_DATA(pins);
-                for (ssize_t p = 7; p >= 0; p--) {
+                for (int p = 7; p >= 0; p--) {
                     uint8_t c = ((m>>p) & 1) ? fg_color : MC6847_HWCOLOR_BLACK;
                     for (size_t d = 0; d < dots_per_bit; d++) {
                         *dst++ = c;
@@ -527,7 +527,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, size_t y) 
                 MC6847_SET_ADDR(pins, addr++);
                 pins = vdg->fetch_cb(pins, ud);
                 uint8_t m = MC6847_GET_DATA(pins);
-                for (ssize_t p = 6; p >= 0; p -= 2) {
+                for (int p = 6; p >= 0; p -= 2) {
                     const uint8_t c = ((m>>p) & 3) + color_offset;
                     for (size_t d = 0; d < dots_per_2bit; d++) {
                         *dst++ = c;
@@ -590,7 +590,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, size_t y) 
                     fg_color = (chr>>4) & 7;
                 }
                 // write the horizontal pixel blocks (2 blocks @ 4 pixel each)
-                for (ssize_t p = 1; p>=0; p--) {
+                for (int p = 1; p>=0; p--) {
                     uint8_t c = (m & (1<<p)) ? fg_color : MC6847_HWCOLOR_BLACK;
                     *dst++=c; *dst++=c; *dst++=c; *dst++=c;
                 }
@@ -603,7 +603,7 @@ static uint64_t _mc6847_decode_scanline(mc6847_t* vdg, uint64_t pins, size_t y) 
                 if (pins & MC6847_INV) {
                     m = ~m;
                 }
-                for (ssize_t p = 7; p >= 0; p--) {
+                for (int p = 7; p >= 0; p--) {
                     *dst++ = m & (1<<p) ? alnum_fg : alnum_bg;
                 }
             }
