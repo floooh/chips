@@ -792,23 +792,23 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
             uint8_t* dst = &(ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH]);
             uint8_t* prev_dst;
             if (dst == ga->fb) {
-                prev_dst = &(ga->fb[sizeof(ga->fb) - 17]);
+                prev_dst = dst;
             }
             else {
                 prev_dst = dst - 16;
             }
             uint8_t c = 0x20;
             if (crtc_pins & AM40010_HS) {
-                c |= 0x21;
+                c |= 0x01;
             }
             if (crtc_pins & AM40010_VS) {
-                c |= 0x22;
+                c |= 0x02;
             }
             if (ga->video.sync) {
-                c |= 0x24;
+                c |= 0x04;
             }
             if (ga->video.intr) {
-                c |= 0x28;
+                c |= 0x08;
             }
             if (crtc_pins & AM40010_DE) {
                 _am40010_decode_pixels(ga, dst, crtc_pins);
