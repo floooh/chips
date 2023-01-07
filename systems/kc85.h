@@ -577,7 +577,6 @@ static inline uint32_t _kc85_xorshift32(uint32_t x) {
 
 void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->audio.callback.func);
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(kc85_t));
@@ -976,7 +975,9 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         // new audio sample ready
         sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->beeper_1.sample + sys->beeper_2.sample;
         if (sys->audio.sample_pos == sys->audio.num_samples) {
-            sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+            if (sys->audio.callback.func) {
+                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+            }
             sys->audio.sample_pos = 0;
         }
     }
