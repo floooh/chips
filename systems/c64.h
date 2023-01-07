@@ -1113,7 +1113,7 @@ chips_display_info_t c64_display_info(c64_t* sys) {
                 .size = M6569_FRAMEBUFFER_SIZE_BYTES,
             }
         },
-        .palette = m6569_palette(),
+        .palette = m6569_dbg_palette(),
     };
     if (sys) {
         res.screen = m6569_screen(&sys->vic);

@@ -65,8 +65,11 @@
 extern "C" {
 #endif
 
-#define M6569_FRAMEBUFFER_WIDTH (512)
-#define M6569_FRAMEBUFFER_HEIGHT (320)
+#define M6569_PIXELS_PER_TICK (8)
+#define M6569_HTOTAL (63)    // 63 cycles per line (PAL)
+#define M6569_VTOTAL (312)   // 312 lines total (PAL)
+#define M6569_FRAMEBUFFER_WIDTH (M6569_HTOTAL * M6569_PIXELS_PER_TICK)
+#define M6569_FRAMEBUFFER_HEIGHT (M6569_VTOTAL)
 #define M6569_FRAMEBUFFER_SIZE_BYTES (M6569_FRAMEBUFFER_WIDTH * M6569_FRAMEBUFFER_HEIGHT)
 
 // address bus lines (with CS active A0..A6 is register address)
@@ -330,8 +333,6 @@ uint32_t m6569_color(size_t i);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _M6569_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
-
 // valid register bits
 static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,     // mob 0..3 xy
@@ -353,9 +354,6 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
 };
 
 // internal implementation constants
-#define _M6569_PIXELS_PER_TICK (8)
-#define _M6569_HTOTAL               (63)    // 63 cycles per line (PAL)
-#define _M6569_VTOTAL               (312)   // 312 lines total (PAL)
 #define _M6569_VRETRACEPOS          (303)   // start of vertical beam retrace
 #define _M6569_RSEL1_BORDER_TOP     (51)    // top border when RSEL=1 (25 rows)
 #define _M6569_RSEL1_BORDER_BOTTOM  (251)   // bottom border when RSEL=1
@@ -375,9 +373,9 @@ static void _m6569_init_crt(m6569_crt_t* crt, const m6569_desc_t* desc) {
     CHIPS_ASSERT((desc->screen.x & 7) == 0);
     CHIPS_ASSERT((desc->screen.width & 7) == 0);
     crt->fb = desc->framebuffer.ptr;
-    crt->vis_x0 = desc->screen.x / _M6569_PIXELS_PER_TICK;
+    crt->vis_x0 = desc->screen.x / M6569_PIXELS_PER_TICK;
     crt->vis_y0 = desc->screen.y;
-    crt->vis_w = desc->screen.width / _M6569_PIXELS_PER_TICK;
+    crt->vis_w = desc->screen.width / M6569_PIXELS_PER_TICK;
     crt->vis_h = desc->screen.height;
     crt->vis_x1 = crt->vis_x0 + crt->vis_w;
     crt->vis_y1 = crt->vis_y0 + crt->vis_h;
@@ -1129,34 +1127,44 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
 /* decode the next 8 pixels as debug visualization */
 static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint8_t* dst, uint8_t hpos) {
     _m6569_decode_pixels(vic, g_data, dst, hpos);
-/* FIXME FIXME FIXME
-    dst[0] = (dst[0] & 0xFF000000) | 0x00222222;
-    uint32_t mask = 0x00000000;
+    uint8_t c = 0;
     if (vic->rs.badline) {
-        mask = 0x00FF0000;
+        c |= 0x10;
     }
     if (ba_pin) {
-        mask = 0x000000FF;
+        c |= 0x20;
     }
     // sprites
     const m6569_sprite_unit_t* su = &vic->sunit;
-    for (int si = 0; si < 8; si++) {
+    for (size_t si = 0; si < 8; si++) {
         if (su->disp_enabled[si]) {
             if ((hpos >= su->h_first[si]) && (hpos <= su->h_last[si])) {
-                mask |= 0x00880088;
+                c |= 0x40;
             }
         }
     }
     // main interrupt bit
     if (vic->reg.int_latch & (1<<7)) {
-        mask |= 0x0000FF00;
+        c |= 0x80;
     }
-    if (mask != 0) {
-        for (int i = 0; i < 8; i++) {
-            dst[i] = (dst[i] & 0xFF888888) | mask;
+    // previous raster position for xor-rendering current raster pos
+    uint8_t* prev_dst;
+    if (dst == vic->crt.fb) {
+        prev_dst = dst;
+    }
+    else {
+        prev_dst = dst - M6569_PIXELS_PER_TICK;
+    }
+    for (size_t i = 0; i < M6569_PIXELS_PER_TICK; i++) {
+        if (i == 0) {
+            dst[i] = 0;
         }
+        else {
+            dst[i] |= c;
+        }
+        dst[i] ^= 0xF0;
+        prev_dst[i] ^= 0xF0;
     }
-*/
 }
 
 /*
@@ -1169,7 +1177,7 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
 static inline void _m6569_rs_next_rasterline(m6569_t* vic) {
     vic->rs.h_count = 0;
     // new scanline
-    if (vic->rs.v_count == (_M6569_VTOTAL-1)) {
+    if (vic->rs.v_count == (M6569_VTOTAL-1)) {
         vic->rs.v_count = 0;
         vic->rs.vc_base = 0;
     }
@@ -1611,7 +1619,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     if (vic->debug_vis) {
         const size_t x = vic->rs.h_count;
         const size_t y = vic->rs.v_count;
-        uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * _M6569_PIXELS_PER_TICK);
+        uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
         _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
     }
     else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
@@ -1619,7 +1627,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     {
         const size_t x = vic->crt.x - vic->crt.vis_x0;
         const size_t y = vic->crt.y - vic->crt.vis_y0;
-        uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * _M6569_PIXELS_PER_TICK);
+        uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
         _m6569_decode_pixels(vic, g_data, dst, vic->rs.h_count);
     }
     vic->vm.vmli = vic->vm.next_vmli;
@@ -1649,8 +1657,8 @@ chips_rect_t m6569_screen(m6569_t* vic) {
     return (chips_rect_t){
         .x = 0,
         .y = 0,
-        .width = _M6569_PIXELS_PER_TICK * (vic->debug_vis ? _M6569_HTOTAL : vic->crt.vis_w),
-        .height = vic->debug_vis ? _M6569_VTOTAL : vic->crt.vis_h,
+        .width = M6569_PIXELS_PER_TICK * (vic->debug_vis ? M6569_HTOTAL : vic->crt.vis_w),
+        .height = vic->debug_vis ? M6569_VTOTAL : vic->crt.vis_h,
     };
 }
 
@@ -1675,6 +1683,7 @@ static const uint32_t _m6569_colors[16] = {
     _M6569_RGBA8(0x95,0x95,0x95)
 };
 */
+#define _M6569_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
 
 /* https://www.pepto.de/projects/colorvic/ */
 static const uint32_t _m6569_colors[16] = {
@@ -1700,6 +1709,38 @@ chips_range_t m6569_palette(void) {
     return (chips_range_t){
         .ptr = (void*)_m6569_colors,
         .size = sizeof(_m6569_colors)
+    };
+}
+
+chips_range_t m6569_dbg_palette(void) {
+    static uint32_t dbg_palette[256];
+    size_t i = 0;
+    for (; i < 16; i++) {
+        dbg_palette[i] = _m6569_colors[i];
+    }
+    for (;i < 256; i++) {
+        uint32_t c = ((_m6569_colors[i&0xF] >> 2) & 0xFF3F3F3F) | 0xFF000000;
+        // bad line
+        if (i & 0x10) {
+            c |= 0x00FF0000;
+        }
+        // BA pin active
+        if (i & 0x20) {
+            c |= 0x000000FF;
+        }
+        // sprite active
+        if (i & 0x40) {
+            c |= 0x00880088;
+        }
+        // interrupt active
+        if (i & 0x80) {
+            c |= 0x0000FF00;
+        }
+        dbg_palette[i] = c;
+    }
+    return (chips_range_t){
+        .ptr = dbg_palette,
+        .size = sizeof(dbg_palette)
     };
 }
 
