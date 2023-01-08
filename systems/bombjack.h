@@ -61,7 +61,7 @@ extern "C" {
 #endif
 
 // increase when bombjack_t memory layout changes
-#define BOMBJACK_SNAPSHOT_VERSION (1)
+#define BOMBJACK_SNAPSHOT_VERSION (2)
 
 #define BOMBJACK_MAX_AUDIO_SAMPLES (1024)
 #define BOMBJACK_DEFAULT_AUDIO_SAMPLES (128)
@@ -1051,21 +1051,14 @@ chips_display_info_t bombjack_display_info(bombjack_t* sys) {
 uint32_t bombjack_save_snapshot(bombjack_t* sys, bombjack_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    dst->dbg.debug.mainboard.callback.func = 0;
-    dst->dbg.debug.mainboard.callback.user_data = 0;
-    dst->dbg.debug.mainboard.stopped = 0;
-    dst->dbg.debug.soundboard.callback.func = 0;
-    dst->dbg.debug.soundboard.callback.user_data = 0;
-    dst->dbg.debug.soundboard.stopped = 0;
-    dst->audio.callback.func = 0;
-    dst->audio.callback.user_data = 0;
+    chips_debug_snapshot_onsave(&dst->dbg.debug.mainboard);
+    chips_debug_snapshot_onsave(&dst->dbg.debug.soundboard);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
     for (size_t i = 0; i < 3; i++) {
-        dst->soundboard.psg[i].in_cb = 0;
-        dst->soundboard.psg[i].out_cb = 0;
-        dst->soundboard.psg[i].user_data = 0;
+        ay38910_snapshot_onsave(&dst->soundboard.psg[i]);
     }
-    mem_pointers_to_offsets(&dst->mainboard.mem, sys);
-    mem_pointers_to_offsets(&dst->soundboard.mem, sys);
+    mem_snapshot_onsave(&dst->mainboard.mem, sys);
+    mem_snapshot_onsave(&dst->soundboard.mem, sys);
     return BOMBJACK_SNAPSHOT_VERSION;
 }
 
@@ -1076,16 +1069,14 @@ bool bombjack_load_snapshot(bombjack_t* sys, uint32_t version, bombjack_t* src) 
     }
     static bombjack_t im;
     im = *src;
-    im.dbg.debug.mainboard = sys->dbg.debug.mainboard;
-    im.dbg.debug.soundboard = sys->dbg.debug.soundboard;
-    im.audio.callback = sys->audio.callback;
+    chips_debug_snapshot_onload(&im.dbg.debug.mainboard, &sys->dbg.debug.mainboard);
+    chips_debug_snapshot_onload(&im.dbg.debug.soundboard, &sys->dbg.debug.soundboard);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
     for (size_t i = 0; i < 3; i++) {
-        im.soundboard.psg[i].in_cb = sys->soundboard.psg[i].in_cb;
-        im.soundboard.psg[i].out_cb = sys->soundboard.psg[i].out_cb;
-        im.soundboard.psg[i].user_data = sys->soundboard.psg[i].user_data;
+        ay38910_snapshot_onload(&im.soundboard.psg[i], &sys->soundboard.psg[i]);
     }
-    mem_offsets_to_pointers(&im.mainboard.mem, sys);
-    mem_offsets_to_pointers(&im.soundboard.mem, sys);
+    mem_snapshot_onload(&im.mainboard.mem, sys);
+    mem_snapshot_onload(&im.soundboard.mem, sys);
     *sys = im;
     return true;
 }
