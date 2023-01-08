@@ -500,12 +500,8 @@ chips_display_info_t z1013_display_info(z1013_t* sys) {
 uint32_t z1013_save_snapshot(z1013_t* sys, z1013_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    // patch any external pointers to zero and replace internal
-    // pointers with offsets
-    dst->debug.callback.func = 0;
-    dst->debug.callback.user_data = 0;
-    dst->debug.stopped = 0;
-    mem_pointers_to_offsets(&dst->mem, sys);
+    chips_debug_snapshot_onsave(&dst->debug);
+    mem_snapshot_onsave(&dst->mem, sys);
     return Z1013_SNAPSHOT_VERSION;
 }
 
@@ -517,8 +513,8 @@ bool z1013_load_snapshot(z1013_t* sys, uint32_t version, const z1013_t* src) {
     // intermediate copy
     static z1013_t im;
     im = *src;
-    im.debug = sys->debug;
-    mem_offsets_to_pointers(&im.mem, sys);
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    mem_snapshot_onload(&im.mem, sys);
     *sys = im;
     return true;
 }

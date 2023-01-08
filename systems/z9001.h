@@ -762,14 +762,9 @@ chips_display_info_t z9001_display_info(z9001_t* sys) {
 uint32_t z9001_save_snapshot(z9001_t* sys, z9001_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    // patch any external pointers to zero and replace internal
-    // pointers with offsets
-    dst->debug.callback.func = 0;
-    dst->debug.callback.user_data = 0;
-    dst->debug.stopped = 0;
-    dst->audio.callback.func = 0;
-    dst->audio.callback.user_data = 0;
-    mem_pointers_to_offsets(&dst->mem, sys);
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    mem_snapshot_onsave(&dst->mem, sys);
     return Z9001_SNAPSHOT_VERSION;
 }
 
@@ -778,12 +773,11 @@ bool z9001_load_snapshot(z9001_t* sys, uint32_t version, const z9001_t* src) {
     if (version != Z9001_SNAPSHOT_VERSION) {
         return false;
     }
-    // intermediate copy
     static z9001_t im;
     im = *src;
-    im.debug = sys->debug;
-    im.audio.callback = sys->audio.callback;
-    mem_offsets_to_pointers(&im.mem, sys);
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    mem_snapshot_onload(&im.mem, sys);
     *sys = im;
     return true;
 }

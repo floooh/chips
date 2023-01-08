@@ -1715,16 +1715,11 @@ chips_display_info_t kc85_display_info(kc85_t* sys) {
 uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    // patch any external pointers to zero and replace internal
-    // pointers with offsets
-    dst->debug.callback.func = 0;
-    dst->debug.callback.user_data = 0;
-    dst->debug.stopped = 0;
-    dst->audio.callback.func = 0;
-    dst->audio.callback.user_data = 0;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
     dst->patch_callback.func = 0;
     dst->patch_callback.user_data = 0;
-    mem_pointers_to_offsets(&dst->mem, sys);
+    mem_snapshot_onsave(&dst->mem, sys);
     return KC85_SNAPSHOT_VERSION;
 }
 
@@ -1737,11 +1732,9 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src) {
     // intermediate copy
     static kc85_t im;
     im = *src;
-    // patch pointers
-    im.debug = sys->debug;
-    im.audio.callback = sys->audio.callback;
-    im.patch_callback = sys->patch_callback;
-    mem_offsets_to_pointers(&im.mem, sys);
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    mem_snapshot_onload(&im.mem, sys);
     *sys = im;
     return true;
 }

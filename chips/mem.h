@@ -177,9 +177,9 @@ uint8_t mem_layer_rd(mem_t* mem, size_t layer, uint16_t addr);
 void mem_layer_wr(mem_t* mem, size_t layer, uint16_t addr, uint8_t data);
 
 /* convert any internal pointers to offsets (helper function for serialization) */
-void mem_pointers_to_offsets(mem_t* mem, void* base);
+void mem_snapshot_onsave(mem_t* snapshot, void* base);
 /* ...and the reverse */
-void mem_offsets_to_pointers(mem_t* mem, void* base);
+void mem_snapshot_onload(mem_t* snapshot, void* base);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -386,30 +386,30 @@ static void mem_offset_to_ptr(uint8_t** ptr_ptr, uint8_t* base) {
     }
 }
 
-void mem_pointers_to_offsets(mem_t* mem, void* base) {
+void mem_snapshot_onsave(mem_t* snapshot, void* base) {
     uint8_t* base8 = (uint8_t*)base;
     for (size_t page = 0; page < MEM_NUM_PAGES; page++) {
-        mem_ptr_to_offset(&mem->page_table[page].read_ptr, base8);
-        mem_ptr_to_offset(&mem->page_table[page].write_ptr, base8);
+        mem_ptr_to_offset(&snapshot->page_table[page].read_ptr, base8);
+        mem_ptr_to_offset(&snapshot->page_table[page].write_ptr, base8);
     }
     for (size_t layer = 0; layer < MEM_NUM_LAYERS; layer++) {
         for (size_t page = 0; page < MEM_NUM_PAGES; page++) {
-            mem_ptr_to_offset(&mem->layers[layer][page].read_ptr, base8);
-            mem_ptr_to_offset(&mem->layers[layer][page].write_ptr, base8);
+            mem_ptr_to_offset(&snapshot->layers[layer][page].read_ptr, base8);
+            mem_ptr_to_offset(&snapshot->layers[layer][page].write_ptr, base8);
         }
     }
 }
 
-void mem_offsets_to_pointers(mem_t* mem, void* base) {
+void mem_snapshot_onload(mem_t* snapshot, void* base) {
     uint8_t* base8 = (uint8_t*)base;
     for (size_t page = 0; page < MEM_NUM_PAGES; page++) {
-        mem_offset_to_ptr(&mem->page_table[page].read_ptr, base8);
-        mem_offset_to_ptr(&mem->page_table[page].write_ptr, base8);
+        mem_offset_to_ptr(&snapshot->page_table[page].read_ptr, base8);
+        mem_offset_to_ptr(&snapshot->page_table[page].write_ptr, base8);
     }
     for (size_t layer = 0; layer < MEM_NUM_LAYERS; layer++) {
         for (size_t page = 0; page < MEM_NUM_PAGES; page++) {
-            mem_offset_to_ptr(&mem->layers[layer][page].read_ptr, base8);
-            mem_offset_to_ptr(&mem->layers[layer][page].write_ptr, base8);
+            mem_offset_to_ptr(&snapshot->layers[layer][page].read_ptr, base8);
+            mem_offset_to_ptr(&snapshot->layers[layer][page].write_ptr, base8);
         }
     }
 }

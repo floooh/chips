@@ -1038,26 +1038,12 @@ chips_display_info_t cpc_display_info(cpc_t* sys) {
 uint32_t cpc_save_snapshot(cpc_t* sys, cpc_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    dst->debug.callback.func = 0;
-    dst->debug.callback.user_data = 0;
-    dst->debug.stopped = 0;
-    dst->audio.callback.func = 0;
-    dst->audio.callback.user_data = 0;
-    dst->psg.in_cb = 0;
-    dst->psg.out_cb = 0;
-    dst->psg.user_data = 0;
-    dst->fdc.seektrack_cb = 0;
-    dst->fdc.seeksector_cb = 0;
-    dst->fdc.read_cb = 0;
-    dst->fdc.trackinfo_cb = 0;
-    dst->fdc.driveinfo_cb = 0;
-    dst->fdc.user_data = 0;
-    dst->ga.bankswitch_cb = 0;
-    dst->ga.cclk_cb = 0;
-    dst->ga.user_data = 0;
-    dst->ga.ram = 0;
-    dst->ga.fb = 0;
-    mem_pointers_to_offsets(&dst->mem, sys);
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    ay38910_snapshot_onsave(&dst->psg);
+    upd765_snapshot_onsave(&dst->fdc);
+    am40010_snapshot_onsave(&dst->ga);
+    mem_snapshot_onsave(&dst->mem, sys);
     return CPC_SNAPSHOT_VERSION;
 }
 
@@ -1068,23 +1054,12 @@ bool cpc_load_snapshot(cpc_t* sys, uint32_t version, cpc_t* src) {
     }
     static cpc_t im;
     im = *src;
-    im.debug = sys->debug;
-    im.audio.callback = sys->audio.callback;
-    im.psg.in_cb = sys->psg.in_cb;
-    im.psg.out_cb = sys->psg.out_cb;
-    im.psg.user_data = sys->psg.user_data;
-    im.fdc.seektrack_cb = sys->fdc.seektrack_cb;
-    im.fdc.seeksector_cb = sys->fdc.seeksector_cb;
-    im.fdc.read_cb = sys->fdc.read_cb;
-    im.fdc.trackinfo_cb = sys->fdc.trackinfo_cb;
-    im.fdc.driveinfo_cb = sys->fdc.driveinfo_cb;
-    im.fdc.user_data = sys->fdc.user_data;
-    im.ga.bankswitch_cb = sys->ga.bankswitch_cb;
-    im.ga.cclk_cb = sys->ga.cclk_cb;
-    im.ga.user_data = sys->ga.user_data;
-    im.ga.ram = sys->ga.ram;
-    im.ga.fb = sys->ga.fb;
-    mem_offsets_to_pointers(&im.mem, sys);
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    ay38910_snapshot_onload(&im.psg, &sys->psg);
+    upd765_snapshot_onload(&im.fdc, &sys->fdc);
+    am40010_snapshot_onload(&im.ga, &sys->ga);
+    mem_snapshot_onload(&im.mem, sys);
     *sys = im;
     return true;
 }

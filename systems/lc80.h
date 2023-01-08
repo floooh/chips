@@ -626,11 +626,8 @@ void lc80_key(lc80_t* sys, int key_code) {
 uint32_t lc80_save_snapshot(lc80_t* sys, lc80_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    dst->debug.callback.func = 0;
-    dst->debug.callback.user_data = 0;
-    dst->debug.stopped = 0;
-    dst->audio.callback.func = 0;
-    dst->audio.callback.user_data = 0;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
     return LC80_SNAPSHOT_VERSION;
 }
 
@@ -641,8 +638,8 @@ bool lc80_load_snapshot(lc80_t* sys, uint32_t version, lc80_t* src) {
     }
     static lc80_t im;
     im = *src;
-    im.debug = sys->debug;
-    im.audio.callback = sys->audio.callback;
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
     *sys = im;
     return true;
 }

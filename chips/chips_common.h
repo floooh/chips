@@ -75,6 +75,42 @@ typedef struct {
     float volume;
 } chips_audio_desc_t;
 
+// prepare chips_audio_t snapshot for saving
+void chips_audio_callback_snapshot_onsave(chips_audio_callback_t* snapshot);
+// fixup chips_audio_t snapshot after loading
+void chips_audio_callback_snapshot_onload(chips_audio_callback_t* snapshot, chips_audio_callback_t* sys);
+// prepare chips_debut_t snapshot for saving
+void chips_debug_snapshot_onsave(chips_debug_t* snapshot);
+// fixup chips_debug_t snapshot after loading
+void chips_debug_snapshot_onload(chips_debug_t* snapshot, chips_debug_t* sys);
+
 #ifdef __cplusplus
-}
+} // extern "C"
 #endif
+
+/*--- IMPLEMENTATION ---------------------------------------------------------*/
+#ifdef CHIPS_IMPL
+
+void chips_audio_callback_snapshot_onsave(chips_audio_callback_t* snapshot) {
+    snapshot->func = 0;
+    snapshot->user_data = 0;
+}
+
+void chips_audio_callback_snapshot_onload(chips_audio_callback_t* snapshot, chips_audio_callback_t* sys) {
+    snapshot->func = sys->func;
+    snapshot->user_data = sys->user_data;
+}
+
+void chips_debug_snapshot_onsave(chips_debug_t* snapshot) {
+    snapshot->callback.func = 0;
+    snapshot->callback.user_data = 0;
+    snapshot->stopped = 0;
+}
+
+void chips_debug_snapshot_onload(chips_debug_t* snapshot, chips_debug_t* sys) {
+    snapshot->callback.func = sys->callback.func;
+    snapshot->callback.user_data = sys->callback.user_data;
+    snapshot->stopped = sys->stopped;
+}
+
+#endif // CHIPS_IMPL

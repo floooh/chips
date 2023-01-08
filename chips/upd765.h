@@ -257,6 +257,10 @@ void upd765_init(upd765_t* upd, const upd765_desc_t* desc);
 void upd765_reset(upd765_t* upd);
 /* perform an IO request on the upd765 */
 uint64_t upd765_iorq(upd765_t* upd, uint64_t pins);
+// prepare upd765_t snapshot for saving
+void upd765_snapshot_onsave(upd765_t* snapshot);
+// fixup upd765_t snapshot after loading
+void upd765_snapshot_onload(upd765_t* snapshot, upd765_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -686,5 +690,25 @@ uint64_t upd765_iorq(upd765_t* upd, uint64_t pins) {
         upd->pins = pins;
     }
     return pins;
+}
+
+void upd765_snapshot_onsave(upd765_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->seektrack_cb = 0;
+    snapshot->seeksector_cb = 0;
+    snapshot->read_cb = 0;
+    snapshot->trackinfo_cb = 0;
+    snapshot->driveinfo_cb = 0;
+    snapshot->user_data = 0;
+}
+
+void upd765_snapshot_onload(upd765_t* snapshot, upd765_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->seektrack_cb = sys->seektrack_cb;
+    snapshot->seeksector_cb = sys->seeksector_cb;
+    snapshot->read_cb = sys->read_cb;
+    snapshot->trackinfo_cb = sys->trackinfo_cb;
+    snapshot->driveinfo_cb = sys->driveinfo_cb;
+    snapshot->user_data = sys->user_data;
 }
 #endif /* CHIPS_IMPL */

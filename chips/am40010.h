@@ -285,6 +285,11 @@ void am40010_iorq(am40010_t* ga, uint64_t cpu_pins);
 */
 uint64_t am40010_tick(am40010_t* ga, uint64_t cpu_pins);
 
+// prepare am40010_t snapshot before saving
+void am40010_snapshot_onsave(am40010_t* snapshot);
+// fixup am40010_t snapshot after loading
+void am40010_snapshot_onload(am40010_t* snapshot, am40010_t* sys);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
@@ -923,4 +928,23 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t pins) {
     ga->pins = pins | ((AM40010_DE|AM40010_HS|AM40010_VS) & ga->crtc_pins);
     return pins;
 }
+
+void am40010_snapshot_onsave(am40010_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->bankswitch_cb = 0;
+    snapshot->cclk_cb = 0;
+    snapshot->user_data = 0;
+    snapshot->ram = 0;
+    snapshot->fb = 0;
+}
+
+void am40010_snapshot_onload(am40010_t* snapshot, am40010_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->bankswitch_cb = sys->bankswitch_cb;
+    snapshot->cclk_cb = sys->cclk_cb;
+    snapshot->user_data = sys->user_data;
+    snapshot->ram = sys->ram;
+    snapshot->fb = sys->fb;
+}
+
 #endif // CHIPS_IMPL

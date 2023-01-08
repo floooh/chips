@@ -292,6 +292,10 @@ bool ay38910_tick(ay38910_t* ay);
 // helper functions to directly write register values and update dependent state, not intended for regular operation!
 void ay38910_set_register(ay38910_t* ay, uint8_t addr, uint8_t data);
 void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr);
+// prepare ay38910_t snapshot for saving
+void ay38910_snapshot_onsave(ay38910_t* snapshot);
+// fixup ay38910_t snapshot after loading
+void ay38910_snapshot_onload(ay38910_t* snapshot, ay38910_t* sys);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -652,4 +656,17 @@ void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr) {
     ay->addr = addr;
 }
 
+void ay38910_snapshot_onsave(ay38910_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->in_cb = 0;
+    snapshot->out_cb = 0;
+    snapshot->user_data = 0;
+}
+
+void ay38910_snapshot_onload(ay38910_t* snapshot, ay38910_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->in_cb = sys->in_cb;
+    snapshot->out_cb = sys->out_cb;
+    snapshot->user_data = sys->user_data;
+}
 #endif /* CHIPS_IMPL */
