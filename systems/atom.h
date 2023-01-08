@@ -729,18 +729,11 @@ chips_display_info_t atom_display_info(atom_t* sys) {
 uint32_t atom_save_snapshot(atom_t* sys, atom_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    dst->debug.callback.func = 0;
-    dst->debug.callback.user_data = 0;
-    dst->debug.stopped = 0;
-    dst->audio.callback.func = 0;
-    dst->audio.callback.user_data = 0;
-    dst->cpu.in_cb = 0;
-    dst->cpu.out_cb = 0;
-    dst->cpu.user_data = 0;
-    dst->vdg.fetch_cb = 0;
-    dst->vdg.user_data = 0;
-    dst->vdg.fb = 0;
-    mem_pointers_to_offsets(&dst->mem, sys);
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    m6502_snapshot_onsave(&dst->cpu);
+    mc6847_snapshot_onsave(&dst->vdg);
+    mem_snapshot_onsave(&dst->mem, sys);
     return ATOM_SNAPSHOT_VERSION;
 }
 
@@ -751,15 +744,11 @@ bool atom_load_snapshot(atom_t* sys, uint32_t version, atom_t* src) {
     }
     static atom_t im;
     im = *src;
-    im.debug = sys->debug;
-    im.audio.callback = sys->audio.callback;
-    im.cpu.in_cb = sys->cpu.in_cb;
-    im.cpu.out_cb = sys->cpu.out_cb;
-    im.cpu.user_data = sys->cpu.user_data;
-    im.vdg.fetch_cb = sys->vdg.fetch_cb;
-    im.vdg.user_data = sys->vdg.user_data;
-    im.vdg.fb = sys->vdg.fb;
-    mem_offsets_to_pointers(&im.mem, sys);
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    m6502_snapshot_onload(&im.cpu, &sys->cpu);
+    mc6847_snapshot_onload(&im.vdg, &sys->vdg);
+    mem_snapshot_onload(&im.mem, sys);
     *sys = im;
     return true;
 }

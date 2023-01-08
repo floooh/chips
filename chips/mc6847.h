@@ -294,6 +294,10 @@ void mc6847_init(mc6847_t* vdg, const mc6847_desc_t* desc);
 void mc6847_reset(mc6847_t* vdg);
 // tick the mc6847_t instance, this will call the fetch_cb and generate the image
 uint64_t mc6847_tick(mc6847_t* vdg, uint64_t pins);
+// prepare mc6847_t snapshot for saving
+void mc6847_snapshot_onsave(mc6847_t* snapshot);
+// fixup mc6847_t snapshot after loading
+void mc6847_snapshot_onload(mc6847_t* snapshot, mc6847_t* sys);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -667,6 +671,20 @@ uint64_t mc6847_tick(mc6847_t* vdg, uint64_t pins) {
     }
     vdg->pins = pins;
     return pins;
+}
+
+void mc6847_snapshot_onsave(mc6847_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->fetch_cb = 0;
+    snapshot->user_data = 0;
+    snapshot->fb = 0;
+}
+
+void mc6847_snapshot_onload(mc6847_t* snapshot, mc6847_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->fetch_cb = sys->fetch_cb;
+    snapshot->user_data = sys->user_data;
+    snapshot->fb = sys->fb;
 }
 
 # endif // CHIPS_IMPL

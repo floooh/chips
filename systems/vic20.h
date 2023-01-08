@@ -832,21 +832,14 @@ chips_display_info_t vic20_display_info(vic20_t* sys) {
 uint32_t vic20_save_snapshot(vic20_t* sys, vic20_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    dst->debug.callback.func = 0;
-    dst->debug.callback.user_data = 0;
-    dst->debug.stopped = 0;
-    dst->audio.callback.func = 0;
-    dst->audio.callback.user_data = 0;
-    dst->cpu.in_cb = 0;
-    dst->cpu.out_cb = 0;
-    dst->cpu.user_data = 0;
-    dst->vic.fetch_cb = 0;
-    dst->vic.user_data = 0;
-    dst->vic.crt.fb = 0;
-    dst->c1530.cas_port = 0;
-    mem_pointers_to_offsets(&dst->mem_cpu, sys);
-    mem_pointers_to_offsets(&dst->mem_vic, sys);
-    mem_pointers_to_offsets(&dst->mem_cart, sys);
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    m6502_snapshot_onsave(&dst->cpu);
+    m6561_snapshot_onsave(&dst->vic);
+    c1530_snapshot_onsave(&dst->c1530);
+    mem_snapshot_onsave(&dst->mem_cpu, sys);
+    mem_snapshot_onsave(&dst->mem_vic, sys);
+    mem_snapshot_onsave(&dst->mem_cart, sys);
     return VIC20_SNAPSHOT_VERSION;
 }
 
@@ -857,18 +850,14 @@ bool vic20_load_snapshot(vic20_t* sys, uint32_t version, vic20_t* src) {
     }
     static vic20_t im;
     im = *src;
-    im.debug = sys->debug;
-    im.audio.callback = sys->audio.callback;
-    im.cpu.in_cb = sys->cpu.in_cb;
-    im.cpu.out_cb = sys->cpu.out_cb;
-    im.cpu.user_data = sys->cpu.user_data;
-    im.vic.fetch_cb = sys->vic.fetch_cb;
-    im.vic.user_data = sys->vic.user_data;
-    im.vic.crt.fb = sys->vic.crt.fb;
-    im.c1530.cas_port = sys->c1530.cas_port;
-    mem_offsets_to_pointers(&im.mem_cpu, sys);
-    mem_offsets_to_pointers(&im.mem_vic, sys);
-    mem_offsets_to_pointers(&im.mem_cart, sys);
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    m6502_snapshot_onload(&im.cpu, &sys->cpu);
+    m6561_snapshot_onload(&im.vic, &sys->vic);
+    c1530_snapshot_onload(&im.c1530, &sys->c1530);
+    mem_snapshot_onload(&im.mem_cpu, sys);
+    mem_snapshot_onload(&im.mem_vic, sys);
+    mem_snapshot_onload(&im.mem_cart, sys);
     *sys = im;
     return true;
 }

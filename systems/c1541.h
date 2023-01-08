@@ -96,6 +96,10 @@ void c1541_tick(c1541_t* sys);
 void c1541_insert_disc(c1541_t* sys, chips_range_t data);
 // remove current disc
 void c1541_remove_disc(c1541_t* sys);
+// prepare a c1541_t snapshot for saving
+void c1541_snapshot_onsave(c1541_t* snapshot, void* base);
+// prepare a c1541_t snapshot for loading
+void c1541_snapshot_onload(c1541_t* snapshot, c1541_t* sys, void* base);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -171,6 +175,20 @@ void c1541_insert_disc(c1541_t* sys, chips_range_t data) {
 void c1541_remove_disc(c1541_t* sys) {
     // FIXME
     (void)sys;
+}
+
+void c1541_snapshot_onsave(c1541_t* snapshot, void* base) {
+    CHIPS_ASSERT(snapshot && base);
+    snapshot->iec = 0;
+    m6502_snapshot_onsave(&snapshot->cpu);
+    mem_snapshot_onsave(&snapshot->mem, base);
+}
+
+void c1541_snapshot_onload(c1541_t* snapshot, c1541_t* sys, void* base) {
+    CHIPS_ASSERT(snapshot && sys && base);
+    snapshot->iec = sys->iec;
+    m6502_snapshot_onload(&snapshot->cpu, &sys->cpu);
+    mem_snapshot_onload(&snapshot->mem, base);
 }
 
 #endif // CHIPS_IMPL

@@ -138,6 +138,10 @@ void c1530_play(c1530_t* sys);
 void c1530_stop(c1530_t* sys);
 /* return true if tape motor is on */
 bool c1530_is_motor_on(c1530_t* sys);
+// prepare c1530_t snapshot for saving
+void c1530_snapshot_onsave(c1530_t* snapshot);
+// fixup c1530_t snapshot after loading
+void c1530_snapshot_onload(c1530_t* snapshot, c1530_t* sys);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -263,6 +267,16 @@ void c1530_tick(c1530_t* sys) {
             sys->pulse_count--;
         }
     }
+}
+
+void c1530_snapshot_onsave(c1530_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->cas_port = 0;
+}
+
+void c1530_snapshot_onload(c1530_t* snapshot, c1530_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->cas_port = sys->cas_port;
 }
 
 #endif /* CHIPS_IMPL */

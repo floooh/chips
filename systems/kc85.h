@@ -1734,6 +1734,7 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src) {
     im = *src;
     chips_debug_snapshot_onload(&im.debug, &sys->debug);
     chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    im.patch_callback = sys->patch_callback;
     mem_snapshot_onload(&im.mem, sys);
     *sys = im;
     return true;

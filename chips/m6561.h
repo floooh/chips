@@ -244,6 +244,10 @@ chips_rect_t m6561_screen(m6561_t* vic);
 chips_range_t m6561_palette(void);
 // get 32-bit RGBA8 value from color index (0..15)
 uint32_t m6561_color(size_t i);
+// prepare m6561_t snapshot for saving
+void m6561_snapshot_onsave(m6561_t* snapshot);
+// fixup m6561_t snapshot after loading
+void m6561_snapshot_onload(m6561_t* snapshot, m6561_t* sys);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -661,5 +665,18 @@ uint64_t m6561_tick(m6561_t* vic, uint64_t pins) {
     return pins;
 }
 
+void m6561_snapshot_onsave(m6561_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->fetch_cb = 0;
+    snapshot->user_data = 0;
+    snapshot->crt.fb = 0;
+}
+
+void m6561_snapshot_onload(m6561_t* snapshot, m6561_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->fetch_cb = sys->fetch_cb;
+    snapshot->user_data = sys->user_data;
+    snapshot->crt.fb = sys->crt.fb;
+}
 
 #endif

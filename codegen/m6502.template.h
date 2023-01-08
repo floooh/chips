@@ -354,6 +354,10 @@ uint64_t m6502_init(m6502_t* cpu, const m6502_desc_t* desc);
 uint64_t m6502_tick(m6502_t* cpu, uint64_t pins);
 /* perform m6510 port IO (only call this if M6510_CHECK_IO(pins) is true) */
 uint64_t m6510_iorq(m6502_t* cpu, uint64_t pins);
+// prepare m6502_t snapshot for saving
+void m6502_snapshot_onsave(m6502_t* snapshot);
+// fixup m6502_t snapshot after loading
+void m6502_snapshot_onload(m6502_t* snapshot, m6502_t* sys);
 
 /* register access functions */
 void m6502_set_a(m6502_t* cpu, uint8_t v);
@@ -657,6 +661,20 @@ uint64_t m6510_iorq(m6502_t* c, uint64_t pins) {
         c->io_pins = (c->io_out & c->io_ddr) | (c->io_inp & ~c->io_ddr);
     }
     return pins;
+}
+
+void m6502_snapshot_onsave(m6502_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->in_cb = 0;
+    snapshot->out_cb = 0;
+    snapshot->user_data = 0;
+}
+
+void m6502_snapshot_onload(m6502_t* snapshot, m6502_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->in_cb = sys->in_cb;
+    snapshot->out_cb = sys->out_cb;
+    snapshot->user_data = sys->user_data;
 }
 
 /* set 16-bit address in 64-bit pin mask */

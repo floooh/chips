@@ -1133,25 +1133,14 @@ chips_display_info_t c64_display_info(c64_t* sys) {
 uint32_t c64_save_snapshot(c64_t* sys, c64_t* dst) {
     CHIPS_ASSERT(sys && dst);
     *dst = *sys;
-    dst->debug.callback.func = 0;
-    dst->debug.callback.user_data = 0;
-    dst->debug.stopped = 0;
-    dst->audio.callback.func = 0;
-    dst->audio.callback.user_data = 0;
-    dst->cpu.in_cb = 0;
-    dst->cpu.out_cb = 0;
-    dst->cpu.user_data = 0;
-    dst->vic.mem.fetch_cb = 0;
-    dst->vic.mem.user_data = 0;
-    dst->vic.crt.fb = 0;
-    mem_pointers_to_offsets(&dst->mem_cpu, sys);
-    mem_pointers_to_offsets(&dst->mem_vic, sys);
-    dst->c1530.cas_port = 0;
-    dst->c1541.iec = 0;
-    dst->c1541.cpu.in_cb = 0;
-    dst->c1541.cpu.out_cb = 0;
-    dst->c1541.cpu.user_data = 0;
-    mem_pointers_to_offsets(&dst->c1541.mem, sys);
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    m6502_snapshot_onsave(&dst->cpu);
+    m6569_snapshot_onsave(&dst->vic);
+    mem_snapshot_onsave(&dst->mem_cpu, sys);
+    mem_snapshot_onsave(&dst->mem_vic, sys);
+    c1530_snapshot_onsave(&dst->c1530);
+    c1541_snapshot_onsave(&dst->c1541, sys);
     return C64_SNAPSHOT_VERSION;
 }
 
@@ -1162,22 +1151,14 @@ bool c64_load_snapshot(c64_t* sys, uint32_t version, c64_t* src) {
     }
     static c64_t im;
     im = *src;
-    im.debug = sys->debug;
-    im.audio.callback = sys->audio.callback;
-    im.cpu.in_cb = sys->cpu.in_cb;
-    im.cpu.out_cb = sys->cpu.out_cb;
-    im.cpu.user_data = sys->cpu.user_data;
-    im.vic.mem.fetch_cb = sys->vic.mem.fetch_cb;
-    im.vic.mem.user_data = sys->vic.mem.user_data;
-    im.vic.crt.fb = sys->vic.crt.fb;
-    mem_offsets_to_pointers(&im.mem_cpu, sys);
-    mem_offsets_to_pointers(&im.mem_vic, sys);
-    im.c1530.cas_port = sys->c1530.cas_port;
-    im.c1541.iec = sys->c1541.iec;
-    im.c1541.cpu.in_cb = sys->c1541.cpu.in_cb;
-    im.c1541.cpu.out_cb = sys->c1541.cpu.out_cb;
-    im.c1541.cpu.user_data = sys->c1541.cpu.user_data;
-    mem_offsets_to_pointers(&im.c1541.mem, sys);
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    m6502_snapshot_onload(&im.cpu, &sys->cpu);
+    m6569_snapshot_onload(&im.vic, &sys->vic);
+    mem_snapshot_onload(&im.mem_cpu, sys);
+    mem_snapshot_onload(&im.mem_vic, sys);
+    c1530_snapshot_onload(&im.c1530, &sys->c1530);
+    c1541_snapshot_onload(&im.c1541, &sys->c1541, sys);
     *sys = im;
     return true;
 }

@@ -320,6 +320,10 @@ chips_rect_t m6569_screen(m6569_t* vic);
 chips_range_t m6569_palette(void);
 // get 32-bit RGBA8 value from color index (0..15)
 uint32_t m6569_color(size_t i);
+// prepare m6569_t snapshot for saving
+void m6569_snapshot_onsave(m6569_t* snapshot);
+// fixup m6569_t snapshot after loading
+void m6569_snapshot_onload(m6569_t* snapshot, m6569_t* sys);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -1748,4 +1752,19 @@ uint32_t m6569_color(size_t i) {
     CHIPS_ASSERT(i < 16);
     return _m6569_colors[i];
 }
+
+void m6569_snapshot_onsave(m6569_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->mem.fetch_cb = 0;
+    snapshot->mem.user_data = 0;
+    snapshot->crt.fb = 0;
+}
+
+void m6569_snapshot_onload(m6569_t* snapshot, m6569_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->mem.fetch_cb = sys->mem.fetch_cb;
+    snapshot->mem.user_data = sys->mem.user_data;
+    snapshot->crt.fb = sys->crt.fb;
+}
+
 #endif // CHIPS_IMPL
