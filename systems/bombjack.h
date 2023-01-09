@@ -66,7 +66,7 @@ extern "C" {
 #define BOMBJACK_MAX_AUDIO_SAMPLES (1024)
 #define BOMBJACK_DEFAULT_AUDIO_SAMPLES (128)
 #define BOMBJACK_FRAMEBUFFER_WIDTH (256)
-#define BOMBJACK_FRAMEBUFFER_HEIGHT (256)
+#define BOMBJACK_FRAMEBUFFER_HEIGHT (288) // save space for sprites
 #define BOMBJACK_FRAMEBUFFER_SIZE_BYTES (BOMBJACK_FRAMEBUFFER_WIDTH * BOMBJACK_FRAMEBUFFER_HEIGHT * 4)
 #define BOMBJACK_DISPLAY_WIDTH (256)
 #define BOMBJACK_DISPLAY_HEIGHT (256)
@@ -742,7 +742,7 @@ static void _bombjack_decode_background(bombjack_t* sys) {
             uint8_t color_block = (attr & 0x0F)<<3;
             bool flip_y = (attr & 0x80) != 0;
             if (flip_y) {
-                ptr += 15*256;
+                ptr += 15*BOMBJACK_FRAMEBUFFER_WIDTH;
             }
             // every tile is 32 bytes
             size_t off = tile_code * 32;
@@ -761,15 +761,15 @@ static void _bombjack_decode_background(bombjack_t* sys) {
                 ptr += flip_y ? -272 : 240;
             }
             if (flip_y) {
-                ptr += 256 + 16;
+                ptr += BOMBJACK_FRAMEBUFFER_WIDTH + 16;
             }
             else {
-                ptr -= (16 * 256) - 16;
+                ptr -= (16 * BOMBJACK_FRAMEBUFFER_WIDTH) - 16;
             }
         }
-        ptr += (15 * 256);
+        ptr += (15 * BOMBJACK_FRAMEBUFFER_WIDTH);
     }
-    CHIPS_ASSERT(ptr == &sys->fb[BOMBJACK_FRAMEBUFFER_WIDTH * BOMBJACK_FRAMEBUFFER_HEIGHT]);
+    CHIPS_ASSERT(ptr == &sys->fb[BOMBJACK_FRAMEBUFFER_WIDTH * BOMBJACK_DISPLAY_HEIGHT]);
 }
 
 /* render foreground tiles
@@ -822,11 +822,11 @@ static void _bombjack_decode_foreground(bombjack_t* sys) {
                 }
                 ptr += 248;
             }
-            ptr -= (8 * 256) - 8;
+            ptr -= (8 * BOMBJACK_FRAMEBUFFER_WIDTH) - 8;
         }
-        ptr += (7 * 256);
+        ptr += (7 * BOMBJACK_FRAMEBUFFER_WIDTH);
     }
-    CHIPS_ASSERT(ptr == &sys->fb[BOMBJACK_FRAMEBUFFER_WIDTH * BOMBJACK_FRAMEBUFFER_HEIGHT]);
+    CHIPS_ASSERT(ptr == &sys->fb[BOMBJACK_FRAMEBUFFER_WIDTH * BOMBJACK_DISPLAY_HEIGHT]);
 }
 
 /*  render sprites
@@ -869,8 +869,8 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
         uint8_t sprite_code = b0 & 0x7F;
         if (b0 & 0x80) {
             // 32x32 'large' sprites (no flip-x/y needed)
-            uint8_t py = 224 - b2;
-            uint32_t* ptr = dst + py*256 + px;
+            uint8_t py = 225 - b2;
+            uint32_t* ptr = dst + py*BOMBJACK_FRAMEBUFFER_WIDTH + px;
             // offset into sprite ROM to gather sprite bitmap pixels
             size_t off = sprite_code * 128;
             for (size_t y = 0; y < 32; y++) {
@@ -897,12 +897,12 @@ static void _bombjack_decode_sprites(bombjack_t* sys) {
         }
         else {
             // 16*16 sprites are decoded like 16x16 background tiles
-            uint8_t py = 240 - b2;
-            uint32_t* ptr = dst + py*256 + px;
+            uint8_t py = 241 - b2;
+            uint32_t* ptr = dst + py*BOMBJACK_FRAMEBUFFER_WIDTH + px;
             bool flip_x = (b1 & 0x80) != 0;
             bool flip_y = (b1 & 0x40) != 0;
             if (flip_x) {
-                ptr += 16*256;
+                ptr += 16*BOMBJACK_FRAMEBUFFER_WIDTH;
             }
             // offset into sprite ROM to gather sprite bitmap pixels
             size_t off = sprite_code * 32;
@@ -946,7 +946,7 @@ static void _bombjack_decode_video(bombjack_t* sys) {
     }
     else {
         if (sys->dbg.clear_background_layer) {
-            for (size_t i = 0; i < BOMBJACK_FRAMEBUFFER_WIDTH*BOMBJACK_FRAMEBUFFER_HEIGHT; i++) {
+            for (size_t i = 0; i < BOMBJACK_FRAMEBUFFER_WIDTH*BOMBJACK_DISPLAY_HEIGHT; i++) {
                 sys->fb[i] = 0xFF000000;
             }
         }
