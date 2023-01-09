@@ -118,7 +118,7 @@ void ui_snapshot_init(ui_snapshot_t* state, const ui_snapshot_desc_t* desc) {
 
 static bool ui_snapshot_draw_menu_slot(const char* sel_id, ui_snapshot_screenshot_t screenshot) {
     const ImVec2 pos = ImGui::GetCursorPos();
-    const ImVec2 size = screenshot.portrait ? (ImVec2){ 96.0f, 128.0f, } : (ImVec2){ 128.0f, 96.0f };
+    const ImVec2 size = screenshot.portrait ? ImVec2{ 96.0f, 128.0f } : ImVec2{ 128.0f, 96.0f };
     bool pressed = ImGui::Selectable(sel_id, false, 0, size);
     ImGui::SetCursorPos(pos);
     ImGui::Image(screenshot.texture, size);
