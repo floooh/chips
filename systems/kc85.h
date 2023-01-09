@@ -278,7 +278,7 @@ extern "C" {
 #define KC85_SNAPSHOT_VERSION (KC85_TYPE_ID | 0x0002)
 
 #define KC85_MAX_AUDIO_SAMPLES (1024U)      // max number of audio samples in internal sample buffer
-#define KC85_DEFAULT_AUDIO_SAMPLES (128U)   // default number of samples in internal sample buffer
+#define KC85_DEFAULT_AUDIO_SAMPLES (128)    // default number of samples in internal sample buffer
 #define KC85_EXP_NUM_SLOTS (2U)             // 2 expansion slots in main unit, each needs one mem_t layer!
 #define KC85_EXP_BUFSIZE (KC85_EXP_NUM_SLOTS*64U*1024U) // expansion system buffer size (64 KB per slot)
 

@@ -257,7 +257,7 @@ static void _mem_update_page_table(mem_t* m, size_t page_index) {
 
 static void _mem_map(mem_t* m, size_t layer, uint16_t addr, uint32_t size, const uint8_t* read_ptr, uint8_t* write_ptr) {
     CHIPS_ASSERT(m);
-    CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
+    CHIPS_ASSERT(layer < MEM_NUM_LAYERS);
     CHIPS_ASSERT((addr & MEM_PAGE_MASK) == 0);
     CHIPS_ASSERT((size & MEM_PAGE_MASK) == 0);
     CHIPS_ASSERT(size <= MEM_ADDR_RANGE);
@@ -297,7 +297,7 @@ void mem_map_rw(mem_t* m, size_t layer, uint16_t addr, uint32_t size, const uint
 
 void mem_unmap_layer(mem_t* m, size_t layer) {
     CHIPS_ASSERT(m);
-    CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
+    CHIPS_ASSERT(layer < MEM_NUM_LAYERS);
     for (size_t page_index = 0; page_index < MEM_NUM_PAGES; page_index++) {
         mem_page_t* page = &m->layers[layer][page_index];
         page->read_ptr = 0;
@@ -331,7 +331,7 @@ void mem_write_range(mem_t* m, uint16_t addr, const uint8_t* src, uint32_t num_b
 }
 
 uint8_t mem_layer_rd(mem_t* mem, size_t layer, uint16_t addr) {
-    CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
+    CHIPS_ASSERT(layer < MEM_NUM_LAYERS);
     if (mem->layers[layer][addr>>MEM_PAGE_SHIFT].read_ptr) {
         return mem->layers[layer][addr>>MEM_PAGE_SHIFT].read_ptr[addr&MEM_PAGE_MASK];
     }
@@ -341,7 +341,7 @@ uint8_t mem_layer_rd(mem_t* mem, size_t layer, uint16_t addr) {
 }
 
 void mem_layer_wr(mem_t* mem, size_t layer, uint16_t addr, uint8_t data) {
-    CHIPS_ASSERT((layer >= 0) && (layer < MEM_NUM_LAYERS));
+    CHIPS_ASSERT(layer < MEM_NUM_LAYERS);
     if (mem->layers[layer][addr>>MEM_PAGE_SHIFT].write_ptr) {
         mem->layers[layer][addr>>MEM_PAGE_SHIFT].write_ptr[addr&MEM_PAGE_MASK] = data;
     }
