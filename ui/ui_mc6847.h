@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -47,7 +47,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -123,7 +123,7 @@ static void _ui_mc6847_draw_hwcolors(ui_mc6847_t* win) {
     ImVec4 c;
     const ImVec2 size(18,18);
     for (int i = 0; i < 8; i++) {
-        c = ImColor(win->mc6847->palette[i]);
+        c = ImColor(win->mc6847->hwcolors[i]);
         ImGui::PushID(i);
         ImGui::ColorButton("##gm_color", c, ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
@@ -133,10 +133,10 @@ static void _ui_mc6847_draw_hwcolors(ui_mc6847_t* win) {
     }
     ImGui::Separator();
     ImGui::Text("Text Mode Colors:");
-    ImVec4 tm_green       = ImColor(win->mc6847->alnum_green);
-    ImVec4 tm_dark_green  = ImColor(win->mc6847->alnum_dark_green);
-    ImVec4 tm_orange      = ImColor(win->mc6847->alnum_orange);
-    ImVec4 tm_dark_orange = ImColor(win->mc6847->alnum_dark_orange);
+    ImVec4 tm_green       = ImColor(win->mc6847->hwcolors[MC6847_HWCOLOR_ALNUM_GREEN]);
+    ImVec4 tm_dark_green  = ImColor(win->mc6847->hwcolors[MC6847_HWCOLOR_ALNUM_DARK_GREEN]);
+    ImVec4 tm_orange      = ImColor(win->mc6847->hwcolors[MC6847_HWCOLOR_ALNUM_ORANGE]);
+    ImVec4 tm_dark_orange = ImColor(win->mc6847->hwcolors[MC6847_HWCOLOR_ALNUM_DARK_ORANGE]);
     ImGui::ColorButton("##tm_green", tm_green, ImGuiColorEditFlags_NoAlpha, size); ImGui::SameLine();
     ImGui::ColorButton("##tm_dark_green", tm_dark_green, ImGuiColorEditFlags_NoAlpha, size); ImGui::SameLine();
     ImGui::ColorButton("##tm_orange", tm_orange, ImGuiColorEditFlags_NoAlpha, size); ImGui::SameLine();

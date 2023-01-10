@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -20,6 +20,7 @@
 
     You need to include the following headers before including c64.h:
 
+    - chips/chips_common.h
     - chips/m6502.h
     - chips/m6526.h
     - chips/m6569.h
@@ -40,7 +41,7 @@
     - floppy disc support
 
     ## Tests Status
-    
+
     In chips-test/tests/testsuite-2.15/bin
 
         branchwrap:     ok
@@ -70,7 +71,7 @@
         trap1..17:      ok
 
     In chips-test/tests/vice-tests/CIA:
-    
+
     ciavarious:
         - all green, expect cia15.prg, which tests the CIA TOD clock,
           which isn't implemented
@@ -206,7 +207,7 @@
     phi1timing:                 FAIL
 
     rasterirq:                  FAIL (reference image doesn't match)
-    
+
     screenpos:                  FAIL (reference image doesn't match)
 
     split-tests:
@@ -239,15 +240,19 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// bump snapshot version when c64_t memory layout changes
+#define C64_SNAPSHOT_VERSION (1)
 
 #define C64_FREQUENCY (985248)              // clock frequency in Hz
 #define C64_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
@@ -314,57 +319,22 @@ typedef enum {
 #define C64_KEY_F7       (0xF7)     // F7
 #define C64_KEY_F8       (0xF8)     // F8
 
-// audio sample callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} c64_audio_callback_t;
-
-// debugging hook definitions
-typedef void (*c64_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        c64_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} c64_debug_t;
-
-typedef struct {
-    const void* ptr;
-    size_t size;
-} c64_rom_image_t;
-
 // config parameters for c64_init()
 typedef struct {
     bool c1530_enabled;     // true to enable the C1530 datassette emulation
     bool c1541_enabled;     // true to enable the C1541 floppy drive emulation
     c64_joystick_type_t joystick_type;  // default is C64_JOYSTICK_NONE
-    c64_debug_t debug;      // optional debugging hook
-
-    // video output config (if you don't want video decoding, set these to 0)
-    struct {
-        void* ptr;          // pointer to a linear RGBA8 pixel buffer, at least 512*312*4 bytes, or ask c64_max_display_size()
-        size_t size;        // size of pixel buffer in bytes
-    } pixel_buffer;
-
-    // audio output config (to disable audio output, set audio.callback.func to zero)
-    struct {
-        c64_audio_callback_t callback;  // called when audio_num_samples are ready
-        int num_samples;                // output sample buffer size, default is C64_DEFAULT_AUDIO_SAMPLES
-        int sample_rate;                // playback sample rate, default is 44100
-        float volume;                   // audio volume: 0.0..1.0, default is 1.0
-    } audio;
-
+    chips_debug_t debug;    // optional debugging hook
+    chips_audio_desc_t audio;   // audio output options
     // ROM images
     struct {
-        c64_rom_image_t chars;     // 4 KByte character ROM dump
-        c64_rom_image_t basic;     // 8 KByte BASIC dump
-        c64_rom_image_t kernal;    // 8 KByte KERNAL dump
+        chips_range_t chars;     // 4 KByte character ROM dump
+        chips_range_t basic;     // 8 KByte BASIC dump
+        chips_range_t kernal;    // 8 KByte KERNAL dump
         // optional C1514 ROM images
         struct {
-            c1541_rom_image_t c000_dfff;
-            c1541_rom_image_t e000_ffff;
+            chips_range_t c000_dfff;
+            chips_range_t e000_ffff;
         } c1541;
     } roms;
 } c64_desc_t;
@@ -393,11 +363,10 @@ typedef struct {
     mem_t mem_cpu;              // CPU-visible memory mapping
     mem_t mem_vic;              // VIC-visible memory mapping
     bool valid;
-    c64_debug_t debug;
+    chips_debug_t debug;
 
-    uint32_t* pixel_buffer;
     struct {
-        c64_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[C64_MAX_AUDIO_SAMPLES];
@@ -408,6 +377,7 @@ typedef struct {
     uint8_t rom_char[0x1000];       // 4 KB character ROM image
     uint8_t rom_basic[0x2000];      // 8 KB BASIC ROM image
     uint8_t rom_kernal[0x2000];     // 8 KB KERNAL V3 ROM image
+    alignas(64) uint8_t fb[M6569_FRAMEBUFFER_SIZE_BYTES];
 
     c1530_t c1530;      // optional datassette
     c1541_t c1541;      // optional floppy drive
@@ -419,6 +389,8 @@ void c64_init(c64_t* sys, const c64_desc_t* desc);
 void c64_discard(c64_t* sys);
 // reset a C64 instance
 void c64_reset(c64_t* sys);
+// get framebuffer and display attributes
+chips_display_info_t c64_display_info(c64_t* sys);
 // tick C64 instance for a given number of microseconds, return number of ticks executed
 uint32_t c64_exec(c64_t* sys, uint32_t micro_seconds);
 // send a key-down event to the C64
@@ -432,9 +404,9 @@ c64_joystick_type_t c64_joystick_type(c64_t* sys);
 // set joystick mask (combination of C64_JOYSTICK_*)
 void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask);
 // quickload a .bin/.prg file
-bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes);
+bool c64_quickload(c64_t* sys, chips_range_t data);
 // insert tape as .TAP file (c1530 must be enabled)
-bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes);
+bool c64_insert_tape(c64_t* sys, chips_range_t data);
 // remove tape file
 void c64_remove_tape(c64_t* sys);
 // return true if a tape is currently inserted
@@ -445,14 +417,10 @@ void c64_tape_play(c64_t* sys);
 void c64_tape_stop(c64_t* sys);
 // return true if tape motor is on
 bool c64_is_tape_motor_on(c64_t* sys);
-// get the standard framebuffer width and height in pixels
-int c64_std_display_width(void);
-int c64_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-size_t c64_max_display_size(void);
-// get the current framebuffer width and height in pixels
-int c64_display_width(c64_t* sys);
-int c64_display_height(c64_t* sys);
+// save a snapshot, patches pointers to zero and offsets, returns snapshot version
+uint32_t c64_save_snapshot(c64_t* sys, c64_t* dst);
+// load a snapshot, returns false if snapshot versions don't match
+bool c64_load_snapshot(c64_t* sys, uint32_t version, c64_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -466,13 +434,10 @@ int c64_display_height(c64_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _C64_STD_DISPLAY_WIDTH (392)
-#define _C64_STD_DISPLAY_HEIGHT (272)
-#define _C64_DBG_DISPLAY_WIDTH ((_M6569_HTOTAL+1)*8)
-#define _C64_DBG_DISPLAY_HEIGHT (_M6569_VTOTAL+1)
-#define _C64_DISPLAY_SIZE (_C64_DBG_DISPLAY_WIDTH*_C64_DBG_DISPLAY_HEIGHT*4)
-#define _C64_DISPLAY_X (64)
-#define _C64_DISPLAY_Y (24)
+#define _C64_SCREEN_WIDTH (392)
+#define _C64_SCREEN_HEIGHT (272)
+#define _C64_SCREEN_X (64)
+#define _C64_SCREEN_Y (24)
 
 static uint8_t _c64_cpu_port_in(void* user_data);
 static void _c64_cpu_port_out(uint8_t data, void* user_data);
@@ -485,12 +450,7 @@ static void _c64_init_memory_map(c64_t* sys);
 
 void c64_init(c64_t* sys, const c64_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    if (desc->pixel_buffer.ptr) {
-        CHIPS_ASSERT(desc->pixel_buffer.size >= c64_max_display_size());
-    }
-    if (desc->debug.callback.func) {
-        CHIPS_ASSERT(desc->debug.stopped);
-    }
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(c64_t));
     sys->valid = true;
@@ -522,12 +482,16 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     m6526_init(&sys->cia_2);
     m6569_init(&sys->vic, &(m6569_desc_t){
         .fetch_cb = _c64_vic_fetch,
-        .rgba8_buffer = (uint32_t*) desc->pixel_buffer.ptr,
-        .rgba8_buffer_size = desc->pixel_buffer.size,
-        .vis_x = _C64_DISPLAY_X,
-        .vis_y = _C64_DISPLAY_Y,
-        .vis_w = _C64_STD_DISPLAY_WIDTH,
-        .vis_h = _C64_STD_DISPLAY_HEIGHT,
+        .framebuffer = {
+            .ptr = sys->fb,
+            .size = sizeof(sys->fb),
+        },
+        .screen = {
+            .x = _C64_SCREEN_X,
+            .y = _C64_SCREEN_Y,
+            .width = _C64_SCREEN_WIDTH,
+            .height = _C64_SCREEN_HEIGHT,
+        },
         .user_data = sys,
     });
     m6581_init(&sys->sid, &(m6581_desc_t){
@@ -881,12 +845,12 @@ static void _c64_init_memory_map(c64_t* sys) {
         this is important at least for the value of the 'ghost byte' at 0x3FFF,
         which is 0xFF
     */
-    int i;
+    size_t i;
     for (i = 0; i < (1<<16);) {
-        for (int j = 0; j < 64; j++, i++) {
+        for (size_t j = 0; j < 64; j++, i++) {
             sys->ram[i] = 0x00;
         }
-        for (int j = 0; j < 64; j++, i++) {
+        for (size_t j = 0; j < 64; j++, i++) {
             sys->ram[i] = 0xFF;
         }
     }
@@ -1082,14 +1046,15 @@ void c64_joystick(c64_t* sys, uint8_t joy1_mask, uint8_t joy2_mask) {
     sys->joy_joy2_mask = joy2_mask;
 }
 
-bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid);
-    if (num_bytes < 2) {
+bool c64_quickload(c64_t* sys, chips_range_t data) {
+    CHIPS_ASSERT(sys && sys->valid && data.ptr);
+    if (data.size < 2) {
         return false;
     }
+    const uint8_t* ptr = (uint8_t*)data.ptr;
     const uint16_t start_addr = ptr[1]<<8 | ptr[0];
     ptr += 2;
-    const uint16_t end_addr = start_addr + (num_bytes - 2);
+    const uint16_t end_addr = start_addr + (data.size - 2);
     uint16_t addr = start_addr;
     while (addr < end_addr) {
         mem_wr(&sys->mem_cpu, addr++, *ptr++);
@@ -1105,9 +1070,9 @@ bool c64_quickload(c64_t* sys, const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-bool c64_insert_tape(c64_t* sys, const uint8_t* ptr, int num_bytes) {
+bool c64_insert_tape(c64_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
-    return c1530_insert_tape(&sys->c1530, ptr, num_bytes);
+    return c1530_insert_tape(&sys->c1530, data);
 }
 
 void c64_remove_tape(c64_t* sys) {
@@ -1135,26 +1100,67 @@ bool c64_is_tape_motor_on(c64_t* sys) {
     return c1530_is_motor_on(&sys->c1530);
 }
 
-int c64_std_display_width(void) {
-    return _C64_STD_DISPLAY_WIDTH;
+chips_display_info_t c64_display_info(c64_t* sys) {
+    chips_display_info_t res = {
+        .frame = {
+            .dim = {
+                .width = M6569_FRAMEBUFFER_WIDTH,
+                .height = M6569_FRAMEBUFFER_HEIGHT,
+            },
+            .bytes_per_pixel = 1,
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = M6569_FRAMEBUFFER_SIZE_BYTES,
+            }
+        },
+        .palette = m6569_dbg_palette(),
+    };
+    if (sys) {
+        res.screen = m6569_screen(&sys->vic);
+    }
+    else {
+        res.screen = (chips_rect_t){
+            .x = 0,
+            .y = 0,
+            .width = _C64_SCREEN_WIDTH,
+            .height = _C64_SCREEN_HEIGHT
+        };
+    };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    return res;
 }
 
-int c64_std_display_height(void) {
-    return _C64_STD_DISPLAY_HEIGHT;
+uint32_t c64_save_snapshot(c64_t* sys, c64_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    m6502_snapshot_onsave(&dst->cpu);
+    m6569_snapshot_onsave(&dst->vic);
+    mem_snapshot_onsave(&dst->mem_cpu, sys);
+    mem_snapshot_onsave(&dst->mem_vic, sys);
+    c1530_snapshot_onsave(&dst->c1530);
+    c1541_snapshot_onsave(&dst->c1541, sys);
+    return C64_SNAPSHOT_VERSION;
 }
 
-size_t c64_max_display_size(void) {
-    return _C64_DISPLAY_SIZE;
-}
-
-int c64_display_width(c64_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return m6569_display_width(&sys->vic);
-}
-
-int c64_display_height(c64_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return m6569_display_height(&sys->vic);
+bool c64_load_snapshot(c64_t* sys, uint32_t version, c64_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != C64_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static c64_t im;
+    im = *src;
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    m6502_snapshot_onload(&im.cpu, &sys->cpu);
+    m6569_snapshot_onload(&im.vic, &sys->vic);
+    mem_snapshot_onload(&im.mem_cpu, sys);
+    mem_snapshot_onload(&im.mem_vic, sys);
+    c1530_snapshot_onload(&im.c1530, &sys->c1530);
+    c1541_snapshot_onload(&im.c1541, &sys->c1541, sys);
+    *sys = im;
+    return true;
 }
 
 #endif /* CHIPS_IMPL */

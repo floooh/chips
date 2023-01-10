@@ -4,11 +4,11 @@
 
     Do this:
         #define CHIPS_IMPL
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provde the following macros with your own implementation
-    
+
     CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
 
     EMULATED PINS:
@@ -49,7 +49,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -74,43 +74,73 @@ extern "C" {
 */
 
 // 8 bits data/address bus shared with CPU data bus
-#define AY38910_DA0 (1ULL<<16)
-#define AY38910_DA1 (1ULL<<17)
-#define AY38910_DA2 (1ULL<<18)
-#define AY38910_DA3 (1ULL<<19)
-#define AY38910_DA4 (1ULL<<20)
-#define AY38910_DA5 (1ULL<<21)
-#define AY38910_DA6 (1ULL<<22)
-#define AY38910_DA7 (1ULL<<23)
+#define AY38910_PIN_DA0 (16)
+#define AY38910_PIN_DA1 (17)
+#define AY38910_PIN_DA2 (18)
+#define AY38910_PIN_DA3 (19)
+#define AY38910_PIN_DA4 (20)
+#define AY38910_PIN_DA5 (21)
+#define AY38910_PIN_DA6 (22)
+#define AY38910_PIN_DA7 (23)
 
 // reset pin shared with CPU
-#define AY38910_RESET   (1ULL<<34)
+#define AY38910_PIN_RESET (34)
 
 // chip-specific pins start at position 40
-#define AY38910_BDIR    (1ULL<<40)
-#define AY38910_BC1     (1ULL<<41)
+#define AY38910_PIN_BDIR (40)
+#define AY38910_PIN_BC1  (41)
 
 // virtual 'audio sample ready' pin
-#define AY38910_SAMPLE  (1ULL<<42)
+#define AY38910_PIN_SAMPLE  (42)
 
 // IO port pins
-#define AY38910_IOA0    (1ULL<<48)
-#define AY38910_IOA1    (1ULL<<49)
-#define AY38910_IOA2    (1ULL<<50)
-#define AY38910_IOA3    (1ULL<<51)
-#define AY38910_IOA4    (1ULL<<52)
-#define AY38910_IOA5    (1ULL<<53)
-#define AY38910_IOA6    (1ULL<<54)
-#define AY38910_IOA7    (1ULL<<55)
+#define AY38910_PIN_IOA0  (48)
+#define AY38910_PIN_IOA1  (49)
+#define AY38910_PIN_IOA2  (50)
+#define AY38910_PIN_IOA3  (51)
+#define AY38910_PIN_IOA4  (52)
+#define AY38910_PIN_IOA5  (53)
+#define AY38910_PIN_IOA6  (54)
+#define AY38910_PIN_IOA7  (55)
 
-#define AY38910_IOB0    (1ULL<<56)
-#define AY38910_IOB1    (1ULL<<57)
-#define AY38910_IOB2    (1ULL<<58)
-#define AY38910_IOB3    (1ULL<<59)
-#define AY38910_IOB4    (1ULL<<60)
-#define AY38910_IOB5    (1ULL<<61)
-#define AY38910_IOB6    (1ULL<<62)
-#define AY38910_IOB7    (1ULL<<63)
+#define AY38910_PIN_IOB0  (56)
+#define AY38910_PIN_IOB1  (57)
+#define AY38910_PIN_IOB2  (58)
+#define AY38910_PIN_IOB3  (59)
+#define AY38910_PIN_IOB4  (60)
+#define AY38910_PIN_IOB5  (61)
+#define AY38910_PIN_IOB6  (62)
+#define AY38910_PIN_IOB7  (63)
+
+// pin bit masks
+#define AY38910_DA0     (1ULL<<AY38910_PIN_DA0)
+#define AY38910_DA1     (1ULL<<AY38910_PIN_DA1)
+#define AY38910_DA2     (1ULL<<AY38910_PIN_DA2)
+#define AY38910_DA3     (1ULL<<AY38910_PIN_DA3)
+#define AY38910_DA4     (1ULL<<AY38910_PIN_DA4)
+#define AY38910_DA5     (1ULL<<AY38910_PIN_DA5)
+#define AY38910_DA6     (1ULL<<AY38910_PIN_DA6)
+#define AY38910_DA7     (1ULL<<AY38910_PIN_DA7)
+#define AY38910_RESET   (1ULL<<AY38910_PIN_RESET)
+#define AY38910_BDIR    (1ULL<<AY38910_PIN_BDIR)
+#define AY38910_BC1     (1ULL<<AY38910_PIN_BC1)
+#define AY38910_SAMPLE  (1ULL<<AY38910_PIN_SAMPLE)
+#define AY38910_IOA0    (1ULL<<AY38910_PIN_IOA0)
+#define AY38910_IOA1    (1ULL<<AY38910_PIN_IOA1)
+#define AY38910_IOA2    (1ULL<<AY38910_PIN_IOA2)
+#define AY38910_IOA3    (1ULL<<AY38910_PIN_IOA3)
+#define AY38910_IOA4    (1ULL<<AY38910_PIN_IOA4)
+#define AY38910_IOA5    (1ULL<<AY38910_PIN_IOA5)
+#define AY38910_IOA6    (1ULL<<AY38910_PIN_IOA6)
+#define AY38910_IOA7    (1ULL<<AY38910_PIN_IOA7)
+#define AY38910_IOB0    (1ULL<<AY38910_PIN_IOB0)
+#define AY38910_IOB1    (1ULL<<AY38910_PIN_IOB1)
+#define AY38910_IOB2    (1ULL<<AY38910_PIN_IOB2)
+#define AY38910_IOB3    (1ULL<<AY38910_PIN_IOB3)
+#define AY38910_IOB4    (1ULL<<AY38910_PIN_IOB4)
+#define AY38910_IOB5    (1ULL<<AY38910_PIN_IOB5)
+#define AY38910_IOB6    (1ULL<<AY38910_PIN_IOB6)
+#define AY38910_IOB7    (1ULL<<AY38910_PIN_IOB7)
 
 // AY-3-8910 registers
 #define AY38910_REG_PERIOD_A_FINE       (0)
@@ -165,7 +195,7 @@ typedef struct {
     ay38910_type_t type;    /* the subtype (default 0 is AY-3-8910) */
     int tick_hz;            /* frequency at which ay38910_tick() will be called in Hz */
     int sound_hz;           /* number of samples that will be produced per second */
-    float magnitude;        /* output sample magnitude, from 0.0 (silence) to 1.0 (max volume) */ 
+    float magnitude;        /* output sample magnitude, from 0.0 (silence) to 1.0 (max volume) */
     ay38910_in_t in_cb;     /* I/O port input callback */
     ay38910_out_t out_cb;   /* I/O port output callback */
     void* user_data;        /* optional user-data for callbacks */
@@ -262,6 +292,10 @@ bool ay38910_tick(ay38910_t* ay);
 // helper functions to directly write register values and update dependent state, not intended for regular operation!
 void ay38910_set_register(ay38910_t* ay, uint8_t addr, uint8_t data);
 void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr);
+// prepare ay38910_t snapshot for saving
+void ay38910_snapshot_onsave(ay38910_t* snapshot);
+// fixup ay38910_t snapshot after loading
+void ay38910_snapshot_onload(ay38910_t* snapshot, ay38910_t* sys);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -622,4 +656,17 @@ void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr) {
     ay->addr = addr;
 }
 
+void ay38910_snapshot_onsave(ay38910_t* snapshot) {
+    CHIPS_ASSERT(snapshot);
+    snapshot->in_cb = 0;
+    snapshot->out_cb = 0;
+    snapshot->user_data = 0;
+}
+
+void ay38910_snapshot_onload(ay38910_t* snapshot, ay38910_t* sys) {
+    CHIPS_ASSERT(snapshot && sys);
+    snapshot->in_cb = sys->in_cb;
+    snapshot->out_cb = sys->out_cb;
+    snapshot->user_data = sys->user_data;
+}
 #endif /* CHIPS_IMPL */

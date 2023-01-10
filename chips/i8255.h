@@ -4,11 +4,11 @@
 
     Do this:
         #define CHIPS_IMPL
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
         CHIPS_ASSERT(c)     -- your own assert macro (default: assert(c))
 
     EMULATED PINS:
@@ -32,7 +32,7 @@
         - mode 2 (bi-directional bus)
         - interrupts
         - input latches
-    
+
     FIXME: documentation
 
     ## zlib/libpng license
@@ -51,7 +51,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -82,63 +82,101 @@ extern "C" {
     Invoke those operations via to i8255_iorq() function.
 */
 
-/* control pins shared with Z80 */
-#define I8255_RD    (1ULL<<27)      /* read from PPI, shared with Z80_RD! */
-#define I8255_WR    (1ULL<<28)      /* write to PPI, shared with Z80_WR! */
+// control pins shared with Z80
+#define I8255_PIN_RD    (27)    // read from PPI, shared with Z80_RD!
+#define I8255_PIN_WR    (28)    // write to PPI, shared with Z80_WR!
 
-/* i8255 control pins */
-#define I8255_CS    (1ULL<<40)      /* chip-select, i8255 responds to RW/WR when this is active */
+// i8255 control pins
+#define I8255_PIN_CS    (40)    // chip-select, i8255 responds to RW/WR when this is active
 
-/* register addressing pins same as address bus pins A0 and A1 */
-#define I8255_A0    (1ULL<<0)       /* address bit 0 */
-#define I8255_A1    (1ULL<<1)       /* address bit 1 */
+// register addressing pins same as address bus pins A0 and A1
+#define I8255_PIN_A0    (0)
+#define I8255_PIN_A1    (1)
 
-/* data bus pins shared with CPU */
-#define I8255_D0    (1ULL<<16)
-#define I8255_D1    (1ULL<<17)
-#define I8255_D2    (1ULL<<18)
-#define I8255_D3    (1ULL<<19)
-#define I8255_D4    (1ULL<<20)
-#define I8255_D5    (1ULL<<21)
-#define I8255_D6    (1ULL<<22)
-#define I8255_D7    (1ULL<<23)
+// data bus pins shared with CPU
+#define I8255_PIN_D0    (16)
+#define I8255_PIN_D1    (17)
+#define I8255_PIN_D2    (18)
+#define I8255_PIN_D3    (19)
+#define I8255_PIN_D4    (20)
+#define I8255_PIN_D5    (21)
+#define I8255_PIN_D6    (22)
+#define I8255_PIN_D7    (23)
 
-/* port A pins */
-#define I8255_PA0       (1ULL<<48)
-#define I8255_PA1       (1ULL<<49)
-#define I8255_PA2       (1ULL<<50)
-#define I8255_PA3       (1ULL<<51)
-#define I8255_PA4       (1ULL<<52)
-#define I8255_PA5       (1ULL<<53)
-#define I8255_PA6       (1ULL<<54)
-#define I8255_PA7       (1ULL<<55)
-#define I8255_PA_PINS   (I8255_PA0|I8255_PA1|I8255_PA2|I8255_PA3|I8255_PA4|I8255_PA5|I8255_PA6|I8255_PA7)
+// port A pins
+#define I8255_PIN_PA0  (48)
+#define I8255_PIN_PA1  (49)
+#define I8255_PIN_PA2  (50)
+#define I8255_PIN_PA3  (51)
+#define I8255_PIN_PA4  (52)
+#define I8255_PIN_PA5  (53)
+#define I8255_PIN_PA6  (54)
+#define I8255_PIN_PA7  (55)
 
-/* port B pins */
-#define I8255_PB0       (1ULL<<56)
-#define I8255_PB1       (1ULL<<57)
-#define I8255_PB2       (1ULL<<58)
-#define I8255_PB3       (1ULL<<59)
-#define I8255_PB4       (1ULL<<60)
-#define I8255_PB5       (1ULL<<61)
-#define I8255_PB6       (1ULL<<62)
-#define I8255_PB7       (1ULL<<63)
-#define I8255_PB_PINS   (I8255_PB0|I8255_PB1|I8255_PB2|I8255_PB3|I8255_PB4|I8255_PB5|I8255_PB6|I8255_PB7)
+// port B pins
+#define I8255_PIN_PB0  (56)
+#define I8255_PIN_PB1  (57)
+#define I8255_PIN_PB2  (58)
+#define I8255_PIN_PB3  (59)
+#define I8255_PIN_PB4  (60)
+#define I8255_PIN_PB5  (61)
+#define I8255_PIN_PB6  (62)
+#define I8255_PIN_PB7  (63)
 
 /* port C pins, NOTE: these overlap with address bus pins A8..A15!
    don't forget to clear upper 8 address bus pins when reusing the
    CPU pin mask for the i8255!
 */
-#define I8255_PC0       (1ULL<<8)
-#define I8255_PC1       (1ULL<<9)
-#define I8255_PC2       (1ULL<<10)
-#define I8255_PC3       (1ULL<<11)
-#define I8255_PC4       (1ULL<<12)
-#define I8255_PC5       (1ULL<<13)
-#define I8255_PC6       (1ULL<<14)
-#define I8255_PC7       (1ULL<<15)
-#define I8255_PC_PINS   (I8255_PC0|I8255_PC1|I8255_PC2|I8255_PC3|I8255_PC4|I8255_PC5|I8255_PC6|I8255_PC7)
+#define I8255_PIN_PC0   (8)
+#define I8255_PIN_PC1   (9)
+#define I8255_PIN_PC2   (10)
+#define I8255_PIN_PC3   (11)
+#define I8255_PIN_PC4   (12)
+#define I8255_PIN_PC5   (13)
+#define I8255_PIN_PC6   (14)
+#define I8255_PIN_PC7   (15)
 
+// pin bit masks
+#define I8255_RD        (1ULL<<I8255_PIN_RD)
+#define I8255_WR        (1ULL<<I8255_PIN_WR)
+#define I8255_CS        (1ULL<<I8255_PIN_CS)
+#define I8255_A0        (1ULL<<I8255_PIN_A0)
+#define I8255_A1        (1ULL<<I8255_PIN_A1)
+#define I8255_D0        (1ULL<<I8255_PIN_D0)
+#define I8255_D1        (1ULL<<I8255_PIN_D1)
+#define I8255_D2        (1ULL<<I8255_PIN_D2)
+#define I8255_D3        (1ULL<<I8255_PIN_D3)
+#define I8255_D4        (1ULL<<I8255_PIN_D4)
+#define I8255_D5        (1ULL<<I8255_PIN_D5)
+#define I8255_D6        (1ULL<<I8255_PIN_D6)
+#define I8255_D7        (1ULL<<I8255_PIN_D7)
+#define I8255_PA0       (1ULL<<I8255_PIN_PA0)
+#define I8255_PA1       (1ULL<<I8255_PIN_PA1)
+#define I8255_PA2       (1ULL<<I8255_PIN_PA2)
+#define I8255_PA3       (1ULL<<I8255_PIN_PA3)
+#define I8255_PA4       (1ULL<<I8255_PIN_PA4)
+#define I8255_PA5       (1ULL<<I8255_PIN_PA5)
+#define I8255_PA6       (1ULL<<I8255_PIN_PA6)
+#define I8255_PA7       (1ULL<<I8255_PIN_PA7)
+#define I8255_PB0       (1ULL<<I8255_PIN_PB0)
+#define I8255_PB1       (1ULL<<I8255_PIN_PB1)
+#define I8255_PB2       (1ULL<<I8255_PIN_PB2)
+#define I8255_PB3       (1ULL<<I8255_PIN_PB3)
+#define I8255_PB4       (1ULL<<I8255_PIN_PB4)
+#define I8255_PB5       (1ULL<<I8255_PIN_PB5)
+#define I8255_PB6       (1ULL<<I8255_PIN_PB6)
+#define I8255_PB7       (1ULL<<I8255_PIN_PB7)
+#define I8255_PC0       (1ULL<<I8255_PIN_PC0)
+#define I8255_PC1       (1ULL<<I8255_PIN_PC1)
+#define I8255_PC2       (1ULL<<I8255_PIN_PC2)
+#define I8255_PC3       (1ULL<<I8255_PIN_PC3)
+#define I8255_PC4       (1ULL<<I8255_PIN_PC4)
+#define I8255_PC5       (1ULL<<I8255_PIN_PC5)
+#define I8255_PC6       (1ULL<<I8255_PIN_PC6)
+#define I8255_PC7       (1ULL<<I8255_PIN_PC7)
+#define I8255_PA_PINS   (I8255_PA0|I8255_PA1|I8255_PA2|I8255_PA3|I8255_PA4|I8255_PA5|I8255_PA6|I8255_PA7)
+#define I8255_PB_PINS   (I8255_PB0|I8255_PB1|I8255_PB2|I8255_PB3|I8255_PB4|I8255_PB5|I8255_PB6|I8255_PB7)
+#define I8255_PC_PINS   (I8255_PC0|I8255_PC1|I8255_PC2|I8255_PC3|I8255_PC4|I8255_PC5|I8255_PC6|I8255_PC7)
 #define I8255_PORT_PINS (I8255_PA_PINS|I8255_PB_PINS|I8255_PC_PINS)
 
 /*
@@ -159,7 +197,7 @@ extern "C" {
         C5+C6: mode select:         00=mode0 (basic in/out)
                                     01=mode1 (strobed in/out)
                                     1x=mode2 (bi-directional bus)
-    
+
     C7: 1 for 'mode select'
 
     INTERRUPT CONTROL (bit 7: 0)

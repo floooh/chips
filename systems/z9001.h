@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -20,6 +20,7 @@
 
     You need to include the following headers before including z9001.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/z80pio.h
     - chips/z80ctc.h
@@ -27,7 +28,7 @@
     - chips/mem.h
     - chips/kbd.h
     - chips/clk.h
-  
+
     ## The Robotron Z9001
 
     The Z9001 (later retconned to KC85/1) was independently developed
@@ -75,18 +76,27 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define Z9001_MAX_AUDIO_SAMPLES (1024)      /* max number of audio samples in internal sample buffer */
-#define Z9001_DEFAULT_AUDIO_SAMPLES (128)   /* default number of samples in internal sample buffer */ 
+// bump this whenever the z9001_t struct layout changes
+#define Z9001_SNAPSHOT_VERSION (0x0001)
+
+#define Z9001_MAX_AUDIO_SAMPLES (1024)      // max number of audio samples in internal sample buffer
+#define Z9001_DEFAULT_AUDIO_SAMPLES (128)   // default number of samples in internal sample buffer
+#define Z9001_FRAMEBUFFER_WIDTH (512)
+#define Z9001_FRAMEBUFFER_HEIGHT (192)
+#define Z9001_FRAMEBUFFER_SIZE_BYTES (Z9001_FRAMEBUFFER_WIDTH * Z9001_FRAMEBUFFER_HEIGHT)
+#define Z9001_DISPLAY_WIDTH (320)
+#define Z9001_DISPLAY_HEIGHT (192)
 
 // Z9001/KC87 model types
 typedef enum {
@@ -94,60 +104,25 @@ typedef enum {
     Z9001_TYPE_KC87,    // the revised KC87 with built-in BASIC and color module
 } z9001_type_t;
 
-// audio sample callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} z9001_audio_callback_t;
-
-// debugging hook definitions
-typedef void (*z9001_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        z9001_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} z9001_debug_t;
-
-typedef struct {
-    const void* ptr;
-    size_t size;
-} z9001_rom_image_t;
-
 // configuration parameters for z9001_init()
 typedef struct {
     z9001_type_t type;                  // default is Z9001_TYPE_Z9001
-    z9001_debug_t debug;                // optional debug hook
-
-    // video output config (if you don't need display decoding, set pixel_buffer to 0)
-    struct {
-        void* ptr;      // pointer to a linear RGBA8 pixel buffer
-        size_t size;    // size of the pixel buffer in bytes
-    } pixel_buffer;
-
-    // audio output config (if you don't want audio, set audio_cb to zero)
-    struct {
-        z9001_audio_callback_t callback; // called when audio_num_samples are ready
-        int num_samples;                // default is Z9001_DEFAULT_AUDIO_SAMPLES
-        int sample_rate;                // playback sample rate, default is 44100
-        float volume;                   // audio volume (0.0 .. 1.0), default is 0.4
-    } audio;
-
+    chips_debug_t debug;                // optional debug hook
+    chips_audio_desc_t audio;
     struct {
         // Z9001 ROM images
         struct {
-            z9001_rom_image_t os_1;
-            z9001_rom_image_t os_2;
-            z9001_rom_image_t font;
+            chips_range_t os_1;
+            chips_range_t os_2;
+            chips_range_t font;
             // optional BASIC module ROM
-            z9001_rom_image_t basic;
+            chips_range_t basic;
         } z9001;
         // KC85 ROM images
         struct {
-            z9001_rom_image_t os;
-            z9001_rom_image_t basic;
-            z9001_rom_image_t font;
+            chips_range_t os;
+            chips_range_t basic;
+            chips_range_t font;
         } kc87;
     } roms;
 } z9001_desc_t;
@@ -159,29 +134,29 @@ typedef struct {
     z80pio_t pio2;
     z80ctc_t ctc;
     beeper_t beeper;
-    bool z9001_has_basic_rom;
-    bool blink_flip_flop;
+    uint8_t blink_flip_flop;    // bit 7 0=>1=>0
     z9001_type_t type;
     uint64_t pins;
-    uint64_t ctc_zcto2;     // pin mask to store state of CTC ZCTO2
+    uint64_t ctc_zcto2;         // pin mask to store state of CTC ZCTO2
     uint32_t blink_counter;
     // FIXME: uint8_t border_color;
     mem_t mem;
     kbd_t kbd;
 
     bool valid;
-    z9001_debug_t debug;
+    bool z9001_has_basic_rom;
+    chips_debug_t debug;
 
-    uint32_t* pixel_buffer;
     struct {
-        z9001_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[Z9001_MAX_AUDIO_SAMPLES];
     } audio;
     uint8_t ram[1<<16];
     uint8_t rom[0x4000];
-    uint8_t rom_font[0x0800];   /* 2 KB font ROM (not mapped into CPU address space) */
+    uint8_t rom_font[0x0800];   // 2 KB font ROM (not mapped into CPU address space)
+    alignas(64) uint8_t fb[Z9001_FRAMEBUFFER_SIZE_BYTES];
 } z9001_t;
 
 // initialize a new Z9001 instance
@@ -190,6 +165,8 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc);
 void z9001_discard(z9001_t* sys);
 // reset Z9001 instance
 void z9001_reset(z9001_t* sys);
+// query information about display requirements, can be called with nullptr
+chips_display_info_t z9001_display_info(z9001_t* sys);
 // run Z9001 instance for a given number of microseconds, return number of executed ticks
 uint32_t z9001_exec(z9001_t* sys, uint32_t micro_seconds);
 // send a key-down event
@@ -197,15 +174,11 @@ void z9001_key_down(z9001_t* sys, int key_code);
 // send a key-up event
 void z9001_key_up(z9001_t* sys, int key_code);
 // load a KC TAP or KCC file into the emulator
-bool z9001_quickload(z9001_t* sys, const uint8_t* ptr, int num_bytes);
-// get the standard framebuffer width and height in pixels
-int z9001_std_display_width(void);
-int z9001_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-int z9001_max_display_size(void);
-// get the current framebuffer width and height in pixels
-int z9001_display_width(z9001_t* sys);
-int z9001_display_height(z9001_t* sys);
+bool z9001_quickload(z9001_t* sys, chips_range_t data);
+// save a snapshot, patches any pointers to zero, returns a snapshot version
+uint32_t z9001_save_snapshot(z9001_t* sys, z9001_t* dst);
+// load a snapshot, returns false if snapshot version doesn't match
+bool z9001_load_snapshot(z9001_t* sys, uint32_t version, const z9001_t* src);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -219,11 +192,6 @@ int z9001_display_height(z9001_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _Z9001_DISPLAY_WIDTH (320)
-#define _Z9001_DISPLAY_HEIGHT (192)
-#define _Z9001_DISPLAY_SIZE (_Z9001_DISPLAY_WIDTH*_Z9001_DISPLAY_HEIGHT*4)
-#define _Z9001_FREQUENCY (2457600)
-
 // xorshift randomness for memory initialization
 static inline uint32_t _z9001_xorshift32(uint32_t x) {
     x ^= x<<13;
@@ -233,6 +201,7 @@ static inline uint32_t _z9001_xorshift32(uint32_t x) {
 }
 
 #define _Z9001_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
+#define _Z9001_FREQUENCY (2457600)
 
 // IO address decoding masks and pins
 #define _Z9001_IO_SEL_MASK (Z80_IORQ|Z80_M1|Z80_A7|Z80_A6)
@@ -249,10 +218,7 @@ static inline uint32_t _z9001_xorshift32(uint32_t x) {
 
 void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _Z9001_DISPLAY_SIZE)));
-    if (desc->debug.callback.func) {
-        CHIPS_ASSERT(desc->debug.stopped);
-    }
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(z9001_t));
     sys->valid = true;
@@ -279,8 +245,6 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
         CHIPS_ASSERT(desc->roms.kc87.os.ptr && (desc->roms.kc87.os.size == 0x2000));
         memcpy(&sys->rom[0x2000], desc->roms.kc87.os.ptr, 0x2000);
     }
-    CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _Z9001_DISPLAY_SIZE));
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
 
     // initialize the hardware
     z80_init(&sys->cpu);
@@ -296,7 +260,7 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
         .sound_hz = _Z9001_DEFAULT(desc->audio.sample_rate, 44100),
         .base_volume = _Z9001_DEFAULT(desc->audio.volume, 0.5f),
     });
-    
+
     /* setup memory map:
         - memory mapping is static and cannot be changed
         - initial memory state is random
@@ -306,7 +270,7 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
         - KC87 has a 1 KB color buffer at 0xEC800
     */
     uint32_t r = 0x6D98302B;
-    for (int i = 0; i < (int)sizeof(sys->ram);) {
+    for (size_t i = 0; i < sizeof(sys->ram);) {
         r = _z9001_xorshift32(r);
         sys->ram[i++] = r;
         sys->ram[i++] = (r>>8);
@@ -338,7 +302,7 @@ void z9001_init(z9001_t* sys, const z9001_desc_t* desc) {
     // 1 KB ASCII video RAM
     mem_map_ram(&sys->mem, 0, 0xEC00, 0x0400, &sys->ram[0xEC00]);
 
-    /* setup the 8x8 keyboard matrix, keep pressed keys sticky for 3 frames 
+    /* setup the 8x8 keyboard matrix, keep pressed keys sticky for 3 frames
         to give the keyboard scanning code enough time to read the key
     */
     kbd_init(&sys->kbd, 3);
@@ -411,8 +375,9 @@ void z9001_reset(z9001_t* sys) {
 
 static uint64_t _z9001_tick(z9001_t* sys, uint64_t pins) {
     pins = z80_tick(&sys->cpu, pins);
+
+    // handle memory requests
     if (pins & Z80_MREQ) {
-        // handle memory requests
         const uint16_t addr = Z80_GET_ADDR(pins);
         if (pins & Z80_RD) {
             Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
@@ -511,50 +476,48 @@ static uint64_t _z9001_tick(z9001_t* sys, uint64_t pins) {
     */
     if (0 >= sys->blink_counter--) {
         sys->blink_counter = (_Z9001_FREQUENCY * 8) / 25;
-        sys->blink_flip_flop = !sys->blink_flip_flop;
+        sys->blink_flip_flop ^= 0x80;
     }
     return pins;
 }
 
-// decode the KC87 40x24 framebuffer to a linear 320x192 RGBA8 buffer
-static const uint32_t _z9001_palette[8] = {
-    0xFF000000,     // black
-    0xFF0000FF,     // red
-    0xFF00FF00,     // green
-    0xFF00FFFF,     // yellow
-    0xFFFF0000,     // blue
-    0xFFFF00FF,     // purple
-    0xFFFFFF00,     // cyan
-    0xFFFFFFFF,     // white
-};
+static inline void _z9001_decode_8pixels(uint8_t* dst, uint8_t pixels, uint8_t colors) {
+    // courtesy of ryg: https://mastodon.gamedev.place/@rygorous/109531596140414988
+    static const uint32_t lut32[16] = {
+        0x00000000, 0xff000000, 0x00ff0000, 0xffff0000,
+        0x0000ff00, 0xff00ff00, 0x00ffff00, 0xffffff00,
+        0x000000ff, 0xff0000ff, 0x00ff00ff, 0xffff00ff,
+        0x0000ffff, 0xff00ffff, 0x00ffffff, 0xffffffff,
+    };
+    const uint32_t colors32 = colors * 0x01010101u;
+    const uint32_t bg32 = colors32 & 0x07070707;
+    const uint32_t fg32 = (colors32 >> 4) & 0x07070707;
+    const uint32_t xor32 = bg32 ^ fg32;
+    uint32_t* dst32 = (uint32_t*)dst;
+    dst32[0] = bg32 ^ (xor32 & lut32[pixels >> 4]);
+    dst32[1] = bg32 ^ (xor32 & lut32[pixels & 0xf]);
+}
+
 static void _z9001_decode_vidmem(z9001_t* sys) {
     // FIXME: there's also a 40x20 video mode
-    uint32_t* dst = sys->pixel_buffer;
     const uint8_t* vidmem = &sys->ram[0xEC00];     // 1 KB ASCII buffer at EC00
     const uint8_t* colmem = &sys->ram[0xE800];     // 1 KB color buffer at E800
-    int offset = 0;
+    size_t offset = 0;
     if (Z9001_TYPE_KC87 == sys->type) {
         // KC87 with color module
         const uint8_t* font = sys->rom_font;
-        uint32_t fg, bg;
-        for (int y = 0; y < 24; y++) {
-            for (int py = 0; py < 8; py++) {
-                for (int x = 0; x < 40; x++) {
+        for (size_t y = 0; y < 24; y++) {
+            for (size_t py = 0; py < 8; py++) {
+                uint8_t* dst = &sys->fb[(y * 8 + py) * Z9001_FRAMEBUFFER_WIDTH];
+                for (size_t x = 0; x < 40; x++, dst += 8) {
                     uint8_t chr = vidmem[offset+x];
                     uint8_t pixels = font[(chr<<3)|py];
-                    uint8_t color = colmem[offset+x];
-                    if ((color & 0x80) && sys->blink_flip_flop) {
+                    uint8_t colors = colmem[offset+x];
+                    if (colors & sys->blink_flip_flop & 0x80) {
                         // blinking: swap back- and foreground color
-                        fg = _z9001_palette[color&7];
-                        bg = _z9001_palette[(color>>4)&7];
+                        colors = ((colors & 7) << 4) | ((colors >> 4) & 7);
                     }
-                    else {
-                        fg = _z9001_palette[(color>>4)&7];
-                        bg = _z9001_palette[color&7];
-                    }
-                    for (int px = 7; px >= 0; px--) {
-                        *dst++ = pixels & (1<<px) ? fg:bg;
-                    }
+                    _z9001_decode_8pixels(dst, pixels, colors);
                 }
             }
             offset += 40;
@@ -563,14 +526,13 @@ static void _z9001_decode_vidmem(z9001_t* sys) {
     else {
         // Z9001 monochrome display
         const uint8_t* font = sys->rom_font;
-        for (int y = 0; y < 24; y++) {
-            for (int py = 0; py < 8; py++) {
-                for (int x = 0; x < 40; x++) {
+        for (size_t y = 0; y < 24; y++) {
+            for (size_t py = 0; py < 8; py++) {
+                uint8_t* dst = &sys->fb[(y * 8 + py) * Z9001_FRAMEBUFFER_WIDTH];
+                for (size_t x = 0; x < 40; x++, dst += 8) {
                     uint8_t chr = vidmem[offset + x];
                     uint8_t pixels = font[(chr<<3)|py];
-                    for (int px = 7; px >=0; px--) {
-                        *dst++ = pixels & (1<<px) ? 0xFFFFFFFF : 0xFF000000;
-                    }
+                    _z9001_decode_8pixels(dst, pixels, 0x70);
                 }
             }
             offset += 40;
@@ -615,8 +577,6 @@ void z9001_key_up(z9001_t* sys, int key_code) {
     //z80pio_write_port(&sys->pio2, Z80PIO_PORT_B, ~kbd_scan_lines(&sys->kbd));
 }
 
-/*=== FILE LOADING ===========================================================*/
-
 // common start function for file loading routines
 static void _z9001_load_start(z9001_t* sys, uint16_t exec_addr) {
     sys->cpu.a = 0x00; sys->cpu.f = 0x10;
@@ -641,11 +601,11 @@ typedef struct {
 } _z9001_kcc_header;
 
 // KCC files cannot really be identified since they have no magic number
-static bool _z9001_is_valid_kcc(const uint8_t* ptr, int num_bytes) {
-    if (num_bytes <= (int) sizeof (_z9001_kcc_header)) {
+static bool _z9001_is_valid_kcc(chips_range_t data) {
+    if (data.size <= sizeof(_z9001_kcc_header)) {
         return false;
     }
-    const _z9001_kcc_header* hdr = (const _z9001_kcc_header*) ptr;
+    const _z9001_kcc_header* hdr = (const _z9001_kcc_header*)data.ptr;
     for (int i = 0; i < 16; i++) {
         if (hdr->name[i] >= 128) {
             return false;
@@ -665,16 +625,17 @@ static bool _z9001_is_valid_kcc(const uint8_t* ptr, int num_bytes) {
             return false;
         }
     }
-    int required_len = (end_addr - load_addr) + sizeof(_z9001_kcc_header);
-    if (required_len > num_bytes) {
+    size_t required_len = (end_addr - load_addr) + sizeof(_z9001_kcc_header);
+    if (required_len > data.size) {
         return false;
     }
     // could be a KCC file
     return true;
 }
 
-static bool _z9001_load_kcc(z9001_t* sys, const uint8_t* ptr) {
-    const _z9001_kcc_header* hdr = (_z9001_kcc_header*) ptr;
+static bool _z9001_load_kcc(z9001_t* sys, chips_range_t data) {
+    const uint8_t* ptr = data.ptr;
+    const _z9001_kcc_header* hdr = (_z9001_kcc_header*)ptr;
     uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
     uint16_t end_addr  = hdr->end_addr_h<<8 | hdr->end_addr_l;
     ptr += sizeof(_z9001_kcc_header);
@@ -692,13 +653,13 @@ typedef struct {
     _z9001_kcc_header kcc;  // from here on identical with KCC
 } _z9001_kctap_header;
 
-static bool _z9001_is_valid_kctap(const uint8_t* ptr, int num_bytes) {
-    if (num_bytes <= (int) sizeof (_z9001_kctap_header)) {
+static bool _z9001_is_valid_kctap(chips_range_t data) {
+    if (data.size <= sizeof(_z9001_kctap_header)) {
         return false;
     }
-    const _z9001_kctap_header* hdr = (const _z9001_kctap_header*) ptr;
-    static uint8_t sig[16] = { 0xC3,'K','C','-','T','A','P','E',0x20,'b','y',0x20,'A','F','.',0x20 };
-    for (int i = 0; i < 16; i++) {
+    const _z9001_kctap_header* hdr = (const _z9001_kctap_header*)data.ptr;
+    static const uint8_t sig[16] = { 0xC3,'K','C','-','T','A','P','E',0x20,'b','y',0x20,'A','F','.',0x20 };
+    for (size_t i = 0; i < 16; i++) {
         if (sig[i] != hdr->sig[i]) {
             return false;
         }
@@ -717,16 +678,17 @@ static bool _z9001_is_valid_kctap(const uint8_t* ptr, int num_bytes) {
             return false;
         }
     }
-    int required_len = (end_addr - load_addr) + sizeof(_z9001_kctap_header);
-    if (required_len > num_bytes) {
+    size_t required_len = (end_addr - load_addr) + sizeof(_z9001_kctap_header);
+    if (required_len > data.size) {
         return false;
     }
     // this appears to be a valid KC TAP file
     return true;
 }
 
-static bool _z9001_load_kctap(z9001_t* sys, const uint8_t* ptr) {
-    const _z9001_kctap_header* hdr = (const _z9001_kctap_header*) ptr;
+static bool _z9001_load_kctap(z9001_t* sys, chips_range_t data) {
+    const uint8_t* ptr = data.ptr;
+    const _z9001_kctap_header* hdr = (const _z9001_kctap_header*)ptr;
     uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
     uint16_t end_addr  = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
     ptr += sizeof(_z9001_kctap_header);
@@ -744,41 +706,80 @@ static bool _z9001_load_kctap(z9001_t* sys, const uint8_t* ptr) {
     return true;
 }
 
-bool z9001_quickload(z9001_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid && ptr);
+bool z9001_quickload(z9001_t* sys, chips_range_t data) {
+    CHIPS_ASSERT(sys && sys->valid && data.ptr);
     // first check for KC TAP, since this can be properly identified
-    if (_z9001_is_valid_kctap(ptr, num_bytes)) {
-        return _z9001_load_kctap(sys, ptr);
+    if (_z9001_is_valid_kctap(data)) {
+        return _z9001_load_kctap(sys, data);
     }
-    else if (_z9001_is_valid_kcc(ptr, num_bytes)) {
-        return _z9001_load_kcc(sys, ptr);
+    else if (_z9001_is_valid_kcc(data)) {
+        return _z9001_load_kcc(sys, data);
     }
     else {
-        /* not a known file type, or not enough data */
+        // not a known file type, or not enough data
         return false;
     }
 }
 
-int z9001_std_display_width(void) {
-    return _Z9001_DISPLAY_WIDTH;
+chips_display_info_t z9001_display_info(z9001_t* sys) {
+    static const uint32_t palette[8] = {
+        0xFF000000,     // black
+        0xFF0000FF,     // red
+        0xFF00FF00,     // green
+        0xFF00FFFF,     // yellow
+        0xFFFF0000,     // blue
+        0xFFFF00FF,     // purple
+        0xFFFFFF00,     // cyan
+        0xFFFFFFFF,     // white
+    };
+    const chips_display_info_t res = {
+        .frame = {
+            .dim = {
+                .width = Z9001_FRAMEBUFFER_WIDTH,
+                .height = Z9001_FRAMEBUFFER_HEIGHT,
+            },
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = Z9001_FRAMEBUFFER_SIZE_BYTES,
+            },
+            .bytes_per_pixel = 1,
+        },
+        .screen = {
+            .x = 0,
+            .y = 0,
+            .width = Z9001_DISPLAY_WIDTH,
+            .height = Z9001_DISPLAY_HEIGHT,
+        },
+        .palette = {
+            .ptr = (void*)palette,
+            .size = sizeof(palette)
+        }
+    };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    return res;
 }
 
-int z9001_std_display_height(void) {
-    return _Z9001_DISPLAY_HEIGHT;
+uint32_t z9001_save_snapshot(z9001_t* sys, z9001_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    mem_snapshot_onsave(&dst->mem, sys);
+    return Z9001_SNAPSHOT_VERSION;
 }
 
-int z9001_max_display_size(void) {
-    return _Z9001_DISPLAY_SIZE;
-}
-
-int z9001_display_width(z9001_t* sys) {
-    (void)sys;
-    return _Z9001_DISPLAY_WIDTH;
-}
-
-int z9001_display_height(z9001_t* sys) {
-    (void)sys;
-    return _Z9001_DISPLAY_HEIGHT;
+bool z9001_load_snapshot(z9001_t* sys, uint32_t version, const z9001_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != Z9001_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static z9001_t im;
+    im = *src;
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    mem_snapshot_onload(&im.mem, sys);
+    *sys = im;
+    return true;
 }
 
 #endif // CHIPS_IMPL

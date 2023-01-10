@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -47,7 +47,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -119,12 +119,12 @@ void ui_am40010_discard(ui_am40010_t* win) {
 }
 
 static void _ui_am40010_draw_hw_colors(ui_am40010_t* win) {
-    am40010_colors_t* c = &win->am40010->colors;
     ImGui::Text("Hardware Colors:");
+    const am40010_t* ga = win->am40010;
     const ImVec2 size(18,18);
     for (int i = 0; i < 32; i++) {
         ImGui::PushID(i);
-        ImGui::ColorButton("##hw_color", ImColor(c->hw_rgba8[i]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::ColorButton("##hw_color", ImColor(ga->hw_colors[i]), ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
         if (((i+1) % 8) != 0) {
             ImGui::SameLine();
@@ -133,12 +133,12 @@ static void _ui_am40010_draw_hw_colors(ui_am40010_t* win) {
 }
 
 static void _ui_am40010_draw_ink_colors(ui_am40010_t* win) {
-    am40010_colors_t* c = &win->am40010->colors;
+    am40010_t* ga = win->am40010;
     ImGui::Text("Ink Colors:");
     const ImVec2 size(18,18);
     for (int i = 0; i < 16; i++) {
         ImGui::PushID(128 + i);
-        ImGui::ColorButton("##ink_color", ImColor(c->ink_rgba8[i]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::ColorButton("##ink_color", ImColor(ga->hw_colors[ga->regs.ink[i]]), ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
         if (((i+1) % 8) != 0) {
             ImGui::SameLine();
@@ -147,10 +147,10 @@ static void _ui_am40010_draw_ink_colors(ui_am40010_t* win) {
 }
 
 static void _ui_am40010_draw_border_color(ui_am40010_t* win) {
-    am40010_colors_t* c = &win->am40010->colors;
+    am40010_t* ga = win->am40010;
     ImGui::Text("Border Color:");
     const ImVec2 size(18,18);
-    ImGui::ColorButton("##brd_color", ImColor(c->border_rgba8), ImGuiColorEditFlags_NoAlpha, size);
+    ImGui::ColorButton("##brd_color", ImColor(ga->hw_colors[ga->regs.border]), ImGuiColorEditFlags_NoAlpha, size);
 }
 
 static void _ui_am40010_draw_registers(ui_am40010_t* win) {
@@ -195,19 +195,8 @@ static void _ui_am40010_draw_video(ui_am40010_t* win) {
     ImGui::Text("addr  %04X", addr);
 }
 
-static void _ui_am40010_tint_framebuffer(ui_am40010_t* win) {
-    const int num = AM40010_DBG_DISPLAY_WIDTH * AM40010_DBG_DISPLAY_HEIGHT;
-    uint32_t* ptr = win->am40010->rgba8_buffer;
-    for (int i = 0; i < num; i++) {
-        ptr[i] = ~ptr[i] | 0xFF0000F0;
-    }
-}
-
 static void _ui_am40010_draw_state(ui_am40010_t* win) {
     ImGui::Checkbox("Debug Visualization", &win->am40010->dbg_vis);
-    if (ImGui::Button("Tint Framebuffer")) {
-        _ui_am40010_tint_framebuffer(win);
-    }
     if (ImGui::CollapsingHeader("Colors", ImGuiTreeNodeFlags_DefaultOpen)) {
         _ui_am40010_draw_hw_colors(win);
         _ui_am40010_draw_ink_colors(win);

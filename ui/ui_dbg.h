@@ -8,7 +8,7 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Select the supported CPUs with the following macros (define one
@@ -18,7 +18,7 @@
     UI_DBG_USE_M6502
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -53,7 +53,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -157,6 +157,12 @@ typedef struct ui_dbg_keys_desc_t {
     ui_dbg_key_desc_t toggle_breakpoint;
 } ui_dbg_keys_desc_t;
 
+typedef struct ui_dbg_texture_callbacks_t {
+    ui_dbg_create_texture_t create_cb;      // callback to create UI texture
+    ui_dbg_update_texture_t update_cb;      // callback to update UI texture
+    ui_dbg_destroy_texture_t destroy_cb;    // callback to destroy UI texture
+} ui_dbg_texture_callbacks_t;
+
 typedef struct ui_dbg_desc_t {
     const char* title;          /* window title */
     #if defined(UI_DBG_USE_Z80)
@@ -167,9 +173,7 @@ typedef struct ui_dbg_desc_t {
     ui_dbg_read_t read_cb;          /* callback to read memory */
     int read_layer;                 /* layer argument for read_cb */
     ui_dbg_user_break_t break_cb;   /* optional user-breakpoint evaluation callback */
-    ui_dbg_create_texture_t create_texture_cb;      /* callback to create UI texture */
-    ui_dbg_update_texture_t update_texture_cb;      /* callback to update UI texture */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* callback to destroy UI texture */
+    ui_dbg_texture_callbacks_t texture_cbs;
     void* user_data;            /* user data for callbacks */
     int x, y;                   /* initial window pos */
     int w, h;                   /* initial window size, or 0 for default size */
@@ -196,7 +200,7 @@ typedef struct ui_dbg_state_t {
     #endif
     bool stopped;
     int step_mode;
-    uint64_t last_tick_pins;    // cpu pins in last tick 
+    uint64_t last_tick_pins;    // cpu pins in last tick
     uint32_t frame_id;          // used in trap callback to detect when a new frame has started
     uint32_t cur_op_ticks;
     uint16_t cur_op_pc;         // PC of current instruction
@@ -267,6 +271,7 @@ typedef struct ui_dbg_t {
     ui_dbg_read_t read_cb;
     int read_layer;
     ui_dbg_user_break_t break_cb;
+    ui_dbg_texture_callbacks_t texture_cbs;
     ui_dbg_create_texture_t create_texture_cb;
     ui_dbg_update_texture_t update_texture_cb;
     ui_dbg_destroy_texture_t destroy_texture_cb;
@@ -419,7 +424,7 @@ static bool _ui_dbg_is_controlflow_op(uint8_t opcode0, uint8_t opcode1) {
             /* HALT */
             case 0x76:
             /* RET */
-            case 0xC9: 
+            case 0xC9:
             /* RET cc */
             case 0xC0: case 0xC8: case 0xD0: case 0xD8:
             case 0xE0: case 0xE8: case 0xF0: case 0xF8:
@@ -452,7 +457,7 @@ static bool _ui_dbg_is_controlflow_op(uint8_t opcode0, uint8_t opcode1) {
             /* JMP ind */
             case 0x6C:
             /* relative branch */
-            case 0x10: case 0x30: case 0x50: case 0x70: 
+            case 0x10: case 0x30: case 0x50: case 0x70:
             case 0x90: case 0xB0: case 0xD0: case 0xF0:
                 return true;
             /* RTI */
@@ -666,7 +671,7 @@ static int _ui_dbg_eval_op_breakpoints(ui_dbg_t* win, int trap_id, uint16_t pc) 
                             }
                         }
                         break;
-                    
+
                     case UI_DBG_BREAKTYPE_WORD:
                         {
                             uint16_t val = (int) _ui_dbg_read_word(win, bp->addr);
@@ -744,7 +749,7 @@ static int _ui_dbg_eval_tick_breakpoints(ui_dbg_t* win, int trap_id, uint64_t pi
             }
         }
     }
-    
+
     // call optional user-breakpoint evaluation callback
     if ((0 == trap_id) && win->break_cb) {
         trap_id = win->break_cb(win, trap_id, pins, win->user_data);
@@ -919,7 +924,7 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
             bool bp_active = (win->dbg.last_trap_id >= UI_DBG_BP_BASE_TRAPID) &&
                              ((win->dbg.last_trap_id - UI_DBG_BP_BASE_TRAPID) == i);
             if (bp_active) {
-                ImGui::PushStyleColor(ImGuiCol_CheckMark, 0xFF0000FF); 
+                ImGui::PushStyleColor(ImGuiCol_CheckMark, 0xFF0000FF);
             }
             ImGui::Checkbox("##enabled", &bp->enabled); ImGui::SameLine();
             if (bp_active) {
@@ -1175,9 +1180,9 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         ImGui::PushStyleColor(ImGuiCol_Text, 0xFF00FF00);
         ImGui::Checkbox("W", &hm->show_writes);
         ImGui::PopStyleColor(3);
-        if (ImGui::Combo("Size", &hm->tex_width_uicombo_state, 
+        if (ImGui::Combo("Size", &hm->tex_width_uicombo_state,
             "16 x 4096 bytes\0"
-            "32 x 2048 bytes\0" 
+            "32 x 2048 bytes\0"
             "64 x 1024 bytes\0"
             "128 x 512 bytes\0"
             "256 x 256 bytes\0"
@@ -1568,7 +1573,7 @@ static void _ui_dbg_update_line_array(ui_dbg_t* win, uint16_t addr) {
     }
 }
 
-/* check if the address is outside the line_array 
+/* check if the address is outside the line_array
     NOTE that all backtraced lines are also considered
     "outside the line array", this is for the case
     where the PC jumps back into the backtraced array,
@@ -1814,15 +1819,15 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
     CHIPS_ASSERT(desc->read_cb);
-    CHIPS_ASSERT(desc->create_texture_cb && desc->update_texture_cb && desc->destroy_texture_cb);
+    CHIPS_ASSERT(desc->texture_cbs.create_cb && desc->texture_cbs.update_cb && desc->texture_cbs.destroy_cb);
     memset(win, 0, sizeof(ui_dbg_t));
     win->valid = true;
     win->read_cb = desc->read_cb;
     win->read_layer = desc->read_layer;
     win->break_cb = desc->break_cb;
-    win->create_texture_cb = desc->create_texture_cb;
-    win->update_texture_cb = desc->update_texture_cb;
-    win->destroy_texture_cb = desc->destroy_texture_cb;
+    win->create_texture_cb = desc->texture_cbs.create_cb;
+    win->update_texture_cb = desc->texture_cbs.update_cb;
+    win->destroy_texture_cb = desc->texture_cbs.destroy_cb;
     win->user_data = desc->user_data;
     _ui_dbg_dbgstate_init(win, desc);
     _ui_dbg_uistate_init(win, desc);

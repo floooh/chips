@@ -8,7 +8,7 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Define the KC85 type to build before including this header (both the
@@ -19,7 +19,7 @@
         CHIPS_KC85_TYPE_4
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -51,7 +51,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -133,35 +133,35 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
     if (ImGui::Begin(win->title, &win->open)) {
         if (ImGui::CollapsingHeader("Port 88h (PIO A)", ImGuiTreeNodeFlags_DefaultOpen)) {
-            const uint8_t v = win->kc85->pio_a;
-            ImGui::Text("0: CAOS ROM E    %s", (v & KC85_PIO_A_CAOS_ROM) ? "ON":"OFF");
-            ImGui::Text("1: RAM0          %s", (v & KC85_PIO_A_RAM) ? "ON":"OFF");
-            ImGui::Text("2: IRM           %s", (v & KC85_PIO_A_IRM) ? "ON":"OFF");
-            ImGui::Text("3: RAM0          %s", (v & KC85_PIO_A_RAM_RO) ? "R/W":"R/O");
+            const uint64_t v = win->kc85->pio_pins;
+            ImGui::Text("0: CAOS ROM E    %s", (v & KC85_PIO_CAOS_ROM) ? "ON":"OFF");
+            ImGui::Text("1: RAM0          %s", (v & KC85_PIO_RAM) ? "ON":"OFF");
+            ImGui::Text("2: IRM           %s", (v & KC85_PIO_IRM) ? "ON":"OFF");
+            ImGui::Text("3: RAM0          %s", (v & KC85_PIO_RAM_RO) ? "R/W":"R/O");
             ImGui::Text("4: unused");
-            ImGui::Text("5: Tape LED      %s", (v & KC85_PIO_A_TAPE_LED) ? "ON":"OFF");
-            ImGui::Text("6: Tape Motor    %s", (v & KC85_PIO_A_TAPE_MOTOR) ? "ON":"OFF");
+            ImGui::Text("5: Tape LED      %s", (v & KC85_PIO_TAPE_LED) ? "ON":"OFF");
+            ImGui::Text("6: Tape Motor    %s", (v & KC85_PIO_TAPE_MOTOR) ? "ON":"OFF");
             #if defined(CHIPS_KC85_TYPE_2)
                 ImGui::Text("7: unused");
             #else
-                ImGui::Text("7: BASIC ROM     %s", (v & KC85_PIO_A_BASIC_ROM) ? "ON":"OFF");
+                ImGui::Text("7: BASIC ROM     %s", (v & KC85_PIO_BASIC_ROM) ? "ON":"OFF");
             #endif
         }
         if (ImGui::CollapsingHeader("Port 89h (PIO B)", ImGuiTreeNodeFlags_DefaultOpen)) {
-            const uint8_t v = win->kc85->pio_b;
+            const uint64_t v = win->kc85->pio_pins;
             #if defined(CHIPS_KC85_TYPE_4)
-                ImGui::Text("0: 'trueck'      %s", (v & 1) ? "ON":"OFF");
-                ImGui::Text("1..4: Volume     %02Xh", ((v>>1) & 0x0F));
+                ImGui::Text("0: 'trueck'      %s", (v & Z80PIO_PB0) ? "ON":"OFF");
+                ImGui::Text("1..4: Volume     %02Xh", (uint8_t)((v>>Z80PIO_PIN_PB1) & 0x0F));
             #else
-                ImGui::Text("0..4: Volume     %02Xh", (v & 0x1F));
+                ImGui::Text("0..4: Volume     %02Xh", (uint8_t)((v>>Z80PIO_PIN_PB0) & 0x1F));
             #endif
             #if defined(CHIPS_KC85_TYPE_4)
-                ImGui::Text("5: RAM8          %s", (v & KC85_PIO_B_RAM8) ? "ON":"OFF");
-                ImGui::Text("6: RAM8          %s", (v & KC85_PIO_B_RAM8_RO) ? "R/W":"R/O");
+                ImGui::Text("5: RAM8          %s", (v & KC85_PIO_RAM8) ? "ON":"OFF");
+                ImGui::Text("6: RAM8          %s", (v & KC85_PIO_RAM8_RO) ? "R/W":"R/O");
             #else
                 ImGui::Text("5..6: unused");
             #endif
-            ImGui::Text("7: Blinking      %s", (v & KC85_PIO_B_BLINK_ENABLED) ? "ON":"OFF");
+            ImGui::Text("7: Blinking      %s", (v & KC85_PIO_BLINK_ENABLED) ? "ON":"OFF");
         }
         #if defined(CHIPS_KC85_TYPE_4)
             if (ImGui::CollapsingHeader("Port 84h", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -183,8 +183,8 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
             }
         #endif
         if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("Vert Count:    %d", win->kc85->v_count);
-            ImGui::Text("Hori Tick:     %d", win->kc85->h_tick);
+            ImGui::Text("Vert Count:    %d", win->kc85->video.v_count);
+            ImGui::Text("Hori Tick:     %d", win->kc85->video.h_tick);
         }
     }
     ImGui::End();

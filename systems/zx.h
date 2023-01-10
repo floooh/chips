@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -20,6 +20,7 @@
 
     You need to include the following headers before including zx.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/beeper.h
     - chips/ay38910.h
@@ -33,7 +34,7 @@
 
     ## The ZX Spectrum 128
 
-    TODO! 
+    TODO!
 
     ## TODO:
     - 'contended memory' timing and IO port timing
@@ -56,18 +57,27 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// bump this whenever the zx_t struct layout changes
+#define ZX_SNAPSHOT_VERSION (0x0001)
+
 #define ZX_MAX_AUDIO_SAMPLES (1024)      // max number of audio samples in internal sample buffer
 #define ZX_DEFAULT_AUDIO_SAMPLES (128)   // default number of samples in internal sample buffer
+#define ZX_FRAMEBUFFER_WIDTH (512)
+#define ZX_FRAMEBUFFER_HEIGHT (256)
+#define ZX_FRAMEBUFFER_SIZE_BYTES (ZX_FRAMEBUFFER_WIDTH * ZX_FRAMEBUFFER_HEIGHT)
+#define ZX_DISPLAY_WIDTH (320)
+#define ZX_DISPLAY_HEIGHT (256)
 
 // ZX Spectrum models
 typedef enum {
@@ -90,55 +100,25 @@ typedef enum {
 #define ZX_JOYSTICK_UP      (1<<3)
 #define ZX_JOYSTICK_BTN     (1<<4)
 
-// audio sample callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} zx_audio_callback_t;
-
-// debugging hook
-typedef void (*zx_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        zx_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} zx_debug_t;
-
-typedef struct {
-    const void* ptr;
-    size_t size;
-} zx_rom_image_t;
-
 // config parameters for zx_init()
 typedef struct {
     zx_type_t type;                     // default is ZX_TYPE_48K
     zx_joystick_type_t joystick_type;   // what joystick to emulate, default is ZX_JOYSTICK_NONE
-    zx_debug_t debug;                   // optional debugger hook
-
-    // video output config
+    chips_debug_t debug;                // optional debugger hook
     struct {
-        void* ptr;      // pointer to a linear RGBA8 pixel buffer, at least 320*256*4 bytes
-        size_t size;    // size of the pixel buffer in bytes
-    } pixel_buffer;
-
-    // audio output config (if you don't want audio, set callback.func to zero)
-    struct {
-        zx_audio_callback_t callback;   // called when audio_num_samples are ready
-        int num_samples;                // default is ZX_AUDIO_NUM_SAMPLES
-        int sample_rate;                // playback sample rate, default is 44100
-        float beeper_volume;            // volume of the ZX48K beeper: 0.0..1.0, default is 0.25
-        float ay_volume;                // volume of the ZX128 AY sound chip: 0.0..1.0, default is 0.5
+        chips_audio_callback_t callback;
+        int num_samples;
+        int sample_rate;
+        float beeper_volume;
+        float ay_volume;
     } audio;
-
     // ROM images
     struct {
         // ZX Spectrum 48K
-        zx_rom_image_t zx48k;
+        chips_range_t zx48k;
         // ZX Spectrum 128
-        zx_rom_image_t zx128_0;
-        zx_rom_image_t zx128_1;
+        chips_range_t zx128_0;
+        chips_range_t zx128_1;
     } roms;
 } zx_desc_t;
 
@@ -156,6 +136,7 @@ typedef struct {
     uint8_t last_mem_config;    // last out to 0x7FFD
     uint8_t last_fe_out;        // last out value to 0xFE port
     uint8_t blink_counter;      // incremented on each vblank
+    uint8_t border_color;
     int frame_scan_lines;
     int top_border_scanlines;
     int scanline_period;
@@ -163,16 +144,14 @@ typedef struct {
     int scanline_y;
     int int_counter;
     uint32_t display_ram_bank;
-    uint32_t border_color;
     kbd_t kbd;
     mem_t mem;
     uint64_t pins;
     uint64_t freq_hz;
     bool valid;
-    zx_debug_t debug;
-    uint32_t* pixel_buffer;
+    chips_debug_t debug;
     struct {
-        zx_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[ZX_MAX_AUDIO_SAMPLES];
@@ -180,6 +159,7 @@ typedef struct {
     uint8_t ram[8][0x4000];
     uint8_t rom[2][0x4000];
     uint8_t junk[0x4000];
+    alignas(64) uint8_t fb[ZX_FRAMEBUFFER_SIZE_BYTES];
 } zx_t;
 
 // initialize a new ZX Spectrum instance
@@ -188,6 +168,8 @@ void zx_init(zx_t* sys, const zx_desc_t* desc);
 void zx_discard(zx_t* sys);
 // reset a ZX Spectrum instance
 void zx_reset(zx_t* sys);
+// query information about display requirements, can be called with nullptr
+chips_display_info_t zx_display_info(zx_t* sys);
 // run ZX Spectrum instance for a given number of microseconds, return number of ticks
 uint32_t zx_exec(zx_t* sys, uint32_t micro_seconds);
 // send a key-down event
@@ -201,15 +183,11 @@ zx_joystick_type_t zx_joystick_type(zx_t* sys);
 // set joystick mask (combination of ZX_JOYSTICK_*)
 void zx_joystick(zx_t* sys, uint8_t mask);
 // load a ZX Z80 file into the emulator
-bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes); 
-// get the standard framebuffer width and height in pixels
-int zx_std_display_width(void);
-int zx_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-size_t zx_max_display_size(void);
-// get the current framebuffer width and height in pixels
-int zx_display_width(zx_t* sys);
-int zx_display_height(zx_t* sys);
+bool zx_quickload(zx_t* sys, chips_range_t data);
+// save a snapshot, patches any pointers to zero, returns a snapshot version
+uint32_t zx_save_snapshot(zx_t* sys, zx_t* dst);
+// load a snapshot, returns false if snapshot version doesn't match
+bool zx_load_snapshot(zx_t* sys, uint32_t version, zx_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -223,20 +201,16 @@ int zx_display_height(zx_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _ZX_DISPLAY_WIDTH (320)
-#define _ZX_DISPLAY_HEIGHT (256)
-#define _ZX_DISPLAY_SIZE (_ZX_DISPLAY_WIDTH*_ZX_DISPLAY_HEIGHT*4)
-#define _ZX_48K_FREQUENCY (3500000)
-#define _ZX_128_FREQUENCY (3546894)
-
 static void _zx_init_memory_map(zx_t* sys);
 static void _zx_init_keyboard_matrix(zx_t* sys);
 
 #define _ZX_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
 
+#define _ZX_48K_FREQUENCY (3500000)
+#define _ZX_128_FREQUENCY (3546894)
+
 void zx_init(zx_t* sys, const zx_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= _ZX_DISPLAY_SIZE)));
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(zx_t));
@@ -244,14 +218,13 @@ void zx_init(zx_t* sys, const zx_desc_t* desc) {
     sys->type = desc->type;
     sys->joystick_type = desc->joystick_type;
     sys->freq_hz = (sys->type == ZX_TYPE_48K) ? _ZX_48K_FREQUENCY : _ZX_128_FREQUENCY;
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
     sys->audio.callback = desc->audio.callback;
     sys->audio.num_samples = _ZX_DEFAULT(desc->audio.num_samples, ZX_DEFAULT_AUDIO_SAMPLES);
     CHIPS_ASSERT(sys->audio.num_samples <= ZX_MAX_AUDIO_SAMPLES);
     sys->debug = desc->debug;
 
-    /* initalize the hardware */
-    sys->border_color = 0xFF000000;
+    // initalize the hardware
+    sys->border_color = 0;
     if (ZX_TYPE_128 == sys->type) {
         CHIPS_ASSERT(desc->roms.zx128_0.ptr && (desc->roms.zx128_0.size == 0x4000));
         CHIPS_ASSERT(desc->roms.zx128_1.ptr && (desc->roms.zx128_1.size == 0x4000));
@@ -320,17 +293,6 @@ void zx_reset(zx_t* sys) {
     _zx_init_memory_map(sys);
 }
 
-static const uint32_t _zx_palette[8] = {
-    0xFF000000,     // black
-    0xFFFF0000,     // blue
-    0xFF0000FF,     // red
-    0xFFFF00FF,     // magenta
-    0xFF00FF00,     // green
-    0xFFFFFF00,     // cyan
-    0xFF00FFFF,     // yellow
-    0xFFFFFFFF,     // white
-};
-
 static bool _zx_decode_scanline(zx_t* sys) {
     /* this is called by the timer callback for every PAL line, controlling
         the vidmem decoding and vblank interrupt
@@ -354,13 +316,12 @@ static bool _zx_decode_scanline(zx_t* sys) {
     const int btm_decode_line = sys->top_border_scanlines + 192 + 32;
     if ((sys->scanline_y >= top_decode_line) && (sys->scanline_y < btm_decode_line)) {
         const uint16_t y = sys->scanline_y - top_decode_line;
-        uint32_t* dst = &sys->pixel_buffer[y * _ZX_DISPLAY_WIDTH];
+        uint8_t* dst = &sys->fb[y * ZX_FRAMEBUFFER_WIDTH];
         const uint8_t* vidmem_bank = sys->ram[sys->display_ram_bank];
         const bool blink = 0 != (sys->blink_counter & 0x10);
-        uint32_t fg, bg;
         if ((y < 32) || (y >= 224)) {
             // upper/lower border
-            for (int x = 0; x < _ZX_DISPLAY_WIDTH; x++) {
+            for (int x = 0; x < ZX_DISPLAY_WIDTH; x++) {
                 *dst++ = sys->border_color;
             }
         }
@@ -388,19 +349,19 @@ static bool _zx_decode_scanline(zx_t* sys) {
                 const uint8_t clr = vidmem_bank[clr_offset];
 
                 // foreground and background color
+                uint8_t fg, bg;
                 if ((clr & (1<<7)) && blink) {
-                    fg = _zx_palette[(clr>>3) & 7];
-                    bg = _zx_palette[clr & 7];
+                    fg = (clr>>3) & 7;
+                    bg = clr & 7;
                 }
                 else {
-                    fg = _zx_palette[clr & 7];
-                    bg = _zx_palette[(clr>>3) & 7];
+                    fg = clr & 7;
+                    bg = (clr>>3) & 7;
                 }
-                if (0 == (clr & (1<<6))) {
-                    // standard brightness
-                    fg &= 0xFFD7D7D7;
-                    bg &= 0xFFD7D7D7;
-                }
+                // color bit 6: standard vs bright
+                fg |= (clr & (1<<6)) >> 3;
+                bg |= (clr & (1<<6)) >> 3;
+
                 for (int px = 7; px >=0; px--) {
                     *dst++ = pix & (1<<px) ? fg : bg;
                 }
@@ -507,7 +468,7 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
                 // write to ULA
                 // FIXME: bit 3: MIC output (CAS SAVE, 0=On, 1=Off)
                 const uint8_t data = Z80_GET_DATA(pins);
-                sys->border_color = _zx_palette[data & 7] & 0xFFD7D7D7;
+                sys->border_color = data & 7;
                 sys->last_fe_out = data;
                 beeper_set(&sys->beeper, 0 != (data & (1<<4)));
             }
@@ -833,8 +794,10 @@ static bool _zx_overflow(const uint8_t* ptr, intptr_t num_bytes, const uint8_t* 
     return (ptr + num_bytes) > end_ptr;
 }
 
-bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
-    const uint8_t* end_ptr = ptr + num_bytes;
+bool zx_quickload(zx_t* sys, chips_range_t data) {
+    CHIPS_ASSERT(data.ptr && (data.size > 0));
+    uint8_t* ptr = data.ptr;
+    const uint8_t* end_ptr = ptr + data.size;
     if (_zx_overflow(ptr, sizeof(_zx_z80_header), end_ptr)) {
         return false;
     }
@@ -871,7 +834,7 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
         int page_index = 0;
         int src_len = 0;
         if (is_version1) {
-            src_len = num_bytes - sizeof(_zx_z80_header);
+            src_len = data.size - sizeof(_zx_z80_header);
         }
         else {
             _zx_z80_page_header* phdr = (_zx_z80_page_header*) ptr;
@@ -983,29 +946,79 @@ bool zx_quickload(zx_t* sys, const uint8_t* ptr, int num_bytes) {
     else {
         sys->pins = z80_prefetch(&sys->cpu, (hdr->PC_h<<8)|hdr->PC_l);
     }
-    sys->border_color = _zx_palette[(hdr->flags0>>1) & 7] & 0xFFD7D7D7;
+    sys->border_color = (hdr->flags0>>1) & 7;
     return true;
 }
 
-int zx_std_display_width(void) {
-    return _ZX_DISPLAY_WIDTH;
+chips_display_info_t zx_display_info(zx_t* sys) {
+    static const uint32_t palette[16] = {
+        0xFF000000,     // std black
+        0xFFD70000,     // std blue
+        0xFF0000D7,     // std red
+        0xFFD700D7,     // std magenta
+        0xFF00D700,     // std green
+        0xFFD7D700,     // std cyan
+        0xFF00D7D7,     // std yellow
+        0xFFD7D7D7,     // std white
+        0xFF000000,     // bright black
+        0xFFFF0000,     // bright blue
+        0xFF0000FF,     // bright red
+        0xFFFF00FF,     // bright magenta
+        0xFF00FF00,     // bright green
+        0xFFFFFF00,     // bright cyan
+        0xFF00FFFF,     // bright yellow
+        0xFFFFFFFF,     // bright white
+    };
+    const chips_display_info_t res = {
+        .frame = {
+            .dim = {
+                .width = ZX_FRAMEBUFFER_WIDTH,
+                .height = ZX_FRAMEBUFFER_HEIGHT,
+            },
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = ZX_FRAMEBUFFER_SIZE_BYTES,
+            },
+            .bytes_per_pixel = 1,
+        },
+        .screen = {
+            .x = 0,
+            .y = 0,
+            .width = ZX_DISPLAY_WIDTH,
+            .height = ZX_DISPLAY_HEIGHT,
+        },
+        .palette = {
+            .ptr = (void*)palette,
+            .size = sizeof(palette),
+        }
+    };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    return res;
 }
 
-int zx_std_display_height(void) {
-    return _ZX_DISPLAY_HEIGHT;
+uint32_t zx_save_snapshot(zx_t* sys, zx_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    ay38910_snapshot_onsave(&dst->ay);
+    mem_snapshot_onsave(&dst->mem, sys);
+    return ZX_SNAPSHOT_VERSION;
 }
 
-size_t zx_max_display_size(void) {
-    return _ZX_DISPLAY_SIZE;
+bool zx_load_snapshot(zx_t* sys, uint32_t version, zx_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != ZX_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static zx_t im;
+    im = *src;
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    ay38910_snapshot_onload(&im.ay, &sys->ay);
+    mem_snapshot_onload(&im.mem, sys);
+    *sys = im;
+    return true;
 }
 
-int zx_display_width(zx_t* sys) {
-    (void)sys;
-    return _ZX_DISPLAY_WIDTH;
-}
-
-int zx_display_height(zx_t* sys) {
-    (void)sys;
-    return _ZX_DISPLAY_HEIGHT;
-}
 #endif // CHIPS_IMPL

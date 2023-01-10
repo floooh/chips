@@ -8,14 +8,14 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    ~~~C    
+    ~~~C
     CHIPS_ASSERT(c)
     ~~~
-    
+
     ## Emulated Pins
 
     ************************************
@@ -49,7 +49,7 @@
     - https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
 
     TODO: Documentation
-    
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
@@ -66,7 +66,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -75,76 +75,114 @@
 extern "C" {
 #endif
 
-/* register select same as lower 4 shared address bus bits */
-#define M6526_RS0   (1ULL<<0)
-#define M6526_RS1   (1ULL<<1)
-#define M6526_RS2   (1ULL<<2)
-#define M6526_RS3   (1ULL<<3)
+// register select same as lower 4 shared address bus bits
+#define M6526_PIN_RS0   (0)
+#define M6526_PIN_RS1   (1)
+#define M6526_PIN_RS2   (2)
+#define M6526_PIN_RS3   (3)
+
+// data bus pins shared with CPU
+#define M6526_PIN_D0    (16)
+#define M6526_PIN_D1    (17)
+#define M6526_PIN_D2    (18)
+#define M6526_PIN_D3    (19)
+#define M6526_PIN_D4    (20)
+#define M6526_PIN_D5    (21)
+#define M6526_PIN_D6    (22)
+#define M6526_PIN_D7    (23)
+
+// control pins shared with CPU
+#define M6526_PIN_RW    (24)      // same as M6502_RW
+#define M6526_PIN_IRQ   (26)      // same as M6502_IRQ
+
+// chip-specific control pins
+#define M6526_PIN_CS    (40)
+#define M6526_PIN_FLAG  (41)
+#define M6526_PIN_PC    (42)
+#define M6526_PIN_SP    (43)
+#define M6526_PIN_TOD   (44)
+#define M6526_PIN_CNT   (45)
+
+// port I/O pins
+#define M6526_PIN_PA0   (48)
+#define M6526_PIN_PA1   (49)
+#define M6526_PIN_PA2   (50)
+#define M6526_PIN_PA3   (51)
+#define M6526_PIN_PA4   (52)
+#define M6526_PIN_PA5   (53)
+#define M6526_PIN_PA6   (54)
+#define M6526_PIN_PA7   (55)
+
+#define M6526_PIN_PB0   (56)
+#define M6526_PIN_PB1   (57)
+#define M6526_PIN_PB2   (58)
+#define M6526_PIN_PB3   (59)
+#define M6526_PIN_PB4   (60)
+#define M6526_PIN_PB5   (61)
+#define M6526_PIN_PB6   (62)
+#define M6526_PIN_PB7   (63)
+
+// pin bit masks
+#define M6526_RS0   (1ULL<<M6526_PIN_RS0)
+#define M6526_RS1   (1ULL<<M6526_PIN_RS1)
+#define M6526_RS2   (1ULL<<M6526_PIN_RS2)
+#define M6526_RS3   (1ULL<<M6526_PIN_RS3)
 #define M6526_RS    (M6526_RS3|M6526_RS2|M6526_RS1|M6526_RS0)
-
-/* data bus pins shared with CPU */
-#define M6526_D0    (1ULL<<16)
-#define M6526_D1    (1ULL<<17)
-#define M6526_D2    (1ULL<<18)
-#define M6526_D3    (1ULL<<19)
-#define M6526_D4    (1ULL<<20)
-#define M6526_D5    (1ULL<<21)
-#define M6526_D6    (1ULL<<22)
-#define M6526_D7    (1ULL<<23)
+#define M6526_D0    (1ULL<<M6526_PIN_D0)
+#define M6526_D1    (1ULL<<M6526_PIN_D1)
+#define M6526_D2    (1ULL<<M6526_PIN_D2)
+#define M6526_D3    (1ULL<<M6526_PIN_D3)
+#define M6526_D4    (1ULL<<M6526_PIN_D4)
+#define M6526_D5    (1ULL<<M6526_PIN_D5)
+#define M6526_D6    (1ULL<<M6526_PIN_D6)
+#define M6526_D7    (1ULL<<M6526_PIN_D7)
 #define M6526_DB_PINS (0xFF0000ULL)
-
-/* control pins shared with CPU */
-#define M6526_RW    (1ULL<<24)      /* same as M6502_RW */
-#define M6526_IRQ   (1ULL<<26)      /* same as M6502_IRQ */
-
-/* chip-specific control pins */
-#define M6526_CS    (1ULL<<40)
-#define M6526_FLAG  (1ULL<<41)
-#define M6526_PC    (1ULL<<42)
-#define M6526_SP    (1ULL<<43)
-#define M6526_TOD   (1ULL<<44)
-#define M6526_CNT   (1ULL<<45)
-
-/* port I/O pins */
-#define M6526_PA0   (1ULL<<48)
-#define M6526_PA1   (1ULL<<49)
-#define M6526_PA2   (1ULL<<50)
-#define M6526_PA3   (1ULL<<51)
-#define M6526_PA4   (1ULL<<52)
-#define M6526_PA5   (1ULL<<53)
-#define M6526_PA6   (1ULL<<54)
-#define M6526_PA7   (1ULL<<55)
+#define M6526_RW    (1ULL<<M6526_PIN_RW)
+#define M6526_IRQ   (1ULL<<M6526_PIN_IRQ)
+#define M6526_CS    (1ULL<<M6526_PIN_CS)
+#define M6526_FLAG  (1ULL<<M6526_PIN_FLAG)
+#define M6526_PC    (1ULL<<M6526_PIN_PC)
+#define M6526_SP    (1ULL<<M6526_PIN_SP)
+#define M6526_TOD   (1ULL<<M6526_PIN_TOD)
+#define M6526_CNT   (1ULL<<M6526_PIN_CNT)
+#define M6526_PA0   (1ULL<<M6526_PIN_PA0)
+#define M6526_PA1   (1ULL<<M6526_PIN_PA1)
+#define M6526_PA2   (1ULL<<M6526_PIN_PA2)
+#define M6526_PA3   (1ULL<<M6526_PIN_PA3)
+#define M6526_PA4   (1ULL<<M6526_PIN_PA4)
+#define M6526_PA5   (1ULL<<M6526_PIN_PA5)
+#define M6526_PA6   (1ULL<<M6526_PIN_PA6)
+#define M6526_PA7   (1ULL<<M6526_PIN_PA7)
 #define M6526_PA_PINS   (M6526_PA0|M6526_PA1|M6526_PA2|M6526_PA3|M6526_PA4|M6526_PA5|M6526_PA6|M6526_PA7)
-
-#define M6526_PB0   (1ULL<<56)
-#define M6526_PB1   (1ULL<<57)
-#define M6526_PB2   (1ULL<<58)
-#define M6526_PB3   (1ULL<<59)
-#define M6526_PB4   (1ULL<<60)
-#define M6526_PB5   (1ULL<<61)
-#define M6526_PB6   (1ULL<<62)
-#define M6526_PB7   (1ULL<<63)
+#define M6526_PB0   (1ULL<<M6526_PIN_PB0)
+#define M6526_PB1   (1ULL<<M6526_PIN_PB1)
+#define M6526_PB2   (1ULL<<M6526_PIN_PB2)
+#define M6526_PB3   (1ULL<<M6526_PIN_PB3)
+#define M6526_PB4   (1ULL<<M6526_PIN_PB4)
+#define M6526_PB5   (1ULL<<M6526_PIN_PB5)
+#define M6526_PB6   (1ULL<<M6526_PIN_PB6)
+#define M6526_PB7   (1ULL<<M6526_PIN_PB7)
 #define M6526_PB_PINS   (M6526_PB0|M6526_PB1|M6526_PB2|M6526_PB3|M6526_PB4|M6526_PB5|M6526_PB6|M6526_PB7)
 
-/* register indices */
-#define M6526_REG_PRA       (0)     /* peripheral data reg A */
-#define M6526_REG_PRB       (1)     /* peripheral data reg B */
-#define M6526_REG_DDRA      (2)     /* data direction reg A */
-#define M6526_REG_DDRB      (3)     /* data direction reg B */
-#define M6526_REG_TALO      (4)     /* timer A low register */
-#define M6526_REG_TAHI      (5)     /* timer A high register */
-#define M6526_REG_TBLO      (6)     /* timer B low register */
-#define M6526_REG_TBHI      (7)     /* timer B high register */
-#define M6526_REG_TOD10TH   (8)     /* 10ths of seconds register */
-#define M6526_REG_TODSEC    (9)     /* seconds register */
-#define M6526_REG_TODMIN    (10)    /* minutes register */
-#define M6526_REG_TODHR     (11)    /* hours am/pm register */
-#define M6526_REG_SDR       (12)    /* serial data register */
-#define M6526_REG_ICR       (13)    /* interrupt control register */
-#define M6526_REG_CRA       (14)    /* control register A */
-#define M6526_REG_CRB       (15)    /* control register B */
+// register indices
+#define M6526_REG_PRA       (0)     // peripheral data reg A
+#define M6526_REG_PRB       (1)     // peripheral data reg B
+#define M6526_REG_DDRA      (2)     // data direction reg A
+#define M6526_REG_DDRB      (3)     // data direction reg B
+#define M6526_REG_TALO      (4)     // timer A low register
+#define M6526_REG_TAHI      (5)     // timer A high register
+#define M6526_REG_TBLO      (6)     // timer B low register
+#define M6526_REG_TBHI      (7)     // timer B high register
+#define M6526_REG_TOD10TH   (8)     // 10ths of seconds register
+#define M6526_REG_TODSEC    (9)     // seconds register
+#define M6526_REG_TODMIN    (10)    // minutes register
+#define M6526_REG_TODHR     (11)    // hours am/pm register
+#define M6526_REG_SDR       (12)    // serial data register
+#define M6526_REG_ICR       (13)    // interrupt control register
+#define M6526_REG_CRA       (14)    // control register A
+#define M6526_REG_CRB       (15)    // control register B
 
-/*--- control-register flag testing macros ---*/
+//--- control-register flag testing macros
 #define M6526_TIMER_STARTED(cr)     (0!=((cr)&(1<<0)))
 #define M6526_PBON(cr)              (0!=((cr)&(1<<1)))
 #define M6526_OUTMODE_TOGGLE(cr)    (0!=((cr)&(1<<2)))
@@ -159,7 +197,7 @@ extern "C" {
 #define M6526_TB_INMODE_TACNT(crb)  (((1<<6)|(1<<5))==((crb)&((1<<6)|(1<<5))))
 #define M6526_TB_ALARM_ALARM(crb)   (0!=((crb)&(1<<7)))
 
-/* delay-pipeline bit offsets */
+// delay-pipeline bit offsets
 #define M6526_PIP_TIMER_COUNT     (0)
 #define M6526_PIP_TIMER_ONESHOT   (8)
 #define M6526_PIP_TIMER_LOAD      (16)
@@ -167,21 +205,21 @@ extern "C" {
 #define M6526_PIP_IRQ       (0)
 #define M6526_PIP_READ_ICR  (8)
 
-/* I/O port state */
+// I/O port state
 typedef struct {
-    uint8_t reg;    /* port register */
-    uint8_t ddr;    /* data direction register */
-    uint8_t inp;    /* input latch */
-    uint8_t pins;   /* current port pin state */
+    uint8_t reg;    // port register
+    uint8_t ddr;    // data direction register
+    uint8_t inp;    // input latch
+    uint8_t pins;   // current port pin state
 } m6526_port_t;
 
-/* timer state */
+// timer state
 typedef struct {
-    uint16_t latch;     /* 16-bit initial value latch */
-    uint16_t counter;   /* 16-bit counter */
-    uint8_t cr;         /* control register */
-    bool t_bit;         /* toggles between true and false when counter underflows */
-    bool t_out;         /* true for 1 cycle when counter underflow */
+    uint16_t latch;     // 16-bit initial value latch
+    uint16_t counter;   // 16-bit counter
+    uint8_t cr;         // control register
+    bool t_bit;         // toggles between true and false when counter underflows
+    bool t_out;         // true for 1 cycle when counter underflow
     /* merged delay-pipelines:
         2-cycle 'counter active':   bits 0..7
         1-cycle 'oneshot active':   bits 8..15
@@ -190,20 +228,20 @@ typedef struct {
     uint32_t pip;
 } m6526_timer_t;
 
-/* interrupt state */
+// interrupt state
 typedef struct {
-    uint8_t imr;            /* interrupt mask */
-    uint8_t imr1;           /* one cycle delay for imr updates */
-    uint8_t icr;            /* interrupt control register */
+    uint8_t imr;            // interrupt mask
+    uint8_t imr1;           // one cycle delay for imr updates
+    uint8_t icr;            // interrupt control register
     /* merged delay pipelines:
         1-cycle delay pipeline to request irq:  bits 0..7
         timer B bug: remember reads from ICR:   bits 8..15
     */
     uint32_t pip;
-    bool flag;              /* last state of flag bit, to detect edge */
+    bool flag;              // last state of flag bit, to detect edge
 } m6526_int_t;
 
-/* m6526 state */
+// m6526 state
 typedef struct {
     m6526_port_t pa;
     m6526_port_t pb;
@@ -213,30 +251,30 @@ typedef struct {
     uint64_t pins;
 } m6526_t;
 
-/* extract 8-bit data bus from 64-bit pins */
+// extract 8-bit data bus from 64-bit pins
 #define M6526_GET_DATA(p) ((uint8_t)((p)>>16))
-/* merge 8-bit data bus value into 64-bit pins */
+// merge 8-bit data bus value into 64-bit pins
 #define M6526_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
-/* extract port A pins */
+// extract port A pins
 #define M6526_GET_PA(p) ((uint8_t)((p)>>48))
-/* extract port B pins */
+// extract port B pins
 #define M6526_GET_PB(p) ((uint8_t)((p)>>56))
-/* merge port A pins into pin mask */
+// merge port A pins into pin mask
 #define M6526_SET_PA(p,a) {p=((p)&0xFF00FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48);}
-/* merge port B pins into pin mask */
+// merge port B pins into pin mask
 #define M6526_SET_PB(p,b) {p=((p)&0x00FFFFFFFFFFFFFFULL)|(((b)&0xFFULL)<<56);}
-/* merge port A and B pins into pin mask */
+// merge port A and B pins into pin mask
 #define M6526_SET_PAB(p,a,b) {p=((p)&0x0000FFFFFFFFFFFFULL)|(((a)&0xFFULL)<<48)|(((b)&0xFFULL)<<56);}
 
-/* initialize a new m6526_t instance */
+// initialize a new m6526_t instance
 void m6526_init(m6526_t* c);
-/* reset an existing m6526_t instance */
+// reset an existing m6526_t instance
 void m6526_reset(m6526_t* c);
-/* tick the m6526_t instance */
+// tick the m6526_t instance
 uint64_t m6526_tick(m6526_t* c, uint64_t pins);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -415,7 +453,7 @@ static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
     if (_M6526_PIP_TEST(c->intr.pip, M6526_PIP_IRQ, 0)) {
         c->intr.icr |= (1<<7);
     }
-    
+
     /* update IRQ pin */
     if (0 != (c->intr.icr & (1<<7))) {
         pins |= M6526_IRQ;
@@ -507,7 +545,7 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     /* timer B oneshot pipeline */
     if (M6526_RUNMODE_ONESHOT(c->tb.cr)) {
         _M6526_PIP_SET(c->tb.pip, M6526_PIP_TIMER_ONESHOT, 1);
-    }    
+    }
 
     /* interrupt pipeline */
     if (c->intr.icr & c->intr.imr) {

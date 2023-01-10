@@ -20,7 +20,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -120,7 +120,7 @@ bool beeper_tick(beeper_t* bp) {
     bp->counter -= BEEPER_FIXEDPOINT_SCALE;
     if (bp->counter <= 0) {
         bp->counter += bp->period;
-        bp->sample = _beeper_dcadjust(bp, (float)bp->state) * bp->volume * bp->base_volume;
+        bp->sample = _beeper_dcadjust(bp, (float)bp->state * bp->volume * bp->base_volume);
         return true;
     }
     return false;

@@ -12,11 +12,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -30,6 +30,7 @@
 
     You need to include the following headers before including namco.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/clk.h
     - chips/mem.h
@@ -55,18 +56,27 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// increase when namco_t memory layout changes
+#define NAMCO_SNAPSHOT_VERSION (1)
+
 #define NAMCO_MAX_AUDIO_SAMPLES (1024)
 #define NAMCO_DEFAULT_AUDIO_SAMPLES (128)
+#define NAMCO_FRAMEBUFFER_WIDTH (512)
+#define NAMCO_FRAMEBUFFER_HEIGHT (224)
+#define NAMCO_FRAMEBUFFER_SIZE_BYTES (NAMCO_FRAMEBUFFER_WIDTH * NAMCO_FRAMEBUFFER_HEIGHT)
+#define NAMCO_DISPLAY_WIDTH     (288)
+#define NAMCO_DISPLAY_HEIGHT    (224)
 
 // input bits (use with namco_input_set() and namco_input_clear())
 #define NAMCO_INPUT_P1_UP       (1<<0)
@@ -84,73 +94,36 @@ extern "C" {
 #define NAMCO_INPUT_P2_COIN     (1<<12)
 #define NAMCO_INPUT_P2_START    (1<<13)
 
-// audio callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} namco_audio_callback_t;
-
-// debugging hook definitions
-typedef void (*namco_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        namco_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} namco_debug_t;
-
-typedef struct {
-    const void* ptr;
-    size_t size;
-} namco_rom_image_t;
-
 // configuration parameters for namco_init()
 typedef struct {
-    // optional debugging hook
-    namco_debug_t debug;
-
-    // video output config
-    struct {
-        void* ptr;      // pointer to a linear RGBA8 pixel buffer, at least 224*256*4 bytes
-        size_t size;    // size of the pixel buffer in bytes
-    } pixel_buffer;
-
-    // audio output config (if you don't want audio, set audio.callback.func to zero)
-    struct {
-        namco_audio_callback_t callback;    // called when audio_num_samples are ready
-        int num_samples;                    // default is NAMCO_DEFAULT_AUDIO_SAMPLES
-        int sample_rate;                    // playback sample rate, default is 44100
-        float volume;                       // audio volume, 0.0..1.0, default is 1.0
-    } audio;
-
-    // ROM images
+    chips_debug_t debug;
+    chips_audio_desc_t audio;
     struct {
         // common ROM areas for Pacman and Pengo
         struct {
-            namco_rom_image_t cpu_0000_0FFF;
-            namco_rom_image_t cpu_1000_1FFF;
-            namco_rom_image_t cpu_2000_2FFF;
-            namco_rom_image_t cpu_3000_3FFF;
-            namco_rom_image_t prom_0000_001F;
-            namco_rom_image_t sound_0000_00FF;
-            namco_rom_image_t sound_0100_01FF;
+            chips_range_t cpu_0000_0FFF;
+            chips_range_t cpu_1000_1FFF;
+            chips_range_t cpu_2000_2FFF;
+            chips_range_t cpu_3000_3FFF;
+            chips_range_t prom_0000_001F;
+            chips_range_t sound_0000_00FF;
+            chips_range_t sound_0100_01FF;
         } common;
         // Pengo specific ROM areas
         struct {
-            namco_rom_image_t cpu_4000_4FFF;
-            namco_rom_image_t cpu_5000_5FFF;
-            namco_rom_image_t cpu_6000_6FFF;
-            namco_rom_image_t cpu_7000_7FFF;
-            namco_rom_image_t gfx_0000_1FFF;
-            namco_rom_image_t gfx_2000_3FFF;
-            namco_rom_image_t prom_0020_041F;
+            chips_range_t cpu_4000_4FFF;
+            chips_range_t cpu_5000_5FFF;
+            chips_range_t cpu_6000_6FFF;
+            chips_range_t cpu_7000_7FFF;
+            chips_range_t gfx_0000_1FFF;
+            chips_range_t gfx_2000_3FFF;
+            chips_range_t prom_0020_041F;
         } pengo;
         // Pacman specific ROM areas
         struct {
-            namco_rom_image_t gfx_0000_0FFF;
-            namco_rom_image_t gfx_1000_1FFF;
-            namco_rom_image_t prom_0020_011F;
+            chips_range_t gfx_0000_0FFF;
+            chips_range_t gfx_1000_1FFF;
+            chips_range_t prom_0020_011F;
         } pacman;
     } roms;
 } namco_desc_t;
@@ -172,13 +145,14 @@ typedef struct {
     uint8_t rom[2][0x0100]; // wave table ROM
     int num_samples;
     int sample_pos;
-    namco_audio_callback_t callback;
+    chips_audio_callback_t callback;
     float sample_buffer[NAMCO_MAX_AUDIO_SAMPLES];
 } namco_sound_t;
 
 // the Namco arcade machine state
 typedef struct {
     z80_t cpu;
+    mem_t mem;
     uint8_t in0;    // inverted bits (active-low)
     uint8_t in1;    // inverted bits (active-low)
     uint8_t dsw1;   // dip-switches as-is (active-high)
@@ -193,14 +167,10 @@ typedef struct {
     uint8_t clut_select;    // Pengo only
     uint8_t tile_select;    // Pengo only
     uint8_t sprite_coords[16];      // 8 sprites, uint8_t x, uint8_t y
-    mem_t mem;
 
     bool valid;
-    namco_debug_t debug;
+    chips_debug_t debug;
 
-    uint32_t* pixel_buffer;
-    uint32_t palette_cache[512];    // precomputed RGBA values, Pacman: 256 entries , Pengo: 512 entries
-    void* user_data;
     namco_sound_t sound;
     uint8_t video_ram[0x0400];
     uint8_t color_ram[0x0400];
@@ -208,6 +178,9 @@ typedef struct {
     uint8_t rom_cpu[0x8000];        // program ROM: Pacman: 16 KB, Pengo: 32 KB
     uint8_t rom_gfx[0x4000];        // tile ROM: Pacman: 8 KB, Pengo: 16 KB
     uint8_t rom_prom[0x0420];       // palette and color lookup ROM
+    uint32_t hw_colors[32];         // decoded color palette from palette ROM
+    uint8_t palette_cache[512];     // palette indirection table, Pacman: 256 entries , Pengo: 512 entries
+    alignas(64) uint8_t fb[NAMCO_FRAMEBUFFER_SIZE_BYTES];   // indices into palette
 } namco_t;
 
 // initialize a new namco_t instance
@@ -216,18 +189,18 @@ void namco_init(namco_t* sys, const namco_desc_t* desc);
 void namco_discard(namco_t* sys);
 // reset a namco_t instance
 void namco_reset(namco_t* sys);
+// query display, framebuffer and color palette (note: palette requires a valid sys ptr!)
+chips_display_info_t namco_display_info(namco_t* sys);
 // run namco_t instance for given amount of microseconds, return number of ticks executed
 uint32_t namco_exec(namco_t* sys, uint32_t micro_seconds);
 // set input bits
 void namco_input_set(namco_t* sys, uint32_t mask);
 // clear input bits
 void namco_input_clear(namco_t* sys, uint32_t mask);
-// get the standard framebuffer width and height in pixels
-int namco_std_display_width(void);
-int namco_std_display_height(void);
-// get the current framebuffer width and height in pixels
-int namco_display_width(namco_t* sys);
-int namco_display_height(namco_t* sys);
+// take a snapshot, patches any pointers to zero, returns a snapshot version
+uint32_t namco_save_snapshot(namco_t* sys, namco_t* dst);
+// load a snapshot, returns false if snapshot version doesn't match
+bool namco_load_snapshot(namco_t* sys, uint32_t version, namco_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -407,9 +380,6 @@ int namco_display_height(namco_t* sys);
 #define NAMCO_SOUND_OVERSAMPLE  (2)
 #define NAMCO_SAMPLE_SCALE      (16)
 #define NAMCO_VSYNC_PERIOD      (NAMCO_CPU_CLOCK / 60)
-#define NAMCO_DISPLAY_WIDTH     (288)
-#define NAMCO_DISPLAY_HEIGHT    (224)
-#define NAMCO_DISPLAY_SIZE      (NAMCO_DISPLAY_WIDTH*NAMCO_DISPLAY_HEIGHT*4)
 
 static void _namco_sound_init(namco_t* sys, const namco_desc_t* desc);
 static void _namco_sound_wr(namco_t* sys, uint16_t addr, uint8_t data);
@@ -419,12 +389,10 @@ static void _namco_sound_tick(namco_t* sys);
 
 void namco_init(namco_t* sys, const namco_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= NAMCO_DISPLAY_SIZE)));
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(namco_t));
     sys->valid = true;
-    sys->pixel_buffer = (uint32_t*) desc->pixel_buffer.ptr;
     sys->debug = desc->debug;
     sys->vsync_count = NAMCO_VSYNC_PERIOD;
     _namco_sound_init(sys, desc);
@@ -533,8 +501,7 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
     #endif
 
     // setup an RGBA palette from the 8-bit RGB values in PROM
-    uint32_t hw_colors[32];
-    for (int i = 0; i < 32; i++) {
+    for (size_t i = 0; i < 32; i++) {
         /*
            Each color ROM entry describes an RGB color in 1 byte:
 
@@ -547,12 +514,12 @@ void namco_init(namco_t* sys, const namco_desc_t* desc) {
         uint8_t r = ((rgb>>0)&1) * 0x21 + ((rgb>>1)&1) * 0x47 + ((rgb>>2)&1) * 0x97;
         uint8_t g = ((rgb>>3)&1) * 0x21 + ((rgb>>4)&1) * 0x47 + ((rgb>>5)&1) * 0x97;
         uint8_t b = ((rgb>>6)&1) * 0x47 + ((rgb>>7)&1) * 0x97;
-        hw_colors[i] = 0xFF000000 | (b<<16) | (g<<8) | r;
+        sys->hw_colors[i] = 0xFF000000 | (b<<16) | (g<<8) | r;
     }
-    for (int i = 0; i < 256; i++) {
+    for (size_t i = 0; i < 256; i++) {
         uint8_t pal_index = sys->rom_prom[i + 0x20] & 0xF;
-        sys->palette_cache[i] = hw_colors[pal_index];
-        sys->palette_cache[256 + i] = hw_colors[0x10 | pal_index];
+        sys->palette_cache[i] = pal_index;
+        sys->palette_cache[256 + i] = 0x10 | pal_index;
     }
 }
 
@@ -579,6 +546,7 @@ static uint64_t _namco_tick(namco_t* sys, uint64_t pins) {
     // tick the sound chip
     _namco_sound_tick(sys);
 
+    // tick the cpu
     pins = z80_tick(&sys->cpu, pins);
 
     // memory requests
@@ -687,9 +655,10 @@ static uint16_t _namco_video_offset(uint32_t x, uint32_t y) {
 
 // 8x4 video tile decoder (used both for background tiles and sprites)
 static inline void _namco_8x4(
-    uint32_t* pixel_base,
+    uint8_t* fb,
     uint8_t* tile_base,
-    uint32_t* palette_base,
+    uint8_t* pal_base,
+    uint8_t* pal_rom,
     uint32_t tile_stride,
     uint32_t tile_offset,
     uint32_t px,
@@ -707,7 +676,7 @@ static inline void _namco_8x4(
         if (y >= NAMCO_DISPLAY_HEIGHT) {
             continue;
         }
-        int tile_index = char_code*tile_stride + tile_offset + yy;
+        int tile_index = char_code * tile_stride + tile_offset + yy;
         for (uint32_t xx = 0; xx < 4; xx++) {
             uint32_t x = px + (xx ^ xor_x);
             if (x >= NAMCO_DISPLAY_WIDTH) {
@@ -716,10 +685,9 @@ static inline void _namco_8x4(
             uint8_t p2_hi = (tile_base[tile_index]>>(7-xx)) & 1;
             uint8_t p2_lo = (tile_base[tile_index]>>(3-xx)) & 1;
             uint8_t p2 = (p2_hi<<1)|p2_lo;
-            uint32_t rgba = palette_base[(color_code<<2)|p2];
-            if (opaque || (rgba != 0xFF000000)) {
-                uint32_t* dst = &pixel_base[y*NAMCO_DISPLAY_WIDTH + x];
-                *dst = rgba;
+            uint8_t hw_color = pal_base[(color_code<<2)|p2];
+            if (opaque || (pal_rom[hw_color] != 0)) {
+                fb[y * NAMCO_FRAMEBUFFER_WIDTH + x] = hw_color;
             }
         }
     }
@@ -727,23 +695,21 @@ static inline void _namco_8x4(
 
 // decode background tiles
 static void _namco_decode_chars(namco_t* sys) {
-    uint32_t* pixel_base = sys->pixel_buffer;
-    uint32_t* pal_base = &sys->palette_cache[(sys->pal_select<<8)|(sys->clut_select<<7)];
+    uint8_t* pal_base = &sys->palette_cache[(sys->pal_select<<8)|(sys->clut_select<<7)];
     uint8_t* tile_base = &sys->rom_gfx[0x0000] + (sys->tile_select * 0x2000);
     for (uint32_t y = 0; y < 28; y++) {
         for (uint32_t x = 0; x < 36; x++) {
             uint16_t offset = _namco_video_offset(x, y);
             uint8_t char_code = sys->video_ram[offset];
             uint8_t color_code = sys->color_ram[offset] & 0x1F;
-            _namco_8x4(pixel_base, tile_base, pal_base, 16, 8, x*8, y*8, char_code, color_code, true, false, false);
-            _namco_8x4(pixel_base, tile_base, pal_base, 16, 0, x*8+4, y*8, char_code, color_code, true, false, false);
+            _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 16, 8, x*8, y*8, char_code, color_code, true, false, false);
+            _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 16, 0, x*8+4, y*8, char_code, color_code, true, false, false);
         }
     }
 }
 
 static void _namco_decode_sprites(namco_t* sys) {
-    uint32_t* pixel_base = sys->pixel_buffer;
-    uint32_t* pal_base = &sys->palette_cache[(sys->pal_select<<8)|(sys->clut_select<<7)];
+    uint8_t* pal_base = &sys->palette_cache[(sys->pal_select<<8)|(sys->clut_select<<7)];
     uint8_t* tile_base = &sys->rom_gfx[0x1000] + (sys->tile_select * 0x2000);
     #if defined(NAMCO_PACMAN)
     const int max_sprite = 6;
@@ -766,23 +732,21 @@ static void _namco_decode_sprites(namco_t* sys) {
         uint32_t fx1 = flip_x ? 8 : 4;
         uint32_t fx2 = flip_x ? 4 : 8;
         uint32_t fx3 = flip_x ? 0 :12;
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 8,  px+fx0, py+fy0, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 16, px+fx1, py+fy0, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 24, px+fx2, py+fy0, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 0,  px+fx3, py+fy0, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 40, px+fx0, py+fy1, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 48, px+fx1, py+fy1, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 56, px+fx2, py+fy1, char_code, color_code, false, flip_x, flip_y);
-        _namco_8x4(pixel_base, tile_base, pal_base, 64, 32, px+fx3, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 8,  px+fx0, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 16, px+fx1, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 24, px+fx2, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 0,  px+fx3, py+fy0, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 40, px+fx0, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 48, px+fx1, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 56, px+fx2, py+fy1, char_code, color_code, false, flip_x, flip_y);
+        _namco_8x4(sys->fb, tile_base, pal_base, sys->rom_prom, 64, 32, px+fx3, py+fy1, char_code, color_code, false, flip_x, flip_y);
     }
 }
 
 void _namco_decode_video(namco_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    if (sys->pixel_buffer) {
-        _namco_decode_chars(sys);
-        _namco_decode_sprites(sys);
-    }
+    _namco_decode_chars(sys);
+    _namco_decode_sprites(sys);
 }
 
 uint32_t namco_exec(namco_t* sys, uint32_t micro_seconds) {
@@ -907,28 +871,6 @@ void namco_input_clear(namco_t* sys, uint32_t mask) {
     }
 }
 
-int namco_std_display_width(void) {
-    return NAMCO_DISPLAY_WIDTH;
-}
-
-int namco_display_size(void) {
-    return NAMCO_DISPLAY_SIZE;
-}
-
-int namco_std_display_height(void) {
-    return NAMCO_DISPLAY_HEIGHT;
-}
-
-int namco_display_width(namco_t* sys) {
-    (void)sys;
-    return NAMCO_DISPLAY_WIDTH;
-}
-
-int namco_display_height(namco_t* sys) {
-    (void)sys;
-    return NAMCO_DISPLAY_HEIGHT;
-}
-
 static void _namco_sound_init(namco_t* sys, const namco_desc_t* desc) {
     CHIPS_ASSERT(desc->audio.num_samples <= NAMCO_MAX_AUDIO_SAMPLES);
     // assume zero-initialized
@@ -1029,4 +971,58 @@ static void _namco_sound_tick(namco_t* sys) {
         }
     }
 }
+
+chips_display_info_t namco_display_info(namco_t* sys) {
+    const chips_display_info_t res = {
+        .frame = {
+            .dim = {
+                .width = NAMCO_FRAMEBUFFER_WIDTH,
+                .height = NAMCO_FRAMEBUFFER_HEIGHT,
+            },
+            .bytes_per_pixel = 1,
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = NAMCO_FRAMEBUFFER_SIZE_BYTES,
+            },
+        },
+        .screen = {
+            .x = 0,
+            .y = 0,
+            .width = NAMCO_DISPLAY_WIDTH,
+            .height = NAMCO_DISPLAY_HEIGHT,
+        },
+        .palette = {
+            .ptr = sys ?  sys->hw_colors : 0,
+            .size = 32 * sizeof(uint32_t)
+        },
+        .portrait = true,
+    };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    CHIPS_ASSERT(((sys == 0) && (res.palette.ptr == 0)) || ((sys != 0) && (res.palette.ptr != 0)));
+    return res;
+}
+
+uint32_t namco_save_snapshot(namco_t* sys, namco_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->sound.callback);
+    mem_snapshot_onsave(&dst->mem, sys);
+    return NAMCO_SNAPSHOT_VERSION;
+}
+
+bool namco_load_snapshot(namco_t* sys, uint32_t version, namco_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != NAMCO_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static namco_t im;
+    im = *src;
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.sound.callback, &sys->sound.callback);
+    mem_snapshot_onload(&im.mem, sys);
+    *sys = im;
+    return true;
+}
+
 #endif // CHIPS_IMPL
