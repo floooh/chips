@@ -20,7 +20,7 @@
     sampled audio playback.
   - The video decoding on some systems has been slightly optimized
     (ZX Spectrum, KC85/2..4, Z9001 and Z1013)
-  - All emulators now have a snapshot function, mainly useful for debugging.
+  - All emulators now have a snapshot feature, mainly useful for debugging.
     Snapshot files are *not* intended as interchange file formats, since even
     small changes to the emulator implementation will make old snapshot files
     invalid. The feature simply works by taking a copy of the emulator's state
