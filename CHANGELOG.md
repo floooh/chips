@@ -20,14 +20,13 @@
     sampled audio playback.
   - The video decoding on some systems has been slightly optimized
     (ZX Spectrum, KC85/2..4, Z9001 and Z1013)
-  - All emulators now have a snapshot function, mainly useful for debugging
-    debugging. Snapshot files are *not* intended as interchange file formats,
-    since even small changes to the emulator implementation will make old
-    snapshot files invalid. The feature simply works by taking a copy of
-    the emulator's state in host memory, which is quite trivial since the
-    entire emulator state lives in a single nested data structure, but this
-    is also the reason why snapshot files are not stable, so use the feature
-    at your own risk.
+  - All emulators now have a snapshot function, mainly useful for debugging.
+    Snapshot files are *not* intended as interchange file formats, since even
+    small changes to the emulator implementation will make old snapshot files
+    invalid. The feature simply works by taking a copy of the emulator's state
+    in host memory, which is quite trivial since the entire emulator state
+    lives in a single nested data structure, but this is also the reason why
+    snapshot files are not stable, so use the feature at your own risk.
   - There's now a new header 'chips/chips_common.h' with shared structs and
     functions, this header now needs to be included before any other chip
     or system header.
