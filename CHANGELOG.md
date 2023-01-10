@@ -53,7 +53,7 @@
       (by getting rid of 8 to 16 color palette lookups and writing less data
       per tick) and allows to move part of the video decoding (the color palette
       resolution) into a pixel shader running on the GPU. The only exception
-      is Bombjack. This still generates an RGBA8 host framebuffer because 'hardware
+      is Bombjack. This still generates an RGBA8 host framebuffer because the 'hardware
       palette' of the Bombjack arcade machine is 12-bits wide (4096 colors)
       and thus doesn't fit into a 256-entry color palette.
   - A potential buffer overflow in Bombjack has been fixed (under rare circumstances,
