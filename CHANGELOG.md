@@ -32,16 +32,16 @@
     or system header.
   - pointer/size pairs have been replaced now with the common ```chips_range_t```
     struct
-  - The video decoding has changed dramatically:
+  - The video decoding has changed drastically:
     - The host framebuffer is now part of the emulator state and no longer provided
       as a ptr/size pair from the outside. That way, snapshots automatically contain
       a screenshot of the current emulator state.
     - The (now internal) host framebuffer is now generally 2^N bytes wide which
       simplifies address computation in the emulator's video decoding. The host
-      framebuffer rendering code is expected to only render a visible subarea
+      framebuffer rendering code is expected to only render a visible sub-area
       out of the host framebuffer.
     - The various getter functions for quering information about the display
-      has been replaced with a single function which returns a ```chips_display_info_t```
+      have been replaced with a single function which returns a ```chips_display_info_t```
       struct, containing all information needed to render the emulator's
       framebuffer (framebuffer dimension, bytes per pixel, pointer to the internal
       framebuffer, the visible 'screen rectangle', an optional color palette,
