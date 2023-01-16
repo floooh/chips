@@ -1482,32 +1482,32 @@ static void _ui_dbg_handle_input(ui_dbg_t* win) {
     /* unused hotkeys are defined as 0 and will never be triggered */
     if (win->dbg.stopped) {
         if (0 != win->ui.keys.cont.keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.cont.keycode)) {
+            if (ImGui::IsKeyPressed((ImGuiKey)win->ui.keys.cont.keycode)) {
                 _ui_dbg_continue(win);
             }
         }
         if (0 != win->ui.keys.step_over.keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_over.keycode)) {
+            if (ImGui::IsKeyPressed((ImGuiKey)win->ui.keys.step_over.keycode)) {
                 _ui_dbg_step_over(win);
             }
         }
         if (0 != win->ui.keys.step_into.keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_into.keycode)) {
+            if (ImGui::IsKeyPressed((ImGuiKey)win->ui.keys.step_into.keycode)) {
                 _ui_dbg_step_into(win);
             }
         }
         if (0 != win->ui.keys.step_tick.keycode) {
-            if (ImGui::IsKeyPressed(win->ui.keys.step_tick.keycode)) {
+            if (ImGui::IsKeyPressed((ImGuiKey)win->ui.keys.step_tick.keycode)) {
                 _ui_dbg_step_tick(win);
             }
         }
     }
     else {
-        if (ImGui::IsKeyPressed(win->ui.keys.stop.keycode)) {
+        if (ImGui::IsKeyPressed((ImGuiKey)win->ui.keys.stop.keycode)) {
             _ui_dbg_break(win);
         }
     }
-    if (ImGui::IsKeyPressed(win->ui.keys.toggle_breakpoint.keycode)) {
+    if (ImGui::IsKeyPressed((ImGuiKey)win->ui.keys.toggle_breakpoint.keycode)) {
         _ui_dbg_bp_toggle_exec(win, _ui_dbg_get_pc(win));
     }
 }
