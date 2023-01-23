@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -46,7 +46,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -313,7 +313,7 @@ struct MemoryEditor
         Sizes s;
         CalcSizes(s, mem_size, base_display_addr);
         if (0 == AddrInputBuf[0]) {
-            sprintf(AddrInputBuf, "%0*" _PRISizeT, s.AddrDigitsCount, base_display_addr);
+            snprintf(AddrInputBuf, sizeof(AddrInputBuf), "%0*" _PRISizeT, s.AddrDigitsCount, base_display_addr);
         }
         ImGuiStyle& style = ImGui::GetStyle();
 
@@ -403,8 +403,8 @@ struct MemoryEditor
                     {
                         ImGui::SetKeyboardFocusHere();
                         ImGui::CaptureKeyboardFromApp(true);
-                        sprintf(AddrInputBuf, "%0*" _PRISizeT, s.AddrDigitsCount, base_display_addr + addr);
-                        sprintf(DataInputBuf, "%02X", ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
+                        snprintf(AddrInputBuf, sizeof(AddrInputBuf), "%0*" _PRISizeT, s.AddrDigitsCount, base_display_addr + addr);
+                        snprintf(DataInputBuf, sizeof(DataInputBuf), "%02X", ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
                     }
                     ImGui::PushItemWidth(s.GlyphWidth * 2);
                     struct UserData
@@ -430,7 +430,7 @@ struct MemoryEditor
                     };
                     UserData user_data;
                     user_data.CursorPos = -1;
-                    sprintf(user_data.CurrentBufOverwrite, "%02X", ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
+                    snprintf(user_data.CurrentBufOverwrite, sizeof(user_data.CurrentBufOverwrite), "%02X", ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
                     ImGuiInputTextFlags flags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_AlwaysInsertMode | ImGuiInputTextFlags_CallbackAlways;
                     if (ImGui::InputText("##data", DataInputBuf, 32, flags, UserData::Callback, &user_data))
                         data_write = data_next = true;
