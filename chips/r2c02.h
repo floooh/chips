@@ -112,16 +112,16 @@ static const int AttributeOffset = 0x3C0;
 typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
     void (*write)(uint16_t addr, uint8_t data, void* user_data);
-    void (*scanlineIRQ)(void* user_data);
-    uint8_t (*readPalette)(uint8_t paletteAddr, void* user_data);
-    void (*vblankCallback)(void* user_data);
-    void (*setPixel)(int x, int y, uint8_t color, void* user_data);
+    void (*scanline_irq)(void* user_data);
+    uint8_t (*read_palette)(uint8_t paletteAddr, void* user_data);
+    void (*vblank_callback)(void* user_data);
+    void (*set_pixel)(int x, int y, uint8_t color, void* user_data);
     void* user_data;
 
-    uint8_t scanlineSprites[8];
-    uint8_t spriteMemory[64*4];
-    uint8_t pictureBuffer[PictureBufferSize];
-    int nScanlineSprites;
+    uint8_t scanline_sprites[8];
+    uint8_t sprite_memory[64*4];
+    uint8_t picture_buffer[PictureBufferSize];
+    int scanline_sprites_num;
 
     enum State
     {
@@ -133,47 +133,47 @@ typedef struct {
 
     int cycle;
     int scanline;
-    bool evenFrame;
+    bool even_frame;
 
     bool vblank;
-    bool sprZeroHit;
-    bool spriteOverflow;
+    bool spr_zero_hit;
+    bool sprite_overflow;
 
     //Registers
-    uint16_t dataAddress;
-    uint16_t tempAddress;
-    uint8_t fineXScroll;
-    bool firstWrite;
-    uint8_t dataBuffer;
+    uint16_t data_address;
+    uint16_t temp_address;
+    uint8_t fine_x_scroll;
+    bool first_write;
+    uint8_t data_buffer;
 
-    uint8_t spriteDataAddress;
+    uint8_t sprite_data_address;
 
     //Setup flags and variables
-    bool longSprites;
-    bool generateInterrupt;
+    bool long_sprites;
+    bool generate_interrupt;
 
-    bool greyscaleMode;
-    bool showSprites;
-    bool showBackground;
-    bool hideEdgeSprites;
-    bool hideEdgeBackground;
+    bool greyscale_mode;
+    bool show_sprites;
+    bool show_background;
+    bool hide_edge_sprites;
+    bool hide_edge_background;
 
     enum CharacterPage
     {
         Low,
         High,
-    } bgPage, sprPage;
-    
-    uint16_t dataAddrIncrement;
+    } bg_page, spr_page;
+
+    uint16_t data_addr_increment;
 } r2c02_t;
 
 typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
     void (*write)(uint16_t addr, uint8_t data, void* user_data);
-    void (*scanlineIRQ)(void* user_data);
-    uint8_t (*readPalette)(uint8_t paletteAddr, void* user_data);
-    void (*vblankCallback)(void* user_data);
-    void (*setPixel)(int x, int y, uint8_t color, void* user_data);
+    void (*scanline_irq)(void* user_data);
+    uint8_t (*read_palette)(uint8_t paletteAddr, void* user_data);
+    void (*vblank_callback)(void* user_data);
+    void (*set_pixel)(int x, int y, uint8_t color, void* user_data);
     void* user_data;
 } r2c02_desc_t;
 
@@ -183,7 +183,9 @@ void r2c02_init(r2c02_t* sys, const r2c02_desc_t* desc);
 void r2c02_reset(r2c02_t* sys);
 /* tick r2c02_t instance */
 uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins);
+
 uint8_t r2c02_status(r2c02_t* sys);
+void r2c02_set_sata_address(r2c02_t* sys, uint8_t addr);
 uint8_t r2c02_data(r2c02_t* sys);
 uint8_t r2c02_oam_data(r2c02_t* sys, uint16_t addr);
 void r2c02_set_mask(r2c02_t* sys, uint8_t mask);
@@ -202,18 +204,31 @@ void r2c02_init(r2c02_t* sys, const r2c02_desc_t* desc) {
     memset(sys, 0, sizeof(*sys));
     sys->read = desc->read;
     sys->write = desc->write;
-    sys->scanlineIRQ = desc->scanlineIRQ;
-    sys->readPalette = desc->readPalette;
-    sys->vblankCallback = desc->vblankCallback;
-    sys->setPixel = desc->setPixel;
+    sys->scanline_irq = desc->scanline_irq;
+    sys->read_palette = desc->read_palette;
+    sys->vblank_callback = desc->vblank_callback;
+    sys->set_pixel = desc->set_pixel;
     sys->user_data = desc->user_data;
 }
 
+void r2c02_reset(r2c02_t* sys) {
+    CHIPS_ASSERT(sys);
+    sys->long_sprites = sys->generate_interrupt = sys->greyscale_mode = sys->vblank = sys->sprite_overflow = false;
+    sys->show_background = sys->show_sprites = sys->even_frame = sys->first_write = true;
+    sys->bg_page = sys->spr_page = Low;
+    sys->data_address = sys->cycle = sys->scanline = sys->sprite_data_address = sys->fine_x_scroll = sys->temp_address = 0;
+    //m_baseNameTable = 0x2000;
+    sys->data_addr_increment = 1;
+    sys->pipelineState = PreRender;
+    sys->scanline_sprites_num = 0;
+}
+
 uint8_t r2c02_status(r2c02_t* sys) {
-    uint8_t status = sys->spriteOverflow << 5 | sys->sprZeroHit << 6 | sys->vblank << 7;
+    CHIPS_ASSERT(sys);
+    uint8_t status = sys->sprite_overflow << 5 | sys->spr_zero_hit << 6 | sys->vblank << 7;
     // Reading status clears vblank!
     sys->vblank = false;
-    sys->firstWrite = true;
+    sys->first_write = true;
     return status;
 }
 
@@ -223,68 +238,81 @@ inline static void _swap(uint8_t* d1, uint8_t* d2) {
     *d2 = tmp;
 }
 
+void r2c02_set_sata_address(r2c02_t* sys, uint8_t addr) {
+    CHIPS_ASSERT(sys);
+    if (sys->first_write) {
+        sys->temp_address &= 0x00ff;
+        sys->temp_address |= (addr & 0x3f) << 8;
+        sys->first_write = false;
+    } else {
+        sys->temp_address &= 0xff00;
+        sys->temp_address |= addr;
+        sys->data_address = sys->temp_address;
+        sys->first_write = true;
+    }
+}
+
 uint8_t r2c02_data(r2c02_t* sys) {
-    uint8_t data = sys->read(sys->dataAddress, sys->user_data);
-    sys->dataAddress += sys->dataAddrIncrement;
+    uint8_t data = sys->read(sys->data_address, sys->user_data);
+    sys->data_address += sys->data_addr_increment;
 
     //Reads are delayed by one byte/read when address is in this range
-    if (sys->dataAddress < 0x3f00)
+    if (sys->data_address < 0x3f00)
     {
         //Return from the data buffer and store the current value in the buffer
-        _swap(&data, &sys->dataBuffer);
+        _swap(&data, &sys->data_buffer);
     }
 
     return data;
 }
 
 void r2c02_control(r2c02_t* sys, uint8_t ctrl) {
-    sys->generateInterrupt = ctrl & 0x80;
-    sys->longSprites = ctrl & 0x20;
-    sys->bgPage = (!!(ctrl & 0x10));
-    sys->sprPage = (!!(ctrl & 0x8));
+    sys->generate_interrupt = ctrl & 0x80;
+    sys->long_sprites = ctrl & 0x20;
+    sys->bg_page = (!!(ctrl & 0x10));
+    sys->spr_page = (!!(ctrl & 0x8));
     if (ctrl & 0x4)
-        sys->dataAddrIncrement = 0x20;
+        sys->data_addr_increment = 0x20;
     else
-        sys->dataAddrIncrement = 1;
-    //m_baseNameTable = (ctrl & 0x3) * 0x400 + 0x2000;
+        sys->data_addr_increment = 1;
 
     //Set the nametable in the temp address, this will be reflected in the data address during rendering
-    sys->tempAddress &= ~0xc00;                 //Unset
-    sys->tempAddress |= (ctrl & 0x3) << 10;     //Set according to ctrl bits
+    sys->temp_address &= ~0xc00;                 //Unset
+    sys->temp_address |= (ctrl & 0x3) << 10;     //Set according to ctrl bits
 }
 
 uint8_t r2c02_oam_data(r2c02_t* sys, uint16_t addr) {
-    return sys->spriteMemory[addr];
+    return sys->sprite_memory[addr];
 }
 
 void r2c02_set_mask(r2c02_t* sys, uint8_t mask) {
-    sys->greyscaleMode = mask & 0x1;
-    sys->hideEdgeBackground = !(mask & 0x2);
-    sys->hideEdgeSprites = !(mask & 0x4);
-    sys->showBackground = mask & 0x8;
-    sys->showSprites = mask & 0x10;
+    sys->greyscale_mode = mask & 0x1;
+    sys->hide_edge_background = !(mask & 0x2);
+    sys->hide_edge_sprites = !(mask & 0x4);
+    sys->show_background = mask & 0x8;
+    sys->show_sprites = mask & 0x10;
 }
 
 void r2c02_set_scroll(r2c02_t* sys, uint8_t scroll) {
-    if (sys->firstWrite)
+    if (sys->first_write)
     {
-        sys->tempAddress &= ~0x1f;
-        sys->tempAddress |= (scroll >> 3) & 0x1f;
-        sys->fineXScroll = scroll & 0x7;
-        sys->firstWrite = false;
+        sys->temp_address &= ~0x1f;
+        sys->temp_address |= (scroll >> 3) & 0x1f;
+        sys->fine_x_scroll = scroll & 0x7;
+        sys->first_write = false;
     }
     else
     {
-        sys->tempAddress &= ~0x73e0;
-        sys->tempAddress |= ((scroll & 0x7) << 12) |
+        sys->temp_address &= ~0x73e0;
+        sys->temp_address |= ((scroll & 0x7) << 12) |
                          ((scroll & 0xf8) << 2);
-        sys->firstWrite = true;
+        sys->first_write = true;
     }
 }
 
 void r2c02_set_data(r2c02_t* sys, uint8_t data) {
-    sys->write(sys->dataAddress, data, sys->user_data);
-    sys->dataAddress += sys->dataAddrIncrement;
+    sys->write(sys->data_address, data, sys->user_data);
+    sys->data_address += sys->data_addr_increment;
 }
 
 uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
@@ -293,31 +321,31 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
     {
         case PreRender:
             if (sys->cycle == 1)
-                sys->vblank = sys->sprZeroHit = false;
-            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->showBackground && sys->showSprites)
+                sys->vblank = sys->spr_zero_hit = false;
+            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->show_background && sys->show_sprites)
             {
                 //Set bits related to horizontal position
-                sys->dataAddress &= ~0x41f; //Unset horizontal bits
-                sys->dataAddress |= sys->tempAddress & 0x41f; //Copy
+                sys->data_address &= ~0x41f; //Unset horizontal bits
+                sys->data_address |= sys->temp_address & 0x41f; //Copy
             }
-            else if (sys->cycle > 280 && sys->cycle <= 304 && sys->showBackground && sys->showSprites)
+            else if (sys->cycle > 280 && sys->cycle <= 304 && sys->show_background && sys->show_sprites)
             {
                 //Set vertical bits
-                sys->dataAddress &= ~0x7be0; //Unset bits related to horizontal
-                sys->dataAddress |= sys->tempAddress & 0x7be0; //Copy
+                sys->data_address &= ~0x7be0; //Unset bits related to horizontal
+                sys->data_address |= sys->temp_address & 0x7be0; //Copy
             }
 //                 if (sys->cycle > 257 && sys->cycle < 320)
 //                     sys->spriteDataAddress = 0;
             //if rendering is on, every other frame is one cycle shorter
-            if (sys->cycle >= ScanlineEndCycle - (!sys->evenFrame && sys->showBackground && sys->showSprites))
+            if (sys->cycle >= ScanlineEndCycle - (!sys->even_frame && sys->show_background && sys->show_sprites))
             {
                 sys->pipelineState = Render;
                 sys->cycle = sys->scanline = 0;
             }
 
             // add IRQ support for MMC3
-            if(sys->cycle==260 && sys->showBackground && sys->showSprites){
-                sys->scanlineIRQ(sys->user_data);
+            if(sys->cycle==260 && sys->show_background && sys->show_sprites){
+                sys->scanline_irq(sys->user_data);
             }
             break;
         case Render:
@@ -330,20 +358,20 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 int x = sys->cycle - 1;
                 int y = sys->scanline;
 
-                if (sys->showBackground)
+                if (sys->show_background)
                 {
-                    int x_fine = (sys->fineXScroll + x) % 8;
-                    if (!sys->hideEdgeBackground || x >= 8)
+                    int x_fine = (sys->fine_x_scroll + x) % 8;
+                    if (!sys->hide_edge_background || x >= 8)
                     {
                         //fetch tile
-                        uint16_t addr = 0x2000 | (sys->dataAddress & 0x0FFF); //mask off fine y
+                        uint16_t addr = 0x2000 | (sys->data_address & 0x0FFF); //mask off fine y
                         //auto addr = 0x2000 + x / 8 + (y / 8) * (ScanlineVisibleDots / 8);
                         uint8_t tile = sys->read(addr, sys->user_data);
 
                         //fetch pattern
                         //Each pattern occupies 16 bytes, so multiply by 16
-                        addr = (tile * 16) + ((sys->dataAddress >> 12/*y % 8*/) & 0x7); //Add fine y
-                        addr |= sys->bgPage << 12; //set whether the pattern is in the high or low page
+                        addr = (tile * 16) + ((sys->data_address >> 12/*y % 8*/) & 0x7); //Add fine y
+                        addr |= sys->bg_page << 12; //set whether the pattern is in the high or low page
                         //Get the corresponding bit determined by (8 - x_fine) from the right
                         bgColor = (sys->read(addr, sys->user_data) >> (7 ^ x_fine)) & 1; //bit 0 of palette entry
                         bgColor |= ((sys->read(addr + 8, sys->user_data) >> (7 ^ x_fine)) & 1) << 1; //bit 1
@@ -351,43 +379,43 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                         bgOpaque = bgColor; //flag used to calculate final pixel with the sprite pixel
 
                         //fetch attribute and calculate higher two bits of palette
-                        addr = 0x23C0 | (sys->dataAddress & 0x0C00) | ((sys->dataAddress >> 4) & 0x38)
-                                    | ((sys->dataAddress >> 2) & 0x07);
+                        addr = 0x23C0 | (sys->data_address & 0x0C00) | ((sys->data_address >> 4) & 0x38)
+                                    | ((sys->data_address >> 2) & 0x07);
                         uint8_t attribute = sys->read(addr, sys->user_data);
-                        int shift = ((sys->dataAddress >> 4) & 4) | (sys->dataAddress & 2);
+                        int shift = ((sys->data_address >> 4) & 4) | (sys->data_address & 2);
                         //Extract and set the upper two bits for the color
                         bgColor |= ((attribute >> shift) & 0x3) << 2;
                     }
                     //Increment/wrap coarse X
                     if (x_fine == 7)
                     {
-                        if ((sys->dataAddress & 0x001F) == 31) // if coarse X == 31
+                        if ((sys->data_address & 0x001F) == 31) // if coarse X == 31
                         {
-                            sys->dataAddress &= ~0x001F;          // coarse X = 0
-                            sys->dataAddress ^= 0x0400;           // switch horizontal nametable
+                            sys->data_address &= ~0x001F;          // coarse X = 0
+                            sys->data_address ^= 0x0400;           // switch horizontal nametable
                         }
                         else
                         {
-                            sys->dataAddress += 1;                // increment coarse X
+                            sys->data_address += 1;                // increment coarse X
                         }
                     }
                 }
 
-                if (sys->showSprites && (!sys->hideEdgeSprites || x >= 8))
+                if (sys->show_sprites && (!sys->hide_edge_sprites || x >= 8))
                 {
-                    for (uint8_t ii = 0; ii<sys->nScanlineSprites; ++ii)
+                    for (uint8_t ii = 0; ii<sys->scanline_sprites_num; ++ii)
                     {
-                        uint8_t i = sys->scanlineSprites[ii];
-                        uint8_t spr_x =     sys->spriteMemory[i * 4 + 3];
+                        uint8_t i = sys->scanline_sprites[ii];
+                        uint8_t spr_x = sys->sprite_memory[i * 4 + 3];
 
                         if (0 > x - spr_x || x - spr_x >= 8)
                             continue;
 
-                        uint8_t spr_y     = sys->spriteMemory[i * 4 + 0] + 1,
-                                tile      = sys->spriteMemory[i * 4 + 1],
-                                attribute = sys->spriteMemory[i * 4 + 2];
+                        uint8_t spr_y     = sys->sprite_memory[i * 4 + 0] + 1,
+                                tile      = sys->sprite_memory[i * 4 + 1],
+                                attribute = sys->sprite_memory[i * 4 + 2];
 
-                        int length = (sys->longSprites) ? 16 : 8;
+                        int length = (sys->long_sprites) ? 16 : 8;
 
                         int x_shift = (x - spr_x) % 8, y_offset = (y - spr_y) % length;
 
@@ -398,10 +426,10 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
                         uint16_t addr = 0;
 
-                        if (!sys->longSprites)
+                        if (!sys->long_sprites)
                         {
                             addr = tile * 16 + y_offset;
-                            if (sys->sprPage == High) addr += 0x1000;
+                            if (sys->spr_page == High) addr += 0x1000;
                         }
                         else //8x16 sprites
                         {
@@ -426,9 +454,9 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                         spriteForeground = !(attribute & 0x20);
 
                         //Sprite-0 hit detection
-                        if (!sys->sprZeroHit && sys->showBackground && i == 0 && sprOpaque && bgOpaque)
+                        if (!sys->spr_zero_hit && sys->show_background && i == 0 && sprOpaque && bgOpaque)
                         {
-                            sys->sprZeroHit = true;
+                            sys->spr_zero_hit = true;
                         }
 
                         break; //Exit the loop now since we've found the highest priority sprite
@@ -444,43 +472,43 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                     paletteAddr = 0;
                 //else bgColor
 
-                sys->pictureBuffer[x+y*256] = sys->readPalette(paletteAddr, sys->user_data);
+                sys->picture_buffer[x+y*256] = sys->read_palette(paletteAddr, sys->user_data);
             }
-            else if (sys->cycle == ScanlineVisibleDots + 1 && sys->showBackground)
+            else if (sys->cycle == ScanlineVisibleDots + 1 && sys->show_background)
             {
                 //Shamelessly copied from nesdev wiki
-                if ((sys->dataAddress & 0x7000) != 0x7000)  // if fine Y < 7
-                    sys->dataAddress += 0x1000;              // increment fine Y
+                if ((sys->data_address & 0x7000) != 0x7000)  // if fine Y < 7
+                    sys->data_address += 0x1000;              // increment fine Y
                 else
                 {
-                    sys->dataAddress &= ~0x7000;             // fine Y = 0
-                    int y = (sys->dataAddress & 0x03E0) >> 5;    // let y = coarse Y
+                    sys->data_address &= ~0x7000;             // fine Y = 0
+                    int y = (sys->data_address & 0x03E0) >> 5;    // let y = coarse Y
                     if (y == 29)
                     {
                         y = 0;                                // coarse Y = 0
-                        sys->dataAddress ^= 0x0800;              // switch vertical nametable
+                        sys->data_address ^= 0x0800;              // switch vertical nametable
                     }
                     else if (y == 31)
                         y = 0;                                // coarse Y = 0, nametable not switched
                     else
                         y += 1;                               // increment coarse Y
-                    sys->dataAddress = (sys->dataAddress & ~0x03E0) | (y << 5);
+                    sys->data_address = (sys->data_address & ~0x03E0) | (y << 5);
                                                             // put coarse Y back into sys->dataAddress
                 }
             }
-            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->showBackground && sys->showSprites)
+            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->show_background && sys->show_sprites)
             {
                 //Copy bits related to horizontal position
-                sys->dataAddress &= ~0x41f;
-                sys->dataAddress |= sys->tempAddress & 0x41f;
+                sys->data_address &= ~0x41f;
+                sys->data_address |= sys->temp_address & 0x41f;
             }
 
 //                 if (sys->cycle > 257 && sys->cycle < 320)
 //                     sys->spriteDataAddress = 0;
 
             // add IRQ support for MMC3
-            if(sys->cycle==260 && sys->showBackground && sys->showSprites){
-                sys->scanlineIRQ(sys->user_data);
+            if(sys->cycle==260 && sys->show_background && sys->show_sprites){
+                sys->scanline_irq(sys->user_data);
             }
 
             if (sys->cycle >= ScanlineEndCycle)
@@ -489,26 +517,26 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 //This isn't where/when this indexing, actually copying in 2C02 is done
                 //but (I think) it shouldn't hurt any games if this is done here
 
-                sys->nScanlineSprites = 0;
+                sys->scanline_sprites_num = 0;
 
                 int range = 8;
-                if (sys->longSprites)
+                if (sys->long_sprites)
                 {
                     range = 16;
                 }
 
                 size_t j = 0;
-                for (size_t i = sys->spriteDataAddress / 4; i < 64; ++i)
+                for (size_t i = sys->sprite_data_address / 4; i < 64; ++i)
                 {
-                    int diff = (sys->scanline - sys->spriteMemory[i * 4]);
+                    int diff = (sys->scanline - sys->sprite_memory[i * 4]);
                     if (0 <= diff && diff < range)
                     {
                         if (j >= 8)
                         {
-                            sys->spriteOverflow = true;
+                            sys->sprite_overflow = true;
                             break;
                         }
-                        sys->scanlineSprites[sys->nScanlineSprites++] = i;
+                        sys->scanline_sprites[sys->scanline_sprites_num++] = i;
                         ++j;
                     }
                 }
@@ -532,7 +560,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 {
                     for (int y = 0; y < 240; ++y)
                     {
-                        sys->setPixel(x, y, sys->pictureBuffer[x+y*256], sys->user_data);
+                        sys->set_pixel(x, y, sys->picture_buffer[x+y*256], sys->user_data);
                     }
                 }
 
@@ -543,7 +571,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
             if (sys->cycle == 1 && sys->scanline == VisibleScanlines + 1)
             {
                 sys->vblank = true;
-                if (sys->generateInterrupt) sys->vblankCallback(sys->user_data);
+                if (sys->generate_interrupt) sys->vblank_callback(sys->user_data);
             }
 
             if (sys->cycle >= ScanlineEndCycle)
@@ -556,7 +584,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
             {
                 sys->pipelineState = PreRender;
                 sys->scanline = 0;
-                sys->evenFrame = !sys->evenFrame;
+                sys->even_frame = !sys->even_frame;
             }
 
             break;
