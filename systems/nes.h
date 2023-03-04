@@ -71,11 +71,7 @@ typedef struct {
 } nes_cartridge_header;
 
 typedef struct {
-    void (*write_prg)(uint16_t addr, uint8_t value, void* user_data);
     uint8_t (*read_prg)(uint16_t addr, void* user_data);
-
-    uint8_t (*read_chr)(uint16_t addr, void* user_data);
-    void (*write_chr)(uint16_t addr, uint8_t value, void* user_data);
     void* user_data;
 } nes_mapper_t;
 
@@ -152,8 +148,6 @@ static void _ppu_vblank(void* user_data);
 static void _ppu_set_pixel(int x, int y, uint8_t color, void* user_data);
 static uint64_t _nes_tick(nes_t* sys, uint64_t pins);
 static uint8_t mapper0_read_prg(uint16_t addr, void* user_data);
-static uint8_t mapper0_read_chr(uint16_t addr, void* user_data);
-static void mapper0_write_chr(uint16_t addr, uint8_t value, void* user_data);
 
 void nes_init(nes_t* sys, const nes_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -259,11 +253,15 @@ bool nes_insert_cart(nes_t* sys, chips_range_t data) {
         return false;
 
     // not supported
-    if(hdr->trainer || hdr->sram_avail || hdr->vram_expansion || hdr->mapper_low)
+    if(hdr->trainer || hdr->sram_avail || hdr->vram_expansion || hdr->mapper_low || hdr->prg_page_count > 2 || hdr->tile_page_count > 1)
         return false;
 
+    size_t prg_size = hdr->prg_page_count * 0x4000;
     memcpy(&sys->cart.header, hdr, sizeof(nes_cartridge_header));
-    memcpy(&sys->cart.rom, data.ptr + sizeof(nes_cartridge_header), data.size - sizeof(nes_cartridge_header));
+    memcpy(&sys->cart.rom, data.ptr + sizeof(nes_cartridge_header), prg_size);
+    if(hdr->tile_page_count > 0) {
+        memcpy(&sys->character_ram, data.ptr + sizeof(nes_cartridge_header) + prg_size, 0x2000);
+    }
 
     const uint8_t mapper = hdr->mapper_low | (hdr->mapper_hi << 4);
     CHIPS_ASSERT(mapper == 0);
@@ -280,14 +278,16 @@ bool nes_insert_cart(nes_t* sys, chips_range_t data) {
     
     sys->mapper = (nes_mapper_t){
         .user_data = (void*)sys,
-        .read_prg = mapper0_read_prg,
-        .read_chr = mapper0_read_chr,
-        .write_chr = mapper0_write_chr
+        .read_prg = mapper0_read_prg
     };
 
     mem_unmap_layer(&sys->mem, 0);
-    mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->cart.rom);
-    mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->cart.rom);
+    if(hdr->prg_page_count == 1) {
+        mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->cart.rom);
+        mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->cart.rom);
+    } else {
+        mem_map_ram(&sys->mem, 0, 0x8000, 0x8000, sys->cart.rom);
+    }
 
     nes_reset(sys);
     return true;
@@ -393,7 +393,6 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         sys->request_nmi = false;
     }
     pins = m6502_tick(&sys->cpu, pins);
-    pins &= ~(M6502_IRQ|M6502_NMI);
     
     //printf("PC: %04X\n", sys->cpu.PC);
     // extract 16-bit address from pin mask
@@ -404,24 +403,22 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         if(addr < 0x2000) {
             M6502_SET_DATA(pins, sys->ram[addr & 0x7ff]);
         }
-        else if (addr < 0x4020)
-        {
+        else if (addr < 0x4020) {
             if (addr < 0x4000) //PPU registers, mirrored
                 addr = addr & 0x2007;
             if(addr == _PPUSTATUS) {
                 M6502_SET_DATA(pins, r2c02_status(&sys->ppu));
+                pins &= ~M6502_NMI;
             } else if(addr == _PPUDATA) {
                 M6502_SET_DATA(pins, r2c02_data(&sys->ppu));
             } else if(addr == _OAMDATA) {
                 M6502_SET_DATA(pins, r2c02_oam_data(&sys->ppu, addr));
             }
         }
-        else if (addr < 0x8000)
-        {
+        else if (addr < 0x8000) {
             // TODO:
         }
-        else if (sys->mapper.read_prg)
-        {
+        else if (sys->mapper.read_prg) {
             M6502_SET_DATA(pins, sys->mapper.read_prg((addr - 0x8000)& 0x3fff, sys->mapper.user_data));
         }
     }
@@ -429,7 +426,6 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         // a memory write
         uint8_t data = M6502_GET_DATA(pins);
         if(addr < 0x2000) {
-            //mem_wr(&sys->mem, addr & 0x7ff, data);
             sys->ram[addr & 0x7ff] = data;
         }
         else if (addr < 0x4020) {
@@ -470,22 +466,9 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
 }
 
 static uint8_t mapper0_read_prg(uint16_t addr, void* user_data) {
-    // TODO: check num banks
     nes_t* sys = (nes_t*)user_data;
     CHIPS_ASSERT(sys && sys->valid);
     return sys->cart.rom[addr];
-}
-
-static uint8_t mapper0_read_chr(uint16_t addr, void* user_data) {
-    nes_t* sys = (nes_t*)user_data;
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->character_ram[addr];
-}
-
-static void mapper0_write_chr(uint16_t addr, uint8_t value, void* user_data) {
-    nes_t* sys = (nes_t*)user_data;
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->character_ram[addr] = value;
 }
 
 #endif /* CHIPS_IMPL */
