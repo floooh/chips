@@ -65,24 +65,19 @@ EXT3  [17]        [24>  /R
 #define PPU_FRAMEBUFFER_SIZE_BYTES (PPU_DISPLAY_WIDTH * PPU_DISPLAY_HEIGHT)
 #define PPU_RAM_SIZE (0x800)
 
+# define RGB(r,g,b) ((uint32_t)((uint32_t)(0xFF)<<24)|((uint32_t)(b)<<16)|((uint32_t)(g)<<8)|r)
+
+// blargg's palette: https://www.nesdev.org/wiki/PPU_palettes
 const uint32_t ppu_palette[] =
 {
-    0xff666666, 0xff002a88, 0xff1412a7, 0xff3b00a4,
-    0xff5c007e, 0xff6e0040, 0xff6c0600, 0xff561d00,
-    0xff333500, 0xff0b4800, 0xff005200, 0xff004f08,
-    0xff00404d, 0xff000000, 0xff000000, 0xff000000,
-    0xffadadad, 0xff155fd9, 0xff4240ff, 0xff7527fe,
-    0xffa01acc, 0xffb71e7b, 0xffb53120, 0xff994e00,
-    0xff6b6d00, 0xff388700, 0xff0c9300, 0xff008f32,
-    0xff007c8d, 0xff000000, 0xff000000, 0xff000000,
-    0xfffffeff, 0xff64b0ff, 0xff9290ff, 0xffc676ff,
-    0xfff36aff, 0xfffe6ecc, 0xfffe8170, 0xffea9e22,
-    0xffbcbe00, 0xff88d800, 0xff5ce430, 0xff45e082,
-    0xff48cdde, 0xff4f4f4f, 0xff000000, 0xff000000,
-    0xfffffeff, 0xffc0dfff, 0xffd3d2ff, 0xffe8c8ff,
-    0xfffbc2ff, 0xfffec4ea, 0xfffeccc5, 0xfff7d8a5,
-    0xffe4e594, 0xffcfef96, 0xffbdf4ab, 0xffb3f3cc,
-    0xffb5ebf2, 0xffb8b8b8, 0xff000000, 0xff000000,
+    RGB( 84,  84,  84), RGB( 0,   30, 116), RGB(  8,  16, 144), RGB( 48,   0, 136), RGB( 68,   0, 100), RGB( 92,   0,  48), RGB( 84,   4,   0), RGB( 60,  24,   0),
+    RGB(32,   42,   0), RGB(  8,  58,   0), RGB(  0,  64,   0), RGB(  0,  60,   0), RGB(  0,  50,  60), RGB(  0,   0,   0), RGB(  0,   0,   0), RGB(  0,   0,   0),
+    RGB(152, 150, 152), RGB( 8,   76, 196), RGB( 48,  50, 236), RGB( 92,  30, 228), RGB(136,  20, 176), RGB(160,  20, 100), RGB(152,  34,  32), RGB(120,  60,   0),
+    RGB(84,   90,   0), RGB( 40, 114,   0), RGB(  8, 124,   0), RGB(  0, 118,  40), RGB(  0, 102, 120), RGB(  0,   0,   0), RGB(  0,   0,   0), RGB(  0,   0,   0),
+    RGB(236, 238, 236), RGB( 76, 154, 236), RGB(120, 124, 236), RGB(176,  98, 236), RGB(228,  84, 236), RGB(236,  88, 180), RGB(236, 106, 100), RGB(212, 136,  32),
+    RGB(160, 170,   0), RGB(116, 196,   0), RGB( 76, 208,  32), RGB( 56, 204, 108), RGB( 56, 180, 204), RGB( 60,  60,  60), RGB(  0,   0,   0), RGB(  0,   0,   0),
+    RGB(236, 238, 236), RGB(168, 204, 236), RGB(188, 188, 236), RGB(212, 178, 236), RGB(236, 174, 236), RGB(236, 174, 212), RGB(236, 180, 176), RGB(228, 196, 144),
+    RGB(204, 210, 120), RGB(180, 222, 120), RGB(168, 226, 144), RGB(152, 226, 180), RGB(160, 214, 228), RGB(160, 162, 160), RGB(  0,   0,   0), RGB(  0,   0,   0)
 };
 
 // data bus pins shared with CPU
@@ -446,7 +441,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                     paletteAddr = sprColor;
                 else if (!bgOpaque && !sprOpaque)
                     paletteAddr = 0;
-                
+
                 sys->picture_buffer[x+y*256] = sys->read_palette(paletteAddr, sys->user_data);
             }
             else if (sys->cycle == ScanlineVisibleDots + 1 && sys->show_background) {

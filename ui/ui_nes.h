@@ -302,14 +302,63 @@ static void _ui_nes_picture_mem_write(int layer, uint16_t addr, uint8_t data, vo
     }
 }
 
-static void _ui_nes_draw_hw_colors() {
+static void _ui_nes_draw_hw_colors(ui_nes_t* ui) {
     ImGui::Text("Hardware Colors:");
     const ImVec2 size(18,18);
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < 64; i++) {
         ImGui::PushID(i);
         ImGui::ColorButton("##hw_color", ImColor(ppu_palette[i]), ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
         if (((i+1) % 16) != 0) {
+            ImGui::SameLine();
+        }
+    }
+    
+    nes_t* nes = ui->nes;
+    ImGui::Text("Background palette 0:");
+    uint16_t addr = 0x3f00;
+    for (int i = 0; i < 4; i++) {
+        ImGui::PushID(i);
+        uint8_t pal_index = mem_rd(&nes->ppu_mem, addr + i);
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 4) != 0) {
+            ImGui::SameLine();
+        }
+    }
+    
+    ImGui::Text("Background palette 1:");
+    addr = 0x3f04;
+    for (int i = 0; i < 4; i++) {
+        ImGui::PushID(i);
+        uint8_t pal_index = mem_rd(&nes->ppu_mem, addr + i);
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 4) != 0) {
+            ImGui::SameLine();
+        }
+    }
+    
+    ImGui::Text("Background palette 2:");
+    addr = 0x3f08;
+    for (int i = 0; i < 4; i++) {
+        ImGui::PushID(i);
+        uint8_t pal_index = mem_rd(&nes->ppu_mem, addr + i);
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 4) != 0) {
+            ImGui::SameLine();
+        }
+    }
+    
+    ImGui::Text("Background palette 3:");
+    addr = 0x3f0c;
+    for (int i = 0; i < 4; i++) {
+        ImGui::PushID(i);
+        uint8_t pal_index = mem_rd(&nes->ppu_mem, addr + i);
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 4) != 0) {
             ImGui::SameLine();
         }
     }
@@ -422,7 +471,7 @@ void ui_nes_draw(ui_nes_t* ui) {
         ui_memedit_draw(&ui->picture_memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
-    _ui_nes_draw_hw_colors();
+    _ui_nes_draw_hw_colors(ui);
     ui_dbg_draw(&ui->dbg);
 }
 
