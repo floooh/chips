@@ -85,6 +85,7 @@ typedef struct {
     int x, y;           /* initial window pos */
     int w, h;           /* initial window size, or 0 for default size */
     bool open;          /* initial open state */
+    size_t mem_size;    /* memory size */
 } ui_memedit_desc_t;
 
 typedef struct {
@@ -94,7 +95,7 @@ typedef struct {
     void* user_data;
     float init_x, init_y;
     float init_w, init_h;
-    size_t max_addr;
+    size_t mem_size;
     MemoryEditor* ed;
     bool open;
     bool valid;
@@ -910,7 +911,7 @@ void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 512 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 120 : desc->h);
-    win->max_addr = (desc->max_addr == 0) ? (1<<16) : desc->max_addr;
+    win->mem_size = desc->mem_size == 0 ? (1<<16) : desc->mem_size;
     win->open = desc->open;
     win->ed = new MemoryEditor;
     win->ed->Cols = (desc->num_cols == 0) ? win->ed->Cols : desc->num_cols;
@@ -947,13 +948,13 @@ void ui_memedit_draw(ui_memedit_t* win) {
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
-    win->ed->DrawWindow(win->title, (uint8_t*)win, win->max_addr);
+    win->ed->DrawWindow(win->title, (uint8_t*)win, win->mem_size);
     win->open = win->ed->Open;
 }
 
 void ui_memedit_draw_content(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->valid);
-    win->ed->DrawContents((uint8_t*)win, win->max_addr);
+    win->ed->DrawContents((uint8_t*)win, win->mem_size);
 }
 #ifdef _MSC_VER
 #pragma warning(pop)

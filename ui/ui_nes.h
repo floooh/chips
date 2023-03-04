@@ -68,6 +68,8 @@ typedef struct {
     nes_t* nes;
     ui_m6502_t cpu;
     ui_memedit_t memedit[4];
+    ui_memedit_t ppu_memedit[4];
+    ui_memedit_t picture_memedit[4];
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
 } ui_nes_t;
@@ -125,6 +127,20 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
                 ImGui::MenuItem("Window #4", 0, &ui->memedit[3].open);
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("PPU Memory Editor")) {
+                ImGui::MenuItem("Window #1", 0, &ui->ppu_memedit[0].open);
+                ImGui::MenuItem("Window #2", 0, &ui->ppu_memedit[1].open);
+                ImGui::MenuItem("Window #3", 0, &ui->ppu_memedit[2].open);
+                ImGui::MenuItem("Window #4", 0, &ui->ppu_memedit[3].open);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Picture Memory Editor")) {
+                ImGui::MenuItem("Window #1", 0, &ui->picture_memedit[0].open);
+                ImGui::MenuItem("Window #2", 0, &ui->picture_memedit[1].open);
+                ImGui::MenuItem("Window #3", 0, &ui->picture_memedit[2].open);
+                ImGui::MenuItem("Window #4", 0, &ui->picture_memedit[3].open);
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu("Disassembler")) {
                 ImGui::MenuItem("Window #1", 0, &ui->dasm[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->dasm[1].open);
@@ -173,6 +189,7 @@ static const ui_chip_pin_t _ui_nes_cpu_pins[] = {
 };
 
 static uint8_t _ui_nes_mem_read(int layer, uint16_t addr, void* user_data) {
+    (void)layer;
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
@@ -184,11 +201,117 @@ static uint8_t _ui_nes_mem_read(int layer, uint16_t addr, void* user_data) {
 }
 
 static void _ui_nes_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+    (void)layer;
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
     if (addr < 0x2000) {
         mem_wr(&nes->mem, addr, data);
+    }
+}
+
+static uint8_t _ui_nes_ppu_mem_read(int layer, uint16_t addr, void* user_data) {
+    (void)layer;
+    CHIPS_ASSERT(user_data);
+    ui_nes_t* ui_nes = (ui_nes_t*) user_data;
+    nes_t* nes = ui_nes->nes;
+    if (addr < 0x2000) {
+        return nes->character_ram[addr];
+    }
+    if (addr >= 0x2000 && addr < 0x3f00) {
+        const uint16_t index = addr & 0x3ff;
+        // Name tables upto 0x3000, then mirrored upto 3eff
+        uint16_t normalizedAddr = addr;
+        if (addr >= 0x3000)
+            normalizedAddr -= 0x1000;
+
+        if (normalizedAddr < 0x2400)      //NT0
+            normalizedAddr = nes->ppu_name_table[0] + index;
+        else if (normalizedAddr < 0x2800) //NT1
+            normalizedAddr = nes->ppu_name_table[1] + index;
+        else if (normalizedAddr < 0x2c00) //NT2
+            normalizedAddr = nes->ppu_name_table[2] + index;
+        else
+            normalizedAddr = nes->ppu_name_table[3] + index;
+        return mem_rd(&nes->ppu_mem, normalizedAddr);
+    }
+    if (addr >= 0x3f00 && addr < 0x4000) {
+        uint16_t normalizedAddr = addr & 0x1f;
+        // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+        if (normalizedAddr >= 0x10 && addr % 4 == 0) {
+            normalizedAddr = normalizedAddr & 0xf;
+        }
+        return mem_rd(&nes->ppu_mem, 0x3f00 + normalizedAddr);
+    }
+    return 0xFF;
+}
+
+static void _ui_nes_ppu_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+    (void)layer;
+    CHIPS_ASSERT(user_data);
+    ui_nes_t* ui_nes = (ui_nes_t*) user_data;
+    nes_t* nes = ui_nes->nes;
+    if (addr < 0x2000) {
+        nes->character_ram[addr] = data;
+    }
+    else if (addr >= 0x2000 && addr < 0x3f00) {
+        const uint16_t index = addr & 0x3ff;
+        // Name tables upto 0x3000, then mirrored upto 3eff
+        uint16_t normalizedAddr = addr;
+        if (addr >= 0x3000)
+            normalizedAddr -= 0x1000;
+
+        if (normalizedAddr < 0x2400)      //NT0
+            normalizedAddr = nes->ppu_name_table[0] + index;
+        else if (normalizedAddr < 0x2800) //NT1
+            normalizedAddr = nes->ppu_name_table[1] + index;
+        else if (normalizedAddr < 0x2c00) //NT2
+            normalizedAddr = nes->ppu_name_table[2] + index;
+        else
+            normalizedAddr = nes->ppu_name_table[3] + index;
+        mem_wr(&nes->ppu_mem, normalizedAddr, data);
+    }
+    if (addr >= 0x3f00 && addr < 0x4000) {
+        uint16_t normalizedAddr = addr & 0x1f;
+        // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+        if (normalizedAddr >= 0x10 && addr % 4 == 0) {
+            normalizedAddr = normalizedAddr & 0xf;
+        }
+        mem_wr(&nes->ppu_mem, 0x3f00 + normalizedAddr, data);
+    }
+}
+
+static uint8_t _ui_nes_picture_mem_read(int layer, uint16_t addr, void* user_data) {
+    (void)layer;
+    CHIPS_ASSERT(user_data);
+    ui_nes_t* ui_nes = (ui_nes_t*) user_data;
+    nes_t* nes = ui_nes->nes;
+    if (addr >= 0 && addr < 256*240 ) {
+        return nes->ppu.picture_buffer[addr];
+    }
+    return 0xFF;
+}
+
+static void _ui_nes_picture_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+    (void)layer;
+    CHIPS_ASSERT(user_data);
+    ui_nes_t* ui_nes = (ui_nes_t*) user_data;
+    nes_t* nes = ui_nes->nes;
+    if (addr >= 0 && addr < 256*240 ) {
+        nes->ppu.picture_buffer[addr] = data;
+    }
+}
+
+static void _ui_nes_draw_hw_colors() {
+    ImGui::Text("Hardware Colors:");
+    const ImVec2 size(18,18);
+    for (int i = 0; i < 32; i++) {
+        ImGui::PushID(i);
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[i]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 16) != 0) {
+            ImGui::SameLine();
+        }
     }
 }
 
@@ -235,6 +358,34 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_memedit_desc_t desc = {.mem_size = 0x4000};
+        desc.layers[0] = "PPU";
+        desc.read_cb = _ui_nes_ppu_mem_read;
+        desc.write_cb = _ui_nes_ppu_mem_write;
+        desc.user_data = ui;
+        static const char* titles[] = { "PPU Memory Editor #1", "PPU Memory Editor #2", "PPU Memory Editor #3", "PPU Memory Editor #4" };
+        for (int i = 0; i < 4; i++) {
+            desc.title = titles[i]; desc.x = x; desc.y = y;
+            ui_memedit_init(&ui->ppu_memedit[i], &desc);
+            x += dx; y += dy;
+        }
+    }
+    x += dx; y += dy;
+    {
+        ui_memedit_desc_t desc = {.mem_size = 256*240};
+        desc.layers[0] = "Picture";
+        desc.read_cb = _ui_nes_picture_mem_read;
+        desc.write_cb = _ui_nes_picture_mem_write;
+        desc.user_data = ui;
+        static const char* titles[] = { "Picture Memory Editor #1", "Picture Memory Editor #2", "Picture Memory Editor #3", "Picture Memory Editor #4" };
+        for (int i = 0; i < 4; i++) {
+            desc.title = titles[i]; desc.x = x; desc.y = y;
+            ui_memedit_init(&ui->picture_memedit[i], &desc);
+            x += dx; y += dy;
+        }
+    }
+    x += dx; y += dy;
+    {
         ui_dasm_desc_t desc = {0};
         desc.layers[0] = "System";
         desc.cpu_type = UI_DASM_CPUTYPE_M6502;
@@ -254,6 +405,8 @@ void ui_nes_discard(ui_nes_t* ui) {
     ui_m6502_discard(&ui->cpu);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
+        ui_memedit_discard(&ui->ppu_memedit[i]);
+        ui_memedit_discard(&ui->picture_memedit[i]);
         ui_dasm_discard(&ui->dasm[i]);
     }
     ui_dbg_discard(&ui->dbg);
@@ -265,8 +418,11 @@ void ui_nes_draw(ui_nes_t* ui) {
     ui_m6502_draw(&ui->cpu);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);
+        ui_memedit_draw(&ui->ppu_memedit[i]);
+        ui_memedit_draw(&ui->picture_memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
+    _ui_nes_draw_hw_colors();
     ui_dbg_draw(&ui->dbg);
 }
 

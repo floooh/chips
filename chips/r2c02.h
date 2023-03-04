@@ -119,9 +119,9 @@ typedef struct {
     void* user_data;
 
     uint8_t scanline_sprites[8];
+    int scanline_sprites_num;
     uint8_t sprite_memory[64*4];
     uint8_t picture_buffer[PictureBufferSize];
-    int scanline_sprites_num;
 
     enum State
     {
@@ -217,7 +217,6 @@ void r2c02_reset(r2c02_t* sys) {
     sys->show_background = sys->show_sprites = sys->even_frame = sys->first_write = true;
     sys->bg_page = sys->spr_page = Low;
     sys->data_address = sys->cycle = sys->scanline = sys->sprite_data_address = sys->fine_x_scroll = sys->temp_address = 0;
-    //m_baseNameTable = 0x2000;
     sys->data_addr_increment = 1;
     sys->pipelineState = PreRender;
     sys->scanline_sprites_num = 0;
@@ -257,8 +256,7 @@ uint8_t r2c02_data(r2c02_t* sys) {
     sys->data_address += sys->data_addr_increment;
 
     //Reads are delayed by one byte/read when address is in this range
-    if (sys->data_address < 0x3f00)
-    {
+    if (sys->data_address < 0x3f00) {
         //Return from the data buffer and store the current value in the buffer
         _swap(&data, &sys->data_buffer);
     }
@@ -294,15 +292,12 @@ void r2c02_set_mask(r2c02_t* sys, uint8_t mask) {
 }
 
 void r2c02_set_scroll(r2c02_t* sys, uint8_t scroll) {
-    if (sys->first_write)
-    {
+    if (sys->first_write) {
         sys->temp_address &= ~0x1f;
         sys->temp_address |= (scroll >> 3) & 0x1f;
         sys->fine_x_scroll = scroll & 0x7;
         sys->first_write = false;
-    }
-    else
-    {
+    } else {
         sys->temp_address &= ~0x73e0;
         sys->temp_address |= ((scroll & 0x7) << 12) |
                          ((scroll & 0xf8) << 2);
@@ -322,14 +317,12 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
         case PreRender:
             if (sys->cycle == 1)
                 sys->vblank = sys->spr_zero_hit = false;
-            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->show_background && sys->show_sprites)
-            {
+            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->show_background && sys->show_sprites) {
                 //Set bits related to horizontal position
                 sys->data_address &= ~0x41f; //Unset horizontal bits
                 sys->data_address |= sys->temp_address & 0x41f; //Copy
             }
-            else if (sys->cycle > 280 && sys->cycle <= 304 && sys->show_background && sys->show_sprites)
-            {
+            else if (sys->cycle > 280 && sys->cycle <= 304 && sys->show_background && sys->show_sprites) {
                 //Set vertical bits
                 sys->data_address &= ~0x7be0; //Unset bits related to horizontal
                 sys->data_address |= sys->temp_address & 0x7be0; //Copy
@@ -337,20 +330,18 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 //                 if (sys->cycle > 257 && sys->cycle < 320)
 //                     sys->spriteDataAddress = 0;
             //if rendering is on, every other frame is one cycle shorter
-            if (sys->cycle >= ScanlineEndCycle - (!sys->even_frame && sys->show_background && sys->show_sprites))
-            {
+            if (sys->cycle >= ScanlineEndCycle - (!sys->even_frame && sys->show_background && sys->show_sprites)) {
                 sys->pipelineState = Render;
                 sys->cycle = sys->scanline = 0;
             }
 
             // add IRQ support for MMC3
-            if(sys->cycle==260 && sys->show_background && sys->show_sprites){
+            if(sys->cycle==260 && sys->show_background && sys->show_sprites) {
                 sys->scanline_irq(sys->user_data);
             }
             break;
         case Render:
-            if (sys->cycle > 0 && sys->cycle <= ScanlineVisibleDots)
-            {
+            if (sys->cycle > 0 && sys->cycle <= ScanlineVisibleDots) {
                 uint8_t bgColor = 0, sprColor = 0;
                 bool bgOpaque = false, sprOpaque = true;
                 bool spriteForeground = false;
@@ -358,19 +349,16 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 int x = sys->cycle - 1;
                 int y = sys->scanline;
 
-                if (sys->show_background)
-                {
+                if (sys->show_background) {
                     int x_fine = (sys->fine_x_scroll + x) % 8;
-                    if (!sys->hide_edge_background || x >= 8)
-                    {
+                    if (!sys->hide_edge_background || x >= 8) {
                         //fetch tile
                         uint16_t addr = 0x2000 | (sys->data_address & 0x0FFF); //mask off fine y
-                        //auto addr = 0x2000 + x / 8 + (y / 8) * (ScanlineVisibleDots / 8);
                         uint8_t tile = sys->read(addr, sys->user_data);
 
                         //fetch pattern
                         //Each pattern occupies 16 bytes, so multiply by 16
-                        addr = (tile * 16) + ((sys->data_address >> 12/*y % 8*/) & 0x7); //Add fine y
+                        addr = (tile * 16) + ((sys->data_address >> 12) & 0x7); //Add fine y
                         addr |= sys->bg_page << 12; //set whether the pattern is in the high or low page
                         //Get the corresponding bit determined by (8 - x_fine) from the right
                         bgColor = (sys->read(addr, sys->user_data) >> (7 ^ x_fine)) & 1; //bit 0 of palette entry
@@ -387,24 +375,19 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                         bgColor |= ((attribute >> shift) & 0x3) << 2;
                     }
                     //Increment/wrap coarse X
-                    if (x_fine == 7)
-                    {
-                        if ((sys->data_address & 0x001F) == 31) // if coarse X == 31
-                        {
+                    if (x_fine == 7) {
+                        if ((sys->data_address & 0x001F) == 31) {  // if coarse X == 31
                             sys->data_address &= ~0x001F;          // coarse X = 0
                             sys->data_address ^= 0x0400;           // switch horizontal nametable
                         }
-                        else
-                        {
-                            sys->data_address += 1;                // increment coarse X
+                        else {
+                            sys->data_address++;                // increment coarse X
                         }
                     }
                 }
 
-                if (sys->show_sprites && (!sys->hide_edge_sprites || x >= 8))
-                {
-                    for (uint8_t ii = 0; ii<sys->scanline_sprites_num; ++ii)
-                    {
+                if (sys->show_sprites && (!sys->hide_edge_sprites || x >= 8)) {
+                    for (uint8_t ii = 0; ii<sys->scanline_sprites_num; ++ii) {
                         uint8_t i = sys->scanline_sprites[ii];
                         uint8_t spr_x = sys->sprite_memory[i * 4 + 3];
 
@@ -416,7 +399,6 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                                 attribute = sys->sprite_memory[i * 4 + 2];
 
                         int length = (sys->long_sprites) ? 16 : 8;
-
                         int x_shift = (x - spr_x) % 8, y_offset = (y - spr_y) % length;
 
                         if ((attribute & 0x40) == 0) //If NOT flipping horizontally
@@ -426,13 +408,11 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
                         uint16_t addr = 0;
 
-                        if (!sys->long_sprites)
-                        {
+                        if (!sys->long_sprites) {
                             addr = tile * 16 + y_offset;
                             if (sys->spr_page == High) addr += 0x1000;
                         }
-                        else //8x16 sprites
-                        {
+                        else { //8x16 sprites
                             //bit-3 is one if it is the bottom tile of the sprite, multiply by two to get the next pattern
                             y_offset = (y_offset & 7) | ((y_offset & 8) << 1);
                             addr = (tile >> 1) * 32 + y_offset;
@@ -442,8 +422,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                         sprColor |= (sys->read(addr, sys->user_data) >> (x_shift)) & 1; //bit 0 of palette entry
                         sprColor |= ((sys->read(addr + 8, sys->user_data) >> (x_shift)) & 1) << 1; //bit 1
 
-                        if (!(sprOpaque = sprColor))
-                        {
+                        if (!(sprOpaque = sprColor)) {
                             sprColor = 0;
                             continue;
                         }
@@ -454,8 +433,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                         spriteForeground = !(attribute & 0x20);
 
                         //Sprite-0 hit detection
-                        if (!sys->spr_zero_hit && sys->show_background && i == 0 && sprOpaque && bgOpaque)
-                        {
+                        if (!sys->spr_zero_hit && sys->show_background && i == 0 && sprOpaque && bgOpaque) {
                             sys->spr_zero_hit = true;
                         }
 
@@ -464,23 +442,18 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 }
 
                 uint8_t paletteAddr = bgColor;
-
-                if ( (!bgOpaque && sprOpaque) ||
-                        (bgOpaque && sprOpaque && spriteForeground) )
+                if ((!bgOpaque && sprOpaque) || (bgOpaque && sprOpaque && spriteForeground))
                     paletteAddr = sprColor;
                 else if (!bgOpaque && !sprOpaque)
                     paletteAddr = 0;
-                //else bgColor
-
+                
                 sys->picture_buffer[x+y*256] = sys->read_palette(paletteAddr, sys->user_data);
             }
-            else if (sys->cycle == ScanlineVisibleDots + 1 && sys->show_background)
-            {
+            else if (sys->cycle == ScanlineVisibleDots + 1 && sys->show_background) {
                 //Shamelessly copied from nesdev wiki
                 if ((sys->data_address & 0x7000) != 0x7000)  // if fine Y < 7
                     sys->data_address += 0x1000;              // increment fine Y
-                else
-                {
+                else {
                     sys->data_address &= ~0x7000;             // fine Y = 0
                     int y = (sys->data_address & 0x03E0) >> 5;    // let y = coarse Y
                     if (y == 29)
@@ -496,8 +469,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                                                             // put coarse Y back into sys->dataAddress
                 }
             }
-            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->show_background && sys->show_sprites)
-            {
+            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->show_background && sys->show_sprites) {
                 //Copy bits related to horizontal position
                 sys->data_address &= ~0x41f;
                 sys->data_address |= sys->temp_address & 0x41f;
@@ -507,32 +479,26 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 //                     sys->spriteDataAddress = 0;
 
             // add IRQ support for MMC3
-            if(sys->cycle==260 && sys->show_background && sys->show_sprites){
+            if(sys->cycle==260 && sys->show_background && sys->show_sprites) {
                 sys->scanline_irq(sys->user_data);
             }
 
-            if (sys->cycle >= ScanlineEndCycle)
-            {
+            if (sys->cycle >= ScanlineEndCycle) {
                 //Find and index sprites that are on the next Scanline
                 //This isn't where/when this indexing, actually copying in 2C02 is done
                 //but (I think) it shouldn't hurt any games if this is done here
 
                 sys->scanline_sprites_num = 0;
-
                 int range = 8;
-                if (sys->long_sprites)
-                {
+                if (sys->long_sprites) {
                     range = 16;
                 }
 
                 size_t j = 0;
-                for (size_t i = sys->sprite_data_address / 4; i < 64; ++i)
-                {
+                for (size_t i = sys->sprite_data_address / 4; i < 64; ++i) {
                     int diff = (sys->scanline - sys->sprite_memory[i * 4]);
-                    if (0 <= diff && diff < range)
-                    {
-                        if (j >= 8)
-                        {
+                    if (0 <= diff && diff < range) {
+                        if (j >= 8) {
                             sys->sprite_overflow = true;
                             break;
                         }
@@ -550,38 +516,32 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
             break;
         case PostRender:
-            if (sys->cycle >= ScanlineEndCycle)
-            {
+            if (sys->cycle >= ScanlineEndCycle) {
                 ++sys->scanline;
                 sys->cycle = 0;
                 sys->pipelineState = VerticalBlank;
 
-                for (int x = 0; x < 256; ++x)
-                {
-                    for (int y = 0; y < 240; ++y)
-                    {
+                for (int x = 0; x < 256; ++x) {
+                    for (int y = 0; y < 240; ++y) {
                         sys->set_pixel(x, y, sys->picture_buffer[x+y*256], sys->user_data);
                     }
                 }
-
             }
 
             break;
         case VerticalBlank:
-            if (sys->cycle == 1 && sys->scanline == VisibleScanlines + 1)
-            {
+            if (sys->cycle == 1 && sys->scanline == VisibleScanlines + 1) {
                 sys->vblank = true;
-                if (sys->generate_interrupt) sys->vblank_callback(sys->user_data);
+                if (sys->generate_interrupt)
+                    sys->vblank_callback(sys->user_data);
             }
 
-            if (sys->cycle >= ScanlineEndCycle)
-            {
+            if (sys->cycle >= ScanlineEndCycle) {
                 ++sys->scanline;
                 sys->cycle = 0;
             }
 
-            if (sys->scanline >= FrameEndScanline)
-            {
+            if (sys->scanline >= FrameEndScanline) {
                 sys->pipelineState = PreRender;
                 sys->scanline = 0;
                 sys->even_frame = !sys->even_frame;
@@ -589,7 +549,8 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
             break;
         default:
-            //LOG(Error) << "Well, this shouldn't have happened." << std::endl;
+            // Well, this shouldn't have happened.
+            assert(false);
             break;
     }
 
