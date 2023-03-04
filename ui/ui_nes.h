@@ -233,7 +233,7 @@ static uint8_t _ui_nes_ppu_mem_read(int layer, uint16_t addr, void* user_data) {
             normalizedAddr = nes->ppu_name_table[2] + index;
         else
             normalizedAddr = nes->ppu_name_table[3] + index;
-        return mem_rd(&nes->ppu_mem, normalizedAddr);
+        return nes->ppu_ram[normalizedAddr-0x2000];
     }
     if (addr >= 0x3f00 && addr < 0x4000) {
         uint16_t normalizedAddr = addr & 0x1f;
@@ -241,7 +241,7 @@ static uint8_t _ui_nes_ppu_mem_read(int layer, uint16_t addr, void* user_data) {
         if (normalizedAddr >= 0x10 && addr % 4 == 0) {
             normalizedAddr = normalizedAddr & 0xf;
         }
-        return mem_rd(&nes->ppu_mem, 0x3f00 + normalizedAddr);
+        return nes->ppu_pal_ram[normalizedAddr];
     }
     return 0xFF;
 }
@@ -269,7 +269,7 @@ static void _ui_nes_ppu_mem_write(int layer, uint16_t addr, uint8_t data, void* 
             normalizedAddr = nes->ppu_name_table[2] + index;
         else
             normalizedAddr = nes->ppu_name_table[3] + index;
-        mem_wr(&nes->ppu_mem, normalizedAddr, data);
+        nes->ppu_ram[normalizedAddr-0x2000] = data;
     }
     if (addr >= 0x3f00 && addr < 0x4000) {
         uint16_t normalizedAddr = addr & 0x1f;
@@ -277,7 +277,7 @@ static void _ui_nes_ppu_mem_write(int layer, uint16_t addr, uint8_t data, void* 
         if (normalizedAddr >= 0x10 && addr % 4 == 0) {
             normalizedAddr = normalizedAddr & 0xf;
         }
-        mem_wr(&nes->ppu_mem, 0x3f00 + normalizedAddr, data);
+        nes->ppu_pal_ram[normalizedAddr] = data;
     }
 }
 
@@ -313,49 +313,49 @@ static void _ui_nes_draw_hw_colors(ui_nes_t* ui) {
             ImGui::SameLine();
         }
     }
-    
+
     nes_t* nes = ui->nes;
     ImGui::Text("Background palette 0:");
-    uint16_t addr = 0x3f00;
+    uint16_t addr = 0x0;
     for (int i = 0; i < 4; i++) {
         ImGui::PushID(i);
-        uint8_t pal_index = mem_rd(&nes->ppu_mem, addr + i);
+        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
         ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
         if (((i+1) % 4) != 0) {
             ImGui::SameLine();
         }
     }
-    
+
     ImGui::Text("Background palette 1:");
-    addr = 0x3f04;
+    addr = 0x4;
     for (int i = 0; i < 4; i++) {
         ImGui::PushID(i);
-        uint8_t pal_index = mem_rd(&nes->ppu_mem, addr + i);
+        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
         ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
         if (((i+1) % 4) != 0) {
             ImGui::SameLine();
         }
     }
-    
+
     ImGui::Text("Background palette 2:");
-    addr = 0x3f08;
+    addr = 0x8;
     for (int i = 0; i < 4; i++) {
         ImGui::PushID(i);
-        uint8_t pal_index = mem_rd(&nes->ppu_mem, addr + i);
+        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
         ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
         if (((i+1) % 4) != 0) {
             ImGui::SameLine();
         }
     }
-    
+
     ImGui::Text("Background palette 3:");
-    addr = 0x3f0c;
+    addr = 0xc;
     for (int i = 0; i < 4; i++) {
         ImGui::PushID(i);
-        uint8_t pal_index = mem_rd(&nes->ppu_mem, addr + i);
+        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
         ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
         ImGui::PopID();
         if (((i+1) % 4) != 0) {

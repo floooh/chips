@@ -107,10 +107,10 @@ static const int AttributeOffset = 0x3C0;
 typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
     void (*write)(uint16_t addr, uint8_t data, void* user_data);
-    void (*scanline_irq)(void* user_data);
     uint8_t (*read_palette)(uint8_t paletteAddr, void* user_data);
+    void (*scanline_irq)(void* user_data);
     void (*vblank_callback)(void* user_data);
-    void (*set_pixel)(int x, int y, uint8_t color, void* user_data);
+    void (*set_pixels)(uint8_t* buffer, void* user_data);
     void* user_data;
 
     uint8_t scanline_sprites[8];
@@ -166,9 +166,8 @@ typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
     void (*write)(uint16_t addr, uint8_t data, void* user_data);
     void (*scanline_irq)(void* user_data);
-    uint8_t (*read_palette)(uint8_t paletteAddr, void* user_data);
     void (*vblank_callback)(void* user_data);
-    void (*set_pixel)(int x, int y, uint8_t color, void* user_data);
+    void (*set_pixels)(uint8_t* buffer, void* user_data);
     void* user_data;
 } r2c02_desc_t;
 
@@ -200,9 +199,8 @@ void r2c02_init(r2c02_t* sys, const r2c02_desc_t* desc) {
     sys->read = desc->read;
     sys->write = desc->write;
     sys->scanline_irq = desc->scanline_irq;
-    sys->read_palette = desc->read_palette;
     sys->vblank_callback = desc->vblank_callback;
-    sys->set_pixel = desc->set_pixel;
+    sys->set_pixels = desc->set_pixels;
     sys->user_data = desc->user_data;
 }
 
@@ -381,60 +379,60 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                     }
                 }
 
-                if (sys->show_sprites && (!sys->hide_edge_sprites || x >= 8)) {
-                    for (uint8_t ii = 0; ii<sys->scanline_sprites_num; ++ii) {
-                        uint8_t i = sys->scanline_sprites[ii];
-                        uint8_t spr_x = sys->sprite_memory[i * 4 + 3];
-
-                        if (0 > x - spr_x || x - spr_x >= 8)
-                            continue;
-
-                        uint8_t spr_y     = sys->sprite_memory[i * 4 + 0] + 1,
-                                tile      = sys->sprite_memory[i * 4 + 1],
-                                attribute = sys->sprite_memory[i * 4 + 2];
-
-                        int length = (sys->long_sprites) ? 16 : 8;
-                        int x_shift = (x - spr_x) % 8, y_offset = (y - spr_y) % length;
-
-                        if ((attribute & 0x40) == 0) //If NOT flipping horizontally
-                            x_shift ^= 7;
-                        if ((attribute & 0x80) != 0) //IF flipping vertically
-                            y_offset ^= (length - 1);
-
-                        uint16_t addr = 0;
-
-                        if (!sys->long_sprites) {
-                            addr = tile * 16 + y_offset;
-                            if (sys->spr_page == High) addr += 0x1000;
-                        }
-                        else { //8x16 sprites
-                            //bit-3 is one if it is the bottom tile of the sprite, multiply by two to get the next pattern
-                            y_offset = (y_offset & 7) | ((y_offset & 8) << 1);
-                            addr = (tile >> 1) * 32 + y_offset;
-                            addr |= (tile & 1) << 12; //Bank 0x1000 if bit-0 is high
-                        }
-
-                        sprColor |= (sys->read(addr, sys->user_data) >> (x_shift)) & 1; //bit 0 of palette entry
-                        sprColor |= ((sys->read(addr + 8, sys->user_data) >> (x_shift)) & 1) << 1; //bit 1
-
-                        if (!(sprOpaque = sprColor)) {
-                            sprColor = 0;
-                            continue;
-                        }
-
-                        sprColor |= 0x10; //Select sprite palette
-                        sprColor |= (attribute & 0x3) << 2; //bits 2-3
-
-                        spriteForeground = !(attribute & 0x20);
-
-                        //Sprite-0 hit detection
-                        if (!sys->spr_zero_hit && sys->show_background && i == 0 && sprOpaque && bgOpaque) {
-                            sys->spr_zero_hit = true;
-                        }
-
-                        break; //Exit the loop now since we've found the highest priority sprite
-                    }
-                }
+//                 if (sys->show_sprites && (!sys->hide_edge_sprites || x >= 8)) {
+//                     for (uint8_t ii = 0; ii<sys->scanline_sprites_num; ++ii) {
+//                         uint8_t i = sys->scanline_sprites[ii];
+//                         uint8_t spr_x = sys->sprite_memory[i * 4 + 3];
+//
+//                         if (0 > x - spr_x || x - spr_x >= 8)
+//                             continue;
+//
+//                         uint8_t spr_y     = sys->sprite_memory[i * 4 + 0] + 1,
+//                                 tile      = sys->sprite_memory[i * 4 + 1],
+//                                 attribute = sys->sprite_memory[i * 4 + 2];
+//
+//                         int length = (sys->long_sprites) ? 16 : 8;
+//                         int x_shift = (x - spr_x) % 8, y_offset = (y - spr_y) % length;
+//
+//                         if ((attribute & 0x40) == 0) //If NOT flipping horizontally
+//                             x_shift ^= 7;
+//                         if ((attribute & 0x80) != 0) //IF flipping vertically
+//                             y_offset ^= (length - 1);
+//
+//                         uint16_t addr = 0;
+//
+//                         if (!sys->long_sprites) {
+//                             addr = tile * 16 + y_offset;
+//                             if (sys->spr_page == High) addr += 0x1000;
+//                         }
+//                         else { //8x16 sprites
+//                             //bit-3 is one if it is the bottom tile of the sprite, multiply by two to get the next pattern
+//                             y_offset = (y_offset & 7) | ((y_offset & 8) << 1);
+//                             addr = (tile >> 1) * 32 + y_offset;
+//                             addr |= (tile & 1) << 12; //Bank 0x1000 if bit-0 is high
+//                         }
+//
+//                         sprColor |= (sys->read(addr, sys->user_data) >> (x_shift)) & 1; //bit 0 of palette entry
+//                         sprColor |= ((sys->read(addr + 8, sys->user_data) >> (x_shift)) & 1) << 1; //bit 1
+//
+//                         if (!(sprOpaque = sprColor)) {
+//                             sprColor = 0;
+//                             continue;
+//                         }
+//
+//                         sprColor |= 0x10; //Select sprite palette
+//                         sprColor |= (attribute & 0x3) << 2; //bits 2-3
+//
+//                         spriteForeground = !(attribute & 0x20);
+//
+//                         //Sprite-0 hit detection
+//                         if (!sys->spr_zero_hit && sys->show_background && i == 0 && sprOpaque && bgOpaque) {
+//                             sys->spr_zero_hit = true;
+//                         }
+//
+//                         break; //Exit the loop now since we've found the highest priority sprite
+//                     }
+//                 }
 
                 uint8_t paletteAddr = bgColor;
                 if ((!bgOpaque && sprOpaque) || (bgOpaque && sprOpaque && spriteForeground))
@@ -442,7 +440,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 else if (!bgOpaque && !sprOpaque)
                     paletteAddr = 0;
 
-                sys->picture_buffer[x+y*256] = sys->read_palette(paletteAddr, sys->user_data);
+                sys->picture_buffer[x+y*256] = sys->read(0x3f00 + paletteAddr, sys->user_data);
             }
             else if (sys->cycle == ScanlineVisibleDots + 1 && sys->show_background) {
                 //Shamelessly copied from nesdev wiki
@@ -515,12 +513,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 ++sys->scanline;
                 sys->cycle = 0;
                 sys->pipelineState = VerticalBlank;
-
-                for (int x = 0; x < 256; ++x) {
-                    for (int y = 0; y < 240; ++y) {
-                        sys->set_pixel(x, y, sys->picture_buffer[x+y*256], sys->user_data);
-                    }
-                }
+                sys->set_pixels(sys->picture_buffer, sys->user_data);
             }
 
             break;
