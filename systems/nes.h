@@ -80,25 +80,42 @@ typedef struct {
     chips_debug_t debug;
 } nes_desc_t;
 
+typedef union {
+    struct {
+        uint8_t right:  1;
+        uint8_t left:   1;
+        uint8_t down:   1;
+        uint8_t up:     1;
+        uint8_t start:  1;
+        uint8_t select: 1;
+        uint8_t b:      1;
+        uint8_t a:      1;
+    };
+    uint8_t value;
+} controller_t;
+
 typedef struct {
     m6502_t cpu;
     r2c02_t ppu;
-    nes_mapper_t mapper;
-    mem_t mem;
-
+    bool request_nmi;
+    
     chips_debug_t debug;
 
-    bool request_nmi;
-    uint8_t ram[0x800]; // 2KB
-    uint8_t ppu_ram[0x1000];
+    mem_t mem;
     mem_t ppu_mem;
-    uint8_t character_ram[0x2000];
+    uint8_t ram[0x800];             // 2KB
+    uint8_t ppu_ram[0x1000];        // 4KB
+    uint8_t character_ram[0x2000];  // 8KB
     uint16_t ppu_name_table[4];
-
+    
+    nes_mapper_t mapper;
     struct {
         nes_cartridge_header header;
         uint8_t rom[0x8000];
     } cart;
+    controller_t controller[2];
+    uint8_t controller_state[2];
+    
     uint64_t pins;
     bool valid;
 
@@ -114,7 +131,9 @@ void nes_discard(nes_t* nes);
 // get display requirements and framebuffer content, may be called with nullptr
 chips_display_info_t nes_display_info(nes_t* nes);
 // run NES instance for given amount of micro_seconds, returns number of ticks executed
-uint32_t nes_exec(nes_t* cpc, uint32_t micro_seconds);
+uint32_t nes_exec(nes_t* nes, uint32_t micro_seconds);
+void nes_key_down(nes_t* nes, int value);
+void nes_key_up(nes_t* nes, int value);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -214,6 +233,64 @@ uint32_t nes_exec(nes_t* sys, uint32_t micro_seconds) {
     }
     sys->pins = pins;
     return num_ticks;
+}
+
+void nes_key_down(nes_t* sys, int value) {
+    switch(value) {
+        case 1:
+            sys->controller[0].left = 1;
+            break;
+        case 2:
+            sys->controller[0].right = 1;
+            break;
+        case 3:
+            sys->controller[0].down = 1;
+            break;
+        case 4:
+            sys->controller[0].up = 1;
+            break;
+        case 5:
+            sys->controller[0].start = 1;
+            break;
+        case 6:
+            sys->controller[0].a = 1;
+            break;
+        case 7:
+            sys->controller[0].b = 1;
+            break;
+        case 8:
+            sys->controller[0].select = 1;
+            break;
+    }
+}
+
+void nes_key_up(nes_t* sys, int value) {
+    switch(value) {
+        case 1:
+            sys->controller[0].left = 0;
+            break;
+        case 2:
+            sys->controller[0].right = 0;
+            break;
+        case 3:
+            sys->controller[0].down = 0;
+            break;
+        case 4:
+            sys->controller[0].up = 0;
+            break;
+        case 5:
+            sys->controller[0].start = 0;
+            break;
+        case 6:
+            sys->controller[0].a = 0;
+            break;
+        case 7:
+            sys->controller[0].b = 0;
+            break;
+        case 8:
+            sys->controller[0].select = 0;
+            break;
+    }
 }
 
 chips_display_info_t nes_display_info(nes_t* sys) {
@@ -402,8 +479,10 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         // a memory read
         if(addr < 0x2000) {
             M6502_SET_DATA(pins, sys->ram[addr & 0x7ff]);
-        }
-        else if (addr < 0x4020) {
+        } else if (addr >= 0x4016 && addr <= 0x4017) {
+            M6502_SET_DATA(pins, (sys->controller_state[addr & 0x0001] & 0x80) ? 1 : 0);
+            sys->controller_state[addr & 0x0001] <<= 1;
+        } else if (addr < 0x4020) {
             if (addr < 0x4000) //PPU registers, mirrored
                 addr = addr & 0x2007;
             if(addr == _PPUSTATUS) {
@@ -427,6 +506,9 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         uint8_t data = M6502_GET_DATA(pins);
         if(addr < 0x2000) {
             sys->ram[addr & 0x7ff] = data;
+        }
+        else if (addr >= 0x4016 && addr <= 0x4017) {
+            sys->controller_state[addr & 0x0001] = sys->controller[addr & 0x0001].value;
         }
         else if (addr < 0x4020) {
             if (addr < 0x4000) //PPU registers, mirrored
