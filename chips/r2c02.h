@@ -107,8 +107,6 @@ static const int AttributeOffset = 0x3C0;
 typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
     void (*write)(uint16_t addr, uint8_t data, void* user_data);
-    void (*scanline_irq)(void* user_data);
-    void (*vblank_callback)(void* user_data);
     void (*set_pixels)(uint8_t* buffer, void* user_data);
     void* user_data;
 
@@ -145,6 +143,7 @@ typedef struct {
     //Setup flags and variables
     bool long_sprites;
     bool generate_interrupt;
+    bool request_nmi;
 
     bool greyscale_mode;
     bool show_sprites;
@@ -158,14 +157,12 @@ typedef struct {
         High,
     } bg_page, spr_page;
 
-    uint16_t data_addr_increment;
+    uint8_t data_addr_increment;
 } r2c02_t;
 
 typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
     void (*write)(uint16_t addr, uint8_t data, void* user_data);
-    void (*scanline_irq)(void* user_data);
-    void (*vblank_callback)(void* user_data);
     void (*set_pixels)(uint8_t* buffer, void* user_data);
     void* user_data;
 } r2c02_desc_t;
@@ -177,12 +174,8 @@ void r2c02_reset(r2c02_t* sys);
 /* tick r2c02_t instance */
 uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins);
 
-uint8_t r2c02_status(r2c02_t* sys);
-void r2c02_set_sata_address(r2c02_t* sys, uint8_t addr);
-uint8_t r2c02_data(r2c02_t* sys);
-uint8_t r2c02_oam_data(r2c02_t* sys, uint16_t addr);
-void r2c02_set_mask(r2c02_t* sys, uint8_t mask);
-void r2c02_set_data(r2c02_t* sys, uint8_t data);
+uint8_t r2c02_read(r2c02_t* sys, uint8_t addr);
+void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
 #ifdef CHIPS_IMPL
@@ -192,13 +185,13 @@ void r2c02_set_data(r2c02_t* sys, uint8_t data);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+inline static void _swap(uint8_t* d1, uint8_t* d2);
+
 void r2c02_init(r2c02_t* sys, const r2c02_desc_t* desc) {
     CHIPS_ASSERT(sys);
     memset(sys, 0, sizeof(*sys));
     sys->read = desc->read;
     sys->write = desc->write;
-    sys->scanline_irq = desc->scanline_irq;
-    sys->vblank_callback = desc->vblank_callback;
     sys->set_pixels = desc->set_pixels;
     sys->user_data = desc->user_data;
 }
@@ -214,92 +207,104 @@ void r2c02_reset(r2c02_t* sys) {
     sys->scanline_sprites_num = 0;
 }
 
-uint8_t r2c02_status(r2c02_t* sys) {
-    CHIPS_ASSERT(sys);
-    uint8_t status = sys->sprite_overflow << 5 | sys->spr_zero_hit << 6 | sys->vblank << 7;
-    // Reading status clears vblank!
-    sys->vblank = false;
-    sys->first_write = true;
-    return status;
-}
-
-inline static void _swap(uint8_t* d1, uint8_t* d2) {
-    uint8_t tmp = *d1;
-    *d1 = *d2;
-    *d2 = tmp;
-}
-
-void r2c02_set_sata_address(r2c02_t* sys, uint8_t addr) {
-    CHIPS_ASSERT(sys);
-    if (sys->first_write) {
-        sys->temp_address &= 0x00ff;
-        sys->temp_address |= (addr & 0x3f) << 8;
-        sys->first_write = false;
-    } else {
-        sys->temp_address &= 0xff00;
-        sys->temp_address |= addr;
-        sys->data_address = sys->temp_address;
-        sys->first_write = true;
+uint8_t r2c02_read(r2c02_t* sys, uint8_t addr) {
+    switch(addr) {
+        case 0x02: {
+            // get PPU status
+            sys->request_nmi = false;
+            uint8_t status = sys->sprite_overflow << 5 | sys->spr_zero_hit << 6 | sys->vblank << 7;
+            // Reading status clears vblank!
+            sys->vblank = false;
+            sys->first_write = true;
+            return status;
+        }
+        case 0x04:
+            // get OAM data
+            return sys->sprite_memory[addr];
+        case 0x07: {
+            // get PPU data
+            uint8_t data = sys->read(sys->data_address, sys->user_data);
+            sys->data_address += sys->data_addr_increment;
+            //Reads are delayed by one byte/read when address is in this range
+            if (sys->data_address < 0x3f00) {
+                //Return from the data buffer and store the current value in the buffer
+                _swap(&data, &sys->data_buffer);
+            }
+            return data;
+        }
+        default: break;
     }
+    return 0;
 }
 
-uint8_t r2c02_data(r2c02_t* sys) {
-    uint8_t data = sys->read(sys->data_address, sys->user_data);
-    sys->data_address += sys->data_addr_increment;
+void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
+    switch(addr) {
+        case 0x00: {
+            // set control
+            sys->generate_interrupt = data & 0x80;
+            sys->long_sprites = data & 0x20;
+            sys->bg_page = (!!(data & 0x10));
+            sys->spr_page = (!!(data & 0x8));
+            if (data & 0x4)
+                sys->data_addr_increment = 32;
+            else
+                sys->data_addr_increment = 1;
 
-    //Reads are delayed by one byte/read when address is in this range
-    if (sys->data_address < 0x3f00) {
-        //Return from the data buffer and store the current value in the buffer
-        _swap(&data, &sys->data_buffer);
+            //Set the nametable in the temp address, this will be reflected in the data address during rendering
+            sys->temp_address &= ~0xc00;                 //Unset
+            sys->temp_address |= (data & 0x3) << 10;     //Set according to ctrl bits
+        } break;
+        case 0x01: {
+            // set mask
+            sys->greyscale_mode = data & 0x1;
+            sys->hide_edge_background = !(data & 0x2);
+            sys->hide_edge_sprites = !(data & 0x4);
+            sys->show_background = data & 0x8;
+            sys->show_sprites = data & 0x10;
+        } break;
+        case 0x03: {
+            // set OAM address
+            sys->sprite_data_address = data;
+        } break;
+        case 0x04: {
+            // set OAM data
+            sys->sprite_memory[sys->sprite_data_address++] = data;
+        } break;
+        case 0x05: {
+            // set scroll
+            if (sys->first_write) {
+                sys->temp_address &= ~0x1f;
+                sys->temp_address |= (data >> 3) & 0x1f;
+                sys->fine_x_scroll = data & 0x7;
+                sys->first_write = false;
+            } else {
+                sys->temp_address &= ~0x73e0;
+                sys->temp_address |= ((data & 0x7) << 12) |
+                                 ((data & 0xf8) << 2);
+                sys->first_write = true;
+            }
+        } break;
+        case 0x06: {
+            // set PPU address
+            CHIPS_ASSERT(sys);
+            if (sys->first_write) {
+                sys->temp_address &= 0x00ff;
+                sys->temp_address |= (data & 0x3f) << 8;
+                sys->first_write = false;
+            } else {
+                sys->temp_address &= 0xff00;
+                sys->temp_address |= data;
+                sys->data_address = sys->temp_address;
+                sys->first_write = true;
+            }
+        } break;
+        case 0x07: {
+            // set PPU data
+            sys->write(sys->data_address, data, sys->user_data);
+            sys->data_address += sys->data_addr_increment;
+        } break;
+        default: break;
     }
-
-    return data;
-}
-
-void r2c02_control(r2c02_t* sys, uint8_t ctrl) {
-    sys->generate_interrupt = ctrl & 0x80;
-    sys->long_sprites = ctrl & 0x20;
-    sys->bg_page = (!!(ctrl & 0x10));
-    sys->spr_page = (!!(ctrl & 0x8));
-    if (ctrl & 0x4)
-        sys->data_addr_increment = 0x20;
-    else
-        sys->data_addr_increment = 1;
-
-    //Set the nametable in the temp address, this will be reflected in the data address during rendering
-    sys->temp_address &= ~0xc00;                 //Unset
-    sys->temp_address |= (ctrl & 0x3) << 10;     //Set according to ctrl bits
-}
-
-uint8_t r2c02_oam_data(r2c02_t* sys, uint16_t addr) {
-    return sys->sprite_memory[addr];
-}
-
-void r2c02_set_mask(r2c02_t* sys, uint8_t mask) {
-    sys->greyscale_mode = mask & 0x1;
-    sys->hide_edge_background = !(mask & 0x2);
-    sys->hide_edge_sprites = !(mask & 0x4);
-    sys->show_background = mask & 0x8;
-    sys->show_sprites = mask & 0x10;
-}
-
-void r2c02_set_scroll(r2c02_t* sys, uint8_t scroll) {
-    if (sys->first_write) {
-        sys->temp_address &= ~0x1f;
-        sys->temp_address |= (scroll >> 3) & 0x1f;
-        sys->fine_x_scroll = scroll & 0x7;
-        sys->first_write = false;
-    } else {
-        sys->temp_address &= ~0x73e0;
-        sys->temp_address |= ((scroll & 0x7) << 12) |
-                         ((scroll & 0xf8) << 2);
-        sys->first_write = true;
-    }
-}
-
-void r2c02_set_data(r2c02_t* sys, uint8_t data) {
-    sys->write(sys->data_address, data, sys->user_data);
-    sys->data_address += sys->data_addr_increment;
 }
 
 uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
@@ -327,7 +332,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
             // add IRQ support for MMC3
             if(sys->cycle==260 && sys->show_background && sys->show_sprites) {
-                sys->scanline_irq(sys->user_data);
+                // TODO: sys->scanline_irq(sys->user_data);
             }
             break;
         case Render:
@@ -467,7 +472,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
             // add IRQ support for MMC3
             if(sys->cycle==260 && sys->show_background && sys->show_sprites) {
-                sys->scanline_irq(sys->user_data);
+                // TODO: sys->scanline_irq(sys->user_data);
             }
 
             if (sys->cycle >= ScanlineEndCycle) {
@@ -515,7 +520,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
             if (sys->cycle == 1 && sys->scanline == VisibleScanlines + 1) {
                 sys->vblank = true;
                 if (sys->generate_interrupt)
-                    sys->vblank_callback(sys->user_data);
+                    sys->request_nmi = true;
             }
 
             if (sys->cycle >= ScanlineEndCycle) {
@@ -538,6 +543,12 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
     ++sys->cycle;
     return pins;
+}
+
+inline static void _swap(uint8_t* d1, uint8_t* d2) {
+    uint8_t tmp = *d1;
+    *d1 = *d2;
+    *d2 = tmp;
 }
 
 #endif /* CHIPS_IMPL */

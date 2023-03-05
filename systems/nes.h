@@ -51,7 +51,6 @@
 extern "C" {
 #endif
 
-// NES emulator state
 typedef struct {
     char magic[4];
 
@@ -89,10 +88,10 @@ typedef union {
     uint8_t value;
 } controller_t;
 
+// NES emulator state
 typedef struct {
     m6502_t cpu;
     r2c02_t ppu;
-    bool request_nmi;
 
     chips_debug_t debug;
 
@@ -154,8 +153,6 @@ void nes_key_up(nes_t* nes, int value);
 
 static uint8_t _ppu_read(uint16_t addr, void* user_data);
 static void _ppu_write(uint16_t address, uint8_t data, void* user_data);
-static void _ppu_scanline_irq(void* user_data);
-static void _ppu_vblank(void* user_data);
 static void _ppu_set_pixels(uint8_t* buffer, void* user_data);
 static uint64_t _nes_tick(nes_t* sys, uint64_t pins);
 
@@ -173,8 +170,6 @@ void nes_init(nes_t* sys, const nes_desc_t* desc) {
     r2c02_init(&sys->ppu, &(r2c02_desc_t){
         .read = _ppu_read,
         .write = _ppu_write,
-        .scanline_irq = _ppu_scanline_irq,
-        .vblank_callback = _ppu_vblank,
         .set_pixels = _ppu_set_pixels,
         .user_data = sys,
     });
@@ -367,17 +362,6 @@ static void _ppu_write(uint16_t addr, uint8_t data, void* user_data) {
    }
 }
 
-static void _ppu_scanline_irq(void* user_data) {
-    (void)user_data;
-    // TODO: _ppu_scanline_irq
-}
-
-static void _ppu_vblank(void* user_data) {
-    nes_t* sys = (nes_t*)user_data;
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->request_nmi = true;
-}
-
 static void _ppu_set_pixels(uint8_t* buffer, void* user_data) {
     nes_t* sys = (nes_t*)user_data;
     CHIPS_ASSERT(sys && sys->valid);
@@ -385,11 +369,11 @@ static void _ppu_set_pixels(uint8_t* buffer, void* user_data) {
 }
 
 static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
-    if(sys->request_nmi) {
+    if(sys->ppu.request_nmi) {
         pins |= M6502_NMI;
-        sys->request_nmi = false;
     }
     pins = m6502_tick(&sys->cpu, pins);
+    pins &= ~M6502_NMI;
 
     // extract 16-bit address from pin mask
     uint16_t addr = M6502_GET_ADDR(pins);
@@ -404,14 +388,7 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         } else if (addr < 0x4020) {
             if (addr < 0x4000) //PPU registers, mirrored
                 addr = addr & 0x2007;
-            if(addr == _PPUSTATUS) {
-                M6502_SET_DATA(pins, r2c02_status(&sys->ppu));
-                pins &= ~M6502_NMI;
-            } else if(addr == _PPUDATA) {
-                M6502_SET_DATA(pins, r2c02_data(&sys->ppu));
-            } else if(addr == _OAMDATA) {
-                M6502_SET_DATA(pins, r2c02_oam_data(&sys->ppu, addr));
-            }
+            M6502_SET_DATA(pins, r2c02_read(&sys->ppu, addr-0x2000));
         }
         else if (addr < 0x8000) {
             // TODO:
@@ -432,36 +409,20 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         uint8_t data = M6502_GET_DATA(pins);
         if(addr < 0x2000) {
             sys->ram[addr & 0x7ff] = data;
-        }
-        else if (addr >= 0x4016 && addr <= 0x4017) {
+        } else if(addr == _OAMDMA) {
+            uint16_t page = data << 8;
+            if (page < 0x2000) {
+                uint8_t* page_ptr = sys->ram + (page & 0x7ff);
+                memcpy(sys->ppu.sprite_memory + sys->ppu.sprite_data_address, page_ptr, 256 - sys->ppu.sprite_data_address);
+                if (sys->ppu.sprite_data_address)
+                    memcpy(sys->ppu.sprite_memory, page_ptr + (256 - sys->ppu.sprite_data_address), sys->ppu.sprite_data_address);
+            }
+        } else if (addr >= 0x4016 && addr <= 0x4017) {
             sys->controller_state[addr & 0x0001] = sys->controller[addr & 0x0001].value;
-        }
-        else if (addr < 0x4020) {
+        } else if (addr < 0x4020) {
             if (addr < 0x4000) //PPU registers, mirrored
                 addr = addr & 0x2007;
-            if(addr == _PPUCTRL) {
-                r2c02_control(&sys->ppu, data);
-            } else if(addr == _PPUMASK) {
-                r2c02_set_mask(&sys->ppu, data);
-            } else if(addr == _OAMADDR) {
-                sys->ppu.sprite_data_address = data;
-            } else if(addr == _PPUADDR) {
-                r2c02_set_sata_address(&sys->ppu, data);
-            } else if(addr == _PPUSCROL) {
-                r2c02_set_scroll(&sys->ppu, data);
-            } else if(addr == _PPUDATA) {
-                r2c02_set_data(&sys->ppu, data);
-            } else if(addr == _OAMDMA) {
-                uint16_t page = data << 8;
-                if (page < 0x2000) {
-                    uint8_t* page_ptr = sys->ram + (page & 0x7ff);
-                    memcpy(sys->ppu.sprite_memory + sys->ppu.sprite_data_address, page_ptr, 256 - sys->ppu.sprite_data_address);
-                    if (sys->ppu.sprite_data_address)
-                        memcpy(sys->ppu.sprite_memory, page_ptr + (256 - sys->ppu.sprite_data_address), sys->ppu.sprite_data_address);
-                }
-            } else if(addr == _OAMDATA) {
-                sys->ppu.sprite_memory[sys->ppu.sprite_data_address++] = data;
-            }
+            r2c02_write(&sys->ppu, addr-0x2000, data);
         }
     }
 
