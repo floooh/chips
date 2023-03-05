@@ -376,7 +376,7 @@ static void _ui_nes_draw_hw_colors(ui_nes_t* ui) {
     }
 
     nes_t* nes = ui->nes;
-    ImGui::Text("Background palette 0:");
+    ImGui::Text("Palette 0:");
     uint16_t addr = 0x0;
     for (int i = 0; i < 4; i++) {
         ImGui::PushID(i);
@@ -387,8 +387,18 @@ static void _ui_nes_draw_hw_colors(ui_nes_t* ui) {
             ImGui::SameLine();
         }
     }
+    addr = 0x10;
+    for (int i = 0; i < 4; i++) {
+        ImGui::PushID(i);
+        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 4) != 0) {
+            ImGui::SameLine();
+        }
+    }
 
-    ImGui::Text("Background palette 1:");
+    ImGui::Text("Palette 1:");
     addr = 0x4;
     for (int i = 0; i < 4; i++) {
         ImGui::PushID(i);
@@ -399,9 +409,7 @@ static void _ui_nes_draw_hw_colors(ui_nes_t* ui) {
             ImGui::SameLine();
         }
     }
-
-    ImGui::Text("Background palette 2:");
-    addr = 0x8;
+    addr = 0x14;
     for (int i = 0; i < 4; i++) {
         ImGui::PushID(i);
         uint8_t pal_index = nes->ppu_pal_ram[addr + i];
@@ -412,8 +420,40 @@ static void _ui_nes_draw_hw_colors(ui_nes_t* ui) {
         }
     }
 
-    ImGui::Text("Background palette 3:");
+    ImGui::Text("Palette 2:");
+    addr = 0x8;
+    for (int i = 0; i < 4; i++) {
+        ImGui::PushID(i);
+        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 4) != 0) {
+            ImGui::SameLine();
+        }
+    }
+    addr = 0x18;
+    for (int i = 0; i < 4; i++) {
+        ImGui::PushID(i);
+        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 4) != 0) {
+            ImGui::SameLine();
+        }
+    }
+
+    ImGui::Text("Palette 3:");
     addr = 0xc;
+    for (int i = 0; i < 4; i++) {
+        ImGui::PushID(i);
+        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
+        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+        ImGui::PopID();
+        if (((i+1) % 4) != 0) {
+            ImGui::SameLine();
+        }
+    }
+    addr = 0x1c;
     for (int i = 0; i < 4; i++) {
         ImGui::PushID(i);
         uint8_t pal_index = nes->ppu_pal_ram[addr + i];
@@ -512,8 +552,9 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
     {
         ui_dasm_desc_t desc = {0};
         desc.layers[0] = "System";
+        desc.read_cb = _ui_nes_mem_read;
         desc.cpu_type = UI_DASM_CPUTYPE_M6502;
-        desc.user_data = ui->nes;
+        desc.user_data = ui;
         static const char* titles[4] = { "Disassembler #1", "Disassembler #2", "Disassembler #2", "Dissassembler #3" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
