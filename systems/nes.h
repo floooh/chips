@@ -70,11 +70,6 @@ typedef struct {
     uint8_t reserved_1[7];
 } nes_cartridge_header;
 
-typedef struct {
-    uint8_t (*read_prg)(uint16_t addr, void* user_data);
-    void* user_data;
-} nes_mapper_t;
-
 // configuration parameters for nes_init()
 typedef struct {
     chips_debug_t debug;
@@ -101,14 +96,12 @@ typedef struct {
 
     chips_debug_t debug;
 
-    mem_t mem;
     uint8_t ram[0x800];             // 2KB
     uint8_t ppu_ram[0x1000];        // 4KB
     uint8_t ppu_pal_ram[0x20];      // 32B
     uint8_t character_ram[0x2000];  // 8KB
     uint16_t ppu_name_table[4];
 
-    nes_mapper_t mapper;
     struct {
         nes_cartridge_header header;
         uint8_t rom[0x8000];
@@ -165,7 +158,6 @@ static void _ppu_scanline_irq(void* user_data);
 static void _ppu_vblank(void* user_data);
 static void _ppu_set_pixels(uint8_t* buffer, void* user_data);
 static uint64_t _nes_tick(nes_t* sys, uint64_t pins);
-static uint8_t mapper0_read_prg(uint16_t addr, void* user_data);
 
 void nes_init(nes_t* sys, const nes_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -186,15 +178,6 @@ void nes_init(nes_t* sys, const nes_desc_t* desc) {
         .set_pixels = _ppu_set_pixels,
         .user_data = sys,
     });
-
-    mem_init(&sys->mem);
-    // TODO: too bad, I can't use 4 pages of 0x800 size like this:
-    //mem_map_ram(&sys->mem, 0, 0x0000, 0x0800, sys->ram);
-    //mem_map_ram(&sys->mem, 0, 0x0800, 0x0800, sys->ram);
-    //mem_map_ram(&sys->mem, 0, 0x1000, 0x0800, sys->ram);
-    //mem_map_ram(&sys->mem, 0, 0x1800, 0x0800, sys->ram);
-    mem_map_ram(&sys->mem, 0, 0x0000, 0x2000, sys->ram);
-    mem_map_ram(&sys->mem, 1, 0x8000, 0x8000, sys->cart.rom);
 }
 
 void nes_discard(nes_t* sys) {
@@ -296,9 +279,9 @@ bool nes_insert_cart(nes_t* sys, chips_range_t data) {
 
     size_t prg_size = hdr->prg_page_count * 0x4000;
     memcpy(&sys->cart.header, hdr, sizeof(nes_cartridge_header));
-    memcpy(&sys->cart.rom, data.ptr + sizeof(nes_cartridge_header), prg_size);
+    memcpy(sys->cart.rom, data.ptr + sizeof(nes_cartridge_header), prg_size);
     if(hdr->tile_page_count > 0) {
-        memcpy(&sys->character_ram, data.ptr + sizeof(nes_cartridge_header) + prg_size, 0x2000);
+        memcpy(sys->character_ram, data.ptr + sizeof(nes_cartridge_header) + prg_size, 0x2000);
     }
 
     const uint8_t mapper = hdr->mapper_low | (hdr->mapper_hi << 4);
@@ -312,19 +295,6 @@ bool nes_insert_cart(nes_t* sys, chips_range_t data) {
         // horizontal mirroring
         sys->ppu_name_table[0] = sys->ppu_name_table[1] = 0x2000;
         sys->ppu_name_table[2] = sys->ppu_name_table[3] = 0x2400;
-    }
-
-    sys->mapper = (nes_mapper_t){
-        .user_data = (void*)sys,
-        .read_prg = mapper0_read_prg
-    };
-
-    mem_unmap_layer(&sys->mem, 0);
-    if(hdr->prg_page_count == 1) {
-        mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->cart.rom);
-        mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->cart.rom);
-    } else {
-        mem_map_ram(&sys->mem, 0, 0x8000, 0x8000, sys->cart.rom);
     }
 
     nes_reset(sys);
@@ -446,8 +416,15 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         else if (addr < 0x8000) {
             // TODO:
         }
-        else if (sys->mapper.read_prg) {
-            M6502_SET_DATA(pins, sys->mapper.read_prg((addr - 0x8000)& 0x3fff, sys->mapper.user_data));
+        else if (addr < 0xc000) {
+            M6502_SET_DATA(pins, sys->cart.rom[addr - 0x8000]);
+        }
+        else {
+            if(sys->cart.header.prg_page_count == 1) {
+                M6502_SET_DATA(pins, sys->cart.rom[addr - 0xc000]);
+            } else {
+                M6502_SET_DATA(pins, sys->cart.rom[addr - 0x8000]);
+            }
         }
     }
     else {
@@ -493,12 +470,6 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
     r2c02_tick(&sys->ppu, pins);
 
     return pins;
-}
-
-static uint8_t mapper0_read_prg(uint16_t addr, void* user_data) {
-    nes_t* sys = (nes_t*)user_data;
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->cart.rom[addr];
 }
 
 #endif /* CHIPS_IMPL */

@@ -201,11 +201,31 @@ static uint8_t _ui_nes_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
-    if (addr < 0x2000 || (addr >= 0x8000)) {
+    if (addr < 0x2000) {
         /* CPU mapped RAM layer */
-        return mem_rd(&nes->mem, addr);
+        return nes->ram[addr & 0x7ff];
     }
-    return 0xFF;
+    if (addr >= 0x4016 && addr <= 0x4017) {
+        return nes->controller_state[addr & 0x0001];
+    }
+    if (addr < 0x4020) {
+        // TODO:
+        return 0xff;
+    }
+    if (addr < 0x8000) {
+        // TODO:
+        return 0xff;
+    }
+    if (addr < 0xc000) {
+        return nes->cart.rom[addr - 0x8000];
+    } else {
+        if(nes->cart.header.prg_page_count == 1) {
+            return nes->cart.rom[addr - 0xc000];
+        } else {
+            return nes->cart.rom[addr - 0x8000];
+        }
+    }
+    return 0xff;
 }
 
 static void _ui_nes_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
@@ -214,7 +234,19 @@ static void _ui_nes_mem_write(int layer, uint16_t addr, uint8_t data, void* user
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
     if (addr < 0x2000) {
-        mem_wr(&nes->mem, addr, data);
+        nes->ram[addr & 0x7ff] = data;
+    } else if (addr >= 0x4016 && addr <= 0x4017) {
+        nes->controller_state[addr & 0x0001] = data;
+    } else if (addr < 0x4020) {
+        // TODO:
+    } else if (addr < 0x8000) {
+        // TODO:
+    } else if (addr < 0xc000) {
+        nes->cart.rom[addr - 0x8000] = data;
+    } else if(nes->cart.header.prg_page_count == 1) {
+            nes->cart.rom[addr - 0xc000] = data;
+    } else {
+        nes->cart.rom[addr - 0x8000] = data;
     }
 }
 

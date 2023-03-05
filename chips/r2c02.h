@@ -107,7 +107,6 @@ static const int AttributeOffset = 0x3C0;
 typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
     void (*write)(uint16_t addr, uint8_t data, void* user_data);
-    uint8_t (*read_palette)(uint8_t paletteAddr, void* user_data);
     void (*scanline_irq)(void* user_data);
     void (*vblank_callback)(void* user_data);
     void (*set_pixels)(uint8_t* buffer, void* user_data);
@@ -320,8 +319,6 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 sys->data_address &= ~0x7be0; //Unset bits related to horizontal
                 sys->data_address |= sys->temp_address & 0x7be0; //Copy
             }
-//                 if (sys->cycle > 257 && sys->cycle < 320)
-//                     sys->spriteDataAddress = 0;
             //if rendering is on, every other frame is one cycle shorter
             if (sys->cycle >= ScanlineEndCycle - (!sys->even_frame && sys->show_background && sys->show_sprites)) {
                 sys->pipelineState = Render;
@@ -467,9 +464,6 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 sys->data_address &= ~0x41f;
                 sys->data_address |= sys->temp_address & 0x41f;
             }
-
-//                 if (sys->cycle > 257 && sys->cycle < 320)
-//                     sys->spriteDataAddress = 0;
 
             // add IRQ support for MMC3
             if(sys->cycle==260 && sys->show_background && sys->show_sprites) {
