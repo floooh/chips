@@ -475,10 +475,9 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
             } else if(addr == _PPUDATA) {
                 r2c02_set_data(&sys->ppu, data);
             } else if(addr == _OAMDMA) {
-                // TODO:
-                uint8_t* page_ptr = &sys->ram[addr & 0x7ff];
-                if (page_ptr)
-                {
+                uint16_t page = data << 8;
+                if (page < 0x2000) {
+                    uint8_t* page_ptr = sys->ram + (page & 0x7ff);
                     memcpy(sys->ppu.sprite_memory + sys->ppu.sprite_data_address, page_ptr, 256 - sys->ppu.sprite_data_address);
                     if (sys->ppu.sprite_data_address)
                         memcpy(sys->ppu.sprite_memory, page_ptr + (256 - sys->ppu.sprite_data_address), sys->ppu.sprite_data_address);
