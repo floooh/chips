@@ -149,7 +149,6 @@ void nes_key_up(nes_t* nes, int value);
 #define _PPUSCROL   (0x2005)
 #define _PPUADDR    (0x2006)
 #define _PPUDATA    (0x2007)
-#define _OAMDMA     (0x4014)
 
 static uint8_t _ppu_read(uint16_t addr, void* user_data);
 static void _ppu_write(uint16_t address, uint8_t data, void* user_data);
@@ -409,7 +408,12 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         uint8_t data = M6502_GET_DATA(pins);
         if(addr < 0x2000) {
             sys->ram[addr & 0x7ff] = data;
-        } else if(addr == _OAMDMA) {
+        } else if (addr < 0x4000) {
+            //PPU registers, mirrored
+            addr = addr & 0x0007;
+            r2c02_write(&sys->ppu, addr, data);
+        } else if(addr == 0x4014) {
+            // OAMDMA
             uint16_t page = data << 8;
             if (page < 0x2000) {
                 uint8_t* page_ptr = sys->ram + (page & 0x7ff);
@@ -419,10 +423,6 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
             }
         } else if (addr >= 0x4016 && addr <= 0x4017) {
             sys->controller_state[addr & 0x0001] = sys->controller[addr & 0x0001].value;
-        } else if (addr < 0x4020) {
-            if (addr < 0x4000) //PPU registers, mirrored
-                addr = addr & 0x2007;
-            r2c02_write(&sys->ppu, addr-0x2000, data);
         }
     }
 
