@@ -256,7 +256,7 @@ static uint8_t _ui_nes_ppu_mem_read(int layer, uint16_t addr, void* user_data) {
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
     if (addr < 0x2000) {
-        return nes->character_ram[addr];
+        return nes->cart.character_ram[addr];
     }
     if (addr >= 0x2000 && addr < 0x3f00) {
         const uint16_t index = addr & 0x3ff;
@@ -292,7 +292,7 @@ static void _ui_nes_ppu_mem_write(int layer, uint16_t addr, uint8_t data, void* 
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
     if (addr < 0x2000) {
-        nes->character_ram[addr] = data;
+        nes->cart.character_ram[addr] = data;
     }
     else if (addr >= 0x2000 && addr < 0x3f00) {
         const uint16_t index = addr & 0x3ff;

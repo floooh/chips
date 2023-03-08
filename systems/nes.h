@@ -29,7 +29,7 @@
 
     This emulator is not fully implemented:
         - PAL not implemented
-        - only mapper 0 is implemented, so only few games are supported
+        - only mapper 0 & 2 are implemented, so only few games are supported
         - there is no audio
         - only the standard NES controller is supported
 
@@ -195,6 +195,9 @@ static uint8_t _nes_read_prg0(uint16_t addr, void* user_data);
 static void _nes_write_prg0(uint16_t addr, uint8_t value, void* user_data);
 static uint8_t _nes_read_chr0(uint16_t addr, void* user_data);
 static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data);
+
+static uint8_t _nes_read_prg2(uint16_t addr, void* user_data);
+static void _nes_write_prg2(uint16_t addr, uint8_t value, void* user_data);
 
 void nes_init(nes_t* sys, const nes_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -489,6 +492,15 @@ static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
         case 0:
             supported = true;
             break;
+        case 2:
+            sys->cart.mapper = (nes_mapper_t){
+                .read_prg = _nes_read_prg2,
+                .write_prg = _nes_write_prg2,
+                .read_chr = _nes_read_chr0,
+                .write_chr = _nes_write_chr0,
+            };
+            supported = true;
+            break;
     }
     sys->cart.mapper.mirroring = sys->cart.header.mirror_mode ? Vertical : Horizontal;
     _nes_mirroring(sys);
@@ -545,6 +557,30 @@ static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data) {
     nes_t* sys = (nes_t*)user_data;
     CHIPS_ASSERT(sys && sys->valid);
     sys->cart.character_ram[addr] = data;
+}
+
+// ********* MAPPER 2 **************
+
+static uint8_t _nes_read_prg2(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    uint16_t page;
+    if(addr < 0xc000) {
+        // CPU $8000-$BFFF: 16 KB switchable PRG ROM bank
+        page = sys->cart.mapper.data2.select_prg;
+    } else {
+        // CPU $C000-$FFFF: 16 KB PRG ROM bank, fixed to the last bank
+        page = sys->cart.header.prg_page_count - 1;
+    }
+    return sys->cart.rom[(page << 14) + (addr & 0x3fff)];
+}
+
+static void _nes_write_prg2(uint16_t addr, uint8_t value, void* user_data) {
+    (void)addr;
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    CHIPS_ASSERT(value < sys->cart.header.prg_page_count);
+    sys->cart.mapper.data2.select_prg = value;
 }
 
 #endif /* CHIPS_IMPL */
