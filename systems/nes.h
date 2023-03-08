@@ -2,7 +2,7 @@
 /*#
     # nes.h
 
-    A NES emulator in a C header
+    A NES emulator in a C header.
 
     Do this:
     ~~~C
@@ -21,8 +21,17 @@
     You need to include the following headers before including nes.h:
 
     - chips/chips_common.h
+    - chips/clk.h
     - chips/m6502.h
     - chips/r2c02.h
+
+    ## Warning
+
+    This emulator is not fully implemented:
+        - PAL not implemented
+        - only mapper 0 is implemented, so only few games are supported
+        - there is no audio
+        - only the standard NES controller is supported
 
     ## zlib/libpng license
 
@@ -88,23 +97,48 @@ typedef union {
     uint8_t value;
 } controller_t;
 
+typedef enum {
+    Horizontal  = 0,
+    Vertical    = 1,
+    FourScreen  = 8,
+    OneScreenLower,
+    OneScreenHigher,
+} name_table_mirroring_t;
+
+typedef struct {
+    uint8_t (*read_prg)(uint16_t address, void* user_data);
+    void (*write_prg)(uint16_t address, uint8_t value, void* user_data);
+    uint8_t (*read_chr)(uint16_t address, void* user_data);
+    void (*write_chr)(uint16_t addr, uint8_t data, void* user_data);
+
+    union {
+        struct {
+            uint8_t select_prg;
+        } data2;
+    };
+    name_table_mirroring_t mirroring;
+} nes_mapper_t;
+
 // NES emulator state
 typedef struct {
     m6502_t cpu;
     r2c02_t ppu;
-
     chips_debug_t debug;
 
     uint8_t ram[0x800];             // 2KB
+    uint8_t extended_ram[0x2000];   // 8KB
+    
     uint8_t ppu_ram[0x1000];        // 4KB
     uint8_t ppu_pal_ram[0x20];      // 32B
-    uint8_t character_ram[0x2000];  // 8KB
     uint16_t ppu_name_table[4];
 
     struct {
         nes_cartridge_header header;
-        uint8_t rom[0x8000];
+        nes_mapper_t mapper;
+        uint8_t character_ram[0x20000]; // 128KB
+        uint8_t rom[0x20000];           // 128KB
     } cart;
+    
     controller_t controller[2];
     uint8_t controller_state[2];
 
@@ -154,6 +188,13 @@ static uint8_t _ppu_read(uint16_t addr, void* user_data);
 static void _ppu_write(uint16_t address, uint8_t data, void* user_data);
 static void _ppu_set_pixels(uint8_t* buffer, void* user_data);
 static uint64_t _nes_tick(nes_t* sys, uint64_t pins);
+static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num);
+static void _nes_mirroring(nes_t* sys);
+
+static uint8_t _nes_read_prg0(uint16_t addr, void* user_data);
+static void _nes_write_prg0(uint16_t addr, uint8_t value, void* user_data);
+static uint8_t _nes_read_chr0(uint16_t addr, void* user_data);
+static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data);
 
 void nes_init(nes_t* sys, const nes_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -172,6 +213,7 @@ void nes_init(nes_t* sys, const nes_desc_t* desc) {
         .set_pixels = _ppu_set_pixels,
         .user_data = sys,
     });
+    _nes_use_mapper(sys, 0);
 }
 
 void nes_discard(nes_t* sys) {
@@ -268,57 +310,53 @@ bool nes_insert_cart(nes_t* sys, chips_range_t data) {
         return false;
 
     // not supported
-    if(hdr->trainer || hdr->sram_avail || hdr->vram_expansion || hdr->mapper_low || hdr->prg_page_count > 2 || hdr->tile_page_count > 1)
+    const uint8_t mapper_num = hdr->mapper_low | (hdr->mapper_hi << 4);
+    if(hdr->trainer || hdr->vram_expansion || hdr->prg_page_count > 8 || hdr->tile_page_count > 16)
         return false;
 
-    size_t prg_size = hdr->prg_page_count * 0x4000;
+    // read PRG-ROM (16KB banks)
+    const size_t prg_size = hdr->prg_page_count * 0x4000;
     memcpy(&sys->cart.header, hdr, sizeof(nes_cartridge_header));
     memcpy(sys->cart.rom, data.ptr + sizeof(nes_cartridge_header), prg_size);
+
+    // read CHR-ROM (8KB banks)
     if(hdr->tile_page_count > 0) {
-        memcpy(sys->character_ram, data.ptr + sizeof(nes_cartridge_header) + prg_size, 0x2000);
+        memcpy(sys->cart.character_ram, data.ptr + sizeof(nes_cartridge_header) + prg_size, hdr->tile_page_count * 0x2000);
     }
 
-    const uint8_t mapper = hdr->mapper_low | (hdr->mapper_hi << 4);
-    CHIPS_ASSERT(mapper == 0);
-
-    if(hdr->mirror_mode) {
-        // vertical mirroring
-        sys->ppu_name_table[0] = sys->ppu_name_table[2] = 0x2000;
-        sys->ppu_name_table[1] = sys->ppu_name_table[3] = 0x2400;
-    } else {
-        // horizontal mirroring
-        sys->ppu_name_table[0] = sys->ppu_name_table[1] = 0x2000;
-        sys->ppu_name_table[2] = sys->ppu_name_table[3] = 0x2400;
+    if(_nes_use_mapper(sys, mapper_num)) {
+        nes_reset(sys);
+        return true;
     }
-
-    nes_reset(sys);
-    return true;
+    return false;
 }
 
 static uint8_t _ppu_read(uint16_t addr, void* user_data) {
     nes_t* sys = (nes_t*)user_data;
     CHIPS_ASSERT(sys && sys->valid);
     if (addr < 0x2000) {
-        return sys->character_ram[addr];
-    }
-    if (addr < 0x3f00) {
+        return sys->cart.mapper.read_chr(addr, sys);
+    } else if(addr < 0x3f00) {
         const uint16_t index = addr & 0x3ff;
         // Name tables upto 0x3000, then mirrored upto 3eff
         uint16_t normalizedAddr = addr;
         if (addr >= 0x3000)
             normalizedAddr -= 0x1000;
-
-        if (normalizedAddr < 0x2400)      //NT0
-            normalizedAddr = sys->ppu_name_table[0] + index;
-        else if (normalizedAddr < 0x2800) //NT1
-            normalizedAddr = sys->ppu_name_table[1] + index;
-        else if (normalizedAddr < 0x2c00) //NT2
-            normalizedAddr = sys->ppu_name_table[2] + index;
-        else
-            normalizedAddr = sys->ppu_name_table[3] + index;
-        return sys->ppu_ram[normalizedAddr-0x2000];
-    }
-    if (addr < 0x4000) {
+        if(sys->ppu_name_table[0] >= 0x2c00) {
+            return sys->cart.mapper.read_chr(normalizedAddr, sys);
+        } else
+        {
+            if (normalizedAddr < 0x2400)      //NT0
+                normalizedAddr = sys->ppu_name_table[0] + index;
+            else if (normalizedAddr < 0x2800) //NT1
+                normalizedAddr = sys->ppu_name_table[1] + index;
+            else if (normalizedAddr < 0x2c00) //NT2
+                normalizedAddr = sys->ppu_name_table[2] + index;
+            else
+                normalizedAddr = sys->ppu_name_table[3] + index;
+            return sys->ppu_ram[normalizedAddr-0x2000];
+        }
+    } else if (addr < 0x4000) {
          uint16_t normalizedAddr = addr & 0x1f;
          // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
          if (normalizedAddr >= 0x10 && addr % 4 == 0) {
@@ -333,25 +371,28 @@ static void _ppu_write(uint16_t addr, uint8_t data, void* user_data) {
     nes_t* sys = (nes_t*)user_data;
     CHIPS_ASSERT(sys && sys->valid);
     if (addr < 0x2000) {
-        sys->character_ram[addr] = data;
-    }
-    else if (addr < 0x3f00) {
+        sys->cart.mapper.write_chr(addr, data, sys);
+    } else if (addr < 0x3f00) {
         const uint16_t index = addr & 0x3ff;
         // Name tables upto 0x3000, then mirrored upto 3eff
         uint16_t normalizedAddr = addr;
         if (addr >= 0x3000)
             normalizedAddr -= 0x1000;
-        if (normalizedAddr < 0x2400)      //NT0
-            normalizedAddr = sys->ppu_name_table[0] + index;
-        else if (normalizedAddr < 0x2800) //NT1
-            normalizedAddr = sys->ppu_name_table[1] + index;
-        else if (normalizedAddr < 0x2c00) //NT2
-            normalizedAddr = sys->ppu_name_table[2] + index;
-        else
-            normalizedAddr = sys->ppu_name_table[3] + index;
-        sys->ppu_ram[normalizedAddr-0x2000] = data;
-    }
-    else if (addr < 0x4000) {
+        if(sys->ppu_name_table[0] >= 0x2c00) {
+            sys->cart.mapper.write_chr(normalizedAddr, data, sys);
+        } else
+        {
+            if (normalizedAddr < 0x2400)      //NT0
+                normalizedAddr = sys->ppu_name_table[0] + index;
+            else if (normalizedAddr < 0x2800) //NT1
+                normalizedAddr = sys->ppu_name_table[1] + index;
+            else if (normalizedAddr < 0x2c00) //NT2
+                normalizedAddr = sys->ppu_name_table[2] + index;
+            else
+                normalizedAddr = sys->ppu_name_table[3] + index;
+            sys->ppu_ram[normalizedAddr-0x2000] = data;
+        }
+    } else if (addr < 0x4000) {
         uint16_t normalizedAddr = addr & 0x1f;
         // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
         if (normalizedAddr >= 0x10 && addr % 4 == 0) {
@@ -388,19 +429,12 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
             if (addr < 0x4000) //PPU registers, mirrored
                 addr = addr & 0x2007;
             M6502_SET_DATA(pins, r2c02_read(&sys->ppu, addr-0x2000));
-        }
-        else if (addr < 0x8000) {
-            // TODO:
-        }
-        else if (addr < 0xc000) {
-            M6502_SET_DATA(pins, sys->cart.rom[addr - 0x8000]);
-        }
-        else {
-            if(sys->cart.header.prg_page_count == 1) {
-                M6502_SET_DATA(pins, sys->cart.rom[addr - 0xc000]);
-            } else {
-                M6502_SET_DATA(pins, sys->cart.rom[addr - 0x8000]);
-            }
+        } else if (addr < 0x6000) {
+            // TODO: Expansion ROM
+        } else if (addr < 0x8000) {
+            M6502_SET_DATA(pins, sys->extended_ram[addr - 0x6000]);
+        } else {
+            M6502_SET_DATA(pins, sys->cart.mapper.read_prg(addr, sys));
         }
     }
     else {
@@ -423,6 +457,12 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
             }
         } else if (addr >= 0x4016 && addr <= 0x4017) {
             sys->controller_state[addr & 0x0001] = sys->controller[addr & 0x0001].value;
+         } else if (addr < 0x6000) {
+             // TODO: Expansion ROM
+         } else if (addr < 0x8000) {
+             sys->extended_ram[addr - 0x6000] = data;
+         } else {
+             sys->cart.mapper.write_prg(addr, data, sys);
         }
     }
 
@@ -431,6 +471,80 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
     r2c02_tick(&sys->ppu, pins);
 
     return pins;
+}
+
+// *************************
+// ********* MAPPERS *******
+// *************************
+static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
+    bool supported = false;
+    memset(&sys->cart.mapper, 0, sizeof(sys->cart.mapper));
+    sys->cart.mapper = (nes_mapper_t){
+        .read_prg = _nes_read_prg0,
+        .write_prg = _nes_write_prg0,
+        .read_chr = _nes_read_chr0,
+        .write_chr = _nes_write_chr0,
+    };
+    switch(mapper_num) {
+        case 0:
+            supported = true;
+            break;
+    }
+    sys->cart.mapper.mirroring = sys->cart.header.mirror_mode ? Vertical : Horizontal;
+    _nes_mirroring(sys);
+    return supported;
+}
+
+static void _nes_mirroring(nes_t* sys) {
+    switch (sys->cart.mapper.mirroring) {
+        case Horizontal:
+            sys->ppu_name_table[0] = sys->ppu_name_table[1] = 0x2000;
+            sys->ppu_name_table[2] = sys->ppu_name_table[3] = 0x2400;
+            break;
+        case Vertical:
+            sys->ppu_name_table[0] = sys->ppu_name_table[2] = 0x2000;
+            sys->ppu_name_table[1] = sys->ppu_name_table[3] = 0x2400;
+            break;
+        case OneScreenLower:
+            sys->ppu_name_table[0] = sys->ppu_name_table[1] = sys->ppu_name_table[2] = sys->ppu_name_table[3] = 0x2000;
+            break;
+        case OneScreenHigher:
+            sys->ppu_name_table[0] = sys->ppu_name_table[1] = sys->ppu_name_table[2] = sys->ppu_name_table[3] = 0x2400;
+            break;
+        case FourScreen:
+            sys->ppu_name_table[0] = 0x2800;
+            break;
+        default:
+            sys->ppu_name_table[0] = sys->ppu_name_table[1] = sys->ppu_name_table[2] = sys->ppu_name_table[3] = 0x2000;
+    }
+}
+
+// ********* MAPPER 0 **************
+
+static uint8_t _nes_read_prg0(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    addr -= 0x8000;
+    if(sys->cart.header.prg_page_count == 1) {
+        addr &= 0x3fff;
+    }
+    return sys->cart.rom[addr];
+}
+
+static void _nes_write_prg0(uint16_t addr, uint8_t value, void* user_data) {
+    (void)addr; (void)value; (void)user_data;
+}
+
+static uint8_t _nes_read_chr0(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->cart.character_ram[addr];
+}
+
+static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->cart.character_ram[addr] = data;
 }
 
 #endif /* CHIPS_IMPL */
