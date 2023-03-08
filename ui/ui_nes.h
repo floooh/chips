@@ -65,6 +65,12 @@ typedef struct {
 } ui_nes_desc_t;
 
 typedef struct {
+    int x, y;
+    int w, h;
+    bool open;
+} ui_nes_video_t;
+
+typedef struct {
     nes_t* nes;
     ui_m6502_t cpu;
     ui_memedit_t memedit[4];
@@ -72,6 +78,7 @@ typedef struct {
     ui_memedit_t sprite_memedit[4];
     ui_memedit_t picture_memedit[4];
     ui_dasm_t dasm[4];
+    ui_nes_video_t video;
     ui_dbg_t dbg;
 } ui_nes_t;
 
@@ -114,6 +121,7 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
         }
         if (ImGui::BeginMenu("Hardware")) {
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
+            ImGui::MenuItem("Video Hardware", 0, &ui->video.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -363,108 +371,6 @@ static void _ui_nes_picture_mem_write(int layer, uint16_t addr, uint8_t data, vo
     }
 }
 
-static void _ui_nes_draw_hw_colors(ui_nes_t* ui) {
-    ImGui::Text("Hardware Colors:");
-    const ImVec2 size(18,18);
-    for (int i = 0; i < 64; i++) {
-        ImGui::PushID(i);
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[i]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 16) != 0) {
-            ImGui::SameLine();
-        }
-    }
-
-    nes_t* nes = ui->nes;
-    ImGui::Text("Palette 0:");
-    uint16_t addr = 0x0;
-    for (int i = 0; i < 4; i++) {
-        ImGui::PushID(i);
-        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 4) != 0) {
-            ImGui::SameLine();
-        }
-    }
-    addr = 0x10;
-    for (int i = 0; i < 4; i++) {
-        ImGui::PushID(i);
-        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 4) != 0) {
-            ImGui::SameLine();
-        }
-    }
-
-    ImGui::Text("Palette 1:");
-    addr = 0x4;
-    for (int i = 0; i < 4; i++) {
-        ImGui::PushID(i);
-        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 4) != 0) {
-            ImGui::SameLine();
-        }
-    }
-    addr = 0x14;
-    for (int i = 0; i < 4; i++) {
-        ImGui::PushID(i);
-        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 4) != 0) {
-            ImGui::SameLine();
-        }
-    }
-
-    ImGui::Text("Palette 2:");
-    addr = 0x8;
-    for (int i = 0; i < 4; i++) {
-        ImGui::PushID(i);
-        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 4) != 0) {
-            ImGui::SameLine();
-        }
-    }
-    addr = 0x18;
-    for (int i = 0; i < 4; i++) {
-        ImGui::PushID(i);
-        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 4) != 0) {
-            ImGui::SameLine();
-        }
-    }
-
-    ImGui::Text("Palette 3:");
-    addr = 0xc;
-    for (int i = 0; i < 4; i++) {
-        ImGui::PushID(i);
-        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 4) != 0) {
-            ImGui::SameLine();
-        }
-    }
-    addr = 0x1c;
-    for (int i = 0; i < 4; i++) {
-        ImGui::PushID(i);
-        uint8_t pal_index = nes->ppu_pal_ram[addr + i];
-        ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
-        ImGui::PopID();
-        if (((i+1) % 4) != 0) {
-            ImGui::SameLine();
-        }
-    }
-}
-
 void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->nes);
@@ -562,11 +468,16 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
             x += dx; y += dy;
         }
     }
+    {
+        ui->video.x = 10;
+        ui->video.y = 20;
+        ui->video.w = 450;
+        ui->video.h = 568;
+    }
 }
 
 void ui_nes_discard(ui_nes_t* ui) {
     CHIPS_ASSERT(ui && ui->nes);
-    ui->nes = 0;
     ui_m6502_discard(&ui->cpu);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
@@ -576,6 +487,123 @@ void ui_nes_discard(ui_nes_t* ui) {
         ui_dasm_discard(&ui->dasm[i]);
     }
     ui_dbg_discard(&ui->dbg);
+}
+
+static void _ui_nes_draw_video(ui_nes_t* ui) {
+    if (!ui->video.open) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2((float)ui->video.x, (float)ui->video.y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2((float)ui->video.w, (float)ui->video.h), ImGuiCond_Once);
+    if (ImGui::Begin("Video Hardware", &ui->video.open)) {
+        const ImVec2 size(18, 18);
+        if (ImGui::CollapsingHeader("Palette", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (int row = 0; row < 4; row++) {
+                for (int col = 0; col < 16; col++) {
+                    int pal_index = col + row * 16;
+                    ImGui::PushID(pal_index);
+                    ImGui::ColorButton("##hw_color", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if (col != 15) {
+                        ImGui::SameLine();
+                    }
+                }
+            }
+            {
+                ImGui::Text("Palette 0");
+                uint16_t addr = 0x3f00;
+                for (int i = 0; i < 4; i++) {
+                    ImGui::PushID(i);
+                    uint8_t pal_index = _ui_nes_ppu_mem_read(0, addr + i, ui);
+                    ImGui::ColorButton("##hw_p0color1", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+                addr = 0x3f10;
+                for (int i = 0; i < 4; i++) {
+                    ImGui::PushID(i);
+                    uint8_t pal_index = _ui_nes_ppu_mem_read(0, addr + i, ui);
+                    ImGui::ColorButton("##hw_p0color2", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+            }
+            {
+                ImGui::Text("Palette 1");
+                uint16_t addr = 0x3f04;
+                for (int i = 0; i < 4; i++) {
+                    ImGui::PushID(i);
+                    uint8_t pal_index = _ui_nes_ppu_mem_read(0, addr + i, ui);
+                    ImGui::ColorButton("##hw_p1color1", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+                addr = 0x3f14;
+                for (int i = 0; i < 4; i++) {
+                    ImGui::PushID(i);
+                    uint8_t pal_index = _ui_nes_ppu_mem_read(0, addr + i, ui);
+                    ImGui::ColorButton("##hw_p1color2", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+            }
+            {
+                ImGui::Text("Palette 2");
+                uint16_t addr = 0x3f08;
+                for (int i = 0; i < 4; i++) {
+                    ImGui::PushID(i);
+                    uint8_t pal_index = _ui_nes_ppu_mem_read(0, addr + i, ui);
+                    ImGui::ColorButton("##hw_p2color1", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+                addr = 0x3f18;
+                for (int i = 0; i < 4; i++) {
+                    ImGui::PushID(i);
+                    uint8_t pal_index = _ui_nes_ppu_mem_read(0, addr + i, ui);
+                    ImGui::ColorButton("##hw_p2color2", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+            }
+            {
+                ImGui::Text("Palette 3");
+                uint16_t addr = 0x3f0c;
+                for (int i = 0; i < 4; i++) {
+                    ImGui::PushID(i);
+                    uint8_t pal_index = _ui_nes_ppu_mem_read(0, addr + i, ui);
+                    ImGui::ColorButton("##hw_p3color1", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+                addr = 0x3f1c;
+                for (int i = 0; i < 4; i++) {
+                    ImGui::PushID(i);
+                    uint8_t pal_index = _ui_nes_ppu_mem_read(0, addr + i, ui);
+                    ImGui::ColorButton("##hw_p3color2", ImColor(ppu_palette[pal_index]), ImGuiColorEditFlags_NoAlpha, size);
+                    ImGui::PopID();
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+            }
+        }
+    }
+    ImGui::End();
 }
 
 void ui_nes_draw(ui_nes_t* ui) {
@@ -589,8 +617,8 @@ void ui_nes_draw(ui_nes_t* ui) {
         ui_memedit_draw(&ui->picture_memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
-    _ui_nes_draw_hw_colors(ui);
     ui_dbg_draw(&ui->dbg);
+    _ui_nes_draw_video(ui);
 }
 
 chips_debug_t ui_nes_get_debug(ui_nes_t* ui) {
