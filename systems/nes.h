@@ -359,13 +359,15 @@ static uint8_t _ppu_read(uint16_t addr, void* user_data) {
                 normalizedAddr = sys->ppu_name_table[3] + index;
             return sys->ppu_ram[normalizedAddr-0x2000];
         }
+    } else if(addr <= 0x3f0c && addr % 4 == 0) {
+        return sys->ppu_pal_ram[0];
     } else if (addr < 0x4000) {
-         uint16_t normalizedAddr = addr & 0x1f;
-         // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
-         if (normalizedAddr >= 0x10 && addr % 4 == 0) {
-             normalizedAddr &= 0xf;
-         }
-         return sys->ppu_pal_ram[normalizedAddr];
+        uint16_t normalizedAddr = addr & 0x1f;
+        // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+        if (normalizedAddr >= 0x10 && addr % 4 == 0) {
+            normalizedAddr &= 0xf;
+        }
+        return sys->ppu_pal_ram[normalizedAddr];
     }
     return 0;
 }
