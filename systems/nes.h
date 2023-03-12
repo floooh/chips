@@ -29,7 +29,7 @@
 
     This emulator is not fully implemented:
         - PAL not implemented
-        - only mapper 0 & 2 are implemented, so only few games are supported
+        - only mappers 0, 2, 7 & 66 are implemented
         - there is no audio
         - only the standard NES controller is supported
 
@@ -117,6 +117,9 @@ typedef struct {
         } data2;
         struct {
             uint8_t prg_bank;
+        } data7;
+        struct {
+            uint8_t prg_bank;
             uint8_t chr_bank;
         } data66;
     };
@@ -140,7 +143,7 @@ typedef struct {
         nes_cartridge_header header;
         nes_mapper_t mapper;
         uint8_t character_ram[0x20000]; // 128KB
-        uint8_t rom[0x20000];           // 128KB
+        uint8_t rom[0x40000];           // 256KB
     } cart;
 
     controller_t controller[2];
@@ -207,6 +210,11 @@ static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data);
 
 static uint8_t _nes_read_prg2(uint16_t addr, void* user_data);
 static void _nes_write_prg2(uint16_t addr, uint8_t value, void* user_data);
+
+static uint8_t _nes_read_prg7(uint16_t addr, void* user_data);
+static void _nes_write_prg7(uint16_t addr, uint8_t value, void* user_data);
+static uint8_t _nes_read_chr7(uint16_t addr, void* user_data);
+static void _nes_write_chr7(uint16_t addr, uint8_t data, void* user_data);
 
 static uint8_t _nes_read_prg66(uint16_t addr, void* user_data);
 static void _nes_write_prg66(uint16_t addr, uint8_t value, void* user_data);
@@ -335,7 +343,7 @@ bool nes_insert_cart(nes_t* sys, chips_range_t data) {
 
     // not supported
     const uint8_t mapper_num = hdr->mapper_low | (hdr->mapper_hi << 4);
-    if(hdr->trainer || hdr->vram_expansion || hdr->prg_page_count > 8 || hdr->tile_page_count > 16)
+    if(hdr->trainer || hdr->vram_expansion || hdr->prg_page_count > 16 || hdr->tile_page_count > 16)
         return false;
 
     // read PRG-ROM (16KB banks)
@@ -534,6 +542,16 @@ static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
             };
             supported = true;
             break;
+        case 7:
+            sys->cart.mapper = (nes_mapper_t){
+                .mirroring = OneScreenLower,
+                .read_prg = _nes_read_prg7,
+                .write_prg = _nes_write_prg7,
+                .read_chr = _nes_read_chr7,
+                .write_chr = _nes_write_chr7,
+            };
+            supported = true;
+            break;
         case 66:
             sys->cart.mapper = (nes_mapper_t){
                 .read_prg = _nes_read_prg66,
@@ -623,6 +641,45 @@ static void _nes_write_prg2(uint16_t addr, uint8_t value, void* user_data) {
     CHIPS_ASSERT(sys && sys->valid);
     CHIPS_ASSERT(value < sys->cart.header.prg_page_count);
     sys->cart.mapper.data2.select_prg = value;
+}
+
+// ********* MAPPER 7 **************
+
+static uint8_t _nes_read_prg7(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if(addr >= 0x8000) {
+        return sys->cart.rom[(sys->cart.mapper.data7.prg_bank * 0x8000) + (addr & 0x7fff)];
+    } else {
+        return 0;
+    }
+}
+
+static void _nes_write_prg7(uint16_t addr, uint8_t data, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if(addr >= 0x8000) {
+        sys->cart.mapper.data7.prg_bank = (data & 0x07);
+        sys->cart.mapper.mirroring = (data & 0x10) ? OneScreenHigher : OneScreenLower;
+        _nes_mirroring(sys);
+    }
+}
+
+static uint8_t _nes_read_chr7(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if(addr < 0x2000) {
+        return sys->cart.character_ram[addr];
+    }
+    return 0;
+}
+
+static void _nes_write_chr7(uint16_t addr, uint8_t data, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if(addr < 0x2000) {
+        sys->cart.character_ram[addr] = data;
+    }
 }
 
 // ********* MAPPER 66 **************
