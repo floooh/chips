@@ -477,6 +477,7 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
 static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
     if(sys->ppu.request_nmi) {
         pins |= M6502_NMI;
+        sys->ppu.request_nmi = false;
     }
     pins = m6502_tick(&sys->cpu, pins);
     pins &= ~M6502_NMI;

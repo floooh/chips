@@ -68,8 +68,7 @@ EXT3  [17]        [24>  /R
 # define RGB(r,g,b) ((uint32_t)((uint32_t)(0xFF)<<24)|((uint32_t)(b)<<16)|((uint32_t)(g)<<8)|r)
 
 // blargg's palette: https://www.nesdev.org/wiki/PPU_palettes
-const uint32_t ppu_palette[] =
-{
+const uint32_t ppu_palette[] = {
     RGB( 84,  84,  84), RGB( 0,   30, 116), RGB(  8,  16, 144), RGB( 48,   0, 136), RGB( 68,   0, 100), RGB( 92,   0,  48), RGB( 84,   4,   0), RGB( 60,  24,   0),
     RGB(32,   42,   0), RGB(  8,  58,   0), RGB(  0,  64,   0), RGB(  0,  60,   0), RGB(  0,  50,  60), RGB(  0,   0,   0), RGB(  0,   0,   0), RGB(  0,   0,   0),
     RGB(152, 150, 152), RGB( 8,   76, 196), RGB( 48,  50, 236), RGB( 92,  30, 228), RGB(136,  20, 176), RGB(160,  20, 100), RGB(152,  34,  32), RGB(120,  60,   0),
@@ -211,7 +210,6 @@ uint8_t r2c02_read(r2c02_t* sys, uint8_t addr) {
     switch(addr) {
         case 0x02: {
             // get PPU status
-            sys->request_nmi = false;
             uint8_t status = sys->sprite_overflow << 5 | sys->spr_zero_hit << 6 | sys->vblank << 7;
             // Reading status clears vblank!
             sys->vblank = false;
