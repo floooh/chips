@@ -127,7 +127,7 @@ typedef struct {
 
     uint8_t ram[0x800];             // 2KB
     uint8_t extended_ram[0x2000];   // 8KB
-    
+
     uint8_t ppu_ram[0x1000];        // 4KB
     uint8_t ppu_pal_ram[0x20];      // 32B
     uint16_t ppu_name_table[4];
@@ -138,7 +138,7 @@ typedef struct {
         uint8_t character_ram[0x20000]; // 128KB
         uint8_t rom[0x20000];           // 128KB
     } cart;
-    
+
     controller_t controller[2];
     uint8_t controller_state[2];
 
@@ -160,6 +160,11 @@ chips_display_info_t nes_display_info(nes_t* nes);
 uint32_t nes_exec(nes_t* nes, uint32_t micro_seconds);
 void nes_key_down(nes_t* nes, int value);
 void nes_key_up(nes_t* nes, int value);
+
+uint8_t nes_ppu_read(nes_t* nes, uint16_t addr);
+void nes_ppu_write(nes_t* nes, uint16_t address, uint8_t data);
+uint8_t nes_mem_read(nes_t* sys, uint16_t addr);
+void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -198,6 +203,14 @@ static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data);
 
 static uint8_t _nes_read_prg2(uint16_t addr, void* user_data);
 static void _nes_write_prg2(uint16_t addr, uint8_t value, void* user_data);
+
+uint8_t nes_ppu_read(nes_t* nes, uint16_t address) {
+    return _ppu_read(address, nes);
+}
+
+void nes_ppu_write(nes_t* nes, uint16_t address, uint8_t data) {
+    _ppu_write(address, data, nes);
+}
 
 void nes_init(nes_t* sys, const nes_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
@@ -413,6 +426,54 @@ static void _ppu_set_pixels(uint8_t* buffer, void* user_data) {
     memcpy(sys->fb, buffer, 256*240);
 }
 
+uint8_t nes_mem_read(nes_t* sys, uint16_t addr) {
+    if(addr < 0x2000) {
+        return sys->ram[addr & 0x7ff];
+    } else if (addr >= 0x4016 && addr <= 0x4017) {
+        uint8_t data = (sys->controller_state[addr & 0x0001] & 0x80) ? 1 : 0;
+        sys->controller_state[addr & 0x0001] <<= 1;
+        return data;
+    } else if (addr < 0x4020) {
+        if (addr < 0x4000) //PPU registers, mirrored
+            addr = addr & 0x2007;
+        return r2c02_read(&sys->ppu, addr-0x2000);
+    } else if (addr < 0x6000) {
+        // TODO: Expansion ROM
+        return 0xFF;
+    } else if (addr < 0x8000) {
+        return sys->extended_ram[addr - 0x6000];
+    } else {
+        return  sys->cart.mapper.read_prg(addr, sys);
+    }
+}
+
+void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
+    if(addr < 0x2000) {
+        sys->ram[addr & 0x7ff] = data;
+    } else if (addr < 0x4000) {
+        //PPU registers, mirrored
+        addr = addr & 0x0007;
+        r2c02_write(&sys->ppu, addr, data);
+    } else if(addr == 0x4014) {
+        // OAMDMA
+        uint16_t page = data << 8;
+        if (page < 0x2000) {
+            uint8_t* page_ptr = sys->ram + (page & 0x7ff);
+            memcpy(sys->ppu.sprite_memory + sys->ppu.sprite_data_address, page_ptr, 256 - sys->ppu.sprite_data_address);
+            if (sys->ppu.sprite_data_address)
+                memcpy(sys->ppu.sprite_memory, page_ptr + (256 - sys->ppu.sprite_data_address), sys->ppu.sprite_data_address);
+        }
+    } else if (addr >= 0x4016 && addr <= 0x4017) {
+        sys->controller_state[addr & 0x0001] = sys->controller[addr & 0x0001].value;
+    } else if (addr < 0x6000) {
+        // TODO: Expansion ROM
+    } else if (addr < 0x8000) {
+        sys->extended_ram[addr - 0x6000] = data;
+    } else {
+        sys->cart.mapper.write_prg(addr, data, sys);
+    }
+}
+
 static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
     if(sys->ppu.request_nmi) {
         pins |= M6502_NMI;
@@ -425,50 +486,11 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
     // perform memory access
     if (pins & M6502_RW) {
         // a memory read
-        if(addr < 0x2000) {
-            M6502_SET_DATA(pins, sys->ram[addr & 0x7ff]);
-        } else if (addr >= 0x4016 && addr <= 0x4017) {
-            M6502_SET_DATA(pins, (sys->controller_state[addr & 0x0001] & 0x80) ? 1 : 0);
-            sys->controller_state[addr & 0x0001] <<= 1;
-        } else if (addr < 0x4020) {
-            if (addr < 0x4000) //PPU registers, mirrored
-                addr = addr & 0x2007;
-            M6502_SET_DATA(pins, r2c02_read(&sys->ppu, addr-0x2000));
-        } else if (addr < 0x6000) {
-            // TODO: Expansion ROM
-        } else if (addr < 0x8000) {
-            M6502_SET_DATA(pins, sys->extended_ram[addr - 0x6000]);
-        } else {
-            M6502_SET_DATA(pins, sys->cart.mapper.read_prg(addr, sys));
-        }
+        M6502_SET_DATA(pins, nes_mem_read(sys, addr));
     }
     else {
         // a memory write
-        uint8_t data = M6502_GET_DATA(pins);
-        if(addr < 0x2000) {
-            sys->ram[addr & 0x7ff] = data;
-        } else if (addr < 0x4000) {
-            //PPU registers, mirrored
-            addr = addr & 0x0007;
-            r2c02_write(&sys->ppu, addr, data);
-        } else if(addr == 0x4014) {
-            // OAMDMA
-            uint16_t page = data << 8;
-            if (page < 0x2000) {
-                uint8_t* page_ptr = sys->ram + (page & 0x7ff);
-                memcpy(sys->ppu.sprite_memory + sys->ppu.sprite_data_address, page_ptr, 256 - sys->ppu.sprite_data_address);
-                if (sys->ppu.sprite_data_address)
-                    memcpy(sys->ppu.sprite_memory, page_ptr + (256 - sys->ppu.sprite_data_address), sys->ppu.sprite_data_address);
-            }
-        } else if (addr >= 0x4016 && addr <= 0x4017) {
-            sys->controller_state[addr & 0x0001] = sys->controller[addr & 0x0001].value;
-         } else if (addr < 0x6000) {
-             // TODO: Expansion ROM
-         } else if (addr < 0x8000) {
-             sys->extended_ram[addr - 0x6000] = data;
-         } else {
-             sys->cart.mapper.write_prg(addr, data, sys);
-        }
+        nes_mem_write(sys, addr, M6502_GET_DATA(pins));
     }
 
     r2c02_tick(&sys->ppu, pins);

@@ -71,9 +71,11 @@ typedef struct {
     ui_dbg_texture_callbacks_t texture_cbs;
     void* tex_pattern_tables[2];
     void* tex_name_tables;
+    void* tex_sprites;
     int pattern_pal_index;
-    uint32_t pixel_buffer[256*256];
-    uint32_t pixel_buffer2[512*512];
+    uint32_t pixel_buffer[512*512];
+    uint32_t pixel_buffer2[256*256];
+    uint32_t pixel_buffer3[64*64];
 } ui_nes_video_t;
 
 typedef struct {
@@ -215,31 +217,7 @@ static uint8_t _ui_nes_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
-    if (addr < 0x2000) {
-        /* CPU mapped RAM layer */
-        return nes->ram[addr & 0x7ff];
-    }
-    if (addr >= 0x4016 && addr <= 0x4017) {
-        return nes->controller_state[addr & 0x0001];
-    }
-    if (addr < 0x4020) {
-        // TODO:
-        return 0xff;
-    }
-    if (addr < 0x8000) {
-        // TODO:
-        return 0xff;
-    }
-    if (addr < 0xc000) {
-        return nes->cart.rom[addr - 0x8000];
-    } else {
-        if(nes->cart.header.prg_page_count == 1) {
-            return nes->cart.rom[addr - 0xc000];
-        } else {
-            return nes->cart.rom[addr - 0x8000];
-        }
-    }
-    return 0xff;
+    return nes_mem_read(nes, addr);
 }
 
 static void _ui_nes_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
@@ -247,21 +225,7 @@ static void _ui_nes_mem_write(int layer, uint16_t addr, uint8_t data, void* user
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
-    if (addr < 0x2000) {
-        nes->ram[addr & 0x7ff] = data;
-    } else if (addr >= 0x4016 && addr <= 0x4017) {
-        nes->controller_state[addr & 0x0001] = data;
-    } else if (addr < 0x4020) {
-        // TODO:
-    } else if (addr < 0x8000) {
-        // TODO:
-    } else if (addr < 0xc000) {
-        nes->cart.rom[addr - 0x8000] = data;
-    } else if(nes->cart.header.prg_page_count == 1) {
-            nes->cart.rom[addr - 0xc000] = data;
-    } else {
-        nes->cart.rom[addr - 0x8000] = data;
-    }
+    nes_ppu_write(nes, addr, data);
 }
 
 static uint8_t _ui_nes_ppu_mem_read(int layer, uint16_t addr, void* user_data) {
@@ -269,38 +233,7 @@ static uint8_t _ui_nes_ppu_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
-    if (addr < 0x2000) {
-        return nes->cart.character_ram[addr];
-    }
-    if (addr >= 0x2000 && addr < 0x3f00) {
-        const uint16_t index = addr & 0x3ff;
-        // Name tables upto 0x3000, then mirrored upto 3eff
-        uint16_t normalizedAddr = addr;
-        if (addr >= 0x3000)
-            normalizedAddr -= 0x1000;
-
-        if (normalizedAddr < 0x2400)      //NT0
-            normalizedAddr = nes->ppu_name_table[0] + index;
-        else if (normalizedAddr < 0x2800) //NT1
-            normalizedAddr = nes->ppu_name_table[1] + index;
-        else if (normalizedAddr < 0x2c00) //NT2
-            normalizedAddr = nes->ppu_name_table[2] + index;
-        else
-            normalizedAddr = nes->ppu_name_table[3] + index;
-        return nes->ppu_ram[normalizedAddr-0x2000];
-    } else if(addr <= 0x3f0c && addr % 4 == 0) {
-        return nes->ppu_pal_ram[0];
-    }
-    else if (addr < 0x4000) {
-        uint16_t normalizedAddr = addr & 0x1f;
-        // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
-        if (normalizedAddr >= 0x10 && addr % 4 == 0) {
-            normalizedAddr &= 0xf;
-        }
-        
-        return nes->ppu_pal_ram[normalizedAddr];
-    }
-    return 0xFF;
+    return nes_ppu_read(nes, addr);
 }
 
 static void _ui_nes_ppu_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
@@ -308,35 +241,7 @@ static void _ui_nes_ppu_mem_write(int layer, uint16_t addr, uint8_t data, void* 
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
-    if (addr < 0x2000) {
-        nes->cart.character_ram[addr] = data;
-    }
-    else if (addr >= 0x2000 && addr < 0x3f00) {
-        const uint16_t index = addr & 0x3ff;
-        // Name tables upto 0x3000, then mirrored upto 3eff
-        uint16_t normalizedAddr = addr;
-        if (addr >= 0x3000)
-            normalizedAddr -= 0x1000;
-
-        if (normalizedAddr < 0x2400)      //NT0
-            normalizedAddr = nes->ppu_name_table[0] + index;
-        else if (normalizedAddr < 0x2800) //NT1
-            normalizedAddr = nes->ppu_name_table[1] + index;
-        else if (normalizedAddr < 0x2c00) //NT2
-            normalizedAddr = nes->ppu_name_table[2] + index;
-        else
-            normalizedAddr = nes->ppu_name_table[3] + index;
-        nes->ppu_ram[normalizedAddr-0x2000] = data;
-    } else if(addr <= 0x3f0c && addr % 4 == 0) {
-        nes->ppu_pal_ram[0] = data;
-    } else if (addr < 0x4000) {
-        uint16_t normalizedAddr = addr & 0x1f;
-        // Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
-        if (normalizedAddr >= 0x10 && addr % 4 == 0) {
-            normalizedAddr &= 0xf;
-        }
-        nes->ppu_pal_ram[normalizedAddr] = data;
-    }
+    nes_ppu_write(nes, addr, data);
 }
 
 static uint8_t _ui_nes_sprite_mem_read(int layer, uint16_t addr, void* user_data) {
@@ -487,6 +392,7 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
         ui->video.tex_pattern_tables[0] = ui->video.texture_cbs.create_cb(256, 256);
         ui->video.tex_pattern_tables[1] = ui->video.texture_cbs.create_cb(256, 256);
         ui->video.tex_name_tables = ui->video.texture_cbs.create_cb(512, 512);
+        ui->video.tex_sprites = ui->video.texture_cbs.create_cb(64, 64);
     }
 }
 
@@ -495,6 +401,7 @@ void ui_nes_discard(ui_nes_t* ui) {
     ui->video.texture_cbs.destroy_cb(ui->video.tex_pattern_tables[0]);
     ui->video.texture_cbs.destroy_cb(ui->video.tex_pattern_tables[1]);
     ui->video.texture_cbs.destroy_cb(ui->video.tex_name_tables);
+    ui->video.texture_cbs.destroy_cb(ui->video.tex_sprites);
     ui_m6502_discard(&ui->cpu);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
@@ -506,15 +413,15 @@ void ui_nes_discard(ui_nes_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-static inline uint16_t _nes_pal_addr(uint8_t pal_index) {
+static inline uint16_t _nes_pal_addr(uint8_t pal_type, uint8_t pal_index) {
     CHIPS_ASSERT(pal_index >= 0);
     CHIPS_ASSERT(pal_index < 4);
-    return 0x3f00 + (pal_index << 2);
+    return 0x3f00 + (pal_type * 0x10) + (pal_index << 2);
 }
 
-static void _ui_nes_decode_pattern_tile(ui_nes_t* ui, uint8_t table_nr, uint8_t tile_index, uint32_t* dst, int w, int pal_index) {
+static void _ui_nes_decode_pattern_tile(ui_nes_t* ui, uint8_t table_nr, uint8_t pal_type, uint8_t tile_index, uint32_t* dst, int w, int pal_index) {
     uint16_t tile_addr = 0x1000 * table_nr + (tile_index << 4);
-    uint16_t pal_addr = _nes_pal_addr(pal_index);
+    uint16_t pal_addr = _nes_pal_addr(pal_type, pal_index);
     for(int py = 0; py < 8; py++) {
         uint8_t bp1_byte = _ui_nes_ppu_mem_read(0, tile_addr, ui);
         uint8_t bp2_byte = _ui_nes_ppu_mem_read(0, tile_addr + 8, ui);
@@ -533,13 +440,13 @@ static void _ui_nes_decode_pattern_tile(ui_nes_t* ui, uint8_t table_nr, uint8_t 
     }
 }
 
-static void _ui_nes_decode_pattern_table(ui_nes_t* ui, uint8_t pattern_table_nr, int pal_index) {
-    uint32_t* dst = ui->video.pixel_buffer;
+static void _ui_nes_decode_pattern_table(ui_nes_t* ui, uint8_t pal_type, uint8_t pattern_table_nr, int pal_index) {
+    uint32_t* dst = ui->video.pixel_buffer2;
     int tile_index = 0;
     for(int py = 0; py < 16; py++) {
         for(int px = 0; px < 16; px++) {
             int dst_offset = (py << 11) + (px << 3);
-            _ui_nes_decode_pattern_tile(ui, pattern_table_nr, tile_index, dst+dst_offset, 256, pal_index);
+            _ui_nes_decode_pattern_tile(ui, pattern_table_nr, pal_type, tile_index, dst+dst_offset, 256, pal_index);
             tile_index++;
         }
     }
@@ -576,7 +483,7 @@ static uint8_t _ui_nes_pal_index(ui_nes_t* ui, int tile_x, int tile_y, uint8_t t
 static void _ui_nes_decode_name_table(ui_nes_t* ui, int x, int y) {
     uint8_t table_nr = (y << 1) + x;
     uint16_t addr = _ui_nes_tile_address(table_nr);
-    uint32_t* dst = ui->video.pixel_buffer2;
+    uint32_t* dst = ui->video.pixel_buffer;
     for(int tile_y = 0; tile_y < 30; tile_y++) {
         for(int tile_x = 0; tile_x < 32; tile_x++) {
             uint8_t tile_index = _ui_nes_ppu_mem_read(0, addr, ui);
@@ -584,15 +491,15 @@ static void _ui_nes_decode_name_table(ui_nes_t* ui, int x, int y) {
             uint8_t att = _ui_nes_attributes(ui, tile_x, tile_y, table_nr);
             int att_shift = ((addr >> 4) & 4) | (addr & 2);
             uint8_t pal_index = (att >> att_shift) & 3;
-            _ui_nes_decode_pattern_tile(ui, 1, tile_index, dst + dst_offset, 512, pal_index);
+            _ui_nes_decode_pattern_tile(ui, 1, 0, tile_index, dst + dst_offset, 512, pal_index);
             addr++;
         }
     }
 }
 
 static void _ui_nes_update_pattern_table(ui_nes_t* ui, int table_nr, int pal_index) {
-    _ui_nes_decode_pattern_table(ui, table_nr, pal_index);
-    ui->video.texture_cbs.update_cb(ui->video.tex_pattern_tables[table_nr], ui->video.pixel_buffer, 256*256*sizeof(uint32_t));
+    _ui_nes_decode_pattern_table(ui, table_nr, 0, pal_index);
+    ui->video.texture_cbs.update_cb(ui->video.tex_pattern_tables[table_nr], ui->video.pixel_buffer2, 256*256*sizeof(uint32_t));
 }
 
 static void _ui_nes_update_names_tables(ui_nes_t* ui) {
@@ -601,7 +508,26 @@ static void _ui_nes_update_names_tables(ui_nes_t* ui) {
             _ui_nes_decode_name_table(ui, x, y);
         }
     }
-    ui->video.texture_cbs.update_cb(ui->video.tex_name_tables, ui->video.pixel_buffer2, 512*512*sizeof(uint32_t));
+    ui->video.texture_cbs.update_cb(ui->video.tex_name_tables, ui->video.pixel_buffer, 512*512*sizeof(uint32_t));
+}
+
+static void _ui_nes_decode_sprite(ui_nes_t* ui, int sprite_x, int sprite_y, int pattern_table) {
+    uint8_t* p = ui->nes->ppu.sprite_memory + sprite_x*4+sprite_y*32;
+    uint8_t tile_index = p[1];
+    uint8_t pal_index = p[2] & 3;
+    int dst_offset = sprite_x*8+(sprite_y*8*8*8);
+    uint32_t* dst = ui->video.pixel_buffer3 + dst_offset;
+    _ui_nes_decode_pattern_tile(ui, pattern_table, 1, tile_index, dst, 64, pal_index);
+}
+
+static void _ui_nes_update_sprites(ui_nes_t* ui) {
+    uint8_t table_nr = (_ui_nes_ppu_mem_read(0, 0x2000, ui) >> 3) & 1;
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            _ui_nes_decode_sprite(ui, x, y, table_nr);
+        }
+    }
+    ui->video.texture_cbs.update_cb(ui->video.tex_sprites, ui->video.pixel_buffer3, 64*64*sizeof(uint32_t));
 }
 
 static void _ui_nes_draw_video(ui_nes_t* ui) {
@@ -744,13 +670,17 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
                 uint8_t att = _ui_nes_attributes(ui, tile_x, tile_y, table_nr);
                 uint16_t att_addr = _ui_nes_att_address(tile_x, tile_y, table_nr);
                 uint8_t pal_index = _ui_nes_pal_index(ui,tile_x, tile_y, table_nr);
-                uint16_t pal_addr = _nes_pal_addr(pal_index);
+                uint16_t pal_addr = _nes_pal_addr(0, pal_index);
                 uint8_t pattern = tile_x + (tile_y << 5);
                 uint16_t pattern_addr = _ui_nes_tile_address(table_nr) + pattern;
                 uint8_t tile_index = _ui_nes_ppu_mem_read(0, pattern_addr, ui);
                 uint16_t tile_addr = 0x1000 * table_nr + (tile_index << 4);
                 ImGui::SetTooltip("x: %d y: %d\naddr: %x\ntable: %u\natt: %02x\natt_addr: %x\npal_addr: %x\ntile_index: %x\ntile_addr: %x", tile_x, tile_y, pattern_addr, table_nr, att, att_addr, pal_addr, tile_index, tile_addr);
             }
+        }
+        if (ImGui::CollapsingHeader("Sprites", ImGuiTreeNodeFlags_DefaultOpen)) {
+            _ui_nes_update_sprites(ui);
+            ImGui::Image(ui->video.tex_sprites, ImVec2(128, 128));
         }
     }
     ImGui::End();
