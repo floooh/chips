@@ -115,6 +115,10 @@ typedef struct {
         struct {
             uint8_t select_prg;
         } data2;
+        struct {
+            uint8_t prg_bank;
+            uint8_t chr_bank;
+        } data66;
     };
     name_table_mirroring_t mirroring;
 } nes_mapper_t;
@@ -203,6 +207,10 @@ static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data);
 
 static uint8_t _nes_read_prg2(uint16_t addr, void* user_data);
 static void _nes_write_prg2(uint16_t addr, uint8_t value, void* user_data);
+
+static uint8_t _nes_read_prg66(uint16_t addr, void* user_data);
+static void _nes_write_prg66(uint16_t addr, uint8_t value, void* user_data);
+static uint8_t _nes_read_chr66(uint16_t addr, void* user_data);
 
 uint8_t nes_ppu_read(nes_t* nes, uint16_t address) {
     return _ppu_read(address, nes);
@@ -526,6 +534,15 @@ static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
             };
             supported = true;
             break;
+        case 66:
+            sys->cart.mapper = (nes_mapper_t){
+                .read_prg = _nes_read_prg66,
+                .write_prg = _nes_write_prg66,
+                .read_chr = _nes_read_chr66,
+                .write_chr = _nes_write_chr0,
+            };
+            supported = true;
+            break;
     }
     sys->cart.mapper.mirroring = sys->cart.header.mirror_mode ? Vertical : Horizontal;
     _nes_mirroring(sys);
@@ -606,6 +623,38 @@ static void _nes_write_prg2(uint16_t addr, uint8_t value, void* user_data) {
     CHIPS_ASSERT(sys && sys->valid);
     CHIPS_ASSERT(value < sys->cart.header.prg_page_count);
     sys->cart.mapper.data2.select_prg = value;
+}
+
+// ********* MAPPER 66 **************
+
+static uint8_t _nes_read_prg66(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if(addr >= 0x8000) {
+        return sys->cart.rom[(sys->cart.mapper.data66.prg_bank * 0x8000) + (addr & 0x7fff)];
+    } else {
+        return 0;
+    }
+}
+
+static void _nes_write_prg66(uint16_t addr, uint8_t data, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if(addr >= 0x8000) {
+        sys->cart.mapper.data66.prg_bank = ((data & 0x30) >> 4);
+        sys->cart.mapper.data66.chr_bank = (data & 0x3);
+        sys->cart.mapper.mirroring = Vertical;
+        _nes_mirroring(sys);
+    }
+}
+
+static uint8_t _nes_read_chr66(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if(addr < 0x2000) {
+        return sys->cart.character_ram[(sys->cart.mapper.data66.chr_bank * 0x2000) + addr];
+    }
+    return 0;
 }
 
 #endif /* CHIPS_IMPL */
