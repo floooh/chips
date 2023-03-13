@@ -250,7 +250,7 @@ static uint8_t _ui_nes_sprite_mem_read(int layer, uint16_t addr, void* user_data
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
     if (addr >= 0 && addr < 64*4 ) {
-        return nes->ppu.sprite_memory[addr];
+        return nes->ppu.oam.reg[addr];
     }
     return 0xFF;
 }
@@ -261,7 +261,7 @@ static void _ui_nes_sprite_mem_write(int layer, uint16_t addr, uint8_t data, voi
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
     if (addr >= 0 && addr < 64*4 ) {
-        nes->ppu.sprite_memory[addr] = data;
+        nes->ppu.oam.reg[addr] = data;
     }
 }
 
@@ -512,7 +512,7 @@ static void _ui_nes_update_names_tables(ui_nes_t* ui) {
 }
 
 static void _ui_nes_decode_sprite(ui_nes_t* ui, int sprite_x, int sprite_y, int pattern_table) {
-    uint8_t* p = ui->nes->ppu.sprite_memory + sprite_x*4+sprite_y*32;
+    uint8_t* p = ui->nes->ppu.oam.reg + sprite_x*4+sprite_y*32;
     uint8_t tile_index = p[1];
     uint8_t pal_index = p[2] & 3;
     int dst_offset = sprite_x*8+(sprite_y*8*8*8);

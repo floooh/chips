@@ -94,14 +94,10 @@ const uint32_t ppu_palette[] = {
 #define I8255_PIN_A2    (10)
 
 static const int PictureBufferSize = (256*240);
-
-static const int ScanlineCycleLength = 341;
 static const int ScanlineEndCycle = 340;
 static const int VisibleScanlines = 240;
 static const int ScanlineVisibleDots = 256;
 static const int FrameEndScanline = 261;
-
-static const int AttributeOffset = 0x3C0;
 
 typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
@@ -109,54 +105,88 @@ typedef struct {
     void (*set_pixels)(uint8_t* buffer, void* user_data);
     void* user_data;
 
-    uint8_t scanline_sprites[8];
-    int scanline_sprites_num;
-    uint8_t sprite_memory[64*4];
-    uint8_t picture_buffer[PictureBufferSize];
-
+    union
+    {
+        struct
+        {
+            uint8_t y;            // Y position of sprite
+            uint8_t id;           // ID of tile from pattern memory
+            uint8_t attribute;    // Flags define how sprite should be rendered
+            uint8_t x;            // X position of sprite
+        } data[64];
+        uint8_t reg[64*4];
+    } oam;
+    
     enum State
     {
         PreRender,
         Render,
         PostRender,
         VerticalBlank
-    } pipelineState;
+    } pipeline_state;
 
     int cycle;
     int scanline;
     bool even_frame;
-
-    bool vblank;
-    bool spr_zero_hit;
-    bool sprite_overflow;
-
+    uint8_t picture_buffer[PictureBufferSize];
+    uint8_t scanline_sprites[8];
+    int scanline_sprites_num;
+    
     //Registers
     uint16_t data_address;
     uint16_t temp_address;
     uint8_t fine_x_scroll;
     bool first_write;
     uint8_t data_buffer;
-
     uint8_t sprite_data_address;
 
     //Setup flags and variables
-    bool long_sprites;
-    bool generate_interrupt;
     bool request_nmi;
-
-    bool greyscale_mode;
-    bool show_sprites;
-    bool show_background;
-    bool hide_edge_sprites;
-    bool hide_edge_background;
-
-    enum CharacterPage
+    
+    union
     {
-        Low,
-        High,
-    } bg_page, spr_page;
+        struct
+        {
+            uint8_t unused : 5;
+            uint8_t sprite_overflow : 1;
+            uint8_t sprite_zero_hit : 1;
+            uint8_t vertical_blank : 1;
+        };
+        uint8_t reg;
+    } ppu_status;
 
-    uint8_t data_addr_increment;
+    union
+    {
+        struct
+        {
+            uint8_t greyscale : 1;
+            uint8_t render_background_left : 1;
+            uint8_t render_sprites_left : 1;
+            uint8_t render_background : 1;
+            uint8_t render_sprites : 1;
+            uint8_t enhance_red : 1;
+            uint8_t enhance_green : 1;
+            uint8_t enhance_blue : 1;
+        };
+        uint8_t reg;
+    } ppu_mask;
+
+    union
+	{
+		struct
+		{
+			uint8_t nametable_x : 1;
+			uint8_t nametable_y : 1;
+			uint8_t increment_mode : 1;
+			uint8_t pattern_sprite : 1;
+			uint8_t pattern_background : 1;
+			uint8_t sprite_size : 1;
+			uint8_t slave_mode : 1; // unused
+			uint8_t enable_nmi : 1;
+		};
+		uint8_t reg;
+	} ppu_control;
+
 } r2c02_t;
 
 typedef struct {
@@ -197,12 +227,12 @@ void r2c02_init(r2c02_t* sys, const r2c02_desc_t* desc) {
 
 void r2c02_reset(r2c02_t* sys) {
     CHIPS_ASSERT(sys);
-    sys->long_sprites = sys->generate_interrupt = sys->greyscale_mode = sys->vblank = sys->sprite_overflow = false;
-    sys->show_background = sys->show_sprites = sys->even_frame = sys->first_write = true;
-    sys->bg_page = sys->spr_page = Low;
+    sys->ppu_control.sprite_size = sys->ppu_control.enable_nmi = sys->ppu_mask.greyscale = sys->ppu_status.vertical_blank = sys->ppu_status.sprite_overflow = false;
+    sys->ppu_mask.render_background = sys->ppu_mask.render_sprites = sys->even_frame = sys->first_write = true;
+    sys->ppu_control.pattern_background = sys->ppu_control.pattern_sprite = 0;
     sys->data_address = sys->cycle = sys->scanline = sys->sprite_data_address = sys->fine_x_scroll = sys->temp_address = 0;
-    sys->data_addr_increment = 1;
-    sys->pipelineState = PreRender;
+    sys->ppu_control.increment_mode = 0;
+    sys->pipeline_state = PreRender;
     sys->scanline_sprites_num = 0;
 }
 
@@ -210,19 +240,19 @@ uint8_t r2c02_read(r2c02_t* sys, uint8_t addr) {
     switch(addr) {
         case 0x02: {
             // get PPU status
-            uint8_t status = sys->sprite_overflow << 5 | sys->spr_zero_hit << 6 | sys->vblank << 7;
+            uint8_t status = sys->ppu_status.reg;
             // Reading status clears vblank!
-            sys->vblank = false;
+            sys->ppu_status.vertical_blank = false;
             sys->first_write = true;
             return status;
         }
         case 0x04:
             // get OAM data
-            return sys->sprite_memory[addr];
+            return sys->oam.reg[addr];
         case 0x07: {
             // get PPU data
             uint8_t data = sys->read(sys->data_address, sys->user_data);
-            sys->data_address += sys->data_addr_increment;
+            sys->data_address += sys->ppu_control.increment_mode ? 32: 1;
             //Reads are delayed by one byte/read when address is in this range
             if (sys->data_address < 0x3f00) {
                 //Return from the data buffer and store the current value in the buffer
@@ -239,14 +269,7 @@ void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
     switch(addr) {
         case 0x00: {
             // set control
-            sys->generate_interrupt = data & 0x80;
-            sys->long_sprites = data & 0x20;
-            sys->bg_page = (!!(data & 0x10));
-            sys->spr_page = (!!(data & 0x8));
-            if (data & 0x4)
-                sys->data_addr_increment = 32;
-            else
-                sys->data_addr_increment = 1;
+            sys->ppu_control.reg = data;
 
             //Set the nametable in the temp address, this will be reflected in the data address during rendering
             sys->temp_address &= ~0xc00;                 //Unset
@@ -254,11 +277,7 @@ void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
         } break;
         case 0x01: {
             // set mask
-            sys->greyscale_mode = data & 0x1;
-            sys->hide_edge_background = !(data & 0x2);
-            sys->hide_edge_sprites = !(data & 0x4);
-            sys->show_background = data & 0x8;
-            sys->show_sprites = data & 0x10;
+            sys->ppu_mask.reg = data;
         } break;
         case 0x03: {
             // set OAM address
@@ -266,7 +285,7 @@ void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
         } break;
         case 0x04: {
             // set OAM data
-            sys->sprite_memory[sys->sprite_data_address++] = data;
+            sys->oam.reg[sys->sprite_data_address++] = data;
         } break;
         case 0x05: {
             // set scroll
@@ -299,7 +318,7 @@ void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
         case 0x07: {
             // set PPU data
             sys->write(sys->data_address, data, sys->user_data);
-            sys->data_address += sys->data_addr_increment;
+            sys->data_address += (sys->ppu_control.increment_mode ? 32 : 1);
         } break;
         default: break;
     }
@@ -307,29 +326,29 @@ void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
 
 uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
     CHIPS_ASSERT(sys);
-    switch (sys->pipelineState)
+    switch (sys->pipeline_state)
     {
         case PreRender:
             if (sys->cycle == 1)
-                sys->vblank = sys->spr_zero_hit = false;
-            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->show_background && sys->show_sprites) {
+                sys->ppu_status.vertical_blank = sys->ppu_status.sprite_zero_hit = false;
+            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
                 //Set bits related to horizontal position
                 sys->data_address &= ~0x41f; //Unset horizontal bits
                 sys->data_address |= sys->temp_address & 0x41f; //Copy
             }
-            else if (sys->cycle > 280 && sys->cycle <= 304 && sys->show_background && sys->show_sprites) {
+            else if (sys->cycle > 280 && sys->cycle <= 304 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
                 //Set vertical bits
                 sys->data_address &= ~0x7be0; //Unset bits related to horizontal
                 sys->data_address |= sys->temp_address & 0x7be0; //Copy
             }
             //if rendering is on, every other frame is one cycle shorter
-            if (sys->cycle >= ScanlineEndCycle - (!sys->even_frame && sys->show_background && sys->show_sprites)) {
-                sys->pipelineState = Render;
+            if (sys->cycle >= ScanlineEndCycle - (!sys->even_frame && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites)) {
+                sys->pipeline_state = Render;
                 sys->cycle = sys->scanline = 0;
             }
 
             // add IRQ support for MMC3
-            if(sys->cycle==260 && sys->show_background && sys->show_sprites) {
+            if(sys->cycle==260 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
                 // TODO: sys->scanline_irq(sys->user_data);
             }
             break;
@@ -342,9 +361,9 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                 int x = sys->cycle - 1;
                 int y = sys->scanline;
 
-                if (sys->show_background) {
+                if (sys->ppu_mask.render_background) {
                     int x_fine = (sys->fine_x_scroll + x) % 8;
-                    if (!sys->hide_edge_background || x >= 8) {
+                    if (sys->ppu_mask.render_background_left || x >= 8) {
                         //fetch tile
                         uint16_t addr = 0x2000 | (sys->data_address & 0x0FFF); //mask off fine y
                         uint8_t tile = sys->read(addr, sys->user_data);
@@ -352,7 +371,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                         //fetch pattern
                         //Each pattern occupies 16 bytes, so multiply by 16
                         addr = (tile * 16) + ((sys->data_address >> 12) & 0x7); //Add fine y
-                        addr |= sys->bg_page << 12; //set whether the pattern is in the high or low page
+                        addr |= sys->ppu_control.pattern_background << 12; //set whether the pattern is in the high or low page
                         //Get the corresponding bit determined by (8 - x_fine) from the right
                         bgColor = (sys->read(addr, sys->user_data) >> (7 ^ x_fine)) & 1; //bit 0 of palette entry
                         bgColor |= ((sys->read(addr + 8, sys->user_data) >> (7 ^ x_fine)) & 1) << 1; //bit 1
@@ -379,19 +398,19 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                     }
                 }
 
-                 if (sys->show_sprites && (!sys->hide_edge_sprites || x >= 8)) {
+                 if (sys->ppu_mask.render_sprites && (sys->ppu_mask.render_sprites_left || x >= 8)) {
                      for (uint8_t ii = 0; ii<sys->scanline_sprites_num; ++ii) {
                          uint8_t i = sys->scanline_sprites[ii];
-                         uint8_t spr_x = sys->sprite_memory[i * 4 + 3];
+                         uint8_t spr_x = sys->oam.data[i].x;
 
                          if (0 > x - spr_x || x - spr_x >= 8)
                              continue;
 
-                         uint8_t spr_y     = sys->sprite_memory[i * 4 + 0] + 1,
-                                 tile      = sys->sprite_memory[i * 4 + 1],
-                                 attribute = sys->sprite_memory[i * 4 + 2];
+                         uint8_t spr_y     = sys->oam.data[i].y + 1,
+                                 tile      = sys->oam.data[i].id,
+                                 attribute = sys->oam.data[i].attribute;
 
-                         int length = (sys->long_sprites) ? 16 : 8;
+                         int length = (sys->ppu_control.sprite_size) ? 16 : 8;
                          int x_shift = (x - spr_x) % 8, y_offset = (y - spr_y) % length;
 
                          if ((attribute & 0x40) == 0) //If NOT flipping horizontally
@@ -401,9 +420,9 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
                          uint16_t addr = 0;
 
-                         if (!sys->long_sprites) {
+                         if (!sys->ppu_control.sprite_size) {
                              addr = tile * 16 + y_offset;
-                             if (sys->spr_page == High) addr += 0x1000;
+                             if (sys->ppu_control.pattern_sprite) addr += 0x1000;
                          }
                          else { //8x16 sprites
                              //bit-3 is one if it is the bottom tile of the sprite, multiply by two to get the next pattern
@@ -426,8 +445,8 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                          spriteForeground = !(attribute & 0x20);
 
                          //Sprite-0 hit detection
-                         if (!sys->spr_zero_hit && sys->show_background && i == 0 && sprOpaque && bgOpaque) {
-                             sys->spr_zero_hit = true;
+                         if (!sys->ppu_status.sprite_zero_hit && sys->ppu_mask.render_background && i == 0 && sprOpaque && bgOpaque) {
+                             sys->ppu_status.sprite_zero_hit = true;
                          }
 
                          break; //Exit the loop now since we've found the highest priority sprite
@@ -442,7 +461,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
                 sys->picture_buffer[x+y*256] = sys->read(0x3f00 + paletteAddr, sys->user_data);
             }
-            else if (sys->cycle == ScanlineVisibleDots + 1 && sys->show_background) {
+            else if (sys->cycle == ScanlineVisibleDots + 1 && sys->ppu_mask.render_background) {
                 //Shamelessly copied from nesdev wiki
                 if ((sys->data_address & 0x7000) != 0x7000)  // if fine Y < 7
                     sys->data_address += 0x1000;              // increment fine Y
@@ -462,14 +481,14 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
                                                             // put coarse Y back into sys->dataAddress
                 }
             }
-            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->show_background && sys->show_sprites) {
+            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
                 //Copy bits related to horizontal position
                 sys->data_address &= ~0x41f;
                 sys->data_address |= sys->temp_address & 0x41f;
             }
 
             // add IRQ support for MMC3
-            if(sys->cycle==260 && sys->show_background && sys->show_sprites) {
+            if(sys->cycle==260 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
                 // TODO: sys->scanline_irq(sys->user_data);
             }
 
@@ -480,16 +499,16 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
                 sys->scanline_sprites_num = 0;
                 int range = 8;
-                if (sys->long_sprites) {
+                if (sys->ppu_control.sprite_size) {
                     range = 16;
                 }
 
                 size_t j = 0;
                 for (size_t i = sys->sprite_data_address / 4; i < 64; ++i) {
-                    int diff = (sys->scanline - sys->sprite_memory[i * 4]);
+                    int diff = (sys->scanline - sys->oam.reg[i * 4]);
                     if (0 <= diff && diff < range) {
                         if (j >= 8) {
-                            sys->sprite_overflow = true;
+                            sys->ppu_status.sprite_overflow = true;
                             break;
                         }
                         sys->scanline_sprites[sys->scanline_sprites_num++] = i;
@@ -502,22 +521,22 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
             }
 
             if (sys->scanline >= VisibleScanlines)
-                sys->pipelineState = PostRender;
+                sys->pipeline_state = PostRender;
 
             break;
         case PostRender:
             if (sys->cycle >= ScanlineEndCycle) {
                 ++sys->scanline;
                 sys->cycle = 0;
-                sys->pipelineState = VerticalBlank;
+                sys->pipeline_state = VerticalBlank;
                 sys->set_pixels(sys->picture_buffer, sys->user_data);
             }
 
             break;
         case VerticalBlank:
             if (sys->cycle == 1 && sys->scanline == VisibleScanlines + 1) {
-                sys->vblank = true;
-                if (sys->generate_interrupt)
+                sys->ppu_status.vertical_blank = true;
+                if (sys->ppu_control.enable_nmi)
                     sys->request_nmi = true;
             }
 
@@ -527,7 +546,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
             }
 
             if (sys->scanline >= FrameEndScanline) {
-                sys->pipelineState = PreRender;
+                sys->pipeline_state = PreRender;
                 sys->scanline = 0;
                 sys->even_frame = !sys->even_frame;
             }

@@ -482,9 +482,9 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
         uint16_t page = data << 8;
         if (page < 0x2000) {
             uint8_t* page_ptr = sys->ram + (page & 0x7ff);
-            memcpy(sys->ppu.sprite_memory + sys->ppu.sprite_data_address, page_ptr, 256 - sys->ppu.sprite_data_address);
+            memcpy(sys->ppu.oam.reg + sys->ppu.sprite_data_address, page_ptr, 256 - sys->ppu.sprite_data_address);
             if (sys->ppu.sprite_data_address)
-                memcpy(sys->ppu.sprite_memory, page_ptr + (256 - sys->ppu.sprite_data_address), sys->ppu.sprite_data_address);
+                memcpy(sys->ppu.oam.reg, page_ptr + (256 - sys->ppu.sprite_data_address), sys->ppu.sprite_data_address);
         }
     } else if (addr >= 0x4016 && addr <= 0x4017) {
         sys->controller_state[addr & 0x0001] = sys->controller[addr & 0x0001].value;
