@@ -84,7 +84,7 @@ typedef struct {
     ui_memedit_t memedit[4];
     ui_memedit_t ppu_memedit[4];
     ui_memedit_t sprite_memedit[4];
-    ui_memedit_t picture_memedit[4];
+    ui_memedit_t oam_memedit[4];
     ui_dasm_t dasm[4];
     ui_nes_video_t video;
     ui_dbg_t dbg;
@@ -158,11 +158,11 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
                 ImGui::MenuItem("Window #4", 0, &ui->sprite_memedit[3].open);
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Picture Memory Editor")) {
-                ImGui::MenuItem("Window #1", 0, &ui->picture_memedit[0].open);
-                ImGui::MenuItem("Window #2", 0, &ui->picture_memedit[1].open);
-                ImGui::MenuItem("Window #3", 0, &ui->picture_memedit[2].open);
-                ImGui::MenuItem("Window #4", 0, &ui->picture_memedit[3].open);
+            if (ImGui::BeginMenu("OAM Memory Editor")) {
+                ImGui::MenuItem("Window #1", 0, &ui->oam_memedit[0].open);
+                ImGui::MenuItem("Window #2", 0, &ui->oam_memedit[1].open);
+                ImGui::MenuItem("Window #3", 0, &ui->oam_memedit[2].open);
+                ImGui::MenuItem("Window #4", 0, &ui->oam_memedit[3].open);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Disassembler")) {
@@ -217,7 +217,7 @@ static uint8_t _ui_nes_mem_read(int layer, uint16_t addr, void* user_data) {
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
-    return nes_mem_read(nes, addr);
+    return nes_mem_read(nes, addr, true);
 }
 
 static void _ui_nes_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
@@ -265,24 +265,24 @@ static void _ui_nes_sprite_mem_write(int layer, uint16_t addr, uint8_t data, voi
     }
 }
 
-static uint8_t _ui_nes_picture_mem_read(int layer, uint16_t addr, void* user_data) {
+static uint8_t _ui_nes_oam_mem_read(int layer, uint16_t addr, void* user_data) {
     (void)layer;
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
-    if (addr >= 0 && addr < 256*240 ) {
-        return nes->ppu.picture_buffer[addr];
+    if (addr >= 0 && addr < 64*4 ) {
+        return nes->ppu.oam.reg[addr];
     }
     return 0xFF;
 }
 
-static void _ui_nes_picture_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+static void _ui_nes_oam_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
     (void)layer;
     CHIPS_ASSERT(user_data);
     ui_nes_t* ui_nes = (ui_nes_t*) user_data;
     nes_t* nes = ui_nes->nes;
-    if (addr >= 0 && addr < 256*240 ) {
-        nes->ppu.picture_buffer[addr] = data;
+    if (addr >= 0 && addr < 64*4 ) {
+        nes->ppu.oam.reg[addr] = data;
     }
 }
 
@@ -357,15 +357,15 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
-        ui_memedit_desc_t desc = {.mem_size = 256*240};
-        desc.layers[0] = "Picture";
-        desc.read_cb = _ui_nes_picture_mem_read;
-        desc.write_cb = _ui_nes_picture_mem_write;
+        ui_memedit_desc_t desc = {.mem_size = 64*4};
+        desc.layers[0] = "OAM";
+        desc.read_cb = _ui_nes_oam_mem_read;
+        desc.write_cb = _ui_nes_oam_mem_write;
         desc.user_data = ui;
-        static const char* titles[] = { "Picture Memory Editor #1", "Picture Memory Editor #2", "Picture Memory Editor #3", "Picture Memory Editor #4" };
+        static const char* titles[] = { "OAM Memory Editor #1", "OAM Memory Editor #2", "OAM Memory Editor #3", "OAM Memory Editor #4" };
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
-            ui_memedit_init(&ui->picture_memedit[i], &desc);
+            ui_memedit_init(&ui->oam_memedit[i], &desc);
             x += dx; y += dy;
         }
     }
@@ -407,7 +407,7 @@ void ui_nes_discard(ui_nes_t* ui) {
         ui_memedit_discard(&ui->memedit[i]);
         ui_memedit_discard(&ui->ppu_memedit[i]);
         ui_memedit_discard(&ui->sprite_memedit[i]);
-        ui_memedit_discard(&ui->picture_memedit[i]);
+        ui_memedit_discard(&ui->oam_memedit[i]);
         ui_dasm_discard(&ui->dasm[i]);
     }
     ui_dbg_discard(&ui->dbg);
@@ -694,7 +694,7 @@ void ui_nes_draw(ui_nes_t* ui) {
         ui_memedit_draw(&ui->memedit[i]);
         ui_memedit_draw(&ui->ppu_memedit[i]);
         ui_memedit_draw(&ui->sprite_memedit[i]);
-        ui_memedit_draw(&ui->picture_memedit[i]);
+        ui_memedit_draw(&ui->oam_memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
     ui_dbg_draw(&ui->dbg);

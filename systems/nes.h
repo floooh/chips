@@ -173,7 +173,7 @@ void nes_key_up(nes_t* nes, int value);
 
 uint8_t nes_ppu_read(nes_t* nes, uint16_t addr);
 void nes_ppu_write(nes_t* nes, uint16_t address, uint8_t data);
-uint8_t nes_mem_read(nes_t* sys, uint16_t addr);
+uint8_t nes_mem_read(nes_t* sys, uint16_t addr, bool read_only);
 void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data);
 
 #ifdef __cplusplus
@@ -449,7 +449,7 @@ static void _ppu_set_pixels(uint8_t* buffer, void* user_data) {
     memcpy(sys->fb, buffer, 256*240);
 }
 
-uint8_t nes_mem_read(nes_t* sys, uint16_t addr) {
+uint8_t nes_mem_read(nes_t* sys, uint16_t addr, bool read_only) {
     if(addr < 0x2000) {
         return sys->ram[addr & 0x7ff];
     } else if (addr >= 0x4016 && addr <= 0x4017) {
@@ -459,7 +459,7 @@ uint8_t nes_mem_read(nes_t* sys, uint16_t addr) {
     } else if (addr < 0x4020) {
         if (addr < 0x4000) //PPU registers, mirrored
             addr = addr & 0x2007;
-        return r2c02_read(&sys->ppu, addr-0x2000);
+        return r2c02_read(&sys->ppu, addr-0x2000, read_only);
     } else if (addr < 0x6000) {
         // TODO: Expansion ROM
         return 0xFF;
@@ -510,7 +510,7 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
     // perform memory access
     if (pins & M6502_RW) {
         // a memory read
-        M6502_SET_DATA(pins, nes_mem_read(sys, addr));
+        M6502_SET_DATA(pins, nes_mem_read(sys, addr, false));
     }
     else {
         // a memory write

@@ -203,7 +203,7 @@ void r2c02_reset(r2c02_t* sys);
 /* tick r2c02_t instance */
 uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins);
 
-uint8_t r2c02_read(r2c02_t* sys, uint8_t addr);
+uint8_t r2c02_read(r2c02_t* sys, uint8_t addr, bool read_only);
 void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data);
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -236,14 +236,16 @@ void r2c02_reset(r2c02_t* sys) {
     sys->scanline_sprites_num = 0;
 }
 
-uint8_t r2c02_read(r2c02_t* sys, uint8_t addr) {
+uint8_t r2c02_read(r2c02_t* sys, uint8_t addr, bool read_only) {
     switch(addr) {
         case 0x02: {
             // get PPU status
             uint8_t status = sys->ppu_status.reg;
-            // Reading status clears vblank!
-            sys->ppu_status.vertical_blank = false;
-            sys->first_write = true;
+            if(!read_only) {
+                // Reading status clears vblank!
+                sys->ppu_status.vertical_blank = false;
+                sys->first_write = true;
+            }
             return status;
         }
         case 0x04:
@@ -252,11 +254,13 @@ uint8_t r2c02_read(r2c02_t* sys, uint8_t addr) {
         case 0x07: {
             // get PPU data
             uint8_t data = sys->read(sys->data_address, sys->user_data);
-            sys->data_address += sys->ppu_control.increment_mode ? 32: 1;
-            //Reads are delayed by one byte/read when address is in this range
-            if (sys->data_address < 0x3f00) {
-                //Return from the data buffer and store the current value in the buffer
-                _swap(&data, &sys->data_buffer);
+            if(!read_only) {
+                sys->data_address += sys->ppu_control.increment_mode ? 32: 1;
+                //Reads are delayed by one byte/read when address is in this range
+                if (sys->data_address < 0x3f00) {
+                    //Return from the data buffer and store the current value in the buffer
+                    _swap(&data, &sys->data_buffer);
+                }
             }
             return data;
         }
