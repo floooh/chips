@@ -116,7 +116,7 @@ typedef struct {
         } data[64];
         uint8_t reg[64*4];
     } oam;
-    
+
     enum State
     {
         PreRender,
@@ -131,7 +131,7 @@ typedef struct {
     uint8_t picture_buffer[PictureBufferSize];
     uint8_t scanline_sprites[8];
     int scanline_sprites_num;
-    
+
     //Registers
     uint16_t data_address;
     uint16_t temp_address;
@@ -142,7 +142,8 @@ typedef struct {
 
     //Setup flags and variables
     bool request_nmi;
-    
+    bool request_irq;
+
     union
     {
         struct
@@ -240,7 +241,7 @@ uint8_t r2c02_read(r2c02_t* sys, uint8_t addr, bool read_only) {
     switch(addr) {
         case 0x02: {
             // get PPU status
-            uint8_t status = sys->ppu_status.reg;
+            uint8_t status = (sys->ppu_status.reg & 0xe0) | (sys->data_buffer & 0x1f);
             if(!read_only) {
                 // Reading status clears vblank!
                 sys->ppu_status.vertical_blank = false;
@@ -250,7 +251,7 @@ uint8_t r2c02_read(r2c02_t* sys, uint8_t addr, bool read_only) {
         }
         case 0x04:
             // get OAM data
-            return sys->oam.reg[addr];
+            return sys->oam.reg[sys->sprite_data_address];
         case 0x07: {
             // get PPU data
             uint8_t data = sys->read(sys->data_address, sys->user_data);
@@ -353,7 +354,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
             // add IRQ support for MMC3
             if(sys->cycle==260 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
-                // TODO: sys->scanline_irq(sys->user_data);
+                sys->request_irq = true;
             }
             break;
         case Render:
@@ -493,7 +494,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
 
             // add IRQ support for MMC3
             if(sys->cycle==260 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
-                // TODO: sys->scanline_irq(sys->user_data);
+                sys->request_irq = true;
             }
 
             if (sys->cycle >= ScanlineEndCycle) {
@@ -558,7 +559,7 @@ uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
             break;
         default:
             // Well, this shouldn't have happened.
-            assert(false);
+            CHIPS_ASSERT(false);
             break;
     }
 

@@ -134,6 +134,7 @@ typedef struct {
     m6502_t cpu;
     r2c02_t ppu;
     chips_debug_t debug;
+    uint16_t dma_wait;
 
     uint8_t ram[0x800];             // 2KB
     uint8_t extended_ram[0x2000];   // 8KB
@@ -478,6 +479,7 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
         addr = addr & 0x0007;
         r2c02_write(&sys->ppu, addr, data);
     } else if(addr == 0x4014) {
+        sys->dma_wait = 256;
         // OAMDMA
         uint16_t page = data << 8;
         if (page < 0x2000) {
@@ -502,19 +504,27 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         pins |= M6502_NMI;
         sys->ppu.request_nmi = false;
     }
-    pins = m6502_tick(&sys->cpu, pins);
-    pins &= ~M6502_NMI;
-
-    // extract 16-bit address from pin mask
-    uint16_t addr = M6502_GET_ADDR(pins);
-    // perform memory access
-    if (pins & M6502_RW) {
-        // a memory read
-        M6502_SET_DATA(pins, nes_mem_read(sys, addr, false));
+    if(sys->ppu.request_irq) {
+        pins |= M6502_IRQ;
+        sys->ppu.request_irq = false;
     }
-    else {
-        // a memory write
-        nes_mem_write(sys, addr, M6502_GET_DATA(pins));
+    if(sys->dma_wait) {
+        sys->dma_wait--;
+    } else {
+        pins = m6502_tick(&sys->cpu, pins);
+        pins &= ~M6502_NMI;
+
+        // extract 16-bit address from pin mask
+        uint16_t addr = M6502_GET_ADDR(pins);
+        // perform memory access
+        if (pins & M6502_RW) {
+            // a memory read
+            M6502_SET_DATA(pins, nes_mem_read(sys, addr, false));
+        }
+        else {
+            // a memory write
+            nes_mem_write(sys, addr, M6502_GET_DATA(pins));
+        }
     }
 
     r2c02_tick(&sys->ppu, pins);
