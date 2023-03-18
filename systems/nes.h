@@ -29,19 +29,19 @@
 
     This emulator is not fully implemented:
         - PAL not implemented
-        - only mappers 0, 2, 3, 7 & 66 are implemented
+        - only mappers 0, 1, 2, 3, 7 & 66 are implemented
         - there is no audio
         - only the standard NES controller is supported
 
     ## zlib/libpng license
 
-    Copyright (c) 2023 Scemino
-    This software is provided 'as-is', without any express or implied warranty.
-    In no event will the authors be held liable for any damages arising from the
-    use of this software.
-    Permission is granted to anyone to use this software for any purpose,
-    including commercial applications, and to alter it and redistribute it
-    freely, subject to the following restrictions:
+        Copyright (c) 2023 Scemino
+        This software is provided 'as-is', without any express or implied warranty.
+        In no event will the authors be held liable for any damages arising from the
+        use of this software.
+        Permission is granted to anyone to use this software for any purpose,
+        including commercial applications, and to alter it and redistribute it
+        freely, subject to the following restrictions:
         1. The origin of this software must not be misrepresented; you must not
         claim that you wrote the original software. If you use this software in a
         product, an acknowledgment in the product documentation would be
@@ -112,6 +112,17 @@ typedef struct {
     void (*write_chr)(uint16_t addr, uint8_t data, void* user_data);
 
     union {
+        struct {
+            uint8_t chr_bank_sel4[2];
+            uint8_t chr_bank_sel8;
+
+            uint8_t prg_bank_sel16[2];
+            uint8_t prg_bank_sel32;
+
+            uint8_t load_reg;
+            uint8_t load_reg_count;
+            uint8_t ctrl_reg;
+        } data1;
         struct {
             uint8_t select_prg;
         } data2;
@@ -212,6 +223,10 @@ static void _nes_write_prg0(uint16_t addr, uint8_t value, void* user_data);
 static uint8_t _nes_read_chr0(uint16_t addr, void* user_data);
 static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data);
 
+static uint8_t _nes_read_prg1(uint16_t addr, void* user_data);
+static void _nes_write_prg1(uint16_t addr, uint8_t value, void* user_data);
+static uint8_t _nes_read_chr1(uint16_t addr, void* user_data);
+
 static uint8_t _nes_read_prg2(uint16_t addr, void* user_data);
 static void _nes_write_prg2(uint16_t addr, uint8_t value, void* user_data);
 
@@ -263,7 +278,7 @@ void nes_discard(nes_t* sys) {
 
 void nes_reset(nes_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    sys->pins |= M6502_RES;
+    sys->pins |= M6502_RES|M6502_SYNC;
     r2c02_reset(&sys->ppu);
 }
 
@@ -467,7 +482,7 @@ uint8_t nes_mem_read(nes_t* sys, uint16_t addr, bool read_only) {
     } else if (addr < 0x8000) {
         return sys->extended_ram[addr - 0x6000];
     } else {
-        return  sys->cart.mapper.read_prg(addr, sys);
+        return sys->cart.mapper.read_prg(addr, sys);
     }
 }
 
@@ -538,7 +553,7 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
 // ********* MAPPERS *******
 // *************************
 static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
-    bool supported = false;
+    bool supported = true;
     memset(&sys->cart.mapper, 0, sizeof(sys->cart.mapper));
     sys->cart.mapper = (nes_mapper_t){
         .read_prg = _nes_read_prg0,
@@ -548,7 +563,18 @@ static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
     };
     switch(mapper_num) {
         case 0:
-            supported = true;
+            break;
+        case 1:
+            sys->cart.mapper = (nes_mapper_t) {
+                .data1 = {
+                    .ctrl_reg = 0x1c,
+                    .prg_bank_sel16[1] = sys->cart.header.prg_page_count - 1,
+                },
+                .read_prg = _nes_read_prg1,
+                .write_prg = _nes_write_prg1,
+                .read_chr = _nes_read_chr1,
+                .write_chr = _nes_write_chr0,
+            };
             break;
         case 2:
             sys->cart.mapper = (nes_mapper_t) {
@@ -557,7 +583,6 @@ static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
                 .read_chr = _nes_read_chr0,
                 .write_chr = _nes_write_chr0,
             };
-            supported = true;
             break;
         case 3:
             sys->cart.mapper = (nes_mapper_t) {
@@ -566,7 +591,6 @@ static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
                 .read_chr = _nes_read_chr3,
                 .write_chr = _nes_write_chr0,
             };
-            supported = true;
             break;
         case 7:
             sys->cart.mapper = (nes_mapper_t) {
@@ -576,7 +600,6 @@ static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
                 .read_chr = _nes_read_chr7,
                 .write_chr = _nes_write_chr7,
             };
-            supported = true;
             break;
         case 66:
             sys->cart.mapper = (nes_mapper_t) {
@@ -585,7 +608,9 @@ static bool _nes_use_mapper(nes_t* sys, uint8_t mapper_num) {
                 .read_chr = _nes_read_chr66,
                 .write_chr = _nes_write_chr0,
             };
-            supported = true;
+            break;
+        default:
+            supported = false;
             break;
     }
     sys->cart.mapper.mirroring = sys->cart.header.mirror_mode ? Vertical : Horizontal;
@@ -643,6 +668,111 @@ static void _nes_write_chr0(uint16_t addr, uint8_t data, void* user_data) {
     nes_t* sys = (nes_t*)user_data;
     CHIPS_ASSERT(sys && sys->valid);
     sys->cart.character_ram[addr] = data;
+}
+
+// ********* MAPPER 1 **************
+
+static uint8_t _nes_read_prg1(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    uint32_t mapped_addr;
+    if (sys->cart.mapper.data1.ctrl_reg & 0b01000) {
+        // 16K Mode
+        int sel = (addr < 0xc000) ? 0 : 1;
+        mapped_addr = sys->cart.mapper.data1.prg_bank_sel16[sel] * 0x4000 + (addr & 0x3fff);
+    } else {
+        // 32K Mode
+        mapped_addr = sys->cart.mapper.data1.prg_bank_sel32 * 0x8000 + (addr & 0x7FFF);
+    }
+    return sys->cart.rom[mapped_addr];
+}
+
+static uint8_t _nes_read_chr1(uint16_t addr, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if (sys->cart.header.tile_page_count != 0) {
+        if (sys->cart.mapper.data1.ctrl_reg & 0x10) {
+            // 4K CHR Bank Mode
+            int sel = (addr < 0x1000) ? 0 : 1;
+            addr = sys->cart.mapper.data1.chr_bank_sel4[sel] * 0x1000 + (addr & 0x0fff);
+        } else {
+            // 8K CHR Bank Mode
+            addr = sys->cart.mapper.data1.chr_bank_sel8 * 0x2000 + (addr & 0x1FFF);
+        }
+    }
+    return sys->cart.character_ram[addr];
+}
+
+static void _nes_write_prg1(uint16_t addr, uint8_t data, void* user_data) {
+    nes_t* sys = (nes_t*)user_data;
+    CHIPS_ASSERT(sys && sys->valid);
+    if(data & 0x80) {
+        sys->cart.mapper.data1.load_reg = 0x00;
+        sys->cart.mapper.data1.load_reg_count = 0;
+        sys->cart.mapper.data1.ctrl_reg = sys->cart.mapper.data1.ctrl_reg | 0x0c;
+    } else {
+        sys->cart.mapper.data1.load_reg >>= 1;
+        sys->cart.mapper.data1.load_reg |= (data & 0x01) << 4;
+        sys->cart.mapper.data1.load_reg_count++;
+        if (sys->cart.mapper.data1.load_reg_count == 5) {
+            uint8_t tgt_reg = (addr >> 13) & 0x03;
+
+            switch (tgt_reg) {
+                case 0:
+                    // 0x8000 - 0x9FFF: Set Control Register
+                    sys->cart.mapper.data1.ctrl_reg = sys->cart.mapper.data1.load_reg & 0x1f;
+
+                    switch (sys->cart.mapper.data1.ctrl_reg & 0x03)
+                    {
+                    case 0: sys->cart.mapper.mirroring = OneScreenLower; break;
+                    case 1: sys->cart.mapper.mirroring = OneScreenHigher; break;
+                    case 2: sys->cart.mapper.mirroring = Vertical;     break;
+                    case 3: sys->cart.mapper.mirroring = Horizontal;   break;
+                    }
+                    break;
+                case 1:
+                    // 0xA000 - 0xBFFF: Set CHR Bank Lo
+                    if (sys->cart.mapper.data1.ctrl_reg & 0b10000) {
+                        // 4K CHR Bank at PPU 0x0000
+                        sys->cart.mapper.data1.chr_bank_sel4[0] = sys->cart.mapper.data1.load_reg & 0x1f;
+                    } else {
+                        // 8K CHR Bank at PPU 0x0000
+                        sys->cart.mapper.data1.chr_bank_sel8 = sys->cart.mapper.data1.load_reg & 0x1e;
+                    }
+                    break;
+                case 2:
+                    // 0xC000 - 0xDFFF: Set CHR Bank Hi
+                    if (sys->cart.mapper.data1.ctrl_reg & 0b10000) {
+                        // 4K CHR Bank at PPU 0x1000
+                        sys->cart.mapper.data1.chr_bank_sel4[1] = sys->cart.mapper.data1.load_reg & 0x1f;
+                    }
+                    break;
+                case 3: {
+                    // 0xE000 - 0xFFFF: Configure PRG Banks
+                    uint8_t prg_mode = (sys->cart.mapper.data1.ctrl_reg >> 2) & 0x03;
+
+                    if (prg_mode == 0 || prg_mode == 1) {
+                        // Set 32K PRG Bank at CPU 0x8000
+                        sys->cart.mapper.data1.prg_bank_sel32 = (sys->cart.mapper.data1.load_reg & 0x0e) >> 1;
+                    } else if (prg_mode == 2) {
+                        // Fix 16KB PRG Bank at CPU 0x8000 to First Bank
+                        sys->cart.mapper.data1.prg_bank_sel16[0] = 0;
+                        // Set 16KB PRG Bank at CPU 0xC000
+                        sys->cart.mapper.data1.prg_bank_sel16[1] = sys->cart.mapper.data1.load_reg & 0x0f;
+                    } else if (prg_mode == 3) {
+                        // Set 16KB PRG Bank at CPU 0x8000
+                        sys->cart.mapper.data1.prg_bank_sel16[0] = sys->cart.mapper.data1.load_reg & 0x0f;
+                        // Fix 16KB PRG Bank at CPU 0xC000 to Last Bank
+                        sys->cart.mapper.data1.prg_bank_sel16[1] = sys->cart.header.prg_page_count - 1;
+                    }
+                } break;
+            }
+
+            // reset load register
+            sys->cart.mapper.data1.load_reg = 0x00;
+            sys->cart.mapper.data1.load_reg_count = 0;
+        }
+    }
 }
 
 // ********* MAPPER 2 **************
