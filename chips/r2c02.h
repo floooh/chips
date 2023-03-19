@@ -254,14 +254,14 @@ uint8_t r2c02_read(r2c02_t* sys, uint8_t addr, bool read_only) {
             return sys->oam.reg[sys->sprite_data_address];
         case 0x07: {
             // get PPU data
-            uint8_t data;
-            if (sys->data_address < 0x3f00) {
-                //Return from the data buffer and store the current value in the buffer
+            // Return from the data buffer and store the current value in the buffer
+            uint8_t data = sys->data_buffer;
+            // Reads are delayed by one byte/read when address is in this range
+            if(!read_only) sys->data_buffer = sys->read(sys->data_address, sys->user_data);
+            if (sys->data_address >= 0x3f00) {
                 data = sys->data_buffer;
-                //Reads are delayed by one byte/read when address is in this range
-                if(!read_only) sys->data_buffer = sys->read(sys->data_address, sys->user_data);
-            } else {
-                data = sys->read(sys->data_address, sys->user_data);
+                // Reading $3F00-$3FFF should work just like $3000-$3EFF, i.e. a nametable byte should be put in the VRAM buffer
+                if(!read_only) sys->data_buffer = sys->read(sys->data_address - 0x1000, sys->user_data);
             }
             if(!read_only) sys->data_address += sys->ppu_control.increment_mode ? 32: 1;
             return data;
