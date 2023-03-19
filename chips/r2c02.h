@@ -254,15 +254,16 @@ uint8_t r2c02_read(r2c02_t* sys, uint8_t addr, bool read_only) {
             return sys->oam.reg[sys->sprite_data_address];
         case 0x07: {
             // get PPU data
-            uint8_t data = sys->read(sys->data_address, sys->user_data);
-            if(!read_only) {
-                sys->data_address += sys->ppu_control.increment_mode ? 32: 1;
+            uint8_t data;
+            if (sys->data_address < 0x3f00) {
+                //Return from the data buffer and store the current value in the buffer
+                data = sys->data_buffer;
                 //Reads are delayed by one byte/read when address is in this range
-                if (sys->data_address < 0x3f00) {
-                    //Return from the data buffer and store the current value in the buffer
-                    _swap(&data, &sys->data_buffer);
-                }
+                if(!read_only) sys->data_buffer = sys->read(sys->data_address, sys->user_data);
+            } else {
+                data = sys->read(sys->data_address, sys->user_data);
             }
+            if(!read_only) sys->data_address += sys->ppu_control.increment_mode ? 32: 1;
             return data;
         }
         default: break;
