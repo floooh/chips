@@ -105,10 +105,8 @@ typedef struct {
     void (*set_pixels)(uint8_t* buffer, void* user_data);
     void* user_data;
 
-    union
-    {
-        struct
-        {
+    union {
+        struct {
             uint8_t y;            // Y position of sprite
             uint8_t id;           // ID of tile from pattern memory
             uint8_t attribute;    // Flags define how sprite should be rendered
@@ -117,8 +115,7 @@ typedef struct {
         uint8_t reg[64*4];
     } oam;
 
-    enum State
-    {
+    enum State {
         PreRender,
         Render,
         PostRender,
@@ -144,10 +141,8 @@ typedef struct {
     bool request_nmi;
     bool request_irq;
 
-    union
-    {
-        struct
-        {
+    union {
+        struct {
             uint8_t unused : 5;
             uint8_t sprite_overflow : 1;
             uint8_t sprite_zero_hit : 1;
@@ -156,10 +151,8 @@ typedef struct {
         uint8_t reg;
     } ppu_status;
 
-    union
-    {
-        struct
-        {
+    union {
+        struct {
             uint8_t greyscale : 1;
             uint8_t render_background_left : 1;
             uint8_t render_sprites_left : 1;
@@ -172,10 +165,8 @@ typedef struct {
         uint8_t reg;
     } ppu_mask;
 
-    union
-	{
-		struct
-		{
+    union {
+		struct {
 			uint8_t nametable_x : 1;
 			uint8_t nametable_y : 1;
 			uint8_t increment_mode : 1;
