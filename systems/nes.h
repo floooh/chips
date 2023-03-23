@@ -60,8 +60,6 @@
 extern "C" {
 #endif
 
-// TODO: remove this :(
-#define M_PI (3.14159)
 #define NES_DEFAULT_AUDIO_SAMPLE_RATE (44100)
 #define NES_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer
 #define NES_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
