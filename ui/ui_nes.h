@@ -81,6 +81,7 @@ typedef struct {
 typedef struct {
     nes_t* nes;
     ui_m6502_t cpu;
+    ui_audio_t audio;
     ui_memedit_t memedit[4];
     ui_memedit_t ppu_memedit[4];
     ui_memedit_t sprite_memedit[4];
@@ -128,6 +129,7 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Hardware")) {
+            ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("Video Hardware", 0, &ui->video.open);
             ImGui::EndMenu();
@@ -315,6 +317,16 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_audio_desc_t desc = {0};
+        desc.title = "Audio Output";
+        desc.sample_buffer = ui->nes->audio.sample_buffer;
+        desc.num_samples = ui->nes->audio.num_samples;
+        desc.x = x;
+        desc.y = y;
+        ui_audio_init(&ui->audio, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_memedit_desc_t desc = {0};
         desc.layers[0] = "System";
         desc.read_cb = _ui_nes_mem_read;
@@ -403,6 +415,7 @@ void ui_nes_discard(ui_nes_t* ui) {
     ui->video.texture_cbs.destroy_cb(ui->video.tex_name_tables);
     ui->video.texture_cbs.destroy_cb(ui->video.tex_sprites);
     ui_m6502_discard(&ui->cpu);
+    ui_audio_discard(&ui->audio);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
         ui_memedit_discard(&ui->ppu_memedit[i]);
@@ -690,6 +703,7 @@ void ui_nes_draw(ui_nes_t* ui) {
     CHIPS_ASSERT(ui && ui->nes);
     _ui_nes_draw_menu(ui);
     ui_m6502_draw(&ui->cpu);
+    ui_audio_draw(&ui->audio, ui->nes->audio.sample_pos);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);
         ui_memedit_draw(&ui->ppu_memedit[i]);
