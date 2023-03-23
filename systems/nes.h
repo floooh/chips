@@ -147,14 +147,32 @@ typedef struct {
     name_table_mirroring_t mirroring;
 } nes_mapper_t;
 
-typedef struct
-{
+typedef struct {
     uint16_t timer;
     uint16_t reload;
 } apu_sequencer_t;
 
-typedef struct
-{
+typedef struct {
+    bool start;
+    bool disable;
+    uint16_t divider_count;
+    uint16_t volume;
+    uint16_t output;
+    uint16_t decay_count;
+} apu_envelope_t;
+
+typedef struct {
+    bool enabled;
+    bool down;
+    bool reload;
+    uint8_t shift;
+    uint8_t timer;
+    uint8_t period;
+    uint16_t change;
+    bool mute;
+} apu_sweeper_t;
+
+typedef struct {
     double frequency;
     double duty_cycle;
     double amplitude;
@@ -171,8 +189,13 @@ typedef struct {
 
     struct {
         apu_sequencer_t seq;
+        apu_envelope_t env;
+        apu_sweeper_t sweeper;
         pulse_t pulse;
+        uint8_t len_counter;
         bool enable; 
+        bool halt;
+        double output;
     } pulse1;
 } apu_t;
 
@@ -256,6 +279,13 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data);
 #define _PPUSCROL   (0x2005)
 #define _PPUADDR    (0x2006)
 #define _PPUDATA    (0x2007)
+
+static const uint8_t length_table[] = {  
+    10, 254, 20,  2, 40,  4, 80,  6,
+    160,   8, 60, 10, 14, 12, 26, 14,
+    12,  16, 24, 18, 48, 20, 96, 22,
+    192,  24, 72, 26, 16, 28, 32, 30
+};
 
 static uint8_t _ppu_read(uint16_t addr, void* user_data);
 static void _ppu_write(uint16_t address, uint8_t data, void* user_data);
@@ -549,20 +579,32 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
         addr = addr & 0x0007;
         r2c02_write(&sys->ppu, addr, data);
     } else if(addr == 0x4000) {
-        switch ((data & 0xC0) >> 6) {
+        switch ((data & 0xc0) >> 6) {
         case 0x00: sys->apu.pulse1.pulse.duty_cycle = 0.125; break;
         case 0x01: sys->apu.pulse1.pulse.duty_cycle = 0.250; break;
         case 0x02: sys->apu.pulse1.pulse.duty_cycle = 0.500; break;
         case 0x03: sys->apu.pulse1.pulse.duty_cycle = 0.750; break;
         }
+        sys->apu.pulse1.halt = (data & 0x20);
+        sys->apu.pulse1.env.volume = (data & 0x0f);
+		sys->apu.pulse1.env.disable = (data & 0x10);
+    } else if(addr == 0x4001) {
+        sys->apu.pulse1.sweeper.enabled = data & 0x80;
+		sys->apu.pulse1.sweeper.period = (data & 0x70) >> 4;
+		sys->apu.pulse1.sweeper.down = data & 0x08;
+		sys->apu.pulse1.sweeper.shift = data & 0x07;
+		sys->apu.pulse1.sweeper.reload = true;
     } else if(addr == 0x4002) {
-        sys->apu.pulse1.seq.reload = (sys->apu.pulse1.seq.reload & 0xFF00) | data;
+        sys->apu.pulse1.seq.reload = (sys->apu.pulse1.seq.reload & 0xff00) | data;
     } else if(addr == 0x4003) {
-        sys->apu.pulse1.seq.reload = (uint16_t)((data & 0x07)) << 8 | (sys->apu.pulse1.seq.reload & 0x00FF);
+        sys->apu.pulse1.seq.reload = (uint16_t)((data & 0x07)) << 8 | (sys->apu.pulse1.seq.reload & 0x00ff);
         sys->apu.pulse1.seq.timer = sys->apu.pulse1.seq.reload;
-        //sys->apu.pulse1.seq.sequence = sys->apu.pulse1.seq.new_sequence;
+        sys->apu.pulse1.len_counter = length_table[(data & 0xf8) >> 3];
+        sys->apu.pulse1.env.start = true;
     } else if(addr == 0x4015) {
         sys->apu.pulse1.enable = data & 1;
+    } else if(addr == 0x400f) {
+        sys->apu.pulse1.env.start = true;
     } else if(addr == 0x4014) {
         sys->dma_wait = 256;
         // OAMDMA
@@ -584,13 +626,13 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
     }
 }
 
-static inline double approx_sin(double t) {
+static inline double _approx_sin(double t) {
     double j = t * 0.15915;
     j = j - (int)j;
     return 20.785 * j * (j - 0.5) * (j - 1.0);
 }
 
-static double pulse_sample(pulse_t* pulse, double t) {
+static double _pulse_sample(pulse_t* pulse, double t) {
     double a = 0;
     double b = 0;
     double p = pulse->duty_cycle * 2.0 * M_PI;
@@ -598,11 +640,72 @@ static double pulse_sample(pulse_t* pulse, double t) {
     const double harmonics = 20;
     for (double n = 1; n < harmonics; n++) {
         double c = n * pulse->frequency * 2.0 * M_PI * t;
-        a += -approx_sin(c) / n;
-        b += -approx_sin(c - p * n) / n;
+        a += -_approx_sin(c) / n;
+        b += -_approx_sin(c - p * n) / n;
     }
 
     return (2.0 * pulse->amplitude / M_PI) * (a - b);
+}
+
+static void _apu_env_clock(apu_envelope_t* env, bool loop) {
+    if (!env->start) {
+        if (env->divider_count == 0) {
+            env->divider_count = env->volume;
+
+            if (env->decay_count == 0) {
+                if (loop) env->decay_count = 15;
+            }
+            else
+                env->decay_count--;
+        }
+        else
+            env->divider_count--;
+    } else {
+        env->start = false;
+        env->decay_count = 15;
+        env->divider_count = env->volume;
+    }
+
+    env->output = env->disable ? env->volume : env->decay_count;
+}
+
+static void _apu_sweeper_track(apu_sweeper_t* sweeper, uint16_t target) {
+    if (sweeper->enabled) {
+        sweeper->change = target >> sweeper->shift;
+        sweeper->mute = (target < 8) || (target > 0x7FF);
+    }
+}
+
+static bool _apu_sweeper_clock(apu_sweeper_t* sweeper, uint16_t* target, bool channel) {
+    bool changed = false;
+    if (sweeper->timer == 0 && sweeper->enabled && sweeper->shift > 0 && !sweeper->mute) {
+        if (*target >= 8 && sweeper->change < 0x07FF) {
+            if (sweeper->down) {
+                *target -= sweeper->change - channel;
+            } else {
+                *target += sweeper->change;
+            }
+            changed = true;
+        }
+    }
+
+    if (sweeper->timer == 0 || sweeper->reload) {
+        sweeper->timer = sweeper->period;
+        sweeper->reload = false;
+    } else {
+       sweeper-> timer--;
+    }
+
+    sweeper->mute = (*target < 8) || (*target > 0x7FF);
+
+    return changed;
+}
+
+void _apu_len_counter_clock(bool bEnable, uint8_t* counter, bool bHalt) {
+    if (!bEnable)
+        *counter = 0;
+    else if (*counter > 0 && !bHalt)
+        (*counter)--;
 }
 
 static bool _apu_tick(apu_t* sys) {
@@ -634,26 +737,38 @@ static bool _apu_tick(apu_t* sys) {
 
         // Quater frame "beats" adjust the volume envelope
         if (quarter_frame_clock) {
-            
+            _apu_env_clock(&sys->pulse1.env, sys->pulse1.halt);
         }
 
         // Half frame "beats" adjust the note length and
         // frequency sweepers
         if (half_frame_clock) {
-            
+            _apu_len_counter_clock(sys->pulse1.enable, &sys->pulse1.len_counter, sys->pulse1.halt);
+            _apu_sweeper_clock(&sys->pulse1.sweeper, &sys->pulse1.seq.reload, 0);
         }
         
         sys->pulse1.pulse.frequency = (double)_NES_FREQUENCY / (16.0 * (double)(sys->pulse1.seq.reload + 1));
-        sys->pulse1.pulse.amplitude = 1;
-        sys->audio_sample = (float)(pulse_sample(&sys->pulse1.pulse, sys->global_time)) - 0.5f;
-        if (!sys->pulse1.enable) sys->audio_sample = 0;
+        sys->pulse1.pulse.amplitude = (double)(sys->pulse1.env.output - 1) / 16.0;
+        float pulse1_sample = (float)(_pulse_sample(&sys->pulse1.pulse, sys->global_time));
+        
+        if (sys->pulse1.len_counter > 0 && sys->pulse1.seq.timer >= 8 && !sys->pulse1.sweeper.mute && sys->pulse1.env.output > 2)
+            sys->pulse1.output += (pulse1_sample - sys->pulse1.output) * 0.5;
+        else
+            sys->pulse1.output = 0;
+
+        if (!sys->pulse1.enable) sys->pulse1.output = 0;
     }
+
+    sys->audio_sample = ((1.0 * sys->pulse1.output) - 0.8) * 0.1;
     
     // Synchronising with Audio
     if (sys->audio_time >= sys->audio_time_per_system_sample) {
         sys->audio_time -= sys->audio_time_per_system_sample;
         audio_sample_ready = true;
     }
+
+    // Frequency sweepers change at high frequency
+	_apu_sweeper_track(&sys->pulse1.sweeper, sys->pulse1.seq.reload);
     
     sys->clock_counter++;
     sys->global_time += sys->audio_time_per_nes_clock;
