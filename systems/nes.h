@@ -150,6 +150,9 @@ typedef struct {
 typedef struct {
     uint16_t timer;
     uint16_t reload;
+    uint8_t output;
+    uint32_t sequence;
+    uint32_t new_sequence;
 } apu_sequencer_t;
 
 typedef struct {
@@ -197,6 +200,14 @@ typedef struct {
         bool halt;
         double output;
     } pulse[2];
+    struct {
+        apu_sequencer_t seq;
+        apu_envelope_t env;
+        uint8_t len_counter;
+        bool enable; 
+        bool halt;
+        double output;
+    } noise;
 } apu_t;
 
 // NES emulator state
@@ -364,6 +375,7 @@ void nes_discard(nes_t* sys) {
 void nes_reset(nes_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->pins |= M6502_RES|M6502_SYNC;
+    sys->apu.noise.seq.sequence = 0xdbdb;
     r2c02_reset(&sys->ppu);
 }
 
@@ -580,11 +592,12 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
         r2c02_write(&sys->ppu, addr, data);
     } else if(addr == 0x4000) {
         switch ((data & 0xc0) >> 6) {
-        case 0x00: sys->apu.pulse[0].pulse.duty_cycle = 0.125; break;
-        case 0x01: sys->apu.pulse[0].pulse.duty_cycle = 0.250; break;
-        case 0x02: sys->apu.pulse[0].pulse.duty_cycle = 0.500; break;
-        case 0x03: sys->apu.pulse[0].pulse.duty_cycle = 0.750; break;
+        case 0x00: sys->apu.pulse[0].seq.new_sequence = 0b01000000; sys->apu.pulse[0].pulse.duty_cycle = 0.125; break;
+        case 0x01: sys->apu.pulse[0].seq.new_sequence = 0b01100000; sys->apu.pulse[0].pulse.duty_cycle = 0.250; break;
+        case 0x02: sys->apu.pulse[0].seq.new_sequence = 0b01111000; sys->apu.pulse[0].pulse.duty_cycle = 0.500; break;
+        case 0x03: sys->apu.pulse[0].seq.new_sequence = 0b10011111; sys->apu.pulse[0].pulse.duty_cycle = 0.750; break;
         }
+        sys->apu.pulse[0].seq.sequence = sys->apu.pulse[0].seq.new_sequence;
         sys->apu.pulse[0].halt = (data & 0x20);
         sys->apu.pulse[0].env.volume = (data & 0x0f);
 		sys->apu.pulse[0].env.disable = (data & 0x10);
@@ -599,15 +612,17 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
     } else if(addr == 0x4003) {
         sys->apu.pulse[0].seq.reload = (uint16_t)((data & 0x07)) << 8 | (sys->apu.pulse[0].seq.reload & 0x00ff);
         sys->apu.pulse[0].seq.timer = sys->apu.pulse[0].seq.reload;
+        sys->apu.pulse[0].seq.sequence = sys->apu.pulse[0].seq.new_sequence;
         sys->apu.pulse[0].len_counter = length_table[(data & 0xf8) >> 3];
         sys->apu.pulse[0].env.start = true;
     } else if(addr == 0x4004) {
         switch ((data & 0xc0) >> 6) {
-        case 0x00: sys->apu.pulse[1].pulse.duty_cycle = 0.125; break;
-        case 0x01: sys->apu.pulse[1].pulse.duty_cycle = 0.250; break;
-        case 0x02: sys->apu.pulse[1].pulse.duty_cycle = 0.500; break;
-        case 0x03: sys->apu.pulse[1].pulse.duty_cycle = 0.750; break;
+        case 0x00: sys->apu.pulse[1].seq.new_sequence = 0b01000000; sys->apu.pulse[1].pulse.duty_cycle = 0.125; break;
+        case 0x01: sys->apu.pulse[1].seq.new_sequence = 0b01100000; sys->apu.pulse[1].pulse.duty_cycle = 0.250; break;
+        case 0x02: sys->apu.pulse[1].seq.new_sequence = 0b01111000; sys->apu.pulse[1].pulse.duty_cycle = 0.500; break;
+        case 0x03: sys->apu.pulse[1].seq.new_sequence = 0b10011111; sys->apu.pulse[1].pulse.duty_cycle = 0.750; break;
         }
+        sys->apu.pulse[1].seq.sequence = sys->apu.pulse[1].seq.new_sequence;
         sys->apu.pulse[1].halt = (data & 0x20);
         sys->apu.pulse[1].env.volume = (data & 0x0f);
 		sys->apu.pulse[1].env.disable = (data & 0x10);
@@ -622,11 +637,37 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
     } else if(addr == 0x4007) {
         sys->apu.pulse[1].seq.reload = (uint16_t)((data & 0x07)) << 8 | (sys->apu.pulse[1].seq.reload & 0x00ff);
         sys->apu.pulse[1].seq.timer = sys->apu.pulse[1].seq.reload;
+        sys->apu.pulse[1].seq.sequence = sys->apu.pulse[1].seq.new_sequence;
         sys->apu.pulse[1].len_counter = length_table[(data & 0xf8) >> 3];
         sys->apu.pulse[1].env.start = true;
+    } else if(addr == 0x400c) {
+        sys->apu.noise.env.volume = (data & 0x0F);
+        sys->apu.noise.env.disable = (data & 0x10);
+		sys->apu.noise.halt = (data & 0x20);
+    } else if(addr == 0x400e) {
+		switch (data & 0x0f) {
+		case 0x00: sys->apu.noise.seq.reload = 0; break;
+		case 0x01: sys->apu.noise.seq.reload = 4; break;
+		case 0x02: sys->apu.noise.seq.reload = 8; break;
+		case 0x03: sys->apu.noise.seq.reload = 16; break;
+		case 0x04: sys->apu.noise.seq.reload = 32; break;
+		case 0x05: sys->apu.noise.seq.reload = 64; break;
+		case 0x06: sys->apu.noise.seq.reload = 96; break;
+		case 0x07: sys->apu.noise.seq.reload = 128; break;
+		case 0x08: sys->apu.noise.seq.reload = 160; break;
+		case 0x09: sys->apu.noise.seq.reload = 202; break;
+		case 0x0A: sys->apu.noise.seq.reload = 254; break;
+		case 0x0B: sys->apu.noise.seq.reload = 380; break;
+		case 0x0C: sys->apu.noise.seq.reload = 508; break;
+		case 0x0D: sys->apu.noise.seq.reload = 1016; break;
+		case 0x0E: sys->apu.noise.seq.reload = 2034; break;
+		case 0x0F: sys->apu.noise.seq.reload = 4068; break;
+		}
     } else if(addr == 0x400f) {
         sys->apu.pulse[0].env.start = true;
         sys->apu.pulse[1].env.start = true;
+        sys->apu.noise.env.start = true;
+		sys->apu.noise.len_counter = length_table[(data & 0xf8) >> 3];
     } else if(addr == 0x4014) {
         sys->dma_wait = 256;
         // OAMDMA
@@ -640,6 +681,7 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
     } else if(addr == 0x4015) {
         sys->apu.pulse[0].enable = data & 1;
         sys->apu.pulse[1].enable = data & 2;
+        sys->apu.noise.enable = data & 0x04;
     } else if (addr >= 0x4016 && addr <= 0x4017) {
         sys->controller_state[addr & 0x0001] = sys->controller[addr & 0x0001].value;
     } else if (addr < 0x6000) {
@@ -726,11 +768,35 @@ static bool _apu_sweeper_clock(apu_sweeper_t* sweeper, uint16_t* target, bool ch
     return changed;
 }
 
-void _apu_len_counter_clock(bool bEnable, uint8_t* counter, bool bHalt) {
-    if (!bEnable)
+static void _apu_len_counter_clock(bool enable, uint8_t* counter, bool halt) {
+    if (!enable)
         *counter = 0;
-    else if (*counter > 0 && !bHalt)
+    else if (*counter > 0 && !halt)
         (*counter)--;
+}
+
+typedef uint32_t (*_apu_seq_func)(uint32_t s);
+
+static uint32_t _apu_pulse_seq(uint32_t s) {
+    s = ((s & 0x0001) << 7) | ((s & 0x00fe) >> 1);
+    return s;
+}
+
+static uint32_t _apu_noise_seq(uint32_t s) {
+    s = (((s & 0x0001) ^ ((s & 0x0002) >> 1)) << 14) | ((s & 0x7fff) >> 1);
+    return s;
+}
+
+static uint8_t _apu_seq_clock(apu_sequencer_t* seq, bool enable, _apu_seq_func func) {
+    if (enable) {
+        seq->timer--;
+        if (seq->timer == 0xffff) {
+            seq->timer = seq->reload;
+            seq->sequence = func(seq->sequence);
+            seq->output = seq->sequence & 0x00000001;
+        }
+    }
+    return seq->output;
 }
 
 static bool _apu_tick(apu_t* sys) {
@@ -764,6 +830,7 @@ static bool _apu_tick(apu_t* sys) {
         if (quarter_frame_clock) {
             _apu_env_clock(&sys->pulse[0].env, sys->pulse[0].halt);
             _apu_env_clock(&sys->pulse[1].env, sys->pulse[1].halt);
+            _apu_env_clock(&sys->noise.env, sys->noise.halt);
         }
 
         // Half frame "beats" adjust the note length and
@@ -774,8 +841,12 @@ static bool _apu_tick(apu_t* sys) {
 
             _apu_len_counter_clock(sys->pulse[1].enable, &sys->pulse[1].len_counter, sys->pulse[1].halt);
             _apu_sweeper_clock(&sys->pulse[1].sweeper, &sys->pulse[1].seq.reload, 0);
+
+            _apu_len_counter_clock(sys->noise.enable, &sys->noise.len_counter, sys->noise.halt);
         }
         
+        // pulse 1
+        _apu_seq_clock(&sys->pulse[0].seq, sys->pulse[0].enable, _apu_pulse_seq);
         sys->pulse[0].pulse.frequency = (double)_NES_FREQUENCY / (16.0 * (double)(sys->pulse[0].seq.reload + 1));
         sys->pulse[0].pulse.amplitude = (double)(sys->pulse[0].env.output - 1) / 16.0;
         float pulse1_sample = (float)(_pulse_sample(&sys->pulse[0].pulse, sys->global_time));
@@ -787,6 +858,8 @@ static bool _apu_tick(apu_t* sys) {
 
         if (!sys->pulse[0].enable) sys->pulse[0].output = 0;
 
+        // pulse 2
+        _apu_seq_clock(&sys->pulse[1].seq, sys->pulse[1].enable, _apu_pulse_seq);
         sys->pulse[1].pulse.frequency = (double)_NES_FREQUENCY / (16.0 * (double)(sys->pulse[1].seq.reload + 1));
         sys->pulse[1].pulse.amplitude = (double)(sys->pulse[1].env.output - 1) / 16.0;
         float pulse2_sample = (float)(_pulse_sample(&sys->pulse[1].pulse, sys->global_time));
@@ -797,19 +870,30 @@ static bool _apu_tick(apu_t* sys) {
             sys->pulse[1].output = 0;
 
         if (!sys->pulse[1].enable) sys->pulse[1].output = 0;
+
+        // noise
+        _apu_seq_clock(&sys->noise.seq, sys->noise.enable, _apu_noise_seq);
+        if (sys->noise.len_counter > 0 && sys->noise.seq.timer >= 8) {
+			sys->noise.output = (double)sys->noise.seq.output * ((double)(sys->noise.env.output-1) / 16.0);
+		}
+        if (!sys->noise.enable) sys->noise.output = 0;
     }
 
-    sys->audio_sample = ((1.0 * sys->pulse[0].output) - 0.8) * 0.1 + ((1.0 * sys->pulse[1].output) - 0.8) * 0.1;
+    // Frequency sweepers change at high frequency
+	_apu_sweeper_track(&sys->pulse[0].sweeper, sys->pulse[0].seq.reload);
+	_apu_sweeper_track(&sys->pulse[1].sweeper, sys->pulse[1].seq.reload);
+
+    // mix
+    sys->audio_sample = 
+        ((1.0 * sys->pulse[0].output) - 0.8) * 0.1 +
+        ((1.0 * sys->pulse[1].output) - 0.8) * 0.1 +
+        ((2.0 * (sys->noise.output - 0.5))) * 0.1;
     
     // Synchronising with Audio
     if (sys->audio_time >= sys->audio_time_per_system_sample) {
         sys->audio_time -= sys->audio_time_per_system_sample;
         audio_sample_ready = true;
     }
-
-    // Frequency sweepers change at high frequency
-	_apu_sweeper_track(&sys->pulse[0].sweeper, sys->pulse[0].seq.reload);
-	_apu_sweeper_track(&sys->pulse[1].sweeper, sys->pulse[1].seq.reload);
     
     sys->clock_counter++;
     sys->global_time += sys->audio_time_per_nes_clock;
