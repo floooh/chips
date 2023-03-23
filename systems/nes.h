@@ -60,6 +60,12 @@
 extern "C" {
 #endif
 
+// TODO: remove this :(
+#define M_PI (3.14159)
+#define NES_DEFAULT_AUDIO_SAMPLE_RATE (44100)
+#define NES_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer
+#define NES_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
+
 typedef struct {
     char magic[4];
 
@@ -80,6 +86,7 @@ typedef struct {
 
 // configuration parameters for nes_init()
 typedef struct {
+    chips_audio_desc_t audio;
     chips_debug_t debug;
 } nes_desc_t;
 
@@ -140,13 +147,43 @@ typedef struct {
     name_table_mirroring_t mirroring;
 } nes_mapper_t;
 
+typedef struct
+{
+    uint16_t timer;
+    uint16_t reload;
+} apu_sequencer_t;
+
+typedef struct
+{
+    double frequency;
+    double duty_cycle;
+    double amplitude;
+} pulse_t;
+
+typedef struct {
+    uint32_t clock_counter;
+    uint32_t frame_clock_counter;
+    double global_time;
+    double audio_time;
+    double audio_time_per_system_sample;
+    double audio_time_per_nes_clock;
+    float audio_sample;
+
+    struct {
+        apu_sequencer_t seq;
+        pulse_t pulse;
+        bool enable; 
+    } pulse1;
+} apu_t;
+
 // NES emulator state
 typedef struct {
     m6502_t cpu;
     r2c02_t ppu;
-    chips_debug_t debug;
     uint16_t dma_wait;
-
+    
+    chips_debug_t debug;
+    
     uint8_t ram[0x800];             // 2KB
     uint8_t extended_ram[0x2000];   // 8KB
 
@@ -160,6 +197,15 @@ typedef struct {
         uint8_t character_ram[0x20000]; // 128KB
         uint8_t rom[0x40000];           // 256KB
     } cart;
+    
+    struct {
+        uint32_t sample_rate;
+        chips_audio_callback_t callback;
+        int num_samples;
+        int sample_pos;
+        float sample_buffer[NES_MAX_AUDIO_SAMPLES];
+    } audio;
+    apu_t apu;
 
     controller_t controller[2];
     uint8_t controller_state[2];
@@ -251,12 +297,21 @@ void nes_ppu_write(nes_t* nes, uint16_t address, uint8_t data) {
     _ppu_write(address, data, nes);
 }
 
+#define _NES_DEFAULT(val,def) (((val) != 0) ? (val) : (def))
+
 void nes_init(nes_t* sys, const nes_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
     memset(sys, 0, sizeof(nes_t));
     sys->valid = true;
     sys->debug = desc->debug;
+    sys->audio.callback = desc->audio.callback;
+    sys->audio.num_samples = _NES_DEFAULT(desc->audio.num_samples, NES_DEFAULT_AUDIO_SAMPLES);
+    sys->audio.sample_rate = _NES_DEFAULT(desc->audio.sample_rate, NES_DEFAULT_AUDIO_SAMPLE_RATE);
+    CHIPS_ASSERT(sys->audio.num_samples <= NES_MAX_AUDIO_SAMPLES);
+ 	sys->apu.audio_time_per_system_sample = 1.0 / (double)sys->audio.sample_rate;
+	sys->apu.audio_time_per_nes_clock = 1.0 / (double)_NES_FREQUENCY; // APU Clock Frequency
+
     // initialize the CPU
     sys->pins = m6502_init(&sys->cpu, &(m6502_desc_t){
         .bcd_disabled = true
@@ -493,6 +548,21 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
         //PPU registers, mirrored
         addr = addr & 0x0007;
         r2c02_write(&sys->ppu, addr, data);
+    } else if(addr == 0x4000) {
+        switch ((data & 0xC0) >> 6) {
+        case 0x00: sys->apu.pulse1.pulse.duty_cycle = 0.125; break;
+        case 0x01: sys->apu.pulse1.pulse.duty_cycle = 0.250; break;
+        case 0x02: sys->apu.pulse1.pulse.duty_cycle = 0.500; break;
+        case 0x03: sys->apu.pulse1.pulse.duty_cycle = 0.750; break;
+        }
+    } else if(addr == 0x4002) {
+        sys->apu.pulse1.seq.reload = (sys->apu.pulse1.seq.reload & 0xFF00) | data;
+    } else if(addr == 0x4003) {
+        sys->apu.pulse1.seq.reload = (uint16_t)((data & 0x07)) << 8 | (sys->apu.pulse1.seq.reload & 0x00FF);
+        sys->apu.pulse1.seq.timer = sys->apu.pulse1.seq.reload;
+        //sys->apu.pulse1.seq.sequence = sys->apu.pulse1.seq.new_sequence;
+    } else if(addr == 0x4015) {
+        sys->apu.pulse1.enable = data & 1;
     } else if(addr == 0x4014) {
         sys->dma_wait = 256;
         // OAMDMA
@@ -512,6 +582,84 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
     } else {
         sys->cart.mapper.write_prg(addr, data, sys);
     }
+}
+
+static inline double approx_sin(double t) {
+    double j = t * 0.15915;
+    j = j - (int)j;
+    return 20.785 * j * (j - 0.5) * (j - 1.0);
+}
+
+static double pulse_sample(pulse_t* pulse, double t) {
+    double a = 0;
+    double b = 0;
+    double p = pulse->duty_cycle * 2.0 * M_PI;
+
+    const double harmonics = 20;
+    for (double n = 1; n < harmonics; n++) {
+        double c = n * pulse->frequency * 2.0 * M_PI * t;
+        a += -approx_sin(c) / n;
+        b += -approx_sin(c - p * n) / n;
+    }
+
+    return (2.0 * pulse->amplitude / M_PI) * (a - b);
+}
+
+static bool _apu_tick(apu_t* sys) {
+    bool quarter_frame_clock = false;
+    bool half_frame_clock = false;
+    bool audio_sample_ready = false;
+    
+    if (sys->clock_counter % 2 == 0) {
+        sys->frame_clock_counter++;
+
+        // 4-Step Sequence Mode
+        switch (sys->frame_clock_counter) {
+            case 3729:
+                quarter_frame_clock = true;
+                break;
+            case 7457:
+                quarter_frame_clock = true;
+                half_frame_clock = true;
+                break;
+            case 11186:
+                quarter_frame_clock = true;
+                break;
+            case 14916:
+                quarter_frame_clock = true;
+                half_frame_clock = true;
+                sys->frame_clock_counter = 0;
+                break;
+        }
+
+        // Quater frame "beats" adjust the volume envelope
+        if (quarter_frame_clock) {
+            
+        }
+
+        // Half frame "beats" adjust the note length and
+        // frequency sweepers
+        if (half_frame_clock) {
+            
+        }
+        
+        sys->pulse1.pulse.frequency = (double)_NES_FREQUENCY / (16.0 * (double)(sys->pulse1.seq.reload + 1));
+        sys->pulse1.pulse.amplitude = 1;
+        sys->audio_sample = (float)(pulse_sample(&sys->pulse1.pulse, sys->global_time)) - 0.5f;
+        if (!sys->pulse1.enable) sys->audio_sample = 0;
+    }
+    
+    // Synchronising with Audio
+    if (sys->audio_time >= sys->audio_time_per_system_sample) {
+        sys->audio_time -= sys->audio_time_per_system_sample;
+        audio_sample_ready = true;
+    }
+    
+    sys->clock_counter++;
+    sys->global_time += sys->audio_time_per_nes_clock;
+    sys->audio_time += sys->audio_time_per_nes_clock;
+
+    return audio_sample_ready;
 }
 
 static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
@@ -542,6 +690,18 @@ static uint64_t _nes_tick(nes_t* sys, uint64_t pins) {
         }
     }
 
+    // tick the sound chip...
+    if(_apu_tick(&sys->apu)) {
+        // new sound sample ready
+        sys->audio.sample_buffer[sys->audio.sample_pos++] = sys->apu.audio_sample;
+        if (sys->audio.sample_pos == sys->audio.num_samples) {
+            if (sys->audio.callback.func) {
+                // new sample packet is ready
+                sys->audio.callback.func(sys->audio.sample_buffer, sys->audio.num_samples, sys->audio.callback.user_data);
+            }
+            sys->audio.sample_pos = 0;
+        }
+    }
     r2c02_tick(&sys->ppu, pins);
     r2c02_tick(&sys->ppu, pins);
     r2c02_tick(&sys->ppu, pins);
