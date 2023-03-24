@@ -660,9 +660,19 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
             ImGui::SliderInt("Palette #", &ui->video.pattern_pal_index, 0, 3);
             const ImVec2 p = ImGui::GetCursorPos();
             _ui_nes_update_pattern_table(ui, 0, ui->video.pattern_pal_index);
+            ImVec2 screen_pos = ImGui::GetCursorScreenPos();
+            ImVec2 mouse_pos = ImGui::GetMousePos();
             ImGui::Image(ui->video.tex_pattern_tables[0], ImVec2(512, 512));
             // HACK: Why do I need to do this to position correctly the next image ?
             ImGui::SetCursorPos(ImVec2(p.x, p.y + 264));
+            int tile_x = (int)(mouse_pos.x - screen_pos.x)>>4;
+            int tile_y = (int)(mouse_pos.y - screen_pos.y)>>4;
+            if (ImGui::IsItemHovered()) {
+                uint8_t table_nr = _ui_nes_table_nr(tile_x, tile_y);
+                tile_x %= 16;
+                tile_y %= 16;
+                ImGui::SetTooltip("x: %d y: %d tile: $%02X\n", tile_x, tile_y, (tile_y << 4) | tile_x);
+            }
             _ui_nes_update_pattern_table(ui, 1, ui->video.pattern_pal_index);
             ImGui::Image(ui->video.tex_pattern_tables[1], ImVec2(512, 512));
             ImGui::SetCursorPos(ImVec2(p.x, p.y + 528));
