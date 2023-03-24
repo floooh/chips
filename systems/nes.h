@@ -30,7 +30,7 @@
     This emulator is not fully implemented:
         - PAL not implemented
         - only mappers 0, 1, 2, 3, 7 & 66 are implemented
-        - there is no audio
+        - audio is limited to pulses 1 & 2 and noise channels (triangle and DMC channels are not implemented)
         - only the standard NES controller is supported
 
     ## zlib/libpng license
