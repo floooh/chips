@@ -89,9 +89,6 @@ typedef struct {
     ui_m6502_t cpu;
     ui_audio_t audio;
     ui_memedit_t memedit[4];
-    ui_memedit_t ppu_memedit[4];
-    ui_memedit_t sprite_memedit[4];
-    ui_memedit_t oam_memedit[4];
     ui_dasm_t dasm[4];
     ui_nes_cartridge_t cartridge;
     ui_nes_video_t video;
@@ -154,27 +151,6 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
                 ImGui::MenuItem("Window #4", 0, &ui->memedit[3].open);
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("PPU Memory Editor")) {
-                ImGui::MenuItem("Window #1", 0, &ui->ppu_memedit[0].open);
-                ImGui::MenuItem("Window #2", 0, &ui->ppu_memedit[1].open);
-                ImGui::MenuItem("Window #3", 0, &ui->ppu_memedit[2].open);
-                ImGui::MenuItem("Window #4", 0, &ui->ppu_memedit[3].open);
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Sprite Memory Editor")) {
-                ImGui::MenuItem("Window #1", 0, &ui->sprite_memedit[0].open);
-                ImGui::MenuItem("Window #2", 0, &ui->sprite_memedit[1].open);
-                ImGui::MenuItem("Window #3", 0, &ui->sprite_memedit[2].open);
-                ImGui::MenuItem("Window #4", 0, &ui->sprite_memedit[3].open);
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("OAM Memory Editor")) {
-                ImGui::MenuItem("Window #1", 0, &ui->oam_memedit[0].open);
-                ImGui::MenuItem("Window #2", 0, &ui->oam_memedit[1].open);
-                ImGui::MenuItem("Window #3", 0, &ui->oam_memedit[2].open);
-                ImGui::MenuItem("Window #4", 0, &ui->oam_memedit[3].open);
-                ImGui::EndMenu();
-            }
             if (ImGui::BeginMenu("Disassembler")) {
                 ImGui::MenuItem("Window #1", 0, &ui->dasm[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->dasm[1].open);
@@ -222,21 +198,11 @@ static const ui_chip_pin_t _ui_nes_cpu_pins[] = {
     { "A15",    31,     M6502_A15 },
 };
 
-static uint8_t _ui_nes_mem_read(int layer, uint16_t addr, void* user_data) {
-    (void)layer;
-    CHIPS_ASSERT(user_data);
-    ui_nes_t* ui_nes = (ui_nes_t*) user_data;
-    nes_t* nes = ui_nes->nes;
-    return nes_mem_read(nes, addr, true);
-}
+#define _UI_NES_MEMLAYER_NUM      (4)
 
-static void _ui_nes_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
-    (void)layer;
-    CHIPS_ASSERT(user_data);
-    ui_nes_t* ui_nes = (ui_nes_t*) user_data;
-    nes_t* nes = ui_nes->nes;
-    nes_ppu_write(nes, addr, data);
-}
+static const char* _ui_nes_memlayer_names[_UI_NES_MEMLAYER_NUM] = {
+    "CPU Mapped", "PPU", "Sprite", "OAM"
+};
 
 static uint8_t _ui_nes_ppu_mem_read(int layer, uint16_t addr, void* user_data) {
     (void)layer;
@@ -296,6 +262,34 @@ static void _ui_nes_oam_mem_write(int layer, uint16_t addr, uint8_t data, void* 
     }
 }
 
+static uint8_t _ui_nes_mem_read(int layer, uint16_t addr, void* user_data) {
+    (void)layer;
+    CHIPS_ASSERT(user_data);
+    ui_nes_t* ui_nes = (ui_nes_t*) user_data;
+    nes_t* nes = ui_nes->nes;
+    switch(layer) {
+        case 0:  return nes_mem_read(nes, addr, true);
+        case 1:  return _ui_nes_ppu_mem_read(layer, addr, user_data);
+        case 2:  return _ui_nes_sprite_mem_read(layer, addr, user_data);
+        case 3:  return _ui_nes_oam_mem_read(layer, addr, user_data);
+        default: return 0;
+    }
+}
+
+static void _ui_nes_mem_write(int layer, uint16_t addr, uint8_t data, void* user_data) {
+    (void)layer;
+    CHIPS_ASSERT(user_data);
+    ui_nes_t* ui_nes = (ui_nes_t*) user_data;
+    nes_t* nes = ui_nes->nes;
+
+    switch(layer) {
+        case 0: nes_mem_write(nes, addr, data); break;
+        case 1: _ui_nes_ppu_mem_write(layer, addr, data, user_data); break;
+        case 2: _ui_nes_sprite_mem_write(layer, addr, data, user_data); break;
+        case 3: _ui_nes_oam_mem_write(layer, addr, data, user_data); break;
+    }
+}
+
 void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->nes);
@@ -336,7 +330,9 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
     x += dx; y += dy;
     {
         ui_memedit_desc_t desc = {0};
-        desc.layers[0] = "System";
+        for (int i = 0; i < _UI_NES_MEMLAYER_NUM; i++) {
+            desc.layers[i] = _ui_nes_memlayer_names[i];
+        }
         desc.read_cb = _ui_nes_mem_read;
         desc.write_cb = _ui_nes_mem_write;
         desc.user_data = ui;
@@ -344,48 +340,6 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
         for (int i = 0; i < 4; i++) {
             desc.title = titles[i]; desc.x = x; desc.y = y;
             ui_memedit_init(&ui->memedit[i], &desc);
-            x += dx; y += dy;
-        }
-    }
-    x += dx; y += dy;
-    {
-        ui_memedit_desc_t desc = {.mem_size = 0x4000};
-        desc.layers[0] = "PPU";
-        desc.read_cb = _ui_nes_ppu_mem_read;
-        desc.write_cb = _ui_nes_ppu_mem_write;
-        desc.user_data = ui;
-        static const char* titles[] = { "PPU Memory Editor #1", "PPU Memory Editor #2", "PPU Memory Editor #3", "PPU Memory Editor #4" };
-        for (int i = 0; i < 4; i++) {
-            desc.title = titles[i]; desc.x = x; desc.y = y;
-            ui_memedit_init(&ui->ppu_memedit[i], &desc);
-            x += dx; y += dy;
-        }
-    }
-    x += dx; y += dy;
-    {
-        ui_memedit_desc_t desc = {.mem_size = 0x100};
-        desc.layers[0] = "Sprite";
-        desc.read_cb = _ui_nes_sprite_mem_read;
-        desc.write_cb = _ui_nes_sprite_mem_write;
-        desc.user_data = ui;
-        static const char* titles[] = { "Sprite Memory Editor #1", "Sprite Memory Editor #2", "Sprite Memory Editor #3", "Sprite Memory Editor #4" };
-        for (int i = 0; i < 4; i++) {
-            desc.title = titles[i]; desc.x = x; desc.y = y;
-            ui_memedit_init(&ui->sprite_memedit[i], &desc);
-            x += dx; y += dy;
-        }
-    }
-    x += dx; y += dy;
-    {
-        ui_memedit_desc_t desc = {.mem_size = 64*4};
-        desc.layers[0] = "OAM";
-        desc.read_cb = _ui_nes_oam_mem_read;
-        desc.write_cb = _ui_nes_oam_mem_write;
-        desc.user_data = ui;
-        static const char* titles[] = { "OAM Memory Editor #1", "OAM Memory Editor #2", "OAM Memory Editor #3", "OAM Memory Editor #4" };
-        for (int i = 0; i < 4; i++) {
-            desc.title = titles[i]; desc.x = x; desc.y = y;
-            ui_memedit_init(&ui->oam_memedit[i], &desc);
             x += dx; y += dy;
         }
     }
@@ -432,9 +386,6 @@ void ui_nes_discard(ui_nes_t* ui) {
     ui_audio_discard(&ui->audio);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
-        ui_memedit_discard(&ui->ppu_memedit[i]);
-        ui_memedit_discard(&ui->sprite_memedit[i]);
-        ui_memedit_discard(&ui->oam_memedit[i]);
         ui_dasm_discard(&ui->dasm[i]);
     }
     ui_dbg_discard(&ui->dbg);
@@ -747,9 +698,6 @@ void ui_nes_draw(ui_nes_t* ui) {
     ui_audio_draw(&ui->audio, ui->nes->audio.sample_pos);
     for (int i = 0; i < 4; i++) {
         ui_memedit_draw(&ui->memedit[i]);
-        ui_memedit_draw(&ui->ppu_memedit[i]);
-        ui_memedit_draw(&ui->sprite_memedit[i]);
-        ui_memedit_draw(&ui->oam_memedit[i]);
         ui_dasm_draw(&ui->dasm[i]);
     }
     ui_dbg_draw(&ui->dbg);
