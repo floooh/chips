@@ -64,6 +64,16 @@ extern "C" {
 #define NES_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer
 #define NES_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
 
+// pad mask bits
+#define NES_PAD_RIGHT (1<<0)
+#define NES_PAD_LEFT  (1<<1)
+#define NES_PAD_DOWN  (1<<2)
+#define NES_PAD_UP    (1<<3)
+#define NES_PAD_START (1<<4)
+#define NES_PAD_SEL   (1<<5)
+#define NES_PAD_B     (1<<6)
+#define NES_PAD_A     (1<<7)
+
 typedef struct {
     char magic[4];
 
@@ -194,7 +204,7 @@ typedef struct {
         apu_sweeper_t sweeper;
         pulse_t pulse;
         uint8_t len_counter;
-        bool enable; 
+        bool enable;
         bool halt;
         double output;
     } pulse[2];
@@ -202,7 +212,7 @@ typedef struct {
         apu_sequencer_t seq;
         apu_envelope_t env;
         uint8_t len_counter;
-        bool enable; 
+        bool enable;
         bool halt;
         double output;
     } noise;
@@ -213,9 +223,9 @@ typedef struct {
     m6502_t cpu;
     r2c02_t ppu;
     uint16_t dma_wait;
-    
+
     chips_debug_t debug;
-    
+
     uint8_t ram[0x800];             // 2KB
     uint8_t extended_ram[0x2000];   // 8KB
 
@@ -229,7 +239,7 @@ typedef struct {
         uint8_t character_ram[0x20000]; // 128KB
         uint8_t rom[0x40000];           // 256KB
     } cart;
-    
+
     struct {
         uint32_t sample_rate;
         chips_audio_callback_t callback;
@@ -260,6 +270,14 @@ chips_display_info_t nes_display_info(nes_t* nes);
 uint32_t nes_exec(nes_t* nes, uint32_t micro_seconds);
 void nes_key_down(nes_t* nes, int value);
 void nes_key_up(nes_t* nes, int value);
+// set pad mask (combination of NES_PAD_*)
+void nes_pad(nes_t* sys, uint8_t mask);
+// get current pad bitmask state
+uint8_t nes_pad_mask(nes_t* sys);
+// return true if a cartridge is currently inserted
+bool nes_cartridge_inserted(nes_t* nes);
+// remove current cartridge
+void nes_remove_cartridge(nes_t* nes);
 
 uint8_t nes_ppu_read(nes_t* nes, uint16_t addr);
 void nes_ppu_write(nes_t* nes, uint16_t address, uint8_t data);
@@ -289,7 +307,7 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data);
 #define _PPUADDR    (0x2006)
 #define _PPUDATA    (0x2007)
 
-static const uint8_t length_table[] = {  
+static const uint8_t length_table[] = {
     10, 254, 20,  2, 40,  4, 80,  6,
     160,   8, 60, 10, 14, 12, 26, 14,
     12,  16, 24, 18, 48, 20, 96, 22,
@@ -365,6 +383,17 @@ void nes_init(nes_t* sys, const nes_desc_t* desc) {
     _nes_use_mapper(sys, 0);
 }
 
+bool nes_cartridge_inserted(nes_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->cart.header.magic[0];
+}
+
+void nes_remove_cartridge(nes_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    memset(&sys->cart.header, 0, sizeof(nes_cartridge_header));
+    nes_reset(sys);
+}
+
 void nes_discard(nes_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
     sys->valid = false;
@@ -421,6 +450,16 @@ void nes_key_up(nes_t* sys, int value) {
         case 7: sys->controller[0].b =      0; break;
         case 8: sys->controller[0].select = 0; break;
     }
+}
+
+void nes_pad(nes_t* sys, uint8_t mask) {
+    CHIPS_ASSERT(sys && sys->valid);
+    sys->controller[0].value = mask;
+}
+
+uint8_t nes_pad_mask(nes_t* sys) {
+    CHIPS_ASSERT(sys && sys->valid);
+    return sys->controller[0].value;
 }
 
 chips_display_info_t nes_display_info(nes_t* sys) {
@@ -801,7 +840,7 @@ static bool _apu_tick(apu_t* sys) {
     bool quarter_frame_clock = false;
     bool half_frame_clock = false;
     bool audio_sample_ready = false;
-    
+
     if (sys->clock_counter % 2 == 0) {
         sys->frame_clock_counter++;
 
@@ -842,13 +881,13 @@ static bool _apu_tick(apu_t* sys) {
 
             _apu_len_counter_clock(sys->noise.enable, &sys->noise.len_counter, sys->noise.halt);
         }
-        
+
         // pulse 1
         _apu_seq_clock(&sys->pulse[0].seq, sys->pulse[0].enable, _apu_pulse_seq);
         sys->pulse[0].pulse.frequency = (double)_NES_FREQUENCY / (16.0 * (double)(sys->pulse[0].seq.reload + 1));
         sys->pulse[0].pulse.amplitude = (double)(sys->pulse[0].env.output - 1) / 16.0;
         float pulse1_sample = (float)(_pulse_sample(&sys->pulse[0].pulse, sys->global_time));
-        
+
         if (sys->pulse[0].len_counter > 0 && sys->pulse[0].seq.timer >= 8 && !sys->pulse[0].sweeper.mute && sys->pulse[0].env.output > 2)
             sys->pulse[0].output += (pulse1_sample - sys->pulse[0].output) * 0.5;
         else
@@ -861,7 +900,7 @@ static bool _apu_tick(apu_t* sys) {
         sys->pulse[1].pulse.frequency = (double)_NES_FREQUENCY / (16.0 * (double)(sys->pulse[1].seq.reload + 1));
         sys->pulse[1].pulse.amplitude = (double)(sys->pulse[1].env.output - 1) / 16.0;
         float pulse2_sample = (float)(_pulse_sample(&sys->pulse[1].pulse, sys->global_time));
-        
+
         if (sys->pulse[1].len_counter > 0 && sys->pulse[1].seq.timer >= 8 && !sys->pulse[1].sweeper.mute && sys->pulse[1].env.output > 2)
             sys->pulse[1].output += (pulse2_sample - sys->pulse[1].output) * 0.5;
         else
@@ -882,17 +921,17 @@ static bool _apu_tick(apu_t* sys) {
 	_apu_sweeper_track(&sys->pulse[1].sweeper, sys->pulse[1].seq.reload);
 
     // mix
-    sys->audio_sample = 
+    sys->audio_sample =
         ((1.0 * sys->pulse[0].output) - 0.8) * 0.1 +
         ((1.0 * sys->pulse[1].output) - 0.8) * 0.1 +
         ((2.0 * (sys->noise.output - 0.5))) * 0.1;
-    
+
     // Synchronising with Audio
     if (sys->audio_time >= sys->audio_time_per_system_sample) {
         sys->audio_time -= sys->audio_time_per_system_sample;
         audio_sample_ready = true;
     }
-    
+
     sys->clock_counter++;
     sys->global_time += sys->audio_time_per_nes_clock;
     sys->audio_time += sys->audio_time_per_nes_clock;

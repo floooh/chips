@@ -134,9 +134,6 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
                 nes_reset(ui->nes);
                 ui_dbg_reset(&ui->dbg);
             }
-            if (ImGui::MenuItem("Cold Boot")) {
-                ui_dbg_reboot(&ui->dbg);
-            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Hardware")) {
