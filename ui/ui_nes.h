@@ -85,12 +85,19 @@ typedef struct {
 } ui_nes_cartridge_t;
 
 typedef struct {
+    int x, y;
+    int w, h;
+    bool open;
+} ui_nes_input_t;
+
+typedef struct {
     nes_t* nes;
     ui_m6502_t cpu;
     ui_audio_t audio;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_nes_cartridge_t cartridge;
+    ui_nes_input_t input;
     ui_nes_video_t video;
     ui_dbg_t dbg;
 } ui_nes_t;
@@ -137,6 +144,7 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("Video Hardware", 0, &ui->video.open);
             ImGui::MenuItem("Cartridge", 0, &ui->cartridge.open);
+            ImGui::MenuItem("NES controller", 0, &ui->input.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -372,7 +380,13 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
         ui->cartridge.x = 10;
         ui->cartridge.y = 20;
         ui->cartridge.w = 450;
-        ui->cartridge.h = 568;
+        ui->cartridge.h = 268;
+    }
+    {
+        ui->input.x = 10;
+        ui->input.y = 20;
+        ui->input.w = 450;
+        ui->input.h = 268;
     }
 }
 
@@ -691,6 +705,34 @@ static void _ui_nes_draw_cartridge(ui_nes_t* ui) {
     ImGui::End();
 }
 
+static void _ui_nes_draw_button_states(ui_nes_t* ui, int i) {
+    ImGui::Text("Left:   %s", ui->nes->controller[i].left ? "yes" : "no");
+    ImGui::Text("Right:  %s", ui->nes->controller[i].right ? "yes" : "no");
+    ImGui::Text("Up:     %s", ui->nes->controller[i].up ? "yes" : "no");
+    ImGui::Text("Down:   %s", ui->nes->controller[i].down ? "yes" : "no");
+    ImGui::Text("Select: %s", ui->nes->controller[i].select ? "yes" : "no");
+    ImGui::Text("Start:  %s", ui->nes->controller[i].start ? "yes" : "no");
+    ImGui::Text("A:      %s", ui->nes->controller[i].a ? "yes" : "no");
+    ImGui::Text("B:      %s", ui->nes->controller[i].b ? "yes" : "no");
+}
+
+static void _ui_nes_draw_input(ui_nes_t* ui) {
+    if (!ui->input.open) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2((float)ui->input.x, (float)ui->input.y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2((float)ui->input.w, (float)ui->input.h), ImGuiCond_Once);
+    if (ImGui::Begin("NES Controller", &ui->input.open)) {
+        if (ImGui::CollapsingHeader("Controller 1", ImGuiTreeNodeFlags_DefaultOpen)) {
+            _ui_nes_draw_button_states(ui, 0);
+        }
+        if (ImGui::CollapsingHeader("Controller 2", ImGuiTreeNodeFlags_DefaultOpen)) {
+            _ui_nes_draw_button_states(ui, 1);
+        }
+    }
+    ImGui::End();
+}
+
 void ui_nes_draw(ui_nes_t* ui) {
     CHIPS_ASSERT(ui && ui->nes);
     _ui_nes_draw_menu(ui);
@@ -703,6 +745,7 @@ void ui_nes_draw(ui_nes_t* ui) {
     ui_dbg_draw(&ui->dbg);
     _ui_nes_draw_video(ui);
     _ui_nes_draw_cartridge(ui);
+    _ui_nes_draw_input(ui);
 }
 
 chips_debug_t ui_nes_get_debug(ui_nes_t* ui) {
