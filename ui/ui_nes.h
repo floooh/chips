@@ -32,6 +32,7 @@
     - ui_memedit.h
     - ui_memmap.h
     - ui_kbd.h
+    - ui_snapshot.h
 
     ## zlib/libpng license
 
@@ -62,6 +63,7 @@ typedef struct {
     nes_t* nes;
     ui_dbg_texture_callbacks_t dbg_texture;     // debug texture create/update/destroy callbacks
     ui_dbg_keys_desc_t dbg_keys;                // user-defined hotkeys for ui_dbg_t
+    ui_snapshot_desc_t snapshot;                // snapshot ui setup params
 } ui_nes_desc_t;
 
 typedef struct {
@@ -100,6 +102,7 @@ typedef struct {
     ui_nes_input_t input;
     ui_nes_video_t video;
     ui_dbg_t dbg;
+    ui_snapshot_t snapshot;
 } ui_nes_t;
 
 void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* desc);
@@ -130,6 +133,7 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
     CHIPS_ASSERT(ui && ui->nes);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
+            ui_snapshot_menus(&ui->snapshot);
             if (ImGui::MenuItem("Reset")) {
                 nes_reset(ui->nes);
                 ui_dbg_reset(&ui->dbg);
@@ -299,6 +303,7 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->nes);
     ui->nes = ui_desc->nes;
+    ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};

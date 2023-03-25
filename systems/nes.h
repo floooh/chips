@@ -64,6 +64,9 @@ extern "C" {
 #define NES_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer
 #define NES_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
 
+// bump when nes_t memory layout changes
+#define NES_SNAPSHOT_VERSION (0x0001)
+
 // pad mask bits
 #define NES_PAD_RIGHT (1<<0)
 #define NES_PAD_LEFT  (1<<1)
@@ -728,6 +731,27 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
     } else {
         sys->cart.mapper.write_prg(addr, data, sys);
     }
+}
+
+bool nes_load_snapshot(nes_t* sys, uint32_t version, nes_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != NES_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static nes_t im;
+    im = *src;
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    *sys = im;
+    return true;
+}
+
+uint32_t nes_save_snapshot(nes_t* sys, nes_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    return NES_SNAPSHOT_VERSION;
 }
 
 static inline double _approx_sin(double t) {
