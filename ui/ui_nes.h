@@ -79,6 +79,12 @@ typedef struct {
 } ui_nes_video_t;
 
 typedef struct {
+    int x, y;
+    int w, h;
+    bool open;
+} ui_nes_cartridge_t;
+
+typedef struct {
     nes_t* nes;
     ui_m6502_t cpu;
     ui_audio_t audio;
@@ -87,6 +93,7 @@ typedef struct {
     ui_memedit_t sprite_memedit[4];
     ui_memedit_t oam_memedit[4];
     ui_dasm_t dasm[4];
+    ui_nes_cartridge_t cartridge;
     ui_nes_video_t video;
     ui_dbg_t dbg;
 } ui_nes_t;
@@ -132,6 +139,7 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("Video Hardware", 0, &ui->video.open);
+            ImGui::MenuItem("Cartridge", 0, &ui->cartridge.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -406,6 +414,12 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
         ui->video.tex_name_tables = ui->video.texture_cbs.create_cb(512, 512);
         ui->video.tex_sprites = ui->video.texture_cbs.create_cb(64, 64);
     }
+    {
+        ui->cartridge.x = 10;
+        ui->cartridge.y = 20;
+        ui->cartridge.w = 450;
+        ui->cartridge.h = 568;
+    }
 }
 
 void ui_nes_discard(ui_nes_t* ui) {
@@ -668,7 +682,6 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
             int tile_x = (int)(mouse_pos.x - screen_pos.x)>>4;
             int tile_y = (int)(mouse_pos.y - screen_pos.y)>>4;
             if (ImGui::IsItemHovered()) {
-                uint8_t table_nr = _ui_nes_table_nr(tile_x, tile_y);
                 tile_x %= 16;
                 tile_y %= 16;
                 ImGui::SetTooltip("x: %d y: %d tile: $%02X\n", tile_x, tile_y, (tile_y << 4) | tile_x);
@@ -709,6 +722,24 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
     ImGui::End();
 }
 
+static void _ui_nes_draw_cartridge(ui_nes_t* ui) {
+    if (!ui->cartridge.open) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2((float)ui->cartridge.x, (float)ui->cartridge.y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2((float)ui->cartridge.w, (float)ui->cartridge.h), ImGuiCond_Once);
+    if (ImGui::Begin("Cartridge", &ui->cartridge.open)) {
+        ImGui::Text("Mapper:             %u", ui->nes->cart.header.mapper_low | (ui->nes->cart.header.mapper_hi << 4));
+        ImGui::Text("PRG ROM/RAM:        %u KB", ui->nes->cart.header.prg_page_count * 16);
+        ImGui::Text("CHR ROM/RAM:        %u KB", ui->nes->cart.header.tile_page_count * 8);
+        ImGui::Text("SRAM:               %u KB", ui->nes->cart.header.sram_page_count * 8);
+        ImGui::Text("Mirroring:          %s", ui->nes->cart.header.vram_expansion ? "Four screen" : ui->nes->cart.header.mirror_mode ? "Vertical" : "Horizontal");
+        ImGui::Text("Battery-backed RAM: %s", ui->nes->cart.header.sram_avail ? "yes" : "no");
+        ImGui::Text("Trainer:            %s",  ui->nes->cart.header.trainer ? "yes" : "no");
+    }
+    ImGui::End();
+}
+
 void ui_nes_draw(ui_nes_t* ui) {
     CHIPS_ASSERT(ui && ui->nes);
     _ui_nes_draw_menu(ui);
@@ -723,6 +754,7 @@ void ui_nes_draw(ui_nes_t* ui) {
     }
     ui_dbg_draw(&ui->dbg);
     _ui_nes_draw_video(ui);
+    _ui_nes_draw_cartridge(ui);
 }
 
 chips_debug_t ui_nes_get_debug(ui_nes_t* ui) {
