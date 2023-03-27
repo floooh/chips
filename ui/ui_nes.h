@@ -93,6 +93,12 @@ typedef struct {
 } ui_nes_input_t;
 
 typedef struct {
+    int x, y;
+    int w, h;
+    bool open;
+} ui_r2c02_t;
+
+typedef struct {
     nes_t* nes;
     ui_m6502_t cpu;
     ui_audio_t audio;
@@ -101,6 +107,7 @@ typedef struct {
     ui_nes_cartridge_t cartridge;
     ui_nes_input_t input;
     ui_nes_video_t video;
+    ui_r2c02_t ppu;
     ui_dbg_t dbg;
     ui_snapshot_t snapshot;
 } ui_nes_t;
@@ -143,6 +150,7 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
         if (ImGui::BeginMenu("Hardware")) {
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
+            ImGui::MenuItem("Ricoh 2C02 (PPU)", 0, &ui->ppu.open);
             ImGui::MenuItem("Video Hardware", 0, &ui->video.open);
             ImGui::MenuItem("Cartridge", 0, &ui->cartridge.open);
             ImGui::MenuItem("NES controller", 0, &ui->input.open);
@@ -735,6 +743,24 @@ static void _ui_nes_draw_input(ui_nes_t* ui) {
     ImGui::End();
 }
 
+void _ui_r2c02_draw(ui_nes_t* ui) {
+    CHIPS_ASSERT(ui && ui->nes);
+    if (!ui->ppu.open) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2((float)ui->ppu.x, (float)ui->ppu.y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2((float)ui->ppu.w, (float)ui->ppu.h), ImGuiCond_Once);
+    if (ImGui::Begin("PPU", &ui->ppu.open)) {
+        ImGui::Text("Control:  $%x", ui->nes->ppu.ppu_control.reg);
+        ImGui::Text("Mask:     $%x", ui->nes->ppu.ppu_mask.reg);
+        ImGui::Text("Status:   $%x", ui->nes->ppu.ppu_status.reg);
+        ImGui::Text("OAM:      $%x", ui->nes->ppu.data_address);
+        ImGui::Text("Scanline: %d", ui->nes->ppu.scanline);
+        ImGui::Text("Pixel:    %d", ui->nes->ppu.cycle - 1);
+    }
+    ImGui::End();
+}
+
 void ui_nes_draw(ui_nes_t* ui) {
     CHIPS_ASSERT(ui && ui->nes);
     _ui_nes_draw_menu(ui);
@@ -748,6 +774,7 @@ void ui_nes_draw(ui_nes_t* ui) {
     _ui_nes_draw_video(ui);
     _ui_nes_draw_cartridge(ui);
     _ui_nes_draw_input(ui);
+    _ui_r2c02_draw(ui);
 }
 
 chips_debug_t ui_nes_get_debug(ui_nes_t* ui) {
