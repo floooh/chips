@@ -70,6 +70,7 @@ typedef struct {
     int x, y;
     int w, h;
     bool open;
+    bool mode16;
     ui_dbg_texture_callbacks_t texture_cbs;
     void* tex_pattern_tables[2];
     void* tex_name_tables;
@@ -445,11 +446,21 @@ static void _ui_nes_decode_pattern_tile(ui_nes_t* ui, uint8_t table_nr, uint8_t 
 static void _ui_nes_decode_pattern_table(ui_nes_t* ui, uint8_t pal_type, uint8_t pattern_table_nr, int pal_index) {
     uint32_t* dst = ui->video.pixel_buffer2;
     int tile_index = 0;
-    for(int py = 0; py < 16; py++) {
-        for(int px = 0; px < 16; px++) {
-            int dst_offset = (py << 11) + (px << 3);
-            _ui_nes_decode_pattern_tile(ui, pattern_table_nr, pal_type, tile_index, dst+dst_offset, 256, pal_index);
-            tile_index++;
+    if(ui->video.mode16) {
+        for(int py = 0; py < 16; py++) {
+            for(int px = 0; px < 32; px++) {
+                int dst_offset = (((py << 1)+(px % 2)) << 11) + ((px >> 1) << 3);
+                _ui_nes_decode_pattern_tile(ui, pattern_table_nr, pal_type, tile_index, dst+dst_offset, 256, pal_index);
+                tile_index++;
+            }
+        }
+    } else {
+        for(int py = 0; py < 16; py++) {
+            for(int px = 0; px < 16; px++) {
+                int dst_offset = (py << 11) + (px << 3);
+                _ui_nes_decode_pattern_tile(ui, pattern_table_nr, pal_type, tile_index, dst+dst_offset, 256, pal_index);
+                tile_index++;
+            }
         }
     }
 }
@@ -647,6 +658,7 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
         }
         if (ImGui::CollapsingHeader("Pattern tables", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::SliderInt("Palette #", &ui->video.pattern_pal_index, 0, 3);
+            ImGui::Checkbox("Sprite 8x16 Mode", &ui->video.mode16);
             const ImVec2 p = ImGui::GetCursorPos();
             _ui_nes_update_pattern_table(ui, 0, ui->video.pattern_pal_index);
             ImVec2 screen_pos = ImGui::GetCursorScreenPos();
@@ -659,7 +671,12 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
             if (ImGui::IsItemHovered()) {
                 tile_x %= 16;
                 tile_y %= 16;
-                ImGui::SetTooltip("x: %d y: %d tile: $%02X\n", tile_x, tile_y, (tile_y << 4) | tile_x);
+                int tx = tile_x, ty = tile_y;
+                if(ui->video.mode16) {
+                    tx = (tile_x << 1) + (tile_y % 2);
+                    ty = (tile_y >> 1);
+                }
+                ImGui::SetTooltip("tile: $%02X\n", (ty << 4) | tx);
             }
             _ui_nes_update_pattern_table(ui, 1, ui->video.pattern_pal_index);
             ImGui::Image(ui->video.tex_pattern_tables[1], ImVec2(512, 512));
