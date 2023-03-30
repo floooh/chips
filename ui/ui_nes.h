@@ -146,6 +146,9 @@ static void _ui_nes_draw_menu(ui_nes_t* ui) {
                 nes_reset(ui->nes);
                 ui_dbg_reset(&ui->dbg);
             }
+            if (ImGui::MenuItem("Remove Cartridge")) {
+                nes_remove_cartridge(ui->nes);
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Hardware")) {

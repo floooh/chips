@@ -28,7 +28,7 @@
     ## Warning
 
     This emulator is not fully implemented:
-        - PAL not implemented
+        - PAL, Dendy not implemented
         - only mappers 0, 1, 2, 3, 7 & 66 are implemented
         - audio is limited to pulses 1 & 2 and noise channels (triangle and DMC channels are not implemented)
         - only the standard NES controller is supported
@@ -393,7 +393,14 @@ bool nes_cartridge_inserted(nes_t* sys) {
 
 void nes_remove_cartridge(nes_t* sys) {
     CHIPS_ASSERT(sys && sys->valid);
-    memset(&sys->cart.header, 0, sizeof(nes_cartridge_header));
+    memset(&sys->cart, 0, sizeof(sys->cart));
+    memset(&sys->ram, 0, sizeof(sys->ram));
+    memset(&sys->extended_ram, 0, sizeof(sys->extended_ram));
+    memset(&sys->ram, 0, sizeof(sys->ram));
+    memset(&sys->ppu_ram, 0, sizeof(sys->ppu_ram));
+    memset(&sys->ppu_pal_ram, 0, sizeof(sys->ppu_pal_ram));
+    memset(&sys->ppu_name_table, 0, sizeof(sys->ppu_name_table));
+    _nes_use_mapper(sys, 0);
     nes_reset(sys);
 }
 
