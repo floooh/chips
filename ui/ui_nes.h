@@ -77,8 +77,6 @@ typedef struct {
     void* tex_sprites;
     int pattern_pal_index;
     uint32_t pixel_buffer[512*512];
-    uint32_t pixel_buffer2[256*256];
-    uint32_t pixel_buffer3[64*64];
 } ui_nes_video_t;
 
 typedef struct {
@@ -222,7 +220,7 @@ static const ui_chip_pin_t _ui_nes_cpu_pins[] = {
 #define _UI_NES_MEMLAYER_NUM      (4)
 
 static const char* _ui_nes_memlayer_names[_UI_NES_MEMLAYER_NUM] = {
-    "CPU Mapped", "PPU", "Sprite", "OAM"
+    "CPU", "PPU", "Sprite", "OAM"
 };
 
 static uint8_t _ui_nes_ppu_mem_read(int layer, uint16_t addr, void* user_data) {
@@ -383,10 +381,10 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
         ui->video.texture_cbs = ui_desc->dbg_texture;
         ui->video.x = 10;
         ui->video.y = 20;
-        ui->video.w = 450;
+        ui->video.w = 562;
         ui->video.h = 568;
-        ui->video.tex_pattern_tables[0] = ui->video.texture_cbs.create_cb(256, 256);
-        ui->video.tex_pattern_tables[1] = ui->video.texture_cbs.create_cb(256, 256);
+        ui->video.tex_pattern_tables[0] = ui->video.texture_cbs.create_cb(128, 128);
+        ui->video.tex_pattern_tables[1] = ui->video.texture_cbs.create_cb(128, 128);
         ui->video.tex_name_tables = ui->video.texture_cbs.create_cb(512, 512);
         ui->video.tex_sprites = ui->video.texture_cbs.create_cb(64, 64);
     }
@@ -446,22 +444,23 @@ static void _ui_nes_decode_pattern_tile(ui_nes_t* ui, uint8_t table_nr, uint8_t 
     }
 }
 
-static void _ui_nes_decode_pattern_table(ui_nes_t* ui, uint8_t pal_type, uint8_t pattern_table_nr, int pal_index) {
-    uint32_t* dst = ui->video.pixel_buffer2;
+static void _ui_nes_decode_pattern_table(ui_nes_t* ui, uint8_t pal_type, uint8_t pattern_table_nr) {
+    const int pal_index = ui->video.pattern_pal_index;
+    uint32_t* dst = ui->video.pixel_buffer;
     int tile_index = 0;
     if(ui->video.mode16) {
-        for(int py = 0; py < 16; py++) {
+        for(int py = 0; py < 8; py++) {
             for(int px = 0; px < 32; px++) {
-                int dst_offset = (((py << 1)+(px % 2)) << 11) + ((px >> 1) << 3);
-                _ui_nes_decode_pattern_tile(ui, pattern_table_nr, pal_type, tile_index, dst+dst_offset, 256, pal_index);
+                int dst_offset = (((py << 1)+(px % 2)) << 10) + ((px >> 1) << 3);
+                _ui_nes_decode_pattern_tile(ui, pattern_table_nr, pal_type, tile_index, dst+dst_offset, 128, pal_index);
                 tile_index++;
             }
         }
     } else {
         for(int py = 0; py < 16; py++) {
             for(int px = 0; px < 16; px++) {
-                int dst_offset = (py << 11) + (px << 3);
-                _ui_nes_decode_pattern_tile(ui, pattern_table_nr, pal_type, tile_index, dst+dst_offset, 256, pal_index);
+                int dst_offset = (py * 128*8) + (px*8);
+                _ui_nes_decode_pattern_tile(ui, pattern_table_nr, pal_type, tile_index, dst+dst_offset, 128, pal_index);
                 tile_index++;
             }
         }
@@ -513,9 +512,11 @@ static void _ui_nes_decode_name_table(ui_nes_t* ui, int x, int y) {
     }
 }
 
-static void _ui_nes_update_pattern_table(ui_nes_t* ui, int table_nr, int pal_index) {
-    _ui_nes_decode_pattern_table(ui, table_nr, 0, pal_index);
-    ui->video.texture_cbs.update_cb(ui->video.tex_pattern_tables[table_nr], ui->video.pixel_buffer2, 256*256*sizeof(uint32_t));
+static void _ui_nes_update_pattern_tables(ui_nes_t* ui) {
+    _ui_nes_decode_pattern_table(ui, 0, 0);
+    ui->video.texture_cbs.update_cb(ui->video.tex_pattern_tables[0], ui->video.pixel_buffer, 128*128*sizeof(uint32_t));
+    _ui_nes_decode_pattern_table(ui, 1, 0);
+    ui->video.texture_cbs.update_cb(ui->video.tex_pattern_tables[1], ui->video.pixel_buffer, 128*128*sizeof(uint32_t));
 }
 
 static void _ui_nes_update_names_tables(ui_nes_t* ui) {
@@ -532,7 +533,7 @@ static void _ui_nes_decode_sprite(ui_nes_t* ui, int sprite_x, int sprite_y, int 
     uint8_t tile_index = p[1];
     uint8_t pal_index = p[2] & 3;
     int dst_offset = sprite_x*8+(sprite_y*8*8*8);
-    uint32_t* dst = ui->video.pixel_buffer3 + dst_offset;
+    uint32_t* dst = ui->video.pixel_buffer + dst_offset;
     _ui_nes_decode_pattern_tile(ui, pattern_table, 1, tile_index, dst, 64, pal_index);
 }
 
@@ -543,7 +544,7 @@ static void _ui_nes_update_sprites(ui_nes_t* ui) {
             _ui_nes_decode_sprite(ui, x, y, table_nr);
         }
     }
-    ui->video.texture_cbs.update_cb(ui->video.tex_sprites, ui->video.pixel_buffer3, 64*64*sizeof(uint32_t));
+    ui->video.texture_cbs.update_cb(ui->video.tex_sprites, ui->video.pixel_buffer, 64*64*sizeof(uint32_t));
 }
 
 static void _ui_nes_draw_video(ui_nes_t* ui) {
@@ -660,38 +661,35 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
             }
         }
         if (ImGui::CollapsingHeader("Pattern tables", ImGuiTreeNodeFlags_DefaultOpen)) {
+            _ui_nes_update_pattern_tables(ui);
             ImGui::SliderInt("Palette #", &ui->video.pattern_pal_index, 0, 3);
             ImGui::Checkbox("Sprite 8x16 Mode", &ui->video.mode16);
-            const ImVec2 p = ImGui::GetCursorPos();
-            _ui_nes_update_pattern_table(ui, 0, ui->video.pattern_pal_index);
-            ImVec2 screen_pos = ImGui::GetCursorScreenPos();
-            ImVec2 mouse_pos = ImGui::GetMousePos();
-            ImGui::Image(ui->video.tex_pattern_tables[0], ImVec2(512, 512));
-            // HACK: Why do I need to do this to position correctly the next image ?
-            ImGui::SetCursorPos(ImVec2(p.x, p.y + 264));
-            int tile_x = (int)(mouse_pos.x - screen_pos.x)>>4;
-            int tile_y = (int)(mouse_pos.y - screen_pos.y)>>4;
-            if (ImGui::IsItemHovered()) {
-                tile_x %= 16;
-                tile_y %= 16;
-                int tx = tile_x, ty = tile_y;
-                if(ui->video.mode16) {
-                    tx = (tile_x << 1) + (tile_y % 2);
-                    ty = (tile_y >> 1);
+            for(int i = 0; i < 2; i++) {
+                ImVec2 screen_pos = ImGui::GetCursorScreenPos();
+                ImVec2 mouse_pos = ImGui::GetMousePos();
+                ImGui::Image(ui->video.tex_pattern_tables[i], ImVec2(256, 256));
+                int tile_x = (int)(mouse_pos.x - screen_pos.x) >> 4;
+                int tile_y = (int)(mouse_pos.y - screen_pos.y) >> 4;
+                if (ImGui::IsItemHovered()) {
+                    tile_x %= 16;
+                    tile_y %= 16;
+                    int tx = tile_x, ty = tile_y;
+                    if(ui->video.mode16) {
+                        tx = (tile_x << 1) + (tile_y % 2);
+                        ty = (tile_y >> 1);
+                    }
+                    ImGui::SetTooltip("tile: $%02X", (ty << 4) | tx);
                 }
-                ImGui::SetTooltip("tile: $%02X\n", (ty << 4) | tx);
+                if(i == 0) {
+                    ImGui::SameLine();
+                }
             }
-            _ui_nes_update_pattern_table(ui, 1, ui->video.pattern_pal_index);
-            ImGui::Image(ui->video.tex_pattern_tables[1], ImVec2(512, 512));
-            ImGui::SetCursorPos(ImVec2(p.x, p.y + 528));
         }
         if (ImGui::CollapsingHeader("Name tables", ImGuiTreeNodeFlags_DefaultOpen)) {
             _ui_nes_update_names_tables(ui);
             ImVec2 screen_pos = ImGui::GetCursorScreenPos();
             ImVec2 mouse_pos = ImGui::GetMousePos();
-            const ImVec2 p = ImGui::GetCursorPos();
             ImGui::Image(ui->video.tex_name_tables, ImVec2(512, 512));
-            ImGui::SetCursorPos(ImVec2(p.x, p.y + 520));
             int tile_x = (int)(mouse_pos.x - screen_pos.x)>>3;
             int tile_y = (int)(mouse_pos.y - screen_pos.y)>>3;
             if (ImGui::IsItemHovered()) {
