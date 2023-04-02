@@ -74,6 +74,7 @@ typedef struct {
     ui_dbg_texture_callbacks_t texture_cbs;
     void* tex_pattern_tables[2];
     void* tex_name_tables;
+    void* tex_name_table_tooltip;
     void* tex_sprites;
     int pattern_pal_index;
     uint32_t pixel_buffer[512*512];
@@ -385,6 +386,7 @@ void ui_nes_init(ui_nes_t* ui, const ui_nes_desc_t* ui_desc) {
         ui->video.h = 568;
         ui->video.tex_pattern_tables[0] = ui->video.texture_cbs.create_cb(128, 128);
         ui->video.tex_pattern_tables[1] = ui->video.texture_cbs.create_cb(128, 128);
+        ui->video.tex_name_table_tooltip = ui->video.texture_cbs.create_cb(8, 8);
         ui->video.tex_name_tables = ui->video.texture_cbs.create_cb(512, 512);
         ui->video.tex_sprites = ui->video.texture_cbs.create_cb(64, 64);
     }
@@ -406,6 +408,7 @@ void ui_nes_discard(ui_nes_t* ui) {
     CHIPS_ASSERT(ui && ui->nes);
     ui->video.texture_cbs.destroy_cb(ui->video.tex_pattern_tables[0]);
     ui->video.texture_cbs.destroy_cb(ui->video.tex_pattern_tables[1]);
+    ui->video.texture_cbs.destroy_cb(ui->video.tex_name_table_tooltip);
     ui->video.texture_cbs.destroy_cb(ui->video.tex_name_tables);
     ui->video.texture_cbs.destroy_cb(ui->video.tex_sprites);
     ui_m6502_discard(&ui->cpu);
@@ -515,7 +518,7 @@ static void _ui_nes_decode_name_table(ui_nes_t* ui, int x, int y) {
 static void _ui_nes_update_pattern_tables(ui_nes_t* ui) {
     _ui_nes_decode_pattern_table(ui, 0, 0);
     ui->video.texture_cbs.update_cb(ui->video.tex_pattern_tables[0], ui->video.pixel_buffer, 128*128*sizeof(uint32_t));
-    _ui_nes_decode_pattern_table(ui, 1, 0);
+    _ui_nes_decode_pattern_table(ui, 0, 1);
     ui->video.texture_cbs.update_cb(ui->video.tex_pattern_tables[1], ui->video.pixel_buffer, 128*128*sizeof(uint32_t));
 }
 
@@ -678,7 +681,14 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
                         tx = (tile_x << 1) + (tile_y % 2);
                         ty = (tile_y >> 1);
                     }
-                    ImGui::SetTooltip("tile: $%02X", (ty << 4) | tx);
+                    int tile_index = (ty << 4) | tx;
+                    ImGui::BeginTooltip();
+                    ImGui::Text("tile: $%02X", tile_index);
+                    uint32_t* dst = ui->video.pixel_buffer;
+                    _ui_nes_decode_pattern_tile(ui, i, 0, tile_index, dst, 8, ui->video.pattern_pal_index);
+                    ui->video.texture_cbs.update_cb(ui->video.tex_name_table_tooltip, ui->video.pixel_buffer, 8*8*sizeof(uint32_t));
+                    ImGui::Image(ui->video.tex_name_table_tooltip, ImVec2(64, 64));
+                    ImGui::EndTooltip();
                 }
                 if(i == 0) {
                     ImGui::SameLine();
@@ -698,13 +708,28 @@ static void _ui_nes_draw_video(ui_nes_t* ui) {
                 tile_y %= 32;
                 uint8_t att = _ui_nes_attributes(ui, tile_x, tile_y, table_nr);
                 uint16_t att_addr = _ui_nes_att_address(tile_x, tile_y, table_nr);
-                uint8_t pal_index = _ui_nes_pal_index(ui,tile_x, tile_y, table_nr);
+                uint8_t pal_index = _ui_nes_pal_index(ui, tile_x, tile_y, table_nr);
                 uint16_t pal_addr = _nes_pal_addr(0, pal_index);
-                uint8_t pattern = tile_x + (tile_y << 5);
+                uint16_t pattern = tile_x + (tile_y << 5);
                 uint16_t pattern_addr = _ui_nes_tile_address(table_nr) + pattern;
                 uint8_t tile_index = _ui_nes_ppu_mem_read(0, pattern_addr, ui);
                 uint16_t tile_addr = 0x1000 * table_nr + (tile_index << 4);
-                ImGui::SetTooltip("x: %d y: %d\naddr: %x\ntable: %u\natt: %02x\natt_addr: %x\npal_addr: %x\ntile_index: %x\ntile_addr: %x", tile_x, tile_y, pattern_addr, table_nr, att, att_addr, pal_addr, tile_index, tile_addr);
+                
+                ImGui::BeginTooltip();
+                ImGui::Text("x: %d y: %d\naddr: %x\ntable: %u\natt: %02x\natt_addr: %x\npal_addr: %x\ntile_index: %x\ntile_addr: %x", tile_x, tile_y, pattern_addr, table_nr, att, att_addr, pal_addr, tile_index, tile_addr);
+                uint32_t* dst = ui->video.pixel_buffer;
+                _ui_nes_decode_pattern_tile(ui, 1, 0, tile_index, dst, 8, pal_index);
+                ui->video.texture_cbs.update_cb(ui->video.tex_name_table_tooltip, ui->video.pixel_buffer, 8*8*sizeof(uint32_t));
+                ImGui::Image(ui->video.tex_name_table_tooltip, ImVec2(64, 64));
+                for(int i=0; i<4; i++) {
+                    uint8_t p_index = _ui_nes_ppu_mem_read(0, pal_addr + i, ui);
+                    uint32_t c = ppu_palette[p_index];
+                    ImGui::ColorButton("##ColorButton", ImGui::ColorConvertU32ToFloat4(c));
+                    if(i != 3) {
+                        ImGui::SameLine();
+                    }
+                }
+                ImGui::EndTooltip();
             }
         }
         if (ImGui::CollapsingHeader("Sprites", ImGuiTreeNodeFlags_DefaultOpen)) {
