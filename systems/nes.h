@@ -716,10 +716,10 @@ void nes_mem_write(nes_t* sys, uint16_t addr, uint8_t data) {
         sys->apu.noise.env.start = true;
 		sys->apu.noise.len_counter = length_table[(data & 0xf8) >> 3];
     } else if(addr == 0x4014) {
-        sys->dma_wait = 256;
+        sys->dma_wait = 513 + (sys->ppu.even_frame ? 0 : 1);
         // OAMDMA
         uint16_t page = data << 8;
-        if (page < 0x2000) {
+        if(page < 0x2000) {
             uint8_t* page_ptr = sys->ram + (page & 0x7ff);
             memcpy(sys->ppu.oam.reg + sys->ppu.sprite_data_address, page_ptr, 256 - sys->ppu.sprite_data_address);
             if (sys->ppu.sprite_data_address)

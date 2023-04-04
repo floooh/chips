@@ -93,11 +93,11 @@ const uint32_t ppu_palette[] = {
 #define I8255_PIN_A1    (9)
 #define I8255_PIN_A2    (10)
 
-static const int PictureBufferSize = (256*240);
-static const int ScanlineEndCycle = 340;
-static const int VisibleScanlines = 240;
-static const int ScanlineVisibleDots = 256;
-static const int FrameEndScanline = 261;
+#define PICTURE_BUFFER_SIZE     (256*240)
+#define SCANLINE_END_CYCLE      (340)
+#define VISIBLE_SCANLINES       (240)
+#define SCANLINE_VISIBLE_DOTS   (256)
+#define FRAME_END_SCANLINE      (261)
 
 typedef struct {
     uint8_t (*read)(uint16_t addr, void* user_data);
@@ -115,17 +115,10 @@ typedef struct {
         uint8_t reg[64*4];
     } oam;
 
-    enum State {
-        PreRender,
-        Render,
-        PostRender,
-        VerticalBlank
-    } pipeline_state;
-
     int cycle;
     int scanline;
     bool even_frame;
-    uint8_t picture_buffer[PictureBufferSize];
+    uint8_t picture_buffer[PICTURE_BUFFER_SIZE];
     uint8_t scanline_sprites[8];
     int scanline_sprites_num;
 
@@ -206,8 +199,6 @@ void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-inline static void _swap(uint8_t* d1, uint8_t* d2);
-
 void r2c02_init(r2c02_t* sys, const r2c02_desc_t* desc) {
     CHIPS_ASSERT(sys);
     memset(sys, 0, sizeof(*sys));
@@ -219,16 +210,17 @@ void r2c02_init(r2c02_t* sys, const r2c02_desc_t* desc) {
 
 void r2c02_reset(r2c02_t* sys) {
     CHIPS_ASSERT(sys);
-    sys->ppu_control.sprite_size = sys->ppu_control.enable_nmi = sys->ppu_mask.greyscale = sys->ppu_status.vertical_blank = sys->ppu_status.sprite_overflow = false;
-    sys->ppu_mask.render_background = sys->ppu_mask.render_sprites = sys->even_frame = sys->first_write = true;
-    sys->ppu_control.pattern_background = sys->ppu_control.pattern_sprite = 0;
-    sys->data_address = sys->cycle = sys->scanline = sys->sprite_data_address = sys->fine_x_scroll = sys->temp_address = 0;
-    sys->ppu_control.increment_mode = 0;
-    sys->pipeline_state = PreRender;
+    sys->ppu_control.reg &= 0x04; 
+    sys->ppu_mask.reg =  0;
+    sys->ppu_status.reg = 0;
+    sys->even_frame = sys->first_write = true;
+    sys->data_address = sys->cycle = sys->sprite_data_address = sys->fine_x_scroll = sys->temp_address = 0;
+    sys->scanline = -1;
     sys->scanline_sprites_num = 0;
 }
 
 uint8_t r2c02_read(r2c02_t* sys, uint8_t addr, bool read_only) {
+    CHIPS_ASSERT(sys);
     switch(addr) {
         case 0x02: {
             // get PPU status
@@ -263,6 +255,7 @@ uint8_t r2c02_read(r2c02_t* sys, uint8_t addr, bool read_only) {
 }
 
 void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
+    CHIPS_ASSERT(sys);
     switch(addr) {
         case 0x00: {
             // set control
@@ -300,7 +293,6 @@ void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
         } break;
         case 0x06: {
             // set PPU address
-            CHIPS_ASSERT(sys);
             if (sys->first_write) {
                 sys->temp_address &= 0x00ff;
                 sys->temp_address |= (data & 0x3f) << 8;
@@ -321,248 +313,237 @@ void r2c02_write(r2c02_t* sys, uint8_t addr, uint8_t data) {
     }
 }
 
-uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
-    CHIPS_ASSERT(sys);
-    switch (sys->pipeline_state)
-    {
-        case PreRender:
-            if (sys->cycle == 1)
-                sys->ppu_status.vertical_blank = sys->ppu_status.sprite_zero_hit = false;
-            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
-                //Set bits related to horizontal position
-                sys->data_address &= ~0x41f; //Unset horizontal bits
-                sys->data_address |= sys->temp_address & 0x41f; //Copy
-            }
-            else if (sys->cycle > 280 && sys->cycle <= 304 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
-                //Set vertical bits
-                sys->data_address &= ~0x7be0; //Unset bits related to horizontal
-                sys->data_address |= sys->temp_address & 0x7be0; //Copy
-            }
-            //if rendering is on, every other frame is one cycle shorter
-            if (sys->cycle >= ScanlineEndCycle - (!sys->even_frame && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites)) {
-                sys->pipeline_state = Render;
-                sys->cycle = sys->scanline = 0;
-            }
-
-            // add IRQ support for MMC3
-            if(sys->cycle==260 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
-                sys->request_irq = true;
-            }
-            break;
-        case Render:
-            if (sys->cycle > 0 && sys->cycle <= ScanlineVisibleDots) {
-                uint8_t bgColor = 0, sprColor = 0;
-                bool bgOpaque = false, sprOpaque = true;
-                bool spriteForeground = false;
-
-                int x = sys->cycle - 1;
-                int y = sys->scanline;
-
-                if (sys->ppu_mask.render_background) {
-                    int x_fine = (sys->fine_x_scroll + x) % 8;
-                    if (sys->ppu_mask.render_background_left || x >= 8) {
-                        //fetch tile
-                        uint16_t addr = 0x2000 | (sys->data_address & 0x0FFF); //mask off fine y
-                        uint8_t tile = sys->read(addr, sys->user_data);
-
-                        //fetch pattern
-                        //Each pattern occupies 16 bytes, so multiply by 16
-                        addr = (tile * 16) + ((sys->data_address >> 12) & 0x7); //Add fine y
-                        addr |= sys->ppu_control.pattern_background << 12; //set whether the pattern is in the high or low page
-                        //Get the corresponding bit determined by (8 - x_fine) from the right
-                        bgColor = (sys->read(addr, sys->user_data) >> (7 ^ x_fine)) & 1; //bit 0 of palette entry
-                        bgColor |= ((sys->read(addr + 8, sys->user_data) >> (7 ^ x_fine)) & 1) << 1; //bit 1
-
-                        bgOpaque = bgColor; //flag used to calculate final pixel with the sprite pixel
-
-                        //fetch attribute and calculate higher two bits of palette
-                        addr = 0x23C0 | (sys->data_address & 0x0C00) | ((sys->data_address >> 4) & 0x38)
-                                    | ((sys->data_address >> 2) & 0x07);
-                        uint8_t attribute = sys->read(addr, sys->user_data);
-                        int shift = ((sys->data_address >> 4) & 4) | (sys->data_address & 2);
-                        //Extract and set the upper two bits for the color
-                        bgColor |= ((attribute >> shift) & 0x3) << 2;
-                    }
-                    //Increment/wrap coarse X
-                    if (x_fine == 7) {
-                        if ((sys->data_address & 0x001F) == 31) {  // if coarse X == 31
-                            sys->data_address &= ~0x001F;          // coarse X = 0
-                            sys->data_address ^= 0x0400;           // switch horizontal nametable
-                        }
-                        else {
-                            sys->data_address++;                // increment coarse X
-                        }
-                    }
-                }
-
-                 if (sys->ppu_mask.render_sprites && (sys->ppu_mask.render_sprites_left || x >= 8)) {
-                     for (uint8_t ii = 0; ii<sys->scanline_sprites_num; ++ii) {
-                         uint8_t i = sys->scanline_sprites[ii];
-                         uint8_t spr_x = sys->oam.data[i].x;
-
-                         if (0 > x - spr_x || x - spr_x >= 8)
-                             continue;
-
-                         uint8_t spr_y     = sys->oam.data[i].y + 1,
-                                 tile      = sys->oam.data[i].id,
-                                 attribute = sys->oam.data[i].attribute;
-
-                         int length = (sys->ppu_control.sprite_size) ? 16 : 8;
-                         int x_shift = (x - spr_x) % 8, y_offset = (y - spr_y) % length;
-
-                         if ((attribute & 0x40) == 0) //If NOT flipping horizontally
-                             x_shift ^= 7;
-                         if ((attribute & 0x80) != 0) //IF flipping vertically
-                             y_offset ^= (length - 1);
-
-                         uint16_t addr = 0;
-
-                         if (!sys->ppu_control.sprite_size) {
-                             addr = tile * 16 + y_offset;
-                             if (sys->ppu_control.pattern_sprite) addr += 0x1000;
-                         }
-                         else { //8x16 sprites
-                             //bit-3 is one if it is the bottom tile of the sprite, multiply by two to get the next pattern
-                             y_offset = (y_offset & 7) | ((y_offset & 8) << 1);
-                             addr = (tile >> 1) * 32 + y_offset;
-                             addr |= (tile & 1) << 12; //Bank 0x1000 if bit-0 is high
-                         }
-
-                         sprColor |= (sys->read(addr, sys->user_data) >> (x_shift)) & 1; //bit 0 of palette entry
-                         sprColor |= ((sys->read(addr + 8, sys->user_data) >> (x_shift)) & 1) << 1; //bit 1
-
-                         if (!(sprOpaque = sprColor)) {
-                             sprColor = 0;
-                             continue;
-                         }
-
-                         sprColor |= 0x10; //Select sprite palette
-                         sprColor |= (attribute & 0x3) << 2; //bits 2-3
-
-                         spriteForeground = !(attribute & 0x20);
-
-                         //Sprite-0 hit detection
-                         if (!sys->ppu_status.sprite_zero_hit && sys->ppu_mask.render_background && i == 0 && sprOpaque && bgOpaque) {
-                             sys->ppu_status.sprite_zero_hit = true;
-                         }
-
-                         break; //Exit the loop now since we've found the highest priority sprite
-                     }
-                 }
-
-                uint8_t paletteAddr = bgColor;
-                if ((!bgOpaque && sprOpaque) || (bgOpaque && sprOpaque && spriteForeground))
-                    paletteAddr = sprColor;
-                else if (!bgOpaque && !sprOpaque)
-                    paletteAddr = 0;
-
-                sys->picture_buffer[x+y*256] = sys->read(0x3f00 + paletteAddr, sys->user_data);
-            }
-            else if (sys->cycle == ScanlineVisibleDots + 1 && sys->ppu_mask.render_background) {
-                //Shamelessly copied from nesdev wiki
-                if ((sys->data_address & 0x7000) != 0x7000)  // if fine Y < 7
-                    sys->data_address += 0x1000;              // increment fine Y
-                else {
-                    sys->data_address &= ~0x7000;             // fine Y = 0
-                    int y = (sys->data_address & 0x03E0) >> 5;    // let y = coarse Y
-                    if (y == 29)
-                    {
-                        y = 0;                                // coarse Y = 0
-                        sys->data_address ^= 0x0800;              // switch vertical nametable
-                    }
-                    else if (y == 31)
-                        y = 0;                                // coarse Y = 0, nametable not switched
-                    else
-                        y += 1;                               // increment coarse Y
-                    sys->data_address = (sys->data_address & ~0x03E0) | (y << 5);
-                                                            // put coarse Y back into sys->dataAddress
-                }
-            }
-            else if (sys->cycle == ScanlineVisibleDots + 2 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
-                //Copy bits related to horizontal position
-                sys->data_address &= ~0x41f;
-                sys->data_address |= sys->temp_address & 0x41f;
-            }
-
-            // add IRQ support for MMC3
-            if(sys->cycle==260 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
-                sys->request_irq = true;
-            }
-
-            if (sys->cycle >= ScanlineEndCycle) {
-                //Find and index sprites that are on the next Scanline
-                //This isn't where/when this indexing, actually copying in 2C02 is done
-                //but (I think) it shouldn't hurt any games if this is done here
-
-                sys->scanline_sprites_num = 0;
-                int range = 8;
-                if (sys->ppu_control.sprite_size) {
-                    range = 16;
-                }
-
-                size_t j = 0;
-                for (size_t i = sys->sprite_data_address / 4; i < 64; ++i) {
-                    int diff = (sys->scanline - sys->oam.reg[i * 4]);
-                    if (0 <= diff && diff < range) {
-                        if (j >= 8) {
-                            sys->ppu_status.sprite_overflow = true;
-                            break;
-                        }
-                        sys->scanline_sprites[sys->scanline_sprites_num++] = i;
-                        ++j;
-                    }
-                }
-
-                ++sys->scanline;
-                sys->cycle = 0;
-            }
-
-            if (sys->scanline >= VisibleScanlines)
-                sys->pipeline_state = PostRender;
-
-            break;
-        case PostRender:
-            if (sys->cycle >= ScanlineEndCycle) {
-                ++sys->scanline;
-                sys->cycle = 0;
-                sys->pipeline_state = VerticalBlank;
-                sys->set_pixels(sys->picture_buffer, sys->user_data);
-            }
-
-            break;
-        case VerticalBlank:
-            if (sys->cycle == 1 && sys->scanline == VisibleScanlines + 1) {
-                sys->ppu_status.vertical_blank = true;
-                if (sys->ppu_control.enable_nmi)
-                    sys->request_nmi = true;
-            }
-
-            if (sys->cycle >= ScanlineEndCycle) {
-                ++sys->scanline;
-                sys->cycle = 0;
-            }
-
-            if (sys->scanline >= FrameEndScanline) {
-                sys->pipeline_state = PreRender;
-                sys->scanline = 0;
-                sys->even_frame = !sys->even_frame;
-            }
-
-            break;
-        default:
-            // Well, this shouldn't have happened.
-            CHIPS_ASSERT(false);
-            break;
+static uint8_t _r2c02_render_sprite(r2c02_t* sys, bool bg_opaque, bool* spr_opaque, bool* sprite_foreground) {
+    uint8_t spr_color = 0;
+    int x = sys->cycle - 1;
+    int y = sys->scanline;
+    for (uint8_t ii = 0; ii<sys->scanline_sprites_num; ++ii) {
+        uint8_t i = sys->scanline_sprites[ii];
+        uint8_t spr_x = sys->oam.data[i].x;
+        
+        if (0 > x - spr_x || x - spr_x >= 8)
+            continue;
+        
+        uint8_t spr_y     = sys->oam.data[i].y + 1,
+        tile      = sys->oam.data[i].id,
+        attribute = sys->oam.data[i].attribute;
+        
+        int length = (sys->ppu_control.sprite_size) ? 16 : 8;
+        int x_shift = (x - spr_x) % 8, y_offset = (y - spr_y) % length;
+        
+        if ((attribute & 0x40) == 0) //If NOT flipping horizontally
+            x_shift ^= 7;
+        if ((attribute & 0x80) != 0) //IF flipping vertically
+            y_offset ^= (length - 1);
+        
+        uint16_t addr = 0;
+        
+        if (!sys->ppu_control.sprite_size) {
+            addr = tile * 16 + y_offset;
+            if (sys->ppu_control.pattern_sprite) addr += 0x1000;
+        }
+        else { //8x16 sprites
+            //bit-3 is one if it is the bottom tile of the sprite, multiply by two to get the next pattern
+            y_offset = (y_offset & 7) | ((y_offset & 8) << 1);
+            addr = (tile >> 1) * 32 + y_offset;
+            addr |= (tile & 1) << 12; //Bank 0x1000 if bit-0 is high
+        }
+        
+        spr_color |= (sys->read(addr, sys->user_data) >> (x_shift)) & 1; //bit 0 of palette entry
+        spr_color |= ((sys->read(addr + 8, sys->user_data) >> (x_shift)) & 1) << 1; //bit 1
+        
+        if (!(*spr_opaque = spr_color)) {
+            spr_color = 0;
+            continue;
+        }
+        
+        spr_color |= 0x10; //Select sprite palette
+        spr_color |= (attribute & 0x3) << 2; //bits 2-3
+        
+        *sprite_foreground = !(attribute & 0x20);
+        
+        //Sprite-0 hit detection
+        if (!sys->ppu_status.sprite_zero_hit && sys->ppu_mask.render_background && i == 0 && (*spr_opaque) && bg_opaque) {
+            sys->ppu_status.sprite_zero_hit = true;
+        }
+        
+        break; //Exit the loop now since we've found the highest priority sprite
     }
-
-    ++sys->cycle;
-    return pins;
+    return spr_color;
 }
 
-inline static void _swap(uint8_t* d1, uint8_t* d2) {
-    uint8_t tmp = *d1;
-    *d1 = *d2;
-    *d2 = tmp;
+static uint8_t _r2c02_render_background(r2c02_t* sys, bool* bg_opaque) {
+    uint8_t bg_color = 0;
+    int x = sys->cycle - 1;
+    int x_fine = (sys->fine_x_scroll + x) % 8;
+    
+    //fetch tile
+    uint16_t addr = 0x2000 | (sys->data_address & 0x0FFF); //mask off fine y
+    uint8_t tile = sys->read(addr, sys->user_data);
+    
+    //fetch pattern
+    //Each pattern occupies 16 bytes, so multiply by 16
+    addr = (tile << 4) + ((sys->data_address >> 12) & 0x7); //Add fine y
+    addr |= sys->ppu_control.pattern_background << 12; //set whether the pattern is in the high or low page
+    //Get the corresponding bit determined by (8 - x_fine) from the right
+    bg_color = (sys->read(addr, sys->user_data) >> (7 ^ x_fine)) & 1; //bit 0 of palette entry
+    bg_color |= ((sys->read(addr + 8, sys->user_data) >> (7 ^ x_fine)) & 1) << 1; //bit 1
+    *bg_opaque = bg_color; //flag used to calculate final pixel with the sprite pixel
+    
+    //fetch attribute and calculate higher two bits of palette
+    addr = 0x23C0 | (sys->data_address & 0x0C00) | ((sys->data_address >> 4) & 0x38)
+    | ((sys->data_address >> 2) & 0x07);
+    uint8_t attribute = sys->read(addr, sys->user_data);
+    int shift = ((sys->data_address >> 4) & 4) | (sys->data_address & 2);
+    
+    //Extract and set the upper two bits for the color
+    bg_color |= ((attribute >> shift) & 0x3) << 2;
+    
+    return bg_color;
+}
+
+uint64_t r2c02_tick(r2c02_t* sys, uint64_t pins) {
+    CHIPS_ASSERT(sys);
+    if (sys->scanline == -1) {
+        // Pre render
+        if (sys->cycle == 1) {
+            sys->ppu_status.vertical_blank = sys->ppu_status.sprite_zero_hit = sys->ppu_status.sprite_overflow = false;
+        } else if (sys->cycle == SCANLINE_VISIBLE_DOTS + 2 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
+            //Set bits related to horizontal position
+            sys->data_address &= ~0x41f; //Unset horizontal bits
+            sys->data_address |= sys->temp_address & 0x41f; //Copy
+        } else if (sys->cycle > 280 && sys->cycle <= 304 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
+            //Set vertical bits
+            sys->data_address &= ~0x7be0; //Unset bits related to horizontal
+            sys->data_address |= sys->temp_address & 0x7be0; //Copy
+        } else  if (sys->cycle >= SCANLINE_END_CYCLE - (!sys->even_frame && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites)) {
+            // if rendering is on, every other frame is one cycle shorter
+            sys->cycle++;
+        }
+
+        // add IRQ support for MMC3
+        if(sys->cycle == 260 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
+            sys->request_irq = true;
+        }
+    } else if (sys->scanline < VISIBLE_SCANLINES) {
+        // render scanlines 0 - 239
+        if (sys->cycle > 0 && sys->cycle <= SCANLINE_VISIBLE_DOTS) {
+            uint8_t bg_color = 0, spr_color = 0;
+            bool bg_opaque = false, spr_opaque = true;
+            bool sprite_foreground = false;
+            
+            int x = sys->cycle - 1;
+            int y = sys->scanline;
+            
+            if (sys->ppu_mask.render_background) {
+                int x_fine = (sys->fine_x_scroll + x) % 8;
+                if (sys->ppu_mask.render_background_left || x >= 8) {
+                    bg_color = _r2c02_render_background(sys, &bg_opaque);
+                }
+                //Increment/wrap coarse X
+                if (x_fine == 7) {
+                    if ((sys->data_address & 0x001F) == 31) {  // if coarse X == 31
+                        sys->data_address &= ~0x001F;          // coarse X = 0
+                        sys->data_address ^= 0x0400;           // switch horizontal nametable
+                    }
+                    else {
+                        sys->data_address++;                // increment coarse X
+                    }
+                }
+            }
+            
+            if (sys->ppu_mask.render_sprites && (sys->ppu_mask.render_sprites_left || x >= 8)) {
+                spr_color = _r2c02_render_sprite(sys, bg_opaque, &spr_opaque, &sprite_foreground);
+            }
+            
+            uint8_t palette_addr = bg_color;
+            if ((!bg_opaque && spr_opaque) || (bg_opaque && spr_opaque && sprite_foreground))
+                palette_addr = spr_color;
+            else if (!bg_opaque && !spr_opaque)
+                palette_addr = 0;
+            
+            sys->picture_buffer[x + (y << 8)] = sys->read(0x3f00 + palette_addr, sys->user_data);
+        } else if (sys->cycle == SCANLINE_VISIBLE_DOTS + 1 && sys->ppu_mask.render_background) {
+            // Shamelessly copied from nesdev wiki
+            if ((sys->data_address & 0x7000) != 0x7000) {  // if fine Y < 7
+                sys->data_address += 0x1000;               // increment fine Y
+            } else {
+                sys->data_address &= ~0x7000;              // fine Y = 0
+                int y = (sys->data_address & 0x03E0) >> 5; // let y = coarse Y
+                if (y == 29) {
+                    y = 0;                                 // coarse Y = 0
+                    sys->data_address ^= 0x0800;           // switch vertical nametable
+                } else if (y == 31) {
+                    y = 0;                                 // coarse Y = 0, nametable not switched
+                } else {
+                    y++;                                   // increment coarse Y
+                }
+                sys->data_address = (sys->data_address & ~0x03E0) | (y << 5);
+            }
+        } else if (sys->cycle == SCANLINE_VISIBLE_DOTS + 2 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
+            // Copy bits related to horizontal position
+            sys->data_address &= ~0x41f;
+            sys->data_address |= sys->temp_address & 0x41f;
+        }
+            
+        // Add IRQ support for MMC3
+        if(sys->cycle==260 && sys->ppu_mask.render_background && sys->ppu_mask.render_sprites) {
+            sys->request_irq = true;
+        }
+        
+        if (sys->cycle >= SCANLINE_END_CYCLE) {
+            // Find and index sprites that are on the next Scanline
+            // This isn't where/when this indexing, actually copying in 2C02 is done
+            // but (I think) it shouldn't hurt any games if this is done here
+            sys->scanline_sprites_num = 0;
+            int range = 8;
+            if (sys->ppu_control.sprite_size) {
+                range = 16;
+            }
+            
+            size_t j = 0;
+            for (size_t i = sys->sprite_data_address / 4; i < 64; ++i) {
+                int diff = (sys->scanline - sys->oam.reg[i * 4]);
+                if (0 <= diff && diff < range) {
+                    if (j >= 8) {
+                        sys->ppu_status.sprite_overflow = true;
+                        break;
+                    }
+                    sys->scanline_sprites[sys->scanline_sprites_num++] = i;
+                    ++j;
+                }
+            }
+            
+            ++sys->scanline;
+            sys->cycle = 0;
+        }
+    } else if (sys->scanline == VISIBLE_SCANLINES) {
+        // post render scanline 240
+        if (sys->cycle >= SCANLINE_END_CYCLE) {
+            sys->set_pixels(sys->picture_buffer, sys->user_data);
+        }
+    } else if (sys->scanline <= FRAME_END_SCANLINE) {
+        // v blanking scanlines 241 - 261
+        if (sys->cycle == 1 && sys->scanline == VISIBLE_SCANLINES + 1) {
+            // set v-blank
+            sys->ppu_status.vertical_blank = true;
+            if (sys->ppu_control.enable_nmi) {
+                // generate NMI
+                sys->request_nmi = true;
+            }
+        }
+    }
+
+    // increment cycle and scanlines
+    if(++sys->cycle >= (SCANLINE_END_CYCLE+1)) {
+        if (++sys->scanline >= FRAME_END_SCANLINE) {
+            sys->scanline = -1;
+            sys->even_frame = !sys->even_frame;
+        }
+        sys->cycle = 0;
+    }
+
+    return pins;
 }
 
 #endif /* CHIPS_IMPL */
