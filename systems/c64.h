@@ -471,16 +471,20 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     sys->io_mapped = true;
     sys->cas_port = C64_CASPORT_MOTOR|C64_CASPORT_SENSE;
 
-    sys->pins = m6502_init(&sys->cpu, &(m6502_desc_t) {
+    m6502_desc_t m6502_desc =
+    {
         .m6510_in_cb = _c64_cpu_port_in,
         .m6510_out_cb = _c64_cpu_port_out,
         .m6510_io_pullup = 0x17,
         .m6510_io_floating = 0xC8,
         .m6510_user_data = sys,
-    });
+    };
+    sys->pins = m6502_init(&sys->cpu, &m6502_desc);
     m6526_init(&sys->cia_1);
     m6526_init(&sys->cia_2);
-    m6569_init(&sys->vic, &(m6569_desc_t){
+
+    m6569_desc_t m6569_desc =
+    {
         .fetch_cb = _c64_vic_fetch,
         .framebuffer = {
             .ptr = sys->fb,
@@ -493,27 +497,31 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
             .height = _C64_SCREEN_HEIGHT,
         },
         .user_data = sys,
-    });
-    m6581_init(&sys->sid, &(m6581_desc_t){
-        .tick_hz = C64_FREQUENCY,
+    };
+    m6569_init(&sys->vic, &m6569_desc);
+
+    m6581_desc_t m6581_desc =
+    {
+         .tick_hz = C64_FREQUENCY,
         .sound_hz = _C64_DEFAULT(desc->audio.sample_rate, 44100),
         .magnitude = _C64_DEFAULT(desc->audio.volume, 1.0f),
-    });
+    };
+    m6581_init(&sys->sid, &m6581_desc);
     _c64_init_key_map(sys);
     _c64_init_memory_map(sys);
     if (desc->c1530_enabled) {
-        c1530_init(&sys->c1530, &(c1530_desc_t){
-            .cas_port = &sys->cas_port,
-        });
+        c1530_desc_t c1530_desc = { .cas_port = &sys->cas_port };
+        c1530_init(&sys->c1530, &c1530_desc);
     }
     if (desc->c1541_enabled) {
-        c1541_init(&sys->c1541, &(c1541_desc_t){
+        c1541_desc_t c1564_desc =
+        {
             .iec_port = &sys->iec_port,
             .roms = {
                 .c000_dfff = desc->roms.c1541.c000_dfff,
                 .e000_ffff = desc->roms.c1541.e000_ffff
-            },
-        });
+        }};
+        c1541_init(&sys->c1541, &c1564_desc);
     }
 }
 

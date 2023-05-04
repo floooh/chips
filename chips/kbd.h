@@ -189,7 +189,7 @@ static inline uint16_t kbd_scan_columns(kbd_t* kbd) {
 void kbd_init(kbd_t* kbd, int sticky_frames) {
     CHIPS_ASSERT(kbd);
     *kbd = (kbd_t){
-        .sticky_time = sticky_frames * 16667
+        .sticky_time =  (uint32_t)(sticky_frames * 16667)
     };
 }
 

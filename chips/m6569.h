@@ -376,7 +376,7 @@ static void _m6569_init_crt(m6569_crt_t* crt, const m6569_desc_t* desc) {
     // vis area horizontal coords must be multiple of 8
     CHIPS_ASSERT((desc->screen.x & 7) == 0);
     CHIPS_ASSERT((desc->screen.width & 7) == 0);
-    crt->fb = desc->framebuffer.ptr;
+    crt->fb = (uint8_t*)desc->framebuffer.ptr;
     crt->vis_x0 = desc->screen.x / M6569_PIXELS_PER_TICK;
     crt->vis_y0 = desc->screen.y;
     crt->vis_w = desc->screen.width / M6569_PIXELS_PER_TICK;
