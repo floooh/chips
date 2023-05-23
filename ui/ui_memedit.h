@@ -431,7 +431,7 @@ struct MemoryEditor
                     UserData user_data;
                     user_data.CursorPos = -1;
                     snprintf(user_data.CurrentBufOverwrite, sizeof(user_data.CurrentBufOverwrite), "%02X", ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
-                    ImGuiInputTextFlags flags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_AlwaysInsertMode | ImGuiInputTextFlags_CallbackAlways;
+                    ImGuiInputTextFlags flags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_AlwaysOverwrite | ImGuiInputTextFlags_CallbackAlways;
                     if (ImGui::InputText("##data", DataInputBuf, 32, flags, UserData::Callback, &user_data))
                         data_write = data_next = true;
                     else if (!DataEditingTakeFocus && !ImGui::IsItemActive())
