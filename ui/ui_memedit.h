@@ -76,6 +76,7 @@ typedef struct {
     const char* layers[UI_MEMEDIT_MAX_LAYERS];   /* memory system layer names */
     ui_memedit_read_t read_cb;
     ui_memedit_write_t write_cb;
+    size_t max_addr;
     int num_rows;       /* initial number of rows, default is 16 */
     bool hide_ascii;    /* initially hide the ASCII column */
     bool hide_options;  /* hide the Options dropdown */
@@ -93,6 +94,7 @@ typedef struct {
     void* user_data;
     float init_x, init_y;
     float init_w, init_h;
+    size_t max_addr;
     MemoryEditor* ed;
     bool open;
     bool valid;
@@ -623,6 +625,7 @@ void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 512 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 120 : desc->h);
+    win->max_addr = (desc->max_addr ==0)?(1<<16):desc->max_addr;
     win->open = desc->open;
     win->ed = new MemoryEditor;
     win->ed->Rows = (desc->num_rows == 0) ? win->ed->Rows : desc->num_rows;
@@ -659,13 +662,13 @@ void ui_memedit_draw(ui_memedit_t* win) {
     }
     ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
-    win->ed->DrawWindow(win->title, (uint8_t*)win, (1<<16));
+    win->ed->DrawWindow(win->title, (uint8_t*)win, win->max_addr);
     win->open = win->ed->Open;
 }
 
 void ui_memedit_draw_content(ui_memedit_t* win) {
     CHIPS_ASSERT(win && win->valid);
-    win->ed->DrawContents((uint8_t*)win, (1<<16));
+    win->ed->DrawContents((uint8_t*)win, win->max_addr);
 }
 #ifdef _MSC_VER
 #pragma warning(pop)
