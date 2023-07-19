@@ -625,7 +625,7 @@ void ui_memedit_init(ui_memedit_t* win, const ui_memedit_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 512 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 120 : desc->h);
-    win->max_addr = (desc->max_addr ==0)?(1<<16):desc->max_addr;
+    win->max_addr = (desc->max_addr == 0) ? (1<<16) : desc->max_addr;
     win->open = desc->open;
     win->ed = new MemoryEditor;
     win->ed->Rows = (desc->num_rows == 0) ? win->ed->Rows : desc->num_rows;
