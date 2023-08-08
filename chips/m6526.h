@@ -241,12 +241,31 @@ typedef struct {
     bool flag;              // last state of flag bit, to detect edge
 } m6526_int_t;
 
+// TOD state
+typedef struct {
+    bool running;
+
+    uint8_t tenths;
+    uint8_t seconds;
+    uint8_t minutes;
+    uint8_t hours;
+
+    uint8_t alarm_tenths;
+    uint8_t alarm_seconds;
+    uint8_t alarm_minutes;
+    uint8_t alarm_hours;
+
+    uint8_t counter;
+    uint8_t max_counter;
+} m6526_tod_t;
+
 // m6526 state
 typedef struct {
     m6526_port_t pa;
     m6526_port_t pb;
     m6526_timer_t ta;
     m6526_timer_t tb;
+    m6526_tod_t tod;
     m6526_int_t intr;
     uint64_t pins;
 } m6526_t;
@@ -309,6 +328,22 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->flag = false;
 }
 
+static void _m6526_init_tod(m6526_tod_t* tod) {
+    tod->tenths = 0;
+    tod->seconds = 0;
+    tod->minutes = 0;
+    tod->hours = 0;
+
+    tod->alarm_tenths = 0;
+    tod->alarm_seconds = 0;
+    tod->alarm_minutes = 0;
+    tod->alarm_hours = 0;
+
+    tod->running = false;
+    tod->counter = 0;
+    tod->max_counter = 5;
+}
+
 void m6526_init(m6526_t* c) {
     CHIPS_ASSERT(c);
     memset(c, 0, sizeof(*c));
@@ -316,6 +351,7 @@ void m6526_init(m6526_t* c) {
     _m6526_init_port(&c->pb);
     _m6526_init_timer(&c->ta);
     _m6526_init_timer(&c->tb);
+    _m6526_init_tod(&c->tod);
     _m6526_init_interrupt(&c->intr);
     c->ta.latch = 0xFFFF;
     c->tb.latch = 0xFFFF;
@@ -327,6 +363,7 @@ void m6526_reset(m6526_t* c) {
     _m6526_init_port(&c->pb);
     _m6526_init_timer(&c->ta);
     _m6526_init_timer(&c->tb);
+    _m6526_init_tod(&c->tod);
     _m6526_init_interrupt(&c->intr);
     c->pins = 0;
 }
@@ -447,7 +484,15 @@ static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
     }
     c->intr.flag = 0 != (pins & M6526_FLAG);
 
-    /* FIXME: ALARM, SP interrupt conditions */
+    /* FIXME: SP interrupt conditions */
+    
+    /* check if TOD is equal to alarm time */
+    if(c->tod.tenths  == c->tod.alarm_tenths  && 
+       c->tod.seconds == c->tod.alarm_seconds &&
+       c->tod.minutes == c->tod.alarm_minutes && 
+       c->tod.hours   == c->tod.alarm_hours) {
+       c->intr.icr |= (1<<2);
+    }
 
     /* handle main interrupt bit */
     if (_M6526_PIP_TEST(c->intr.pip, M6526_PIP_IRQ, 0)) {
@@ -559,10 +604,62 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     c->intr.pip = (c->intr.pip >> 1) & 0x7F7F7F7F;
 }
 
+static void _m6526_tick_tod(m6526_tod_t* tod, uint64_t pins) {    
+    if(!(pins & M6526_TOD) || !tod->running) return;
+
+    // convert TOD 50/60 Hz signal to 10 Hz
+    if(++tod->counter < tod->max_counter) return;
+    tod->counter = 0;
+
+    // unpack from BCD
+    uint8_t tenths    = tod->tenths & 0x0F;  
+    uint8_t seconds_h = (tod->seconds & 0x7F) >> 4;
+    uint8_t seconds_l = tod->seconds & 0x0F;
+    uint8_t minutes_h = (tod->minutes & 0x7F) >> 4;
+    uint8_t minutes_l = tod->minutes & 0x0F;
+    uint8_t hours_h   = (tod->hours & 0x7F) >> 4;    
+    uint8_t hours_l   = tod->hours & 0x0F;    
+    uint8_t AMPM      = (tod->hours & 128) >> 7;
+
+    // increment clock
+    if(++tenths > 9) {
+        tenths = 0;
+        if(++seconds_l > 9) {
+            seconds_l = 0;
+            if(++seconds_h > 5) {
+                seconds_h = 0;
+                if(++minutes_l > 9) {
+                    minutes_l = 0;
+                    if(++minutes_h > 5) {
+                        minutes_h = 0;
+                        ++hours_l;
+                        if(hours_h == 0 && hours_l > 9 ) {
+                            hours_l = 0;
+                            hours_h = 1;
+                        }
+                        else if(hours_h == 1 && hours_l > 2) {                        
+                            hours_l = 0;
+                            hours_h = 0;
+                            AMPM ^= 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // pack into BCD
+    tod->tenths  = tenths;
+    tod->seconds = (seconds_h << 4) | seconds_l;
+    tod->minutes = (minutes_h << 4) | minutes_l;
+    tod->hours   = (hours_h   << 4) | hours_l | (AMPM << 7);    
+}
+
 static uint64_t _m6526_tick(m6526_t* c, uint64_t pins) {
     _m6526_read_port_pins(c, pins);
     _m6526_tick_timer(&c->ta);
     _m6526_tick_timer(&c->tb);
+    _m6526_tick_tod(&c->tod, pins);
     pins = _m6526_update_irq(c, pins);
     pins = _m6526_write_port_pins(c, pins);
     _m6526_tick_pipeline(c);
@@ -616,6 +713,19 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
             /* force-load bit always returns zero */
             data = c->tb.cr & ~(1<<4);
             break;
+        case M6526_REG_TOD10TH:            
+            data = c->tod.tenths;
+            c->tod.running = true;  // TOD starts when tenths are R/W
+            break;
+        case M6526_REG_TODSEC:            
+            data = c->tod.seconds;
+            break;
+        case M6526_REG_TODMIN:            
+            data = c->tod.minutes;
+            break;
+        case M6526_REG_TODHR:            
+            data = c->tod.hours;
+            break;        
     }
     return data;
 }
@@ -659,10 +769,41 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             break;
         case M6526_REG_CRA:
             _m6526_write_cr(&c->ta, data);
+            c->tod.max_counter = data & (1<<7) ? 5 : 6; // 50 or 60 Hz TOD
             break;
         case M6526_REG_CRB:
             _m6526_write_cr(&c->tb, data);
             break;
+        case M6526_REG_TOD10TH:  
+            if(c->tb.cr & (1<<7)) {
+                c->tod.alarm_tenths = data;                
+            } else {      
+                c->tod.tenths = data;
+                c->tod.running = true;  // TOD starts when tenths are R/W
+            }
+            break;
+        case M6526_REG_TODSEC:            
+            if(c->tb.cr & (1<<7)) {
+                c->tod.alarm_seconds = data;
+            } else {
+                c->tod.seconds = data;
+            }
+            break;
+        case M6526_REG_TODMIN:            
+            if(c->tb.cr & (1<<7)) {
+                c->tod.alarm_minutes = data;
+            } else {
+                c->tod.minutes = data;
+            }
+            break;
+        case M6526_REG_TODHR:            
+            if(c->tb.cr & (1<<7)) {
+                c->tod.alarm_hours = data;                
+            } else {
+                c->tod.hours = data;
+                c->tod.running = false; // TOD stops when hours are written
+            }
+            break;        
     }
 }
 
