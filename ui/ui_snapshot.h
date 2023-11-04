@@ -130,7 +130,7 @@ void ui_snapshot_menus(ui_snapshot_t* state) {
     if (ImGui::BeginMenu("Save Snapshot")) {
         for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
             const ui_snapshot_screenshot_t screenshot = state->slots[slot_index].screenshot;
-            ImGui::PushID(slot_index);
+            ImGui::PushID((int)slot_index);
             if (screenshot.texture) {
                 if (ui_snapshot_draw_menu_slot("##savesnapshot", screenshot)) {
                     ui_snapshot_save_slot(state, slot_index);
@@ -154,7 +154,7 @@ void ui_snapshot_menus(ui_snapshot_t* state) {
         for (size_t slot_index = 0; slot_index < UI_SNAPSHOT_MAX_SLOTS; slot_index++) {
             if (state->slots[slot_index].valid) {
                 const ui_snapshot_screenshot_t screenshot = state->slots[slot_index].screenshot;
-                ImGui::PushID(slot_index);
+                ImGui::PushID((int)slot_index);
                 if (screenshot.texture) {
                     if (ui_snapshot_draw_menu_slot("##loadsnapshot", screenshot)) {
                         ui_snapshot_load_slot(state, slot_index);
