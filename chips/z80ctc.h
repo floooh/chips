@@ -195,7 +195,7 @@ extern "C" {
 
 typedef struct {
     uint8_t control[Z80CTC_NUM_CHANNELS];   // Z80CTC_CTRL_xxx
-    uint8_t constant[Z80CTC_NUM_CHANNELS];
+    uint64_t constant;
     uint64_t counter;
     uint64_t count;
     uint8_t prescaler[Z80CTC_NUM_CHANNELS];
@@ -258,8 +258,8 @@ void z80ctc_reset(z80ctc_t* ctc) {
         ctc->trigger_edge[i] = false;
         ctc->prescaler_mask[i] = 0x0F;
         ctc->int_state[i] = 0;
-        ctc->constant[i] = 0;
     }
+    ctc->constant = 0;
     ctc->counter = 0;
 }
 
@@ -273,12 +273,10 @@ static uint8_t _z80ctc_get_u8(uint64_t orig, int chn) {
     return (uint8_t)(orig >> shift);
 }
 
-/*
-static uint8_t _z80ctc_select_u8(uint64_t orig, int chn, uint64_t val) {
+static uint64_t _z80ctc_select_u8(uint64_t orig, int chn, uint64_t val) {
     const uint64_t mask = 0xFFUL << (chn<<4);
     return (orig & ~mask) | (val & mask);
 }
-*/
 
 /*
     Issue an 'active edge' on a channel, this happens when a CLKTRG pin
@@ -296,7 +294,7 @@ static void _z80ctc_active_edge(z80ctc_t* ctc, int chn) {
     } else if (ctc->waiting_for_trigger[chn]) {
         // timer mode and waiting for trigger?
         ctc->waiting_for_trigger[chn] = false;
-        ctc->counter = _z80ctc_set_u8(ctc->counter, chn, ctc->constant[chn]);
+        ctc->counter = _z80ctc_select_u8(ctc->counter, chn, ctc->constant);
     }
 }
 
@@ -305,15 +303,15 @@ void _z80ctc_write(z80ctc_t* ctc, int chn, uint8_t data) {
     if (ctc->control[chn] & Z80CTC_CTRL_CONST_FOLLOWS) {
         // timer constant following control word
         ctc->control[chn] &= ~(Z80CTC_CTRL_CONST_FOLLOWS|Z80CTC_CTRL_RESET);
-        ctc->constant[chn] = data;
+        ctc->constant = _z80ctc_set_u8(ctc->constant, chn, data);
         if ((ctc->control[chn] & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
             if ((ctc->control[chn] & Z80CTC_CTRL_TRIGGER) == Z80CTC_CTRL_TRIGGER_WAIT) {
                 ctc->waiting_for_trigger[chn] = true;
             } else {
-                ctc->counter = _z80ctc_set_u8(ctc->counter, chn, ctc->constant[chn]);
+                ctc->counter = _z80ctc_select_u8(ctc->counter, chn, ctc->constant);
             }
         } else {
-            ctc->counter = _z80ctc_set_u8(ctc->counter, chn, ctc->constant[chn]);
+            ctc->counter = _z80ctc_select_u8(ctc->counter, chn, ctc->constant);
         }
     } else if (data & Z80CTC_CTRL_CONTROL) {
         // a control word
@@ -393,7 +391,7 @@ static uint64_t _z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
                     pins |= Z80CTC_ZCTO0<<chn;
                 }
                 // reload the down counter
-                ctc->counter = _z80ctc_set_u8(ctc->counter, chn, ctc->constant[chn]);
+                ctc->counter = _z80ctc_select_u8(ctc->counter, chn, ctc->constant);
             }
         }
     }
