@@ -298,8 +298,7 @@ static uint64_t _z80ctc_active_edge(z80ctc_t* ctc, uint64_t pins, int chn) {
         if (0 == --ctc->down_counter[chn]) {
             pins = _z80ctc_counter_zero(ctc, pins, chn);
         }
-    }
-    else if (ctc->waiting_for_trigger[chn]) {
+    } else if (ctc->waiting_for_trigger[chn]) {
         // timer mode and waiting for trigger?
         ctc->waiting_for_trigger[chn] = false;
         ctc->down_counter[chn] = ctc->constant[chn];
@@ -316,24 +315,20 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn, uint8_t data) {
         if ((ctc->control[chn] & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
             if ((ctc->control[chn] & Z80CTC_CTRL_TRIGGER) == Z80CTC_CTRL_TRIGGER_WAIT) {
                 ctc->waiting_for_trigger[chn] = true;
-            }
-            else {
+            } else {
                 ctc->down_counter[chn] = ctc->constant[chn];
             }
-        }
-        else {
+        } else {
             ctc->down_counter[chn] = ctc->constant[chn];
         }
-    }
-    else if (data & Z80CTC_CTRL_CONTROL) {
+    } else if (data & Z80CTC_CTRL_CONTROL) {
         // a control word
         const uint8_t old_ctrl = ctc->control[chn];
         ctc->control[chn] = data;
         ctc->trigger_edge[chn] = (data & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_RISING;
         if ((ctc->control[chn] & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
             ctc->prescaler_mask[chn] = 0x0F;
-        }
-        else {
+        } else {
             ctc->prescaler_mask[chn] = 0xFF;
         }
 
@@ -341,8 +336,7 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn, uint8_t data) {
         if ((old_ctrl & Z80CTC_CTRL_EDGE) != (ctc->control[chn] & Z80CTC_CTRL_EDGE)) {
             pins = _z80ctc_active_edge(ctc, pins, chn);
         }
-    }
-    else {
+    } else {
         /* the interrupt vector for the entire CTC must be written
            to channel 0, the vectors for the following channels
            are then computed from the base vector plus 2 bytes per channel
@@ -362,8 +356,7 @@ static uint64_t _z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
     if (pins & Z80CTC_RD) {
         const uint8_t data = ctc->down_counter[chn];
         Z80CTC_SET_DATA(pins, data);
-    }
-    else {
+    } else {
         const uint8_t data = Z80CTC_GET_DATA(pins);
         pins = _z80ctc_write(ctc, pins, chn, data);
     }
@@ -384,8 +377,7 @@ static uint64_t _z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
                     pins = _z80ctc_active_edge(ctc, pins, chn);
                 }
             }
-        }
-        else if ((ctc->control[chn] & (Z80CTC_CTRL_MODE|Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) == Z80CTC_CTRL_MODE_TIMER) {
+        } else if ((ctc->control[chn] & (Z80CTC_CTRL_MODE|Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) == Z80CTC_CTRL_MODE_TIMER) {
             // handle timer mode downcounting
             if (0 == ((--ctc->prescaler[chn]) & ctc->prescaler_mask[chn])) {
                 // prescaler has reached zero, tick the down counter
