@@ -191,26 +191,20 @@ extern "C" {
 #define Z80CTC_INT_REQUESTED        (1<<1)
 #define Z80CTC_INT_SERVICED         (1<<2)
 
-// Z80 CTC channel state
-typedef struct {
-    uint8_t control;        // Z80CTC_CTRL_xxx
-    uint8_t constant;
-    uint8_t down_counter;
-    uint8_t prescaler;
-    uint8_t int_vector;
-    // optimization helpers
-    bool trigger_edge;
-    bool waiting_for_trigger;
-    bool ext_trigger;
-    uint8_t prescaler_mask;
-    uint8_t int_state;
-} z80ctc_channel_t;
-
 #define Z80CTC_NUM_CHANNELS (4)
 
-// Z80 CTC state
 typedef struct {
-    z80ctc_channel_t chn[Z80CTC_NUM_CHANNELS];
+    uint8_t control[Z80CTC_NUM_CHANNELS];   // Z80CTC_CTRL_xxx
+    uint8_t constant[Z80CTC_NUM_CHANNELS];
+    uint8_t down_counter[Z80CTC_NUM_CHANNELS];
+    uint8_t prescaler[Z80CTC_NUM_CHANNELS];
+    uint8_t int_vector[Z80CTC_NUM_CHANNELS];
+    // optimization helpers
+    bool trigger_edge[Z80CTC_NUM_CHANNELS];
+    bool waiting_for_trigger[Z80CTC_NUM_CHANNELS];
+    bool ext_trigger[Z80CTC_NUM_CHANNELS];
+    uint8_t prescaler_mask[Z80CTC_NUM_CHANNELS];
+    uint8_t int_state[Z80CTC_NUM_CHANNELS];
     uint64_t pins;
 } z80ctc_t;
 
@@ -258,14 +252,13 @@ void z80ctc_init(z80ctc_t* ctc) {
 void z80ctc_reset(z80ctc_t* ctc) {
     CHIPS_ASSERT(ctc);
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-        z80ctc_channel_t* chn = &ctc->chn[i];
-        chn->control = Z80CTC_CTRL_RESET;
-        chn->constant = 0;
-        chn->down_counter = 0;
-        chn->waiting_for_trigger = false;
-        chn->trigger_edge = false;
-        chn->prescaler_mask = 0x0F;
-        chn->int_state = 0;
+        ctc->control[i] = Z80CTC_CTRL_RESET;
+        ctc->constant[i] = 0;
+        ctc->down_counter[i] = 0;
+        ctc->waiting_for_trigger[i] = false;
+        ctc->trigger_edge[i] = false;
+        ctc->prescaler_mask[i] = 0x0F;
+        ctc->int_state[i] = 0;
     }
 }
 
@@ -273,20 +266,20 @@ void z80ctc_reset(z80ctc_t* ctc) {
     called when the downcounter reaches zero, request interrupt,
     trigger ZCTO pin and reload downcounter
 */
-static uint64_t _z80ctc_counter_zero(z80ctc_t* ctc, z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
+static uint64_t _z80ctc_counter_zero(z80ctc_t* ctc, uint64_t pins, int chn) {
     // down counter has reached zero, trigger interrupt and ZCTO pin
-    if (chn->control & Z80CTC_CTRL_EI) {
+    if (ctc->control[chn] & Z80CTC_CTRL_EI) {
         // interrupt enabled, request an interrupt
-        chn->int_state |= Z80CTC_INT_NEEDED;
+        ctc->int_state[chn] |= Z80CTC_INT_NEEDED;
     }
     // last channel doesn't have a ZCTO pin
-    if (chn_id < 3) {
+    if (chn < 3) {
         // set the zcto pin
-        pins |= Z80CTC_ZCTO0<<chn_id;
+        pins |= Z80CTC_ZCTO0<<chn;
         ctc->pins = pins;
     }
     // reload the down counter
-    chn->down_counter = chn->constant;
+    ctc->down_counter[chn] = ctc->constant[chn];
     return pins;
 }
 
@@ -299,55 +292,54 @@ static uint64_t _z80ctc_counter_zero(z80ctc_t* ctc, z80ctc_channel_t* chn, uint6
       the waiting flag is cleared and timing starts
     - if the channel is in counter mode, the counter decrements
 */
-static uint64_t _z80ctc_active_edge(z80ctc_t* ctc, z80ctc_channel_t* chn, uint64_t pins, int chn_id) {
-    if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
+static uint64_t _z80ctc_active_edge(z80ctc_t* ctc, uint64_t pins, int chn) {
+    if ((ctc->control[chn] & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
         // counter mode
-        if (0 == --chn->down_counter) {
-            pins = _z80ctc_counter_zero(ctc, chn, pins, chn_id);
+        if (0 == --ctc->down_counter[chn]) {
+            pins = _z80ctc_counter_zero(ctc, pins, chn);
         }
     }
-    else if (chn->waiting_for_trigger) {
+    else if (ctc->waiting_for_trigger[chn]) {
         // timer mode and waiting for trigger?
-        chn->waiting_for_trigger = false;
-        chn->down_counter = chn->constant;
+        ctc->waiting_for_trigger[chn] = false;
+        ctc->down_counter[chn] = ctc->constant[chn];
     }
     return pins;
 }
 
 // write to CTC channel
-uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn_id, uint8_t data) {
-    z80ctc_channel_t* chn = &ctc->chn[chn_id];
-    if (chn->control & Z80CTC_CTRL_CONST_FOLLOWS) {
+uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn, uint8_t data) {
+    if (ctc->control[chn] & Z80CTC_CTRL_CONST_FOLLOWS) {
         // timer constant following control word
-        chn->control &= ~(Z80CTC_CTRL_CONST_FOLLOWS|Z80CTC_CTRL_RESET);
-        chn->constant = data;
-        if ((chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
-            if ((chn->control & Z80CTC_CTRL_TRIGGER) == Z80CTC_CTRL_TRIGGER_WAIT) {
-                chn->waiting_for_trigger = true;
+        ctc->control[chn] &= ~(Z80CTC_CTRL_CONST_FOLLOWS|Z80CTC_CTRL_RESET);
+        ctc->constant[chn] = data;
+        if ((ctc->control[chn] & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_TIMER) {
+            if ((ctc->control[chn] & Z80CTC_CTRL_TRIGGER) == Z80CTC_CTRL_TRIGGER_WAIT) {
+                ctc->waiting_for_trigger[chn] = true;
             }
             else {
-                chn->down_counter = chn->constant;
+                ctc->down_counter[chn] = ctc->constant[chn];
             }
         }
         else {
-            chn->down_counter = chn->constant;
+            ctc->down_counter[chn] = ctc->constant[chn];
         }
     }
     else if (data & Z80CTC_CTRL_CONTROL) {
         // a control word
-        const uint8_t old_ctrl = chn->control;
-        chn->control = data;
-        chn->trigger_edge = (data & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_RISING;
-        if ((chn->control & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
-            chn->prescaler_mask = 0x0F;
+        const uint8_t old_ctrl = ctc->control[chn];
+        ctc->control[chn] = data;
+        ctc->trigger_edge[chn] = (data & Z80CTC_CTRL_EDGE) == Z80CTC_CTRL_EDGE_RISING;
+        if ((ctc->control[chn] & Z80CTC_CTRL_PRESCALER) == Z80CTC_CTRL_PRESCALER_16) {
+            ctc->prescaler_mask[chn] = 0x0F;
         }
         else {
-            chn->prescaler_mask = 0xFF;
+            ctc->prescaler_mask[chn] = 0xFF;
         }
 
         // changing the Trigger Slope trigger an 'active edge'
-        if ((old_ctrl & Z80CTC_CTRL_EDGE) != (chn->control & Z80CTC_CTRL_EDGE)) {
-            pins = _z80ctc_active_edge(ctc, chn, pins, chn_id);
+        if ((old_ctrl & Z80CTC_CTRL_EDGE) != (ctc->control[chn] & Z80CTC_CTRL_EDGE)) {
+            pins = _z80ctc_active_edge(ctc, pins, chn);
         }
     }
     else {
@@ -355,9 +347,9 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn_id, uint8_t data) {
            to channel 0, the vectors for the following channels
            are then computed from the base vector plus 2 bytes per channel
         */
-        if (0 == chn_id) {
+        if (0 == chn) {
             for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-                ctc->chn[i].int_vector = (data & 0xF8) + 2*i;
+                ctc->int_vector[i] = (data & 0xF8) + 2*i;
             }
         }
     }
@@ -366,14 +358,14 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn_id, uint8_t data) {
 
 // perform an CPU IO request on the CTC
 static uint64_t _z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
-    const int chn_id = (pins / Z80CTC_CS0) & 3;
+    const int chn = (pins / Z80CTC_CS0) & 3;
     if (pins & Z80CTC_RD) {
-        const uint8_t data = ctc->chn[chn_id].down_counter;
+        const uint8_t data = ctc->down_counter[chn];
         Z80CTC_SET_DATA(pins, data);
     }
     else {
         const uint8_t data = Z80CTC_GET_DATA(pins);
-        pins = _z80ctc_write(ctc, pins, chn_id, data);
+        pins = _z80ctc_write(ctc, pins, chn, data);
     }
     return pins;
 }
@@ -381,26 +373,24 @@ static uint64_t _z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
 // internal tick function
 static uint64_t _z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
     pins &= ~(Z80CTC_ZCTO0|Z80CTC_ZCTO1|Z80CTC_ZCTO2);
-    for (int chn_id = 0; chn_id < Z80CTC_NUM_CHANNELS; chn_id++) {
-        z80ctc_channel_t* chn = &ctc->chn[chn_id];
-
+    for (int chn = 0; chn < Z80CTC_NUM_CHANNELS; chn++) {
         // check if externally triggered
-        if (chn->waiting_for_trigger || (chn->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
-            bool trg = 0 != (pins & (Z80CTC_CLKTRG0<<chn_id));
-            if (trg != chn->ext_trigger) {
-                chn->ext_trigger = trg;
+        if (ctc->waiting_for_trigger[chn] || (ctc->control[chn] & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
+            bool trg = 0 != (pins & (Z80CTC_CLKTRG0<<chn));
+            if (trg != ctc->ext_trigger[chn]) {
+                ctc->ext_trigger[chn] = trg;
                 /* rising/falling edge trigger */
-                if (chn->trigger_edge == trg) {
-                    pins = _z80ctc_active_edge(ctc, chn, pins, chn_id);
+                if (ctc->trigger_edge[chn] == trg) {
+                    pins = _z80ctc_active_edge(ctc, pins, chn);
                 }
             }
         }
-        else if ((chn->control & (Z80CTC_CTRL_MODE|Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) == Z80CTC_CTRL_MODE_TIMER) {
+        else if ((ctc->control[chn] & (Z80CTC_CTRL_MODE|Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) == Z80CTC_CTRL_MODE_TIMER) {
             // handle timer mode downcounting
-            if (0 == ((--chn->prescaler) & chn->prescaler_mask)) {
+            if (0 == ((--ctc->prescaler[chn]) & ctc->prescaler_mask[chn])) {
                 // prescaler has reached zero, tick the down counter
-                if (0 == --chn->down_counter) {
-                    pins = _z80ctc_counter_zero(ctc, chn, pins, chn_id);
+                if (0 == --ctc->down_counter[chn]) {
+                    pins = _z80ctc_counter_zero(ctc, pins, chn);
                 }
             }
         }
@@ -410,15 +400,13 @@ static uint64_t _z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
 
 // interrupt daisy chain handling
 static uint64_t _z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
-    for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
-        z80ctc_channel_t* chn = &ctc->chn[i];
-
+    for (int chn = 0; chn < Z80CTC_NUM_CHANNELS; chn++) {
         // on RETI, only the highest priority interrupt that's currently being
         // serviced resets its state so that IEIO enables interrupt handling
         // on downstream devices, this must be allowed to happen even if a higher
         // priority device has entered interrupt handling
-        if ((pins & Z80CTC_RETI) && (chn->int_state & Z80CTC_INT_SERVICED)) {
-            chn->int_state &= ~Z80CTC_INT_SERVICED;
+        if ((pins & Z80CTC_RETI) && (ctc->int_state[chn] & Z80CTC_INT_SERVICED)) {
+            ctc->int_state[chn] &= ~Z80CTC_INT_SERVICED;
             pins &= ~Z80CTC_RETI;
         }
 
@@ -447,20 +435,20 @@ static uint64_t _z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
               their interrupt request status when M1 is active - about two
               clock cycles earlier than IORQ".
         */
-        if ((chn->int_state != 0) && (pins & Z80CTC_IEIO)) {
+        if ((ctc->int_state[chn] != 0) && (pins & Z80CTC_IEIO)) {
             // inhibit interrupt handling on downstream devices for the
             // entire duration of interrupt servicing
             pins &= ~Z80CTC_IEIO;
             // set INT pint active until the CPU acknowledges the interrupt
-            if (chn->int_state & Z80CTC_INT_NEEDED) {
+            if (ctc->int_state[chn] & Z80CTC_INT_NEEDED) {
                 pins |= Z80CTC_INT;
-                chn->int_state = (chn->int_state & ~Z80CTC_INT_NEEDED) | Z80CTC_INT_REQUESTED;
+                ctc->int_state[chn] = (ctc->int_state[chn] & ~Z80CTC_INT_NEEDED) | Z80CTC_INT_REQUESTED;
             }
             // interrupt ackowledge from CPU (M1|IORQ): put interrupt vector
             // on data bus, clear INT pin and go into "serviced" state.
-            if ((chn->int_state & Z80CTC_INT_REQUESTED) && ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1))) {
-                Z80CTC_SET_DATA(pins, chn->int_vector);
-                chn->int_state = (chn->int_state & ~Z80CTC_INT_REQUESTED) | Z80CTC_INT_SERVICED;
+            if ((ctc->int_state[chn] & Z80CTC_INT_REQUESTED) && ((pins & (Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_IORQ|Z80CTC_M1))) {
+                Z80CTC_SET_DATA(pins, ctc->int_vector[chn]);
+                ctc->int_state[chn] = (ctc->int_state[chn] & ~Z80CTC_INT_REQUESTED) | Z80CTC_INT_SERVICED;
                 pins &= ~Z80CTC_INT;
             }
         }
