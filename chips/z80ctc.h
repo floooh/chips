@@ -196,7 +196,8 @@ extern "C" {
 typedef struct {
     uint8_t control[Z80CTC_NUM_CHANNELS];   // Z80CTC_CTRL_xxx
     uint8_t constant[Z80CTC_NUM_CHANNELS];
-    uint8_t down_counter[Z80CTC_NUM_CHANNELS];
+    uint8_t counter[Z80CTC_NUM_CHANNELS];
+    uint8_t count[Z80CTC_NUM_CHANNELS];
     uint8_t prescaler[Z80CTC_NUM_CHANNELS];
     uint8_t int_vector[Z80CTC_NUM_CHANNELS];
     // optimization helpers
@@ -254,33 +255,12 @@ void z80ctc_reset(z80ctc_t* ctc) {
     for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
         ctc->control[i] = Z80CTC_CTRL_RESET;
         ctc->constant[i] = 0;
-        ctc->down_counter[i] = 0;
+        ctc->counter[i] = 0;
         ctc->waiting_for_trigger[i] = false;
         ctc->trigger_edge[i] = false;
         ctc->prescaler_mask[i] = 0x0F;
         ctc->int_state[i] = 0;
     }
-}
-
-/*
-    called when the downcounter reaches zero, request interrupt,
-    trigger ZCTO pin and reload downcounter
-*/
-static uint64_t _z80ctc_counter_zero(z80ctc_t* ctc, uint64_t pins, int chn) {
-    // down counter has reached zero, trigger interrupt and ZCTO pin
-    if (ctc->control[chn] & Z80CTC_CTRL_EI) {
-        // interrupt enabled, request an interrupt
-        ctc->int_state[chn] |= Z80CTC_INT_NEEDED;
-    }
-    // last channel doesn't have a ZCTO pin
-    if (chn < 3) {
-        // set the zcto pin
-        pins |= Z80CTC_ZCTO0<<chn;
-        ctc->pins = pins;
-    }
-    // reload the down counter
-    ctc->down_counter[chn] = ctc->constant[chn];
-    return pins;
 }
 
 /*
@@ -292,22 +272,19 @@ static uint64_t _z80ctc_counter_zero(z80ctc_t* ctc, uint64_t pins, int chn) {
       the waiting flag is cleared and timing starts
     - if the channel is in counter mode, the counter decrements
 */
-static uint64_t _z80ctc_active_edge(z80ctc_t* ctc, uint64_t pins, int chn) {
+static void _z80ctc_active_edge(z80ctc_t* ctc, int chn) {
     if ((ctc->control[chn] & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
         // counter mode
-        if (0 == --ctc->down_counter[chn]) {
-            pins = _z80ctc_counter_zero(ctc, pins, chn);
-        }
+        ctc->count[chn] = 1;
     } else if (ctc->waiting_for_trigger[chn]) {
         // timer mode and waiting for trigger?
         ctc->waiting_for_trigger[chn] = false;
-        ctc->down_counter[chn] = ctc->constant[chn];
+        ctc->counter[chn] = ctc->constant[chn];
     }
-    return pins;
 }
 
 // write to CTC channel
-uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn, uint8_t data) {
+void _z80ctc_write(z80ctc_t* ctc, int chn, uint8_t data) {
     if (ctc->control[chn] & Z80CTC_CTRL_CONST_FOLLOWS) {
         // timer constant following control word
         ctc->control[chn] &= ~(Z80CTC_CTRL_CONST_FOLLOWS|Z80CTC_CTRL_RESET);
@@ -316,10 +293,10 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn, uint8_t data) {
             if ((ctc->control[chn] & Z80CTC_CTRL_TRIGGER) == Z80CTC_CTRL_TRIGGER_WAIT) {
                 ctc->waiting_for_trigger[chn] = true;
             } else {
-                ctc->down_counter[chn] = ctc->constant[chn];
+                ctc->counter[chn] = ctc->constant[chn];
             }
         } else {
-            ctc->down_counter[chn] = ctc->constant[chn];
+            ctc->counter[chn] = ctc->constant[chn];
         }
     } else if (data & Z80CTC_CTRL_CONTROL) {
         // a control word
@@ -332,9 +309,9 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn, uint8_t data) {
             ctc->prescaler_mask[chn] = 0xFF;
         }
 
-        // changing the Trigger Slope trigger an 'active edge'
+        // changing the Trigger Slope triggers an 'active edge'
         if ((old_ctrl & Z80CTC_CTRL_EDGE) != (ctc->control[chn] & Z80CTC_CTRL_EDGE)) {
-            pins = _z80ctc_active_edge(ctc, pins, chn);
+            _z80ctc_active_edge(ctc, chn);
         }
     } else {
         /* the interrupt vector for the entire CTC must be written
@@ -347,18 +324,17 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn, uint8_t data) {
             }
         }
     }
-    return pins;
 }
 
 // perform an CPU IO request on the CTC
 static uint64_t _z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
     const int chn = (pins / Z80CTC_CS0) & 3;
     if (pins & Z80CTC_RD) {
-        const uint8_t data = ctc->down_counter[chn];
+        const uint8_t data = ctc->counter[chn];
         Z80CTC_SET_DATA(pins, data);
     } else {
         const uint8_t data = Z80CTC_GET_DATA(pins);
-        pins = _z80ctc_write(ctc, pins, chn, data);
+        _z80ctc_write(ctc, chn, data);
     }
     return pins;
 }
@@ -374,16 +350,33 @@ static uint64_t _z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
                 ctc->ext_trigger[chn] = trg;
                 /* rising/falling edge trigger */
                 if (ctc->trigger_edge[chn] == trg) {
-                    pins = _z80ctc_active_edge(ctc, pins, chn);
+                    _z80ctc_active_edge(ctc, chn);
                 }
             }
         } else if ((ctc->control[chn] & (Z80CTC_CTRL_MODE|Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) == Z80CTC_CTRL_MODE_TIMER) {
             // handle timer mode downcounting
             if (0 == ((--ctc->prescaler[chn]) & ctc->prescaler_mask[chn])) {
                 // prescaler has reached zero, tick the down counter
-                if (0 == --ctc->down_counter[chn]) {
-                    pins = _z80ctc_counter_zero(ctc, pins, chn);
+                ctc->count[chn] = 1;
+            }
+        }
+    }
+    for (int chn = 0; chn < Z80CTC_NUM_CHANNELS; chn++) {
+        if (ctc->count[chn]) {
+            ctc->counter[chn] -= 1;
+            if (0 == ctc->counter[chn]) {
+                // down counter has reached zero, trigger interrupt and ZCTO pin
+                if (ctc->control[chn] & Z80CTC_CTRL_EI) {
+                    // interrupt enabled, request an interrupt
+                    ctc->int_state[chn] |= Z80CTC_INT_NEEDED;
                 }
+                // last channel doesn't have a ZCTO pin
+                if (chn < 3) {
+                    // set the zcto pin
+                    pins |= Z80CTC_ZCTO0<<chn;
+                }
+                // reload the down counter
+                ctc->counter[chn] = ctc->constant[chn];
             }
         }
     }
@@ -449,6 +442,9 @@ static uint64_t _z80ctc_int(z80ctc_t* ctc, uint64_t pins) {
 }
 
 uint64_t z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
+    for (int i = 0; i < Z80CTC_NUM_CHANNELS; i++) {
+        ctc->count[i] = 0;
+    }
     if ((pins & (Z80CTC_CE|Z80CTC_IORQ|Z80CTC_M1)) == (Z80CTC_CE|Z80CTC_IORQ)) {
         pins = _z80ctc_iorq(ctc, pins);
     }
