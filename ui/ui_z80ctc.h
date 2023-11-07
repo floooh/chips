@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -46,7 +46,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -136,51 +136,51 @@ static void _ui_z80ctc_channels(ui_z80ctc_t* win) {
 
     ImGui::Text("Constant"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%02X", ctc->chn[i].constant); ImGui::NextColumn();
+        ImGui::Text("%02X", ctc->constant[i]); ImGui::NextColumn();
     }
     ImGui::Text("Counter"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%02X", ctc->chn[i].down_counter); ImGui::NextColumn();
+        ImGui::Text("%02X", ctc->counter[i]); ImGui::NextColumn();
     }
     ImGui::Text("INT Vec"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%02X", ctc->chn[i].int_vector); ImGui::NextColumn();
+        ImGui::Text("%02X", ctc->int_vector[i]); ImGui::NextColumn();
     }
     ImGui::Text("Control"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%02X", ctc->chn[i].control); ImGui::NextColumn();
+        ImGui::Text("%02X", ctc->control[i]); ImGui::NextColumn();
     }
     ImGui::Text("       INT"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_EI) ? "EI":"DI"); ImGui::NextColumn();
+        ImGui::Text("%s", (ctc->control[i] & Z80CTC_CTRL_EI) ? "EI":"DI"); ImGui::NextColumn();
     }
     ImGui::Text("      MODE"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_MODE) ? "CTR":"TMR"); ImGui::NextColumn();
+        ImGui::Text("%s", (ctc->control[i] & Z80CTC_CTRL_MODE) ? "CTR":"TMR"); ImGui::NextColumn();
     }
     ImGui::Text("  PRESCALE"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_PRESCALER) ? "256":"16"); ImGui::NextColumn();
+        ImGui::Text("%s", (ctc->control[i] & Z80CTC_CTRL_PRESCALER) ? "256":"16"); ImGui::NextColumn();
     }
     ImGui::Text("      EDGE"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_EDGE) ? "RISE":"FALL"); ImGui::NextColumn();
+        ImGui::Text("%s", (ctc->control[i] & Z80CTC_CTRL_EDGE) ? "RISE":"FALL"); ImGui::NextColumn();
     }
     ImGui::Text("   TRIGGER"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_TRIGGER) ? "PULS":"AUTO"); ImGui::NextColumn();
+        ImGui::Text("%s", (ctc->control[i] & Z80CTC_CTRL_TRIGGER) ? "PULS":"AUTO"); ImGui::NextColumn();
     }
     ImGui::Text("  CONSTANT"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_CONST_FOLLOWS) ? "FLWS":"NONE"); ImGui::NextColumn();
+        ImGui::Text("%s", (ctc->control[i] & Z80CTC_CTRL_CONST_FOLLOWS) ? "FLWS":"NONE"); ImGui::NextColumn();
     }
     ImGui::Text("     RESET"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_RESET) ? "ON":"OFF"); ImGui::NextColumn();
+        ImGui::Text("%s", (ctc->control[i] & Z80CTC_CTRL_RESET) ? "ON":"OFF"); ImGui::NextColumn();
     }
     ImGui::Text("   CONTROL"); ImGui::NextColumn();
     for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_CONTROL) ? "WRD":"VEC"); ImGui::NextColumn();
+        ImGui::Text("%s", (ctc->control[i] & Z80CTC_CTRL_CONTROL) ? "WRD":"VEC"); ImGui::NextColumn();
     }
 }
 
