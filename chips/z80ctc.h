@@ -342,31 +342,26 @@ static uint64_t _z80ctc_iorq(z80ctc_t* ctc, uint64_t pins) {
 // internal tick function
 static uint64_t _z80ctc_tick(z80ctc_t* ctc, uint64_t pins) {
     pins &= ~(Z80CTC_ZCTO0|Z80CTC_ZCTO1|Z80CTC_ZCTO2);
-    u8x4 prescaler_sub = 0;
-    for (int chn = 0; chn < Z80CTC_NUM_CHANNELS; chn++) {
-        // check if externally triggered
-        if (ctc->waiting_for_trigger[chn] || (ctc->control[chn] & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
-            uint8_t trg = (0 != (pins & (Z80CTC_CLKTRG0<<chn))) ? 0xFF : 0x00;
-            if (trg != ctc->ext_trigger[chn]) {
-                ctc->ext_trigger[chn] = trg;
-                /* rising/falling edge trigger */
-                if (ctc->trigger_edge[chn] == trg) {
-                    // z80ctc_active_edge()
-                    if ((ctc->control[chn] & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER) {
-                        // counter mode
-                        ctc->active_edge_counter_sub[chn] = 1;
-                    } else if (ctc->waiting_for_trigger[chn]) {
-                        // timer mode and waiting for trigger?
-                        ctc->waiting_for_trigger[chn] = 0x00;
-                        ctc->counter[chn] = ctc->constant[chn];
-                    }
-                }
-            }
-        } else if ((ctc->control[chn] & (Z80CTC_CTRL_MODE|Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) == Z80CTC_CTRL_MODE_TIMER) {
-            // handle timer mode downcounting
-            prescaler_sub[chn] = 1;
-        }
-    }
+
+    u8x4 if_wait = ctc->waiting_for_trigger;
+    u8x4 if_counter = (u8x4)((ctc->control & Z80CTC_CTRL_MODE) == Z80CTC_CTRL_MODE_COUNTER);
+    u8x4 if_wait_or_counter = if_wait | if_counter;
+    u8x4 if_prescale = ~if_wait_or_counter & (u8x4)((ctc->control & (Z80CTC_CTRL_MODE|Z80CTC_CTRL_RESET|Z80CTC_CTRL_CONST_FOLLOWS)) == Z80CTC_CTRL_MODE_TIMER);
+    u8x4 if_clktrg = {
+        (pins & Z80CTC_CLKTRG0) ? 0xFF : 0x00,
+        (pins & Z80CTC_CLKTRG1) ? 0xFF : 0x00,
+        (pins & Z80CTC_CLKTRG2) ? 0xFF : 0x00,
+        (pins & Z80CTC_CLKTRG3) ? 0xFF : 0x00,
+    };
+    u8x4 if_ext_trigger = if_wait_or_counter & ((u8x4)(if_clktrg != ctc->ext_trigger));
+    ctc->ext_trigger = (ctc->ext_trigger & ~if_ext_trigger) | (~ctc->ext_trigger & if_ext_trigger);
+    u8x4 if_trigger_edge = if_ext_trigger & ((u8x4)(if_clktrg == ctc->trigger_edge));
+    u8x4 if_counter_sub = if_trigger_edge & if_counter;
+    ctc->active_edge_counter_sub |= if_counter_sub & 1;
+    u8x4 if_start_waiting_trigger = if_trigger_edge & ~if_counter & if_wait;
+    ctc->waiting_for_trigger &= ~if_start_waiting_trigger;
+    ctc->counter = (ctc->counter & ~if_start_waiting_trigger) | (ctc->constant & if_start_waiting_trigger);
+    u8x4 prescaler_sub = if_prescale & 1;
 
     ctc->prescaler = (ctc->prescaler - prescaler_sub) & ctc->prescaler_mask;
     u8x4 counter_sub = ctc->active_edge_counter_sub | (((u8x4)(ctc->prescaler == 0)) & 1 & prescaler_sub);
