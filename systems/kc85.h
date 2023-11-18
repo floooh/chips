@@ -478,8 +478,14 @@ const char* kc85_slot_mod_name(kc85_t* sys, uint8_t slot_addr);
 const char* kc85_slot_mod_short_name(kc85_t* sys, uint8_t slot_addr);
 // get a slot's control byte
 uint8_t kc85_slot_ctrl(kc85_t* sys, uint8_t slot_addr);
-// load a .KCC or .TAP snapshot file into the emulator
-bool kc85_quickload(kc85_t* sys, chips_range_t data);
+// test if data is a valid TAP file
+bool kc85_is_valid_kctap(chips_range_t data);
+// test if data is a valid KCC file
+bool kc85_is_valid_kcc(chips_range_t data);
+// extract the exed address from a KCC file
+uint16_t kc85_kcc_exec_addr(chips_range_t data);
+// load a .KCC or .TAP snapshot file into the emulator and optionally try to start
+bool kc85_quickload(kc85_t* sys, chips_range_t data, bool start);
 // take snapshot, patches any pointers to zero, returns a snapshot version
 uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst);
 // load a snapshot, returns false if snapshot version doesn't match
@@ -1510,7 +1516,7 @@ static void _kc85_invoke_patch_callback(kc85_t* sys, const _kc85_kcc_header* hdr
 }
 
 /* KCC files cannot really be identified since they have no magic number */
-static bool _kc85_is_valid_kcc(chips_range_t data) {
+bool kc85_is_valid_kcc(chips_range_t data) {
     if (data.size <= sizeof(_kc85_kcc_header)) {
         return false;
     }
@@ -1537,18 +1543,22 @@ static bool _kc85_is_valid_kcc(chips_range_t data) {
     return true;
 }
 
-static bool _kc85_load_kcc(kc85_t* sys, chips_range_t data) {
+uint16_t kc85_kcc_exec_addr(chips_range_t data) {
+    assert(kc85_is_valid_kcc(data));
+    const _kc85_kcc_header* hdr = (const _kc85_kcc_header*) data.ptr;
+    return hdr->exec_addr_h<<8 | hdr->exec_addr_l;
+}
+
+static bool _kc85_load_kcc(kc85_t* sys, chips_range_t data, bool start) {
     const _kc85_kcc_header* hdr = (_kc85_kcc_header*) data.ptr;
     uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
     uint16_t end_addr  = hdr->end_addr_h<<8 | hdr->end_addr_l;
     const uint8_t* ptr = (const uint8_t*)data.ptr + sizeof(_kc85_kcc_header);
     while (addr < end_addr) {
-        /* data is continuous */
         mem_wr(&sys->mem, addr++, *ptr++);
     }
     _kc85_invoke_patch_callback(sys, hdr);
-    /* if file has an exec-address, start the program */
-    if (hdr->num_addr > 2) {
+    if (start && (hdr->num_addr > 2)) {
         _kc85_load_start(sys, hdr->exec_addr_h<<8 | hdr->exec_addr_l);
     }
     return true;
@@ -1561,7 +1571,7 @@ typedef struct {
     _kc85_kcc_header kcc;   /* from here on identical with KCC */
 } _kc85_kctap_header;
 
-static bool _kc85_is_valid_kctap(chips_range_t data) {
+bool kc85_is_valid_kctap(chips_range_t data) {
     if (data.size <= sizeof(_kc85_kctap_header)) {
         return false;
     }
@@ -1594,7 +1604,7 @@ static bool _kc85_is_valid_kctap(chips_range_t data) {
     return true;
 }
 
-static bool _kc85_load_kctap(kc85_t* sys, chips_range_t data) {
+static bool _kc85_load_kctap(kc85_t* sys, chips_range_t data, bool start) {
     const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) data.ptr;
     uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
     uint16_t end_addr  = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
@@ -1608,20 +1618,20 @@ static bool _kc85_load_kctap(kc85_t* sys, chips_range_t data) {
     }
     _kc85_invoke_patch_callback(sys, &hdr->kcc);
     /* if file has an exec-address, start the program */
-    if (hdr->kcc.num_addr > 2) {
+    if (start && (hdr->kcc.num_addr > 2)) {
         _kc85_load_start(sys, hdr->kcc.exec_addr_h<<8 | hdr->kcc.exec_addr_l);
     }
     return true;
 }
 
-bool kc85_quickload(kc85_t* sys, chips_range_t data) {
+bool kc85_quickload(kc85_t* sys, chips_range_t data, bool start) {
     CHIPS_ASSERT(sys && sys->valid && data.ptr);
     /* first check for KC-TAP format, since this can be properly identified */
-    if (_kc85_is_valid_kctap(data)) {
-        return _kc85_load_kctap(sys, data);
+    if (kc85_is_valid_kctap(data)) {
+        return _kc85_load_kctap(sys, data, start);
     }
-    else if (_kc85_is_valid_kcc(data)) {
-        return _kc85_load_kcc(sys, data);
+    else if (kc85_is_valid_kcc(data)) {
+        return _kc85_load_kcc(sys, data, start);
     }
     else {
         /* not a known file type, or not enough data */
