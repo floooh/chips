@@ -310,8 +310,14 @@ void ui_dbg_reboot(ui_dbg_t* win);
 void ui_dbg_add_breakpoint(ui_dbg_t* win, uint16_t addr);
 /* clear an execution breakpoint at address */
 void ui_dbg_remove_breakpoint(ui_dbg_t* win, uint16_t addr);
-/* continue stopped debugger */
+/* pause/stop execution */
+void ui_dbg_break(ui_dbg_t* win);
+/* continue execution */
 void ui_dbg_continue(ui_dbg_t* win, bool invoke_continued_cb);
+/* perform a debugger step-next (step over) */
+void ui_dbg_step_next(ui_dbg_t* win);
+/* peform a debugger step-into */
+void ui_dbg_step_into(ui_dbg_t* win);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -1947,14 +1953,28 @@ void ui_dbg_remove_breakpoint(ui_dbg_t* win, uint16_t addr) {
     }
 }
 
+void ui_dbg_break(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    _ui_dbg_break(win);
+}
+
 void ui_dbg_continue(ui_dbg_t* win, bool invoke_continued_cb) {
     CHIPS_ASSERT(win && win->valid);
     _ui_dbg_continue(win, invoke_continued_cb);
+}
+
+void ui_dbg_step_next(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    _ui_dbg_step_over(win);
+}
+
+void ui_dbg_step_into(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    _ui_dbg_step_into(win);
 }
 
 void ui_dbg_open_debugger_on_stop(ui_dbg_t* win, bool open) {
     CHIPS_ASSERT(win && win->valid);
     win->dbg.open_on_stop = open;
 }
-
 #endif /* CHIPS_UI_IMPL */
