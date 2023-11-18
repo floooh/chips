@@ -110,6 +110,13 @@ enum {
     UI_DBG_STEPMODE_TICK,
 };
 
+enum {
+    UI_DBG_STOP_REASON_UNKNOWN = 0,
+    UI_DBG_STOP_REASON_BREAK = 1,
+    UI_DBG_STOP_REASON_BREAKPOINT = 2,
+    UI_DBG_STOP_REASON_STEP = 3,
+};
+
 /* a breakpoint description */
 typedef struct ui_dbg_breakpoint_t {
     int type;           /* UI_DBG_BREAKTYPE_* */
@@ -141,8 +148,8 @@ typedef void* (*ui_dbg_create_texture_t)(int w, int h);
 typedef void (*ui_dbg_update_texture_t)(void* tex_handle, void* data, int data_byte_size);
 /* callback to destroy a UI texture */
 typedef void (*ui_dbg_destroy_texture_t)(void* tex_handle);
-/* callback when emulator has stopped at an address */
-typedef void (*ui_dbg_stopped_t)(int break_type, uint16_t addr);
+/* callback when emulator has stopped at an address (stop_reason is UI_DBG_STOP_REASON_XXX) */
+typedef void (*ui_dbg_stopped_t)(int stop_reason, uint16_t addr);
 /* callback when emulator has continued after stopped state */
 typedef void (*ui_dbg_continued_t)(void);
 
@@ -499,7 +506,7 @@ static void _ui_dbg_break(ui_dbg_t* win) {
     win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
     win->ui.request_scroll = true;
     if (win->debug_cbs.stopped_cb) {
-        win->debug_cbs.stopped_cb(UI_DBG_BREAKTYPE_EXEC, win->dbg.cur_op_pc);
+        win->debug_cbs.stopped_cb(UI_DBG_STOP_REASON_BREAK, win->dbg.cur_op_pc);
     }
 }
 
@@ -1913,10 +1920,11 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
 
     if (trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
-        win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
         if (win->debug_cbs.stopped_cb) {
-            win->debug_cbs.stopped_cb(UI_DBG_BREAKTYPE_EXEC, win->dbg.cur_op_pc);
+            int stop_reason = (win->dbg.step_mode == UI_DBG_STEPMODE_NONE) ? UI_DBG_STOP_REASON_BREAKPOINT : UI_DBG_STOP_REASON_STEP;
+            win->debug_cbs.stopped_cb(stop_reason, win->dbg.cur_op_pc);
         }
+        win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
         if (win->dbg.open_on_stop) {
             ImGui::SetWindowFocus(win->ui.title);
             win->ui.open = true;
