@@ -79,6 +79,7 @@ typedef struct {
     kc85_t* kc85;
     ui_kc85_boot_t boot_cb;                 // user-provided callback to reboot
     ui_dbg_texture_callbacks_t dbg_texture; // user-provided texture create/update/destroy callbacks
+    ui_dbg_debug_callbacks_t dbg_debug;     // user-provided debugger callbacks
     ui_dbg_keys_desc_t dbg_keys;            // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;            // snapshot system creation params
 } ui_kc85_desc_t;
@@ -365,6 +366,7 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.z80 = &ui->kc85->cpu;
         desc.read_cb = _ui_kc85_mem_read;
         desc.texture_cbs = ui_desc->dbg_texture;
+        desc.debug_cbs = ui_desc->dbg_debug;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui->kc85;
         ui_dbg_init(&ui->dbg, &desc);

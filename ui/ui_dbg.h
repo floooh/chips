@@ -141,6 +141,10 @@ typedef void* (*ui_dbg_create_texture_t)(int w, int h);
 typedef void (*ui_dbg_update_texture_t)(void* tex_handle, void* data, int data_byte_size);
 /* callback to destroy a UI texture */
 typedef void (*ui_dbg_destroy_texture_t)(void* tex_handle);
+/* callback when emulator has stopped at an address */
+typedef void (*ui_dbg_stopped_t)(int break_type, uint16_t addr);
+/* callback when emulator has continued after stopped state */
+typedef void (*ui_dbg_continued_t)(void);
 
 /* user-defined hotkeys (all strings must be static) */
 typedef struct ui_dbg_key_desc_t {
@@ -163,6 +167,11 @@ typedef struct ui_dbg_texture_callbacks_t {
     ui_dbg_destroy_texture_t destroy_cb;    // callback to destroy UI texture
 } ui_dbg_texture_callbacks_t;
 
+typedef struct ui_dbg_debug_callbacks_t {
+    ui_dbg_stopped_t stopped_cb;
+    ui_dbg_continued_t continued_cb;
+} ui_dbg_debug_callbacks_t;
+
 typedef struct ui_dbg_desc_t {
     const char* title;          /* window title */
     #if defined(UI_DBG_USE_Z80)
@@ -174,6 +183,7 @@ typedef struct ui_dbg_desc_t {
     int read_layer;                 /* layer argument for read_cb */
     ui_dbg_user_break_t break_cb;   /* optional user-breakpoint evaluation callback */
     ui_dbg_texture_callbacks_t texture_cbs;
+    ui_dbg_debug_callbacks_t debug_cbs;
     void* user_data;            /* user data for callbacks */
     int x, y;                   /* initial window pos */
     int w, h;                   /* initial window size, or 0 for default size */
@@ -199,6 +209,7 @@ typedef struct ui_dbg_state_t {
     m6502_t* m6502;
     #endif
     bool stopped;
+    bool open_on_stop;
     int step_mode;
     uint64_t last_tick_pins;    // cpu pins in last tick
     uint32_t frame_id;          // used in trap callback to detect when a new frame has started
@@ -272,9 +283,7 @@ typedef struct ui_dbg_t {
     int read_layer;
     ui_dbg_user_break_t break_cb;
     ui_dbg_texture_callbacks_t texture_cbs;
-    ui_dbg_create_texture_t create_texture_cb;
-    ui_dbg_update_texture_t update_texture_cb;
-    ui_dbg_destroy_texture_t destroy_texture_cb;
+    ui_dbg_debug_callbacks_t debug_cbs;
     void* user_data;
     ui_dbg_dasm_t dasm;
     ui_dbg_state_t dbg;
@@ -287,6 +296,8 @@ typedef struct ui_dbg_t {
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
 /* discard ui_dbg_t instance */
 void ui_dbg_discard(ui_dbg_t* win);
+/* enable/disable that the debug window opens on a breakpoint */
+void ui_dbg_open_debugger_on_stop(ui_dbg_t* win, bool open);
 /* render the ui_dbg_t UIs */
 void ui_dbg_draw(ui_dbg_t* win);
 /* call after ticking the system */
@@ -295,6 +306,12 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins);
 void ui_dbg_reset(ui_dbg_t* win);
 /* call when rebooting the emulated machine (re-initializes some data structures) */
 void ui_dbg_reboot(ui_dbg_t* win);
+/* set an execution breakpoint at address */
+void ui_dbg_add_breakpoint(ui_dbg_t* win, uint16_t addr);
+/* clear an execution breakpoint at address */
+void ui_dbg_remove_breakpoint(ui_dbg_t* win, uint16_t addr);
+/* continue stopped debugger */
+void ui_dbg_continue(ui_dbg_t* win, bool invoke_continued_cb);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -475,11 +492,17 @@ static void _ui_dbg_break(ui_dbg_t* win) {
     win->dbg.stopped = true;
     win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
     win->ui.request_scroll = true;
+    if (win->debug_cbs.stopped_cb) {
+        win->debug_cbs.stopped_cb(UI_DBG_BREAKTYPE_EXEC, win->dbg.cur_op_pc);
+    }
 }
 
-static void _ui_dbg_continue(ui_dbg_t* win) {
+static void _ui_dbg_continue(ui_dbg_t* win, bool invoke_continue_cb) {
     win->dbg.stopped = false;
     win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
+    if (invoke_continue_cb && win->debug_cbs.continued_cb) {
+        win->debug_cbs.continued_cb();
+    }
 }
 
 static void _ui_dbg_step_into(ui_dbg_t* win) {
@@ -608,6 +631,7 @@ static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
         CHIPS_ASSERT(desc->m6502);
         dbg->m6502 = desc->m6502;
     #endif
+    dbg->open_on_stop = true;
     dbg->delete_breakpoint_index = -1;
 }
 
@@ -1034,14 +1058,14 @@ static void _ui_dbg_heatmap_init(ui_dbg_t* win) {
     win->heatmap.tex_height = 256;
     win->heatmap.tex_width_uicombo_state = 4;
     win->heatmap.next_tex_width = win->heatmap.tex_width;
-    win->heatmap.texture = win->create_texture_cb(win->heatmap.tex_width, win->heatmap.tex_height);
+    win->heatmap.texture = win->texture_cbs.create_cb(win->heatmap.tex_width, win->heatmap.tex_height);
     win->heatmap.show_ops = win->heatmap.show_reads = win->heatmap.show_writes = true;
     win->heatmap.scale = 1;
     win->heatmap.autoclear_interval = 0;  /* 0 means: no autoclear */
 }
 
 static void _ui_dbg_heatmap_discard(ui_dbg_t* win) {
-    win->destroy_texture_cb(win->heatmap.texture);
+    win->texture_cbs.destroy_cb(win->heatmap.texture);
 }
 
 static void _ui_dbg_heatmap_update_texture_size(ui_dbg_t* win, int new_width) {
@@ -1049,8 +1073,8 @@ static void _ui_dbg_heatmap_update_texture_size(ui_dbg_t* win, int new_width) {
     if (new_width != win->heatmap.tex_width) {
         win->heatmap.tex_width = new_width;
         win->heatmap.tex_height = (1<<16) / new_width;
-        win->destroy_texture_cb(win->heatmap.texture);
-        win->heatmap.texture = win->create_texture_cb(win->heatmap.tex_width, win->heatmap.tex_height);
+        win->texture_cbs.destroy_cb(win->heatmap.texture);
+        win->heatmap.texture = win->texture_cbs.create_cb(win->heatmap.tex_width, win->heatmap.tex_height);
     }
 }
 
@@ -1144,7 +1168,7 @@ static void _ui_dbg_heatmap_update(ui_dbg_t* win) {
             win->heatmap.pixels[i] = p;
         }
     }
-    win->update_texture_cb(win->heatmap.texture, win->heatmap.pixels, 256*256*4);
+    win->texture_cbs.update_cb(win->heatmap.texture, win->heatmap.pixels, 256*256*4);
 }
 
 static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
@@ -1340,7 +1364,7 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
                 _ui_dbg_break(win);
             }
             if (ImGui::MenuItem("Continue", win->ui.keys.cont.name, false, win->dbg.stopped)) {
-                _ui_dbg_continue(win);
+                _ui_dbg_continue(win, true);
             }
             if (ImGui::MenuItem("Step Over", win->ui.keys.step_over.name, false, win->dbg.stopped)) {
                 _ui_dbg_step_over(win);
@@ -1483,7 +1507,7 @@ static void _ui_dbg_handle_input(ui_dbg_t* win) {
     if (win->dbg.stopped) {
         if (0 != win->ui.keys.cont.keycode) {
             if (ImGui::IsKeyPressed((ImGuiKey)win->ui.keys.cont.keycode)) {
-                _ui_dbg_continue(win);
+                _ui_dbg_continue(win, true);
             }
         }
         if (0 != win->ui.keys.step_over.keycode) {
@@ -1520,7 +1544,7 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
     if (win->dbg.stopped || (win->dbg.step_mode != UI_DBG_STEPMODE_NONE)) {
         snprintf(str, sizeof(str), "Continue (%s)", _ui_dbg_str_or_def(win->ui.keys.cont.name, "-"));
         if (ImGui::Button(str)) {
-            _ui_dbg_continue(win);
+            _ui_dbg_continue(win, true);
         }
         ImGui::SameLine();
         snprintf(str, sizeof(str), "Over (%s)", _ui_dbg_str_or_def(win->ui.keys.step_over.name, "-"));
@@ -1825,9 +1849,8 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     win->read_cb = desc->read_cb;
     win->read_layer = desc->read_layer;
     win->break_cb = desc->break_cb;
-    win->create_texture_cb = desc->texture_cbs.create_cb;
-    win->update_texture_cb = desc->texture_cbs.update_cb;
-    win->destroy_texture_cb = desc->texture_cbs.destroy_cb;
+    win->texture_cbs = desc->texture_cbs;
+    win->debug_cbs = desc->debug_cbs;
     win->user_data = desc->user_data;
     _ui_dbg_dbgstate_init(win, desc);
     _ui_dbg_uistate_init(win, desc);
@@ -1885,8 +1908,13 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
     if (trap_id >= UI_DBG_STEP_TRAPID) {
         win->dbg.stopped = true;
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
-        ImGui::SetWindowFocus(win->ui.title);
-        win->ui.open = true;
+        if (win->debug_cbs.stopped_cb) {
+            win->debug_cbs.stopped_cb(UI_DBG_BREAKTYPE_EXEC, win->dbg.cur_op_pc);
+        }
+        if (win->dbg.open_on_stop) {
+            ImGui::SetWindowFocus(win->ui.title);
+            win->ui.open = true;
+        }
     }
     win->dbg.last_trap_id = trap_id;
 }
@@ -1902,4 +1930,31 @@ void ui_dbg_draw(ui_dbg_t* win) {
     _ui_dbg_history_draw(win);
     _ui_dbg_bp_draw(win);
 }
+
+void ui_dbg_add_breakpoint(ui_dbg_t* win, uint16_t addr) {
+    CHIPS_ASSERT(win && win->valid && win->ui.title);
+    int index = _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, addr);
+    if (index < 0) {
+        _ui_dbg_bp_add_exec(win, true, addr);
+    }
+}
+
+void ui_dbg_remove_breakpoint(ui_dbg_t* win, uint16_t addr) {
+    CHIPS_ASSERT(win && win->valid && win->ui.title);
+    int index = _ui_dbg_bp_find(win, UI_DBG_BREAKTYPE_EXEC, addr);
+    if (index >= 0) {
+        _ui_dbg_bp_del(win, index);
+    }
+}
+
+void ui_dbg_continue(ui_dbg_t* win, bool invoke_continued_cb) {
+    CHIPS_ASSERT(win && win->valid);
+    _ui_dbg_continue(win, invoke_continued_cb);
+}
+
+void ui_dbg_open_debugger_on_stop(ui_dbg_t* win, bool open) {
+    CHIPS_ASSERT(win && win->valid);
+    win->dbg.open_on_stop = open;
+}
+
 #endif /* CHIPS_UI_IMPL */
