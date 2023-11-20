@@ -216,7 +216,7 @@ typedef struct ui_dbg_state_t {
     m6502_t* m6502;
     #endif
     bool stopped;
-    bool open_on_stop;
+    bool external_debugger_connected;
     int step_mode;
     uint64_t last_tick_pins;    // cpu pins in last tick
     uint32_t frame_id;          // used in trap callback to detect when a new frame has started
@@ -303,8 +303,10 @@ typedef struct ui_dbg_t {
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
 /* discard ui_dbg_t instance */
 void ui_dbg_discard(ui_dbg_t* win);
-/* enable/disable that the debug window opens on a breakpoint */
-void ui_dbg_open_debugger_on_stop(ui_dbg_t* win, bool open);
+/* notify ui_dbg that an external debugger has connected (may change some behaviour) */
+void ui_dbg_external_debugger_connected(ui_dbg_t* win);
+/* notify ui_dbg that an external debugger has disconnected (clears breakpoints and continues) */
+void ui_dbg_external_debugger_disconnected(ui_dbg_t* win);
 /* render the ui_dbg_t UIs */
 void ui_dbg_draw(ui_dbg_t* win);
 /* call after ticking the system */
@@ -644,7 +646,6 @@ static void _ui_dbg_dbgstate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
         CHIPS_ASSERT(desc->m6502);
         dbg->m6502 = desc->m6502;
     #endif
-    dbg->open_on_stop = true;
     dbg->delete_breakpoint_index = -1;
 }
 
@@ -1925,7 +1926,7 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
             win->debug_cbs.stopped_cb(stop_reason, win->dbg.cur_op_pc);
         }
         win->dbg.step_mode = UI_DBG_STEPMODE_NONE;
-        if (win->dbg.open_on_stop) {
+        if (!win->dbg.external_debugger_connected) {
             ImGui::SetWindowFocus(win->ui.title);
             win->ui.open = true;
         }
@@ -1943,6 +1944,19 @@ void ui_dbg_draw(ui_dbg_t* win) {
     _ui_dbg_heatmap_draw(win);
     _ui_dbg_history_draw(win);
     _ui_dbg_bp_draw(win);
+}
+
+void ui_dbg_external_debugger_connected(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    win->dbg.external_debugger_connected = true;
+}
+
+void ui_dbg_external_debugger_disconnected(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    win->dbg.external_debugger_connected = false;
+    // delete all breakpoints and continue execution (in case of stopped)
+    _ui_dbg_bp_delete_all(win);
+    _ui_dbg_continue(win, false);
 }
 
 void ui_dbg_add_breakpoint(ui_dbg_t* win, uint16_t addr) {
@@ -1979,10 +1993,5 @@ void ui_dbg_step_next(ui_dbg_t* win) {
 void ui_dbg_step_into(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
     _ui_dbg_step_into(win);
-}
-
-void ui_dbg_open_debugger_on_stop(ui_dbg_t* win, bool open) {
-    CHIPS_ASSERT(win && win->valid);
-    win->dbg.open_on_stop = open;
 }
 #endif /* CHIPS_UI_IMPL */
