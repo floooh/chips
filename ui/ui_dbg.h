@@ -323,6 +323,8 @@ void ui_dbg_remove_breakpoint(ui_dbg_t* win, uint16_t addr);
 void ui_dbg_break(ui_dbg_t* win);
 /* continue execution */
 void ui_dbg_continue(ui_dbg_t* win, bool invoke_continued_cb);
+/* return true if the debugger is currently stopped */
+bool ui_dbg_stopped(ui_dbg_t* win);
 /* perform a debugger step-next (step over) */
 void ui_dbg_step_next(ui_dbg_t* win);
 /* peform a debugger step-into */
@@ -1983,6 +1985,11 @@ void ui_dbg_break(ui_dbg_t* win) {
 void ui_dbg_continue(ui_dbg_t* win, bool invoke_continued_cb) {
     CHIPS_ASSERT(win && win->valid);
     _ui_dbg_continue(win, invoke_continued_cb);
+}
+
+bool ui_dbg_stopped(ui_dbg_t* win) {
+    CHIPS_ASSERT(win && win->valid);
+    return win->dbg.stopped;
 }
 
 void ui_dbg_step_next(ui_dbg_t* win) {
