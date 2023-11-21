@@ -484,6 +484,8 @@ bool kc85_is_valid_kctap(chips_range_t data);
 bool kc85_is_valid_kcc(chips_range_t data);
 // extract the exed address from a KCC file
 uint16_t kc85_kcc_exec_addr(chips_range_t data);
+// get the return address in ROM which is pushed on the stack for quickloaded code
+uint16_t kc85_quickload_return_addr(void);
 // load a .KCC or .TAP snapshot file into the emulator and optionally try to start
 bool kc85_quickload(kc85_t* sys, chips_range_t data, bool start);
 // take snapshot, patches any pointers to zero, returns a snapshot version
@@ -1468,6 +1470,19 @@ static void _kc85_exp_update_memory_mapping(kc85_t* sys) {
 
 /*=== FILE LOADING ===========================================================*/
 
+uint16_t kc85_quickload_return_addr(void) {
+    // FIXME: KC85/2: find proper return address
+    #if defined(CHIPS_KC85_TYPE_2)
+        return 0xffff;
+    #elif defined(CHIPS_KC85_TYPE_3)
+        return 0xf15c;
+    #elif defined(CHIPS_KC85_TYPE_4)
+        return 0xf17e;
+    #else
+    #error "unknown KC85 type!"
+    #endif
+}
+
 // common start function for all snapshot file formats
 static void _kc85_load_start(kc85_t* sys, uint16_t exec_addr) {
     sys->cpu.a = 0x00;
@@ -1484,11 +1499,10 @@ static void _kc85_load_start(kc85_t* sys, uint16_t exec_addr) {
     mem_wr(&sys->mem, 0xb7a0, 0);
     #if defined(CHIPS_KC85_TYPE_3)
         _kc85_tick(sys, Z80_MAKE_PINS(Z80_IORQ|Z80_WR, 0x89, 0x9f));
-        mem_wr16(&sys->mem, sys->cpu.sp, 0xf15c);
     #elif defined(CHIPS_KC85_TYPE_4)
         _kc85_tick(sys, Z80_MAKE_PINS(Z80_IORQ|Z80_WR, 0x89, 0xff));
-        mem_wr16(&sys->mem, sys->cpu.sp, 0xf17e);
     #endif
+    mem_wr16(&sys->mem, sys->cpu.sp, kc85_quickload_return_addr());
     z80_prefetch(&sys->cpu, exec_addr);
 }
 
