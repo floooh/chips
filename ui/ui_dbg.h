@@ -391,7 +391,7 @@ static inline uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t pc) {
     win->dasm.str_pos = 0;
     win->dasm.bin_pos = 0;
     #if defined(UI_DBG_USE_Z80)
-        z80dasm_op(pc, _ui_dbg_dasm_in_cb, win, _ui_dbg_dasm_out_cb, win);
+        z80dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
     #elif defined(UI_DBG_USE_M6502)
         m6502dasm_op(pc, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
     #endif
@@ -404,7 +404,7 @@ static inline uint16_t _ui_dbg_disasm_len(ui_dbg_t* win, uint16_t pc) {
     win->dasm.str_pos = 0;
     win->dasm.bin_pos = 0;
     #if defined(UI_DBG_USE_Z80)
-        uint16_t next_pc = z80dasm_op(pc, _ui_dbg_dasm_in_cb, win, 0, 0);
+        uint16_t next_pc = z80dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
     #elif defined(UI_DBG_USE_M6502)
         uint16_t next_pc = m6502dasm_op(pc, _ui_dbg_dasm_in_cb, 0, win);
     #endif

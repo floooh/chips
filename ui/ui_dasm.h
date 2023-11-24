@@ -8,7 +8,7 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the
+    before you include this file in *one* C++ file to create the 
     implementation.
 
     Select the supported CPUs with the following macros (at least
@@ -18,7 +18,7 @@
     UI_DASM_USE_M6502
 
     Optionally provide the following macros with your own implementation
-
+    
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -51,7 +51,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution.
+        distribution. 
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -202,7 +202,7 @@ static void _ui_dasm_disasm(ui_dasm_t* win) {
         m6502dasm_op(win->cur_addr, _ui_dasm_in_cb, _ui_dasm_out_cb, win);
     }
     #elif defined(UI_DASM_USE_Z80)
-    z80dasm_op(win->cur_addr, _ui_dasm_in_cb, win, _ui_dasm_out_cb, win);
+    z80dasm_op(win->cur_addr, _ui_dasm_in_cb, _ui_dasm_out_cb, win);
     #else
     m6502dasm_op(win->cur_addr, _ui_dasm_in_cb, _ui_dasm_out_cb, win);
     #endif
@@ -275,7 +275,7 @@ static bool _ui_dasm_jumptarget(ui_dasm_t* win, uint16_t pc, uint16_t* out_addr)
         else if (win->bin_pos == 2) {
             switch (win->bin_buf[0]) {
                 /* relative branch */
-                case 0x10: case 0x30: case 0x50: case 0x70:
+                case 0x10: case 0x30: case 0x50: case 0x70: 
                 case 0x90: case 0xB0: case 0xD0: case 0xF0:
                     *out_addr = pc + (int8_t)win->bin_buf[1];
                     return true;
