@@ -2022,21 +2022,25 @@ void ui_dbg_disassemble(ui_dbg_t* win, const ui_dbg_dasm_request_t* request) {
                     break;
                 }
             }
+            const int bt_line_idx = num_backtrace_lines - line_idx - 1;
             if (is_known_op) {
                 _ui_dbg_disasm(win, bt_addr);
-                request->out_lines[line_idx] = win->dasm_line;
+                request->out_lines[bt_line_idx] = win->dasm_line;
             } else {
                 const char* hex_map = "0123456789ABCDEF";
                 uint8_t byte = _ui_dbg_read_byte(win, bt_addr);
-                ui_dbg_dasm_line_t* l = &request->out_lines[line_idx];
+                ui_dbg_dasm_line_t* l = &request->out_lines[bt_line_idx];
                 memset(l, 0, sizeof(ui_dbg_dasm_line_t));
                 l->addr = bt_addr;
                 l->num_bytes = 1;
                 l->bytes[0] = byte;
-                l->num_chars = 2;
-                l->chars[0] = hex_map[(byte >> 4) & 0xF];
-                l->chars[1] = hex_map[byte & 0xF];
-                l->chars[2] = 0;
+                l->num_chars = 6;
+                l->chars[0] = 'D';
+                l->chars[1] = 'B';
+                l->chars[2] = ' ';
+                l->chars[3] = hex_map[(byte >> 4) & 0xF];
+                l->chars[4] = hex_map[byte & 0xF];
+                l->chars[5] = 'h';
             }
         }
     }
