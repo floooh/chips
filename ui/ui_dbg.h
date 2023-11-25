@@ -291,7 +291,7 @@ typedef struct ui_dbg_dasm_line_t {
 
 typedef struct ui_dbg_dasm_request_t {
     uint16_t addr;                  // base address
-    int line_offset;                // offset in number of ops/lines, may be negative
+    int offset_lines;               // offset in number of ops/lines, may be negative
     int num_lines;                  // number of lines to disassemble
     ui_dbg_dasm_line_t* out_lines;  // pointer to output ops, must have at least num_ops entries
 } ui_dbg_dasm_request_t;
@@ -401,12 +401,15 @@ static void _ui_dbg_dasm_out_cb(char c, void* user_data) {
 // disassemble instruction at address
 static inline uint16_t _ui_dbg_disasm(ui_dbg_t* win, uint16_t addr) {
     memset(&win->dasm_line, 0, sizeof(win->dasm_line));
+    win->dasm_line.addr = addr;
     #if defined(UI_DBG_USE_Z80)
         z80dasm_op(addr, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
     #elif defined(UI_DBG_USE_M6502)
         m6502dasm_op(addr, _ui_dbg_dasm_in_cb, _ui_dbg_dasm_out_cb, win);
     #endif
-    return win->dasm_line.addr;
+    uint16_t next_addr = win->dasm_line.addr;
+    win->dasm_line.addr = addr;
+    return next_addr;
 }
 
 /* disassemble the an instruction, but only return the length of the instruction */
@@ -1994,8 +1997,8 @@ void ui_dbg_disassemble(ui_dbg_t* win, const ui_dbg_dasm_request_t* request) {
 
     int line_idx = 0;
     // optional backwards scan
-    if (request->line_offset < 0) {
-        const int num_backtrace_lines = -request->line_offset;
+    if (request->offset_lines < 0) {
+        const int num_backtrace_lines = -request->offset_lines;
         for (; line_idx < num_backtrace_lines; line_idx++) {
             // scan backwards for op start in block of 4 bytes (== max length of instruction)
             bool is_known_op = false;
@@ -2040,8 +2043,8 @@ void ui_dbg_disassemble(ui_dbg_t* win, const ui_dbg_dasm_request_t* request) {
 
     uint16_t fwd_addr = request->addr;
     // if the offset is > 0, skip disassembled instructions
-    if (request->line_offset > 0) {
-        for (int i = 0; i < request->line_offset; i++) {
+    if (request->offset_lines > 0) {
+        for (int i = 0; i < request->offset_lines; i++) {
             fwd_addr = _ui_dbg_disasm(win, fwd_addr);
         }
     }
