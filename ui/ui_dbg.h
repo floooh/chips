@@ -1589,8 +1589,13 @@ static void _ui_dbg_update_line_array(ui_dbg_t* win, uint16_t addr) {
                         }
                     }
                 #endif
-                // found an op start
-                bt_addr = scan_addr;
+                // found an op start, if any unknown bytes had been skipped, ignore the op
+                // (it will be found again in the next iteration)
+                _ui_dbg_disasm(win, scan_addr);
+                if ((int)(win->dasm_line.num_bytes - 1) == j) {
+                    // ok, no gap bytes, break here with a found op
+                    bt_addr = scan_addr;
+                }
                 break;
             }
         }
@@ -2016,9 +2021,14 @@ void ui_dbg_disassemble(ui_dbg_t* win, const ui_dbg_dasm_request_t* request) {
                             }
                         }
                     #endif
-                    // found an op start
-                    bt_addr = scan_addr;
-                    is_known_op = true;
+                    // found an op start, if any unknown bytes had been skipped, ignore the op
+                    // (it will be found again in the next iteration)
+                    _ui_dbg_disasm(win, scan_addr);
+                    if ((int)(win->dasm_line.num_bytes - 1) == j) {
+                        // ok, no gap bytes, break with 'found_op' status
+                        bt_addr = scan_addr;
+                        is_known_op = true;
+                    }
                     break;
                 }
             }
