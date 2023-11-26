@@ -2037,20 +2037,16 @@ void ui_dbg_disassemble(ui_dbg_t* win, const ui_dbg_dasm_request_t* request) {
                 _ui_dbg_disasm(win, bt_addr);
                 request->out_lines[bt_line_idx] = win->dasm_line;
             } else {
-                const char* hex_map = "0123456789ABCDEF";
                 uint8_t byte = _ui_dbg_read_byte(win, bt_addr);
                 ui_dbg_dasm_line_t* l = &request->out_lines[bt_line_idx];
                 memset(l, 0, sizeof(ui_dbg_dasm_line_t));
                 l->addr = bt_addr;
                 l->num_bytes = 1;
                 l->bytes[0] = byte;
-                l->num_chars = 6;
-                l->chars[0] = 'D';
-                l->chars[1] = 'B';
-                l->chars[2] = ' ';
-                l->chars[3] = hex_map[(byte >> 4) & 0xF];
-                l->chars[4] = hex_map[byte & 0xF];
-                l->chars[5] = 'h';
+                l->num_chars = 3;
+                l->chars[0] = '?';
+                l->chars[1] = '?';
+                l->chars[2] = '?';
             }
         }
     }
