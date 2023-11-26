@@ -1449,9 +1449,9 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         char f_str[9] = {
             (c->f & Z80_SF) ? 'S':'-',
             (c->f & Z80_ZF) ? 'Z':'-',
-            (c->f & Z80_YF) ? 'X':'-',
+            (c->f & Z80_YF) ? 'Y':'-',
             (c->f & Z80_HF) ? 'H':'-',
-            (c->f & Z80_XF) ? 'Y':'-',
+            (c->f & Z80_XF) ? 'X':'-',
             (c->f & Z80_VF) ? 'V':'-',
             (c->f & Z80_NF) ? 'N':'-',
             (c->f & Z80_CF) ? 'C':'-',
