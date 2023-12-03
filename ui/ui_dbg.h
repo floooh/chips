@@ -1563,6 +1563,49 @@ static void _ui_dbg_draw_buttons(ui_dbg_t* win) {
     ImGui::Separator();
 }
 
+/* helper function for backward scanning disassembly, tries to find
+   a known op in the previous 4 bytes, returns true if a known op
+   was found
+
+*/
+typedef struct {
+    bool is_known_op;
+    uint16_t addr;
+} _ui_dbg_disasm_backscan_result_t;
+
+static _ui_dbg_disasm_backscan_result_t _ui_dbg_disasm_backscan(ui_dbg_t* win, uint16_t addr) {
+    bool is_known_op = false;
+    uint16_t bs_addr = addr - 1;
+    uint16_t scan_addr = bs_addr;
+    for (int i = 0; i < 4; i++, scan_addr--) {
+        if (_ui_dbg_heatmap_is_opcode(win, scan_addr)) {
+            // Z80: prefixed instruction?
+            #if defined(UI_DBG_USE_Z80)
+                uint16_t prev_addr = scan_addr - 1;
+                if (_ui_dbg_heatmap_is_opcode(win, prev_addr)) {
+                    uint8_t maybe_prefix = _ui_dbg_read_byte(win, prev_addr);
+                    if ((maybe_prefix == 0xCB) || (maybe_prefix == 0xDD) || (maybe_prefix == 0xED) || (maybe_prefix == 0xFD)) {
+                        scan_addr = prev_addr;
+                        // NOTE: we don't need a separate code path to check for double prefix FD/DD CB, since
+                        // in such a case the CB opcode byte will be the regular opcode byte followed by
+                        // a no-op 8-bit immediate value
+                    }
+                }
+            #endif
+            // found an op start, if any unknown bytes had been skipped, ignore the op
+            // (it will be found again in the next iteration)
+            _ui_dbg_disasm(win, scan_addr);
+            if ((int)(win->dasm_line.num_bytes - 1) == i) {
+                // ok, no gap bytes, break with 'found_op' status
+                bs_addr = scan_addr;
+                is_known_op = true;
+            }
+            break;
+        }
+    }
+    return { is_known_op, bs_addr };
+}
+
 /* this updates the line array currently visualized by the disassembler
    listing, this only happens when the PC is outside the visible
    area or when the memory content 'under' the line array changes
@@ -1571,37 +1614,14 @@ static void _ui_dbg_update_line_array(ui_dbg_t* win, uint16_t addr) {
     /* one half is backtraced from current PC, the other half is
        'forward tracked' from current PC
     */
-    uint16_t bt_addr = addr;
+    uint16_t bs_addr = addr;
     int line_idx;
     for (line_idx = 0; line_idx < UI_DBG_NUM_BACKTRACE_LINES; line_idx++) {
         // scan backwards for op start in blocks of 4 bytes (== max length of an instruction)
-        bt_addr -= 1;
-        uint16_t scan_addr = bt_addr;
-        for (int j = 0; j < 4; j++, scan_addr--) {
-            if (_ui_dbg_heatmap_is_opcode(win, scan_addr)) {
-                // Z80: prefixed instruction?
-                #if defined(UI_DBG_USE_Z80)
-                    const uint16_t prev_addr = scan_addr - 1;
-                    if (_ui_dbg_heatmap_is_opcode(win, prev_addr)) {
-                        const uint8_t maybe_prefix = _ui_dbg_read_byte(win, prev_addr);
-                        if ((maybe_prefix == 0xCB) || (maybe_prefix == 0xDD) || (maybe_prefix == 0xED) || (maybe_prefix == 0xFD)) {
-                            scan_addr = prev_addr;
-                        }
-                    }
-                #endif
-                // found an op start, if any unknown bytes had been skipped, ignore the op
-                // (it will be found again in the next iteration)
-                _ui_dbg_disasm(win, scan_addr);
-                if ((int)(win->dasm_line.num_bytes - 1) == j) {
-                    // ok, no gap bytes, break here with a found op
-                    bt_addr = scan_addr;
-                }
-                break;
-            }
-        }
-        const int bt_index = UI_DBG_NUM_BACKTRACE_LINES - line_idx - 1;
-        win->ui.line_array[bt_index].addr = bt_addr;
-        win->ui.line_array[bt_index].val = _ui_dbg_read_byte(win, bt_addr);
+        bs_addr = _ui_dbg_disasm_backscan(win, bs_addr).addr;
+        const int bs_index = UI_DBG_NUM_BACKTRACE_LINES - line_idx - 1;
+        win->ui.line_array[bs_index].addr = bs_addr;
+        win->ui.line_array[bs_index].val = _ui_dbg_read_byte(win, bs_addr);
     }
     for (; line_idx < UI_DBG_NUM_LINES; line_idx++) {
         win->ui.line_array[line_idx].addr = addr;
@@ -1995,52 +2015,24 @@ void ui_dbg_disassemble(ui_dbg_t* win, const ui_dbg_dasm_request_t* request) {
     // NOTE: this code uses the same strategy as _ui_dbg_update_line_array()
     // it will first scan backward and look for known instructions
     // in the heatmap, and then scan forward
-    //
-    // At some point it might make sense to merge the two functions into
-    // a common helper function
-    uint16_t bt_addr = request->addr;
-
+    uint16_t bs_addr = request->addr;
     int line_idx = 0;
     // optional backwards scan
     if (request->offset_lines < 0) {
         const int num_backtrace_lines = -request->offset_lines;
         for (; line_idx < num_backtrace_lines; line_idx++) {
             // scan backwards for op start in block of 4 bytes (== max length of instruction)
-            bool is_known_op = false;
-            bt_addr -= 1;
-            uint16_t scan_addr = bt_addr;
-            for (int j = 0; j < 4; j++, scan_addr--) {
-                if (_ui_dbg_heatmap_is_opcode(win, scan_addr)) {
-                    // Z80: prefixed instruction?
-                    #if defined(UI_DBG_USE_Z80)
-                        const uint16_t prev_addr = scan_addr - 1;
-                        if (_ui_dbg_heatmap_is_opcode(win, prev_addr)) {
-                            const uint8_t maybe_prefix = _ui_dbg_read_byte(win, prev_addr);
-                            if ((maybe_prefix == 0xCB) || (maybe_prefix == 0xDD) || (maybe_prefix == 0xED) || (maybe_prefix == 0xFD)) {
-                                scan_addr = prev_addr;
-                            }
-                        }
-                    #endif
-                    // found an op start, if any unknown bytes had been skipped, ignore the op
-                    // (it will be found again in the next iteration)
-                    _ui_dbg_disasm(win, scan_addr);
-                    if ((int)(win->dasm_line.num_bytes - 1) == j) {
-                        // ok, no gap bytes, break with 'found_op' status
-                        bt_addr = scan_addr;
-                        is_known_op = true;
-                    }
-                    break;
-                }
-            }
-            const int bt_line_idx = num_backtrace_lines - line_idx - 1;
-            if (is_known_op) {
-                _ui_dbg_disasm(win, bt_addr);
-                request->out_lines[bt_line_idx] = win->dasm_line;
+            const _ui_dbg_disasm_backscan_result_t res = _ui_dbg_disasm_backscan(win, bs_addr);
+            bs_addr = res.addr;
+            const int bs_line_idx = num_backtrace_lines - line_idx - 1;
+            if (res.is_known_op) {
+                _ui_dbg_disasm(win, bs_addr);
+                request->out_lines[bs_line_idx] = win->dasm_line;
             } else {
-                uint8_t byte = _ui_dbg_read_byte(win, bt_addr);
-                ui_dbg_dasm_line_t* l = &request->out_lines[bt_line_idx];
+                uint8_t byte = _ui_dbg_read_byte(win, bs_addr);
+                ui_dbg_dasm_line_t* l = &request->out_lines[bs_line_idx];
                 memset(l, 0, sizeof(ui_dbg_dasm_line_t));
-                l->addr = bt_addr;
+                l->addr = bs_addr;
                 l->num_bytes = 1;
                 l->bytes[0] = byte;
                 l->num_chars = 3;
