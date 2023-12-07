@@ -166,12 +166,12 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
         #if defined(CHIPS_KC85_TYPE_4)
             if (ImGui::CollapsingHeader("Port 84h", ImGuiTreeNodeFlags_DefaultOpen)) {
                 const uint8_t v = win->kc85->io84;
-                ImGui::Text("0: Show image    %d", (v & KC85_IO84_SEL_VIEW_IMG) ? 0:1);
-                ImGui::Text("1: Access        %s", (v & KC85_IO84_SEL_CPU_COLOR) ? "PIXELS":"COLORS");
-                ImGui::Text("2: Access image  %d", (v & KC85_IO84_SEL_CPU_IMG) ? 0:1);
+                ImGui::Text("0: Show image    %d", (v & KC85_IO84_SEL_VIEW_IMG) ? 1:0);
+                ImGui::Text("1: Access        %s", (v & KC85_IO84_SEL_CPU_COLOR) ? "COLORS":"PIXELS");
+                ImGui::Text("2: Access image  %d", (v & KC85_IO84_SEL_CPU_IMG) ? 1:0);
                 ImGui::Text("3: Hicolor mode  %s", (v & KC85_IO84_HICOLOR) ? "OFF":"ON");
-                ImGui::Text("4: RAM8 block    %d", (v & KC85_IO84_SEL_RAM8) ? 0:1);
-                ImGui::Text("5: RAM8 ???      %d", (v & KC85_IO84_BLOCKSEL_RAM8) ? 0:1);
+                ImGui::Text("4: RAM8 block    %d", (v & KC85_IO84_SEL_RAM8) ? 1:0);
+                ImGui::Text("5: RAM8 ???      %d", (v & KC85_IO84_BLOCKSEL_RAM8) ? 1:0);
                 ImGui::Text("6..7: unused");
             }
             if (ImGui::CollapsingHeader("Port 86h", ImGuiTreeNodeFlags_DefaultOpen)) {
