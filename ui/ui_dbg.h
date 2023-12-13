@@ -178,22 +178,25 @@ typedef struct ui_dbg_debug_callbacks_t {
 } ui_dbg_debug_callbacks_t;
 
 typedef struct ui_dbg_desc_t {
-    const char* title;          /* window title */
+    const char* title;          // window title
     #if defined(UI_DBG_USE_Z80)
-    z80_t* z80;                 /* Z80 CPU to track */
+    z80_t* z80;                 // Z80 CPU to track
     #elif defined(UI_DBG_USE_M6502)
-    m6502_t* m6502;             /* 6502 CPU to track */
+    m6502_t* m6502;             // 6502 CPU to track
     #endif
-    ui_dbg_read_t read_cb;          /* callback to read memory */
-    int read_layer;                 /* layer argument for read_cb */
-    ui_dbg_user_break_t break_cb;   /* optional user-breakpoint evaluation callback */
+    uint32_t freq_hz;               // CPU clock frequency in Hz
+    uint32_t scanline_ticks;        // length of a raster line in clock cycles
+    uint32_t frame_ticks;           // length of a frame in clock cycles
+    ui_dbg_read_t read_cb;          // callback to read memory
+    int read_layer;                 // layer argument for read_cb
+    ui_dbg_user_break_t break_cb;   // optional user-breakpoint evaluation callback
     ui_dbg_texture_callbacks_t texture_cbs;
     ui_dbg_debug_callbacks_t debug_cbs;
-    void* user_data;            /* user data for callbacks */
-    int x, y;                   /* initial window pos */
-    int w, h;                   /* initial window size, or 0 for default size */
-    bool open;                  /* initial open state */
-    ui_dbg_keys_desc_t keys;      /* user-defined hotkeys */
+    void* user_data;                // user data for callbacks
+    int x, y;                       // initial window pos
+    int w, h;                       // initial window size, or 0 for default size
+    bool open;                      // initial open state
+    ui_dbg_keys_desc_t keys;        // user-defined hotkeys
     ui_dbg_breaktype_t user_breaktypes[UI_DBG_MAX_USER_BREAKTYPES];  /* user-defined breakpoint types */
 } ui_dbg_desc_t;
 
@@ -237,6 +240,7 @@ typedef struct ui_dbg_uistate_t {
     bool show_bytes;
     bool show_ticks;
     bool show_history;
+    bool show_stopwatch;
     bool request_scroll;
     ui_dbg_keys_desc_t keys;
     ui_dbg_line_t line_array[UI_DBG_NUM_LINES];
@@ -296,6 +300,17 @@ typedef struct ui_dbg_dasm_request_t {
     ui_dbg_dasm_line_t* out_lines;  // pointer to output ops, must have at least num_ops entries
 } ui_dbg_dasm_request_t;
 
+enum {
+    UI_DBG_STOPWATCH_NUM = 8,
+};
+typedef struct ui_dbg_stopwatch_t {
+    uint32_t freq_hz;
+    uint32_t scanline_ticks;
+    uint32_t frame_ticks;
+    uint64_t cur_ticks;
+    uint64_t start_ticks[UI_DBG_STOPWATCH_NUM];
+} ui_dbg_stopwatch_t;
+
 typedef struct ui_dbg_t {
     bool valid;
     ui_dbg_read_t read_cb;
@@ -309,43 +324,44 @@ typedef struct ui_dbg_t {
     ui_dbg_uistate_t ui;
     ui_dbg_heatmap_t heatmap;
     ui_dbg_history_t history;
+    ui_dbg_stopwatch_t stopwatch;
 } ui_dbg_t;
 
-/* initialize a new ui_dbg_t instance */
+// initialize a new ui_dbg_t instance
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
-/* discard ui_dbg_t instance */
+// discard ui_dbg_t instance
 void ui_dbg_discard(ui_dbg_t* win);
-/* notify ui_dbg that an external debugger has connected (may change some behaviour) */
+// notify ui_dbg that an external debugger has connected (may change some behaviour)
 void ui_dbg_external_debugger_connected(ui_dbg_t* win);
-/* notify ui_dbg that an external debugger has disconnected (clears breakpoints and continues) */
+// notify ui_dbg that an external debugger has disconnected (clears breakpoints and continues)
 void ui_dbg_external_debugger_disconnected(ui_dbg_t* win);
-/* render the ui_dbg_t UIs */
+// render the ui_dbg_t UIs
 void ui_dbg_draw(ui_dbg_t* win);
-/* call after ticking the system */
+// call after ticking the system
 void ui_dbg_tick(ui_dbg_t* win, uint64_t pins);
-/* call when resetting the emulated machine (re-initializes some data structures) */
+// call when resetting the emulated machine (re-initializes some data structures)
 void ui_dbg_reset(ui_dbg_t* win);
-/* call when rebooting the emulated machine (re-initializes some data structures) */
+// call when rebooting the emulated machine (re-initializes some data structures)
 void ui_dbg_reboot(ui_dbg_t* win);
-/* set an execution breakpoint at address */
+// set an execution breakpoint at address
 void ui_dbg_add_breakpoint(ui_dbg_t* win, uint16_t addr);
-/* clear an execution breakpoint at address */
+// clear an execution breakpoint at address
 void ui_dbg_remove_breakpoint(ui_dbg_t* win, uint16_t addr);
-/* pause/stop execution */
+// pause/stop execution
 void ui_dbg_break(ui_dbg_t* win);
-/* continue execution */
+// continue execution
 void ui_dbg_continue(ui_dbg_t* win, bool invoke_continued_cb);
-/* return true if the debugger is currently stopped */
+// return true if the debugger is currently stopped
 bool ui_dbg_stopped(ui_dbg_t* win);
-/* perform a debugger step-next (step over) */
+// perform a debugger step-next (step over)
 void ui_dbg_step_next(ui_dbg_t* win);
-/* peform a debugger step-into */
+// peform a debugger step-into
 void ui_dbg_step_into(ui_dbg_t* win);
-/* request a disassembly at start address */
+// request a disassembly at start address
 void ui_dbg_disassemble(ui_dbg_t* win, const ui_dbg_dasm_request_t* request);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -1277,6 +1293,57 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
     ImGui::End();
 }
 
+/*== STOPWATCH WINDOW ========================================================*/
+static void _ui_dbg_stopwatch_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
+    memset(&win->stopwatch, 0, sizeof(win->stopwatch));
+    win->stopwatch.freq_hz = desc->freq_hz;
+    win->stopwatch.scanline_ticks = desc->scanline_ticks;
+    win->stopwatch.frame_ticks = desc->frame_ticks;
+}
+
+static void _ui_dbg_stopwatch_reset(ui_dbg_t* win) {
+    win->stopwatch.cur_ticks = 0;
+    for (int i = 0; i < UI_DBG_STOPWATCH_NUM; i++) {
+        win->stopwatch.start_ticks[i] = 0;
+    }
+}
+
+static void _ui_dbg_stopwatch_draw(ui_dbg_t* win) {
+    if (!win->ui.show_stopwatch) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(-1, -1), ImGuiCond_Once);
+    if (ImGui::Begin("Stopwatch", &win->ui.show_stopwatch)) {
+        for (int i = 0; i < UI_DBG_STOPWATCH_NUM; i++) {
+            ImGui::PushID(i);
+            if (ImGui::Button("Reset")) {
+                win->stopwatch.start_ticks[i] = win->stopwatch.cur_ticks;
+            }
+            ImGui::SameLine();
+            uint64_t cycle_count = win->stopwatch.cur_ticks - win->stopwatch.start_ticks[i];
+            double ms = -1.0;
+            double raster_lines = -1.0;
+            double frames = -1.0;
+            if (win->stopwatch.freq_hz > 0) {
+                ms = ((double)cycle_count / (double)win->stopwatch.freq_hz) * 1000.0;
+            }
+            if (win->stopwatch.scanline_ticks > 0) {
+                raster_lines = (double)cycle_count / (double)win->stopwatch.scanline_ticks;
+            }
+            if (win->stopwatch.frame_ticks > 0) {
+                frames = (double)cycle_count / (double)win->stopwatch.frame_ticks;
+            }
+            ImGui::Text("%llu ticks", cycle_count);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("milliseconds: %.3f\nraster lines: %.3f\nframes:       %.3f\n", ms, raster_lines, frames);
+            }
+            ImGui::PopID();
+        }
+    }
+    ImGui::End();
+}
+
 /*== UI HELPERS ==============================================================*/
 static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui_dbg_uistate_t* ui = &win->ui;
@@ -1395,9 +1462,10 @@ static void _ui_dbg_draw_menu(ui_dbg_t* win) {
         if (ImGui::BeginMenu("Show")) {
             ImGui::MenuItem("Memory Heatmap", 0, &win->ui.show_heatmap);
             ImGui::MenuItem("Execution History", 0, &win->ui.show_history);
+            ImGui::MenuItem("Breakpoints", 0, &win->ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &win->ui.show_stopwatch);
             ImGui::MenuItem("Registers", 0, &win->ui.show_regs);
             ImGui::MenuItem("Button Bar", 0, &win->ui.show_buttons);
-            ImGui::MenuItem("Breakpoints", 0, &win->ui.show_breakpoints);
             ImGui::MenuItem("Opcode Bytes", 0, &win->ui.show_bytes);
             ImGui::MenuItem("Opcode Ticks", 0, &win->ui.show_ticks);
             ImGui::EndMenu();
@@ -1875,6 +1943,7 @@ void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     _ui_dbg_dbgstate_init(win, desc);
     _ui_dbg_uistate_init(win, desc);
     _ui_dbg_heatmap_init(win);
+    _ui_dbg_stopwatch_init(win, desc);
 }
 
 void ui_dbg_discard(ui_dbg_t* win) {
@@ -1889,6 +1958,7 @@ void ui_dbg_reset(ui_dbg_t* win) {
     _ui_dbg_uistate_reset(win);
     _ui_dbg_heatmap_reset(win);
     _ui_dbg_history_reset(win);
+    _ui_dbg_stopwatch_reset(win);
 }
 
 void ui_dbg_reboot(ui_dbg_t* win) {
@@ -1922,6 +1992,7 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
         trap_id = _ui_dbg_eval_tick_breakpoints(win, trap_id, pins);
     }
     _ui_dbg_heatmap_record_tick(win, pins);
+    win->stopwatch.cur_ticks++;
     win->dbg.cur_op_ticks++;
     win->dbg.last_tick_pins = pins;
 
@@ -1943,13 +2014,14 @@ void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
 void ui_dbg_draw(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid && win->ui.title);
     win->dbg.frame_id++;
-    if (!(win->ui.open || win->ui.show_heatmap || win->ui.show_breakpoints || win->ui.show_history)) {
+    if (!(win->ui.open || win->ui.show_heatmap || win->ui.show_breakpoints || win->ui.show_history || win->ui.show_stopwatch)) {
         return;
     }
     _ui_dbg_dbgwin_draw(win);
     _ui_dbg_heatmap_draw(win);
     _ui_dbg_history_draw(win);
     _ui_dbg_bp_draw(win);
+    _ui_dbg_stopwatch_draw(win);
 }
 
 void ui_dbg_external_debugger_connected(ui_dbg_t* win) {

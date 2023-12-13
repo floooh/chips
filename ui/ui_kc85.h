@@ -150,6 +150,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
             ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
             ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
@@ -364,6 +365,9 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         desc.z80 = &ui->kc85->cpu;
+        desc.freq_hz = KC85_FREQUENCY;
+        desc.scanline_ticks = KC85_SCANLINE_TICKS;
+        desc.frame_ticks = KC85_SCANLINE_TICKS * KC85_NUM_SCANLINES;
         desc.read_cb = _ui_kc85_mem_read;
         desc.texture_cbs = ui_desc->dbg_texture;
         desc.debug_cbs = ui_desc->dbg_debug;

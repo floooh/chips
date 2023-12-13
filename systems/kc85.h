@@ -274,6 +274,15 @@ extern "C" {
 #define KC85_TYPE_ID (0x00040000)
 #endif
 
+#if defined(CHIPS_KC85_TYPE_4)
+#define KC85_FREQUENCY (1770000)
+#define KC85_SCANLINE_TICKS (113)
+#else
+#define KC85_FREQUENCY (1750000)
+#define KC85_SCANLINE_TICKS (112)
+#endif
+#define KC85_NUM_SCANLINES (312)
+
 // bump this whenever the kc85_t struct layout changes
 #define KC85_SNAPSHOT_VERSION (KC85_TYPE_ID | 0x0002)
 
@@ -505,18 +514,7 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#if defined(CHIPS_KC85_TYPE_4)
-#define _KC85_FREQUENCY (1770000)
-#else
-#define _KC85_FREQUENCY (1750000)
-#endif
 #define _KC85_IRM0_PAGE (4)
-#if defined(CHIPS_KC85_TYPE_4)
-#define _KC85_SCANLINE_TICKS (113)
-#else
-#define _KC85_SCANLINE_TICKS (112)
-#endif
-#define _KC85_NUM_SCANLINES (312)
 
 /*
     IO address decoding.
@@ -589,7 +587,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
 
     memset(sys, 0, sizeof(kc85_t));
     sys->valid = true;
-    sys->freq_hz = _KC85_FREQUENCY;
+    sys->freq_hz = KC85_FREQUENCY;
     sys->patch_callback = desc->patch_callback;
     sys->debug = desc->debug;
 
@@ -735,10 +733,10 @@ static inline void _kc85_decode_8pixels(uint8_t* dst, uint8_t pixels, uint8_t co
 
 static inline uint64_t _kc85_update_raster_counters(kc85_t* sys, uint64_t pins) {
     sys->video.h_tick++;
-    if (sys->video.h_tick == _KC85_SCANLINE_TICKS) {
+    if (sys->video.h_tick == KC85_SCANLINE_TICKS) {
         sys->video.h_tick = 0;
         sys->video.v_count++;
-        if (sys->video.v_count == _KC85_NUM_SCANLINES) {
+        if (sys->video.v_count == KC85_NUM_SCANLINES) {
             sys->video.v_count = 0;
             // vertical sync, trigger CTC CLKTRG2 input for video blinking effect
             pins |= Z80CTC_CLKTRG2;

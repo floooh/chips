@@ -612,6 +612,7 @@ static void _ui_bombjack_draw_menu(ui_bombjack_t* ui) {
             if (ImGui::BeginMenu("Main Board")) {
                 ImGui::MenuItem("CPU Debugger", 0, &ui->main.dbg.ui.open);
                 ImGui::MenuItem("Breakpoints", 0, &ui->main.dbg.ui.show_breakpoints);
+                ImGui::MenuItem("Stopwatch", 0, &ui->main.dbg.ui.show_stopwatch);
                 ImGui::MenuItem("Execution History", 0, &ui->main.dbg.ui.show_history);
                 ImGui::MenuItem("Memory Heatmap", 0, &ui->main.dbg.ui.show_heatmap);
                 ImGui::EndMenu();
@@ -619,6 +620,7 @@ static void _ui_bombjack_draw_menu(ui_bombjack_t* ui) {
             if (ImGui::BeginMenu("Sound Board")) {
                 ImGui::MenuItem("CPU Debugger", 0, &ui->sound.dbg.ui.open);
                 ImGui::MenuItem("Breakpoints", 0, &ui->sound.dbg.ui.show_breakpoints);
+                ImGui::MenuItem("Stopwatch", 0, &ui->sound.dbg.ui.show_stopwatch);
                 ImGui::MenuItem("Execution History", 0, &ui->sound.dbg.ui.show_history);
                 ImGui::MenuItem("Memory Heatmap", 0, &ui->sound.dbg.ui.show_heatmap);
                 ImGui::EndMenu();

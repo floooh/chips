@@ -172,6 +172,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui) {
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
             ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
             ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
@@ -191,6 +192,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui) {
             if (ui->c64->c1541.valid) {
                 if (ImGui::BeginMenu("VC-1541 (Floppy Drive)")) {
                     ImGui::MenuItem("CPU Debugger", 0, &ui->c1541_dbg.ui.open);
+                    ImGui::MenuItem("Stopwatch", 0, &ui->c1541_dbg.ui.show_stopwatch);
                     ImGui::MenuItem("Breakpoints", 0, &ui->c1541_dbg.ui.show_breakpoints);
                     ImGui::MenuItem("Execution History", 0, &ui->c1541_dbg.ui.show_history);
                     ImGui::MenuItem("Memory Heatmap", 0, &ui->c1541_dbg.ui.show_heatmap);
