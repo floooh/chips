@@ -334,8 +334,15 @@ static uint8_t _ui_kc85_mem_read(int layer, uint16_t addr, void* user_data) {
     kc85_t* kc85 = (kc85_t*) user_data;
     if (layer == 0) {
         return mem_rd(&kc85->mem, addr);
-    }
-    else {
+    } else if ((layer >= 4) && (layer < 8)) {
+        // IRM access
+        if ((addr >= 0x8000) && (addr < 0xC000)) {
+            return kc85->ram[KC85_IRM0_PAGE + (layer-4)][addr - 0x8000];
+        } else {
+            return 0xFF;
+        }
+    } else {
+        // Motherboard, SLOT 08, SLOT 0C
         return mem_layer_rd(&kc85->mem, layer-1, addr);
     }
 }
@@ -345,8 +352,12 @@ static void _ui_kc85_mem_write(int layer, uint16_t addr, uint8_t data, void* use
     kc85_t* kc85 = (kc85_t*) user_data;
     if (layer == 0) {
         mem_wr(&kc85->mem, addr, data);
-    }
-    else {
+    } else if ((layer >= 4) && (layer < 8)) {
+        // IRM access
+        if ((addr >= 0x8000) && (addr < 0xC000)) {
+            kc85->ram[KC85_IRM0_PAGE + (layer-4)][addr - 0x8000] = data;
+        }
+    } else {
         mem_layer_wr(&kc85->mem, layer-1, addr, data);
     }
 }
@@ -431,6 +442,12 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
         desc.layers[3] = "Slot 0C";
+        #if defined(CHIPS_KC85_TYPE_4)
+            desc.layers[4] = "IRM 0 Pixels";
+            desc.layers[5] = "IRM 0 Colors";
+            desc.layers[6] = "IRM 1 Pixels";
+            desc.layers[7] = "IRM 1 Colors";
+        #endif
         desc.read_cb = _ui_kc85_mem_read;
         desc.write_cb = _ui_kc85_mem_write;
         desc.user_data = ui->kc85;
@@ -455,6 +472,12 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
         desc.layers[3] = "Slot 0C";
+        #if defined(CHIPS_KC85_TYPE_4)
+            desc.layers[4] = "IRM 0 Pixels";
+            desc.layers[5] = "IRM 0 Colors";
+            desc.layers[6] = "IRM 1 Pixels";
+            desc.layers[7] = "IRM 1 Colors";
+        #endif
         desc.cpu_type = UI_DASM_CPUTYPE_Z80;
         desc.start_addr = 0xF000;
         desc.read_cb = _ui_kc85_mem_read;

@@ -282,6 +282,7 @@ extern "C" {
 #define KC85_SCANLINE_TICKS (112)
 #endif
 #define KC85_NUM_SCANLINES (312)
+#define KC85_IRM0_PAGE (4)
 
 // bump this whenever the kc85_t struct layout changes
 #define KC85_SNAPSHOT_VERSION (KC85_TYPE_ID | 0x0002)
@@ -514,7 +515,6 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _KC85_IRM0_PAGE (4)
 
 /*
     IO address decoding.
@@ -767,11 +767,11 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             // CPU accesses video memory, which will force the background color
             // a short duration
             //
-            uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE][color_offset];
+            uint8_t color_bits = sys->ram[KC85_IRM0_PAGE][color_offset];
             bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & (sys->pio_pins>>(Z80PIO_PIN_PB7-7)) & (1<<7));
             // same as (pins & Z80_WR) && (addr >= 0x8000) && (addr < 0xC000)
             bool cpu_access = (pins & (Z80_WR | 0xC000)) == (Z80_WR | 0x8000);
-            uint8_t pixel_bits = (fg_blank || cpu_access) ? 0 : sys->ram[_KC85_IRM0_PAGE][pixel_offset];
+            uint8_t pixel_bits = (fg_blank || cpu_access) ? 0 : sys->ram[KC85_IRM0_PAGE][pixel_offset];
             uint8_t* dst = &(sys->fb[y*KC85_FRAMEBUFFER_WIDTH + x*8]);
             _kc85_decode_8pixels(dst, pixel_bits, color_bits);
         }
@@ -811,17 +811,17 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
         if ((y < 256) && (x < 40)) {
             size_t irm_index = (sys->io84 & 1) * 2;
             size_t offset = (x<<8) | y;
-            uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE + irm_index + 1][offset];
+            uint8_t color_bits = sys->ram[KC85_IRM0_PAGE + irm_index + 1][offset];
             uint8_t* dst = &sys->fb[y * KC85_FRAMEBUFFER_WIDTH + x * 8];
             if (sys->io84 & KC85_IO84_HICOLOR) {
                 // regular KC85/4 video mode
                 bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & (sys->pio_pins>>(Z80PIO_PIN_PB7-7)) & (1<<7));
-                uint8_t pixel_bits = fg_blank ? 0 : sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
+                uint8_t pixel_bits = fg_blank ? 0 : sys->ram[KC85_IRM0_PAGE + irm_index][offset];
                 _kc85_decode_8pixels(dst, pixel_bits, color_bits);
             }
             else {
                 // hicolor mode
-                uint8_t p0 = sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
+                uint8_t p0 = sys->ram[KC85_IRM0_PAGE + irm_index][offset];
                 uint8_t p1 = color_bits;
                 _kc85_decode_hicolor_8pixels(dst, p0, p1);
             }
@@ -858,7 +858,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
     #if !defined(CHIPS_KC85_TYPE_4) // KC85/2 and /3
         // 16 KB Video RAM at 0x8000
         if (pio_pins & KC85_PIO_IRM) {
-            mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[_KC85_IRM0_PAGE]);
+            mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[KC85_IRM0_PAGE]);
         }
     #else // KC84/4
         // 16 KB RAM at 0x4000
@@ -886,7 +886,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
         */
         if (pio_pins & KC85_PIO_IRM) {
             uint32_t irm_index = (sys->io84 & 6)>>1;
-            uint8_t* irm_ptr = sys->ram[_KC85_IRM0_PAGE + irm_index];
+            uint8_t* irm_ptr = sys->ram[KC85_IRM0_PAGE + irm_index];
             /* on the KC85, an access to IRM banks other than the
               first is only possible for the first 10 KByte until
               A800, memory access to the remaining 6 KBytes
@@ -896,7 +896,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
             mem_map_ram(&sys->mem, 0, 0x8000, 0x2800, irm_ptr);
 
             // always force access to 0xA800 and above to the first IRM bank
-            mem_map_ram(&sys->mem, 0, 0xA800, 0x1800, sys->ram[_KC85_IRM0_PAGE] + 0x2800);
+            mem_map_ram(&sys->mem, 0, 0xA800, 0x1800, sys->ram[KC85_IRM0_PAGE] + 0x2800);
        }
        // 4 KB CAOS-C ROM at 0xC000 (on top of BASIC)
        if (sys->io86 & KC85_IO86_CAOS_ROM_C) {
