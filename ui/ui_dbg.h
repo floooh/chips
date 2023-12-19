@@ -146,6 +146,10 @@ typedef void* (*ui_dbg_create_texture_t)(int w, int h);
 typedef void (*ui_dbg_update_texture_t)(void* tex_handle, void* data, int data_byte_size);
 /* callback to destroy a UI texture */
 typedef void (*ui_dbg_destroy_texture_t)(void* tex_handle);
+/* callback when emulator is being rebootet */
+typedef void (*ui_dbg_reboot_t)(void);
+/* callback when emulator is being reset */
+typedef void (*ui_dbg_reset_t)(void);
 /* callback when emulator has stopped at an address (stop_reason is UI_DBG_STOP_REASON_XXX) */
 typedef void (*ui_dbg_stopped_t)(int stop_reason, uint16_t addr);
 /* callback when emulator has continued after stopped state */
@@ -173,6 +177,8 @@ typedef struct ui_dbg_texture_callbacks_t {
 } ui_dbg_texture_callbacks_t;
 
 typedef struct ui_dbg_debug_callbacks_t {
+    ui_dbg_reboot_t reboot_cb;
+    ui_dbg_reset_t reset_cb;
     ui_dbg_stopped_t stopped_cb;
     ui_dbg_continued_t continued_cb;
 } ui_dbg_debug_callbacks_t;
@@ -1959,6 +1965,9 @@ void ui_dbg_reset(ui_dbg_t* win) {
     _ui_dbg_heatmap_reset(win);
     _ui_dbg_history_reset(win);
     _ui_dbg_stopwatch_reset(win);
+    if (win->debug_cbs.reset_cb) {
+        win->debug_cbs.reset_cb();
+    }
 }
 
 void ui_dbg_reboot(ui_dbg_t* win) {
@@ -1967,6 +1976,9 @@ void ui_dbg_reboot(ui_dbg_t* win) {
     _ui_dbg_uistate_reboot(win);
     _ui_dbg_heatmap_reboot(win);
     _ui_dbg_history_reboot(win);
+    if (win->debug_cbs.reboot_cb) {
+        win->debug_cbs.reboot_cb();
+    }
 }
 
 void ui_dbg_tick(ui_dbg_t* win, uint64_t pins) {
