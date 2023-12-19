@@ -733,13 +733,23 @@ static inline void _kc85_decode_8pixels(uint8_t* dst, uint8_t pixels, uint8_t co
 
 static inline uint64_t _kc85_update_raster_counters(kc85_t* sys, uint64_t pins) {
     sys->video.h_tick++;
+    // feed '_h4' into CTC CLKTRG0 and 1, per scanline:
+    //   0..31 ticks lo
+    //  32..63 ticks hi
+    //  64..95 ticks lo
+    //  remainder: hi
+    if (sys->video.h_tick & 0x20) {
+        pins |= (Z80CTC_CLKTRG0 | Z80CTC_CLKTRG1);
+    }
+    // vertical blanking interval (/BI) active for the last 56 scanlines
+    if (sys->video.v_count & 0x100) {
+        pins |= (Z80CTC_CLKTRG2 | Z80CTC_CLKTRG3);
+    }
     if (sys->video.h_tick == KC85_SCANLINE_TICKS) {
         sys->video.h_tick = 0;
         sys->video.v_count++;
         if (sys->video.v_count == KC85_NUM_SCANLINES) {
             sys->video.v_count = 0;
-            // vertical sync, trigger CTC CLKTRG2 input for video blinking effect
-            pins |= Z80CTC_CLKTRG2;
         }
     }
     return pins;
@@ -923,10 +933,10 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         }
     }
 
-    // tick the video system, this may return Z80CTC_CLKTRG2 on VSYNC
+    // tick the video system, may set CLKTRG0..3
     pins = _kc85_tick_video(sys, pins);
 
-    // tick the CTC, NOTE: Z80CTC_CLKTRG2 may be set from video system
+    // tick the CTC
     {
         // set virtual IEIO pin because CTC is highest priority interrupt device
         pins |= Z80_IEIO;
