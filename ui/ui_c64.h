@@ -72,6 +72,7 @@ typedef struct {
     c64_t* c64;             // pointer to c64_t instance to track
     ui_c64_boot_cb boot_cb; // reboot callback function
     ui_dbg_texture_callbacks_t dbg_texture; // texture create/update/destroy callbacks
+    ui_dbg_debug_callbacks_t dbg_debug;
     ui_dbg_keys_desc_t dbg_keys;        // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;        // snapshot UI setup params
 } ui_c64_desc_t;
@@ -551,9 +552,13 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         desc.m6502 = &ui->c64->cpu;
+        desc.freq_hz = C64_FREQUENCY;
+        desc.scanline_ticks = M6569_HTOTAL;
+        desc.frame_ticks = M6569_HTOTAL * M6569_VTOTAL;
         desc.read_cb = _ui_c64_mem_read;
         desc.break_cb = _ui_c64_eval_bp;
         desc.texture_cbs = ui_desc->dbg_texture;
+        desc.debug_cbs = ui_desc->dbg_debug;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui;
         /* custom breakpoint types */
