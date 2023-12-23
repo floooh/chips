@@ -1774,9 +1774,9 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
         bool in_safe_area = (line_i >= (clipper.DisplayStart+safe_lines)) && (line_i <= (clipper.DisplayEnd-safe_lines));
         bool is_pc_line = (addr == pc);
         if (is_pc_line &&
-                (force_scroll ||
-                (!in_safe_area && win->ui.request_scroll) ||
-                (!in_safe_area && !win->dbg.stopped)))
+            (force_scroll ||
+            (!in_safe_area && win->ui.request_scroll) ||
+            (!in_safe_area && !win->dbg.stopped)))
         {
             win->ui.request_scroll = false;
             int scroll_to_line = line_i - safe_lines - 2;
