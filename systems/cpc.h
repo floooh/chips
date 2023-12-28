@@ -252,16 +252,14 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         CHIPS_ASSERT(desc->roms.cpc464.basic.ptr && (desc->roms.cpc464.basic.size == 0x4000));
         memcpy(sys->rom_os, desc->roms.cpc464.os.ptr, 0x4000);
         memcpy(sys->rom_basic, desc->roms.cpc464.basic.ptr, 0x4000);
-    }
-    else if (CPC_TYPE_6128 == desc->type) {
+    } else if (CPC_TYPE_6128 == desc->type) {
         CHIPS_ASSERT(desc->roms.cpc6128.os.ptr && (desc->roms.cpc6128.os.size == 0x4000));
         CHIPS_ASSERT(desc->roms.cpc6128.basic.ptr && (desc->roms.cpc6128.basic.size == 0x4000));
         CHIPS_ASSERT(desc->roms.cpc6128.amsdos.ptr && (desc->roms.cpc6128.amsdos.size == 0x4000));
         memcpy(sys->rom_os, desc->roms.cpc6128.os.ptr, 0x4000);
         memcpy(sys->rom_basic, desc->roms.cpc6128.basic.ptr, 0x4000);
         memcpy(sys->rom_amsdos, desc->roms.cpc6128.amsdos.ptr, 0x4000);
-    }
-    else { // KC Compact
+    } else { // KC Compact
         CHIPS_ASSERT(desc->roms.kcc.os.ptr && (desc->roms.kcc.os.size == 0x4000));
         CHIPS_ASSERT(desc->roms.kcc.basic.ptr && (desc->roms.kcc.basic.size == 0x4000));
         memcpy(sys->rom_os, desc->roms.kcc.os.ptr, 0x4000);
@@ -334,12 +332,10 @@ static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
         const uint16_t addr = Z80_GET_ADDR(cpu_pins);
         if (cpu_pins & Z80_RD) {
             Z80_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
-        }
-        else if (cpu_pins & Z80_WR) {
+        } else if (cpu_pins & Z80_WR) {
             mem_wr(&sys->mem, addr, Z80_GET_DATA(cpu_pins));
         }
-    }
-    else if ((cpu_pins & (Z80_M1|Z80_IORQ)) == Z80_IORQ) {
+    } else if ((cpu_pins & (Z80_M1|Z80_IORQ)) == Z80_IORQ) {
         /* CPU IO address decoding
 
             For address decoding, see the main board schematics!
@@ -452,8 +448,7 @@ static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
             if (cpu_pins & Z80_WR) {
                 fdd_motor(&sys->fdd, 0 != (Z80_GET_DATA(cpu_pins) & 1));
             }
-        }
-        else if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
+        } else if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
             // floppy controller status/data register
             uint64_t fdc_pins = UPD765_CS | (cpu_pins & Z80_PIN_MASK);
             cpu_pins = upd765_iorq(&sys->fdc, fdc_pins) & Z80_PIN_MASK;
@@ -520,8 +515,7 @@ static uint8_t _cpc_psg_in(int port_id, void* user_data) {
             data |= (sys->kbd_joymask | sys->joy_joymask);
         }
         return ~data;
-    }
-    else {
+    } else {
         // this shouldn't happen since the AY-3-8912 only has one IO port
         return 0xFF;
     }
@@ -549,8 +543,7 @@ static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_
         ram_config_index = ram_config & 7;
         rom0_ptr = sys->rom_os;
         rom1_ptr = (rom_select == 7) ? sys->rom_amsdos : sys->rom_basic;
-    }
-    else {
+    } else {
         ram_config_index = 0;
         rom0_ptr = sys->rom_os;
         rom1_ptr = sys->rom_basic;
@@ -564,8 +557,7 @@ static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_
     if (rom_enable & AM40010_CONFIG_LROMEN) {
         // read/write RAM
         mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[i0]);
-    }
-    else {
+    } else {
         // RAM-behind-ROM
         mem_map_rw(&sys->mem, 0, 0x0000, 0x4000, rom0_ptr, sys->ram[i0]);
     }
@@ -577,8 +569,7 @@ static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_
     if (rom_enable & AM40010_CONFIG_HROMEN) {
         // read/write RAM
         mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->ram[i3]);
-    }
-    else {
+    } else {
         // RAM-behind-ROM
         mem_map_rw(&sys->mem, 0, 0xC000, 0x4000, rom1_ptr, sys->ram[i3]);
     }
@@ -593,8 +584,7 @@ uint32_t cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
         for (uint32_t tick = 0; tick < num_ticks; tick++) {
             pins = _cpc_tick(sys, pins);
         }
-    }
-    else {
+    } else {
         // run with debug hook
         for (uint32_t tick = 0; (tick < num_ticks) && !(*sys->debug.stopped); tick++) {
             pins = _cpc_tick(sys, pins);
@@ -617,8 +607,7 @@ void cpc_key_down(cpc_t* sys, int key_code) {
             case 0x0B: sys->kbd_joymask |= CPC_JOYSTICK_UP; break;
             default: kbd_key_down(&sys->kbd, key_code); break;
         }
-    }
-    else {
+    } else {
         kbd_key_down(&sys->kbd, key_code);
     }
 }
@@ -634,8 +623,7 @@ void cpc_key_up(cpc_t* sys, int key_code) {
             case 0x0B: sys->kbd_joymask &= ~CPC_JOYSTICK_UP; break;
             default: kbd_key_up(&sys->kbd, key_code); break;
         }
-    }
-    else {
+    } else {
         kbd_key_up(&sys->kbd, key_code);
     }
 }
@@ -896,11 +884,9 @@ bool cpc_quickload(cpc_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid && data.ptr && (data.size > 0));
     if (_cpc_is_valid_sna(data)) {
         return _cpc_load_sna(sys, data);
-    }
-    else if (_cpc_is_valid_bin(data)) {
+    } else if (_cpc_is_valid_bin(data)) {
         return _cpc_load_bin(sys, data);
-    }
-    else {
+    } else {
         // not a known file type, or not enough data
         return false;
     }
@@ -911,8 +897,7 @@ static int _cpc_fdc_seektrack(int drive, int track, void* user_data) {
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
         return fdd_seek_track(&sys->fdd, track);
-    }
-    else {
+    } else {
         return UPD765_RESULT_NOT_READY;
     }
 }
@@ -935,8 +920,7 @@ static int _cpc_fdc_seeksector(int drive, int side, upd765_sectorinfo_t* inout_i
             inout_info->st2 = sector->info.upd765.st2;
         }
         return res;
-    }
-    else {
+    } else {
         return UPD765_RESULT_NOT_READY;
     }
 }
@@ -945,8 +929,7 @@ static int _cpc_fdc_read(int drive, int side, void* user_data, uint8_t* out_data
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
         return fdd_read(&sys->fdd, side, out_data);
-    }
-    else {
+    } else {
         return UPD765_RESULT_NOT_READY;
     }
 }
@@ -980,8 +963,7 @@ static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* o
         out_info->ready = sys->fdd.motor_on;
         out_info->write_protected = sys->fdd.disc.write_protected;
         out_info->fault = false;
-    }
-    else {
+    } else {
         out_info->physical_track = 0;
         out_info->sides = 1;
         out_info->head = 0;
