@@ -196,7 +196,7 @@ bool cpc_quickload(cpc_t* cpc, chips_range_t data, bool start);
 // return the exec address of a quickload file (.sna or .bin)
 uint16_t cpc_quickload_exec_addr(chips_range_t data);
 // return the return-address for a quickloaded file
-uint16_t cpc_quickload_return_addr(void);
+uint16_t cpc_quickload_return_addr(cpc_t* cpc);
 // insert a disk image file (.dsk)
 bool cpc_insert_disc(cpc_t* cpc, chips_range_t data);
 // remove current disc
@@ -877,12 +877,32 @@ static bool _cpc_load_bin(cpc_t* sys, chips_range_t data, bool start) {
         mem_wr(&sys->mem, load_addr+i, *ptr++);
     }
     if (start) {
-        // FIXME: alternatively via CALL xxxx?
-        sys->cpu.iff1 = true;
-        sys->cpu.iff2 = true;
-        sys->cpu.c = 0; // FIXME: "ROM select number"
-        sys->cpu.hl = start_addr;
-        sys->pins = z80_prefetch(&sys->cpu, 0xBD16); // MC START PROGRAM
+        // write CALL &xxxx into BASIC line buffer
+        const char* to_hex = "0123456789ABCDEF";
+        uint16_t line_buf;
+        switch (sys->type) {
+            case CPC_TYPE_6128:
+            case CPC_TYPE_KCCOMPACT:
+                line_buf = 0xAC8A;
+                break;
+            default:
+                line_buf = 0xACA4;
+                break;
+        }
+        mem_wr(&sys->mem, line_buf++, 'C');
+        mem_wr(&sys->mem, line_buf++, 'A');
+        mem_wr(&sys->mem, line_buf++, 'L');
+        mem_wr(&sys->mem, line_buf++, 'L');
+        mem_wr(&sys->mem, line_buf++, ' ');
+        mem_wr(&sys->mem, line_buf++, '&');
+        mem_wr(&sys->mem, line_buf++, to_hex[(start_addr >> 12) & 0x0F]);
+        mem_wr(&sys->mem, line_buf++, to_hex[(start_addr >> 8) & 0x0F]);
+        mem_wr(&sys->mem, line_buf++, to_hex[(start_addr >> 4) & 0x0F]);
+        mem_wr(&sys->mem, line_buf++, to_hex[(start_addr >> 0) & 0x0F]);
+        mem_wr(&sys->mem, line_buf++, 0);
+        // generate a Return key press
+        cpc_key_down(sys, 0x0D);
+        cpc_key_up(sys, 0x0D);
     }
     return true;
 }
@@ -899,9 +919,15 @@ bool cpc_quickload(cpc_t* sys, chips_range_t data, bool start) {
     }
 }
 
-uint16_t cpc_quickload_return_addr(void) {
-    // FIXME!
-    return 0xFFFF;
+uint16_t cpc_quickload_return_addr(cpc_t* sys) {
+    switch (sys->type) {
+        case CPC_TYPE_6128:
+        case CPC_TYPE_KCCOMPACT:
+            return 0xB9A2;
+        case CPC_TYPE_464:
+            return 0xB99A;
+    }
+    return 0xB9A2;
 }
 
 uint16_t cpc_quickload_exec_addr(chips_range_t data) {
