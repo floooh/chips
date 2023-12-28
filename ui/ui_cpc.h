@@ -72,6 +72,7 @@ typedef struct {
     cpc_t* cpc;
     ui_cpc_boot_t boot_cb; // user-provided callback to reboot to different config
     ui_dbg_texture_callbacks_t dbg_texture;     // debug texture create/update/destroy callbacks
+    ui_dbg_debug_callbacks_t dbg_debug;         // user-provided debugger callbacks
     ui_dbg_keys_desc_t dbg_keys;                // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;                // snapshot ui setup params
 } ui_cpc_desc_t;
@@ -145,8 +146,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui) {
             if (ImGui::MenuItem("Joystick", 0, ui->cpc->joystick_type != CPC_JOYSTICK_NONE)) {
                 if (ui->cpc->joystick_type == CPC_JOYSTICK_NONE) {
                     ui->cpc->joystick_type = CPC_JOYSTICK_DIGITAL;
-                }
-                else {
+                } else {
                     ui->cpc->joystick_type = CPC_JOYSTICK_NONE;
                 }
             }
@@ -242,8 +242,7 @@ static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
             ui_memmap_region(&ui->memmap, "RAM 1", 0x4000, 0x4000, true);
             ui_memmap_region(&ui->memmap, "RAM 2", 0x8000, 0x4000, true);
             ui_memmap_region(&ui->memmap, "RAM 3 (Screen)", 0xC000, 0x4000, true);
-    }
-    else {
+    } else {
         const uint8_t ram_config_index = cpc->ga.ram_config & 7;
         const uint8_t rom_select = cpc->ga.rom_select;
         ui_memmap_layer(&ui->memmap, "ROM Layer 0");
@@ -272,27 +271,21 @@ static uint8_t* _ui_cpc_memptr(cpc_t* cpc, int layer, uint16_t addr) {
     if (layer == _UI_CPC_MEMLAYER_GA) {
         uint8_t* ram = &cpc->ram[0][0];
         return ram + addr;
-    }
-    else if (layer == _UI_CPC_MEMLAYER_ROMS) {
+    } else if (layer == _UI_CPC_MEMLAYER_ROMS) {
         if (addr < 0x4000) {
             return &cpc->rom_os[addr];
-        }
-        else if (addr >= 0xC000) {
+        } else if (addr >= 0xC000) {
             return &cpc->rom_basic[addr - 0xC000];
-        }
-        else {
+        } else {
             return 0;
         }
-    }
-    else if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
+    } else if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
         if ((CPC_TYPE_6128 == cpc->type) && (addr >= 0xC000)) {
             return &cpc->rom_amsdos[addr - 0xC000];
-        }
-        else {
+        } else {
             return 0;
         }
-    }
-    else {
+    } else {
         /* one of the 7 RAM layers */
         CHIPS_ASSERT((layer >= _UI_CPC_MEMLAYER_RAM0) && (layer <= _UI_CPC_MEMLAYER_RAM7));
         const int ram_config_index = (CPC_TYPE_6128 == cpc->type) ? (cpc->ga.ram_config & 7) : 0;
@@ -329,13 +322,11 @@ static uint8_t _ui_cpc_mem_read(int layer, uint16_t addr, void* user_data) {
     if (layer == _UI_CPC_MEMLAYER_CPU) {
         /* CPU mapped RAM layer */
         return mem_rd(&cpc->mem, addr);
-    }
-    else {
+    } else {
         uint8_t* ptr = _ui_cpc_memptr(cpc, layer, addr);
         if (ptr) {
             return *ptr;
-        }
-        else {
+        } else {
             return 0xFF;
         }
     }
@@ -347,8 +338,7 @@ static void _ui_cpc_mem_write(int layer, uint16_t addr, uint8_t data, void* user
     cpc_t* cpc = ui_cpc->cpc;
     if (layer == _UI_CPC_MEMLAYER_CPU) {
         mem_wr(&cpc->mem, addr, data);
-    }
-    else {
+    } else {
         uint8_t* ptr = _ui_cpc_memptr(cpc, layer, addr);
         if (ptr) {
             *ptr = data;
@@ -600,6 +590,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         desc.read_cb = _ui_cpc_mem_read;
         desc.break_cb = _ui_cpc_eval_bp;
         desc.texture_cbs = ui_desc->dbg_texture;
+        desc.debug_cbs = ui_desc->dbg_debug;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui;
         /* custom breakpoint types */

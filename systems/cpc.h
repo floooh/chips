@@ -192,7 +192,11 @@ void cpc_joystick(cpc_t* sys, uint8_t mask);
 // get current joystick bitmask state
 uint8_t cpc_joystick_mask(cpc_t* sys);
 // load a snapshot file (.sna or .bin) into the emulator
-bool cpc_quickload(cpc_t* cpc, chips_range_t data);
+bool cpc_quickload(cpc_t* cpc, chips_range_t data, bool start);
+// return the exec address of a quickload file (.sna or .bin)
+uint16_t cpc_quickload_exec_addr(chips_range_t data);
+// return the return-address for a quickloaded file
+uint16_t cpc_quickload_return_addr(void);
 // insert a disk image file (.dsk)
 bool cpc_insert_disc(cpc_t* cpc, chips_range_t data);
 // remove current disc
@@ -862,7 +866,7 @@ static bool _cpc_is_valid_bin(chips_range_t data) {
     return true;
 }
 
-static bool _cpc_load_bin(cpc_t* sys, chips_range_t data) {
+static bool _cpc_load_bin(cpc_t* sys, chips_range_t data, bool start) {
     const uint8_t* ptr = (uint8_t*) data.ptr;
     const _cpc_bin_header* hdr = (const _cpc_bin_header*) ptr;
     ptr += sizeof(_cpc_bin_header);
@@ -872,24 +876,44 @@ static bool _cpc_load_bin(cpc_t* sys, chips_range_t data) {
     for (uint16_t i = 0; i < len; i++) {
         mem_wr(&sys->mem, load_addr+i, *ptr++);
     }
-    sys->cpu.iff1 = true;
-    sys->cpu.iff2 = true;
-    sys->cpu.c = 0; // FIXME: "ROM select number"
-    sys->cpu.hl = start_addr;
-    sys->pins = z80_prefetch(&sys->cpu, 0xBD16); // MC START PROGRAM
+    if (start) {
+        // FIXME: alternatively via CALL xxxx?
+        sys->cpu.iff1 = true;
+        sys->cpu.iff2 = true;
+        sys->cpu.c = 0; // FIXME: "ROM select number"
+        sys->cpu.hl = start_addr;
+        sys->pins = z80_prefetch(&sys->cpu, 0xBD16); // MC START PROGRAM
+    }
     return true;
 }
 
-bool cpc_quickload(cpc_t* sys, chips_range_t data) {
+bool cpc_quickload(cpc_t* sys, chips_range_t data, bool start) {
     CHIPS_ASSERT(sys && sys->valid && data.ptr && (data.size > 0));
     if (_cpc_is_valid_sna(data)) {
         return _cpc_load_sna(sys, data);
     } else if (_cpc_is_valid_bin(data)) {
-        return _cpc_load_bin(sys, data);
+        return _cpc_load_bin(sys, data, start);
     } else {
         // not a known file type, or not enough data
         return false;
     }
+}
+
+uint16_t cpc_quickload_return_addr(void) {
+    // FIXME!
+    return 0xFFFF;
+}
+
+uint16_t cpc_quickload_exec_addr(chips_range_t data) {
+    uint16_t start_addr = 0xFFFF;
+    if (_cpc_is_valid_sna(data)) {
+        const _cpc_sna_header* hdr = (const _cpc_sna_header*)data.ptr;
+        start_addr = (hdr->PC_h<<8) | hdr->PC_l;
+    } else if (_cpc_is_valid_bin(data)) {
+        const _cpc_bin_header* hdr = (const _cpc_bin_header*)data.ptr;
+        start_addr = (hdr->start_addr_h<<8)|hdr->start_addr_l;
+    }
+    return start_addr;
 }
 
 /*=== FLOPPY DISC SUPPORT ====================================================*/
