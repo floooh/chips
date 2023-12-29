@@ -227,6 +227,7 @@ typedef struct am40010_video_t {
     uint8_t mode;       // currently active mode updated at hsync
     bool sync;          // state of the sync output pin
     bool intr;          // interrupt flip-flop
+    uint8_t latch[2];   // store video ram bytes read at 2 MHz
 } am40010_video_t;
 
 // CRT beam tracking
@@ -695,20 +696,24 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     return ga->video.sync;
 }
 
-static void _am40010_decode_pixels(am40010_t* ga, uint8_t* dst, uint64_t crtc_pins) {
+static uint8_t _am40010_vid_read(am40010_t* ga, uint64_t crtc_pins, uint16_t cclk) {
     /*
          compute the source address from current CRTC ma (memory address)
          and ra (raster address) like this:
 
-         |ma13|ma12|ra2|ra1|ra0|ma9|ma8|ma7|ma6|ma5|ma4|ma3|ma2|ma1|ma0|0|
+         |ma13|ma12|ra2|ra1|ra0|ma9|ma8|ma7|ma6|ma5|ma4|ma3|ma2|ma1|ma0|cclk|
 
         Bits ma13 and m12 point to the 16 KByte page, and all
         other bits are the index into that page.
     */
     const uint16_t addr = ((crtc_pins & 0x3000) << 2) |     // MA13,MA12
                           ((crtc_pins & 0x3FF) << 1) |      // MA9..MA0
-                          (((crtc_pins>>48) & 7) << 11);    // RA0..RA2
-    const uint8_t* src = &(ga->ram[addr]);
+                          (((crtc_pins>>48) & 7) << 11) |   // RA0..RA2
+                          cclk;
+    return ga->ram[addr];
+}
+
+static void _am40010_decode_pixels(am40010_t* ga, uint8_t* dst) {
     uint8_t c;
     uint8_t p;
     switch (ga->video.mode) {
@@ -720,7 +725,7 @@ static void _am40010_decode_pixels(am40010_t* ga, uint8_t* dst, uint64_t crtc_pi
                 1:       |0|4|2|6|
             */
             for (size_t i = 0; i < 2; i++) {
-                c = *src++;
+                c = ga->video.latch[i];
                 p = ga->regs.ink[((c>>7)&0x1)|((c>>2)&0x2)|((c>>3)&0x4)|((c<<2)&0x8)];
                 *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
                 p = ga->regs.ink[((c>>6)&0x1)|((c>>1)&0x2)|((c>>2)&0x4)|((c<<3)&0x8)];
@@ -737,7 +742,7 @@ static void _am40010_decode_pixels(am40010_t* ga, uint8_t* dst, uint64_t crtc_pi
                 3:       |0|4|
             */
             for (size_t i = 0; i < 2; i++) {
-                c = *src++;
+                c = ga->video.latch[i];
                 p = ga->regs.ink[((c>>2)&2)|((c>>7)&1)];
                 *dst++ = p; *dst++ = p;
                 p = ga->regs.ink[((c>>1)&2)|((c>>6)&1)];
@@ -751,7 +756,7 @@ static void _am40010_decode_pixels(am40010_t* ga, uint8_t* dst, uint64_t crtc_pi
         case 2:
             // 640x200 @ 2 colors (8 pixels per byte)
             for (size_t i = 0; i < 2; i++) {
-                c = *src++;
+                c = ga->video.latch[i];
                 *dst++ = ga->regs.ink[(c>>7)&1];
                 *dst++ = ga->regs.ink[(c>>6)&1];
                 *dst++ = ga->regs.ink[(c>>5)&1];
@@ -770,7 +775,7 @@ static void _am40010_decode_pixels(am40010_t* ga, uint8_t* dst, uint64_t crtc_pi
                 1:       |x|x|2|6|
             */
             for (size_t i = 0; i < 2; i++) {
-                c = *src++;
+                c = ga->video.latch[i];
                 p = ga->regs.ink[((c>>7)&0x1)|((c>>2)&0x2)];
                 *dst++ = p; *dst++ = p; *dst++ = p; *dst++ = p;
                 p = ga->regs.ink[((c>>6)&0x1)|((c>>1)&0x2)];
@@ -808,7 +813,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
                 c |= 0x08;
             }
             if (crtc_pins & AM40010_DE) {
-                _am40010_decode_pixels(ga, dst, crtc_pins);
+                _am40010_decode_pixels(ga, dst);
                 for (size_t i = 0; i < 16; i++) {
                     if (0 == (i & 2)) {
                         dst[i] = c ^ 0x10;
@@ -832,7 +837,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
         bool black = ga->video.sync;
         uint8_t* dst = &ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH];
         if (crtc_pins & AM40010_DE) {
-            _am40010_decode_pixels(ga, dst, crtc_pins);
+            _am40010_decode_pixels(ga, dst);
         } else if (black) {
             for (int i = 0; i < 16; i++) {
                 *dst++ = 63;    // special 'pure black' hw color
@@ -843,13 +848,6 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
             }
         }
     }
-}
-
-// the actions which need to happen on CCLK (1 MHz frequency)
-static inline void _am40010_do_cclk(am40010_t* ga, uint64_t crtc_pins) {
-    bool sync = _am40010_sync_irq(ga, crtc_pins);
-    _am40010_crt_tick(ga, sync);
-    _am40010_decode_video(ga, crtc_pins);
 }
 
 // the tick function must be called at 4 MHz
@@ -876,8 +874,9 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t pins) {
 
         NOTE: Logon's Run crashes on rdy:1 and rdy:2
     */
-    const bool rdy  = 0 != (ga->seq_tick_count & 3);
-    const bool cclk = 1 == (ga->seq_tick_count & 3);
+    const bool rdy   = 0 != (ga->seq_tick_count & 3);
+    const bool cclk1 = 1 == (ga->seq_tick_count & 3);
+    const bool cclk0 = 3 == (ga->seq_tick_count & 3);
     if (rdy) {
         // READY is connected to Z80 WAIT, this sets the WAIT pin
         // in 3 out of 4 CPU clock cycles
@@ -885,10 +884,18 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t pins) {
     } else {
         pins &= ~AM40010_READY;
     }
-    if (cclk) {
+    if (cclk0) {
+        // read first video ram byte
         uint64_t crtc_pins = ga->cclk_cb(ga->user_data);
-        _am40010_do_cclk(ga, crtc_pins);
+        ga->video.latch[0] = _am40010_vid_read(ga, crtc_pins, 0);
+        bool sync = _am40010_sync_irq(ga, crtc_pins);
+        _am40010_crt_tick(ga, sync);
         ga->crtc_pins = crtc_pins;
+    }
+    if (cclk1) {
+        // read second video ram byte
+        ga->video.latch[1] = _am40010_vid_read(ga, ga->crtc_pins, 1);
+        _am40010_decode_video(ga, ga->crtc_pins);
     }
 
     // perform the per-4Mhz-tick actions, the AM40010_READY pin is also the Z80_WAIT pin
