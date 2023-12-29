@@ -386,8 +386,7 @@ static void _am40010_init_hwcolors(am40010_t* ga) {
         for (size_t i = 0; i < 32; i++) {
             ga->hw_colors[i] = _am40010_cpc_colors[i];
         }
-    }
-    else {
+    } else {
         // KC Compact colors
         for (size_t i = 0; i < 32; i++) {
             uint32_t c = 0xFF000000;
@@ -414,8 +413,7 @@ static void _am40010_init_hwcolors(am40010_t* ga) {
             r = 0xFF;
             g = 0xFF;
             b = 0xFF;
-        }
-        else {
+        } else {
             if (i & 1) {
                 r = 0x55;   // HS set
             }
@@ -494,8 +492,7 @@ void am40010_iorq(am40010_t* ga, uint64_t pins) {
             case (1<<6):
                 if (ga->regs.inksel & (1<<4)) {
                     ga->regs.border = data & 0x1F;
-                }
-                else {
+                } else {
                     ga->regs.ink[ga->regs.inksel] = data & 0x1F;
                 }
                 break;
@@ -585,8 +582,7 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
     crt->h_pos++;
     if (crt->h_pos == _AM40010_CRT_H_DISPLAY_START) {
         crt->h_blank = false;
-    }
-    else if (crt->h_pos == 64) {
+    } else if (crt->h_pos == 64) {
         // no hsync on this line
         new_line = true;
     }
@@ -602,8 +598,7 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
         crt->v_pos++;
         if (crt->v_pos == _AM40010_CRT_V_DISPLAY_START) {
             crt->v_blank = false;
-        }
-        else if (crt->v_pos == 312) {
+        } else if (crt->v_pos == 312) {
             // no vsync on this frame
             new_frame = true;
         }
@@ -625,8 +620,7 @@ static void _am40010_crt_tick(am40010_t* ga, bool sync) {
         crt->visible = true;
         crt->pos_x = crt->h_pos - _AM40010_CRT_VIS_X0;
         crt->pos_y = crt->v_pos - _AM40010_CRT_VIS_Y0;
-    }
-    else {
+    } else {
         crt->visible = false;
     }
 }
@@ -686,9 +680,8 @@ static bool _am40010_sync_irq(am40010_t* ga, uint64_t crtc_pins) {
     // if HSYNC is off, force the clkcnt counter to 0
     if (0 == (crtc_pins & AM40010_HS)) {
         clkcnt = 0;
-    }
-    // FIXME: figure out why this "< 8" is needed (otherwise purple left column in Demoizart)
-    else if (clkcnt < 8) {
+    } else if (clkcnt < 8) {
+        // FIXME: figure out why this "< 8" is needed (otherwise purple left column in Demoizart)
         clkcnt++;
     }
     // v_sync is on as long as hscount is < 4
@@ -798,8 +791,7 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
             uint8_t* prev_dst;
             if (dst == ga->fb) {
                 prev_dst = dst;
-            }
-            else {
+            } else {
                 prev_dst = dst - 16;
             }
             uint8_t c = 0x20;
@@ -823,34 +815,29 @@ static void _am40010_decode_video(am40010_t* ga, uint64_t crtc_pins) {
                         prev_dst[i] ^= 0x10;
                     }
                 }
-            }
-            else {
+            } else {
                 for (size_t i = 0; i < 16; i++) {
                     if (0 == (i & 2)) {
                         dst[i] = c ^ 0x10;
                         prev_dst[i] ^= 0x10;
-                    }
-                    else {
+                    } else {
                         dst[i] = 63;
                     }
                 }
             }
         }
-    }
-    else if (ga->crt.visible) {
+    } else if (ga->crt.visible) {
         size_t dst_x = ga->crt.pos_x * 16;
         size_t dst_y = ga->crt.pos_y;
         bool black = ga->video.sync;
         uint8_t* dst = &ga->fb[dst_x + dst_y * AM40010_FRAMEBUFFER_WIDTH];
         if (crtc_pins & AM40010_DE) {
             _am40010_decode_pixels(ga, dst, crtc_pins);
-        }
-        else if (black) {
+        } else if (black) {
             for (int i = 0; i < 16; i++) {
                 *dst++ = 63;    // special 'pure black' hw color
             }
-        }
-        else {
+        } else {
             for (int i = 0; i < 16; i++) {
                 *dst++ = ga->regs.border;
             }
@@ -895,8 +882,7 @@ uint64_t am40010_tick(am40010_t* ga, uint64_t pins) {
         // READY is connected to Z80 WAIT, this sets the WAIT pin
         // in 3 out of 4 CPU clock cycles
         pins |= AM40010_READY;
-    }
-    else {
+    } else {
         pins &= ~AM40010_READY;
     }
     if (cclk) {
