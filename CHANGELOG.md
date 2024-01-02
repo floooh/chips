@@ -1,5 +1,18 @@
 ## What's New
 
+* **02-Jan-2024**:
+
+  - Added a new 'web api' (a set of Javascript functions which allow controlling
+    the integrated debugger) for the emualators:
+      - KC85/2, /3 and /4
+      - C64
+      - CPC
+  - Debugger: added a 'stopwatch' window to count cycles between two breakpoints
+  - am40010.h: video ram data is now loaded into an internal 2-byte latch
+    in two steps at a 2 MHz interval
+
+  Also check out this new VSCode extension: https://marketplace.visualstudio.com/items?itemName=floooh.vscode-kcide
+
 * **10-Jan-2023**: A big code cleanup session affecting all emulators,
   and some minor emulation improvements:
 
