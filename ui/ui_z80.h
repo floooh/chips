@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -47,7 +47,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -134,9 +134,9 @@ static void _ui_z80_regs(ui_z80_t* win) {
     char f_str[9] = {
         (f & Z80_SF) ? 'S':'-',
         (f & Z80_ZF) ? 'Z':'-',
-        (f & Z80_YF) ? 'X':'-',
+        (f & Z80_YF) ? 'Y':'-',
         (f & Z80_HF) ? 'H':'-',
-        (f & Z80_XF) ? 'Y':'-',
+        (f & Z80_XF) ? 'X':'-',
         (f & Z80_VF) ? 'V':'-',
         (f & Z80_NF) ? 'N':'-',
         (f & Z80_CF) ? 'C':'-',

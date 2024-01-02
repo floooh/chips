@@ -79,6 +79,7 @@ typedef struct {
     kc85_t* kc85;
     ui_kc85_boot_t boot_cb;                 // user-provided callback to reboot
     ui_dbg_texture_callbacks_t dbg_texture; // user-provided texture create/update/destroy callbacks
+    ui_dbg_debug_callbacks_t dbg_debug;     // user-provided debugger callbacks
     ui_dbg_keys_desc_t dbg_keys;            // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;            // snapshot system creation params
 } ui_kc85_desc_t;
@@ -149,6 +150,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
             ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
             ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
@@ -332,8 +334,15 @@ static uint8_t _ui_kc85_mem_read(int layer, uint16_t addr, void* user_data) {
     kc85_t* kc85 = (kc85_t*) user_data;
     if (layer == 0) {
         return mem_rd(&kc85->mem, addr);
-    }
-    else {
+    } else if ((layer >= 4) && (layer < 8)) {
+        // IRM access
+        if ((addr >= 0x8000) && (addr < 0xC000)) {
+            return kc85->ram[KC85_IRM0_PAGE + (layer-4)][addr - 0x8000];
+        } else {
+            return 0xFF;
+        }
+    } else {
+        // Motherboard, SLOT 08, SLOT 0C
         return mem_layer_rd(&kc85->mem, layer-1, addr);
     }
 }
@@ -343,8 +352,12 @@ static void _ui_kc85_mem_write(int layer, uint16_t addr, uint8_t data, void* use
     kc85_t* kc85 = (kc85_t*) user_data;
     if (layer == 0) {
         mem_wr(&kc85->mem, addr, data);
-    }
-    else {
+    } else if ((layer >= 4) && (layer < 8)) {
+        // IRM access
+        if ((addr >= 0x8000) && (addr < 0xC000)) {
+            kc85->ram[KC85_IRM0_PAGE + (layer-4)][addr - 0x8000] = data;
+        }
+    } else {
         mem_layer_wr(&kc85->mem, layer-1, addr, data);
     }
 }
@@ -363,8 +376,12 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         desc.z80 = &ui->kc85->cpu;
+        desc.freq_hz = KC85_FREQUENCY;
+        desc.scanline_ticks = KC85_SCANLINE_TICKS;
+        desc.frame_ticks = KC85_SCANLINE_TICKS * KC85_NUM_SCANLINES;
         desc.read_cb = _ui_kc85_mem_read;
         desc.texture_cbs = ui_desc->dbg_texture;
+        desc.debug_cbs = ui_desc->dbg_debug;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui->kc85;
         ui_dbg_init(&ui->dbg, &desc);
@@ -425,6 +442,12 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
         desc.layers[3] = "Slot 0C";
+        #if defined(CHIPS_KC85_TYPE_4)
+            desc.layers[4] = "IRM 0 Pixels";
+            desc.layers[5] = "IRM 0 Colors";
+            desc.layers[6] = "IRM 1 Pixels";
+            desc.layers[7] = "IRM 1 Colors";
+        #endif
         desc.read_cb = _ui_kc85_mem_read;
         desc.write_cb = _ui_kc85_mem_write;
         desc.user_data = ui->kc85;
@@ -449,6 +472,12 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
         desc.layers[3] = "Slot 0C";
+        #if defined(CHIPS_KC85_TYPE_4)
+            desc.layers[4] = "IRM 0 Pixels";
+            desc.layers[5] = "IRM 0 Colors";
+            desc.layers[6] = "IRM 1 Pixels";
+            desc.layers[7] = "IRM 1 Colors";
+        #endif
         desc.cpu_type = UI_DASM_CPUTYPE_Z80;
         desc.start_addr = 0xF000;
         desc.read_cb = _ui_kc85_mem_read;

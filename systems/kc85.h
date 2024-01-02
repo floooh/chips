@@ -274,6 +274,16 @@ extern "C" {
 #define KC85_TYPE_ID (0x00040000)
 #endif
 
+#if defined(CHIPS_KC85_TYPE_4)
+#define KC85_FREQUENCY (1770000)
+#define KC85_SCANLINE_TICKS (113)
+#else
+#define KC85_FREQUENCY (1750000)
+#define KC85_SCANLINE_TICKS (112)
+#endif
+#define KC85_NUM_SCANLINES (312)
+#define KC85_IRM0_PAGE (4)
+
 // bump this whenever the kc85_t struct layout changes
 #define KC85_SNAPSHOT_VERSION (KC85_TYPE_ID | 0x0002)
 
@@ -478,8 +488,16 @@ const char* kc85_slot_mod_name(kc85_t* sys, uint8_t slot_addr);
 const char* kc85_slot_mod_short_name(kc85_t* sys, uint8_t slot_addr);
 // get a slot's control byte
 uint8_t kc85_slot_ctrl(kc85_t* sys, uint8_t slot_addr);
-// load a .KCC or .TAP snapshot file into the emulator
-bool kc85_quickload(kc85_t* sys, chips_range_t data);
+// test if data is a valid TAP file
+bool kc85_is_valid_kctap(chips_range_t data);
+// test if data is a valid KCC file
+bool kc85_is_valid_kcc(chips_range_t data);
+// extract the exed address from a KCC file
+uint16_t kc85_kcc_exec_addr(chips_range_t data);
+// get the return address in ROM which is pushed on the stack for quickloaded code
+uint16_t kc85_quickload_return_addr(void);
+// load a .KCC or .TAP snapshot file into the emulator and optionally try to start
+bool kc85_quickload(kc85_t* sys, chips_range_t data, bool start);
 // take snapshot, patches any pointers to zero, returns a snapshot version
 uint32_t kc85_save_snapshot(kc85_t* sys, kc85_t* dst);
 // load a snapshot, returns false if snapshot version doesn't match
@@ -497,18 +515,6 @@ bool kc85_load_snapshot(kc85_t* sys, uint32_t version, const kc85_t* src);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#if defined(CHIPS_KC85_TYPE_4)
-#define _KC85_FREQUENCY (1770000)
-#else
-#define _KC85_FREQUENCY (1750000)
-#endif
-#define _KC85_IRM0_PAGE (4)
-#if defined(CHIPS_KC85_TYPE_4)
-#define _KC85_SCANLINE_TICKS (113)
-#else
-#define _KC85_SCANLINE_TICKS (112)
-#endif
-#define _KC85_NUM_SCANLINES (312)
 
 /*
     IO address decoding.
@@ -581,7 +587,7 @@ void kc85_init(kc85_t* sys, const kc85_desc_t* desc) {
 
     memset(sys, 0, sizeof(kc85_t));
     sys->valid = true;
-    sys->freq_hz = _KC85_FREQUENCY;
+    sys->freq_hz = KC85_FREQUENCY;
     sys->patch_callback = desc->patch_callback;
     sys->debug = desc->debug;
 
@@ -727,13 +733,23 @@ static inline void _kc85_decode_8pixels(uint8_t* dst, uint8_t pixels, uint8_t co
 
 static inline uint64_t _kc85_update_raster_counters(kc85_t* sys, uint64_t pins) {
     sys->video.h_tick++;
-    if (sys->video.h_tick == _KC85_SCANLINE_TICKS) {
+    // feed '_h4' into CTC CLKTRG0 and 1, per scanline:
+    //   0..31 ticks lo
+    //  32..63 ticks hi
+    //  64..95 ticks lo
+    //  remainder: hi
+    if (sys->video.h_tick & 0x20) {
+        pins |= (Z80CTC_CLKTRG0 | Z80CTC_CLKTRG1);
+    }
+    // vertical blanking interval (/BI) active for the last 56 scanlines
+    if (sys->video.v_count & 0x100) {
+        pins |= (Z80CTC_CLKTRG2 | Z80CTC_CLKTRG3);
+    }
+    if (sys->video.h_tick == KC85_SCANLINE_TICKS) {
         sys->video.h_tick = 0;
         sys->video.v_count++;
-        if (sys->video.v_count == _KC85_NUM_SCANLINES) {
+        if (sys->video.v_count == KC85_NUM_SCANLINES) {
             sys->video.v_count = 0;
-            // vertical sync, trigger CTC CLKTRG2 input for video blinking effect
-            pins |= Z80CTC_CLKTRG2;
         }
     }
     return pins;
@@ -761,11 +777,11 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
             // CPU accesses video memory, which will force the background color
             // a short duration
             //
-            uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE][color_offset];
+            uint8_t color_bits = sys->ram[KC85_IRM0_PAGE][color_offset];
             bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & (sys->pio_pins>>(Z80PIO_PIN_PB7-7)) & (1<<7));
             // same as (pins & Z80_WR) && (addr >= 0x8000) && (addr < 0xC000)
             bool cpu_access = (pins & (Z80_WR | 0xC000)) == (Z80_WR | 0x8000);
-            uint8_t pixel_bits = (fg_blank || cpu_access) ? 0 : sys->ram[_KC85_IRM0_PAGE][pixel_offset];
+            uint8_t pixel_bits = (fg_blank || cpu_access) ? 0 : sys->ram[KC85_IRM0_PAGE][pixel_offset];
             uint8_t* dst = &(sys->fb[y*KC85_FRAMEBUFFER_WIDTH + x*8]);
             _kc85_decode_8pixels(dst, pixel_bits, color_bits);
         }
@@ -805,17 +821,17 @@ static uint64_t _kc85_tick_video(kc85_t* sys, uint64_t pins) {
         if ((y < 256) && (x < 40)) {
             size_t irm_index = (sys->io84 & 1) * 2;
             size_t offset = (x<<8) | y;
-            uint8_t color_bits = sys->ram[_KC85_IRM0_PAGE + irm_index + 1][offset];
+            uint8_t color_bits = sys->ram[KC85_IRM0_PAGE + irm_index + 1][offset];
             uint8_t* dst = &sys->fb[y * KC85_FRAMEBUFFER_WIDTH + x * 8];
             if (sys->io84 & KC85_IO84_HICOLOR) {
                 // regular KC85/4 video mode
                 bool fg_blank = 0 != (color_bits & (sys->flip_flops>>(Z80CTC_BIT_ZCTO2-7)) & (sys->pio_pins>>(Z80PIO_PIN_PB7-7)) & (1<<7));
-                uint8_t pixel_bits = fg_blank ? 0 : sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
+                uint8_t pixel_bits = fg_blank ? 0 : sys->ram[KC85_IRM0_PAGE + irm_index][offset];
                 _kc85_decode_8pixels(dst, pixel_bits, color_bits);
             }
             else {
                 // hicolor mode
-                uint8_t p0 = sys->ram[_KC85_IRM0_PAGE + irm_index][offset];
+                uint8_t p0 = sys->ram[KC85_IRM0_PAGE + irm_index][offset];
                 uint8_t p1 = color_bits;
                 _kc85_decode_hicolor_8pixels(dst, p0, p1);
             }
@@ -852,7 +868,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
     #if !defined(CHIPS_KC85_TYPE_4) // KC85/2 and /3
         // 16 KB Video RAM at 0x8000
         if (pio_pins & KC85_PIO_IRM) {
-            mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[_KC85_IRM0_PAGE]);
+            mem_map_ram(&sys->mem, 0, 0x8000, 0x4000, sys->ram[KC85_IRM0_PAGE]);
         }
     #else // KC84/4
         // 16 KB RAM at 0x4000
@@ -880,7 +896,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
         */
         if (pio_pins & KC85_PIO_IRM) {
             uint32_t irm_index = (sys->io84 & 6)>>1;
-            uint8_t* irm_ptr = sys->ram[_KC85_IRM0_PAGE + irm_index];
+            uint8_t* irm_ptr = sys->ram[KC85_IRM0_PAGE + irm_index];
             /* on the KC85, an access to IRM banks other than the
               first is only possible for the first 10 KByte until
               A800, memory access to the remaining 6 KBytes
@@ -890,7 +906,7 @@ static void _kc85_update_memory_map(kc85_t* sys) {
             mem_map_ram(&sys->mem, 0, 0x8000, 0x2800, irm_ptr);
 
             // always force access to 0xA800 and above to the first IRM bank
-            mem_map_ram(&sys->mem, 0, 0xA800, 0x1800, sys->ram[_KC85_IRM0_PAGE] + 0x2800);
+            mem_map_ram(&sys->mem, 0, 0xA800, 0x1800, sys->ram[KC85_IRM0_PAGE] + 0x2800);
        }
        // 4 KB CAOS-C ROM at 0xC000 (on top of BASIC)
        if (sys->io86 & KC85_IO86_CAOS_ROM_C) {
@@ -917,10 +933,10 @@ static uint64_t _kc85_tick(kc85_t* sys, uint64_t pins) {
         }
     }
 
-    // tick the video system, this may return Z80CTC_CLKTRG2 on VSYNC
+    // tick the video system, may set CLKTRG0..3
     pins = _kc85_tick_video(sys, pins);
 
-    // tick the CTC, NOTE: Z80CTC_CLKTRG2 may be set from video system
+    // tick the CTC
     {
         // set virtual IEIO pin because CTC is highest priority interrupt device
         pins |= Z80_IEIO;
@@ -1462,6 +1478,19 @@ static void _kc85_exp_update_memory_mapping(kc85_t* sys) {
 
 /*=== FILE LOADING ===========================================================*/
 
+uint16_t kc85_quickload_return_addr(void) {
+    // FIXME: KC85/2: find proper return address
+    #if defined(CHIPS_KC85_TYPE_2)
+        return 0xffff;
+    #elif defined(CHIPS_KC85_TYPE_3)
+        return 0xf15c;
+    #elif defined(CHIPS_KC85_TYPE_4)
+        return 0xf17e;
+    #else
+    #error "unknown KC85 type!"
+    #endif
+}
+
 // common start function for all snapshot file formats
 static void _kc85_load_start(kc85_t* sys, uint16_t exec_addr) {
     sys->cpu.a = 0x00;
@@ -1478,11 +1507,10 @@ static void _kc85_load_start(kc85_t* sys, uint16_t exec_addr) {
     mem_wr(&sys->mem, 0xb7a0, 0);
     #if defined(CHIPS_KC85_TYPE_3)
         _kc85_tick(sys, Z80_MAKE_PINS(Z80_IORQ|Z80_WR, 0x89, 0x9f));
-        mem_wr16(&sys->mem, sys->cpu.sp, 0xf15c);
     #elif defined(CHIPS_KC85_TYPE_4)
         _kc85_tick(sys, Z80_MAKE_PINS(Z80_IORQ|Z80_WR, 0x89, 0xff));
-        mem_wr16(&sys->mem, sys->cpu.sp, 0xf17e);
     #endif
+    mem_wr16(&sys->mem, sys->cpu.sp, kc85_quickload_return_addr());
     z80_prefetch(&sys->cpu, exec_addr);
 }
 
@@ -1510,7 +1538,7 @@ static void _kc85_invoke_patch_callback(kc85_t* sys, const _kc85_kcc_header* hdr
 }
 
 /* KCC files cannot really be identified since they have no magic number */
-static bool _kc85_is_valid_kcc(chips_range_t data) {
+bool kc85_is_valid_kcc(chips_range_t data) {
     if (data.size <= sizeof(_kc85_kcc_header)) {
         return false;
     }
@@ -1537,18 +1565,22 @@ static bool _kc85_is_valid_kcc(chips_range_t data) {
     return true;
 }
 
-static bool _kc85_load_kcc(kc85_t* sys, chips_range_t data) {
+uint16_t kc85_kcc_exec_addr(chips_range_t data) {
+    assert(kc85_is_valid_kcc(data));
+    const _kc85_kcc_header* hdr = (const _kc85_kcc_header*) data.ptr;
+    return hdr->exec_addr_h<<8 | hdr->exec_addr_l;
+}
+
+static bool _kc85_load_kcc(kc85_t* sys, chips_range_t data, bool start) {
     const _kc85_kcc_header* hdr = (_kc85_kcc_header*) data.ptr;
     uint16_t addr = hdr->load_addr_h<<8 | hdr->load_addr_l;
     uint16_t end_addr  = hdr->end_addr_h<<8 | hdr->end_addr_l;
     const uint8_t* ptr = (const uint8_t*)data.ptr + sizeof(_kc85_kcc_header);
     while (addr < end_addr) {
-        /* data is continuous */
         mem_wr(&sys->mem, addr++, *ptr++);
     }
     _kc85_invoke_patch_callback(sys, hdr);
-    /* if file has an exec-address, start the program */
-    if (hdr->num_addr > 2) {
+    if (start && (hdr->num_addr > 2)) {
         _kc85_load_start(sys, hdr->exec_addr_h<<8 | hdr->exec_addr_l);
     }
     return true;
@@ -1561,7 +1593,7 @@ typedef struct {
     _kc85_kcc_header kcc;   /* from here on identical with KCC */
 } _kc85_kctap_header;
 
-static bool _kc85_is_valid_kctap(chips_range_t data) {
+bool kc85_is_valid_kctap(chips_range_t data) {
     if (data.size <= sizeof(_kc85_kctap_header)) {
         return false;
     }
@@ -1594,7 +1626,7 @@ static bool _kc85_is_valid_kctap(chips_range_t data) {
     return true;
 }
 
-static bool _kc85_load_kctap(kc85_t* sys, chips_range_t data) {
+static bool _kc85_load_kctap(kc85_t* sys, chips_range_t data, bool start) {
     const _kc85_kctap_header* hdr = (const _kc85_kctap_header*) data.ptr;
     uint16_t addr = hdr->kcc.load_addr_h<<8 | hdr->kcc.load_addr_l;
     uint16_t end_addr  = hdr->kcc.end_addr_h<<8 | hdr->kcc.end_addr_l;
@@ -1608,20 +1640,20 @@ static bool _kc85_load_kctap(kc85_t* sys, chips_range_t data) {
     }
     _kc85_invoke_patch_callback(sys, &hdr->kcc);
     /* if file has an exec-address, start the program */
-    if (hdr->kcc.num_addr > 2) {
+    if (start && (hdr->kcc.num_addr > 2)) {
         _kc85_load_start(sys, hdr->kcc.exec_addr_h<<8 | hdr->kcc.exec_addr_l);
     }
     return true;
 }
 
-bool kc85_quickload(kc85_t* sys, chips_range_t data) {
+bool kc85_quickload(kc85_t* sys, chips_range_t data, bool start) {
     CHIPS_ASSERT(sys && sys->valid && data.ptr);
     /* first check for KC-TAP format, since this can be properly identified */
-    if (_kc85_is_valid_kctap(data)) {
-        return _kc85_load_kctap(sys, data);
+    if (kc85_is_valid_kctap(data)) {
+        return _kc85_load_kctap(sys, data, start);
     }
-    else if (_kc85_is_valid_kcc(data)) {
-        return _kc85_load_kcc(sys, data);
+    else if (kc85_is_valid_kcc(data)) {
+        return _kc85_load_kcc(sys, data, start);
     }
     else {
         /* not a known file type, or not enough data */

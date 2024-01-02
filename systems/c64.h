@@ -421,6 +421,14 @@ bool c64_is_tape_motor_on(c64_t* sys);
 uint32_t c64_save_snapshot(c64_t* sys, c64_t* dst);
 // load a snapshot, returns false if snapshot versions don't match
 bool c64_load_snapshot(c64_t* sys, uint32_t version, c64_t* src);
+// perform a RUN BASIC call
+void c64_basic_run(c64_t* sys);
+// perform a LOAD BASIC call
+void c64_basic_load(c64_t* sys);
+// perform a SYS xxxx BASIC call via the BASIC input buffer
+void c64_basic_syscall(c64_t* sys, uint16_t addr);
+// returns the SYS call return address (can be used to set a breakpoint)
+uint16_t c64_syscall_return_addr(void);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -1163,4 +1171,49 @@ bool c64_load_snapshot(c64_t* sys, uint32_t version, c64_t* src) {
     return true;
 }
 
+void c64_basic_run(c64_t* sys) {
+    CHIPS_ASSERT(sys);
+    // write RUN into the keyboard buffer
+    uint16_t keybuf = 0x277;
+    mem_wr(&sys->mem_cpu, keybuf++, 'R');
+    mem_wr(&sys->mem_cpu, keybuf++, 'U');
+    mem_wr(&sys->mem_cpu, keybuf++, 'N');
+    mem_wr(&sys->mem_cpu, keybuf++, 0x0D);
+    // write number of characters, this kicks off evaluation
+    mem_wr(&sys->mem_cpu, 0xC6, 4);
+}
+
+void c64_basic_load(c64_t* sys) {
+    CHIPS_ASSERT(sys);
+    // write LOAD
+    uint16_t keybuf = 0x277;
+    mem_wr(&sys->mem_cpu, keybuf++, 'L');
+    mem_wr(&sys->mem_cpu, keybuf++, 'O');
+    mem_wr(&sys->mem_cpu, keybuf++, 'A');
+    mem_wr(&sys->mem_cpu, keybuf++, 'D');
+    mem_wr(&sys->mem_cpu, keybuf++, 0x0D);
+    // write number of characters, this kicks off evaluation
+    mem_wr(&sys->mem_cpu, 0xC6, 5);
+}
+
+void c64_basic_syscall(c64_t* sys, uint16_t addr) {
+    CHIPS_ASSERT(sys);
+    // write SYS xxxx[Return] into the keyboard buffer (up to 10 chars)
+    uint16_t keybuf = 0x277;
+    mem_wr(&sys->mem_cpu, keybuf++, 'S');
+    mem_wr(&sys->mem_cpu, keybuf++, 'Y');
+    mem_wr(&sys->mem_cpu, keybuf++, 'S');
+    mem_wr(&sys->mem_cpu, keybuf++, ((addr / 10000) % 10) + '0');
+    mem_wr(&sys->mem_cpu, keybuf++, ((addr / 1000) % 10) + '0');
+    mem_wr(&sys->mem_cpu, keybuf++, ((addr / 100) % 10) + '0');
+    mem_wr(&sys->mem_cpu, keybuf++, ((addr / 10) % 10) + '0');
+    mem_wr(&sys->mem_cpu, keybuf++, ((addr / 1) % 10) + '0');
+    mem_wr(&sys->mem_cpu, keybuf++, 0x0D);
+    // write number of characters, this kicks off evaluation
+    mem_wr(&sys->mem_cpu, 0xC6, 9);
+}
+
+uint16_t c64_syscall_return_addr(void) {
+    return 0xA7EA;
+}
 #endif /* CHIPS_IMPL */
