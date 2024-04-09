@@ -55,6 +55,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdalign.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #ifdef __cplusplus
 extern "C" {
