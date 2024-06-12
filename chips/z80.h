@@ -333,6 +333,14 @@ extern "C" {
 #define Z80_ZF (1<<6)           // zero
 #define Z80_SF (1<<7)           // sign
 
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define Z80_REGDEF(A, B, AB) \
+    union { struct { uint8_t B; uint8_t A; }; uint16_t AB; }
+#else
+#define Z80_REGDEF(A, B, AB) \
+    union { struct { uint8_t A; uint8_t B; }; uint16_t AB; }
+#endif
+
 // CPU state
 typedef struct {
     uint16_t step;      // the currently active decoder step
@@ -343,23 +351,23 @@ typedef struct {
     bool prefix_active; // true if any prefix currently active (only needed in z80_opdone())
     uint64_t pins;      // last pin state, used for NMI detection
     uint64_t int_bits;  // track INT and NMI state
-    union { struct { uint8_t pcl; uint8_t pch; }; uint16_t pc; };
+    Z80_REGDEF(pch, pcl, pc);
 
     // NOTE: These unions are fine in C, but not C++.
-    union { struct { uint8_t f; uint8_t a; }; uint16_t af; };
-    union { struct { uint8_t c; uint8_t b; }; uint16_t bc; };
-    union { struct { uint8_t e; uint8_t d; }; uint16_t de; };
+    Z80_REGDEF(a, f, af);
+    Z80_REGDEF(b, c, bc);
+    Z80_REGDEF(d, e, de);
     union {
         struct {
-            union { struct { uint8_t l; uint8_t h; }; uint16_t hl; };
-            union { struct { uint8_t ixl; uint8_t ixh; }; uint16_t ix; };
-            union { struct { uint8_t iyl; uint8_t iyh; }; uint16_t iy; };
+            Z80_REGDEF(h, l, hl);
+            Z80_REGDEF(ixh, ixl, ix);
+            Z80_REGDEF(iyh, iyl, iy);
         };
-        struct { union { struct { uint8_t l; uint8_t h; }; uint16_t hl; }; } hlx[3];
+        struct { Z80_REGDEF(h, l, hl); } hlx[3];
     };
-    union { struct { uint8_t wzl; uint8_t wzh; }; uint16_t wz; };
-    union { struct { uint8_t spl; uint8_t sph; }; uint16_t sp; };
-    union { struct { uint8_t r; uint8_t i; }; uint16_t ir; };
+    Z80_REGDEF(wzh, wzl, wz);
+    Z80_REGDEF(sph, spl, sp);
+    Z80_REGDEF(i, r, ir);
     uint16_t af2, bc2, de2, hl2; // shadow register bank
     uint8_t im;
     bool iff1, iff2;
