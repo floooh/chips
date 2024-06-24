@@ -679,6 +679,7 @@ ddfdcb:
 
 #== INTERRUPT HANDLING =========================================================
 
+# FIXME: last tcycle also needs "cpu->addr = cpu->hl"
 int_im0:
   flags: { special: true }
   mcycles:
