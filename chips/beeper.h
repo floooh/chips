@@ -107,12 +107,11 @@ void beeper_reset(beeper_t* b) {
    from the chip simulation which is >0.0 gets converted to
    a +/- sample value)
 */
-static float _beeper_dcadjust(beeper_t* bp, float s) {
+static void _beeper_dcadjust(beeper_t* bp, float s) {
     bp->dcadj_sum -= bp->dcadj_buf[bp->dcadj_pos];
     bp->dcadj_sum += s;
     bp->dcadj_buf[bp->dcadj_pos] = s;
     bp->dcadj_pos = (bp->dcadj_pos + 1) & (BEEPER_DCADJ_BUFLEN-1);
-    return s - (bp->dcadj_sum / BEEPER_DCADJ_BUFLEN);
 }
 
 bool beeper_tick(beeper_t* bp) {
