@@ -20,7 +20,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -32,7 +32,7 @@ extern "C" {
 // error-accumulation precision boost
 #define BEEPER_FIXEDPOINT_SCALE (16)
 // DC adjust buffer size
-#define BEEPER_DCADJ_BUFLEN (512)
+#define BEEPER_DCADJ_BUFLEN (128)
 
 // initialization parameters
 typedef struct {
