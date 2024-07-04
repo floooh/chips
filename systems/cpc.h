@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -20,6 +20,7 @@
 
     You need to include the following headers before including cpc.h:
 
+    - chips/chips_common.h
     - chips/z80.h
     - chips/ay38910.h
     - chips/i8255.h
@@ -65,15 +66,19 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdalign.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// bump when cpc_t memory layout changes
+#define CPC_SNAPSHOT_VERSION (0x0001)
 
 #define CPC_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
 #define CPC_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer
@@ -101,64 +106,30 @@ typedef enum {
 #define CPC_JOYSTICK_BTN0  (1<<4)
 #define CPC_JOYSTICK_BTN1  (1<<4)
 
-// audio sample callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} cpc_audio_callback_t;
-
-// debugging hook
-typedef void (*cpc_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        cpc_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} cpc_debug_t;
-
-typedef struct {
-    const void* ptr;
-    size_t size;
-} cpc_rom_image_t;
-
 // configuration parameters for cpc_init()
 typedef struct {
     cpc_type_t type;                // default is the CPC 6128
     cpc_joystick_type_t joystick_type;
-    cpc_debug_t debug;
-
-    // video output config
-    struct {
-        void* ptr;              // pointer to a linear RGBA8 pixel buffer, at least 1024*312*4 bytes
-        size_t size;            // size of the pixel buffer in bytes
-    } pixel_buffer;
-
-    // audio output config (if you don't want audio, set callback.func to zero)
-    struct {
-        cpc_audio_callback_t callback;  // called when audio_num_samples are ready */
-        int num_samples;                // default is CPC_AUDIO_NUM_SAMPLES
-        int sample_rate;                // playback sample rate, default is 44100
-        float volume;                   // audio volume: 0.0..1.0, default is 0.25
-    } audio;
+    chips_debug_t debug;
+    chips_audio_desc_t audio;
 
     // ROM images
     struct {
         // CPC 464
         struct {
-            cpc_rom_image_t os;
-            cpc_rom_image_t basic;
+            chips_range_t os;
+            chips_range_t basic;
         } cpc464;
         // CPC 6128
         struct {
-            cpc_rom_image_t os;
-            cpc_rom_image_t basic;
-            cpc_rom_image_t amsdos;
+            chips_range_t os;
+            chips_range_t basic;
+            chips_range_t amsdos;
         } cpc6128;
         // KC Compact
         struct {
-            cpc_rom_image_t os;
-            cpc_rom_image_t basic;
+            chips_range_t os;
+            chips_range_t basic;
         } kcc;
     } roms;
 } cpc_desc_t;
@@ -168,26 +139,24 @@ typedef struct {
     z80_t cpu;
     ay38910_t psg;
     mc6845_t crtc;
-    am40010_t ga;
     i8255_t ppi;
     upd765_t fdc;
+    am40010_t ga;
 
     cpc_type_t type;
     cpc_joystick_type_t joystick_type;
     uint8_t kbd_joymask;
     uint8_t joy_joymask;
-    uint16_t casread_trap;
-    uint16_t casread_ret;
 
     kbd_t kbd;
     mem_t mem;
 
     uint64_t pins;
     bool valid;
-    cpc_debug_t debug;
+    chips_debug_t debug;
 
     struct {
-        cpc_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[CPC_MAX_AUDIO_SAMPLES];
@@ -196,15 +165,7 @@ typedef struct {
     uint8_t rom_os[0x4000];
     uint8_t rom_basic[0x4000];
     uint8_t rom_amsdos[0x4000];
-    // tape loading (FIXME: currently not implemented)
-    /*
-    struct {
-        int size; // tape_size is > 0 if a tape is inserted
-        int pos;
-        uint8_t buf[CPC_MAX_TAPE_SIZE];
-    } tape;
-    */
-    // floppy disc drive
+    alignas(64) uint8_t fb[AM40010_FRAMEBUFFER_SIZE_BYTES];
     fdd_t fdd;
 } cpc_t;
 
@@ -214,6 +175,8 @@ void cpc_init(cpc_t* cpc, const cpc_desc_t* desc);
 void cpc_discard(cpc_t* cpc);
 // reset a CPC instance
 void cpc_reset(cpc_t* cpc);
+// get display requirements and framebuffer content, may be called with nullptr
+chips_display_info_t cpc_display_info(cpc_t* cpc);
 // run CPC instance for given amount of micro_seconds, returns number of ticks executed
 uint32_t cpc_exec(cpc_t* cpc, uint32_t micro_seconds);
 // send a key down event
@@ -229,13 +192,13 @@ void cpc_joystick(cpc_t* sys, uint8_t mask);
 // get current joystick bitmask state
 uint8_t cpc_joystick_mask(cpc_t* sys);
 // load a snapshot file (.sna or .bin) into the emulator
-bool cpc_quickload(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
-// insert a tape file (.tap) (FIXME: currently not implemented)
-//bool cpc_insert_tape(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
-// remove currently inserted tape (FIXME: currently not implemented)
-//void cpc_remove_tape(cpc_t* cpc);
+bool cpc_quickload(cpc_t* cpc, chips_range_t data, bool start);
+// return the exec address of a quickload file (.sna or .bin)
+uint16_t cpc_quickload_exec_addr(chips_range_t data);
+// return the return-address for a quickloaded file
+uint16_t cpc_quickload_return_addr(cpc_t* cpc);
 // insert a disk image file (.dsk)
-bool cpc_insert_disc(cpc_t* cpc, const uint8_t* ptr, int num_bytes);
+bool cpc_insert_disc(cpc_t* cpc, chips_range_t data);
 // remove current disc
 void cpc_remove_disc(cpc_t* cpc);
 // return true if a floppy disc is currently inserted
@@ -244,14 +207,10 @@ bool cpc_disc_inserted(cpc_t* cpc);
 void cpc_enable_video_debugging(cpc_t* cpc, bool enabled);
 // get current display debug visualization enabled/disabled state
 bool cpc_video_debugging_enabled(cpc_t* cpc);
-// get the standard framebuffer width and height in pixels
-int cpc_std_display_width(void);
-int cpc_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-size_t cpc_max_display_size(void);
-// get the current framebuffer width and height in pixels
-int cpc_display_width(cpc_t* sys);
-int cpc_display_height(cpc_t* sys);
+// take a snapshot, patches any pointers to zero, returns snapshot version
+uint32_t cpc_save_snapshot(cpc_t* sys, cpc_t* dst);
+// load a snapshot, returns false if snapshot version doesn't match
+bool cpc_load_snapshot(cpc_t* sys, uint32_t version, cpc_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -282,7 +241,6 @@ static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* o
 
 void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT((0 == desc->pixel_buffer.ptr) || (desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= cpc_max_display_size())));
     if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(cpc_t));
@@ -298,16 +256,14 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         CHIPS_ASSERT(desc->roms.cpc464.basic.ptr && (desc->roms.cpc464.basic.size == 0x4000));
         memcpy(sys->rom_os, desc->roms.cpc464.os.ptr, 0x4000);
         memcpy(sys->rom_basic, desc->roms.cpc464.basic.ptr, 0x4000);
-    }
-    else if (CPC_TYPE_6128 == desc->type) {
+    } else if (CPC_TYPE_6128 == desc->type) {
         CHIPS_ASSERT(desc->roms.cpc6128.os.ptr && (desc->roms.cpc6128.os.size == 0x4000));
         CHIPS_ASSERT(desc->roms.cpc6128.basic.ptr && (desc->roms.cpc6128.basic.size == 0x4000));
         CHIPS_ASSERT(desc->roms.cpc6128.amsdos.ptr && (desc->roms.cpc6128.amsdos.size == 0x4000));
         memcpy(sys->rom_os, desc->roms.cpc6128.os.ptr, 0x4000);
         memcpy(sys->rom_basic, desc->roms.cpc6128.basic.ptr, 0x4000);
         memcpy(sys->rom_amsdos, desc->roms.cpc6128.amsdos.ptr, 0x4000);
-    }
-    else { // KC Compact
+    } else { // KC Compact
         CHIPS_ASSERT(desc->roms.kcc.os.ptr && (desc->roms.kcc.os.size == 0x4000));
         CHIPS_ASSERT(desc->roms.kcc.basic.ptr && (desc->roms.kcc.basic.size == 0x4000));
         memcpy(sys->rom_os, desc->roms.kcc.os.ptr, 0x4000);
@@ -332,10 +288,14 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         .cpc_type = (am40010_cpc_type_t) sys->type,
         .bankswitch_cb = _cpc_bankswitch,
         .cclk_cb = _cpc_cclk,
-        .ram = &sys->ram[0][0],
-        .ram_size = sizeof(sys->ram),
-        .rgba8_buffer = (uint32_t*) desc->pixel_buffer.ptr,
-        .rgba8_buffer_size = desc->pixel_buffer.size,
+        .ram = {
+            .ptr = &sys->ram[0][0],
+            .size = sizeof(sys->ram)
+        },
+        .framebuffer = {
+            .ptr = &sys->fb[0],
+            .size = sizeof(sys->fb),
+        },
         .user_data = sys,
     });
     upd765_init(&sys->fdc, &(upd765_desc_t){
@@ -349,18 +309,6 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
     fdd_init(&sys->fdd);
 
     _cpc_init_keymap(sys);
-
-    /* cassette tape loading
-        (http://www.cpcwiki.eu/index.php/Format:TAP_tape_image_file_format)
-    */
-    if (CPC_TYPE_464 == sys->type) {
-        sys->casread_trap = 0x2836;
-        sys->casread_ret  = 0x2872;
-    }
-    else {
-        sys->casread_trap = 0x29A6;
-        sys->casread_ret  = 0x29E2;
-    }
 }
 
 void cpc_discard(cpc_t* sys) {
@@ -388,12 +336,10 @@ static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
         const uint16_t addr = Z80_GET_ADDR(cpu_pins);
         if (cpu_pins & Z80_RD) {
             Z80_SET_DATA(cpu_pins, mem_rd(&sys->mem, addr));
-        }
-        else if (cpu_pins & Z80_WR) {
+        } else if (cpu_pins & Z80_WR) {
             mem_wr(&sys->mem, addr, Z80_GET_DATA(cpu_pins));
         }
-    }
-    else if ((cpu_pins & (Z80_M1|Z80_IORQ)) == Z80_IORQ) {
+    } else if ((cpu_pins & (Z80_M1|Z80_IORQ)) == Z80_IORQ) {
         /* CPU IO address decoding
 
             For address decoding, see the main board schematics!
@@ -506,8 +452,7 @@ static uint64_t _cpc_tick(cpc_t* sys, uint64_t cpu_pins) {
             if (cpu_pins & Z80_WR) {
                 fdd_motor(&sys->fdd, 0 != (Z80_GET_DATA(cpu_pins) & 1));
             }
-        }
-        else if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
+        } else if ((cpu_pins & (Z80_A10|Z80_A8|Z80_A7)) == Z80_A8) {
             // floppy controller status/data register
             uint64_t fdc_pins = UPD765_CS | (cpu_pins & Z80_PIN_MASK);
             cpu_pins = upd765_iorq(&sys->fdc, fdc_pins) & Z80_PIN_MASK;
@@ -574,8 +519,7 @@ static uint8_t _cpc_psg_in(int port_id, void* user_data) {
             data |= (sys->kbd_joymask | sys->joy_joymask);
         }
         return ~data;
-    }
-    else {
+    } else {
         // this shouldn't happen since the AY-3-8912 only has one IO port
         return 0xFF;
     }
@@ -603,8 +547,7 @@ static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_
         ram_config_index = ram_config & 7;
         rom0_ptr = sys->rom_os;
         rom1_ptr = (rom_select == 7) ? sys->rom_amsdos : sys->rom_basic;
-    }
-    else {
+    } else {
         ram_config_index = 0;
         rom0_ptr = sys->rom_os;
         rom1_ptr = sys->rom_basic;
@@ -618,8 +561,7 @@ static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_
     if (rom_enable & AM40010_CONFIG_LROMEN) {
         // read/write RAM
         mem_map_ram(&sys->mem, 0, 0x0000, 0x4000, sys->ram[i0]);
-    }
-    else {
+    } else {
         // RAM-behind-ROM
         mem_map_rw(&sys->mem, 0, 0x0000, 0x4000, rom0_ptr, sys->ram[i0]);
     }
@@ -631,8 +573,7 @@ static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_
     if (rom_enable & AM40010_CONFIG_HROMEN) {
         // read/write RAM
         mem_map_ram(&sys->mem, 0, 0xC000, 0x4000, sys->ram[i3]);
-    }
-    else {
+    } else {
         // RAM-behind-ROM
         mem_map_rw(&sys->mem, 0, 0xC000, 0x4000, rom1_ptr, sys->ram[i3]);
     }
@@ -647,8 +588,7 @@ uint32_t cpc_exec(cpc_t* sys, uint32_t micro_seconds) {
         for (uint32_t tick = 0; tick < num_ticks; tick++) {
             pins = _cpc_tick(sys, pins);
         }
-    }
-    else {
+    } else {
         // run with debug hook
         for (uint32_t tick = 0; (tick < num_ticks) && !(*sys->debug.stopped); tick++) {
             pins = _cpc_tick(sys, pins);
@@ -671,8 +611,7 @@ void cpc_key_down(cpc_t* sys, int key_code) {
             case 0x0B: sys->kbd_joymask |= CPC_JOYSTICK_UP; break;
             default: kbd_key_down(&sys->kbd, key_code); break;
         }
-    }
-    else {
+    } else {
         kbd_key_down(&sys->kbd, key_code);
     }
 }
@@ -688,8 +627,7 @@ void cpc_key_up(cpc_t* sys, int key_code) {
             case 0x0B: sys->kbd_joymask &= ~CPC_JOYSTICK_UP; break;
             default: kbd_key_up(&sys->kbd, key_code); break;
         }
-    }
-    else {
+    } else {
         kbd_key_up(&sys->kbd, key_code);
     }
 }
@@ -728,7 +666,7 @@ bool cpc_video_debugging_enabled(cpc_t* sys) {
 static void _cpc_init_keymap(cpc_t* sys) {
     /*
         http://cpctech.cpc-live.com/docs/keyboard.html
-    
+
         CPC has a 10 columns by 8 lines keyboard matrix. The 10 columns
         are lit up by bits 0..3 of PPI port C connected to a 74LS145
         BCD decoder, and the lines are read through port A of the
@@ -826,13 +764,13 @@ typedef struct {
     uint8_t pad1[0x93];
 } _cpc_sna_header;
 
-static bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
-    if (num_bytes <= (int)sizeof(_cpc_sna_header)) {
+static bool _cpc_is_valid_sna(chips_range_t data) {
+    if (data.size <= sizeof(_cpc_sna_header)) {
         return false;
     }
-    const _cpc_sna_header* hdr = (const _cpc_sna_header*) ptr;
+    const _cpc_sna_header* hdr = (const _cpc_sna_header*)data.ptr;
     static uint8_t magic[8] = { 'M', 'V', 0x20, '-', 0x20, 'S', 'N', 'A' };
-    for (int i = 0; i < 8; i++) {
+    for (size_t i = 0; i < 8; i++) {
         if (magic[i] != hdr->magic[i]) {
             return false;
         }
@@ -841,14 +779,15 @@ static bool _cpc_is_valid_sna(const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+static bool _cpc_load_sna(cpc_t* sys, chips_range_t data) {
+    const uint8_t* ptr = (uint8_t*) data.ptr;
     const _cpc_sna_header* hdr = (const _cpc_sna_header*) ptr;
     ptr += sizeof(_cpc_sna_header);
-    
+
     // copy 64 or 128 KByte memory dump
     const uint16_t dump_size = hdr->dump_size_h<<8 | hdr->dump_size_l;
     const uint32_t dump_num_bytes = (dump_size == 64) ? 0x10000 : 0x20000;
-    if (num_bytes > (int) (sizeof(_cpc_sna_header) + dump_num_bytes)) {
+    if (data.size > (sizeof(_cpc_sna_header) + dump_num_bytes)) {
         return false;
     }
     if (dump_num_bytes > sizeof(sys->ram)) {
@@ -874,7 +813,6 @@ static bool _cpc_load_sna(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
     sys->cpu.de2 = (hdr->D_<<8) | hdr->E_;
     sys->cpu.hl2 = (hdr->H_<<8) | hdr->L_;
 
-    sys->ga.colors.dirty = true;
     for (int i = 0; i < 16; i++) {
         sys->ga.regs.ink[i] = hdr->pens[i] & 0x1F;
     }
@@ -921,14 +859,15 @@ typedef struct {
     uint8_t pad_5[0x60];
 } _cpc_bin_header;
 
-static bool _cpc_is_valid_bin(int num_bytes) {
-    if (num_bytes <= (int)sizeof(_cpc_bin_header)) {
+static bool _cpc_is_valid_bin(chips_range_t data) {
+    if (data.size <= sizeof(_cpc_bin_header)) {
         return false;
     }
     return true;
 }
 
-static bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr) {
+static bool _cpc_load_bin(cpc_t* sys, chips_range_t data, bool start) {
+    const uint8_t* ptr = (uint8_t*) data.ptr;
     const _cpc_bin_header* hdr = (const _cpc_bin_header*) ptr;
     ptr += sizeof(_cpc_bin_header);
     const uint16_t load_addr = (hdr->load_addr_h<<8)|hdr->load_addr_l;
@@ -937,96 +876,78 @@ static bool _cpc_load_bin(cpc_t* sys, const uint8_t* ptr) {
     for (uint16_t i = 0; i < len; i++) {
         mem_wr(&sys->mem, load_addr+i, *ptr++);
     }
-    sys->cpu.iff1 = true;
-    sys->cpu.iff2 = true;
-    sys->cpu.c = 0; // FIXME: "ROM select number"
-    sys->cpu.hl = start_addr;
-    sys->pins = z80_prefetch(&sys->cpu, 0xBD16); // MC START PROGRAM
-    return true;}
+    if (start) {
+        // write CALL &xxxx into BASIC line buffer
+        const char* to_hex = "0123456789ABCDEF";
+        uint16_t line_buf;
+        switch (sys->type) {
+            case CPC_TYPE_6128:
+            case CPC_TYPE_KCCOMPACT:
+                line_buf = 0xAC8A;
+                break;
+            default:
+                line_buf = 0xACA4;
+                break;
+        }
+        mem_wr(&sys->mem, line_buf++, 'C');
+        mem_wr(&sys->mem, line_buf++, 'A');
+        mem_wr(&sys->mem, line_buf++, 'L');
+        mem_wr(&sys->mem, line_buf++, 'L');
+        mem_wr(&sys->mem, line_buf++, ' ');
+        mem_wr(&sys->mem, line_buf++, '&');
+        mem_wr(&sys->mem, line_buf++, to_hex[(start_addr >> 12) & 0x0F]);
+        mem_wr(&sys->mem, line_buf++, to_hex[(start_addr >> 8) & 0x0F]);
+        mem_wr(&sys->mem, line_buf++, to_hex[(start_addr >> 4) & 0x0F]);
+        mem_wr(&sys->mem, line_buf++, to_hex[(start_addr >> 0) & 0x0F]);
+        mem_wr(&sys->mem, line_buf++, 0);
+        // generate a Return key press
+        cpc_key_down(sys, 0x0D);
+        cpc_key_up(sys, 0x0D);
+    }
+    return true;
+}
 
-bool cpc_quickload(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid && ptr);
-    if (_cpc_is_valid_sna(ptr, num_bytes)) {
-        return _cpc_load_sna(sys, ptr, num_bytes);
-    }
-    else if (_cpc_is_valid_bin(num_bytes)) {
-        return _cpc_load_bin(sys, ptr);
-    }
-    else {
+bool cpc_quickload(cpc_t* sys, chips_range_t data, bool start) {
+    CHIPS_ASSERT(sys && sys->valid && data.ptr && (data.size > 0));
+    if (_cpc_is_valid_sna(data)) {
+        return _cpc_load_sna(sys, data);
+    } else if (_cpc_is_valid_bin(data)) {
+        return _cpc_load_bin(sys, data, start);
+    } else {
         // not a known file type, or not enough data
         return false;
     }
 }
 
-/*=== CASSETTE TAPE FILE LOADING =============================================*/
-/*
- FIXME: implement tape loading through the hardware emulation instead of
- OS function trapping.
- 
-static int _cpc_trap_cb(uint16_t pc, uint32_t ticks, uint64_t pins, void* user_data) {
-    // CPU trap handler to check for casread
-    (void)ticks;
-    (void)pins;
-    cpc_t* sys = (cpc_t*) user_data;
-    return (pc == sys->casread_trap) ? 1 : 0;
+uint16_t cpc_quickload_return_addr(cpc_t* sys) {
+    switch (sys->type) {
+        case CPC_TYPE_6128:
+        case CPC_TYPE_KCCOMPACT:
+            return 0xB9A2;
+        case CPC_TYPE_464:
+            return 0xB99A;
+    }
+    return 0xB9A2;
 }
 
-bool cpc_insert_tape(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid);
-    CHIPS_ASSERT(ptr);
-    cpc_remove_tape(sys);
-    if (num_bytes > CPC_MAX_TAPE_SIZE) {
-        return false;
+uint16_t cpc_quickload_exec_addr(chips_range_t data) {
+    uint16_t start_addr = 0xFFFF;
+    if (_cpc_is_valid_sna(data)) {
+        const _cpc_sna_header* hdr = (const _cpc_sna_header*)data.ptr;
+        start_addr = (hdr->PC_h<<8) | hdr->PC_l;
+    } else if (_cpc_is_valid_bin(data)) {
+        const _cpc_bin_header* hdr = (const _cpc_bin_header*)data.ptr;
+        start_addr = (hdr->start_addr_h<<8)|hdr->start_addr_l;
     }
-    memcpy(sys->tape.buf, ptr, num_bytes);
-    sys->tape.pos = 0;
-    sys->tape.size = num_bytes;
-    z80_trap_cb(&sys->cpu, _cpc_trap_cb, sys);
-    return true;
+    return start_addr;
 }
-
-void cpc_remove_tape(cpc_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    sys->tape.pos = 0;
-    sys->tape.size = 0;
-    z80_trap_cb(&sys->cpu, 0, 0);
-}
-
-// the trapped OS casread function, reads one tape block into memory
-static void _cpc_cas_read(cpc_t* sys) {
-    bool success = false;
-    // if no tape is currently inserted, both tape_pos and tape_size is 0
-    if ((sys->tape.pos + 3) < sys->tape.size) {
-        uint8_t len_l = sys->tape.buf[sys->tape.pos++];
-        uint8_t len_h = sys->tape.buf[sys->tape.pos++];
-        uint16_t len = len_h<<8 | len_l;
-        if ((sys->tape.pos + len) <= sys->tape.size) {
-            uint8_t sync = sys->tape.buf[sys->tape.pos++];
-            if (sync == sys->cpu.a) {
-                success = true;
-                for (uint16_t i = 0; i < (len-1); i++) {
-                    uint8_t val = sys->tape.buf[sys->tape.pos++];
-                    mem_wr(&sys->mem, sys->cpu.hl++, val);
-                }
-            }
-        }
-    }
-    sys->cpu.f = success ? 0x45 : 0x00;
-    sys->pins = z80_prefetch(&sys->cpu, sys->casread_ret);
-    if (sys->tape.pos >= sys->tape.size) {
-        // reached end of tape, remove tape
-        cpc_remove_tape(sys);
-    }
-}
-*/
 
 /*=== FLOPPY DISC SUPPORT ====================================================*/
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data) {
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
         return fdd_seek_track(&sys->fdd, track);
-    }
-    else {
+    } else {
         return UPD765_RESULT_NOT_READY;
     }
 }
@@ -1049,8 +970,7 @@ static int _cpc_fdc_seeksector(int drive, int side, upd765_sectorinfo_t* inout_i
             inout_info->st2 = sector->info.upd765.st2;
         }
         return res;
-    }
-    else {
+    } else {
         return UPD765_RESULT_NOT_READY;
     }
 }
@@ -1059,8 +979,7 @@ static int _cpc_fdc_read(int drive, int side, void* user_data, uint8_t* out_data
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
         return fdd_read(&sys->fdd, side, out_data);
-    }
-    else {
+    } else {
         return UPD765_RESULT_NOT_READY;
     }
 }
@@ -1094,8 +1013,7 @@ static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* o
         out_info->ready = sys->fdd.motor_on;
         out_info->write_protected = sys->fdd.disc.write_protected;
         out_info->fault = false;
-    }
-    else {
+    } else {
         out_info->physical_track = 0;
         out_info->sides = 1;
         out_info->head = 0;
@@ -1105,9 +1023,9 @@ static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* o
     }
 }
 
-bool cpc_insert_disc(cpc_t* sys, const uint8_t* ptr, int num_bytes) {
+bool cpc_insert_disc(cpc_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid);
-    return fdd_cpc_insert_dsk(&sys->fdd, ptr, num_bytes);
+    return fdd_cpc_insert_dsk(&sys->fdd, data);
 }
 
 void cpc_remove_disc(cpc_t* sys) {
@@ -1120,27 +1038,62 @@ bool cpc_disc_inserted(cpc_t* sys) {
     return fdd_disc_inserted(&sys->fdd);
 }
 
-int cpc_std_display_width(void) {
-    return AM40010_DISPLAY_WIDTH;
+chips_display_info_t cpc_display_info(cpc_t* sys) {
+    const chips_display_info_t res = {
+        .frame = {
+            .dim = {
+                .width = AM40010_FRAMEBUFFER_WIDTH,
+                .height = AM40010_FRAMEBUFFER_HEIGHT,
+            },
+            .bytes_per_pixel = 1,
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = AM40010_FRAMEBUFFER_SIZE_BYTES,
+            }
+        },
+        .screen = {
+            .x = 0,
+            .y = 0,
+            .width = (sys && sys->ga.dbg_vis) ? AM40010_FRAMEBUFFER_WIDTH : AM40010_DISPLAY_WIDTH,
+            .height = (sys && sys->ga.dbg_vis) ? AM40010_FRAMEBUFFER_HEIGHT : AM40010_DISPLAY_HEIGHT,
+        },
+        .palette = {
+            .ptr = sys ? sys->ga.hw_colors : 0,
+            .size = AM40010_NUM_HWCOLORS * sizeof(uint32_t)
+        }
+    };
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    CHIPS_ASSERT(((sys == 0) && (res.palette.ptr == 0)) || ((sys != 0) && (res.palette.ptr != 0)));
+    return res;
 }
 
-int cpc_std_display_height(void) {
-    return AM40010_DISPLAY_HEIGHT;
+uint32_t cpc_save_snapshot(cpc_t* sys, cpc_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    ay38910_snapshot_onsave(&dst->psg);
+    upd765_snapshot_onsave(&dst->fdc);
+    am40010_snapshot_onsave(&dst->ga);
+    mem_snapshot_onsave(&dst->mem, sys);
+    return CPC_SNAPSHOT_VERSION;
 }
 
-size_t cpc_max_display_size(void) {
-    // take debugging visualization into account
-    return AM40010_DBG_DISPLAY_WIDTH * AM40010_DBG_DISPLAY_HEIGHT * 4;
-}
-
-int cpc_display_width(cpc_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->ga.dbg_vis ? AM40010_DBG_DISPLAY_WIDTH : AM40010_DISPLAY_WIDTH;
-}
-
-int cpc_display_height(cpc_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return sys->ga.dbg_vis ? AM40010_DBG_DISPLAY_HEIGHT : AM40010_DISPLAY_HEIGHT;
+bool cpc_load_snapshot(cpc_t* sys, uint32_t version, cpc_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != CPC_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static cpc_t im;
+    im = *src;
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    ay38910_snapshot_onload(&im.psg, &sys->psg);
+    upd765_snapshot_onload(&im.fdc, &sys->fdc);
+    am40010_snapshot_onload(&im.ga, &sys->ga);
+    mem_snapshot_onload(&im.mem, sys);
+    *sys = im;
+    return true;
 }
 
 #endif /* CHIPS_IMPL */

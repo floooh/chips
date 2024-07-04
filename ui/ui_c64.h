@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -37,6 +37,7 @@
     - ui_memedit.h
     - ui_memmap.h
     - ui_kbd.h
+    - ui_snapshot.h
 
     ## zlib/libpng license
 
@@ -54,7 +55,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -70,10 +71,10 @@ typedef void (*ui_c64_boot_cb)(c64_t* sys);
 typedef struct {
     c64_t* c64;             // pointer to c64_t instance to track
     ui_c64_boot_cb boot_cb; // reboot callback function
-    ui_dbg_create_texture_t create_texture_cb;      // texture creation callback for ui_dbg_t
-    ui_dbg_update_texture_t update_texture_cb;      // texture update callback for ui_dbg_t
-    ui_dbg_destroy_texture_t destroy_texture_cb;    // texture destruction callback for ui_dbg_t
-    ui_dbg_keys_desc_t dbg_keys;          // user-defined hotkeys for ui_dbg_t
+    ui_dbg_texture_callbacks_t dbg_texture; // texture create/update/destroy callbacks
+    ui_dbg_debug_callbacks_t dbg_debug;
+    ui_dbg_keys_desc_t dbg_keys;        // user-defined hotkeys for ui_dbg_t
+    ui_snapshot_desc_t snapshot;        // snapshot UI setup params
 } ui_c64_desc_t;
 
 typedef struct {
@@ -92,12 +93,13 @@ typedef struct {
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
     ui_dbg_t c1541_dbg;
+    ui_snapshot_t snapshot;
 } ui_c64_t;
 
 void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc);
 void ui_c64_discard(ui_c64_t* ui);
 void ui_c64_draw(ui_c64_t* ui);
-c64_debug_t ui_c64_get_debug(ui_c64_t* ui);
+chips_debug_t ui_c64_get_debug(ui_c64_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -122,6 +124,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui) {
     CHIPS_ASSERT(ui && ui->c64 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
+            ui_snapshot_menus(&ui->snapshot);
             if (ImGui::MenuItem("Reset")) {
                 c64_reset(ui->c64);
                 ui_dbg_reset(&ui->dbg);
@@ -170,6 +173,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui) {
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
             ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
             ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
@@ -189,6 +193,7 @@ static void _ui_c64_draw_menu(ui_c64_t* ui) {
             if (ui->c64->c1541.valid) {
                 if (ImGui::BeginMenu("VC-1541 (Floppy Drive)")) {
                     ImGui::MenuItem("CPU Debugger", 0, &ui->c1541_dbg.ui.open);
+                    ImGui::MenuItem("Stopwatch", 0, &ui->c1541_dbg.ui.show_stopwatch);
                     ImGui::MenuItem("Breakpoints", 0, &ui->c1541_dbg.ui.show_breakpoints);
                     ImGui::MenuItem("Execution History", 0, &ui->c1541_dbg.ui.show_history);
                     ImGui::MenuItem("Memory Heatmap", 0, &ui->c1541_dbg.ui.show_heatmap);
@@ -539,6 +544,7 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->c64 = ui_desc->c64;
     ui->boot_cb = ui_desc->boot_cb;
+    ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};
@@ -546,11 +552,13 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         desc.m6502 = &ui->c64->cpu;
+        desc.freq_hz = C64_FREQUENCY;
+        desc.scanline_ticks = M6569_HTOTAL;
+        desc.frame_ticks = M6569_HTOTAL * M6569_VTOTAL;
         desc.read_cb = _ui_c64_mem_read;
         desc.break_cb = _ui_c64_eval_bp;
-        desc.create_texture_cb = ui_desc->create_texture_cb;
-        desc.update_texture_cb = ui_desc->update_texture_cb;
-        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.texture_cbs = ui_desc->dbg_texture;
+        desc.debug_cbs = ui_desc->dbg_debug;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui;
         /* custom breakpoint types */
@@ -749,10 +757,10 @@ void ui_c64_draw(ui_c64_t* ui) {
     }
 }
 
-c64_debug_t ui_c64_get_debug(ui_c64_t* ui) {
+chips_debug_t ui_c64_get_debug(ui_c64_t* ui) {
     CHIPS_ASSERT(ui);
-    c64_debug_t res = {};
-    res.callback.func = (c64_debug_func_t)ui_dbg_tick;
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;

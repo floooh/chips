@@ -11,7 +11,7 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
@@ -64,10 +64,10 @@
     ~~~
         Perform a tick on the CTC, this function must be called
         for every CPU tick. Depending on the input pin mask and the current
-        CTC chip state, the CTC will perform IO requests from the CPU, check 
+        CTC chip state, the CTC will perform IO requests from the CPU, check
         for external trigger events, perform the interrupt daisychain protocol,
         and return a potentially modified pin mask.
-        
+
         The CTC reads the following pins when an IO request should be performed:
 
         - **Z80CTC_CE|Z80CTC_IORQ**: performs an IO request
@@ -87,7 +87,7 @@
           handling in "downstream chips"
         - **Z80CTC_RETI**: virtual pin which is set when the CPU has decoded a RETI/RETN
           instruction
-        
+
         The following output pins are potentially modified:
 
         - **Z80CTC_D0..Z80CTC_D7**: the resulting data byte of IO read requests
@@ -112,7 +112,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -122,27 +122,45 @@ extern "C" {
 #endif
 
 // control pins directly shared with CPU
-#define Z80CTC_M1       (1ULL<<24)   // CPU Machine Cycle One (same as Z80_M1) */
-#define Z80CTC_IORQ     (1ULL<<26)   // CPU IO Request (same as Z80_IORQ) */
-#define Z80CTC_RD       (1ULL<<27)   // CPU Read Cycle Status (same as Z80_RD) */
-#define Z80CTC_INT      (1ULL<<30)   // Interrupt Request (same as Z80_INT) */
-#define Z80CTC_RESET    (1ULL<<31)   // put CTC into reset state (same as Z80_RESET) */
+#define Z80CTC_BIT_M1       (24)   // CPU Machine Cycle One (same as Z80_M1) */
+#define Z80CTC_BIT_IORQ     (26)   // CPU IO Request (same as Z80_IORQ) */
+#define Z80CTC_BIT_RD       (27)   // CPU Read Cycle Status (same as Z80_RD) */
+#define Z80CTC_BIT_INT      (30)   // Interrupt Request (same as Z80_INT) */
+#define Z80CTC_BIT_RESET    (31)   // put CTC into reset state (same as Z80_RESET) */
 
 // Z80 interrupt daisy chain shared pins
-#define Z80CTC_IEIO     (1ULL<<37)   // combined Interrupt Enable In/Out (same as Z80_IEIO) */
-#define Z80CTC_RETI     (1ULL<<38)   // CPU has decoded a RETI instruction (same as Z80_RETI) */
+#define Z80CTC_BIT_IEIO     (37)   // combined Interrupt Enable In/Out (same as Z80_IEIO) */
+#define Z80CTC_BIT_RETI     (38)   // CPU has decoded a RETI instruction (same as Z80_RETI) */
 
 // CTC specific pins starting at bit 40
-#define Z80CTC_CE       (1ULL<<40)   // Chip Enable
-#define Z80CTC_CS0      (1ULL<<41)   // Channel Select Bit 0
-#define Z80CTC_CS1      (1ULL<<42)   // Channel Select Bit 1
-#define Z80CTC_CLKTRG0  (1ULL<<43)   // Clock/Timer Trigger 0
-#define Z80CTC_CLKTRG1  (1ULL<<44)   // Clock/Timer Trigger 1
-#define Z80CTC_CLKTRG2  (1ULL<<45)   // Clock/Timer Trigger 2
-#define Z80CTC_CLKTRG3  (1ULL<<46)   // Clock/Timer Trigger 3
-#define Z80CTC_ZCTO0    (1ULL<<47)   // Zero Count/Timeout 0
-#define Z80CTC_ZCTO1    (1ULL<<48)   // Zero Count/Timeout 1
-#define Z80CTC_ZCTO2    (1ULL<<49)   // Zero Count/Timeout 2
+#define Z80CTC_BIT_CE       (40)   // Chip Enable
+#define Z80CTC_BIT_CS0      (41)   // Channel Select Bit 0
+#define Z80CTC_BIT_CS1      (42)   // Channel Select Bit 1
+#define Z80CTC_BIT_CLKTRG0  (43)   // Clock/Timer Trigger 0
+#define Z80CTC_BIT_CLKTRG1  (44)   // Clock/Timer Trigger 1
+#define Z80CTC_BIT_CLKTRG2  (45)   // Clock/Timer Trigger 2
+#define Z80CTC_BIT_CLKTRG3  (46)   // Clock/Timer Trigger 3
+#define Z80CTC_BIT_ZCTO0    (47)   // Zero Count/Timeout 0
+#define Z80CTC_BIT_ZCTO1    (48)   // Zero Count/Timeout 1
+#define Z80CTC_BIT_ZCTO2    (49)   // Zero Count/Timeout 2
+
+#define Z80CTC_M1       (1ULL<<Z80CTC_BIT_M1)
+#define Z80CTC_IORQ     (1ULL<<Z80CTC_BIT_IORQ)
+#define Z80CTC_RD       (1ULL<<Z80CTC_BIT_RD)
+#define Z80CTC_INT      (1ULL<<Z80CTC_BIT_INT)
+#define Z80CTC_RESET    (1ULL<<Z80CTC_BIT_RESET)
+#define Z80CTC_IEIO     (1ULL<<Z80CTC_BIT_IEIO)
+#define Z80CTC_RETI     (1ULL<<Z80CTC_BIT_RETI)
+#define Z80CTC_CE       (1ULL<<Z80CTC_BIT_CE)
+#define Z80CTC_CS0      (1ULL<<Z80CTC_BIT_CS0)
+#define Z80CTC_CS1      (1ULL<<Z80CTC_BIT_CS1)
+#define Z80CTC_CLKTRG0  (1ULL<<Z80CTC_BIT_CLKTRG0)
+#define Z80CTC_CLKTRG1  (1ULL<<Z80CTC_BIT_CLKTRG1)
+#define Z80CTC_CLKTRG2  (1ULL<<Z80CTC_BIT_CLKTRG2)
+#define Z80CTC_CLKTRG3  (1ULL<<Z80CTC_BIT_CLKTRG3)
+#define Z80CTC_ZCTO0    (1ULL<<Z80CTC_BIT_ZCTO0)
+#define Z80CTC_ZCTO1    (1ULL<<Z80CTC_BIT_ZCTO1)
+#define Z80CTC_ZCTO2    (1ULL<<Z80CTC_BIT_ZCTO2)
 
 // Z80 CTC control register bits
 #define Z80CTC_CTRL_EI              (1<<7)  // 1: interrupt enabled, 0: interrupt disabled
@@ -334,7 +352,7 @@ uint64_t _z80ctc_write(z80ctc_t* ctc, uint64_t pins, int chn_id, uint8_t data) {
     }
     else {
         /* the interrupt vector for the entire CTC must be written
-           to channel 0, the vectors for the following channels 
+           to channel 0, the vectors for the following channels
            are then computed from the base vector plus 2 bytes per channel
         */
         if (0 == chn_id) {

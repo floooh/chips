@@ -10,11 +10,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    ~~~C    
+    ~~~C
     CHIPS_ASSERT(c)
     ~~~
 
@@ -56,7 +56,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -65,32 +65,50 @@
 extern "C" {
 #endif
 
-/* address bus pins A0..A4 */
-#define M6581_A0    (1ULL<<0)
-#define M6581_A1    (1ULL<<1)
-#define M6581_A2    (1ULL<<2)
-#define M6581_A3    (1ULL<<3)
-#define M6581_A4    (1ULL<<4)
+// address bus pins A0..A4
+#define M6581_PIN_A0    (0)
+#define M6581_PIN_A1    (1)
+#define M6581_PIN_A2    (2)
+#define M6581_PIN_A3    (3)
+#define M6581_PIN_A4    (4)
+
+// data bus pins D0..D7
+#define M6581_PIN_D0    (16)
+#define M6581_PIN_D1    (17)
+#define M6581_PIN_D2    (18)
+#define M6581_PIN_D3    (19)
+#define M6581_PIN_D4    (20)
+#define M6581_PIN_D5    (21)
+#define M6581_PIN_D6    (22)
+#define M6581_PIN_D7    (23)
+
+// shared control pins
+#define M6581_PIN_RW    (24)      /* same as M6502_RW */
+
+// chip-specific pins
+#define M6581_PIN_CS        (40)      /* chip-select */
+#define M6581_PIN_SAMPLE    (41)      /* virtual "audio sample ready" pin */
+
+// pin bit masks
+#define M6581_A0    (1ULL<<M6581_PIN_A0)
+#define M6581_A1    (1ULL<<M6581_PIN_A1)
+#define M6581_A2    (1ULL<<M6581_PIN_A2)
+#define M6581_A3    (1ULL<<M6581_PIN_A3)
+#define M6581_A4    (1ULL<<M6581_PIN_A4)
 #define M6581_ADDR_MASK (0x1F)
+#define M6581_D0    (1ULL<<M6581_PIN_D0)
+#define M6581_D1    (1ULL<<M6581_PIN_D1)
+#define M6581_D2    (1ULL<<M6581_PIN_D2)
+#define M6581_D3    (1ULL<<M6581_PIN_D3)
+#define M6581_D4    (1ULL<<M6581_PIN_D4)
+#define M6581_D5    (1ULL<<M6581_PIN_D5)
+#define M6581_D6    (1ULL<<M6581_PIN_D6)
+#define M6581_D7    (1ULL<<M6581_PIN_D7)
+#define M6581_RW    (1ULL<<M6581_PIN_RW)
+#define M6581_CS        (1ULL<<M6581_PIN_CS)
+#define M6581_SAMPLE    (1ULL<<M6581_PIN_SAMPLE)
 
-/* data bus pins D0..D7 */
-#define M6581_D0    (1ULL<<16)
-#define M6581_D1    (1ULL<<17)
-#define M6581_D2    (1ULL<<18)
-#define M6581_D3    (1ULL<<19)
-#define M6581_D4    (1ULL<<20)
-#define M6581_D5    (1ULL<<21)
-#define M6581_D6    (1ULL<<22)
-#define M6581_D7    (1ULL<<23)
-
-/* shared control pins */
-#define M6581_RW    (1ULL<<24)      /* same as M6502_RW */
-
-/* chip-specific pins */
-#define M6581_CS        (1ULL<<40)      /* chip-select */
-#define M6581_SAMPLE    (1ULL<<41)      /* virtual "audio sample ready" pin */
-
-/* registers */
+// registers
 #define M6581_V1_FREQ_LO    (0)
 #define M6581_V1_FREQ_HI    (1)
 #define M6581_V1_PW_LO      (2)
@@ -125,7 +143,7 @@ extern "C" {
 #define M6581_INV_2         (31)
 #define M6581_NUM_REGS (32)
 
-/* voice control bits */
+// voice control bits
 #define M6581_CTRL_GATE     (1<<0)
 #define M6581_CTRL_SYNC     (1<<1)
 #define M6581_CTRL_RINGMOD  (1<<2)
@@ -135,47 +153,47 @@ extern "C" {
 #define M6581_CTRL_PULSE    (1<<6)
 #define M6581_CTRL_NOISE    (1<<7)
 
-/* filter routing bits */
+// filter routing bits
 #define M6581_FILTER_FILT1  (1<<0)
 #define M6581_FILTER_FILT2  (1<<1)
 #define M6581_FILTER_FILT3  (1<<2)
 #define M6581_FILTER_FILTEX (1<<3)
 
-/* filter mode bits */
+// filter mode bits
 #define M6581_FILTER_LP     (1<<0)
 #define M6581_FILTER_BP     (1<<1)
 #define M6581_FILTER_HP     (1<<2)
 #define M6581_FILTER_3OFF   (1<<3)
 
-/* setup parameters for m6581_init() */
+// setup parameters for m6581_init()
 typedef struct {
-    int tick_hz;        /* frequency at which m6581_tick() will be called in Hz */
-    int sound_hz;       /* sound sample frequency */
-    float magnitude;    /* output sample magnitude (0=silence to 1=max volume) */
+    int tick_hz;        // frequency at which m6581_tick() will be called in Hz
+    int sound_hz;       // sound sample frequency
+    float magnitude;    // output sample magnitude (0=silence to 1=max volume)
 } m6581_desc_t;
 
-/* envelope generator state */
+// envelope generator state
 typedef enum {
     M6581_ENV_FROZEN,
     M6581_ENV_ATTACK,
     M6581_ENV_DECAY,
     M6581_ENV_RELEASE
-} _m6581_env_state_t;
+} m6581_env_state_t;
 
-/* voice state */
+// voice state
 typedef struct {
     bool muted;
-    /* wave generator state */
+    // wave generator state
     uint16_t freq;
     uint16_t pulse_width;
     uint8_t ctrl;
     bool sync;
-    uint32_t noise_shift;           /* 24 bit */
-    uint32_t wav_accum;             /* 8.16 fixed */
-    uint32_t wav_output;            /* 12 bit */
+    uint32_t noise_shift;           // 24 bit
+    uint32_t wav_accum;             // 8.16 fixed
+    uint32_t wav_output;            // 12 bit
 
-    /* envelope generator state */
-    _m6581_env_state_t env_state;
+    // envelope generator state
+    m6581_env_state_t env_state;
     uint32_t env_attack_add;
     uint32_t env_decay_sub;
     uint32_t env_sustain_level;
@@ -186,7 +204,7 @@ typedef struct {
     uint32_t env_counter_compare;
 } m6581_voice_t;
 
-/* filter state */
+// filter state
 typedef struct {
     uint16_t cutoff;
     uint8_t resonance;
@@ -201,7 +219,7 @@ typedef struct {
     int v_lp;
 } m6581_filter_t;
 
-/* m6581 instance state */
+// m6581 instance state
 typedef struct {
     int sound_hz;
     /* reading a write-only register returns the last value
@@ -209,30 +227,30 @@ typedef struct {
     */
     uint8_t bus_value;
     uint16_t bus_decay;
-    /* voice state */
+    // voice state
     m6581_voice_t voice[3];
-    /* filter state */
+    // filter state
     m6581_filter_t filter;
-    /* sample generation state */
+    // sample generation state
     int sample_period;
     int sample_counter;
     float sample_accum;
     float sample_accum_count;
     float sample_mag;
     float sample;
-    /* debug inspection */
+    // debug inspection
     uint64_t pins;
 } m6581_t;
 
-/* initialize a new m6581_t instance */
+// initialize a new m6581_t instance
 void m6581_init(m6581_t* sid, const m6581_desc_t* desc);
-/* reset a m6581_t instance */
+// reset a m6581_t instance
 void m6581_reset(m6581_t* sid);
-/* tick a m6581_t instance */
+// tick a m6581_t instance
 uint64_t m6581_tick(m6581_t* sid, uint64_t pins);
 
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
@@ -261,12 +279,12 @@ uint64_t m6581_tick(m6581_t* sid, uint64_t pins);
 #define M6581_DCVOICE (0) // (0x800*0xFF)
 
 static const uint32_t _m6581_rate_count_period[16] = {
-    0x7F00, 0x0006, 0x003C, 0x0330, 0x20C0, 0x6755, 0x3800, 0x500E,    
+    0x7F00, 0x0006, 0x003C, 0x0330, 0x20C0, 0x6755, 0x3800, 0x500E,
     0x1212, 0x0222, 0x1848, 0x59B8, 0x3840, 0x77E2, 0x7625, 0x0A93
 };
 
 static const uint8_t _m6581_env_gen_dr_divisors[256] = {
-    30,30,30,30,30,30,16,16,16,16,16,16,16,16,8,8, 
+    30,30,30,30,30,30,16,16,16,16,16,16,16,16,8,8,
     8,8,8,8,8,8,8,8,8,8,4,4,4,4,4,4,
     4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
     4,4,4,4,4,4,2,2,2,2,2,2,2,2,2,2,
@@ -281,7 +299,7 @@ static const uint8_t _m6581_env_gen_dr_divisors[256] = {
     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1    
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
 };
 
 static float _m6581_cutoff_freq[2048];

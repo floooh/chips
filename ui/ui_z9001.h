@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -34,6 +34,7 @@
     - ui_memedit.h
     - ui_memmap.h
     - ui_kbd.h
+    - ui_snapshot.h
 
     ## zlib/libpng license
 
@@ -51,7 +52,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -65,11 +66,10 @@ typedef void (*ui_z9001_boot_t)(z9001_t* sys, z9001_type_t type);
 
 typedef struct {
     z9001_t* z9001;
-    ui_z9001_boot_t boot_cb; /* user-provided callback to reboot to different config */
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keys_desc_t dbg_keys;        /* user-defined hotkeys for ui_dbg_t */
+    ui_z9001_boot_t boot_cb; // user-provided callback to reboot to different config
+    ui_dbg_texture_callbacks_t dbg_texture; // user-provided texture create/update/destroy callbacks
+    ui_dbg_keys_desc_t dbg_keys;        // user-defined hotkeys for ui_dbg_t
+    ui_snapshot_desc_t snapshot;        // snapshot system creation params
 } ui_z9001_desc_t;
 
 typedef struct {
@@ -84,12 +84,13 @@ typedef struct {
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
+    ui_snapshot_t snapshot;
 } ui_z9001_t;
 
 void ui_z9001_init(ui_z9001_t* ui, const ui_z9001_desc_t* desc);
 void ui_z9001_discard(ui_z9001_t* ui);
 void ui_z9001_draw(ui_z9001_t* ui);
-z9001_debug_t ui_z9001_get_debug(ui_z9001_t* ui);
+chips_debug_t ui_z9001_get_debug(ui_z9001_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -114,6 +115,7 @@ static void _ui_z9001_draw_menu(ui_z9001_t* ui) {
     CHIPS_ASSERT(ui && ui->z9001 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
+            ui_snapshot_menus(&ui->snapshot);
             if (ImGui::MenuItem("Reset")) {
                 z9001_reset(ui->z9001);
                 ui_dbg_reset(&ui->dbg);
@@ -141,6 +143,7 @@ static void _ui_z9001_draw_menu(ui_z9001_t* ui) {
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
             ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
             ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
@@ -310,6 +313,7 @@ void ui_z9001_init(ui_z9001_t* ui, const ui_z9001_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->z9001 = ui_desc->z9001;
     ui->boot_cb = ui_desc->boot_cb;
+    ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};
@@ -318,9 +322,7 @@ void ui_z9001_init(ui_z9001_t* ui, const ui_z9001_desc_t* ui_desc) {
         desc.y = y;
         desc.z80 = &ui->z9001->cpu;
         desc.read_cb = _ui_z9001_mem_read;
-        desc.create_texture_cb = ui_desc->create_texture_cb;
-        desc.update_texture_cb = ui_desc->update_texture_cb;
-        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.texture_cbs = ui_desc->dbg_texture;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui->z9001;
         ui_dbg_init(&ui->dbg, &desc);
@@ -455,9 +457,9 @@ void ui_z9001_draw(ui_z9001_t* ui) {
     ui_dbg_draw(&ui->dbg);
 }
 
-z9001_debug_t ui_z9001_get_debug(ui_z9001_t* ui) {
-    z9001_debug_t res;
-    res.callback.func = (z9001_debug_func_t)ui_dbg_tick;
+chips_debug_t ui_z9001_get_debug(ui_z9001_t* ui) {
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;

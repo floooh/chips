@@ -418,7 +418,7 @@ static void _ui_dasm_draw_stack(ui_dasm_t* win) {
         win->stack_num = 0;
     }
     char buf[5] = { 0 };
-    if (ImGui::ListBoxHeader("##stack", ImVec2(-1,-1))) {
+    if (ImGui::BeginListBox("##stack", ImVec2(-1,-1))) {
         for (int i = 0; i < win->stack_num; i++) {
             snprintf(buf, sizeof(buf), "%04X", win->stack[i]);
             ImGui::PushID(i);
@@ -432,7 +432,7 @@ static void _ui_dasm_draw_stack(ui_dasm_t* win) {
             }
             ImGui::PopID();
         }
-        ImGui::ListBoxFooter();
+        ImGui::EndListBox();
     }
     ImGui::EndChild();
 }

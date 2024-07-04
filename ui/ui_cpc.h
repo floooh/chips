@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -56,7 +56,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -65,16 +65,16 @@
 extern "C" {
 #endif
 
-/* general callback type for rebooting to different configs */
+// general callback type for rebooting to different configs
 typedef void (*ui_cpc_boot_t)(cpc_t* sys, cpc_type_t type);
 
 typedef struct {
     cpc_t* cpc;
-    ui_cpc_boot_t boot_cb; /* user-provided callback to reboot to different config */
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_cpc_boot_t boot_cb; // user-provided callback to reboot to different config
+    ui_dbg_texture_callbacks_t dbg_texture;     // debug texture create/update/destroy callbacks
+    ui_dbg_debug_callbacks_t dbg_debug;         // user-provided debugger callbacks
+    ui_dbg_keys_desc_t dbg_keys;                // user-defined hotkeys for ui_dbg_t
+    ui_snapshot_desc_t snapshot;                // snapshot ui setup params
 } ui_cpc_desc_t;
 
 typedef struct {
@@ -95,12 +95,13 @@ typedef struct {
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
+    ui_snapshot_t snapshot;
 } ui_cpc_t;
 
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc);
 void ui_cpc_discard(ui_cpc_t* ui);
 void ui_cpc_draw(ui_cpc_t* ui);
-cpc_debug_t ui_cpc_get_debug(ui_cpc_t* ui);
+chips_debug_t ui_cpc_get_debug(ui_cpc_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -125,6 +126,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui) {
     CHIPS_ASSERT(ui && ui->cpc && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
+            ui_snapshot_menus(&ui->snapshot);
             if (ImGui::MenuItem("Reset")) {
                 cpc_reset(ui->cpc);
                 ui_dbg_reset(&ui->dbg);
@@ -144,8 +146,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui) {
             if (ImGui::MenuItem("Joystick", 0, ui->cpc->joystick_type != CPC_JOYSTICK_NONE)) {
                 if (ui->cpc->joystick_type == CPC_JOYSTICK_NONE) {
                     ui->cpc->joystick_type = CPC_JOYSTICK_DIGITAL;
-                }
-                else {
+                } else {
                     ui->cpc->joystick_type = CPC_JOYSTICK_NONE;
                 }
             }
@@ -167,6 +168,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui) {
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
             ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
             ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
@@ -240,8 +242,7 @@ static void _ui_cpc_update_memmap(ui_cpc_t* ui) {
             ui_memmap_region(&ui->memmap, "RAM 1", 0x4000, 0x4000, true);
             ui_memmap_region(&ui->memmap, "RAM 2", 0x8000, 0x4000, true);
             ui_memmap_region(&ui->memmap, "RAM 3 (Screen)", 0xC000, 0x4000, true);
-    }
-    else {
+    } else {
         const uint8_t ram_config_index = cpc->ga.ram_config & 7;
         const uint8_t rom_select = cpc->ga.rom_select;
         ui_memmap_layer(&ui->memmap, "ROM Layer 0");
@@ -270,27 +271,21 @@ static uint8_t* _ui_cpc_memptr(cpc_t* cpc, int layer, uint16_t addr) {
     if (layer == _UI_CPC_MEMLAYER_GA) {
         uint8_t* ram = &cpc->ram[0][0];
         return ram + addr;
-    }
-    else if (layer == _UI_CPC_MEMLAYER_ROMS) {
+    } else if (layer == _UI_CPC_MEMLAYER_ROMS) {
         if (addr < 0x4000) {
             return &cpc->rom_os[addr];
-        }
-        else if (addr >= 0xC000) {
+        } else if (addr >= 0xC000) {
             return &cpc->rom_basic[addr - 0xC000];
-        }
-        else {
+        } else {
             return 0;
         }
-    }
-    else if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
+    } else if (layer == _UI_CPC_MEMLAYER_AMSDOS) {
         if ((CPC_TYPE_6128 == cpc->type) && (addr >= 0xC000)) {
             return &cpc->rom_amsdos[addr - 0xC000];
-        }
-        else {
+        } else {
             return 0;
         }
-    }
-    else {
+    } else {
         /* one of the 7 RAM layers */
         CHIPS_ASSERT((layer >= _UI_CPC_MEMLAYER_RAM0) && (layer <= _UI_CPC_MEMLAYER_RAM7));
         const int ram_config_index = (CPC_TYPE_6128 == cpc->type) ? (cpc->ga.ram_config & 7) : 0;
@@ -327,13 +322,11 @@ static uint8_t _ui_cpc_mem_read(int layer, uint16_t addr, void* user_data) {
     if (layer == _UI_CPC_MEMLAYER_CPU) {
         /* CPU mapped RAM layer */
         return mem_rd(&cpc->mem, addr);
-    }
-    else {
+    } else {
         uint8_t* ptr = _ui_cpc_memptr(cpc, layer, addr);
         if (ptr) {
             return *ptr;
-        }
-        else {
+        } else {
             return 0xFF;
         }
     }
@@ -345,8 +338,7 @@ static void _ui_cpc_mem_write(int layer, uint16_t addr, uint8_t data, void* user
     cpc_t* cpc = ui_cpc->cpc;
     if (layer == _UI_CPC_MEMLAYER_CPU) {
         mem_wr(&cpc->mem, addr, data);
-    }
-    else {
+    } else {
         uint8_t* ptr = _ui_cpc_memptr(cpc, layer, addr);
         if (ptr) {
             *ptr = data;
@@ -587,6 +579,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->cpc = ui_desc->cpc;
     ui->boot_cb = ui_desc->boot_cb;
+    ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};
@@ -596,9 +589,8 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
         desc.z80 = &ui->cpc->cpu;
         desc.read_cb = _ui_cpc_mem_read;
         desc.break_cb = _ui_cpc_eval_bp;
-        desc.create_texture_cb = ui_desc->create_texture_cb;
-        desc.update_texture_cb = ui_desc->update_texture_cb;
-        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.texture_cbs = ui_desc->dbg_texture;
+        desc.debug_cbs = ui_desc->dbg_debug;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui;
         /* custom breakpoint types */
@@ -786,10 +778,10 @@ void ui_cpc_draw(ui_cpc_t* ui) {
     ui_dbg_draw(&ui->dbg);
 }
 
-cpc_debug_t ui_cpc_get_debug(ui_cpc_t* ui) {
+chips_debug_t ui_cpc_get_debug(ui_cpc_t* ui) {
     CHIPS_ASSERT(ui);
-    cpc_debug_t res = {};
-    res.callback.func = (cpc_debug_func_t)ui_dbg_tick;
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;

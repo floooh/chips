@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -47,7 +47,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -178,9 +178,9 @@ static void _ui_m6561_draw_graphics_unit(const ui_m6561_t* win) {
         const m6561_graphics_unit_t* gu = &win->vic->gunit;
         ImGui::Text("shifter: %02X", gu->shift);
         ImGui::Text("color:   %02X", gu->color);
-        _ui_m6561_draw_rgb("bg_color:", gu->bg_color);
-        _ui_m6561_draw_rgb("brd_color", gu->brd_color);
-        _ui_m6561_draw_rgb("aux_color", gu->aux_color);
+        _ui_m6561_draw_rgb("bg_color:", m6561_color(gu->bg_color));
+        _ui_m6561_draw_rgb("brd_color", m6561_color(gu->brd_color));
+        _ui_m6561_draw_rgb("aux_color", m6561_color(gu->aux_color));
     }
 }
 
@@ -234,16 +234,6 @@ static void _ui_m6561_draw_sound(const ui_m6561_t* win) {
     }
 }
 
-static void _ui_m6561_tint_framebuffer(ui_m6561_t* win) {
-    uint32_t* ptr = win->vic->crt.rgba8_buffer;
-    if (ptr) {
-        const int num = m6561_display_width(win->vic) * m6561_display_height(win->vic);
-        for (int i = 0; i < num; i++) {
-            ptr[i] = ~ptr[i] | 0xFF0000F0;
-        }
-    }
-}
-
 void ui_m6561_draw(ui_m6561_t* win) {
     CHIPS_ASSERT(win && win->valid);
     if (!win->open) {
@@ -258,9 +248,6 @@ void ui_m6561_draw(ui_m6561_t* win) {
         ImGui::SameLine();
         ImGui::BeginChild("##m6561_state", ImVec2(0, 0), true);
         ImGui::Checkbox("Debug Visualization", &win->vic->debug_vis);
-        if (ImGui::Button("Tint Framebuffer")) {
-            _ui_m6561_tint_framebuffer(win);
-        }
         _ui_m6561_draw_hwcolors();
         _ui_m6561_draw_registers(win);
         _ui_m6561_draw_raster_unit(win);

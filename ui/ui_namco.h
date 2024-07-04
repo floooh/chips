@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -34,6 +34,7 @@
     - ui_dbg.h
     - ui_memedit.h
     - ui_memmap.h
+    - ui_snapshot.h
 
     ## zlib/libpng license
 
@@ -51,7 +52,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -62,10 +63,9 @@ extern "C" {
 
 typedef struct {
     namco_t* sys;
-    ui_dbg_create_texture_t create_texture_cb;      // texture creation callback for ui_dbg_t
-    ui_dbg_update_texture_t update_texture_cb;      // texture update callback for ui_dbg_t
-    ui_dbg_destroy_texture_t destroy_texture_cb;    // texture destruction callback for ui_dbg_t
+    ui_dbg_texture_callbacks_t dbg_texture;         // user-provided texture create/update/destroy callbacks
     ui_dbg_keys_desc_t dbg_keys;                    // user-defined hotkeys for ui_dbg_t
+    ui_snapshot_desc_t snapshot;                    // snapshot system creation params
 } ui_namco_desc_t;
 
 typedef struct {
@@ -76,12 +76,13 @@ typedef struct {
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
+    ui_snapshot_t snapshot;
 } ui_namco_t;
 
 void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* desc);
 void ui_namco_discard(ui_namco_t* ui);
 void ui_namco_draw(ui_namco_t* ui);
-namco_debug_t ui_namco_get_debug(ui_namco_t* ui);
+chips_debug_t ui_namco_get_debug(ui_namco_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -200,6 +201,7 @@ void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->sys);
     memset(ui, 0, sizeof(ui_namco_t));
     ui->sys = ui_desc->sys;
+    ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};
@@ -209,9 +211,7 @@ void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* ui_desc) {
         desc.z80 = &ui->sys->cpu;
         desc.read_cb = _ui_namco_mem_read;
         desc.read_layer = _UI_NAMCO_MEMLAYER_MAIN;
-        desc.create_texture_cb = ui_desc->create_texture_cb;
-        desc.update_texture_cb = ui_desc->update_texture_cb;
-        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.texture_cbs = ui_desc->dbg_texture;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui;
         ui_dbg_init(&ui->dbg, &desc);
@@ -301,6 +301,7 @@ void ui_namco_discard(ui_namco_t* ui) {
 static void _ui_namco_draw_menu(ui_namco_t* ui) {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
+            ui_snapshot_menus(&ui->snapshot);
             if (ImGui::MenuItem("Reboot")) {
                 namco_reset(ui->sys);
                 ui_dbg_reboot(&ui->dbg);
@@ -316,6 +317,7 @@ static void _ui_namco_draw_menu(ui_namco_t* ui) {
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
             ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
             ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
@@ -352,9 +354,9 @@ void ui_namco_draw(ui_namco_t* ui) {
     }
 }
 
-namco_debug_t ui_namco_get_debug(ui_namco_t* ui) {
-    namco_debug_t res = {};
-    res.callback.func = (namco_debug_func_t)ui_dbg_tick;
+chips_debug_t ui_namco_get_debug(ui_namco_t* ui) {
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;

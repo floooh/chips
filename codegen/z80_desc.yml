@@ -83,13 +83,11 @@ ADD HL,$RP:
 LD (BC),A:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 0)
   mcycles:
-    # NOTE: WZH can also be 0 on Z80 clones (the VisualZ80 netlist also sets WZH to zero)
     - { type: mwrite, ab: $BC, db: $A, action: "$WZL=$C+1;$WZH=$A" }
 
 LD (DE),A:
   cond: (x == 0) and (z == 2) and (q == 0) and (p == 1)
   mcycles:
-    # NOTE: WZH can also be 0 on Z80 clones (the VisualZ80 netlist also sets WZH to zero)
     - { type: mwrite, ab: $DE, db: $A, action: "$WZL=$E+1;$WZH=$A" }
 
 LD (nn),HL:
@@ -105,7 +103,6 @@ LD (nn),A:
   mcycles:
     - { type: mread, ab: $PC++, dst: $WZL }
     - { type: mread, ab: $PC++, dst: $WZH }
-    # NOTE: WZH can also be 0 on Z80 clones (the VisualZ80 netlist also sets WZH to zero)
     - { type: mwrite, ab: $WZ++, db: $A, action: "$WZH=$A" }
 
 LD A,(BC):
@@ -288,6 +285,7 @@ OUT (n),A:
     - { type: mread, ab: $PC++, dst: $WZL, action: $WZH=$A }
     - { type: iowrite, ab: $WZ, db: $A, action: $WZL++ }
 
+# FIXME: ioread can go directly into A
 IN A,(n):
   cond: (x == 3) and (y == 3) and (z == 3)
   mcycles:
@@ -385,6 +383,7 @@ ED NOP:
   cond: (x == 0) or (x == 3) or ((x == 1) and (z == 7) and (y >= 6)) or ((x == 2) and ((z > 3) or (y < 4)))
   mcycles: []
 
+# FIXME: should be RRY (because H/L can't be IXH/IXL etc...)
 IN $RY,(C):
   prefix: ed
   cond: (x == 1) and (y != 6) and (z == 0)
@@ -400,6 +399,7 @@ IN (C):
     # discard result, only set flags
     - { type: overlapped, action: "_z80_in(cpu,$DLATCH)" }
 
+# FIXME: should be RRY (because H/L can't be IXH/IXL etc...)
 OUT (C),$RY:
   prefix: ed
   cond: (x == 1) and (y != 6) and (z == 1)
@@ -432,7 +432,7 @@ LD (nn),$RP:
     - { type: mread, ab: $PC++, dst: $WZH }
     - { type: mwrite, ab: $WZ++, db: $RRPL }
     - { type: mwrite, ab: $WZ, db: $RRPH }
-  
+
 LD $RP,(nn):
   prefix: ed
   cond: (x == 1) and (z == 3) and (q == 1)
@@ -586,7 +586,7 @@ CPDR:
 INI:
   prefix: ed
   cond: (x == 2) and (y == 4) and (z == 2)
-  mcycles: 
+  mcycles:
     - { type: generic, tcycles: 1 }
     - { type: ioread, ab: $BC, dst: $DLATCH, action: "$WZ=$BC+1;$B--;" }
     - { type: mwrite, ab: "cpu->hl++", db: $DLATCH, action: "_z80_ini_ind(cpu,$DLATCH,$C+1)" }
@@ -679,6 +679,7 @@ ddfdcb:
 
 #== INTERRUPT HANDLING =========================================================
 
+# FIXME: last tcycle also needs "cpu->addr = cpu->hl"
 int_im0:
   flags: { special: true }
   mcycles:

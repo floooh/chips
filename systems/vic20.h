@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_IMPL
     ~~~
-    before you include this file in *one* C or C++ file to create the 
+    before you include this file in *one* C or C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -20,6 +20,7 @@
 
     You need to include the following headers before including vic20.h:
 
+    - chips/chips_common.h
     - chips/m6502.h
     - chips/m6522.h
     - chips/m6561.h
@@ -53,7 +54,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -63,93 +64,60 @@
 extern "C" {
 #endif
 
+// bump snapshot version when vic20_t memory layout changes
+#define VIC20_SNAPSHOT_VERSION (1)
+
 #define VIC20_FREQUENCY (1108404)
 #define VIC20_MAX_AUDIO_SAMPLES (1024)        // max number of audio samples in internal sample buffer
-#define VIC20_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer 
+#define VIC20_DEFAULT_AUDIO_SAMPLES (128)     // default number of samples in internal sample buffer
 
-/* VIC-20 joystick types (only one joystick supported) */
+// VIC-20 joystick types (only one joystick supported)
 typedef enum {
     VIC20_JOYSTICKTYPE_NONE,
     VIC20_JOYSTICKTYPE_DIGITAL,
 } vic20_joystick_type_t;
 
-/* memory configuration (used in vic20_desc_t.mem_config) */
+// memory configuration (used in vic20_desc_t.mem_config)
 typedef enum {
-    VIC20_MEMCONFIG_STANDARD,       /* unexpanded */
-    VIC20_MEMCONFIG_8K,             /* Block 1 */
-    VIC20_MEMCONFIG_16K,            /* Block 1+2 */
-    VIC20_MEMCONFIG_24K,            /* Block 1+2+3 */
-    VIC20_MEMCONFIG_32K,            /* Block 1+2+3+5 (note that BASIC can only use blocks 1+2+3) */
-    VIC20_MEMCONFIG_MAX             /* 32K + 3KB at 0400..0FFF */
+    VIC20_MEMCONFIG_STANDARD,       // unexpanded
+    VIC20_MEMCONFIG_8K,             // Block 1
+    VIC20_MEMCONFIG_16K,            // Block 1+2
+    VIC20_MEMCONFIG_24K,            // Block 1+2+3
+    VIC20_MEMCONFIG_32K,            // Block 1+2+3+5 (note that BASIC can only use blocks 1+2+3)
+    VIC20_MEMCONFIG_MAX             // 32K + 3KB at 0400..0FFF
 } vic20_memory_config_t;
 
-/* joystick mask bits */
+// joystick mask bits
 #define VIC20_JOYSTICK_UP    (1<<0)
 #define VIC20_JOYSTICK_DOWN  (1<<1)
 #define VIC20_JOYSTICK_LEFT  (1<<2)
 #define VIC20_JOYSTICK_RIGHT (1<<3)
 #define VIC20_JOYSTICK_BTN   (1<<4)
 
-/* casette port bits, same as C1530_CASPORT_* */
+// casette port bits, same as C1530_CASPORT_*
 #define VIC20_CASPORT_MOTOR   (1<<0)
 #define VIC20_CASPORT_READ    (1<<1)
 #define VIC20_CASPORT_WRITE   (1<<2)
 #define VIC20_CASPORT_SENSE   (1<<3)
 
-/* IEC port bits, same as C1541_IECPORT_* */
+// IEC port bits, same as C1541_IECPORT_*
 #define VIC20_IECPORT_RESET   (1<<0)
 #define VIC20_IECPORT_SRQIN   (1<<1)
 #define VIC20_IECPORT_DATA    (1<<2)
 #define VIC20_IECPORT_CLK     (1<<3)
 #define VIC20_IECPORT_ATN     (1<<4)
 
-// audio sample callback
-typedef struct {
-    void (*func)(const float* samples, int num_samples, void* user_data);
-    void* user_data;
-} vic20_audio_callback_t;
-
-// debugging hook definitions
-typedef void (*vic20_debug_func_t)(void* user_data, uint64_t pins);
-typedef struct {
-    struct {
-        vic20_debug_func_t func;
-        void* user_data;
-    } callback;
-    bool* stopped;
-} vic20_debug_t;
-
-typedef struct {
-    const void* ptr;
-    size_t size;
-} vic20_rom_image_t;
-
 // config parameters for vic20_init()
 typedef struct {
-    bool c1530_enabled;         // set to true to enable C1530 datassette emulation
+    bool c1530_enabled;             // set to true to enable C1530 datassette emulation
     vic20_joystick_type_t joystick_type;    // default is VIC20_JOYSTICK_NONE
     vic20_memory_config_t mem_config;       // default is VIC20_MEMCONFIG_STANDARD
-    vic20_debug_t debug;        // optional debugging hook
-
-    // video output config (if you don't want video decoding, set these to 0)
+    chips_debug_t debug;            // optional debugging hook
+    chips_audio_desc_t audio;
     struct {
-        void* ptr;      // pointer to a linear RGBA8 pixel buffer, query required size via vic20_max_display_size()
-        size_t size;    // size of the pixel buffer in bytes
-    } pixel_buffer;
-
-    // audio output config (if you don't want audio, set audio.callback.func to zero
-    struct {
-        vic20_audio_callback_t callback;    // called when audio_num_samples are ready
-        int num_samples;            // default is VIC20_AUDIO_NUM_SAMPLES
-        int sample_rate;            // playback sample rate in Hz, default is 44100
-        float volume;               // audio volume of the VIC chip (0.0 .. 1.0), default is 1.0
-    } audio;
-
-    // ROM images
-    struct {
-        vic20_rom_image_t chars;    // 4 KByte character ROM dump
-        vic20_rom_image_t basic;    // 8 KByte BASIC dump
-        vic20_rom_image_t kernal;   // 8 KByte KERNAL dump
+        chips_range_t chars;    // 4 KByte character ROM dump
+        chips_range_t basic;    // 8 KByte BASIC dump
+        chips_range_t kernal;   // 8 KByte KERNAL dump
     } roms;
 } vic20_desc_t;
 
@@ -174,11 +142,10 @@ typedef struct {
     mem_t mem_cpu;              // CPU-visible memory mapping
     mem_t mem_vic;              // VIC-visible memory mapping
     bool valid;
-    vic20_debug_t debug;
+    chips_debug_t debug;
 
-    uint32_t* pixel_buffer;
     struct {
-        vic20_audio_callback_t callback;
+        chips_audio_callback_t callback;
         int num_samples;
         int sample_pos;
         float sample_buffer[VIC20_MAX_AUDIO_SAMPLES];
@@ -192,6 +159,7 @@ typedef struct {
     uint8_t rom_basic[0x2000];      // 8 KB BASIC ROM image
     uint8_t rom_kernal[0x2000];     // 8 KB KERNAL V3 ROM image
     uint8_t ram_exp[4][0x2000];     // optional expansion 8K RAM blocks
+    uint8_t fb[M6561_FRAMEBUFFER_SIZE_BYTES];
 
     c1530_t c1530;                  // c1530.valid = true if enabled
 
@@ -204,6 +172,8 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc);
 void vic20_discard(vic20_t* sys);
 // reset a VIC-20 instance
 void vic20_reset(vic20_t* sys);
+// query display information
+chips_display_info_t vic20_display_info(vic20_t* sys);
 // tick VIC-20 instance for a given number of microseconds, return number of executed ticks
 uint32_t vic20_exec(vic20_t* sys, uint32_t micro_seconds);
 // send a key-down event to the VIC-20
@@ -217,13 +187,13 @@ vic20_joystick_type_t vic20_joystick_type(vic20_t* sys);
 // set joystick mask (combination of VIC20_JOYSTICK_*)
 void vic20_joystick(vic20_t* sys, uint8_t joy_mask);
 // quickload a .prg/.bin file
-bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+bool vic20_quickload(vic20_t* sys, chips_range_t data);
 // load a .prg/.bin file as ROM cartridge
-bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+bool vic20_insert_rom_cartridge(vic20_t* sys, chips_range_t data);
 // remove current ROM cartridge
 void vic20_remove_rom_cartridge(vic20_t* sys);
 // insert tape as .TAP file (c1530 must be enabled)
-bool vic20_insert_tape(vic20_t* sys, const uint8_t* ptr, int num_bytes);
+bool vic20_insert_tape(vic20_t* sys, chips_range_t data);
 // remove tape file
 void vic20_remove_tape(vic20_t* sys);
 // return true if a tape is currently inserted
@@ -234,14 +204,10 @@ void vic20_tape_play(vic20_t* sys);
 void vic20_tape_stop(vic20_t* sys);
 // return true if tape motor is on
 bool vic20_is_tape_motor_on(vic20_t* sys);
-// get the standard framebuffer width and height in pixels
-int vic20_std_display_width(void);
-int vic20_std_display_height(void);
-// get the maximum framebuffer size in number of bytes
-size_t vic20_max_display_size(void);
-// get the current framebuffer width and height in pixels
-int vic20_display_width(vic20_t* sys);
-int vic20_display_height(vic20_t* sys);
+// take a snapshot, patches pointers to zero or offsets, returns snapshot version
+uint32_t vic20_save_snapshot(vic20_t* sys, vic20_t* dst);
+// load a snapshot, returns false if snapshot version doesn't match
+bool vic20_load_snapshot(vic20_t* sys, uint32_t version, vic20_t* src);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -255,13 +221,10 @@ int vic20_display_height(vic20_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
-#define _VIC20_STD_DISPLAY_WIDTH (232)  /* actually 229, but rounded up to 8x */
-#define _VIC20_STD_DISPLAY_HEIGHT (272)
-#define _VIC20_DBG_DISPLAY_WIDTH ((_M6561_HTOTAL+1)*4)
-#define _VIC20_DBG_DISPLAY_HEIGHT (_M6561_VTOTAL+1)
-#define _VIC20_DISPLAY_SIZE (_VIC20_DBG_DISPLAY_WIDTH*_VIC20_DBG_DISPLAY_HEIGHT*4)
-#define _VIC20_DISPLAY_X (32)
-#define _VIC20_DISPLAY_Y (8)
+#define _VIC20_SCREEN_WIDTH (232) // actually 229, but rounded up to 8x
+#define _VIC20_SCREEN_HEIGHT (272)
+#define _VIC20_SCREEN_X (32)
+#define _VIC20_SCREEN_Y (8)
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data);
 static void _vic20_init_key_map(vic20_t* sys);
@@ -270,10 +233,7 @@ static void _vic20_init_key_map(vic20_t* sys);
 
 void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     CHIPS_ASSERT(sys && desc);
-    CHIPS_ASSERT(desc->pixel_buffer.ptr && (desc->pixel_buffer.size >= vic20_max_display_size()));
-    if (desc->debug.callback.func) {
-        CHIPS_ASSERT(desc->debug.stopped);
-    }
+    if (desc->debug.callback.func) { CHIPS_ASSERT(desc->debug.stopped); }
 
     memset(sys, 0, sizeof(vic20_t));
     sys->valid = true;
@@ -300,19 +260,23 @@ void vic20_init(vic20_t* sys, const vic20_desc_t* desc) {
     m6522_init(&sys->via_2);
     m6561_init(&sys->vic, &(m6561_desc_t){
         .fetch_cb = _vic20_vic_fetch,
-        .rgba8_buffer = (uint32_t*) desc->pixel_buffer.ptr,
-        .rgba8_buffer_size = desc->pixel_buffer.size,
-        .vis_x = _VIC20_DISPLAY_X,
-        .vis_y = _VIC20_DISPLAY_Y,
-        .vis_w = _VIC20_STD_DISPLAY_WIDTH,
-        .vis_h = _VIC20_STD_DISPLAY_HEIGHT,
+        .framebuffer = {
+            .ptr = sys->fb,
+            .size = sizeof(sys->fb)
+        },
+        .screen = {
+            .x = _VIC20_SCREEN_X,
+            .y = _VIC20_SCREEN_Y,
+            .width = _VIC20_SCREEN_WIDTH,
+            .height = _VIC20_SCREEN_HEIGHT,
+        },
         .user_data = sys,
         .tick_hz = VIC20_FREQUENCY,
         .sound_hz = _VIC20_DEFAULT(desc->audio.sample_rate, 44100),
         .sound_magnitude = _VIC20_DEFAULT(desc->audio.volume, 1.0f),
     });
     _vic20_init_key_map(sys);
-    
+
     /*
         VIC-20 CPU memory map:
 
@@ -662,14 +626,15 @@ static void _vic20_init_key_map(vic20_t* sys) {
     kbd_register_key(&sys->kbd, 0xF8, 7, 7, 1);
 }
 
-bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid && ptr && (num_bytes > 0));
-    if (num_bytes < 2) {
+bool vic20_quickload(vic20_t* sys, chips_range_t data) {
+    CHIPS_ASSERT(sys && sys->valid && data.ptr && (data.size > 0));
+    if (data.size < 2) {
         return false;
     }
+    const uint8_t* ptr = (uint8_t*)data.ptr;
     const uint16_t start_addr = ptr[1]<<8 | ptr[0];
     ptr += 2;
-    const uint16_t end_addr = start_addr + (num_bytes - 2);
+    const uint16_t end_addr = start_addr + (data.size - 2);
     uint16_t addr = start_addr;
     while (addr < end_addr) {
         mem_wr(&sys->mem_cpu, addr++, *ptr++);
@@ -677,9 +642,9 @@ bool vic20_quickload(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
     return true;
 }
 
-bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
-    CHIPS_ASSERT(sys && sys->valid && ptr && (num_bytes > 0));
-    if (num_bytes < 2) {
+bool vic20_insert_rom_cartridge(vic20_t* sys, chips_range_t data) {
+    CHIPS_ASSERT(sys && sys->valid && data.ptr && (data.size > 0));
+    if (data.size < 2) {
         return false;
     }
 
@@ -687,9 +652,10 @@ bool vic20_insert_rom_cartridge(vic20_t* sys, const uint8_t* ptr, int num_bytes)
        two memory regions with valid data, we cannot scribble over memory
        in that gap, so use a temporary memory mapping
     */
+    const uint8_t* ptr = (uint8_t*)data.ptr;
     const uint16_t start_addr = ptr[1]<<8 | ptr[0];
     ptr += 2;
-    const uint16_t end_addr = start_addr + (num_bytes - 2);
+    const uint16_t end_addr = start_addr + (data.size - 2);
     uint16_t addr = start_addr;
     while (addr < end_addr) {
         mem_wr(&sys->mem_cart, addr++, *ptr++);
@@ -717,34 +683,12 @@ void vic20_remove_rom_cartridge(vic20_t* sys) {
     sys->pins |= M6502_RES;
 }
 
-int vic20_std_display_width(void) {
-    return _VIC20_STD_DISPLAY_WIDTH;
-}
-
-int vic20_std_display_height(void) {
-    return _VIC20_STD_DISPLAY_HEIGHT;
-}
-
-size_t vic20_max_display_size(void) {
-    return _VIC20_DISPLAY_SIZE;
-}
-
-int vic20_display_width(vic20_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return m6561_display_width(&sys->vic);
-}
-
-int vic20_display_height(vic20_t* sys) {
-    CHIPS_ASSERT(sys && sys->valid);
-    return m6561_display_height(&sys->vic);
-}
-
 // generate precomputed VIA-1 and VIA-2 joystick port masks
 static void _vic20_update_joymasks(vic20_t* sys) {
     uint8_t jm = sys->kbd_joy_mask | sys->joy_joy_mask;
     sys->via1_joy_mask = M6522_PA2|M6522_PA3|M6522_PA4|M6522_PA5;
     sys->via2_joy_mask = M6522_PB7;
-    if (jm & VIC20_JOYSTICK_LEFT) {
+    if (jm & VIC20_JOYSTICK_UP) {
         sys->via1_joy_mask &= ~M6522_PA2;
     }
     if (jm & VIC20_JOYSTICK_DOWN) {
@@ -825,9 +769,9 @@ void vic20_joystick(vic20_t* sys, uint8_t joy_mask) {
     _vic20_update_joymasks(sys);
 }
 
-bool vic20_insert_tape(vic20_t* sys, const uint8_t* ptr, int num_bytes) {
+bool vic20_insert_tape(vic20_t* sys, chips_range_t data) {
     CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
-    return c1530_insert_tape(&sys->c1530, ptr, num_bytes);
+    return c1530_insert_tape(&sys->c1530, data);
 }
 
 void vic20_remove_tape(vic20_t* sys) {
@@ -853,6 +797,69 @@ void vic20_tape_stop(vic20_t* sys) {
 bool vic20_is_tape_motor_on(vic20_t* sys) {
     CHIPS_ASSERT(sys && sys->valid && sys->c1530.valid);
     return c1530_is_motor_on(&sys->c1530);
+}
+
+chips_display_info_t vic20_display_info(vic20_t* sys) {
+    chips_display_info_t res = {
+        .frame = {
+            .dim = {
+                .width = M6561_FRAMEBUFFER_WIDTH,
+                .height = M6561_FRAMEBUFFER_HEIGHT,
+            },
+            .bytes_per_pixel = 1,
+            .buffer = {
+                .ptr = sys ? sys->fb : 0,
+                .size = M6561_FRAMEBUFFER_SIZE_BYTES,
+            }
+        },
+        .palette = m6561_palette(),
+    };
+    if (sys) {
+        res.screen = m6561_screen(&sys->vic);
+    }
+    else {
+        res.screen = (chips_rect_t){
+            .x = 0,
+            .y = 0,
+            .width = _VIC20_SCREEN_WIDTH,
+            .height = _VIC20_SCREEN_HEIGHT,
+        };
+    }
+    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
+    return res;
+}
+
+uint32_t vic20_save_snapshot(vic20_t* sys, vic20_t* dst) {
+    CHIPS_ASSERT(sys && dst);
+    *dst = *sys;
+    chips_debug_snapshot_onsave(&dst->debug);
+    chips_audio_callback_snapshot_onsave(&dst->audio.callback);
+    m6502_snapshot_onsave(&dst->cpu);
+    m6561_snapshot_onsave(&dst->vic);
+    c1530_snapshot_onsave(&dst->c1530);
+    mem_snapshot_onsave(&dst->mem_cpu, sys);
+    mem_snapshot_onsave(&dst->mem_vic, sys);
+    mem_snapshot_onsave(&dst->mem_cart, sys);
+    return VIC20_SNAPSHOT_VERSION;
+}
+
+bool vic20_load_snapshot(vic20_t* sys, uint32_t version, vic20_t* src) {
+    CHIPS_ASSERT(sys && src);
+    if (version != VIC20_SNAPSHOT_VERSION) {
+        return false;
+    }
+    static vic20_t im;
+    im = *src;
+    chips_debug_snapshot_onload(&im.debug, &sys->debug);
+    chips_audio_callback_snapshot_onload(&im.audio.callback, &sys->audio.callback);
+    m6502_snapshot_onload(&im.cpu, &sys->cpu);
+    m6561_snapshot_onload(&im.vic, &sys->vic);
+    c1530_snapshot_onload(&im.c1530, &sys->c1530);
+    mem_snapshot_onload(&im.mem_cpu, sys);
+    mem_snapshot_onload(&im.mem_vic, sys);
+    mem_snapshot_onload(&im.mem_cart, sys);
+    *sys = im;
+    return true;
 }
 
 #endif // CHIPS_IMPL

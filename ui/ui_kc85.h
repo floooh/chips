@@ -8,7 +8,7 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Define the KC85 type to build before including this header (both the
@@ -19,7 +19,7 @@
         CHIPS_KC85_TYPE_4
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -41,7 +41,8 @@
     - ui_dbg.h
     - ui_memedit.h
     - ui_memmap.h
-    
+    - ui_snapshot.h
+
     ## zlib/libpng license
 
     Copyright (c) 2018 Andre Weissflog
@@ -58,7 +59,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -76,11 +77,11 @@ typedef void (*ui_kc85_boot_t)(kc85_t* sys);
 
 typedef struct {
     kc85_t* kc85;
-    ui_kc85_boot_t boot_cb; /* user-provided callback to reboot */
-    ui_dbg_create_texture_t create_texture_cb;      /* texture creation callback for ui_dbg_t */
-    ui_dbg_update_texture_t update_texture_cb;      /* texture update callback for ui_dbg_t */
-    ui_dbg_destroy_texture_t destroy_texture_cb;    /* texture destruction callback for ui_dbg_t */
-    ui_dbg_keys_desc_t dbg_keys;          /* user-defined hotkeys for ui_dbg_t */
+    ui_kc85_boot_t boot_cb;                 // user-provided callback to reboot
+    ui_dbg_texture_callbacks_t dbg_texture; // user-provided texture create/update/destroy callbacks
+    ui_dbg_debug_callbacks_t dbg_debug;     // user-provided debugger callbacks
+    ui_dbg_keys_desc_t dbg_keys;            // user-defined hotkeys for ui_dbg_t
+    ui_snapshot_desc_t snapshot;            // snapshot system creation params
 } ui_kc85_desc_t;
 
 typedef struct {
@@ -95,12 +96,13 @@ typedef struct {
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
+    ui_snapshot_t snapshot;
 } ui_kc85_t;
 
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc);
 void ui_kc85_discard(ui_kc85_t* ui);
 void ui_kc85_draw(ui_kc85_t* ui);
-kc85_debug_t ui_kc85_get_debug(ui_kc85_t* ui);
+chips_debug_t ui_kc85_get_debug(ui_kc85_t* ui);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -111,7 +113,7 @@ kc85_debug_t ui_kc85_get_debug(ui_kc85_t* ui);
 #ifndef __cplusplus
 #error "implementation must be compiled as C++"
 #endif
-#include <string.h> /* memset */
+#include <string.h> // memset
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
@@ -125,6 +127,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
     CHIPS_ASSERT(ui && ui->kc85 && ui->boot_cb);
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("System")) {
+            ui_snapshot_menus(&ui->snapshot);
             if (ImGui::MenuItem("Reset")) {
                 kc85_reset(ui->kc85);
                 ui_dbg_reset(&ui->dbg);
@@ -147,6 +150,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
             ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
             ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
             ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
             if (ImGui::BeginMenu("Memory Editor")) {
@@ -173,47 +177,46 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
 
 static void _ui_kc85_update_memmap(ui_kc85_t* ui) {
     CHIPS_ASSERT(ui && ui->kc85);
-    const uint8_t pio_a = ui->kc85->pio_a;
+    const uint64_t pio_pins = ui->kc85->pio_pins;
     ui_memmap_reset(&ui->memmap);
     #if defined(CHIPS_KC85_TYPE_2)
         /* KC85/2 memory map */
         ui_memmap_layer(&ui->memmap, "System");
-            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
-            ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_a & KC85_PIO_A_IRM));
-            ui_memmap_region(&ui->memmap, "CAOS ROM 1", 0xE000, 0x0800, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
-            ui_memmap_region(&ui->memmap, "CAOS ROM 2", 0xF000, 0x0800, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
+            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_pins & KC85_PIO_RAM));
+            ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_pins & KC85_PIO_IRM));
+            ui_memmap_region(&ui->memmap, "CAOS ROM 1", 0xE000, 0x0800, 0 != (pio_pins & KC85_PIO_CAOS_ROM));
+            ui_memmap_region(&ui->memmap, "CAOS ROM 2", 0xF000, 0x0800, 0 != (pio_pins & KC85_PIO_CAOS_ROM));
     #elif defined(CHIPS_KC85_TYPE_3)
         /* KC85/3 memory map */
         ui_memmap_layer(&ui->memmap, "System");
-            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
-            ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_a & KC85_PIO_A_IRM));
-            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_a & KC85_PIO_A_BASIC_ROM));
-            ui_memmap_region(&ui->memmap, "CAOS ROM", 0xE000, 0x2000, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
+            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_pins & KC85_PIO_RAM));
+            ui_memmap_region(&ui->memmap, "IRM", 0x8000, 0x4000, 0 != (pio_pins & KC85_PIO_IRM));
+            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_pins & KC85_PIO_BASIC_ROM));
+            ui_memmap_region(&ui->memmap, "CAOS ROM", 0xE000, 0x2000, 0 != (pio_pins & KC85_PIO_CAOS_ROM));
     #else
         /* KC85/4 memory map */
-        const uint8_t pio_b = ui->kc85->pio_b;        
         const uint8_t io86  = ui->kc85->io86;
         const uint8_t io84  = ui->kc85->io84;
         ui_memmap_layer(&ui->memmap, "System 0");
-            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_a & KC85_PIO_A_RAM));
+            ui_memmap_region(&ui->memmap, "RAM0", 0x0000, 0x4000, 0 != (pio_pins & KC85_PIO_RAM));
             ui_memmap_region(&ui->memmap, "RAM4", 0x4000, 0x4000, 0 != (io86 & KC85_IO86_RAM4));
-            ui_memmap_region(&ui->memmap, "IRM0 PIXELS", 0x8000, 0x2800, (0 != (pio_a & KC85_PIO_A_IRM)) && (0 == (io84 & 6)));
-            ui_memmap_region(&ui->memmap, "IRM0", 0xA800, 0x1800, 0 != (pio_a & KC85_PIO_A_IRM));
-            ui_memmap_region(&ui->memmap, "CAOS ROM E", 0xE000, 0x2000, 0 != (pio_a & KC85_PIO_A_CAOS_ROM));
+            ui_memmap_region(&ui->memmap, "IRM0 PIXELS", 0x8000, 0x2800, (0 != (pio_pins & KC85_PIO_IRM)) && (0 == (io84 & 6)));
+            ui_memmap_region(&ui->memmap, "IRM0", 0xA800, 0x1800, 0 != (pio_pins & KC85_PIO_IRM));
+            ui_memmap_region(&ui->memmap, "CAOS ROM E", 0xE000, 0x2000, 0 != (pio_pins & KC85_PIO_CAOS_ROM));
         ui_memmap_layer(&ui->memmap, "System 1");
-            ui_memmap_region(&ui->memmap, "IRM0 COLORS", 0x8000, 0x2800, (0 != (pio_a & KC85_PIO_A_IRM)) && (2 == (io84 & 6)));
+            ui_memmap_region(&ui->memmap, "IRM0 COLORS", 0x8000, 0x2800, (0 != (pio_pins & KC85_PIO_IRM)) && (2 == (io84 & 6)));
             ui_memmap_region(&ui->memmap, "CAOS ROM C", 0xC000, 0x1000, 0 != (io86 & KC85_IO86_CAOS_ROM_C));
         ui_memmap_layer(&ui->memmap, "System 2");
-            ui_memmap_region(&ui->memmap, "IRM1 PIXELS", 0x8000, 0x2800, (0 != (pio_a & KC85_PIO_A_IRM)) && (4 == (io84 & 6)));
-            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_a & KC85_PIO_A_BASIC_ROM));
+            ui_memmap_region(&ui->memmap, "IRM1 PIXELS", 0x8000, 0x2800, (0 != (pio_pins & KC85_PIO_IRM)) && (4 == (io84 & 6)));
+            ui_memmap_region(&ui->memmap, "BASIC ROM", 0xC000, 0x2000, 0 != (pio_pins & KC85_PIO_BASIC_ROM));
         ui_memmap_layer(&ui->memmap, "System 3");
-            ui_memmap_region(&ui->memmap, "IRM1 COLORS", 0x8000, 0x2800, (0 != (pio_a & KC85_PIO_A_IRM)) && (6 == (io84 & 6)));
+            ui_memmap_region(&ui->memmap, "IRM1 COLORS", 0x8000, 0x2800, (0 != (pio_pins & KC85_PIO_IRM)) && (6 == (io84 & 6)));
         ui_memmap_layer(&ui->memmap, "System 4");
-            ui_memmap_region(&ui->memmap, "RAM8 BANK0", 0x8000, 0x4000, (0 != (pio_b & KC85_PIO_B_RAM8)) && (0 == (io84 & KC85_IO84_SEL_RAM8)));
+            ui_memmap_region(&ui->memmap, "RAM8 BANK0", 0x8000, 0x4000, (0 != (pio_pins & KC85_PIO_RAM8)) && (0 == (io84 & KC85_IO84_SEL_RAM8)));
         ui_memmap_layer(&ui->memmap, "System 5");
-            ui_memmap_region(&ui->memmap, "RAM8 BANK1", 0x8000, 0x4000, (0 != (pio_b & KC85_PIO_B_RAM8)) && (0 != (io84 & KC85_IO84_SEL_RAM8)));
+            ui_memmap_region(&ui->memmap, "RAM8 BANK1", 0x8000, 0x4000, (0 != (pio_pins & KC85_PIO_RAM8)) && (0 != (io84 & KC85_IO84_SEL_RAM8)));
     #endif
-    for (int i = 0; i < KC85_NUM_SLOTS; i++) {
+    for (size_t i = 0; i < KC85_EXP_NUM_SLOTS; i++) {
         const uint8_t slot_addr = ui->kc85->exp.slot[i].addr;
         ui_memmap_layer(&ui->memmap, slot_addr == 0x08 ? "Slot 08" : "Slot 0C");
         if (kc85_slot_occupied(ui->kc85, slot_addr)) {
@@ -331,8 +334,15 @@ static uint8_t _ui_kc85_mem_read(int layer, uint16_t addr, void* user_data) {
     kc85_t* kc85 = (kc85_t*) user_data;
     if (layer == 0) {
         return mem_rd(&kc85->mem, addr);
-    }
-    else {
+    } else if ((layer >= 4) && (layer < 8)) {
+        // IRM access
+        if ((addr >= 0x8000) && (addr < 0xC000)) {
+            return kc85->ram[KC85_IRM0_PAGE + (layer-4)][addr - 0x8000];
+        } else {
+            return 0xFF;
+        }
+    } else {
+        // Motherboard, SLOT 08, SLOT 0C
         return mem_layer_rd(&kc85->mem, layer-1, addr);
     }
 }
@@ -342,8 +352,12 @@ static void _ui_kc85_mem_write(int layer, uint16_t addr, uint8_t data, void* use
     kc85_t* kc85 = (kc85_t*) user_data;
     if (layer == 0) {
         mem_wr(&kc85->mem, addr, data);
-    }
-    else {
+    } else if ((layer >= 4) && (layer < 8)) {
+        // IRM access
+        if ((addr >= 0x8000) && (addr < 0xC000)) {
+            kc85->ram[KC85_IRM0_PAGE + (layer-4)][addr - 0x8000] = data;
+        }
+    } else {
         mem_layer_wr(&kc85->mem, layer-1, addr, data);
     }
 }
@@ -352,9 +366,9 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
     CHIPS_ASSERT(ui && ui_desc);
     CHIPS_ASSERT(ui_desc->kc85);
     CHIPS_ASSERT(ui_desc->boot_cb);
-    CHIPS_ASSERT(ui_desc->create_texture_cb && ui_desc->update_texture_cb && ui_desc->destroy_texture_cb);
     ui->kc85 = ui_desc->kc85;
     ui->boot_cb = ui_desc->boot_cb;
+    ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};
@@ -362,10 +376,12 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.x = x;
         desc.y = y;
         desc.z80 = &ui->kc85->cpu;
+        desc.freq_hz = KC85_FREQUENCY;
+        desc.scanline_ticks = KC85_SCANLINE_TICKS;
+        desc.frame_ticks = KC85_SCANLINE_TICKS * KC85_NUM_SCANLINES;
         desc.read_cb = _ui_kc85_mem_read;
-        desc.create_texture_cb = ui_desc->create_texture_cb;
-        desc.update_texture_cb = ui_desc->update_texture_cb;
-        desc.destroy_texture_cb = ui_desc->destroy_texture_cb;
+        desc.texture_cbs = ui_desc->dbg_texture;
+        desc.debug_cbs = ui_desc->dbg_debug;
         desc.keys = ui_desc->dbg_keys;
         desc.user_data = ui->kc85;
         ui_dbg_init(&ui->dbg, &desc);
@@ -426,6 +442,12 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
         desc.layers[3] = "Slot 0C";
+        #if defined(CHIPS_KC85_TYPE_4)
+            desc.layers[4] = "IRM 0 Pixels";
+            desc.layers[5] = "IRM 0 Colors";
+            desc.layers[6] = "IRM 1 Pixels";
+            desc.layers[7] = "IRM 1 Colors";
+        #endif
         desc.read_cb = _ui_kc85_mem_read;
         desc.write_cb = _ui_kc85_mem_write;
         desc.user_data = ui->kc85;
@@ -450,6 +472,12 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
         desc.layers[1] = "Motherboard";
         desc.layers[2] = "Slot 08";
         desc.layers[3] = "Slot 0C";
+        #if defined(CHIPS_KC85_TYPE_4)
+            desc.layers[4] = "IRM 0 Pixels";
+            desc.layers[5] = "IRM 0 Colors";
+            desc.layers[6] = "IRM 1 Pixels";
+            desc.layers[7] = "IRM 1 Colors";
+        #endif
         desc.cpu_type = UI_DASM_CPUTYPE_Z80;
         desc.start_addr = 0xF000;
         desc.read_cb = _ui_kc85_mem_read;
@@ -498,9 +526,9 @@ void ui_kc85_draw(ui_kc85_t* ui) {
     ui_dbg_draw(&ui->dbg);
 }
 
-kc85_debug_t ui_kc85_get_debug(ui_kc85_t* ui) {
-    kc85_debug_t res = {};
-    res.callback.func = (kc85_debug_func_t)ui_dbg_tick;
+chips_debug_t ui_kc85_get_debug(ui_kc85_t* ui) {
+    chips_debug_t res = {};
+    res.callback.func = (chips_debug_func_t)ui_dbg_tick;
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;
