@@ -116,11 +116,12 @@ static float _beeper_dcadjust(beeper_t* bp, float s) {
 }
 
 bool beeper_tick(beeper_t* bp) {
+    _beeper_dcadjust(bp, (float)bp->state * bp->volume * bp->base_volume);
     /* generate a new sample? */
     bp->counter -= BEEPER_FIXEDPOINT_SCALE;
     if (bp->counter <= 0) {
         bp->counter += bp->period;
-        bp->sample = _beeper_dcadjust(bp, (float)bp->state) * bp->volume * bp->base_volume;
+        bp->sample = bp->dcadj_sum / BEEPER_DCADJ_BUFLEN;
         return true;
     }
     return false;
