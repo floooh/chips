@@ -486,7 +486,13 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
         }
     }
     else if (pins & Z80_IORQ) {
-        if ((pins & Z80_A0) == 0) {
+        /* acknowledge the interrupt request by putting the 8-bit vector
+            in the data bus
+        */
+        if (pins & Z80_M1) {
+            Z80_SET_DATA(pins, 0xFF);
+        }
+        else if ((pins & Z80_A0) == 0) {
             /* Spectrum ULA (...............0)
                 Bits 5 and 7 as read by INning from Port 0xfe are always one
             */
