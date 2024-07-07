@@ -487,8 +487,14 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
         else if (((pins & (Z80_A15|Z80_A1)) == Z80_A15) && (sys->type == ZX_TYPE_128)) {
             // AY-3-8912 access (1*............0.)
             if (pins & Z80_A14) { pins |= AY38910_BC1; }
-            if (pins & Z80_WR) { pins |= AY38910_BDIR; }
-            pins = ay38910_iorq(&sys->ay, pins) & Z80_PIN_MASK;
+            if (pins & Z80_RD) {
+                pins &= ~AY38910_BDIR;
+                pins = ay38910_iorq(&sys->ay, pins) & Z80_PIN_MASK;
+            }
+            else if (pins & Z80_WR) {
+                pins |= AY38910_BDIR;
+                pins = ay38910_iorq(&sys->ay, pins) & Z80_PIN_MASK;
+            }
         }
         else if ((pins & (Z80_RD|Z80_A7|Z80_A6|Z80_A5)) == Z80_RD) {
             // Kempston Joystick (........000.....)
