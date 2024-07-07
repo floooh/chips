@@ -435,6 +435,11 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
         }
     }
 
+    if ((pins & Z80_WR) == 0) {
+        // if no one puts data on the bus, it's floating
+        Z80_SET_DATA(pins, 0xFF);
+    }
+
     if (pins & Z80_MREQ) {
         // a memory request
         // FIXME: 'contended memory'
