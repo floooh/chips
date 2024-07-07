@@ -474,25 +474,23 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
         }
     }
 
+    // keep track if data has been put on the bus
+    bool data_set = (pins & Z80_WR) == Z80_WR;
+
     if (pins & Z80_MREQ) {
         // a memory request
         // FIXME: 'contended memory'
         const uint16_t addr = Z80_GET_ADDR(pins);
         if (pins & Z80_RD) {
             Z80_SET_DATA(pins, mem_rd(&sys->mem, addr));
+            data_set = true;
         }
         else if (pins & Z80_WR) {
             mem_wr(&sys->mem, addr, Z80_GET_DATA(pins));
         }
     }
     else if (pins & Z80_IORQ) {
-        /* acknowledge the interrupt request by putting the 8-bit vector
-            in the data bus
-        */
-        if (pins & Z80_M1) {
-            Z80_SET_DATA(pins, 0xFF);
-        }
-        else if ((pins & Z80_A0) == 0) {
+        if ((pins & Z80_A0) == 0) {
             /* Spectrum ULA (...............0)
                 Bits 5 and 7 as read by INning from Port 0xfe are always one
             */
@@ -508,6 +506,7 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
                 const uint16_t kbd_lines = kbd_test_lines(&sys->kbd, column_mask);
                 data |= (~kbd_lines) & 0x1F;
                 Z80_SET_DATA(pins, data);
+                data_set = true;
             }
             else if (pins & Z80_WR) {
                 // write to ULA
@@ -527,13 +526,26 @@ static uint64_t _zx_tick(zx_t* sys, uint64_t pins) {
         else if (((pins & (Z80_A15|Z80_A1)) == Z80_A15) && (sys->type == ZX_TYPE_128)) {
             // AY-3-8912 access (1*............0.)
             if (pins & Z80_A14) { pins |= AY38910_BC1; }
-            if (pins & Z80_WR) { pins |= AY38910_BDIR; }
-            pins = ay38910_iorq(&sys->ay, pins) & Z80_PIN_MASK;
+            if (pins & Z80_RD) {
+                pins &= ~AY38910_BDIR;
+                pins = ay38910_iorq(&sys->ay, pins) & Z80_PIN_MASK;
+                data_set = true;
+            }
+            else if (pins & Z80_WR) {
+                pins |= AY38910_BDIR;
+                pins = ay38910_iorq(&sys->ay, pins) & Z80_PIN_MASK;
+            }
         }
         else if ((pins & (Z80_RD|Z80_A7|Z80_A6|Z80_A5)) == Z80_RD) {
             // Kempston Joystick (........000.....)
             Z80_SET_DATA(pins, sys->kbd_joymask | sys->joy_joymask);
+            data_set = true;
         }
+    }
+
+    if (!data_set) {
+        // no one put data on the bus, it's floating
+        Z80_SET_DATA(pins, 0xFF);
     }
 
     // tick the AY at half frequency, use the buffered chip select
