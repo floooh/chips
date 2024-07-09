@@ -3383,9 +3383,9 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case  707: goto step_next;
         case  708: goto step_next;
         case  709: _wait();_ioread(cpu->wz++);goto step_next;
-        case  710: cpu->dlatch=_gd();goto step_next;
+        case  710: cpu->a=_gd();goto step_next;
         // -- overlapped
-        case  711: cpu->a=cpu->dlatch;goto fetch_next;
+        case  711: goto fetch_next;
         
         //  DC: CALL C,nn (M:6 T:17)
         // -- mread
@@ -4100,12 +4100,12 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 1112: _wait();_ioread(cpu->bc);goto step_next;
         case 1113: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case 1114: cpu->hlx[cpu->hlx_idx].h=_z80_in(cpu,cpu->dlatch);goto fetch_next;
+        case 1114: cpu->h=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 61: OUT (C),H (M:2 T:8)
         // -- iowrite
         case 1115: goto step_next;
-        case 1116: _iowrite(cpu->bc,cpu->hlx[cpu->hlx_idx].h);goto step_next;
+        case 1116: _iowrite(cpu->bc,cpu->h);goto step_next;
         case 1117: _wait();cpu->wz=cpu->bc+1;goto step_next;
         case 1118: goto step_next;
         // -- overlapped
@@ -4171,12 +4171,12 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 1155: _wait();_ioread(cpu->bc);goto step_next;
         case 1156: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next;
         // -- overlapped
-        case 1157: cpu->hlx[cpu->hlx_idx].l=_z80_in(cpu,cpu->dlatch);goto fetch_next;
+        case 1157: cpu->l=_z80_in(cpu,cpu->dlatch);goto fetch_next;
         
         // ED 69: OUT (C),L (M:2 T:8)
         // -- iowrite
         case 1158: goto step_next;
-        case 1159: _iowrite(cpu->bc,cpu->hlx[cpu->hlx_idx].l);goto step_next;
+        case 1159: _iowrite(cpu->bc,cpu->l);goto step_next;
         case 1160: _wait();cpu->wz=cpu->bc+1;goto step_next;
         case 1161: goto step_next;
         // -- overlapped
@@ -4677,7 +4677,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // -- generic
         case 1471: pins=_z80_refresh(cpu,pins);goto step_next;
         // -- generic
-        case 1472: cpu->step=_z80_optable[cpu->opcode];goto step_next;
+        case 1472: cpu->step=_z80_optable[cpu->opcode]; cpu->addr=cpu->hl;goto step_next;
         // -- overlapped
         case 1473: goto fetch_next;
         

@@ -285,13 +285,11 @@ OUT (n),A:
     - { type: mread, ab: $PC++, dst: $WZL, action: $WZH=$A }
     - { type: iowrite, ab: $WZ, db: $A, action: $WZL++ }
 
-# FIXME: ioread can go directly into A
 IN A,(n):
   cond: (x == 3) and (y == 3) and (z == 3)
   mcycles:
     - { type: mread, ab: $PC++, dst: $WZL, action: $WZH=$A }
-    - { type: ioread, ab: $WZ++, dst: $DLATCH }
-    - { type: overlapped, action: $A=$DLATCH }
+    - { type: ioread, ab: $WZ++, dst: $A }
 
 EX (SP),HL:
   cond: (x == 3) and (y == 4) and (z == 3)
@@ -383,13 +381,12 @@ ED NOP:
   cond: (x == 0) or (x == 3) or ((x == 1) and (z == 7) and (y >= 6)) or ((x == 2) and ((z > 3) or (y < 4)))
   mcycles: []
 
-# FIXME: should be RRY (because H/L can't be IXH/IXL etc...)
 IN $RY,(C):
   prefix: ed
   cond: (x == 1) and (y != 6) and (z == 0)
   mcycles:
     - { type: ioread, ab: $BC, dst: $DLATCH, action: $WZ=$BC+1 }
-    - { type: overlapped, action: "$RY=_z80_in(cpu,$DLATCH)" }
+    - { type: overlapped, action: "$RRY=_z80_in(cpu,$DLATCH)" }
 
 IN (C):
   prefix: ed
@@ -399,12 +396,11 @@ IN (C):
     # discard result, only set flags
     - { type: overlapped, action: "_z80_in(cpu,$DLATCH)" }
 
-# FIXME: should be RRY (because H/L can't be IXH/IXL etc...)
 OUT (C),$RY:
   prefix: ed
   cond: (x == 1) and (y != 6) and (z == 1)
   mcycles:
-    - { type: iowrite, ab: $BC, db: $RY, action: $WZ=$BC+1 }
+    - { type: iowrite, ab: $BC, db: $RRY, action: $WZ=$BC+1 }
 
 OUT (C),0:
   prefix: ed
@@ -679,7 +675,6 @@ ddfdcb:
 
 #== INTERRUPT HANDLING =========================================================
 
-# FIXME: last tcycle also needs "cpu->addr = cpu->hl"
 int_im0:
   flags: { special: true }
   mcycles:
@@ -690,7 +685,7 @@ int_im0:
     - { type: generic, tcycles: 1, action: "_wait();cpu->opcode=_z80_get_db(pins)" }
     # combined refresh and branch to loaded instruction cycle
     - { type: generic, tcycles: 1, action: "pins=_z80_refresh(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "cpu->step=_z80_optable[cpu->opcode]" }
+    - { type: generic, tcycles: 1, action: "cpu->step=_z80_optable[cpu->opcode]; cpu->addr=cpu->hl" }
 
 int_im1:
   flags: { special: true }
