@@ -1301,9 +1301,9 @@ static bool _kc85_exp_alloc(kc85_t* sys, kc85_slot_t* slot) {
 */
 static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
     CHIPS_ASSERT(free_slot->mod.size > 0);
-    const uint32_t bytes_to_free = free_slot->mod.size;
-    CHIPS_ASSERT(sys->exp.buf_top >= bytes_to_free);
-    sys->exp.buf_top -= bytes_to_free;
+    const uint32_t gap_size = free_slot->mod.size;
+    CHIPS_ASSERT(sys->exp.buf_top >= gap_size);
+    sys->exp.buf_top -= gap_size;
     for (size_t i = 0; i < KC85_EXP_NUM_SLOTS; i++) {
         kc85_slot_t* slot = &sys->exp.slot[i];
         // no module in slot: nothing to do
@@ -1312,12 +1312,12 @@ static void _kc85_exp_free(kc85_t* sys, kc85_slot_t* free_slot) {
         }
         // if slot is 'behind' the to-be-freed slot...
         if (slot->buf_offset > free_slot->buf_offset) {
-            CHIPS_ASSERT(slot->buf_offset >= bytes_to_free);
+            CHIPS_ASSERT(slot->buf_offset >= gap_size);
             // move data backward to close the hole
             const uint8_t* from = &sys->exp_buf[slot->buf_offset];
-            uint8_t* to = &sys->exp_buf[slot->buf_offset - bytes_to_free];
-            memmove(to, from, bytes_to_free);
-            slot->buf_offset -= bytes_to_free;
+            uint8_t* to = &sys->exp_buf[slot->buf_offset - gap_size];
+            memmove(to, from, slot->mod.size);
+            slot->buf_offset -= gap_size;
         }
     }
 }
