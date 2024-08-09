@@ -1505,6 +1505,7 @@ static void _kc85_load_start(kc85_t* sys, uint16_t exec_addr) {
         mem_wr(&sys->mem, addr, 0);
     }
     mem_wr(&sys->mem, 0xb7a0, 0);
+    // FIXME: this doesn't actually do anything
     #if defined(CHIPS_KC85_TYPE_3)
         _kc85_tick(sys, Z80_MAKE_PINS(Z80_IORQ|Z80_WR, 0x89, 0x9f));
     #elif defined(CHIPS_KC85_TYPE_4)
