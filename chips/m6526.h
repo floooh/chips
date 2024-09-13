@@ -241,12 +241,38 @@ typedef struct {
     bool flag;              // last state of flag bit, to detect edge
 } m6526_int_t;
 
+// TOD state
+typedef struct {
+    bool running;
+    bool latched;
+    bool alarm;
+
+    uint8_t tenths;
+    uint8_t seconds;
+    uint8_t minutes;
+    uint8_t hours;
+
+    uint8_t latched_tenths;
+    uint8_t latched_seconds;
+    uint8_t latched_minutes;
+    uint8_t latched_hours;
+
+    uint8_t alarm_tenths;
+    uint8_t alarm_seconds;
+    uint8_t alarm_minutes;
+    uint8_t alarm_hours;
+
+    uint8_t counter;
+    uint8_t match_counter;
+} m6526_tod_t;
+
 // m6526 state
 typedef struct {
     m6526_port_t pa;
     m6526_port_t pb;
     m6526_timer_t ta;
     m6526_timer_t tb;
+    m6526_tod_t tod;
     m6526_int_t intr;
     uint64_t pins;
 } m6526_t;
@@ -309,6 +335,29 @@ static void _m6526_init_interrupt(m6526_int_t* intr) {
     intr->flag = false;
 }
 
+static void _m6526_init_tod(m6526_tod_t* tod) {
+    tod->tenths  = 0x0;
+    tod->seconds = 0x00;
+    tod->minutes = 0x00;
+    tod->hours   = 0x01;    // the most common value
+
+    tod->latched_tenths  = 0x0;
+    tod->latched_seconds = 0x00;
+    tod->latched_minutes = 0x00;
+    tod->latched_hours   = 0x01;
+
+    tod->alarm_tenths  = 0x0;
+    tod->alarm_seconds = 0x00;
+    tod->alarm_minutes = 0x00;
+    tod->alarm_hours   = 0x00;    
+
+    tod->running = false;
+    tod->latched = false;
+    tod->alarm = false;
+    tod->counter = 0;
+    tod->match_counter = 5;
+}
+
 void m6526_init(m6526_t* c) {
     CHIPS_ASSERT(c);
     memset(c, 0, sizeof(*c));
@@ -316,6 +365,7 @@ void m6526_init(m6526_t* c) {
     _m6526_init_port(&c->pb);
     _m6526_init_timer(&c->ta);
     _m6526_init_timer(&c->tb);
+    _m6526_init_tod(&c->tod);
     _m6526_init_interrupt(&c->intr);
     c->ta.latch = 0xFFFF;
     c->tb.latch = 0xFFFF;
@@ -327,6 +377,7 @@ void m6526_reset(m6526_t* c) {
     _m6526_init_port(&c->pb);
     _m6526_init_timer(&c->ta);
     _m6526_init_timer(&c->tb);
+    _m6526_init_tod(&c->tod);
     _m6526_init_interrupt(&c->intr);
     c->pins = 0;
 }
@@ -447,7 +498,17 @@ static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
     }
     c->intr.flag = 0 != (pins & M6526_FLAG);
 
-    /* FIXME: ALARM, SP interrupt conditions */
+    /* FIXME: SP interrupt conditions */
+    
+    // set alarm bit only on the raising edge of the alarm signal
+    bool alarm = (
+       c->tod.tenths  == c->tod.alarm_tenths  && 
+       c->tod.seconds == c->tod.alarm_seconds &&
+       c->tod.minutes == c->tod.alarm_minutes && 
+       c->tod.hours   == c->tod.alarm_hours
+    );
+    if(alarm && !c->tod.alarm) c->intr.icr |= (1<<2);
+    c->tod.alarm = alarm;
 
     /* handle main interrupt bit */
     if (_M6526_PIP_TEST(c->intr.pip, M6526_PIP_IRQ, 0)) {
@@ -559,10 +620,57 @@ static void _m6526_tick_pipeline(m6526_t* c) {
     c->intr.pip = (c->intr.pip >> 1) & 0x7F7F7F7F;
 }
 
+#define BCDINC(x) ((((x)+1) & 0xF) == 0x0A ? (x)+7 : (((x) & 0x0F) == 0x0F ? (x) & 0xF0 : ((x)+1)))
+
+static void _m6526_tick_tod(m6526_tod_t* tod, uint64_t pins) {    
+    if(!(pins & M6526_TOD) || !tod->running) return;
+
+    // convert TOD 50/60 Hz signal to 10 Hz
+    tod->counter = (tod->counter + 1) & 0x07;
+    if(tod->counter != tod->match_counter) return;
+    tod->counter = 0;
+
+    // unpack from BCD
+    uint8_t tenths    = tod->tenths;  
+    uint8_t seconds   = tod->seconds;
+    uint8_t minutes   = tod->minutes;    
+    uint8_t hours     = tod->hours;    
+
+    // increment clock
+    tenths = (tenths + 1) & 0x0F;    
+    if(tenths == 10) {
+        tenths = 0;
+        seconds = BCDINC(seconds) & 0x7F;
+        if(seconds == 0x60) {
+            seconds = 0;
+            minutes = BCDINC(minutes) & 0x7F;
+            if(minutes == 0x60) {
+                minutes = 0;
+                ++hours;
+                     if(hours == 0x13) hours = 0x01;
+                else if(hours == 0x0A) hours = 0x10;
+                else if(hours == 0x12) hours = 0x92;
+                else if(hours == 0x93) hours = 0x81;
+                else if(hours == 0x8A) hours = 0x90;
+                else if(hours == 0x92) hours = 0x12;
+                else if(hours == 0x10) hours = 0x00;
+                else if(hours == 0x20) hours = 0x10;
+            }
+        }
+    }
+
+    // pack into BCD
+    tod->tenths  = tenths;
+    tod->seconds = seconds;
+    tod->minutes = minutes;
+    tod->hours   = hours; 
+}
+
 static uint64_t _m6526_tick(m6526_t* c, uint64_t pins) {
     _m6526_read_port_pins(c, pins);
     _m6526_tick_timer(&c->ta);
     _m6526_tick_timer(&c->tb);
+    _m6526_tick_tod(&c->tod, pins);
     pins = _m6526_update_irq(c, pins);
     pins = _m6526_write_port_pins(c, pins);
     _m6526_tick_pipeline(c);
@@ -616,6 +724,26 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
             /* force-load bit always returns zero */
             data = c->tb.cr & ~(1<<4);
             break;
+        case M6526_REG_TOD10TH:            
+            data = c->tod.latched ? c->tod.latched_tenths : c->tod.tenths;           
+            c->tod.latched = false;            
+            break;
+        case M6526_REG_TODSEC:            
+            data = c->tod.latched ? c->tod.latched_seconds : c->tod.seconds;
+            break;
+        case M6526_REG_TODMIN:            
+            data = c->tod.latched ? c->tod.latched_minutes : c->tod.minutes;
+            break;
+        case M6526_REG_TODHR:
+            if(!c->tod.latched) {                       
+                c->tod.latched_tenths  = c->tod.tenths;
+                c->tod.latched_seconds = c->tod.seconds;
+                c->tod.latched_minutes = c->tod.minutes;
+                c->tod.latched_hours   = c->tod.hours;
+                c->tod.latched = true;       
+            }            
+            data = c->tod.latched ? c->tod.latched_hours : c->tod.hours;             
+            break;        
     }
     return data;
 }
@@ -659,10 +787,44 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             break;
         case M6526_REG_CRA:
             _m6526_write_cr(&c->ta, data);
+            c->tod.match_counter = data & (1<<7) ? 5 : 6; // 50 or 60 Hz TOD
             break;
         case M6526_REG_CRB:
             _m6526_write_cr(&c->tb, data);
             break;
+        case M6526_REG_TOD10TH:  
+            if(c->tb.cr & (1<<7)) {
+                c->tod.alarm_tenths = data & 0x0F;                
+            } else {      
+                c->tod.tenths = data & 0x0F;
+                c->tod.running = true;  // TOD starts when tenths are R/W                
+            }
+            break;
+        case M6526_REG_TODSEC:            
+            if(c->tb.cr & (1<<7)) {
+                c->tod.alarm_seconds = data & 0x7F;
+            } else {
+                c->tod.seconds = data & 0x7F;
+            }
+            break;
+        case M6526_REG_TODMIN:            
+            if(c->tb.cr & (1<<7)) {
+                c->tod.alarm_minutes = data & 0x7F;
+            } else {
+                c->tod.minutes = data & 0x7F;
+            }
+            break;
+        case M6526_REG_TODHR: 
+            data = data & 0x9F;
+            if(data == 0x92 || data == 0x12) data ^= 0x80; // CIA oddity: AM/PM flag is inverted at 12 hour
+            if(c->tb.cr & (1<<7)) {
+                c->tod.alarm_hours = data;                
+            } else {
+                c->tod.hours = data;
+                c->tod.running = false; // TOD stops when hours are written
+                c->tod.counter = 0;
+            }
+            break;        
     }
 }
 
