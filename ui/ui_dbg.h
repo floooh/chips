@@ -1921,7 +1921,7 @@ static void _ui_dbg_dbgwin_draw(ui_dbg_t* win) {
     ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, win->ui.init_h), ImGuiCond_Once);
     if (ImGui::Begin(win->ui.title, &win->ui.open, ImGuiWindowFlags_MenuBar)) {
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
-            ImGui::CaptureKeyboardFromApp();
+            ImGui::SetNextFrameWantCaptureKeyboard(true);
             _ui_dbg_handle_input(win);
         }
         _ui_dbg_draw_menu(win);
