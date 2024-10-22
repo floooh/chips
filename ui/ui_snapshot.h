@@ -51,6 +51,8 @@ extern "C" {
 
 #define UI_SNAPSHOT_MAX_SLOTS (8)
 
+// Dear ImGui compatible texture handle
+typedef uint64_t ui_snapshot_texture_t;
 // callback function to save snapshot to a numbered slot
 typedef void (*ui_snapshot_save_t)(size_t slot_index);
 // callback function to load snapshot from numbered slot
@@ -58,7 +60,7 @@ typedef bool (*ui_snapshot_load_t)(size_t slot_index);
 
 // a snapshot screenshot wrapper struct
 typedef struct {
-    void* texture;
+    ui_snapshot_texture_t texture;
     bool portrait;
 } ui_snapshot_screenshot_t;
 
