@@ -595,8 +595,8 @@ static void _ui_dbg_history_draw(ui_dbg_t* win) {
     if (!win->ui.show_history) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 64), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, 376), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 64), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, 376), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Execution History", &win->ui.show_history)) {
         const float line_height = ImGui::GetTextLineHeight();
         ImGui::SetNextWindowContentSize(ImVec2(0, UI_DBG_NUM_HISTORY_ITEMS * line_height));
@@ -951,8 +951,8 @@ static void _ui_dbg_bp_draw(ui_dbg_t* win) {
     if (!win->ui.show_breakpoints) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(-1, 256), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(-1, 256), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Breakpoints", &win->ui.show_breakpoints)) {
         bool scroll_down = false;
         if (ImGui::Button("Add..")) {
@@ -1211,8 +1211,8 @@ static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
         }
     }
     _ui_dbg_heatmap_update(win);
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 128), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(292, 400), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y + 128), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(292, 400), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Memory Heatmap", &win->ui.show_heatmap)) {
         if (ImGui::Button("Clear All")) {
             _ui_dbg_heatmap_clear_all(win);
@@ -1320,8 +1320,8 @@ static void _ui_dbg_stopwatch_draw(ui_dbg_t* win) {
     if (!win->ui.show_stopwatch) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(-1, -1), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x + win->ui.init_w, win->ui.init_y), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(-1, -1), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Stopwatch", &win->ui.show_stopwatch)) {
         for (int i = 0; i < UI_DBG_STOPWATCH_NUM; i++) {
             ImGui::PushID(i);
@@ -1919,8 +1919,8 @@ static void _ui_dbg_dbgwin_draw(ui_dbg_t* win) {
     if (!win->ui.open) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x, win->ui.init_y), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, win->ui.init_h), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->ui.init_x, win->ui.init_y), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(win->ui.init_w, win->ui.init_h), ImGuiCond_FirstUseEver);
     if (ImGui::Begin(win->ui.title, &win->ui.open, ImGuiWindowFlags_MenuBar)) {
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
             ImGui::SetNextFrameWantCaptureKeyboard(true);

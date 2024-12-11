@@ -945,8 +945,8 @@ void ui_memedit_draw(ui_memedit_t* win) {
     if (!win->ed->Open) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_FirstUseEver);
     win->ed->DrawWindow(win->title, (uint8_t*)win, win->max_addr);
     win->open = win->ed->Open;
 }

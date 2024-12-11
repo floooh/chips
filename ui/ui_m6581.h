@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -47,7 +47,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -247,7 +247,7 @@ static void _ui_m6581_draw_state(ui_m6581_t* win) {
         ImGui::Text("Exp Counter"); ImGui::NextColumn();
         for (int i = 0; i < 3; i++) {
             ImGui::Text("%02X", sid->voice[i].env_exp_counter); ImGui::NextColumn();
-        } 
+        }
         ImGui::Text("Counter Cmp"); ImGui::NextColumn();
         for (int i = 0; i < 3; i++) {
             ImGui::Text("%X", sid->voice[i].env_counter_compare); ImGui::NextColumn();
@@ -255,7 +255,7 @@ static void _ui_m6581_draw_state(ui_m6581_t* win) {
     }
     ImGui::Columns();
     if (ImGui::CollapsingHeader("Filter")) {
-        ImGui::Text("Voices        %s %s %s", 
+        ImGui::Text("Voices        %s %s %s",
             (0 != (sid->filter.voices & 1)) ? "ON ":"OFF",
             (0 != (sid->filter.voices & 2)) ? "ON ":"OFF",
             (0 != (sid->filter.voices & 4)) ? "ON ":"OFF");
@@ -279,8 +279,8 @@ void ui_m6581_draw(ui_m6581_t* win) {
     if (!win->open) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_Once);
-    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(win->init_w, win->init_h), ImGuiCond_FirstUseEver);
     if (ImGui::Begin(win->title, &win->open)) {
         ImGui::BeginChild("##m6581_chip", ImVec2(176, 0), true);
         ui_chip_draw(&win->chip, win->sid->pins);

@@ -552,7 +552,7 @@ void ui_vic20_draw_system(ui_vic20_t* ui) {
         return;
     }
     vic20_t* sys = ui->vic20;
-    ImGui::SetNextWindowSize({ 200, 250}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({ 200, 250}, ImGuiCond_FirstUseEver);
     if (ImGui::Begin("VIC-20 System", &ui->system_window_open)) {
         const char* mem_config = "???";
         switch (sys->mem_config) {

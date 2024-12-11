@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -44,7 +44,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -271,10 +271,10 @@ void ui_kbd_draw(ui_kbd_t* win) {
     if (!win->open) {
         return;
     }
-    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(win->init_x, win->init_y), ImGuiCond_FirstUseEver);
     const float min_w = win->num_columns * win->cell_width + win->left_padding + 40.0f;
     const float min_h = win->num_lines * win->cell_height + win->top_padding + 64.0f;
-    ImGui::SetNextWindowSize(ImVec2(min_w, min_h), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(min_w, min_h), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(min_w, min_h), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::Begin(win->title, &win->open)) {
         _ui_kbd_draw_plane_combo(win);

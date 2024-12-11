@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -39,7 +39,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -111,8 +111,8 @@ void ui_c1530_draw(ui_c1530_t* win) {
     if (!win->open) {
         return;
     }
-    ImGui::SetNextWindowPos({win->init_x, win->init_y}, ImGuiCond_Once);
-    ImGui::SetNextWindowSize({win->init_w, win->init_h}, ImGuiCond_Once);
+    ImGui::SetNextWindowPos({win->init_x, win->init_y}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize({win->init_w, win->init_h}, ImGuiCond_FirstUseEver);
     if (ImGui::Begin(win->title, &win->open)) {
         c1530_t* sys = win->c1530;
         CHIPS_ASSERT(sys && sys->cas_port);
