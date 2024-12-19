@@ -93,7 +93,7 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc);
 void ui_atom_discard(ui_atom_t* ui);
 void ui_atom_draw(ui_atom_t* ui);
 chips_debug_t ui_atom_get_debug(ui_atom_t* ui);
-ui_settings_t ui_atom_save_settings(ui_atom_t* ui);
+void ui_atom_save_settings(ui_atom_t* ui, ui_settings_t* settings);
 void ui_atom_load_settings(ui_atom_t* ui, const ui_settings_t* settings);
 
 #ifdef __cplusplus
@@ -512,29 +512,22 @@ chips_debug_t ui_atom_get_debug(ui_atom_t* ui) {
     return res;
 }
 
-ui_settings_t ui_atom_save_settings(ui_atom_t* ui) {
+void ui_atom_save_settings(ui_atom_t* ui, ui_settings_t* settings) {
     CHIPS_ASSERT(ui);
-    ui_settings_t res;
-    ui_settings_init(&res);
-    ui_settings_add(&res, ui->cpu.title, ui->cpu.open);
-    ui_settings_add(&res, ui->ppi.title, ui->ppi.open);
-    ui_settings_add(&res, ui->via.title, ui->via.open);
-    ui_settings_add(&res, ui->vdg.title, ui->vdg.open);
-    ui_settings_add(&res, ui->audio.title, ui->audio.open);
-    ui_settings_add(&res, ui->kbd.title, ui->kbd.open);
-    ui_settings_add(&res, ui->memmap.title, ui->memmap.open);
+    ui_settings_add(settings, ui->cpu.title, ui->cpu.open);
+    ui_settings_add(settings, ui->ppi.title, ui->ppi.open);
+    ui_settings_add(settings, ui->via.title, ui->via.open);
+    ui_settings_add(settings, ui->vdg.title, ui->vdg.open);
+    ui_settings_add(settings, ui->audio.title, ui->audio.open);
+    ui_settings_add(settings, ui->kbd.title, ui->kbd.open);
+    ui_settings_add(settings, ui->memmap.title, ui->memmap.open);
     for (int i = 0; i < 4; i++) {
-        ui_settings_add(&res, ui->memedit[i].title, ui->memedit[i].open);
+        ui_settings_add(settings, ui->memedit[i].title, ui->memedit[i].open);
     }
     for (int i = 0; i < 4; i++) {
-        ui_settings_add(&res, ui->dasm[i].title, ui->dasm[i].open);
+        ui_settings_add(settings, ui->dasm[i].title, ui->dasm[i].open);
     }
-    ui_settings_add(&res, ui->dbg.ui.title, ui->dbg.ui.open);
-    ui_settings_add(&res, ui->dbg.ui.heatmap.title, ui->dbg.ui.heatmap.open);
-    ui_settings_add(&res, ui->dbg.ui.history.title, ui->dbg.ui.history.open);
-    ui_settings_add(&res, ui->dbg.ui.breakpoints.title, ui->dbg.ui.breakpoints.open);
-    ui_settings_add(&res, ui->dbg.ui.stopwatch.title, ui->dbg.ui.stopwatch.open);
-    return res;
+    ui_dbg_save_settings(&ui->dbg, settings);
 }
 
 void ui_atom_load_settings(ui_atom_t* ui, const ui_settings_t* settings) {
@@ -552,11 +545,7 @@ void ui_atom_load_settings(ui_atom_t* ui, const ui_settings_t* settings) {
     for (int i = 0; i < 4; i++) {
         ui->dasm[i].open = ui_settings_isopen(settings, ui->dasm[i].title);
     }
-    ui->dbg.ui.open = ui_settings_isopen(settings, ui->dbg.ui.title);
-    ui->dbg.ui.heatmap.open = ui_settings_isopen(settings, ui->dbg.ui.heatmap.title);
-    ui->dbg.ui.history.open = ui_settings_isopen(settings, ui->dbg.ui.history.title);
-    ui->dbg.ui.breakpoints.open = ui_settings_isopen(settings, ui->dbg.ui.breakpoints.title);
-    ui->dbg.ui.stopwatch.open = ui_settings_isopen(settings, ui->dbg.ui.stopwatch.title);
+    ui_dbg_load_settings(&ui->dbg, settings);
 }
 
 #ifdef __clang__

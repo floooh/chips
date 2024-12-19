@@ -29,6 +29,7 @@
 
         - imgui.h
         - ui_util.h
+        - ui_settings.h
         - z80.h         (only if UI_DBG_USE_Z80 is defined)
         - z80dasm.h     (only if UI_DBG_USE_Z80 is defined)
         - m6502.h       (only if UI_DBG_USE_M6502 is defined)
@@ -351,6 +352,10 @@ typedef struct ui_dbg_t {
 void ui_dbg_init(ui_dbg_t* win, ui_dbg_desc_t* desc);
 // discard ui_dbg_t instance
 void ui_dbg_discard(ui_dbg_t* win);
+// save persistent state
+void ui_dbg_save_settings(ui_dbg_t* win, ui_settings_t* settings);
+// load persistent state
+void ui_dbg_load_settings(ui_dbg_t* win, const ui_settings_t* settings);
 // notify ui_dbg that an external debugger has connected (may change some behaviour)
 void ui_dbg_external_debugger_connected(ui_dbg_t* win);
 // notify ui_dbg that an external debugger has disconnected (clears breakpoints and continues)
@@ -1976,6 +1981,22 @@ void ui_dbg_discard(ui_dbg_t* win) {
     CHIPS_ASSERT(win && win->valid);
     _ui_dbg_heatmap_discard(win);
     win->valid = false;
+}
+
+void ui_dbg_save_settings(ui_dbg_t* win, ui_settings_t* settings) {
+    ui_settings_add(settings, win->ui.title, win->ui.open);
+    ui_settings_add(settings, win->ui.heatmap.title, win->ui.heatmap.open);
+    ui_settings_add(settings, win->ui.history.title, win->ui.history.open);
+    ui_settings_add(settings, win->ui.breakpoints.title, win->ui.breakpoints.open);
+    ui_settings_add(settings, win->ui.stopwatch.title, win->ui.stopwatch.open);
+}
+
+void ui_dbg_load_settings(ui_dbg_t* win, const ui_settings_t* settings) {
+    win->ui.open = ui_settings_isopen(settings, win->ui.title);
+    win->ui.heatmap.open = ui_settings_isopen(settings, win->ui.heatmap.title);
+    win->ui.history.open = ui_settings_isopen(settings, win->ui.history.title);
+    win->ui.breakpoints.open = ui_settings_isopen(settings, win->ui.breakpoints.title);
+    win->ui.stopwatch.open = ui_settings_isopen(settings, win->ui.stopwatch.title);
 }
 
 void ui_dbg_reset(ui_dbg_t* win) {
