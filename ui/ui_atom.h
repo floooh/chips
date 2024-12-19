@@ -35,6 +35,7 @@
     - ui_memedit.h
     - ui_memmap.h
     - ui_kbd.h
+    - ui_settings.h
 
     ## zlib/libpng license
 
@@ -92,6 +93,8 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc);
 void ui_atom_discard(ui_atom_t* ui);
 void ui_atom_draw(ui_atom_t* ui);
 chips_debug_t ui_atom_get_debug(ui_atom_t* ui);
+ui_settings_t ui_atom_save_settings(ui_atom_t* ui);
+void ui_atom_load_settings(ui_atom_t* ui, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -148,10 +151,10 @@ static void _ui_atom_draw_menu(ui_atom_t* ui) {
         }
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
-            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
-            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
-            ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
-            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
+            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.breakpoints.open);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.stopwatch.open);
+            ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.history.open);
+            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.heatmap.open);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
@@ -507,6 +510,53 @@ chips_debug_t ui_atom_get_debug(ui_atom_t* ui) {
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;
+}
+
+ui_settings_t ui_atom_save_settings(ui_atom_t* ui) {
+    CHIPS_ASSERT(ui);
+    ui_settings_t res;
+    ui_settings_init(&res);
+    ui_settings_add(&res, ui->cpu.title, ui->cpu.open);
+    ui_settings_add(&res, ui->ppi.title, ui->ppi.open);
+    ui_settings_add(&res, ui->via.title, ui->via.open);
+    ui_settings_add(&res, ui->vdg.title, ui->vdg.open);
+    ui_settings_add(&res, ui->audio.title, ui->audio.open);
+    ui_settings_add(&res, ui->kbd.title, ui->kbd.open);
+    ui_settings_add(&res, ui->memmap.title, ui->memmap.open);
+    for (int i = 0; i < 4; i++) {
+        ui_settings_add(&res, ui->memedit[i].title, ui->memedit[i].open);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_settings_add(&res, ui->dasm[i].title, ui->dasm[i].open);
+    }
+    ui_settings_add(&res, ui->dbg.ui.title, ui->dbg.ui.open);
+    ui_settings_add(&res, ui->dbg.ui.heatmap.title, ui->dbg.ui.heatmap.open);
+    ui_settings_add(&res, ui->dbg.ui.history.title, ui->dbg.ui.history.open);
+    ui_settings_add(&res, ui->dbg.ui.breakpoints.title, ui->dbg.ui.breakpoints.open);
+    ui_settings_add(&res, ui->dbg.ui.stopwatch.title, ui->dbg.ui.stopwatch.open);
+    return res;
+}
+
+void ui_atom_load_settings(ui_atom_t* ui, const ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui->cpu.open = ui_settings_isopen(settings, ui->cpu.title);
+    ui->ppi.open = ui_settings_isopen(settings, ui->ppi.title);
+    ui->via.open = ui_settings_isopen(settings, ui->via.title);
+    ui->vdg.open = ui_settings_isopen(settings, ui->vdg.title);
+    ui->audio.open = ui_settings_isopen(settings, ui->audio.title);
+    ui->kbd.open = ui_settings_isopen(settings, ui->kbd.title);
+    ui->memmap.open = ui_settings_isopen(settings, ui->memmap.title);
+    for (int i = 0; i < 4; i++) {
+        ui->memedit[i].open = ui_settings_isopen(settings, ui->memedit[i].title);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui->dasm[i].open = ui_settings_isopen(settings, ui->dasm[i].title);
+    }
+    ui->dbg.ui.open = ui_settings_isopen(settings, ui->dbg.ui.title);
+    ui->dbg.ui.heatmap.open = ui_settings_isopen(settings, ui->dbg.ui.heatmap.title);
+    ui->dbg.ui.history.open = ui_settings_isopen(settings, ui->dbg.ui.history.title);
+    ui->dbg.ui.breakpoints.open = ui_settings_isopen(settings, ui->dbg.ui.breakpoints.title);
+    ui->dbg.ui.stopwatch.open = ui_settings_isopen(settings, ui->dbg.ui.stopwatch.title);
 }
 
 #ifdef __clang__
