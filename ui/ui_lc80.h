@@ -114,6 +114,8 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* desc);
 void ui_lc80_discard(ui_lc80_t* ui);
 void ui_lc80_draw(ui_lc80_t* ui);
 chips_debug_t ui_lc80_get_debug(ui_lc80_t* ui);
+void ui_lc80_save_settings(ui_lc80_t* ui, ui_settings_t* settings);
+void ui_lc80_load_settings(ui_lc80_t* ui, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -726,10 +728,10 @@ static void _ui_lc80_draw_menu(ui_lc80_t* ui) {
         }
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->win.dbg.ui.open);
-            ImGui::MenuItem("Breakpoints", 0, &ui->win.dbg.ui.show_breakpoints);
-            ImGui::MenuItem("Stopwatch", 0, &ui->win.dbg.ui.show_stopwatch);
-            ImGui::MenuItem("Execution History", 0, &ui->win.dbg.ui.show_history);
-            ImGui::MenuItem("Memory Heatmap", 0, &ui->win.dbg.ui.show_heatmap);
+            ImGui::MenuItem("Breakpoints", 0, &ui->win.dbg.ui.breakpoints.open);
+            ImGui::MenuItem("Stopwatch", 0, &ui->win.dbg.ui.stopwatch.open);
+            ImGui::MenuItem("Execution History", 0, &ui->win.dbg.ui.history.open);
+            ImGui::MenuItem("Memory Heatmap", 0, &ui->win.dbg.ui.heatmap.open);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->win.memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->win.memedit[1].open);
@@ -1191,6 +1193,39 @@ chips_debug_t ui_lc80_get_debug(ui_lc80_t* ui) {
     return res;
 }
 
+void ui_lc80_save_settings(ui_lc80_t* ui, ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui_z80_save_settings(&ui->win.cpu, settings);
+    ui_z80pio_save_settings(&ui->win.pio_sys, settings);
+    ui_z80pio_save_settings(&ui->win.pio_usr, settings);
+    ui_z80ctc_save_settings(&ui->win.ctc, settings);
+    ui_audio_save_settings(&ui->win.audio, settings);
+    ui_kbd_save_settings(&ui->win.kbd, settings);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_save_settings(&ui->win.memedit[i], settings);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_dasm_save_settings(&ui->win.dasm[i], settings);
+    }
+    ui_dbg_save_settings(&ui->win.dbg, settings);
+}
+
+void ui_lc80_load_settings(ui_lc80_t* ui, const ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui_z80_load_settings(&ui->win.cpu, settings);
+    ui_z80pio_load_settings(&ui->win.pio_sys, settings);
+    ui_z80pio_load_settings(&ui->win.pio_usr, settings);
+    ui_z80ctc_load_settings(&ui->win.ctc, settings);
+    ui_audio_load_settings(&ui->win.audio, settings);
+    ui_kbd_load_settings(&ui->win.kbd, settings);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_load_settings(&ui->win.memedit[i], settings);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_dasm_load_settings(&ui->win.dasm[i], settings);
+    }
+    ui_dbg_load_settings(&ui->win.dbg, settings);
+}
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
