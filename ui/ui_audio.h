@@ -20,6 +20,7 @@
 
     Include the following headers before including the *implementation*:
         - imgui.h
+        - ui_settings.h
 
     All string data provided to the ui_audio_init() must remain alive until
     until ui_audio_discard() is called!
@@ -75,6 +76,8 @@ typedef struct {
 void ui_audio_init(ui_audio_t* win, const ui_audio_desc_t* desc);
 void ui_audio_discard(ui_audio_t* win);
 void ui_audio_draw(ui_audio_t* win, int sample_pos);
+void ui_audio_save_settings(ui_audio_t* win, ui_settings_t* settings);
+void ui_audio_load_settings(ui_audio_t* ui, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -135,5 +138,15 @@ void ui_audio_draw(ui_audio_t* win, int sample_pos) {
         ImGui::GetWindowDrawList()->AddLine(ImVec2(x, y0), ImVec2(x, y1), win->cursor_color, 3);
     }
     ImGui::End();
+}
+
+void ui_audio_save_settings(ui_audio_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_audio_load_settings(ui_audio_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
 }
 #endif /* CHIPS_UI_IMPL */

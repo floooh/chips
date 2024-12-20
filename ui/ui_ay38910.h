@@ -27,6 +27,7 @@
         - ay38910.h
         - ui_chip.h
         - ui_util.h
+        - ui_settings.h
 
     All string data provided to the ui_ay38910_init() must remain alive until
     until ui_ay38910_discard() is called!
@@ -81,6 +82,8 @@ typedef struct {
 void ui_ay38910_init(ui_ay38910_t* win, const ui_ay38910_desc_t* desc);
 void ui_ay38910_discard(ui_ay38910_t* win);
 void ui_ay38910_draw(ui_ay38910_t* win);
+void ui_ay38910_save_settings(ui_ay38910_t* win, ui_settings_t* settings);
+void ui_ay38910_load_settings(ui_ay38910_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -217,4 +220,15 @@ void ui_ay38910_draw(ui_ay38910_t* win) {
     }
     ImGui::End();
 }
+
+void ui_ay38910_save_settings(ui_ay38910_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_ay38910_load_settings(ui_ay38910_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
+
 #endif /* CHIPS_UI_IMPL */

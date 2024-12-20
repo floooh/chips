@@ -26,6 +26,7 @@
         - i8255.h
         - ui_chip.h
         - ui_util.h
+        - ui_settings.h
 
     All string data provided to the ui_i8255_init() must remain alive until
     until ui_i8255_discard() is called!
@@ -80,6 +81,8 @@ typedef struct {
 void ui_i8255_init(ui_i8255_t* win, const ui_i8255_desc_t* desc);
 void ui_i8255_discard(ui_i8255_t* win);
 void ui_i8255_draw(ui_i8255_t* win);
+void ui_i8255_save_settings(ui_i8255_t* win, ui_settings_t* settings);
+void ui_i8255_load_settings(ui_i8255_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -168,4 +171,15 @@ void ui_i8255_draw(ui_i8255_t* win) {
     }
     ImGui::End();
 }
+
+void ui_i8255_save_settings(ui_i8255_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_i8255_load_settings(ui_i8255_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
+
 #endif

@@ -513,37 +513,37 @@ chips_debug_t ui_atom_get_debug(ui_atom_t* ui) {
 }
 
 void ui_atom_save_settings(ui_atom_t* ui, ui_settings_t* settings) {
-    CHIPS_ASSERT(ui);
-    ui_settings_add(settings, ui->cpu.title, ui->cpu.open);
-    ui_settings_add(settings, ui->ppi.title, ui->ppi.open);
-    ui_settings_add(settings, ui->via.title, ui->via.open);
-    ui_settings_add(settings, ui->vdg.title, ui->vdg.open);
-    ui_settings_add(settings, ui->audio.title, ui->audio.open);
-    ui_settings_add(settings, ui->kbd.title, ui->kbd.open);
-    ui_settings_add(settings, ui->memmap.title, ui->memmap.open);
+    CHIPS_ASSERT(ui && settings);
+    ui_m6502_save_settings(&ui->cpu, settings);
+    ui_i8255_save_settings(&ui->ppi, settings);
+    ui_m6522_save_settings(&ui->via, settings);
+    ui_m6847_save_settings(&ui->vdg, settings);
+    ui_audio_save_settings(&ui->audio, settings);
+    ui_kbd_save_settings(&ui->kbd, settings);
+    ui_memmap_save_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
-        ui_settings_add(settings, ui->memedit[i].title, ui->memedit[i].open);
+        ui_memedit_save_settings(&ui->memedit[i], settings);
     }
     for (int i = 0; i < 4; i++) {
-        ui_settings_add(settings, ui->dasm[i].title, ui->dasm[i].open);
+        ui_dasm_save_settings(&ui->dasm[i], settings);
     }
     ui_dbg_save_settings(&ui->dbg, settings);
 }
 
 void ui_atom_load_settings(ui_atom_t* ui, const ui_settings_t* settings) {
     CHIPS_ASSERT(ui && settings);
-    ui->cpu.open = ui_settings_isopen(settings, ui->cpu.title);
-    ui->ppi.open = ui_settings_isopen(settings, ui->ppi.title);
-    ui->via.open = ui_settings_isopen(settings, ui->via.title);
-    ui->vdg.open = ui_settings_isopen(settings, ui->vdg.title);
-    ui->audio.open = ui_settings_isopen(settings, ui->audio.title);
-    ui->kbd.open = ui_settings_isopen(settings, ui->kbd.title);
-    ui->memmap.open = ui_settings_isopen(settings, ui->memmap.title);
+    ui_m6502_load_settings(&ui->cpu, settings);
+    ui_i8255_load_settings(&ui->ppi, settings);
+    ui_m6522_load_settings(&ui->via, settings);
+    ui_m6847_load_settings(&ui->vdg, settings);
+    ui_audio_load_settings(&ui->audio, settings);
+    ui_kbd_load_settings(&ui->kbd, settings);
+    ui_memmap_load_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
-        ui->memedit[i].open = ui_settings_isopen(settings, ui->memedit[i].title);
+        ui_memedit_load_settings(&ui->memedit[i], settings);
     }
     for (int i = 0; i < 4; i++) {
-        ui->dasm[i].open = ui_settings_isopen(settings, ui->dasm[i].title);
+        ui_dasm_load_settings(&ui->dasm[i], settings);
     }
     ui_dbg_load_settings(&ui->dbg, settings);
 }

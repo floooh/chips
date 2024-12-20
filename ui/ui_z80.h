@@ -27,6 +27,7 @@
         - z80.h
         - ui_chip.h
         - ui_util.h
+        - ui_settings.h
 
     All strings provided to ui_z80_init() must remain alive until
     ui_z80_discard() is called!
@@ -81,6 +82,8 @@ typedef struct {
 void ui_z80_init(ui_z80_t* win, const ui_z80_desc_t* desc);
 void ui_z80_discard(ui_z80_t* win);
 void ui_z80_draw(ui_z80_t* win);
+void ui_z80_save_settings(ui_z80_t* win, ui_settings_t* settings);
+void ui_z80_load_settings(ui_z80_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -167,5 +170,15 @@ void ui_z80_draw(ui_z80_t* win) {
         ImGui::EndChild();
     }
     ImGui::End();
+}
+
+void ui_z80_save_settings(ui_z80_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_z80_load_settings(ui_z80_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
 }
 #endif /* CHIPS_UI_IMPL */

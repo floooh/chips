@@ -27,6 +27,7 @@
         - m6522.h
         - ui_chip.h
         - ui_util.h
+        - ui_settings.h
 
     All strings provided to ui_m6522_init() must remain alive until
     ui_m6522_discard() is called!
@@ -83,6 +84,8 @@ typedef struct ui_m6522_t {
 void ui_m6522_init(ui_m6522_t* win, const ui_m6522_desc_t* desc);
 void ui_m6522_discard(ui_m6522_t* win);
 void ui_m6522_draw(ui_m6522_t* win);
+void ui_m6522_save_settings(ui_m6522_t* win, ui_settings_t* settings);
+void ui_m6522_load_settings(ui_m6522_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -257,4 +260,15 @@ void ui_m6522_draw(ui_m6522_t* win) {
     }
     ImGui::End();
 }
+
+void ui_m6522_save_settings(ui_m6522_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_m6522_load_settings(ui_m6522_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
+
 #endif /* CHIPS_UI_IMPL */

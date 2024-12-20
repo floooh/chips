@@ -23,6 +23,7 @@
 
         - imgui.h
         - ui_util.h
+        - ui_settings.h
 
     All strings provided to ui_memmap_init() must remain alive until
     ui_memmap_discard() is called!
@@ -94,6 +95,8 @@ typedef struct {
 void ui_memmap_init(ui_memmap_t* win, const ui_memmap_desc_t* desc);
 void ui_memmap_discard(ui_memmap_t* win);
 void ui_memmap_draw(ui_memmap_t* win);
+void ui_memmap_save_settings(ui_memmap_t* win, ui_settings_t* settings);
+void ui_memmap_load_settings(ui_memmap_t* ui, const ui_settings_t* settings);
 
 /* reset/clear memory map description */
 void ui_memmap_reset(ui_memmap_t* win);
@@ -249,4 +252,13 @@ void ui_memmap_region(ui_memmap_t* win, const char* name, uint16_t addr, int len
     reg.on = on;
 }
 
+void ui_memmap_save_settings(ui_memmap_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_memmap_load_settings(ui_memmap_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
 #endif /* CHIPS_UI_IMPL */
