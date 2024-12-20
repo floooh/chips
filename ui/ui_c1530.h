@@ -22,6 +22,7 @@
     ui_c1530.h both for the declaration and implementation:
 
     - c1530.h
+    - ui_settings.h
 
     ## zlib/libpng license
 
@@ -69,6 +70,8 @@ typedef struct {
 void ui_c1530_init(ui_c1530_t* win, const ui_c1530_desc_t* desc);
 void ui_c1530_discard(ui_c1530_t* win);
 void ui_c1530_draw(ui_c1530_t* win);
+void ui_c1530_save_settings(ui_c1530_t* win, ui_settings_t* settings);
+void ui_c1530_load_settings(ui_c1530_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -133,4 +136,13 @@ void ui_c1530_draw(ui_c1530_t* win) {
     ImGui::End();
 }
 
+void ui_c1530_save_settings(ui_c1530_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_c1530_load_settings(ui_c1530_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
 #endif /* CHIPS_UI_IMPL */

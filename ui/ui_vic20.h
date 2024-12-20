@@ -28,6 +28,7 @@
     - ui_c1530.h
     - ui_chip.h
     - ui_util.h
+    - ui_settings.h
     - ui_m6502.h
     - ui_m6522.h
     - ui_m6561.h
@@ -91,13 +92,18 @@ typedef struct {
     ui_dasm_t dasm[4];
     ui_dbg_t dbg;
     ui_snapshot_t snapshot;
-    bool system_window_open;
+    struct {
+        const char* title;
+        bool open;
+    } system;
 } ui_vic20_t;
 
 void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* desc);
 void ui_vic20_discard(ui_vic20_t* ui);
 void ui_vic20_draw(ui_vic20_t* ui);
 chips_debug_t ui_vic20_get_debug(ui_vic20_t* ui);
+void ui_vic20_save_settings(ui_vic20_t* ui, ui_settings_t* settings);
+void ui_vic20_load_settings(ui_vic20_t* ui, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -147,7 +153,7 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Hardware")) {
-            ImGui::MenuItem("System", 0, &ui->system_window_open);
+            ImGui::MenuItem("System", 0, &ui->system.open);
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
@@ -162,10 +168,10 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui) {
         }
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
-            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
-            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
-            ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
-            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
+            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.breakpoints.open);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.stopwatch.open);
+            ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.history.open);
+            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.heatmap.open);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
@@ -392,6 +398,7 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->vic20);
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->vic20 = ui_desc->vic20;
+    ui->system.title = "VIC-20 System";
     ui->boot_cb = ui_desc->boot_cb;
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
@@ -548,12 +555,12 @@ void ui_vic20_discard(ui_vic20_t* ui) {
 }
 
 void ui_vic20_draw_system(ui_vic20_t* ui) {
-    if (!ui->system_window_open) {
+    if (!ui->system.open) {
         return;
     }
     vic20_t* sys = ui->vic20;
     ImGui::SetNextWindowSize({ 200, 250}, ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("VIC-20 System", &ui->system_window_open)) {
+    if (ImGui::Begin(ui->system.title, &ui->system.open)) {
         const char* mem_config = "???";
         switch (sys->mem_config) {
             case VIC20_MEMCONFIG_STANDARD:  mem_config = "standard"; break;
@@ -611,6 +618,46 @@ chips_debug_t ui_vic20_get_debug(ui_vic20_t* ui) {
     res.callback.user_data = &ui->dbg;
     res.stopped = &ui->dbg.dbg.stopped;
     return res;
+}
+
+void ui_vic20_save_settings(ui_vic20_t* ui, ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui_c1530_save_settings(&ui->c1530, settings);
+    ui_m6502_save_settings(&ui->cpu, settings);
+    for (int i = 0; i < 2; i++) {
+        ui_m6522_save_settings(&ui->via[i], settings);
+    }
+    ui_m6561_save_settings(&ui->vic, settings);
+    ui_audio_save_settings(&ui->audio, settings);
+    ui_kbd_save_settings(&ui->kbd, settings);
+    ui_memmap_save_settings(&ui->memmap, settings);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_save_settings(&ui->memedit[i], settings);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_dasm_save_settings(&ui->dasm[i], settings);
+    }
+    ui_dbg_save_settings(&ui->dbg, settings);
+}
+
+void ui_vic20_load_settings(ui_vic20_t* ui, const ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui_c1530_load_settings(&ui->c1530, settings);
+    ui_m6502_load_settings(&ui->cpu, settings);
+    for (int i = 0; i < 2; i++) {
+        ui_m6522_load_settings(&ui->via[i], settings);
+    }
+    ui_m6561_load_settings(&ui->vic, settings);
+    ui_audio_load_settings(&ui->audio, settings);
+    ui_kbd_load_settings(&ui->kbd, settings);
+    ui_memmap_load_settings(&ui->memmap, settings);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_load_settings(&ui->memedit[i], settings);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_dasm_load_settings(&ui->dasm[i], settings);
+    }
+    ui_dbg_load_settings(&ui->dbg, settings);
 }
 
 #ifdef __clang__
