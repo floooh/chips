@@ -21,6 +21,7 @@
     Include the following headers before the including the *declaration*:
         - m6569.h
         - ui_chip.h
+        - ui_settings.h
 
     Include the following headers before including the *implementation*:
         - imgui.h
@@ -81,6 +82,8 @@ typedef struct ui_m6569_t {
 void ui_m6569_init(ui_m6569_t* win, const ui_m6569_desc_t* desc);
 void ui_m6569_discard(ui_m6569_t* win);
 void ui_m6569_draw(ui_m6569_t* win);
+void ui_m6569_save_settings(ui_m6569_t* win, ui_settings_t* settings);
+void ui_m6569_load_settings(ui_m6569_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -315,4 +318,13 @@ void ui_m6569_draw(ui_m6569_t* win) {
     ImGui::End();
 }
 
+void ui_m6569_save_settings(ui_m6569_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_m6569_load_settings(ui_m6569_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
 #endif /* CHIPS_UI_IMPL */

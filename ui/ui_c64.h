@@ -27,6 +27,7 @@
     - mem.h
     - ui_chip.h
     - ui_util.h
+    - ui_settings.h
     - ui_m6502.h
     - ui_m6526.h
     - ui_m6569.h
@@ -100,6 +101,8 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* desc);
 void ui_c64_discard(ui_c64_t* ui);
 void ui_c64_draw(ui_c64_t* ui);
 chips_debug_t ui_c64_get_debug(ui_c64_t* ui);
+void ui_c64_save_settings(ui_c64_t* ui, ui_settings_t* settings);
+void ui_c64_load_settings(ui_c64_t* ui, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -172,10 +175,10 @@ static void _ui_c64_draw_menu(ui_c64_t* ui) {
         }
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
-            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
-            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
-            ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
-            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
+            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.breakpoints.open);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.stopwatch.open);
+            ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.history.open);
+            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.heatmap.open);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
@@ -193,10 +196,10 @@ static void _ui_c64_draw_menu(ui_c64_t* ui) {
             if (ui->c64->c1541.valid) {
                 if (ImGui::BeginMenu("VC-1541 (Floppy Drive)")) {
                     ImGui::MenuItem("CPU Debugger", 0, &ui->c1541_dbg.ui.open);
-                    ImGui::MenuItem("Stopwatch", 0, &ui->c1541_dbg.ui.show_stopwatch);
-                    ImGui::MenuItem("Breakpoints", 0, &ui->c1541_dbg.ui.show_breakpoints);
-                    ImGui::MenuItem("Execution History", 0, &ui->c1541_dbg.ui.show_history);
-                    ImGui::MenuItem("Memory Heatmap", 0, &ui->c1541_dbg.ui.show_heatmap);
+                    ImGui::MenuItem("Stopwatch", 0, &ui->c1541_dbg.ui.stopwatch.open);
+                    ImGui::MenuItem("Breakpoints", 0, &ui->c1541_dbg.ui.breakpoints.open);
+                    ImGui::MenuItem("Execution History", 0, &ui->c1541_dbg.ui.history.open);
+                    ImGui::MenuItem("Memory Heatmap", 0, &ui->c1541_dbg.ui.heatmap.open);
                     ImGui::EndMenu();
                 }
             }
@@ -766,6 +769,49 @@ chips_debug_t ui_c64_get_debug(ui_c64_t* ui) {
     return res;
 }
 
+void ui_c64_save_settings(ui_c64_t* ui, ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui_m6502_save_settings(&ui->cpu, settings);
+    ui_m6502_save_settings(&ui->c1541_cpu, settings);
+    for (int i = 0; i < 2; i++) {
+        ui_m6526_save_settings(&ui->cia[i], settings);
+    }
+    ui_m6581_save_settings(&ui->sid, settings);
+    ui_m6569_save_settings(&ui->vic, settings);
+    ui_audio_save_settings(&ui->audio, settings);
+    ui_kbd_save_settings(&ui->kbd, settings);
+    ui_memmap_save_settings(&ui->memmap, settings);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_save_settings(&ui->memedit[i], settings);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_dasm_save_settings(&ui->dasm[i], settings);
+    }
+    ui_dbg_save_settings(&ui->dbg, settings);
+    ui_dbg_save_settings(&ui->c1541_dbg, settings);
+}
+
+void ui_c64_load_settings(ui_c64_t* ui, const ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui_m6502_load_settings(&ui->cpu, settings);
+    ui_m6502_load_settings(&ui->c1541_cpu, settings);
+    for (int i = 0; i < 2; i++) {
+        ui_m6526_load_settings(&ui->cia[i], settings);
+    }
+    ui_m6581_load_settings(&ui->sid, settings);
+    ui_m6569_load_settings(&ui->vic, settings);
+    ui_audio_load_settings(&ui->audio, settings);
+    ui_kbd_load_settings(&ui->kbd, settings);
+    ui_memmap_load_settings(&ui->memmap, settings);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_load_settings(&ui->memedit[i], settings);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_dasm_load_settings(&ui->dasm[i], settings);
+    }
+    ui_dbg_load_settings(&ui->dbg, settings);
+    ui_dbg_load_settings(&ui->c1541_dbg, settings);
+}
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
