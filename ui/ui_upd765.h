@@ -21,6 +21,7 @@
     Include the following headers before the including the *declaration*:
         - upd765.h
         - ui_chip.h
+        - ui_settings.h
 
     Include the following headers before including the *implementation*:
         - imgui.h
@@ -81,6 +82,8 @@ typedef struct ui_upd765_t {
 void ui_upd765_init(ui_upd765_t* win, const ui_upd765_desc_t* desc);
 void ui_upd765_discard(ui_upd765_t* win);
 void ui_upd765_draw(ui_upd765_t* win);
+void ui_upd765_save_settings(ui_upd765_t* win, ui_settings_t* settings);
+void ui_upd765_load_settings(ui_upd765_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -248,5 +251,15 @@ void ui_upd765_draw(ui_upd765_t* win) {
         ImGui::EndChild();
     }
     ImGui::End();
+}
+
+void ui_upd765_save_settings(ui_upd765_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_upd765_load_settings(ui_upd765_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
 }
 #endif /* CHIPS_UI_IMPL */

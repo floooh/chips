@@ -21,6 +21,7 @@
     Include the following headers before the including the *declaration*:
         - am40010.h
         - ui_chip.h
+        - ui_settings.h
 
     Include the following headers before including the *implementation*:
         - imgui.h
@@ -81,6 +82,8 @@ typedef struct ui_am40010_t {
 void ui_am40010_init(ui_am40010_t* win, ui_am40010_desc_t* desc);
 void ui_am40010_discard(ui_am40010_t* win);
 void ui_am40010_draw(ui_am40010_t* win);
+void ui_am40010_save_settings(ui_am40010_t* win, ui_settings_t* settings);
+void ui_am40010_load_settings(ui_am40010_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -232,4 +235,13 @@ void ui_am40010_draw(ui_am40010_t* win) {
     ImGui::End();
 }
 
+void ui_am40010_save_settings(ui_am40010_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_am40010_load_settings(ui_am40010_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
 #endif /* CHIPS_UI_IMPL */

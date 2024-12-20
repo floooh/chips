@@ -21,6 +21,7 @@
     Include the following headers before the including the *declaration*:
         - fdd.h
         - ui_chip.h
+        - ui_settings.h
 
     Include the following headers before including the *implementation*:
         - imgui.h
@@ -78,6 +79,8 @@ typedef struct ui_fdd_t {
 void ui_fdd_init(ui_fdd_t* win, ui_fdd_desc_t* desc);
 void ui_fdd_discard(ui_fdd_t* win);
 void ui_fdd_draw(ui_fdd_t* win);
+void ui_fdd_save_settings(ui_fdd_t* win, ui_settings_t* settings);
+void ui_fdd_load_settings(ui_fdd_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -193,5 +196,15 @@ void ui_fdd_draw(ui_fdd_t* win) {
         }
     }
     ImGui::End();
+}
+
+void ui_fdd_save_settings(ui_fdd_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_fdd_load_settings(ui_fdd_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
 }
 #endif /* CHIPS_UI_IMPL */

@@ -25,6 +25,7 @@
     - mem.h
     - ui_chip.h
     - ui_util.h
+    - ui_settings.h
     - ui_z80.h
     - ui_i8255.h
     - ui_mc6845.h
@@ -102,6 +103,8 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc);
 void ui_cpc_discard(ui_cpc_t* ui);
 void ui_cpc_draw(ui_cpc_t* ui);
 chips_debug_t ui_cpc_get_debug(ui_cpc_t* ui);
+void ui_cpc_save_settings(ui_cpc_t* ui, ui_settings_t* settings);
+void ui_cpc_load_settings(ui_cpc_t* ui, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -167,10 +170,10 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui) {
         }
         if (ImGui::BeginMenu("Debug")) {
             ImGui::MenuItem("CPU Debugger", 0, &ui->dbg.ui.open);
-            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.show_breakpoints);
-            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.show_stopwatch);
-            ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.show_history);
-            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.show_heatmap);
+            ImGui::MenuItem("Breakpoints", 0, &ui->dbg.ui.breakpoints.open);
+            ImGui::MenuItem("Stopwatch", 0, &ui->dbg.ui.stopwatch.open);
+            ImGui::MenuItem("Execution History", 0, &ui->dbg.ui.history.open);
+            ImGui::MenuItem("Memory Heatmap", 0, &ui->dbg.ui.heatmap.open);
             if (ImGui::BeginMenu("Memory Editor")) {
                 ImGui::MenuItem("Window #1", 0, &ui->memedit[0].open);
                 ImGui::MenuItem("Window #2", 0, &ui->memedit[1].open);
@@ -787,6 +790,47 @@ chips_debug_t ui_cpc_get_debug(ui_cpc_t* ui) {
     return res;
 }
 
+void ui_cpc_save_settings(ui_cpc_t* ui, ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui_z80_save_settings(&ui->cpu, settings);
+    ui_ay38910_save_settings(&ui->psg, settings);
+    ui_mc6845_save_settings(&ui->vdc, settings);
+    ui_am40010_save_settings(&ui->ga, settings);
+    ui_i8255_save_settings(&ui->ppi, settings);
+    ui_upd765_save_settings(&ui->upd, settings);
+    ui_audio_save_settings(&ui->audio, settings);
+    ui_fdd_save_settings(&ui->fdd, settings);
+    ui_kbd_save_settings(&ui->kbd, settings);
+    ui_memmap_save_settings(&ui->memmap, settings);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_save_settings(&ui->memedit[i], settings);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_dasm_save_settings(&ui->dasm[i], settings);
+    }
+    ui_dbg_save_settings(&ui->dbg, settings);
+}
+
+void ui_cpc_load_settings(ui_cpc_t* ui, const ui_settings_t* settings) {
+    CHIPS_ASSERT(ui && settings);
+    ui_z80_load_settings(&ui->cpu, settings);
+    ui_ay38910_load_settings(&ui->psg, settings);
+    ui_mc6845_load_settings(&ui->vdc, settings);
+    ui_am40010_load_settings(&ui->ga, settings);
+    ui_i8255_load_settings(&ui->ppi, settings);
+    ui_upd765_load_settings(&ui->upd, settings);
+    ui_audio_load_settings(&ui->audio, settings);
+    ui_fdd_load_settings(&ui->fdd, settings);
+    ui_kbd_load_settings(&ui->kbd, settings);
+    ui_memmap_load_settings(&ui->memmap, settings);
+    for (int i = 0; i < 4; i++) {
+        ui_memedit_load_settings(&ui->memedit[i], settings);
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_dasm_load_settings(&ui->dasm[i], settings);
+    }
+    ui_dbg_load_settings(&ui->dbg, settings);
+}
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
