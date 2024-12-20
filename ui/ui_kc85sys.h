@@ -27,6 +27,7 @@
 
     Include the following headers before the including the *declaration*:
         - kc85.h
+        - ui_settings.h
 
     Include the following headers before including the *implementation*:
         - imgui.h
@@ -88,6 +89,8 @@ typedef struct {
 void ui_kc85sys_init(ui_kc85sys_t* win, const ui_kc85sys_desc_t* desc);
 void ui_kc85sys_discard(ui_kc85sys_t* win);
 void ui_kc85sys_draw(ui_kc85sys_t* win);
+void ui_kc85sys_save_settings(ui_kc85sys_t* win, ui_settings_t* settings);
+void ui_kc85sys_load_settings(ui_kc85sys_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -189,4 +192,15 @@ void ui_kc85sys_draw(ui_kc85sys_t* win) {
     }
     ImGui::End();
 }
+
+void ui_kc85sys_save_settings(ui_kc85sys_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_kc85sys_load_settings(ui_kc85sys_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
+
 #endif /* CHIPS_UI_IMPL */

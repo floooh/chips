@@ -21,6 +21,7 @@
     Include the following headers before the including the *declaration*:
         - z80pio.h
         - ui_chip.h
+        - ui_settings.h
 
     Include the following headers before including the *implementation*:
         - imgui.h
@@ -81,6 +82,12 @@ typedef struct {
 void ui_z80pio_init(ui_z80pio_t* win, const ui_z80pio_desc_t* desc);
 void ui_z80pio_discard(ui_z80pio_t* win);
 void ui_z80pio_draw(ui_z80pio_t* win);
+void ui_z80pio_save_settings(ui_z80pio_t* win, ui_settings_t* settings);
+void ui_z80pio_load_settings(ui_z80pio_t* win, const ui_settings_t* settings);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 /*-- IMPLEMENTATION (include in C++ source) ----------------------------------*/
 #ifdef CHIPS_UI_IMPL
@@ -197,5 +204,13 @@ void ui_z80pio_draw(ui_z80pio_t* win) {
     ImGui::End();
 }
 
-} /* extern "C" */
-#endif
+void ui_z80pio_save_settings(ui_z80pio_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_z80pio_load_settings(ui_z80pio_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
+#endif // CHIPS_UI_IMPL

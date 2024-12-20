@@ -21,6 +21,7 @@
     Include the following headers before the including the *declaration*:
         - z80ctc.h
         - ui_chip.h
+        - ui_settings.h
 
     Include the following headers before including the *implementation*:
         - imgui.h
@@ -81,6 +82,8 @@ typedef struct {
 void ui_z80ctc_init(ui_z80ctc_t* win, const ui_z80ctc_desc_t* desc);
 void ui_z80ctc_discard(ui_z80ctc_t* win);
 void ui_z80ctc_draw(ui_z80ctc_t* win);
+void ui_z80ctc_save_settings(ui_z80ctc_t* win, ui_settings_t* settings);
+void ui_z80ctc_load_settings(ui_z80ctc_t* win, const ui_settings_t* settings);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -203,4 +206,13 @@ void ui_z80ctc_draw(ui_z80ctc_t* win) {
     ImGui::End();
 }
 
+void ui_z80ctc_save_settings(ui_z80ctc_t* win, ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    ui_settings_add(settings, win->title, win->open);
+}
+
+void ui_z80ctc_load_settings(ui_z80ctc_t* win, const ui_settings_t* settings) {
+    CHIPS_ASSERT(win && settings);
+    win->open = ui_settings_isopen(settings, win->title);
+}
 #endif /* CHIPS_UI_IMPL */
