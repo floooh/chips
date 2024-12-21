@@ -1514,82 +1514,84 @@ void _ui_dbg_draw_regs(ui_dbg_t* win) {
         return;
     }
     #if defined(UI_DBG_USE_Z80)
-        const float h = 4*ImGui::GetFrameHeightWithSpacing();
-        ImGui::BeginChild("##regs", ImVec2(0, h), false);
         z80_t* c = win->dbg.z80;
-        ImGui::Columns(5, "##reg_columns", false);
-        for (int i = 0; i < 5; i++) {
-            ImGui::SetColumnWidth(i, 72);
+        if (ImGui::BeginTable("##reg_columns", 5)) {
+            for (int i = 0; i < 5; i++) {
+                ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 64);
+            }
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            c->af  = ui_util_input_u16("AF", c->af); ImGui::TableNextColumn();
+            c->bc  = ui_util_input_u16("BC", c->bc); ImGui::TableNextColumn();
+            c->de  = ui_util_input_u16("DE", c->de); ImGui::TableNextColumn();
+            c->hl  = ui_util_input_u16("HL", c->hl); ImGui::TableNextColumn();
+            c->wz  = ui_util_input_u16("WZ", c->wz); ImGui::TableNextColumn();
+            c->af2 = ui_util_input_u16("AF'", c->af2); ImGui::TableNextColumn();
+            c->bc2 = ui_util_input_u16("BC'", c->bc2); ImGui::TableNextColumn();
+            c->de2 = ui_util_input_u16("DE'", c->de2); ImGui::TableNextColumn();
+            c->hl2 = ui_util_input_u16("HL'", c->hl2); ImGui::TableNextColumn();
+            c->i   = ui_util_input_u8("I", c->i); ImGui::TableNextColumn();
+            c->ix  = ui_util_input_u16("IX", c->ix); ImGui::TableNextColumn();
+            c->iy  = ui_util_input_u16("IY", c->iy); ImGui::TableNextColumn();
+            c->sp  = ui_util_input_u16("SP", c->sp); ImGui::TableNextColumn();
+            c->pc  = ui_util_input_u16("PC", c->pc); ImGui::TableNextColumn();
+            c->r   = ui_util_input_u8("R", c->r); ImGui::TableNextColumn();
+            c->im  = ui_util_input_u8("IM", c->im); ImGui::SameLine(); ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            if (c->iff1) { ImGui::Text("IFF1"); }
+            else         { ImGui::TextDisabled("IFF1"); }
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            if (c->iff2) { ImGui::Text("IFF2"); }
+            else         { ImGui::TextDisabled("IFF2"); }
+            ImGui::TableNextColumn();
+            char f_str[9] = {
+                (c->f & Z80_SF) ? 'S':'-',
+                (c->f & Z80_ZF) ? 'Z':'-',
+                (c->f & Z80_YF) ? 'Y':'-',
+                (c->f & Z80_HF) ? 'H':'-',
+                (c->f & Z80_XF) ? 'X':'-',
+                (c->f & Z80_VF) ? 'V':'-',
+                (c->f & Z80_NF) ? 'N':'-',
+                (c->f & Z80_CF) ? 'C':'-',
+                0,
+            };
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("%s", f_str);
+            ImGui::EndTable();
         }
-        c->af  = ui_util_input_u16("AF", c->af); ImGui::NextColumn();
-        c->bc  = ui_util_input_u16("BC", c->bc); ImGui::NextColumn();
-        c->de  = ui_util_input_u16("DE", c->de); ImGui::NextColumn();
-        c->hl  = ui_util_input_u16("HL", c->hl); ImGui::NextColumn();
-        c->wz  = ui_util_input_u16("WZ", c->wz); ImGui::NextColumn();
-        c->af2 = ui_util_input_u16("AF'", c->af2); ImGui::NextColumn();
-        c->bc2 = ui_util_input_u16("BC'", c->bc2); ImGui::NextColumn();
-        c->de2 = ui_util_input_u16("DE'", c->de2); ImGui::NextColumn();
-        c->hl2 = ui_util_input_u16("HL'", c->hl2); ImGui::NextColumn();
-        c->i   = ui_util_input_u8("I", c->i); ImGui::NextColumn();
-        c->ix  = ui_util_input_u16("IX", c->ix); ImGui::NextColumn();
-        c->iy  = ui_util_input_u16("IY", c->iy); ImGui::NextColumn();
-        c->sp  = ui_util_input_u16("SP", c->sp); ImGui::NextColumn();
-        c->pc  = ui_util_input_u16("PC", c->pc); ImGui::NextColumn();
-        c->r   = ui_util_input_u8("R", c->r); ImGui::NextColumn();
-        c->im  = ui_util_input_u8("IM", c->im); ImGui::SameLine(); ImGui::NextColumn();
-        ImGui::AlignTextToFramePadding();
-        if (c->iff1) { ImGui::Text("IFF1"); }
-        else         { ImGui::TextDisabled("IFF1"); }
-        ImGui::NextColumn();
-        ImGui::AlignTextToFramePadding();
-        if (c->iff2) { ImGui::Text("IFF2"); }
-        else         { ImGui::TextDisabled("IFF2"); }
-        ImGui::NextColumn();
-        char f_str[9] = {
-            (c->f & Z80_SF) ? 'S':'-',
-            (c->f & Z80_ZF) ? 'Z':'-',
-            (c->f & Z80_YF) ? 'Y':'-',
-            (c->f & Z80_HF) ? 'H':'-',
-            (c->f & Z80_XF) ? 'X':'-',
-            (c->f & Z80_VF) ? 'V':'-',
-            (c->f & Z80_NF) ? 'N':'-',
-            (c->f & Z80_CF) ? 'C':'-',
-            0,
-        };
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("%s", f_str);
-        ImGui::EndChild();
     #elif defined(UI_DBG_USE_M6502)
-        const float h = 1*ImGui::GetFrameHeightWithSpacing();
-        ImGui::BeginChild("##regs", ImVec2(0, h), false);
         m6502_t* c = win->dbg.m6502;
-        ImGui::Columns(7, "##reg_columns", false);
-        for (int i = 0; i < 5; i++) {
-            ImGui::SetColumnWidth(i, 44);
+        if (ImGui::BeginTable("##reg_columns", 7)) {
+            for (int i = 0; i < 5; i++) {
+                ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 36);
+            }
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 64);
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 72);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            m6502_set_a(c, ui_util_input_u8("A", m6502_a(c))); ImGui::TableNextColumn();
+            m6502_set_x(c, ui_util_input_u8("X", m6502_x(c))); ImGui::TableNextColumn();
+            m6502_set_y(c, ui_util_input_u8("Y", m6502_y(c))); ImGui::TableNextColumn();
+            m6502_set_s(c, ui_util_input_u8("S", m6502_s(c))); ImGui::TableNextColumn();
+            m6502_set_p(c, ui_util_input_u8("P", m6502_p(c))); ImGui::TableNextColumn();
+            m6502_set_pc(c, ui_util_input_u16("PC", m6502_pc(c))); ImGui::TableNextColumn();
+            const uint8_t p = m6502_p(c);
+            char p_str[9] = {
+                (p & M6502_NF) ? 'N':'-',
+                (p & M6502_VF) ? 'V':'-',
+                (p & M6502_XF) ? 'X':'-',
+                (p & M6502_BF) ? 'B':'-',
+                (p & M6502_DF) ? 'D':'-',
+                (p & M6502_IF) ? 'I':'-',
+                (p & M6502_ZF) ? 'Z':'-',
+                (p & M6502_CF) ? 'C':'-',
+                0,
+            };
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("%s", p_str);
+            ImGui::EndTable();
         }
-        ImGui::SetColumnWidth(5, 64);
-        ImGui::SetColumnWidth(6, 72);
-        m6502_set_a(c, ui_util_input_u8("A", m6502_a(c))); ImGui::NextColumn();
-        m6502_set_x(c, ui_util_input_u8("X", m6502_x(c))); ImGui::NextColumn();
-        m6502_set_y(c, ui_util_input_u8("Y", m6502_y(c))); ImGui::NextColumn();
-        m6502_set_s(c, ui_util_input_u8("S", m6502_s(c))); ImGui::NextColumn();
-        m6502_set_p(c, ui_util_input_u8("P", m6502_p(c))); ImGui::NextColumn();
-        m6502_set_pc(c, ui_util_input_u16("PC", m6502_pc(c))); ImGui::NextColumn();
-        const uint8_t p = m6502_p(c);
-        char p_str[9] = {
-            (p & M6502_NF) ? 'N':'-',
-            (p & M6502_VF) ? 'V':'-',
-            (p & M6502_XF) ? 'X':'-',
-            (p & M6502_BF) ? 'B':'-',
-            (p & M6502_DF) ? 'D':'-',
-            (p & M6502_IF) ? 'I':'-',
-            (p & M6502_ZF) ? 'Z':'-',
-            (p & M6502_CF) ? 'C':'-',
-            0,
-        };
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("%s", p_str);
-        ImGui::EndChild();
     #endif
     ImGui::Separator();
 }
