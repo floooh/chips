@@ -772,7 +772,10 @@ chips_debug_t ui_c64_get_debug(ui_c64_t* ui) {
 void ui_c64_save_settings(ui_c64_t* ui, ui_settings_t* settings) {
     CHIPS_ASSERT(ui && settings);
     ui_m6502_save_settings(&ui->cpu, settings);
-    ui_m6502_save_settings(&ui->c1541_cpu, settings);
+    if (ui->c64->c1541.valid) {
+        ui_m6502_save_settings(&ui->c1541_cpu, settings);
+        ui_dbg_save_settings(&ui->c1541_dbg, settings);
+    }
     for (int i = 0; i < 2; i++) {
         ui_m6526_save_settings(&ui->cia[i], settings);
     }
@@ -788,13 +791,15 @@ void ui_c64_save_settings(ui_c64_t* ui, ui_settings_t* settings) {
         ui_dasm_save_settings(&ui->dasm[i], settings);
     }
     ui_dbg_save_settings(&ui->dbg, settings);
-    ui_dbg_save_settings(&ui->c1541_dbg, settings);
 }
 
 void ui_c64_load_settings(ui_c64_t* ui, const ui_settings_t* settings) {
     CHIPS_ASSERT(ui && settings);
     ui_m6502_load_settings(&ui->cpu, settings);
-    ui_m6502_load_settings(&ui->c1541_cpu, settings);
+    if (ui->c64->c1541.valid) {
+        ui_m6502_load_settings(&ui->c1541_cpu, settings);
+        ui_dbg_load_settings(&ui->c1541_dbg, settings);
+    }
     for (int i = 0; i < 2; i++) {
         ui_m6526_load_settings(&ui->cia[i], settings);
     }
@@ -810,7 +815,6 @@ void ui_c64_load_settings(ui_c64_t* ui, const ui_settings_t* settings) {
         ui_dasm_load_settings(&ui->dasm[i], settings);
     }
     ui_dbg_load_settings(&ui->dbg, settings);
-    ui_dbg_load_settings(&ui->c1541_dbg, settings);
 }
 #ifdef __clang__
 #pragma clang diagnostic pop

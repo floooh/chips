@@ -622,7 +622,9 @@ chips_debug_t ui_vic20_get_debug(ui_vic20_t* ui) {
 
 void ui_vic20_save_settings(ui_vic20_t* ui, ui_settings_t* settings) {
     CHIPS_ASSERT(ui && settings);
-    ui_c1530_save_settings(&ui->c1530, settings);
+    if (ui->c1530.valid) {
+        ui_c1530_save_settings(&ui->c1530, settings);
+    }
     ui_m6502_save_settings(&ui->cpu, settings);
     for (int i = 0; i < 2; i++) {
         ui_m6522_save_settings(&ui->via[i], settings);
@@ -642,7 +644,9 @@ void ui_vic20_save_settings(ui_vic20_t* ui, ui_settings_t* settings) {
 
 void ui_vic20_load_settings(ui_vic20_t* ui, const ui_settings_t* settings) {
     CHIPS_ASSERT(ui && settings);
-    ui_c1530_load_settings(&ui->c1530, settings);
+    if (ui->c1530.valid) {
+        ui_c1530_load_settings(&ui->c1530, settings);
+    }
     ui_m6502_load_settings(&ui->cpu, settings);
     for (int i = 0; i < 2; i++) {
         ui_m6522_load_settings(&ui->via[i], settings);
