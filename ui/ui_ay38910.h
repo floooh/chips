@@ -110,7 +110,7 @@ void ui_ay38910_init(ui_ay38910_t* win, const ui_ay38910_desc_t* desc) {
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 440 : desc->w);
-    win->init_h = (float) ((desc->h == 0) ? 370 : desc->h);
+    win->init_h = (float) ((desc->h == 0) ? 378 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -123,48 +123,46 @@ void ui_ay38910_discard(ui_ay38910_t* win) {
 
 static void _ui_ay38910_draw_state(ui_ay38910_t* win) {
     ay38910_t* ay = win->ay;
-    ImGui::Columns(4, "##ay_channels", false);
-    ImGui::SetColumnWidth(0, 96);
-    ImGui::SetColumnWidth(1, 40);
-    ImGui::SetColumnWidth(2, 40);
-    ImGui::SetColumnWidth(3, 40);
-    ImGui::NextColumn();
-    ImGui::Text("ChnA"); ImGui::NextColumn();
-    ImGui::Text("ChnB"); ImGui::NextColumn();
-    ImGui::Text("ChnC"); ImGui::NextColumn();
-    ImGui::Separator();
-    ImGui::Text("Tone Period"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%04X", ay->tone[i].period); ImGui::NextColumn();
+    if (ImGui::BeginTable("##ay_channels", 4)) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 86);
+        ImGui::TableSetupColumn("ChnA", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("ChnB", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("ChnC", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableHeadersRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Tone Period"); ImGui::TableNextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%04X", ay->tone[i].period); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Tone Count"); ImGui::TableNextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%04X", ay->tone[i].counter); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Tone Bit"); ImGui::TableNextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%s", ay->tone[i].bit ? "ON":"OFF"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Volume"); ImGui::TableNextColumn();
+        for (int i = 0; i < 3; i++) {
+            ImGui::Text("%X", ay->reg[AY38910_REG_AMP_A + i] & 0x0F); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Ampl Ctrl"); ImGui::TableNextColumn();
+        for (int i = 0; i < 3; i++) {
+            const uint8_t v = ay->reg[AY38910_REG_AMP_A + i] & 0x10;
+            ImGui::Text("%s", v ? "ENV":"VOL"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Mix Tone"); ImGui::TableNextColumn();
+        for (int i = 0; i < 3; i++) {
+            const uint8_t v = (ay->enable >> i) & 1;
+            ImGui::Text("%s", v ? "OFF":"ON"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Mix Noise"); ImGui::TableNextColumn();
+        for (int i = 0; i < 3; i++) {
+            const uint8_t v = (ay->enable >> (i+3)) & 1;
+            ImGui::Text("%s", v ? "OFF":"ON"); ImGui::TableNextColumn();
+        }
+        ImGui::EndTable();
     }
-    ImGui::Text("Tone Count"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%04X", ay->tone[i].counter); ImGui::NextColumn();
-    }
-    ImGui::Text("Tone Bit"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%s", ay->tone[i].bit ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text("Volume"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        ImGui::Text("%X", ay->reg[AY38910_REG_AMP_A + i] & 0x0F); ImGui::NextColumn();
-    }
-    ImGui::Text("Ampl Ctrl"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        const uint8_t v = ay->reg[AY38910_REG_AMP_A + i] & 0x10;
-        ImGui::Text("%s", v ? "ENV":"VOL"); ImGui::NextColumn();
-    }
-    ImGui::Text("Mix Tone"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        const uint8_t v = (ay->enable >> i) & 1;
-        ImGui::Text("%s", v ? "OFF":"ON"); ImGui::NextColumn();
-    }
-    ImGui::Text("Mix Noise"); ImGui::NextColumn();
-    for (int i = 0; i < 3; i++) {
-        const uint8_t v = (ay->enable >> (i+3)) & 1;
-        ImGui::Text("%s", v ? "OFF":"ON"); ImGui::NextColumn();
-    }
-    ImGui::Columns();
     ImGui::Separator();
     ImGui::Text("Noise Period  %02X (reg:%02X)", ay->noise.period, ay->reg[AY38910_REG_PERIOD_NOISE]);
     ImGui::Text("Noise Count   %02X", ay->noise.counter);
@@ -174,31 +172,31 @@ static void _ui_ay38910_draw_state(ui_ay38910_t* win) {
     ImGui::Text("Env Period    %04X (reg:%04X)", ay->env.period, (ay->reg[AY38910_REG_ENV_PERIOD_COARSE]<<8)|ay->reg[AY38910_REG_ENV_PERIOD_FINE]);
     ImGui::Text("Env Count     %04X", ay->env.counter);
     ImGui::Text("Env Ampl      %02X", ay->env.shape_state);
-    ImGui::Separator();
     const int num_ports = (ay->type==AY38910_TYPE_8910) ? 2 : ((ay->type == AY38910_TYPE_8912) ? 1 : 0);
     const int max_ports = 2;
-    ImGui::Columns(max_ports + 1, "##ay_ports", false);
-    ImGui::SetColumnWidth(0, 96);
-    ImGui::SetColumnWidth(1, 60);
-    ImGui::SetColumnWidth(2, 60);
-    ImGui::NextColumn();
-    ImGui::Text("PortA"); ImGui::NextColumn();
-    ImGui::Text("PortB"); ImGui::NextColumn();
-    ImGui::Text("In/Out Dir"); ImGui::NextColumn();
-    int i;
-    for (i = 0; i < num_ports; i++) {
-        const uint8_t v = (ay->enable >> (i+6)) & 1;
-        ImGui::Text("%s", v ? "OUT":"IN"); ImGui::NextColumn();
-    }
-    for (; i < max_ports; i++) {
-        ImGui::Text("-"); ImGui::NextColumn();
-    }
-    ImGui::Text("Data Store"); ImGui::NextColumn();
-    for (i = 0; i < num_ports; i++) {
-        ImGui::Text("%02X", (i == 0) ? ay->port_a : ay->port_b); ImGui::NextColumn();
-    }
-    for (; i < max_ports; i++) {
-        ImGui::Text("-"); ImGui::NextColumn();
+    if (ImGui::BeginTable("##ay_ports", max_ports + 1)) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 96);
+        ImGui::TableSetupColumn("PortA", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("PortA", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableHeadersRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("In/Out Dir"); ImGui::TableNextColumn();
+        int i;
+        for (i = 0; i < num_ports; i++) {
+            const uint8_t v = (ay->enable >> (i+6)) & 1;
+            ImGui::Text("%s", v ? "OUT":"IN"); ImGui::TableNextColumn();
+        }
+        for (; i < max_ports; i++) {
+            ImGui::Text("-"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Data Store"); ImGui::TableNextColumn();
+        for (i = 0; i < num_ports; i++) {
+            ImGui::Text("%02X", (i == 0) ? ay->port_a : ay->port_b); ImGui::TableNextColumn();
+        }
+        for (; i < max_ports; i++) {
+            ImGui::Text("-"); ImGui::TableNextColumn();
+        }
+        ImGui::EndTable();
     }
 }
 
