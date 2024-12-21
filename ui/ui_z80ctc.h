@@ -123,67 +123,63 @@ void ui_z80ctc_discard(ui_z80ctc_t* win) {
 
 static void _ui_z80ctc_channels(ui_z80ctc_t* win) {
     const z80ctc_t* ctc = win->ctc;
-
-    ImGui::Columns(5, "##ctc_columns", false);
-    ImGui::SetColumnWidth(0, 80);
-    ImGui::SetColumnWidth(1, 40);
-    ImGui::SetColumnWidth(2, 40);
-    ImGui::SetColumnWidth(3, 40);
-    ImGui::SetColumnWidth(4, 40);
-    ImGui::NextColumn();
-    ImGui::Text("Chn0"); ImGui::NextColumn();
-    ImGui::Text("Chn1"); ImGui::NextColumn();
-    ImGui::Text("Chn2"); ImGui::NextColumn();
-    ImGui::Text("Chn3"); ImGui::NextColumn();
-    ImGui::Separator();
-
-    ImGui::Text("Constant"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%02X", ctc->chn[i].constant); ImGui::NextColumn();
-    }
-    ImGui::Text("Counter"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%02X", ctc->chn[i].down_counter); ImGui::NextColumn();
-    }
-    ImGui::Text("INT Vec"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%02X", ctc->chn[i].int_vector); ImGui::NextColumn();
-    }
-    ImGui::Text("Control"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%02X", ctc->chn[i].control); ImGui::NextColumn();
-    }
-    ImGui::Text("       INT"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_EI) ? "EI":"DI"); ImGui::NextColumn();
-    }
-    ImGui::Text("      MODE"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_MODE) ? "CTR":"TMR"); ImGui::NextColumn();
-    }
-    ImGui::Text("  PRESCALE"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_PRESCALER) ? "256":"16"); ImGui::NextColumn();
-    }
-    ImGui::Text("      EDGE"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_EDGE) ? "RISE":"FALL"); ImGui::NextColumn();
-    }
-    ImGui::Text("   TRIGGER"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_TRIGGER) ? "PULS":"AUTO"); ImGui::NextColumn();
-    }
-    ImGui::Text("  CONSTANT"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_CONST_FOLLOWS) ? "FLWS":"NONE"); ImGui::NextColumn();
-    }
-    ImGui::Text("     RESET"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_RESET) ? "ON":"OFF"); ImGui::NextColumn();
-    }
-    ImGui::Text("   CONTROL"); ImGui::NextColumn();
-    for (int i = 0; i < 4; i++) {
-        ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_CONTROL) ? "WRD":"VEC"); ImGui::NextColumn();
+    if (ImGui::BeginTable("##ctc_columns", 5)) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 72);
+        ImGui::TableSetupColumn("Chn1", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("Chn2", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("Chn3", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("Chn4", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableHeadersRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Constant"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%02X", ctc->chn[i].constant); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Counter"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%02X", ctc->chn[i].down_counter); ImGui::TableNextColumn();
+        }
+        ImGui::Text("INT Vec"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%02X", ctc->chn[i].int_vector); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Control"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%02X", ctc->chn[i].control); ImGui::TableNextColumn();
+        }
+        ImGui::Text("INT"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_EI) ? "EI":"DI"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("MODE"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_MODE) ? "CTR":"TMR"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("PRESCALE"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_PRESCALER) ? "256":"16"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("EDGE"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_EDGE) ? "RISE":"FALL"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("TRIGGER"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_TRIGGER) ? "PULS":"AUTO"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("CONSTANT"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_CONST_FOLLOWS) ? "FLWS":"NONE"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("RESET"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_RESET) ? "ON":"OFF"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("CONTROL"); ImGui::TableNextColumn();
+        for (int i = 0; i < 4; i++) {
+            ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_CONTROL) ? "WRD":"VEC"); ImGui::TableNextColumn();
+        }
+        ImGui::EndTable();
     }
 }
 

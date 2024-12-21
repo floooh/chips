@@ -1,3 +1,4 @@
+#pragma once
 /*#
     # ui_i81255.h
 
@@ -122,34 +123,32 @@ void ui_i8255_discard(ui_i8255_t* win) {
 
 static void _ui_i8255_draw_state(ui_i8255_t* win) {
     i8255_t* ppi = win->i8255;
-    ImGui::Columns(5, "##ppi_ports", false);
-    ImGui::SetColumnWidth(0, 64);
-    ImGui::SetColumnWidth(1, 32);
-    ImGui::SetColumnWidth(2, 32);
-    ImGui::SetColumnWidth(3, 32);
-    ImGui::SetColumnWidth(4, 32);
-    ImGui::NextColumn();
-    ImGui::Text("A"); ImGui::NextColumn();
-    ImGui::Text("B"); ImGui::NextColumn();
-    ImGui::Text("CHI"); ImGui::NextColumn();
-    ImGui::Text("CLO"); ImGui::NextColumn();
+    if (ImGui::BeginTable("##ppi_ports", 5)) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 56);
+        ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("CHI", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("CLO", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableHeadersRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Mode"); ImGui::TableNextColumn();
+        ImGui::Text("%d", (ppi->control & I8255_CTRL_ACHI_MODE) >> 5); ImGui::TableNextColumn();
+        ImGui::Text("%d", (ppi->control & I8255_CTRL_BCLO_MODE) >> 2); ImGui::TableNextColumn();
+        ImGui::Text("%d", (ppi->control & I8255_CTRL_ACHI_MODE) >> 5); ImGui::TableNextColumn();
+        ImGui::Text("%d", (ppi->control & I8255_CTRL_BCLO_MODE) >> 2); ImGui::TableNextColumn();
+        ImGui::Text("In/Out"); ImGui::TableNextColumn();
+        ImGui::Text("%s", ((ppi->control & I8255_CTRL_A) == I8255_CTRL_A_INPUT) ? "IN":"OUT"); ImGui::TableNextColumn();
+        ImGui::Text("%s", ((ppi->control & I8255_CTRL_B) == I8255_CTRL_B_INPUT) ? "IN":"OUT"); ImGui::TableNextColumn();
+        ImGui::Text("%s", ((ppi->control & I8255_CTRL_CHI) == I8255_CTRL_CHI_INPUT) ? "IN":"OUT"); ImGui::TableNextColumn();
+        ImGui::Text("%s", ((ppi->control & I8255_CTRL_CLO) == I8255_CTRL_CLO_INPUT) ? "IN":"OUT"); ImGui::TableNextColumn();
+        ImGui::Text("Output"); ImGui::TableNextColumn();
+        ImGui::Text("%02X", ppi->pa.outp); ImGui::TableNextColumn();
+        ImGui::Text("%02X", ppi->pb.outp); ImGui::TableNextColumn();
+        ImGui::Text("%X", ppi->pc.outp >> 4); ImGui::TableNextColumn();
+        ImGui::Text("%X", ppi->pc.outp & 0xF); ImGui::TableNextColumn();
+        ImGui::EndTable();
+    }
     ImGui::Separator();
-    ImGui::Text("Mode"); ImGui::NextColumn();
-    ImGui::Text("%d", (ppi->control & I8255_CTRL_ACHI_MODE) >> 5); ImGui::NextColumn();
-    ImGui::Text("%d", (ppi->control & I8255_CTRL_BCLO_MODE) >> 2); ImGui::NextColumn();
-    ImGui::Text("%d", (ppi->control & I8255_CTRL_ACHI_MODE) >> 5); ImGui::NextColumn();
-    ImGui::Text("%d", (ppi->control & I8255_CTRL_BCLO_MODE) >> 2); ImGui::NextColumn();
-    ImGui::Text("In/Out"); ImGui::NextColumn();
-    ImGui::Text("%s", ((ppi->control & I8255_CTRL_A) == I8255_CTRL_A_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
-    ImGui::Text("%s", ((ppi->control & I8255_CTRL_B) == I8255_CTRL_B_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
-    ImGui::Text("%s", ((ppi->control & I8255_CTRL_CHI) == I8255_CTRL_CHI_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
-    ImGui::Text("%s", ((ppi->control & I8255_CTRL_CLO) == I8255_CTRL_CLO_INPUT) ? "IN":"OUT"); ImGui::NextColumn();
-    ImGui::Text("Output"); ImGui::NextColumn();
-    ImGui::Text("%02X", ppi->pa.outp); ImGui::NextColumn();
-    ImGui::Text("%02X", ppi->pb.outp); ImGui::NextColumn();
-    ImGui::Text("%X", ppi->pc.outp >> 4); ImGui::NextColumn();
-    ImGui::Text("%X", ppi->pc.outp & 0xF); ImGui::NextColumn();
-    ImGui::Columns(); ImGui::Separator();
     ImGui::Text("Control: %02X", ppi->control);
 }
 
