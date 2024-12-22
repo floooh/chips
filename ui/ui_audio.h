@@ -103,7 +103,7 @@ void ui_audio_init(ui_audio_t* win, const ui_audio_desc_t* desc) {
     win->title = desc->title;
     win->sample_buffer = desc->sample_buffer;
     win->num_samples = desc->num_samples;
-    win->init_x = (float)  desc->x;
+    win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 480 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 120 : desc->h);

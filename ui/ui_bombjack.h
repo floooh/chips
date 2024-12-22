@@ -74,8 +74,8 @@ typedef struct {
     bool open;
     int hovered_palette_column;
     ui_dbg_texture_callbacks_t texture_cbs;
-    ui_dbg_texture_t tex_16x16[24];
-    ui_dbg_texture_t tex_32x32[24];
+    ui_texture_t tex_16x16[24];
+    ui_texture_t tex_32x32[24];
     uint32_t pixel_buffer[1024];
 } ui_bombjack_video_t;
 

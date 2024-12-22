@@ -8,11 +8,11 @@
     ~~~C
     #define CHIPS_UI_IMPL
     ~~~
-    before you include this file in *one* C++ file to create the 
+    before you include this file in *one* C++ file to create the
     implementation.
 
     Optionally provide the following macros with your own implementation
-    
+
     ~~~C
     CHIPS_ASSERT(c)
     ~~~
@@ -39,7 +39,7 @@
         2. Altered source versions must be plainly marked as such, and must not
         be misrepresented as being the original software.
         3. This notice may not be removed or altered from any source
-        distribution. 
+        distribution.
 #*/
 #include <stdint.h>
 #include <stdbool.h>
@@ -47,6 +47,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// Dear ImGui compatible texture handle
+typedef uint64_t ui_texture_t;
 
 /* draw an 16-bit hex text input field */
 uint16_t ui_util_input_u16(const char* label, uint16_t val);

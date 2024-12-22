@@ -38,6 +38,7 @@
     - ui_z80pio.h
     - ui_kc85sys.h
     - ui_audio.h
+    - ui_display.h
     - ui_dasm.h
     - ui_dbg.h
     - ui_memedit.h
@@ -86,6 +87,10 @@ typedef struct {
 } ui_kc85_desc_t;
 
 typedef struct {
+    ui_display_frame_t display;
+} ui_kc85_frame_t;
+
+typedef struct {
     kc85_t* kc85;
     ui_kc85_boot_t boot_cb;
     ui_z80_t cpu;
@@ -93,6 +98,7 @@ typedef struct {
     ui_z80ctc_t ctc;
     ui_kc85sys_t sys;
     ui_audio_t audio;
+    ui_display_t display;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
@@ -102,7 +108,7 @@ typedef struct {
 
 void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* desc);
 void ui_kc85_discard(ui_kc85_t* ui);
-void ui_kc85_draw(ui_kc85_t* ui);
+void ui_kc85_draw(ui_kc85_t* ui, const ui_kc85_frame_t* frame);
 chips_debug_t ui_kc85_get_debug(ui_kc85_t* ui);
 void ui_kc85_save_settings(ui_kc85_t* ui, ui_settings_t* settings);
 void ui_kc85_load_settings(ui_kc85_t* ui, const ui_settings_t* settings);
@@ -145,6 +151,7 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("System State", 0, &ui->sys.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
+            ImGui::MenuItem("Display", 0, &ui->display.open);
             ImGui::MenuItem("Z80 CPU", 0, &ui->cpu.open);
             ImGui::MenuItem("Z80 PIO", 0, &ui->pio.open);
             ImGui::MenuItem("Z80 CTC", 0, &ui->ctc.open);
@@ -440,6 +447,14 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_display_desc_t desc = {0};
+        desc.title = "Display";
+        desc.x = x;
+        desc.y = y;
+        ui_display_init(&ui->display, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_memedit_desc_t desc = {0};
         desc.layers[0] = "CPU Mapped";
         desc.layers[1] = "Motherboard";
@@ -502,6 +517,7 @@ void ui_kc85_discard(ui_kc85_t* ui) {
     ui_z80ctc_discard(&ui->ctc);
     ui_kc85sys_discard(&ui->sys);
     ui_audio_discard(&ui->audio);
+    ui_display_discard(&ui->display);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
@@ -510,13 +526,14 @@ void ui_kc85_discard(ui_kc85_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_kc85_draw(ui_kc85_t* ui) {
+void ui_kc85_draw(ui_kc85_t* ui, const ui_kc85_frame_t* frame) {
     CHIPS_ASSERT(ui && ui->kc85);
     _ui_kc85_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_kc85_update_memmap(ui);
     }
     ui_audio_draw(&ui->audio, ui->kc85->audio.sample_pos);
+    ui_display_draw(&ui->display, &frame->display);
     ui_z80_draw(&ui->cpu);
     ui_z80pio_draw(&ui->pio);
     ui_z80ctc_draw(&ui->ctc);
@@ -544,6 +561,7 @@ void ui_kc85_save_settings(ui_kc85_t* ui, ui_settings_t* settings) {
     ui_z80ctc_save_settings(&ui->ctc, settings);
     ui_kc85sys_save_settings(&ui->sys, settings);
     ui_audio_save_settings(&ui->audio, settings);
+    ui_display_save_settings(&ui->display, settings);
     ui_memmap_save_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
         ui_memedit_save_settings(&ui->memedit[i], settings);
@@ -561,6 +579,7 @@ void ui_kc85_load_settings(ui_kc85_t* ui, const ui_settings_t* settings) {
     ui_z80ctc_load_settings(&ui->ctc, settings);
     ui_kc85sys_load_settings(&ui->sys, settings);
     ui_audio_load_settings(&ui->audio, settings);
+    ui_display_load_settings(&ui->display, settings);
     ui_memmap_load_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
         ui_memedit_load_settings(&ui->memedit[i], settings);

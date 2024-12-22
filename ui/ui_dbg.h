@@ -135,8 +135,6 @@ typedef struct ui_dbg_user_breaktype_t {
     bool show_val16;            /* show the value field as word? */
 } ui_dbg_breaktype_t;
 
-/* texture handle compatible with Dear ImGui */
-typedef uint64_t ui_dbg_texture_t;
 /* forward decl */
 struct ui_dbg_t;
 /* callback for reading a byte from memory */
@@ -144,11 +142,11 @@ typedef uint8_t (*ui_dbg_read_t)(int layer, uint16_t addr, void* user_data);
 /* callback for evaluating uer breakpoints, return breakpoint index, or -1 */
 typedef int (*ui_dbg_user_break_t)(struct ui_dbg_t* win, int trap_id, uint64_t pins, void* user_data);
 /* a callback to create a dynamic-update RGBA8 UI texture, needs to return an ImTextureID handle */
-typedef ui_dbg_texture_t (*ui_dbg_create_texture_t)(int w, int h);
+typedef ui_texture_t (*ui_dbg_create_texture_t)(int w, int h);
 /* callback to update a UI texture with new data */
-typedef void (*ui_dbg_update_texture_t)(ui_dbg_texture_t tex_handle, void* data, int data_byte_size);
+typedef void (*ui_dbg_update_texture_t)(ui_texture_t tex_handle, void* data, int data_byte_size);
 /* callback to destroy a UI texture */
-typedef void (*ui_dbg_destroy_texture_t)(ui_dbg_texture_t tex_handle);
+typedef void (*ui_dbg_destroy_texture_t)(ui_texture_t tex_handle);
 /* callback when emulator is being rebootet */
 typedef void (*ui_dbg_reboot_t)(void);
 /* callback when emulator is being reset */
@@ -285,7 +283,7 @@ typedef struct ui_dbg_heatmap_t {
     int tex_width, tex_height;
     int tex_width_uicombo_state;
     int next_tex_width;
-    ui_dbg_texture_t texture;
+    ui_texture_t texture;
     bool show_ops, show_reads, show_writes;
     int autoclear_interval; /* 0: no autoclear */
     int scale;
