@@ -133,55 +133,53 @@ static const char* _ui_z80pio_mode_str(uint8_t mode) {
 
 static void _ui_z80pio_ports(ui_z80pio_t* win) {
     const z80pio_t* pio = win->pio;
-
-    ImGui::Columns(3, "##pio_columns", false);
-    ImGui::SetColumnWidth(0, 80);
-    ImGui::SetColumnWidth(1, 40);
-    ImGui::SetColumnWidth(2, 40);
-    ImGui::NextColumn();
-    ImGui::Text("PA"); ImGui::NextColumn();
-    ImGui::Text("PB"); ImGui::NextColumn();
-    ImGui::Separator();
-
-    ImGui::Text("Mode"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%s", _ui_z80pio_mode_str(pio->port[i].mode)); ImGui::NextColumn();
-    }
-    ImGui::Text("Output"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%02X", pio->port[i].output); ImGui::NextColumn();
-    }
-    ImGui::Text("Input"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%02X", pio->port[i].input); ImGui::NextColumn();
-    }
-    ImGui::Text("IO Select"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%02X", pio->port[i].io_select); ImGui::NextColumn();
-    }
-    ImGui::Text("INT Ctrl"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%02X", pio->port[i].int_control); ImGui::NextColumn();
-    }
-    ImGui::Text("  ei/di"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_EI ? "EI":"DI"); ImGui::NextColumn();
-    }
-    ImGui::Text("  and/or"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_ANDOR ? "AND":"OR"); ImGui::NextColumn();
-    }
-    ImGui::Text("  hi/lo"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_HILO ? "HI":"LO"); ImGui::NextColumn();
-    }
-    ImGui::Text("INT Vec"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%02X", pio->port[i].int_vector); ImGui::NextColumn();
-    }
-    ImGui::Text("INT Mask"); ImGui::NextColumn();
-    for (int i = 0; i < 2; i++) {
-        ImGui::Text("%02X", pio->port[i].int_mask); ImGui::NextColumn();
+    if (ImGui::BeginTable("##pio_columns", 3)) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 64);
+        ImGui::TableSetupColumn("PA", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableSetupColumn("PB", ImGuiTableColumnFlags_WidthFixed, 32);
+        ImGui::TableHeadersRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Mode"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%s", _ui_z80pio_mode_str(pio->port[i].mode)); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Output"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%02X", pio->port[i].output); ImGui::TableNextColumn();
+        }
+        ImGui::Text("Input"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%02X", pio->port[i].input); ImGui::TableNextColumn();
+        }
+        ImGui::Text("IO Select"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%02X", pio->port[i].io_select); ImGui::TableNextColumn();
+        }
+        ImGui::Text("INT Ctrl"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%02X", pio->port[i].int_control); ImGui::TableNextColumn();
+        }
+        ImGui::Text("  ei/di"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_EI ? "EI":"DI"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("  and/or"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_ANDOR ? "AND":"OR"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("  hi/lo"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%s", pio->port[i].int_control & Z80PIO_INTCTRL_HILO ? "HI":"LO"); ImGui::TableNextColumn();
+        }
+        ImGui::Text("INT Vec"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%02X", pio->port[i].int_vector); ImGui::TableNextColumn();
+        }
+        ImGui::Text("INT Mask"); ImGui::TableNextColumn();
+        for (int i = 0; i < 2; i++) {
+            ImGui::Text("%02X", pio->port[i].int_mask); ImGui::TableNextColumn();
+        }
+        ImGui::EndTable();
     }
 }
 

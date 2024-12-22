@@ -147,35 +147,35 @@ static void _ui_z80ctc_channels(ui_z80ctc_t* win) {
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%02X", ctc->chn[i].control); ImGui::TableNextColumn();
         }
-        ImGui::Text("INT"); ImGui::TableNextColumn();
+        ImGui::Text("  INT"); ImGui::TableNextColumn();
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_EI) ? "EI":"DI"); ImGui::TableNextColumn();
         }
-        ImGui::Text("MODE"); ImGui::TableNextColumn();
+        ImGui::Text("  MODE"); ImGui::TableNextColumn();
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_MODE) ? "CTR":"TMR"); ImGui::TableNextColumn();
         }
-        ImGui::Text("PRESCALE"); ImGui::TableNextColumn();
+        ImGui::Text("  PRESCALE"); ImGui::TableNextColumn();
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_PRESCALER) ? "256":"16"); ImGui::TableNextColumn();
         }
-        ImGui::Text("EDGE"); ImGui::TableNextColumn();
+        ImGui::Text("  EDGE"); ImGui::TableNextColumn();
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_EDGE) ? "RISE":"FALL"); ImGui::TableNextColumn();
         }
-        ImGui::Text("TRIGGER"); ImGui::TableNextColumn();
+        ImGui::Text("  TRIGGER"); ImGui::TableNextColumn();
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_TRIGGER) ? "PULS":"AUTO"); ImGui::TableNextColumn();
         }
-        ImGui::Text("CONSTANT"); ImGui::TableNextColumn();
+        ImGui::Text("  CONSTANT"); ImGui::TableNextColumn();
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_CONST_FOLLOWS) ? "FLWS":"NONE"); ImGui::TableNextColumn();
         }
-        ImGui::Text("RESET"); ImGui::TableNextColumn();
+        ImGui::Text("  RESET"); ImGui::TableNextColumn();
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_RESET) ? "ON":"OFF"); ImGui::TableNextColumn();
         }
-        ImGui::Text("CONTROL"); ImGui::TableNextColumn();
+        ImGui::Text("  CONTROL"); ImGui::TableNextColumn();
         for (int i = 0; i < 4; i++) {
             ImGui::Text("%s", (ctc->chn[i].control & Z80CTC_CTRL_CONTROL) ? "WRD":"VEC"); ImGui::TableNextColumn();
         }

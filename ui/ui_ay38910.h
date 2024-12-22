@@ -110,7 +110,7 @@ void ui_ay38910_init(ui_ay38910_t* win, const ui_ay38910_desc_t* desc) {
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 440 : desc->w);
-    win->init_h = (float) ((desc->h == 0) ? 378 : desc->h);
+    win->init_h = (float) ((desc->h == 0) ? 420 : desc->h);
     win->open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
@@ -163,15 +163,32 @@ static void _ui_ay38910_draw_state(ui_ay38910_t* win) {
         }
         ImGui::EndTable();
     }
-    ImGui::Separator();
-    ImGui::Text("Noise Period  %02X (reg:%02X)", ay->noise.period, ay->reg[AY38910_REG_PERIOD_NOISE]);
-    ImGui::Text("Noise Count   %02X", ay->noise.counter);
-    ImGui::Text("Noise Rand    %05X", ay->noise.rng);
-    ImGui::Text("Noise Bit     %s", ay->noise.bit ? "ON":"OFF");
-    ImGui::Separator();
-    ImGui::Text("Env Period    %04X (reg:%04X)", ay->env.period, (ay->reg[AY38910_REG_ENV_PERIOD_COARSE]<<8)|ay->reg[AY38910_REG_ENV_PERIOD_FINE]);
-    ImGui::Text("Env Count     %04X", ay->env.counter);
-    ImGui::Text("Env Ampl      %02X", ay->env.shape_state);
+    if (ImGui::BeginTable("##ay_noise", 2)) {
+        ImGui::TableSetupColumn("Noise", ImGuiTableColumnFlags_WidthFixed, 86);
+        ImGui::TableHeadersRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Period"); ImGui::TableNextColumn();
+        ImGui::Text("%02X (reg:%02X)", ay->noise.period, ay->reg[AY38910_REG_PERIOD_NOISE]); ImGui::TableNextColumn();
+        ImGui::Text("Count"); ImGui::TableNextColumn();
+        ImGui::Text("%02X", ay->noise.counter); ImGui::TableNextColumn();
+        ImGui::Text("Rand"); ImGui::TableNextColumn();
+        ImGui::Text("%05X", ay->noise.rng); ImGui::TableNextColumn();
+        ImGui::Text("Bit"); ImGui::TableNextColumn();
+        ImGui::Text("%s", ay->noise.bit ? "ON":"OFF"); ImGui::TableNextColumn();
+        ImGui::EndTable();
+    }
+    if (ImGui::BeginTable("##ay_envelope", 2)) {
+        ImGui::TableSetupColumn("Envelope", ImGuiTableColumnFlags_WidthFixed, 86);
+        ImGui::TableHeadersRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("Period"); ImGui::TableNextColumn();
+        ImGui::Text("%04X (reg:%04X)", ay->env.period, (ay->reg[AY38910_REG_ENV_PERIOD_COARSE]<<8)|ay->reg[AY38910_REG_ENV_PERIOD_FINE]); ImGui::TableNextColumn();
+        ImGui::Text("Count"); ImGui::TableNextColumn();
+        ImGui::Text("%04X", ay->env.counter); ImGui::TableNextColumn();
+        ImGui::Text("Amplitude"); ImGui::TableNextColumn();
+        ImGui::Text("%02X", ay->env.shape_state); ImGui::TableNextColumn();
+        ImGui::EndTable();
+    }
     const int num_ports = (ay->type==AY38910_TYPE_8910) ? 2 : ((ay->type == AY38910_TYPE_8912) ? 1 : 0);
     const int max_ports = 2;
     if (ImGui::BeginTable("##ay_ports", max_ports + 1)) {
