@@ -179,7 +179,7 @@ void ui_display_draw(ui_display_t* win, const ui_display_frame_t* frame) {
     const ImVec2 pixel_aspect = { (float)frame->pixel_aspect.width, (float)frame->pixel_aspect.height };
     ImGui::SetNextWindowPos({win->init_x, win->init_y}, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize({dim.x + 20, dim.y + 20}, ImGuiCond_FirstUseEver);
-    if (ImGui::Begin(win->title, &win->open, ImGuiWindowFlags_HorizontalScrollbar)) {
+    if (ImGui::Begin(win->title, &win->open, ImGuiWindowFlags_HorizontalScrollbar|ImGuiWindowFlags_NoNav)) {
         // need to render the image via ImDrawList because we need to specify 4 uv coords
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const ui_display_quad_t p = ui_display_pos_quad(dim, pixel_aspect);
