@@ -58,6 +58,9 @@ typedef struct {
 
 typedef struct {
     ui_texture_t tex;
+    chips_dim_t dim;            // framebuffer width/height
+    chips_rect_t screen;        // visible area
+    chips_dim_t pixel_aspect;   // pixel aspect
     bool portrait;
     bool origin_top_left;
 } ui_display_frame_t;
@@ -65,7 +68,6 @@ typedef struct {
 typedef struct {
     const char* title;
     float init_x, init_y;
-    float init_w, init_h;
     bool open;
     bool valid;
 } ui_display_t;
@@ -91,6 +93,10 @@ void ui_display_load_settings(ui_display_t* win, const ui_settings_t* settings);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+typedef struct {
+    ImVec2 v[4];
+} ui_display_quad_t;
+
 void ui_display_init(ui_display_t* win, const ui_display_desc_t* desc) {
     CHIPS_ASSERT(win && desc);
     CHIPS_ASSERT(desc->title);
@@ -98,8 +104,6 @@ void ui_display_init(ui_display_t* win, const ui_display_desc_t* desc) {
     win->title = desc->title;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
-    win->init_w = (float) ((desc->w == 0) ? 320 : desc->w);
-    win->init_h = (float) ((desc->h == 0) ? 256 : desc->h);
     win->open = desc->open;
     win->valid = true;
 }
@@ -109,44 +113,78 @@ void ui_display_discard(ui_display_t* win) {
     win->valid = false;
 }
 
+static ui_display_quad_t ui_display_uv_quad(bool origin_top_left, bool portrait) {
+    ui_display_quad_t res = {};
+    res.v[0] = { 0, 0 };
+    res.v[1] = { 1, 0 };
+    res.v[2] = { 1, 1 };
+    res.v[3] = { 0, 1 };
+    if (origin_top_left) {
+        res.v[0].y = res.v[1].y = 1;
+        res.v[2].y = res.v[3].y = 0;
+    }
+    if (portrait) {
+        ImVec2 v0 = res.v[0];
+        res.v[0] = res.v[1];
+        res.v[1] = res.v[2];
+        res.v[2] = res.v[3];
+        res.v[3] = v0;
+    }
+    return res;
+}
+
+static ui_display_quad_t ui_display_pos_quad(ImVec2 dim, ImVec2 aspect) {
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    const ImVec2 region = ImGui::GetContentRegionAvail();
+    float cw = region.x;
+    if (cw < 1.0f) {
+        cw = 1.0f;
+    }
+    float ch = region.y;
+    if (ch < 1.0f) {
+        ch = 1.0f;
+    }
+    const float canvas_aspect = cw / ch;
+    const float view_aspect = (dim.x * aspect.x) / (dim.y * aspect.y);
+    float vp_x, vp_y, vp_w, vp_h;
+    if (view_aspect < canvas_aspect) {
+        vp_y = pos.y;
+        vp_h = ch;
+        vp_w = ch * view_aspect;
+        vp_x = pos.x + (cw - vp_w) * 0.5f;
+    } else {
+        vp_x = pos.x;
+        vp_w = cw;
+        vp_h = cw / view_aspect;
+        vp_y = pos.y + (ch - vp_h) * 0.5f;
+    }
+    const float x0 = vp_x;
+    const float y0 = vp_y;
+    const float x1 = vp_x + vp_w;
+    const float y1 = vp_y + vp_h;
+    ui_display_quad_t res = {};
+    res.v[0] = { x0, y0 };
+    res.v[1] = { x1, y0 };
+    res.v[2] = { x1, y1 };
+    res.v[3] = { x0, y1 };
+    return res;
+}
+
 void ui_display_draw(ui_display_t* win, const ui_display_frame_t* frame) {
     CHIPS_ASSERT(win && frame && win->valid && win->title);
     if (!win->open) {
         return;
     }
+    const ImVec2 dim = { (float)frame->screen.width, (float)frame->screen.height };
+    const ImVec2 pixel_aspect = { (float)frame->pixel_aspect.width, (float)frame->pixel_aspect.height };
     ImGui::SetNextWindowPos({win->init_x, win->init_y}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize({win->init_w, win->init_h}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize({dim.x + 20, dim.y + 20}, ImGuiCond_FirstUseEver);
     if (ImGui::Begin(win->title, &win->open, ImGuiWindowFlags_HorizontalScrollbar)) {
-        // need to render the image via ImDrawList because we need to specific 4 uv coords
+        // need to render the image via ImDrawList because we need to specify 4 uv coords
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        const ImVec2 pos = ImGui::GetCursorScreenPos();
-        const ImVec2 region = ImGui::GetContentRegionAvail();
-        const ImVec2 p0 = pos;
-        const ImVec2 p1 = { pos.x + region.x, pos.y + region.y };
-        const ImVec2 p[4] = {
-            { p0.x, p0.y },
-            { p1.x, p0.y },
-            { p1.x, p1.y },
-            { p0.x, p1.y },
-        };
-        ImVec2 uv[4] = {
-            { 0, 0 },
-            { 1, 0 },
-            { 1, 1 },
-            { 0, 1 },
-        };
-        if (frame->origin_top_left) {
-            uv[0].y = uv[1].y = 1;
-            uv[2].y = uv[3].y = 0;
-        }
-        if (frame->portrait) {
-            ImVec2 uv0 = uv[0];
-            uv[0] = uv[1];
-            uv[1] = uv[2];
-            uv[2] = uv[3];
-            uv[3] = uv0;
-        }
-        dl->AddImageQuad(frame->tex, p[0], p[1], p[2], p[3], uv[0], uv[1], uv[2], uv[3], 0xFFFFFFFF);
+        const ui_display_quad_t p = ui_display_pos_quad(dim, pixel_aspect);
+        const ui_display_quad_t uv = ui_display_uv_quad(frame->origin_top_left, frame->portrait);
+        dl->AddImageQuad(frame->tex, p.v[0], p.v[1], p.v[2], p.v[3], uv.v[0], uv.v[1], uv.v[2], uv.v[3], 0xFFFFFFFF);
     }
     ImGui::End();
 }
