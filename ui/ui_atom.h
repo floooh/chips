@@ -30,6 +30,7 @@
     - ui_i8255.h
     - ui_m6522.h
     - ui_audio.h
+    - ui_dislplay.h
     - ui_dasm.h
     - ui_dbg.h
     - ui_memedit.h
@@ -81,6 +82,7 @@ typedef struct {
     ui_m6522_t via;
     ui_mc6847_t vdg;
     ui_audio_t audio;
+    ui_display_t display;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
@@ -89,9 +91,13 @@ typedef struct {
     ui_snapshot_t snapshot;
 } ui_atom_t;
 
+typedef struct {
+    ui_display_frame_t display;
+} ui_atom_frame_t;
+
 void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* desc);
 void ui_atom_discard(ui_atom_t* ui);
-void ui_atom_draw(ui_atom_t* ui);
+void ui_atom_draw(ui_atom_t* ui, const ui_atom_frame_t* frame);
 chips_debug_t ui_atom_get_debug(ui_atom_t* ui);
 void ui_atom_save_settings(ui_atom_t* ui, ui_settings_t* settings);
 void ui_atom_load_settings(ui_atom_t* ui, const ui_settings_t* settings);
@@ -143,6 +149,7 @@ static void _ui_atom_draw_menu(ui_atom_t* ui) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
+            ImGui::MenuItem("Display", 0, &ui->display.open);
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("MOS 6522 (VIA)", 0, &ui->via.open);
             ImGui::MenuItem("MC6847 (VDG)", 0, &ui->vdg.open);
@@ -410,6 +417,14 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_display_desc_t desc = {0};
+        desc.title = "Display";
+        desc.x = x;
+        desc.y = y;
+        ui_display_init(&ui->display, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_kbd_desc_t desc = {0};
         desc.title = "Keyboard Matrix";
         desc.kbd = &ui->atom->kbd;
@@ -478,6 +493,7 @@ void ui_atom_discard(ui_atom_t* ui) {
     ui_i8255_discard(&ui->ppi);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
+    ui_display_discard(&ui->display);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
@@ -486,10 +502,11 @@ void ui_atom_discard(ui_atom_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_atom_draw(ui_atom_t* ui) {
-    CHIPS_ASSERT(ui && ui->atom);
+void ui_atom_draw(ui_atom_t* ui, const ui_atom_frame_t* frame) {
+    CHIPS_ASSERT(ui && ui->atom && frame);
     _ui_atom_draw_menu(ui);
     ui_audio_draw(&ui->audio, ui->atom->audio.sample_pos);
+    ui_display_draw(&ui->display, &frame->display);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
     ui_m6522_draw(&ui->via);
@@ -519,6 +536,7 @@ void ui_atom_save_settings(ui_atom_t* ui, ui_settings_t* settings) {
     ui_m6522_save_settings(&ui->via, settings);
     ui_m6847_save_settings(&ui->vdg, settings);
     ui_audio_save_settings(&ui->audio, settings);
+    ui_display_save_settings(&ui->display, settings);
     ui_kbd_save_settings(&ui->kbd, settings);
     ui_memmap_save_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
@@ -537,6 +555,7 @@ void ui_atom_load_settings(ui_atom_t* ui, const ui_settings_t* settings) {
     ui_m6522_load_settings(&ui->via, settings);
     ui_m6847_load_settings(&ui->vdg, settings);
     ui_audio_load_settings(&ui->audio, settings);
+    ui_display_load_settings(&ui->display, settings);
     ui_kbd_load_settings(&ui->kbd, settings);
     ui_memmap_load_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {

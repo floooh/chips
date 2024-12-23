@@ -68,6 +68,7 @@ typedef struct {
 typedef struct {
     const char* title;
     float init_x, init_y;
+    float init_w, init_h;
     bool open;
     bool valid;
 } ui_display_t;
@@ -104,6 +105,8 @@ void ui_display_init(ui_display_t* win, const ui_display_desc_t* desc) {
     win->title = desc->title;
     win->init_x = (float) desc->x;
     win->init_y = (float) desc->y;
+    win->init_w = (float) ((desc->w == 0) ? 320 + 20 : desc->w);
+    win->init_h = (float) ((desc->h == 0) ? 256 + 20 : desc->h);
     win->open = desc->open;
     win->valid = true;
 }
@@ -124,11 +127,11 @@ static ui_display_quad_t ui_display_uv_quad(bool origin_top_left, bool portrait)
         res.v[2].y = res.v[3].y = 0;
     }
     if (portrait) {
-        ImVec2 v0 = res.v[0];
-        res.v[0] = res.v[1];
-        res.v[1] = res.v[2];
-        res.v[2] = res.v[3];
-        res.v[3] = v0;
+        ImVec2 v3 = res.v[3];
+        res.v[3] = res.v[2];
+        res.v[2] = res.v[1];
+        res.v[1] = res.v[0];
+        res.v[0] = v3;
     }
     return res;
 }
@@ -178,7 +181,7 @@ void ui_display_draw(ui_display_t* win, const ui_display_frame_t* frame) {
     const ImVec2 dim = { (float)frame->screen.width, (float)frame->screen.height };
     const ImVec2 pixel_aspect = { (float)frame->pixel_aspect.width, (float)frame->pixel_aspect.height };
     ImGui::SetNextWindowPos({win->init_x, win->init_y}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize({dim.x + 20, dim.y + 20}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize({win->init_w, win->init_h}, ImGuiCond_FirstUseEver);
     if (ImGui::Begin(win->title, &win->open, ImGuiWindowFlags_HorizontalScrollbar|ImGuiWindowFlags_NoNav)) {
         // need to render the image via ImDrawList because we need to specify 4 uv coords
         ImDrawList* dl = ImGui::GetWindowDrawList();

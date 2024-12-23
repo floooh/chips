@@ -31,6 +31,7 @@
     - ui_settings.h
     - ui_z80.h
     - ui_audio.h
+    - ui_display.h
     - ui_dasm.h
     - ui_dbg.h
     - ui_memedit.h
@@ -74,15 +75,20 @@ typedef struct {
     ui_z80_t cpu;
     ui_dbg_t dbg;
     ui_audio_t audio;
+    ui_display_t display;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
     ui_snapshot_t snapshot;
 } ui_namco_t;
 
+typedef struct {
+    ui_display_frame_t display;
+} ui_namco_frame_t;
+
 void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* desc);
 void ui_namco_discard(ui_namco_t* ui);
-void ui_namco_draw(ui_namco_t* ui);
+void ui_namco_draw(ui_namco_t* ui, const ui_namco_frame_t* frame);
 chips_debug_t ui_namco_get_debug(ui_namco_t* ui);
 void ui_namco_save_settings(ui_namco_t* ui, ui_settings_t* settings);
 void ui_namco_load_settings(ui_namco_t* ui, const ui_settings_t* settings);
@@ -241,6 +247,16 @@ void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_display_desc_t desc = {0};
+        desc.title = "Display";
+        desc.x = x;
+        desc.y = y;
+        desc.w = NAMCO_DISPLAY_HEIGHT + 20; // not a bug
+        desc.h = NAMCO_DISPLAY_WIDTH + 20;
+        ui_display_init(&ui->display, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_memedit_desc_t desc = {0};
         for (int i = 0; i < _UI_NAMCO_NUM_MEMLAYERS; i++) {
             desc.layers[i] = _ui_namco_memlayer_names[i];
@@ -292,14 +308,15 @@ void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* ui_desc) {
 void ui_namco_discard(ui_namco_t* ui) {
     CHIPS_ASSERT(ui && ui->sys);
     ui_dbg_discard(&ui->dbg);
+    ui_z80_discard(&ui->cpu);
+    ui_audio_discard(&ui->audio);
+    ui_display_discard(&ui->display);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
         ui_dasm_discard(&ui->dasm[i]);
     }
-    ui_z80_discard(&ui->cpu);
 }
-
 
 static void _ui_namco_draw_menu(ui_namco_t* ui) {
     if (ImGui::BeginMainMenuBar()) {
@@ -314,6 +331,7 @@ static void _ui_namco_draw_menu(ui_namco_t* ui) {
         if (ImGui::BeginMenu("Hardware")) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
+            ImGui::MenuItem("Display", 0, &ui->display.open);
             ImGui::MenuItem("Z80", 0, &ui->cpu.open);
             ImGui::EndMenu();
         }
@@ -344,11 +362,12 @@ static void _ui_namco_draw_menu(ui_namco_t* ui) {
     }
 }
 
-void ui_namco_draw(ui_namco_t* ui) {
-    CHIPS_ASSERT(ui && ui->sys);
+void ui_namco_draw(ui_namco_t* ui, const ui_namco_frame_t* frame) {
+    CHIPS_ASSERT(ui && ui->sys && frame);
     _ui_namco_draw_menu(ui);
     ui_memmap_draw(&ui->memmap);
     ui_audio_draw(&ui->audio, ui->sys->sound.sample_pos);
+    ui_display_draw(&ui->display, &frame->display);
     ui_dbg_draw(&ui->dbg);
     ui_z80_draw(&ui->cpu);
     for (int i = 0; i < 4; i++) {
@@ -370,6 +389,7 @@ void ui_namco_save_settings(ui_namco_t* ui, ui_settings_t* settings) {
     ui_z80_save_settings(&ui->cpu, settings);
     ui_dbg_save_settings(&ui->dbg, settings);
     ui_audio_save_settings(&ui->audio, settings);
+    ui_display_save_settings(&ui->display, settings);
     ui_memmap_save_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
         ui_memedit_save_settings(&ui->memedit[i], settings);
@@ -384,6 +404,7 @@ void ui_namco_load_settings(ui_namco_t* ui, const ui_settings_t* settings) {
     ui_z80_load_settings(&ui->cpu, settings);
     ui_dbg_load_settings(&ui->dbg, settings);
     ui_audio_load_settings(&ui->audio, settings);
+    ui_display_load_settings(&ui->display, settings);
     ui_memmap_load_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
         ui_memedit_load_settings(&ui->memedit[i], settings);

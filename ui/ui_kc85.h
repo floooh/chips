@@ -527,7 +527,7 @@ void ui_kc85_discard(ui_kc85_t* ui) {
 }
 
 void ui_kc85_draw(ui_kc85_t* ui, const ui_kc85_frame_t* frame) {
-    CHIPS_ASSERT(ui && ui->kc85);
+    CHIPS_ASSERT(ui && ui->kc85 && frame);
     _ui_kc85_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_kc85_update_memmap(ui);

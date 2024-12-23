@@ -33,6 +33,7 @@
     - ui_m6522.h
     - ui_m6561.h
     - ui_audio.h
+    - ui_display.h
     - ui_dasm.h
     - ui_dbg.h
     - ui_memedit.h
@@ -86,6 +87,7 @@ typedef struct {
     ui_m6522_t via[2];
     ui_m6561_t vic;
     ui_audio_t audio;
+    ui_display_t display;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
@@ -98,9 +100,13 @@ typedef struct {
     } system;
 } ui_vic20_t;
 
+typedef struct {
+    ui_display_frame_t display;
+} ui_vic20_frame_t;
+
 void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* desc);
 void ui_vic20_discard(ui_vic20_t* ui);
-void ui_vic20_draw(ui_vic20_t* ui);
+void ui_vic20_draw(ui_vic20_t* ui, const ui_vic20_frame_t* frame);
 chips_debug_t ui_vic20_get_debug(ui_vic20_t* ui);
 void ui_vic20_save_settings(ui_vic20_t* ui, ui_settings_t* settings);
 void ui_vic20_load_settings(ui_vic20_t* ui, const ui_settings_t* settings);
@@ -157,6 +163,7 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
+            ImGui::MenuItem("Display", 0, &ui->display.open);
             ImGui::MenuItem("MOS 6502 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("MOS 6522 #1 (VIA)", 0, &ui->via[0].open);
             ImGui::MenuItem("MOS 6522 #2 (VIA)", 0, &ui->via[1].open);
@@ -481,6 +488,14 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_display_desc_t desc = {0};
+        desc.title = "Display";
+        desc.x = x;
+        desc.y = y;
+        ui_display_init(&ui->display, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_kbd_desc_t desc = {0};
         desc.title = "Keyboard Matrix";
         desc.kbd = &ui->vic20->kbd;
@@ -546,6 +561,7 @@ void ui_vic20_discard(ui_vic20_t* ui) {
     ui_m6561_discard(&ui->vic);
     ui_kbd_discard(&ui->kbd);
     ui_audio_discard(&ui->audio);
+    ui_display_discard(&ui->display);
     ui_memmap_discard(&ui->memmap);
     for (int i = 0; i < 4; i++) {
         ui_memedit_discard(&ui->memedit[i]);
@@ -588,8 +604,8 @@ void ui_vic20_draw_system(ui_vic20_t* ui) {
     ImGui::End();
 }
 
-void ui_vic20_draw(ui_vic20_t* ui) {
-    CHIPS_ASSERT(ui && ui->vic20);
+void ui_vic20_draw(ui_vic20_t* ui, const ui_vic20_frame_t* frame) {
+    CHIPS_ASSERT(ui && ui->vic20 && frame);
     _ui_vic20_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_vic20_update_memmap(ui);
@@ -599,6 +615,7 @@ void ui_vic20_draw(ui_vic20_t* ui) {
         ui_c1530_draw(&ui->c1530);
     }
     ui_audio_draw(&ui->audio, ui->vic20->audio.sample_pos);
+    ui_display_draw(&ui->display, &frame->display);
     ui_kbd_draw(&ui->kbd);
     ui_m6502_draw(&ui->cpu);
     ui_m6522_draw(&ui->via[0]);
@@ -631,6 +648,7 @@ void ui_vic20_save_settings(ui_vic20_t* ui, ui_settings_t* settings) {
     }
     ui_m6561_save_settings(&ui->vic, settings);
     ui_audio_save_settings(&ui->audio, settings);
+    ui_display_save_settings(&ui->display, settings);
     ui_kbd_save_settings(&ui->kbd, settings);
     ui_memmap_save_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
@@ -640,6 +658,7 @@ void ui_vic20_save_settings(ui_vic20_t* ui, ui_settings_t* settings) {
         ui_dasm_save_settings(&ui->dasm[i], settings);
     }
     ui_dbg_save_settings(&ui->dbg, settings);
+    ui_settings_add(settings, ui->system.title, ui->system.open);
 }
 
 void ui_vic20_load_settings(ui_vic20_t* ui, const ui_settings_t* settings) {
@@ -653,6 +672,7 @@ void ui_vic20_load_settings(ui_vic20_t* ui, const ui_settings_t* settings) {
     }
     ui_m6561_load_settings(&ui->vic, settings);
     ui_audio_load_settings(&ui->audio, settings);
+    ui_display_load_settings(&ui->display, settings);
     ui_kbd_load_settings(&ui->kbd, settings);
     ui_memmap_load_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
@@ -662,6 +682,7 @@ void ui_vic20_load_settings(ui_vic20_t* ui, const ui_settings_t* settings) {
         ui_dasm_load_settings(&ui->dasm[i], settings);
     }
     ui_dbg_load_settings(&ui->dbg, settings);
+    ui->system.open = ui_settings_isopen(settings, ui->system.title);
 }
 
 #ifdef __clang__

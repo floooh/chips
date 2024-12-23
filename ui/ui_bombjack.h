@@ -29,6 +29,7 @@
     - ui_z80.h
     - ui_ay38910.h
     - ui_audio.h
+    - ui_display.h
     - ui_dasm.h
     - ui_dbg.h
     - ui_memedit.h
@@ -93,6 +94,7 @@ typedef struct {
         ui_audio_t audio;
         ui_dbg_t dbg;
     } sound;
+    ui_display_t display;
     ui_memmap_t memmap;
     ui_memedit_t memedit[4];
     ui_dasm_t dasm[4];
@@ -100,9 +102,13 @@ typedef struct {
     ui_snapshot_t snapshot;
 } ui_bombjack_t;
 
+typedef struct {
+    ui_display_frame_t display;
+} ui_bombjack_frame_t;
+
 void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* desc);
 void ui_bombjack_discard(ui_bombjack_t* ui);
-void ui_bombjack_draw(ui_bombjack_t* ui);
+void ui_bombjack_draw(ui_bombjack_t* ui, const ui_bombjack_frame_t* frame);
 bombjack_debug_t ui_bombjack_get_debug(ui_bombjack_t* ui);
 void ui_bombjack_save_settings(ui_bombjack_t* ui, ui_settings_t* settings);
 void ui_bombjack_load_settings(ui_bombjack_t* ui, const ui_settings_t* settings);
@@ -321,6 +327,16 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_display_desc_t desc = {0};
+        desc.title = "Display";
+        desc.x = x;
+        desc.y = y;
+        desc.w = BOMBJACK_DISPLAY_HEIGHT + 20;  // not a bug
+        desc.h = BOMBJACK_DISPLAY_WIDTH + 20;
+        ui_display_init(&ui->display, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_memmap_desc_t desc = {0};
         desc.title = "Memory Map (Main)";
         desc.x = x;
@@ -414,6 +430,7 @@ void ui_bombjack_discard(ui_bombjack_t* ui) {
     ui_dbg_discard(&ui->main.dbg);
     ui_dbg_discard(&ui->sound.dbg);
     ui_memmap_discard(&ui->memmap);
+    ui_display_discard(&ui->display);
     ui_audio_discard(&ui->sound.audio);
     for (int i = 0; i < 3; i++) {
         ui_ay38910_discard(&ui->sound.psg[i]);
@@ -611,6 +628,7 @@ static void _ui_bombjack_draw_menu(ui_bombjack_t* ui) {
             ImGui::MenuItem("AY-3-8912 #2", 0, &ui->sound.psg[1].open);
             ImGui::MenuItem("AY-3-8912 #3", 0, &ui->sound.psg[2].open);
             ImGui::MenuItem("Audio Output", 0, &ui->sound.audio.open);
+            ImGui::MenuItem("Display", 0, &ui->display.open);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -835,8 +853,8 @@ static void _ui_bombjack_draw_video(ui_bombjack_t* ui) {
     ImGui::End();
 }
 
-void ui_bombjack_draw(ui_bombjack_t* ui) {
-    CHIPS_ASSERT(ui && ui->bj);
+void ui_bombjack_draw(ui_bombjack_t* ui, const ui_bombjack_frame_t* frame) {
+    CHIPS_ASSERT(ui && ui->bj && frame);
     _ui_bombjack_handle_sys_bits(ui);
     _ui_bombjack_draw_menu(ui);
     _ui_bombjack_draw_video(ui);
@@ -853,6 +871,7 @@ void ui_bombjack_draw(ui_bombjack_t* ui) {
         ui_dasm_draw(&ui->dasm[i]);
     }
     ui_audio_draw(&ui->sound.audio, ui->bj->audio.sample_pos);
+    ui_display_draw(&ui->display, &frame->display);
 }
 
 bombjack_debug_t ui_bombjack_get_debug(ui_bombjack_t* ui) {
@@ -876,6 +895,7 @@ void ui_bombjack_save_settings(ui_bombjack_t* ui, ui_settings_t* settings) {
         ui_ay38910_save_settings(&ui->sound.psg[i], settings);
     }
     ui_audio_save_settings(&ui->sound.audio, settings);
+    ui_display_save_settings(&ui->display, settings);
     ui_dbg_save_settings(&ui->sound.dbg, settings);
     ui_memmap_save_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {
@@ -896,6 +916,7 @@ void ui_bombjack_load_settings(ui_bombjack_t* ui, const ui_settings_t* settings)
         ui_ay38910_load_settings(&ui->sound.psg[i], settings);
     }
     ui_audio_load_settings(&ui->sound.audio, settings);
+    ui_display_load_settings(&ui->display, settings);
     ui_dbg_load_settings(&ui->sound.dbg, settings);
     ui_memmap_load_settings(&ui->memmap, settings);
     for (int i = 0; i < 4; i++) {

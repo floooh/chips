@@ -35,6 +35,7 @@
     - ui_am40010.h
     - ui_fdd.h
     - ui_audio.h
+    - ui_display.h
     - ui_dasm.h
     - ui_dbg.h
     - ui_memedit.h
@@ -79,6 +80,10 @@ typedef struct {
 } ui_cpc_desc_t;
 
 typedef struct {
+    ui_display_frame_t display;
+} ui_cpc_frame_t;
+
+typedef struct {
     cpc_t* cpc;
     int dbg_scanline;
     bool dbg_vsync;
@@ -90,6 +95,7 @@ typedef struct {
     ui_i8255_t ppi;
     ui_upd765_t upd;
     ui_audio_t audio;
+    ui_display_t display;
     ui_fdd_t fdd;
     ui_kbd_t kbd;
     ui_memmap_t memmap;
@@ -101,7 +107,7 @@ typedef struct {
 
 void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* desc);
 void ui_cpc_discard(ui_cpc_t* ui);
-void ui_cpc_draw(ui_cpc_t* ui);
+void ui_cpc_draw(ui_cpc_t* ui, const ui_cpc_frame_t* frame);
 chips_debug_t ui_cpc_get_debug(ui_cpc_t* ui);
 void ui_cpc_save_settings(ui_cpc_t* ui, ui_settings_t* settings);
 void ui_cpc_load_settings(ui_cpc_t* ui, const ui_settings_t* settings);
@@ -159,6 +165,7 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui) {
             ImGui::MenuItem("Memory Map", 0, &ui->memmap.open);
             ImGui::MenuItem("Keyboard Matrix", 0, &ui->kbd.open);
             ImGui::MenuItem("Audio Output", 0, &ui->audio.open);
+            ImGui::MenuItem("Display", 0, &ui->display.open);
             ImGui::MenuItem("Z80 (CPU)", 0, &ui->cpu.open);
             ImGui::MenuItem("AY-3-8912 (PSG)", 0, &ui->psg.open);
             ImGui::MenuItem("MC6845 (CRTC)", 0, &ui->vdc.open);
@@ -676,6 +683,14 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     }
     x += dx; y += dy;
     {
+        ui_display_desc_t desc = {0};
+        desc.title = "Display";
+        desc.x = x;
+        desc.y = y;
+        ui_display_init(&ui->display, &desc);
+    }
+    x += dx; y += dy;
+    {
         ui_fdd_desc_t desc = {0};
         desc.title = "Floppy Disk Drive";
         desc.fdd = &ui->cpc->fdd;
@@ -748,6 +763,7 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui_mc6845_discard(&ui->vdc);
     ui_am40010_discard(&ui->ga);
     ui_kbd_discard(&ui->kbd);
+    ui_display_discard(&ui->display);
     ui_audio_discard(&ui->audio);
     ui_fdd_discard(&ui->fdd);
     ui_memmap_discard(&ui->memmap);
@@ -758,13 +774,14 @@ void ui_cpc_discard(ui_cpc_t* ui) {
     ui_dbg_discard(&ui->dbg);
 }
 
-void ui_cpc_draw(ui_cpc_t* ui) {
-    CHIPS_ASSERT(ui && ui->cpc);
+void ui_cpc_draw(ui_cpc_t* ui, const ui_cpc_frame_t* frame) {
+    CHIPS_ASSERT(ui && ui->cpc && frame);
     _ui_cpc_draw_menu(ui);
     if (ui->memmap.open) {
         _ui_cpc_update_memmap(ui);
     }
     ui_audio_draw(&ui->audio, ui->cpc->audio.sample_pos);
+    ui_display_draw(&ui->display, &frame->display);
     ui_fdd_draw(&ui->fdd);
     ui_kbd_draw(&ui->kbd);
     ui_z80_draw(&ui->cpu);
@@ -799,6 +816,7 @@ void ui_cpc_save_settings(ui_cpc_t* ui, ui_settings_t* settings) {
     ui_i8255_save_settings(&ui->ppi, settings);
     ui_upd765_save_settings(&ui->upd, settings);
     ui_audio_save_settings(&ui->audio, settings);
+    ui_display_save_settings(&ui->display, settings);
     ui_fdd_save_settings(&ui->fdd, settings);
     ui_kbd_save_settings(&ui->kbd, settings);
     ui_memmap_save_settings(&ui->memmap, settings);
@@ -820,6 +838,7 @@ void ui_cpc_load_settings(ui_cpc_t* ui, const ui_settings_t* settings) {
     ui_i8255_load_settings(&ui->ppi, settings);
     ui_upd765_load_settings(&ui->upd, settings);
     ui_audio_load_settings(&ui->audio, settings);
+    ui_display_load_settings(&ui->display, settings);
     ui_fdd_load_settings(&ui->fdd, settings);
     ui_kbd_load_settings(&ui->kbd, settings);
     ui_memmap_load_settings(&ui->memmap, settings);
