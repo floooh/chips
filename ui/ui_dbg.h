@@ -238,6 +238,7 @@ typedef struct ui_dbg_line_t {
 typedef struct ui_dbg_uistate_t {
     const char* title;
     bool open;
+    bool last_open;
     float init_x, init_y;
     float init_w, init_h;
     bool show_regs;
@@ -248,18 +249,22 @@ typedef struct ui_dbg_uistate_t {
     struct {
         const char* title;
         bool open;
+        bool last_open;
     } heatmap;
     struct {
         const char* title;
         bool open;
+        bool last_open;
     } history;
     struct {
         const char* title;
         bool open;
+        bool last_open;
     } breakpoints;
     struct {
         const char* title;
         bool open;
+        bool last_open;
     } stopwatch;
     ui_dbg_keys_desc_t keys;
     ui_dbg_line_t line_array[UI_DBG_NUM_LINES];
@@ -607,6 +612,7 @@ static uint16_t _ui_dbg_history_get(ui_dbg_t* win, uint16_t rel_pos) {
 }
 
 static void _ui_dbg_history_draw(ui_dbg_t* win) {
+    ui_util_handle_window_open_dirty(&win->ui.history.open, &win->ui.history.last_open);
     if (!win->ui.history.open) {
         return;
     }
@@ -963,6 +969,7 @@ static void _ui_dbg_bp_draw_delete_all_modal(ui_dbg_t* win, const char* title) {
 
 /* draw the breakpoint list window */
 static void _ui_dbg_bp_draw(ui_dbg_t* win) {
+    ui_util_handle_window_open_dirty(&win->ui.breakpoints.open, &win->ui.breakpoints.last_open);
     if (!win->ui.breakpoints.open) {
         return;
     }
@@ -1212,6 +1219,7 @@ static void _ui_dbg_heatmap_update(ui_dbg_t* win) {
 }
 
 static void _ui_dbg_heatmap_draw(ui_dbg_t* win) {
+    ui_util_handle_window_open_dirty(&win->ui.heatmap.open, &win->ui.heatmap.last_open);
     if (!win->ui.heatmap.open) {
         return;
     }
@@ -1332,6 +1340,7 @@ static void _ui_dbg_stopwatch_reset(ui_dbg_t* win) {
 }
 
 static void _ui_dbg_stopwatch_draw(ui_dbg_t* win) {
+    ui_util_handle_window_open_dirty(&win->ui.stopwatch.open, &win->ui.stopwatch.last_open);
     if (!win->ui.stopwatch.open) {
         return;
     }
@@ -1371,15 +1380,15 @@ static void _ui_dbg_stopwatch_draw(ui_dbg_t* win) {
 static void _ui_dbg_uistate_init(ui_dbg_t* win, ui_dbg_desc_t* desc) {
     ui_dbg_uistate_t* ui = &win->ui;
     ui->title = desc->title;
-    ui->open = desc->open;
+    ui->open = ui->last_open = desc->open;
     ui->heatmap.title = "Memory Heatmap";
-    ui->heatmap.open = false;
+    ui->heatmap.open = ui->heatmap.last_open = false;
     ui->history.title = "Execution History";
-    ui->history.open = false;
+    ui->history.open = ui->history.last_open = false;
     ui->breakpoints.title = "Breakpoints";
-    ui->breakpoints.open = false;
+    ui->breakpoints.open = ui->breakpoints.last_open = false;
     ui->stopwatch.title = "Stopwatch";
-    ui->stopwatch.open = false;
+    ui->stopwatch.open = ui->stopwatch.last_open = false;
     ui->init_x = (float) desc->x;
     ui->init_y = (float) desc->y;
     ui->init_w = (float) ((desc->w == 0) ? 380 : desc->w);
@@ -1939,6 +1948,7 @@ static void _ui_dbg_draw_main(ui_dbg_t* win) {
 }
 
 static void _ui_dbg_dbgwin_draw(ui_dbg_t* win) {
+    ui_util_handle_window_open_dirty(&win->ui.open, &win->ui.last_open);
     if (!win->ui.open) {
         return;
     }

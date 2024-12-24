@@ -64,6 +64,7 @@ typedef struct {
     float init_x, init_y;
     float init_w, init_h;
     bool open;
+    bool last_open;
     bool valid;
 } ui_c1530_t;
 
@@ -99,7 +100,7 @@ void ui_c1530_init(ui_c1530_t* win, const ui_c1530_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 200 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 220 : desc->h);
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->valid = true;
 }
 
@@ -111,6 +112,7 @@ void ui_c1530_discard(ui_c1530_t* win) {
 
 void ui_c1530_draw(ui_c1530_t* win) {
     CHIPS_ASSERT(win && win->valid);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }

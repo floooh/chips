@@ -103,6 +103,7 @@ typedef struct {
     float init_x, init_y;
     float init_w, init_h;
     bool open;
+    bool last_open;
     bool valid;
     uint16_t start_addr;
     uint16_t cur_addr;
@@ -155,7 +156,7 @@ void ui_dasm_init(ui_dasm_t* win, const ui_dasm_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 400 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 256 : desc->h);
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->highlight_color = 0xFF30FF30;
     for (int i = 0; i < UI_DASM_MAX_LAYERS; i++) {
         if (desc->layers[i]) {
@@ -442,6 +443,7 @@ static void _ui_dasm_draw_stack(ui_dasm_t* win) {
 
 void ui_dasm_draw(ui_dasm_t* win) {
     CHIPS_ASSERT(win && win->valid && win->title);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }

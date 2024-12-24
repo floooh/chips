@@ -83,6 +83,7 @@ typedef struct {
     float init_x, init_y;
     float init_w, init_h;
     bool open;
+    bool last_open;
     bool valid;
 } ui_kc85sys_t;
 
@@ -118,7 +119,7 @@ void ui_kc85sys_init(ui_kc85sys_t* win, const ui_kc85sys_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 200 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 400 : desc->h);
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->valid = true;
 }
 
@@ -129,6 +130,7 @@ void ui_kc85sys_discard(ui_kc85sys_t* win) {
 
 void ui_kc85sys_draw(ui_kc85sys_t* win) {
     CHIPS_ASSERT(win && win->valid && win->title && win->kc85);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }

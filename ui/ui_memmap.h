@@ -87,6 +87,7 @@ typedef struct {
     float layer_height;
     float left_padding;
     bool open;
+    bool last_open;
     bool valid;
     int num_layers;
     ui_memmap_layer_t layers[UI_MEMMAP_MAX_LAYERS];
@@ -196,7 +197,7 @@ void ui_memmap_init(ui_memmap_t* win, const ui_memmap_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 400 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 40 : desc->h);
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->left_padding = 80.0f;;
     win->layer_height = 20.0f;
     win->valid = true;
@@ -209,6 +210,7 @@ void ui_memmap_discard(ui_memmap_t* win) {
 
 void ui_memmap_draw(ui_memmap_t* win) {
     CHIPS_ASSERT(win && win->valid && win->title);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }

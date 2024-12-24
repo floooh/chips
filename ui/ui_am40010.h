@@ -75,6 +75,7 @@ typedef struct ui_am40010_t {
     float init_x, init_y;
     float init_w, init_h;
     bool open;
+    bool last_open;
     bool valid;
     ui_chip_t chip;
 } ui_am40010_t;
@@ -111,7 +112,7 @@ void ui_am40010_init(ui_am40010_t* win, ui_am40010_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 440 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 300 : desc->h);
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
 }
@@ -218,6 +219,7 @@ static void _ui_am40010_draw_state(ui_am40010_t* win) {
 
 void ui_am40010_draw(ui_am40010_t* win) {
     CHIPS_ASSERT(win && win->valid && win->title && win->am40010);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }

@@ -51,24 +51,26 @@ extern "C" {
 // Dear ImGui compatible texture handle
 typedef uint64_t ui_texture_t;
 
-/* draw an 16-bit hex text input field */
+// draw an 16-bit hex text input field
 uint16_t ui_util_input_u16(const char* label, uint16_t val);
-/* draw an 8-bit hex text input field */
+// draw an 8-bit hex text input field
 uint8_t ui_util_input_u8(const char* label, uint8_t val);
-/* draw an 8-bit hex label/value text */
+// draw an 8-bit hex label/value text
 void ui_util_u8(const char* label, uint8_t val);
-/* draw a 16-bit hex label/value text */
+// draw a 16-bit hex label/value text
 void ui_util_u16(const char* label, uint16_t val);
-/* draw an 8-bit binary label/value text */
+// draw an 8-bit binary label/value text
 void ui_util_b8(const char* label, uint8_t val);
-/* draw a 24-bit binary label/value text */
+// draw a 24-bit binary label/value text
 void ui_util_b24(const char* label, uint32_t val);
-/* draw a 32-bit binary label/value text */
+// draw a 32-bit binary label/value text
 void ui_util_b32(const char* label, uint32_t val);
-/* get an ImGui style color (ImGuiCol_*) with overall alpha applied */
+// get an ImGui style color (ImGuiCol_*) with overall alpha applied
 uint32_t ui_util_color(int imgui_color);
-/* inject the common options menu */
+// inject the common options menu
 void ui_util_options_menu(void);
+// check if window open state has changed and call ImGui::MarkIniSettingsDirty() if needed
+void ui_util_handle_window_open_dirty(const bool* cur_open, bool* last_open);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -190,6 +192,14 @@ void ui_util_options_menu(void) {
         ImGui::EndMenu();
     }
     ImGui::SameLine(ImGui::GetWindowWidth() - 120);
+}
+
+void ui_util_handle_window_open_dirty(const bool* cur_open, bool* last_open) {
+    CHIPS_ASSERT(cur_open && last_open);
+    if (*cur_open != *last_open) {
+        *last_open = *cur_open;
+        ImGui::MarkIniSettingsDirty();
+    }
 }
 
 #ifdef _MSC_VER

@@ -70,6 +70,7 @@ typedef struct {
     float init_x, init_y;
     float init_w, init_h;
     bool open;
+    bool last_open;
     bool valid;
 } ui_display_t;
 
@@ -107,7 +108,7 @@ void ui_display_init(ui_display_t* win, const ui_display_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 320 + 20 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 256 + 20 : desc->h);
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->valid = true;
 }
 
@@ -175,6 +176,7 @@ static ui_display_quad_t ui_display_pos_quad(ImVec2 dim, ImVec2 aspect) {
 
 void ui_display_draw(ui_display_t* win, const ui_display_frame_t* frame) {
     CHIPS_ASSERT(win && frame && win->valid && win->title);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }

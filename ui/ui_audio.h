@@ -70,6 +70,7 @@ typedef struct {
     float init_w, init_h;
     uint32_t cursor_color;
     bool open;
+    bool last_open;
     bool valid;
 } ui_audio_t;
 
@@ -108,7 +109,7 @@ void ui_audio_init(ui_audio_t* win, const ui_audio_desc_t* desc) {
     win->init_w = (float) ((desc->w == 0) ? 480 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 120 : desc->h);
     win->cursor_color = 0xFF0000FF;
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->valid = true;
 }
 
@@ -119,6 +120,7 @@ void ui_audio_discard(ui_audio_t* win) {
 
 void ui_audio_draw(ui_audio_t* win, int sample_pos) {
     CHIPS_ASSERT(win && win->valid && win->title && win->sample_buffer);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }

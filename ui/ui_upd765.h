@@ -75,6 +75,7 @@ typedef struct ui_upd765_t {
     float init_x, init_y;
     float init_w, init_h;
     bool open;
+    bool last_open;
     bool valid;
     ui_chip_t chip;
 } ui_upd765_t;
@@ -111,7 +112,7 @@ void ui_upd765_init(ui_upd765_t* win, ui_upd765_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 496 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 400 : desc->h);
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->valid = true;
     ui_chip_init(&win->chip, &desc->chip_desc);
 }
@@ -236,6 +237,7 @@ static void _ui_upd765_draw_state(ui_upd765_t* win) {
 
 void ui_upd765_draw(ui_upd765_t* win) {
     CHIPS_ASSERT(win && win->valid && win->title);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }

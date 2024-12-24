@@ -73,6 +73,7 @@ typedef struct ui_fdd_t {
     float init_x, init_y;
     float init_w, init_h;
     bool open;
+    bool last_open;
     bool valid;
 } ui_fdd_t;
 
@@ -109,7 +110,7 @@ void ui_fdd_init(ui_fdd_t* win, ui_fdd_desc_t* desc) {
     win->init_y = (float) desc->y;
     win->init_w = (float) ((desc->w == 0) ? 540 : desc->w);
     win->init_h = (float) ((desc->h == 0) ? 320 : desc->h);
-    win->open = desc->open;
+    win->open = win->last_open = desc->open;
     win->valid = true;
 }
 
@@ -120,6 +121,7 @@ void ui_fdd_discard(ui_fdd_t* win) {
 
 void ui_fdd_draw(ui_fdd_t* win) {
     CHIPS_ASSERT(win && win->valid && win->title);
+    ui_util_handle_window_open_dirty(&win->open, &win->last_open);
     if (!win->open) {
         return;
     }
