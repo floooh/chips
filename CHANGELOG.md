@@ -1,5 +1,12 @@
 ## What's New
 
+* **24-Dec-2024**: complete UI overhaul:
+
+  - switched to the Dear ImGui docking branch
+  - add imgui.ini persistency both for native and web builds
+  - add a window with the emulator's framebuffer content
+  - modernize Dear ImGui code (replaced deprecated Column- with Table-API)
+
 * **02-Jan-2024**:
 
   - Added a new 'web api' (a set of Javascript functions which allow controlling
