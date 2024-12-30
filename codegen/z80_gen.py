@@ -1,10 +1,9 @@
 import yaml, copy
-from string import Template
+import templ
 
 FIRST_DECODER_STEP = 28
 DESC_PATH  = 'z80_desc.yml'
-TEMPL_PATH = 'z80.template.h'
-OUT_PATH   = '../chips/z80.h'
+INOUT_PATH  = '../chips/z80.h'
 TAB_WIDTH  = 4
 
 # a machine cycle description
@@ -75,8 +74,8 @@ rp2_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->af' ]
 rp2l_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->f']
 rp2h_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->a']
 cc_map   = [ '_cc_nz', '_cc_z', '_cc_nc', '_cc_c', '_cc_po', '_cc_pe', '_cc_p', '_cc_m' ]
-alu_map  = [ '_z80_add8(cpu,', 
-             '_z80_adc8(cpu,', 
+alu_map  = [ '_z80_add8(cpu,',
+             '_z80_adc8(cpu,',
              '_z80_sub8(cpu,',
              '_z80_sbc8(cpu,',
              '_z80_and8(cpu,',
@@ -263,7 +262,7 @@ def expand_optable():
     for oprange,prefix in enumerate(['', 'ed']):
         for opcode in range(0,256):
             x = opcode >> 6 # type: ignore (generated unused warning, but x is needed in 'eval')
-            y = (opcode >> 3) & 7 
+            y = (opcode >> 3) & 7
             z = opcode & 7 # type: ignore
             p = y >> 1 # type: ignore
             q = y & 1 # type: ignore
@@ -301,7 +300,7 @@ def gen_decoder():
         l(f'case {decoder_step:4}: {action}goto step_next;')
         decoder_step += 1
         step += 1
-    
+
     def add_fetch(action):
         nonlocal decoder_step
         nonlocal step
@@ -380,7 +379,7 @@ def gen_decoder():
                     # likewise if this is a prefix instruction special case
                     add(f"{action}_fetch_{mcycle.items['prefix']}();")
                 else:
-                    # regular case, jump to the shared fetch block after the 
+                    # regular case, jump to the shared fetch block after the
                     add_fetch(f'{action}')
         op.num_steps = step
 
@@ -405,24 +404,23 @@ def optable_to_string(type):
             step = "_Z80_OPSTATE_STEP_INDIRECT"
         else:
             step = f"{op.decoder_offset - 1:4}"
-        res += tab() + f'{step},' 
+        res += tab() + f'{step},'
         res += f'  // {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
     return res
 
 def write_result():
-    with open(TEMPL_PATH, 'r') as templf:
-        templ = Template(templf.read())
-        c_src = templ.safe_substitute(
-            decode_block = out_lines,
-            optable = optable_to_string('main'),
-            ddfd_optable = optable_to_string('ddfd'),
-            ed_optable = optable_to_string('ed'),
-            special_optable = optable_to_string('special'))
+    with open(INOUT_PATH, 'r') as f:
+        lines = f.read().splitlines()
+        lines = templ.replace(lines, 'optable_main', optable_to_string('main'))
+        lines = templ.replace(lines, 'optable_ddfd', optable_to_string('ddfd'))
+        lines = templ.replace(lines, 'optable_ed', optable_to_string('ed'))
+        lines = templ.replace(lines, 'optable_special', optable_to_string('special'))
+        lines = templ.replace(lines, 'decoder', out_lines)
+    out_str = '\n'.join(lines) + '\n'
+    with open(INOUT_PATH, 'w') as f:
+        f.write(out_str)
 
-        with open(OUT_PATH, 'w') as outf:
-            outf.write(c_src)
-
-if __name__=='__main__':
+if __name__ == '__main__':
     parse_opdescs()
     expand_optable()
     gen_decoder()

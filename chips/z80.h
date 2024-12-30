@@ -1896,6 +1896,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 27: cpu->step = _z80_ed_optable[cpu->opcode]; goto step_next;
         //=== from here on code-generated
         // <% decoder
+
         //  00: NOP (M:1 T:4)
         // -- overlapped
         case   28: goto fetch_next;
