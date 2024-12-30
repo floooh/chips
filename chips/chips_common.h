@@ -1,6 +1,6 @@
 #pragma once
 /*
-    sys_common.h
+    chips_common.h
 
     Common data types for chips system headers.
 
