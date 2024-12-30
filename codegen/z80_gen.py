@@ -1,7 +1,6 @@
 import yaml, copy
 import templ
 
-FIRST_DECODER_STEP = 28
 DESC_PATH  = 'z80_desc.yml'
 INOUT_PATH  = '../chips/z80.h'
 TAB_WIDTH  = 4
@@ -94,17 +93,6 @@ im_map = [ '0', '0', '1', '2', '0', '0', '1', '2' ]
 
 def err(msg: str):
     raise BaseException(msg)
-
-# append a source code line
-indent = 0
-out_lines = ''
-
-def tab():
-    return ' ' * TAB_WIDTH * indent
-
-def l(s):
-    global out_lines
-    out_lines += tab() + s + '\n'
 
 def map_comment(inp, y, z, p, q):
     return inp\
@@ -286,41 +274,60 @@ def compute_tcycles(op):
 
 # generate code for one op
 def gen_decoder():
-    global indent
     indent = 2
-    decoder_step = FIRST_DECODER_STEP
+    cur_step = 0
+    cur_extra_step = 512 # main and ed ops
+    out_lines = ''
+    out_extra_lines = ''
+
+    def tab():
+        return ' ' * TAB_WIDTH * indent
+
+    def l(s):
+        nonlocal out_lines
+        out_lines += tab() + s + '\n'
+
+    def lx(s):
+        nonlocal out_extra_lines
+        out_extra_lines += tab() + s + '\n'
 
     def add(action):
-        nonlocal decoder_step
-        nonlocal step
-        l(f'case {decoder_step:4}: {action}goto step_next;')
-        decoder_step += 1
-        step += 1
+        nonlocal cur_step, cur_extra_step, op_step, op
+        if op_step == 0:
+            l(f'case {cur_step:4}: {action}cpu->step={cur_extra_step};goto step_to; // {op.name} T:{op_step}')
+            cur_step += 1
+        else:
+            lx(f'case {cur_extra_step:4}: {action}goto step_next; // {op.name} T:{op_step}')
+            cur_extra_step += 1
+        op_step += 1
 
     def add_fetch(action):
-        nonlocal decoder_step
-        nonlocal step
-        l(f'case {decoder_step:4}: {action}goto fetch_next;')
-        decoder_step += 1
-        step += 1
+        nonlocal cur_step, cur_extra_step, op_step, op
+        if op_step == 0:
+            l(f'case {cur_step:4}: {action}goto fetch_next; // {op.name} T:{op_step}')
+            cur_step += 1
+        else:
+            lx(f'case {cur_extra_step:4}: {action}goto fetch_next; // {op.name} T:{op_step}')
+            cur_extra_step += 1
+        op_step += 1
 
     for op_index,op in enumerate(OPS):
         # ignore duplicate ops if they are flagged as 'single'
         if flag(op, 'single') and op.first_op_index != op_index:
             continue
+        # FIXME: ignore special ops for now
+        if flag(op, 'special'):
+            continue
 
-        step = 0
+        op_step = 0
         op.num_cycles = compute_tcycles(op)
-        op.decoder_offset = decoder_step
+        op.decoder_offset = cur_step
 
-        l('')
-        l(f'// {op.prefix.upper()} {op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
             action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
             if mcycle.type == 'fetch':
                 pass
             elif mcycle.type == 'mread':
-                l(f'// -- mread')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 add('')
@@ -329,7 +336,6 @@ def gen_decoder():
                 for _ in range(3,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'mwrite':
-                l(f'// -- mwrite')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 add('')
@@ -338,7 +344,6 @@ def gen_decoder():
                 for _ in range(3,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'ioread':
-                l(f'// -- ioread')
                 addr = mcycle.items['ab']
                 store = mcycle.items['dst'].replace('_X_', '_gd()')
                 add('')
@@ -348,7 +353,6 @@ def gen_decoder():
                 for _ in range(4,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'iowrite':
-                l(f'// -- iowrite')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 add('')
@@ -358,12 +362,10 @@ def gen_decoder():
                 for _ in range(4,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'generic':
-                l(f'// -- generic')
                 add(f'{action}')
                 for _ in range(1,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'overlapped':
-                l(f'// -- overlapped')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 if 'post_action' in mcycle.items:
                     # if a post-action is defined we can jump to the common fetch block but
@@ -376,46 +378,47 @@ def gen_decoder():
                 else:
                     # regular case, jump to the shared fetch block after the
                     add_fetch(f'{action}')
-        op.num_steps = step
+        op.num_steps = op_step
+    return out_lines + out_extra_lines
 
-def optable_to_string(type):
-    global indent
-    indent = 1
-    res = ''
-    for op_index,op in enumerate(OPS):
-        if (type == 'main' or type == 'ddfd') and op_index > 255:
-            continue
-        elif type == 'ed' and (op_index < 256 or op_index > 511):
-            continue
-        elif type == 'special' and op_index < 512:
-            continue
-        # map redundant 'single' ops to the original
-        if flag(op, 'single') and op.first_op_index != op_index:
-            op = OPS[op.first_op_index]
-        if type == 'ddfd' and flag(op, 'indirect') and flag(op, 'imm8'):
-            step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"
-        elif type == 'ddfd' and flag(op, 'indirect'):
-            step = "_Z80_OPSTATE_STEP_INDIRECT"
-        else:
-            step = f"{op.decoder_offset - 1:4}"
-        res += tab() + f'{step},'
-        res += f'  // {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
-    return res
+# def optable_to_string(type):
+#     global indent
+#     indent = 1
+#     res = ''
+#     for op_index,op in enumerate(OPS):
+#         if (type == 'main' or type == 'ddfd') and op_index > 255:
+#             continue
+#         elif type == 'ed' and (op_index < 256 or op_index > 511):
+#             continue
+#         elif type == 'special' and op_index < 512:
+#             continue
+#         # map redundant 'single' ops to the original
+#         if flag(op, 'single') and op.first_op_index != op_index:
+#             op = OPS[op.first_op_index]
+#         if type == 'ddfd' and flag(op, 'indirect') and flag(op, 'imm8'):
+#             step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"
+#         elif type == 'ddfd' and flag(op, 'indirect'):
+#             step = "_Z80_OPSTATE_STEP_INDIRECT"
+#         else:
+#             step = f"{op.decoder_offset - 1:4}"
+#         res += tab() + f'{step},'
+#         res += f'  // {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
+#     return res
 
-def write_result():
+def write_result(out_lines):
     with open(INOUT_PATH, 'r') as f:
         lines = f.read().splitlines()
-        lines = templ.replace(lines, 'optable_main', optable_to_string('main'))
-        lines = templ.replace(lines, 'optable_ddfd', optable_to_string('ddfd'))
-        lines = templ.replace(lines, 'optable_ed', optable_to_string('ed'))
-        lines = templ.replace(lines, 'optable_special', optable_to_string('special'))
+        # lines = templ.replace(lines, 'optable_main', optable_to_string('main'))
+        # lines = templ.replace(lines, 'optable_ddfd', optable_to_string('ddfd'))
+        # lines = templ.replace(lines, 'optable_ed', optable_to_string('ed'))
+        # lines = templ.replace(lines, 'optable_special', optable_to_string('special'))
         lines = templ.replace(lines, 'decoder', out_lines)
     out_str = '\n'.join(lines) + '\n'
-    with open(INOUT_PATH, 'w') as f:
+    with open('/Users/floh/scratch/z80.h', 'w') as f:
         f.write(out_str)
 
 if __name__ == '__main__':
     parse_opdescs()
     expand_optable()
-    gen_decoder()
-    write_result()
+    out_lines = gen_decoder()
+    write_result(out_lines)
