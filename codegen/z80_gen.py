@@ -29,7 +29,7 @@ class Op:
         self.first_op_index = -1
         self.mcycles = []
 
-OP_PATTERNS = []
+OP_DESCS = []
 
 OP_INDEX_CB = 512
 OP_INDEX_CBHL = 513
@@ -95,11 +95,6 @@ im_map = [ '0', '0', '1', '2', '0', '0', '1', '2' ]
 def err(msg: str):
     raise BaseException(msg)
 
-def unwrap(maybe_value):
-    if maybe_value is None:
-        err('Expected valid value, found None')
-    return maybe_value
-
 # append a source code line
 indent = 0
 out_lines = ''
@@ -107,7 +102,7 @@ out_lines = ''
 def tab():
     return ' ' * TAB_WIDTH * indent
 
-def l(s) :
+def l(s):
     global out_lines
     out_lines += tab() + s + '\n'
 
@@ -225,12 +220,13 @@ def parse_opdescs():
                 op.mcycles.insert(0, MCycle('fetch', FETCH_TCYCLES, {}))
             if num_overlapped == 0:
                 op.mcycles.append(MCycle('overlapped', OVERLAPPED_FETCH_TCYCLES, {}))
-            OP_PATTERNS.append(op)
+            OP_DESCS.append(op)
 
 def find_opdesc(name):
-    for op_desc in OP_PATTERNS:
+    for op_desc in OP_DESCS:
         if op_desc.name == name:
             return op_desc
+    err(f"opdesc not found for '{name}'")
     return None
 
 def stampout_mcycle_items(mcycle_items, y, z, p, q):
@@ -267,19 +263,19 @@ def expand_optable():
             p = y >> 1 # type: ignore
             q = y & 1 # type: ignore
             op_index = oprange * 256 + opcode
-            for op_desc_index,op_desc in enumerate(OP_PATTERNS):
+            for op_desc_index,op_desc in enumerate(OP_DESCS):
                 if not flag(op_desc, 'special'):
                     if eval(op_desc.cond_compiled) and op_desc.prefix == prefix:
                         if OPS[op_index] is not None:
                             err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
                         stampout_op(prefix, opcode, op_index, op_desc)
-    stampout_op('cb', 0, OP_INDEX_CB, unwrap(find_opdesc('cb')))
-    stampout_op('cb', 0, OP_INDEX_CBHL, unwrap(find_opdesc('cbhl')))
-    stampout_op('cb', 0, OP_INDEX_DDFDCB, unwrap(find_opdesc('ddfdcb')))
-    stampout_op('', 0, OP_INDEX_INT_IM0, unwrap(find_opdesc('int_im0')))
-    stampout_op('', 0, OP_INDEX_INT_IM1, unwrap(find_opdesc('int_im1')))
-    stampout_op('', 0, OP_INDEX_INT_IM2, unwrap(find_opdesc('int_im2')))
-    stampout_op('', 0, OP_INDEX_NMI, unwrap(find_opdesc('nmi')))
+    stampout_op('cb', 0, OP_INDEX_CB, find_opdesc('cb'))
+    stampout_op('cb', 0, OP_INDEX_CBHL, find_opdesc('cbhl'))
+    stampout_op('cb', 0, OP_INDEX_DDFDCB, find_opdesc('ddfdcb'))
+    stampout_op('', 0, OP_INDEX_INT_IM0, find_opdesc('int_im0'))
+    stampout_op('', 0, OP_INDEX_INT_IM1, find_opdesc('int_im1'))
+    stampout_op('', 0, OP_INDEX_INT_IM2, find_opdesc('int_im2'))
+    stampout_op('', 0, OP_INDEX_NMI, find_opdesc('nmi'))
 
 # compute number of tcycles in an instruction
 def compute_tcycles(op):
@@ -308,8 +304,7 @@ def gen_decoder():
         decoder_step += 1
         step += 1
 
-    for op_index,maybe_op in enumerate(OPS):
-        op = unwrap(maybe_op)
+    for op_index,op in enumerate(OPS):
         # ignore duplicate ops if they are flagged as 'single'
         if flag(op, 'single') and op.first_op_index != op_index:
             continue
@@ -387,17 +382,16 @@ def optable_to_string(type):
     global indent
     indent = 1
     res = ''
-    for op_index,maybe_op in enumerate(OPS):
+    for op_index,op in enumerate(OPS):
         if (type == 'main' or type == 'ddfd') and op_index > 255:
             continue
         elif type == 'ed' and (op_index < 256 or op_index > 511):
             continue
         elif type == 'special' and op_index < 512:
             continue
-        op = unwrap(maybe_op)
         # map redundant 'single' ops to the original
         if flag(op, 'single') and op.first_op_index != op_index:
-            op = unwrap(OPS[op.first_op_index])
+            op = OPS[op.first_op_index]
         if type == 'ddfd' and flag(op, 'indirect') and flag(op, 'imm8'):
             step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"
         elif type == 'ddfd' and flag(op, 'indirect'):
