@@ -21,29 +21,18 @@ class Op:
         self.flags = flags
         self.opcode = -1
         self.prefix = ''
-        self.single = False
+        self.multiple = False
+        self.multiple_first_op_index = -1
         self.num_cycles = 0
         self.num_steps = 0
-        self.decoder_offset = 0
-        self.first_op_index = -1
+        self.step_index = -1
+        self.extra_step_index = -1
         self.mcycles = []
 
 OP_DESCS = []
 
-OP_INDEX_CB = 512
-OP_INDEX_CBHL = 513
-OP_INDEX_DDFDCB = 514
-OP_INDEX_INT_IM0 = 515
-OP_INDEX_INT_IM1 = 516
-OP_INDEX_INT_IM2 = 517
-OP_INDEX_NMI = 518
-
 NUM_SPECIAL_OPS = 7
 
-# 0..255:   core opcodes
-# 256..511: ED prefix opcodes
-# 512..514: special decoder blocks for CB-prefix
-# 515..519: special decoder blocks for interrupt handling
 OPS = [None for _ in range(0,2*256 + NUM_SPECIAL_OPS)]
 
 # a fetch machine cycle is processed as 2 parts because it overlaps
@@ -232,12 +221,14 @@ def stampout_op(prefix, opcode, op_index, op_desc):
     z = opcode & 7
     p = y >> 1
     q = y & 1
-    if op_desc.first_op_index == -1:
-        op_desc.first_op_index = op_index
+    if op_desc.multiple_first_op_index == -1:
+        op_desc.multiple_first_op_index = op_index
     op = copy.deepcopy(op_desc)
     op.name = map_comment(op.name, y, z, p, q)
     op.prefix = prefix
     op.opcode = opcode
+    if flag(op, 'multiple') and op.multiple_first_op_index != op_index:
+        op.flags['redundant'] = True
     for mcycle in op.mcycles:
         mcycle.items = stampout_mcycle_items(mcycle.items, y, z, p, q)
     OPS[op_index] = op
@@ -257,13 +248,13 @@ def expand_optable():
                         if OPS[op_index] is not None:
                             err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
                         stampout_op(prefix, opcode, op_index, op_desc)
-    stampout_op('cb', 0, OP_INDEX_CB, find_opdesc('cb'))
-    stampout_op('cb', 0, OP_INDEX_CBHL, find_opdesc('cbhl'))
-    stampout_op('cb', 0, OP_INDEX_DDFDCB, find_opdesc('ddfdcb'))
-    stampout_op('', 0, OP_INDEX_INT_IM0, find_opdesc('int_im0'))
-    stampout_op('', 0, OP_INDEX_INT_IM1, find_opdesc('int_im1'))
-    stampout_op('', 0, OP_INDEX_INT_IM2, find_opdesc('int_im2'))
-    stampout_op('', 0, OP_INDEX_NMI, find_opdesc('nmi'))
+    op_index += 1; stampout_op('cb', -1, op_index, find_opdesc('cb'))
+    op_index += 1; stampout_op('cb', -1, op_index, find_opdesc('cbhl'))
+    op_index += 1; stampout_op('cb', -1, op_index, find_opdesc('ddfdcb'))
+    op_index += 1; stampout_op('', -1, op_index, find_opdesc('int_im0'))
+    op_index += 1; stampout_op('', -1, op_index, find_opdesc('int_im1'))
+    op_index += 1; stampout_op('', -1, op_index, find_opdesc('int_im2'))
+    op_index += 1; stampout_op('', -1, op_index, find_opdesc('nmi'))
 
 # compute number of tcycles in an instruction
 def compute_tcycles(op):
@@ -293,17 +284,24 @@ def gen_decoder():
 
     def add(action):
         nonlocal cur_step, cur_extra_step, op_step, op
-        if op_step == 0:
-            l(f'case {cur_step:4}: {action}cpu->step={cur_extra_step};goto step_to; // {op.name} T:{op_step}')
+        # NOTE: special ops (interrupt handling etc) are entirely written into the 'extra' decoder block
+        if op_step == 0 and not flag(op, 'special'):
+            next_step = cur_extra_step
+            # check if this is a redundant op which needs to step to a shared payload
+            if flag(op, 'redundant'):
+                next_step = OPS[op.multiple_first_op_index].extra_step_index
+            l(f'case {cur_step:4}: {action}cpu->step={next_step};goto step_to; // {op.name} T:{op_step}')
             cur_step += 1
         else:
-            lx(f'case {cur_extra_step:4}: {action}goto step_next; // {op.name} T:{op_step}')
-            cur_extra_step += 1
+            # do not write a payload for redundant ops
+            if not flag(op, 'redundant'):
+                lx(f'case {cur_extra_step:4}: {action}goto step_next; // {op.name} T:{op_step}')
+                cur_extra_step += 1
         op_step += 1
 
     def add_fetch(action):
         nonlocal cur_step, cur_extra_step, op_step, op
-        if op_step == 0:
+        if op_step == 0 and not flag(op, 'special'):
             l(f'case {cur_step:4}: {action}goto fetch_next; // {op.name} T:{op_step}')
             cur_step += 1
         else:
@@ -311,17 +309,11 @@ def gen_decoder():
             cur_extra_step += 1
         op_step += 1
 
-    for op_index,op in enumerate(OPS):
-        # ignore duplicate ops if they are flagged as 'single'
-        if flag(op, 'single') and op.first_op_index != op_index:
-            continue
-        # FIXME: ignore special ops for now
-        if flag(op, 'special'):
-            continue
-
+    for op in OPS:
         op_step = 0
         op.num_cycles = compute_tcycles(op)
-        op.decoder_offset = cur_step
+        op.step_index = cur_step
+        op.extra_step_index = cur_extra_step
 
         for i,mcycle in enumerate(op.mcycles):
             action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
@@ -392,8 +384,8 @@ def gen_decoder():
 #             continue
 #         elif type == 'special' and op_index < 512:
 #             continue
-#         # map redundant 'single' ops to the original
-#         if flag(op, 'single') and op.first_op_index != op_index:
+#         # map redundant 'multiple' ops to the original
+#         if flag(op, 'multiple') and op.first_op_index != op_index:
 #             op = OPS[op.first_op_index]
 #         if type == 'ddfd' and flag(op, 'indirect') and flag(op, 'imm8'):
 #             step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"

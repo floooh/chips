@@ -377,7 +377,7 @@ RST $Y*8:
 #== ED prefix block ============================================================
 ED NOP:
   prefix: ed
-  flags: { single: true }
+  flags: { multiple: true }
   cond: (x == 0) or (x == 3) or ((x == 1) and (z == 7) and (y >= 6)) or ((x == 2) and ((z > 3) or (y < 4)))
   mcycles: []
 
@@ -441,14 +441,14 @@ LD $RP,(nn):
 NEG:
   prefix: ed
   cond: (x == 1) and (z == 4)
-  flags: { single: true }
+  flags: { multiple: true }
   mcycles:
     - { type: overlapped, action: "_z80_neg8(cpu)"}
 
 RETI:
   prefix: ed
   cond: (x == 1) and (y != 0) and (z == 5)
-  flags: { single: true }
+  flags: { multiple: true }
   mcycles:
     # virtual RETI pin must be set as early as possible
     - { type: mread, ab: $SP++, dst: $WZL, action: "pins|=Z80_RETI" }
