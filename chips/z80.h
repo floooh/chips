@@ -1022,43 +1022,29 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         // <% decoder
         // %>
         //=== shared fetch machine cycle for non-DD/FD-prefixed ops
-        // M1/T2: load opcode from data bus
         case Z80_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
-        // M1/T3: refresh cycle
         case Z80_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
-        // M1/T4: branch to instruction 'payload'
         case Z80_M1_T4:
             cpu->step = cpu->opcode;
             cpu->addr = cpu->hl;
             goto step_to;
         //=== shared fetch machine cycle for DD/FD-prefixed ops
-        // M1/T2: load opcode from data bus
         case Z80_DDFD_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
-        // M1/T3: refresh cycle
         case Z80_DDFD_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
-        // M1/T4: branch to instruction 'payload'
         case Z80_DDFD_M1_T4:
-            // FIXME: if indirect_table[cpu->opcode] => DDFD_D_T1 else cpu->opcode
             cpu->step = _z80_indirect_table[cpu->opcode] ? Z80_DDFD_D_T1 : cpu->opcode;
             cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
             goto step_to;
         //=== optional d-loading cycle for (IX+d), (IY+d)
-        //--- mread
         case Z80_DDFD_D_T1: goto step_next;
-        case Z80_DDFD_D_T2: _wait();_mread(cpu->pc++); goto step_next;
+        case Z80_DDFD_D_T2: _wait(); _mread(cpu->pc++); goto step_next;
         case Z80_DDFD_D_T3: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
         //--- special case LD (IX/IY+d),n or filler ticks
         case Z80_DDFD_D_T4: goto step_next;
         case Z80_DDFD_D_T5: if (cpu->opcode == 0x36) { _wait();_mread(cpu->pc++); }; goto step_next;
         case Z80_DDFD_D_T6: if (cpu->opcode == 0x36) { cpu->dlatch = _gd(); }; goto step_next;
         case Z80_DDFD_D_T7: goto step_next;
-        case Z80_DDFD_D_T8:
-            if (cpu->opcode == 0x36) {
-                cpu->step = Z80_DDFD_LDHLN_WR_T1;
-            } else {
-                cpu->step = cpu->opcode;
-            }
-            goto step_to;
+        case Z80_DDFD_D_T8: cpu->step = (cpu->opcode==0x36) ? Z80_DDFD_LDHLN_WR_T1 : cpu->opcode; goto step_to;
         //--- special case LD (IX/IY+d),n write mcycle
         case Z80_DDFD_LDHLN_WR_T1: goto step_next;
         case Z80_DDFD_LDHLN_WR_T2: _wait(); _mwrite(cpu->addr,cpu->dlatch); goto step_next;

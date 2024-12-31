@@ -206,6 +206,13 @@ def find_opdesc(name):
     err(f"opdesc not found for '{name}'")
     return None
 
+def find_op(name):
+    for op in OPS:
+        if op.name == name:
+            return op
+    err(f"op not found for '{name}'")
+    return None
+
 def stampout_mcycle_items(mcycle_items, y, z, p, q):
     res = {}
     for key,val in mcycle_items.items():
@@ -398,7 +405,7 @@ def gen_decoder():
 #     return res
 
 def extra_step_defines_string(max_step):
-    extra_steps = [
+    manual_steps = [
         "M1_T2",
         "M1_T3",
         "M1_T4",
@@ -423,9 +430,21 @@ def extra_step_defines_string(max_step):
     ]
     res = ''
     step_index = max_step
-    for step in extra_steps:
-        res += f'#define Z80_{step} {step_index}\n'
+    for step_name in manual_steps:
+        res += f'#define Z80_{step_name} {step_index}\n'
         step_index += 1
+    special_steps = {
+        'cb': 'CB_STEP',
+        'cbhl': 'CBHL_STEP',
+        'ddfdcb': 'DDFDCB_STEP',
+        'int_im0': 'INT_IM0_STEP',
+        'int_im1': 'INT_IM1_STEP',
+        'int_im2': 'INT_IM2_STEP',
+        'nmi': 'NMI_STEP',
+    }
+    for op_name, step_name in special_steps.items():
+        op = find_op(op_name)
+        res += f'#define Z80_{step_name} {op.extra_step_index}\n'
     return res
 
 def write_result(decoder_output):
