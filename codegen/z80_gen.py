@@ -371,7 +371,7 @@ def gen_decoder():
                     # regular case, jump to the shared fetch block after the
                     add_fetch(f'{action}')
         op.num_steps = op_step
-    return out_lines + out_extra_lines
+    return { 'out_lines': out_lines + out_extra_lines, 'max_step': cur_extra_step }
 
 # def optable_to_string(type):
 #     global indent
@@ -397,14 +397,44 @@ def gen_decoder():
 #         res += f'  // {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
 #     return res
 
-def write_result(out_lines):
+def extra_step_defines_string(max_step):
+    extra_steps = [
+        "M1_T2",
+        "M1_T3",
+        "M1_T4",
+        "DDFD_M1_T2",
+        "DDFD_M1_T3",
+        "DDFD_M1_T4",
+        "DDFD_D_T1",
+        "DDFD_D_T2",
+        "DDFD_D_T3",
+        "DDFD_D_T4",
+        "DDFD_D_T5",
+        "DDFD_D_T6",
+        "DDFD_D_T7",
+        "DDFD_D_T8",
+        "DDFD_LDHLN_WR_T1",
+        "DDFD_LDHLN_WR_T2",
+        "DDFD_LDHLN_WR_T3",
+        "DDFD_LDHLN_OVERLAPPED",
+        "ED_M1_T2",
+        "ED_M1_T3",
+        "ED_M1_T4",
+    ]
+    res = ''
+    step_index = max_step
+    for step in extra_steps:
+        res += f'#define Z80_{step} {step_index}\n'
+        step_index += 1
+    return res
+
+def write_result(decoder_output):
+    out_lines = decoder_output['out_lines']
+    max_step = decoder_output['max_step']
     with open(INOUT_PATH, 'r') as f:
         lines = f.read().splitlines()
-        # lines = templ.replace(lines, 'optable_main', optable_to_string('main'))
-        # lines = templ.replace(lines, 'optable_ddfd', optable_to_string('ddfd'))
-        # lines = templ.replace(lines, 'optable_ed', optable_to_string('ed'))
-        # lines = templ.replace(lines, 'optable_special', optable_to_string('special'))
         lines = templ.replace(lines, 'decoder', out_lines)
+        lines = templ.replace(lines, 'extra_step_defines', extra_step_defines_string(max_step))
     out_str = '\n'.join(lines) + '\n'
     with open('/Users/floh/scratch/z80.h', 'w') as f:
         f.write(out_str)
@@ -412,5 +442,5 @@ def write_result(out_lines):
 if __name__ == '__main__':
     parse_opdescs()
     expand_optable()
-    out_lines = gen_decoder()
-    write_result(out_lines)
+    decoder_output = gen_decoder()
+    write_result(decoder_output)

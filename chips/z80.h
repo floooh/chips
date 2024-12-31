@@ -401,6 +401,10 @@ bool z80_opdone(z80_t* cpu);
 #define _Z80_MAP_IX (1)
 #define _Z80_MAP_IY (2)
 
+// extra/special decoder steps
+// <% extra_step_defines
+// %>
+
 uint64_t z80_init(z80_t* cpu) {
     CHIPS_ASSERT(cpu);
     // initial state as described in 'The Undocumented Z80 Documented'
@@ -1015,80 +1019,70 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     pins &= ~(Z80_CTRL_PIN_MASK|Z80_RETI);
     switch (cpu->step) {
-        //=== shared fetch machine cycle for non-DD/FD-prefixed ops
-        // M1/T2: load opcode from data bus
-        case 0: _wait(); cpu->opcode = _gd(); goto step_next;
-        // M1/T3: refresh cycle
-        case 1: pins = _z80_refresh(cpu, pins); goto step_next;
-        // M1/T4: branch to instruction 'payload'
-        case 2: {
-            cpu->step = _z80_optable[cpu->opcode];
-            // preload effective address for (HL) ops
-            cpu->addr = cpu->hl;
-        } goto step_next;
-        //=== shared fetch machine cycle for DD/FD-prefixed ops
-        // M1/T2: load opcode from data bus
-        case 3: _wait(); cpu->opcode = _gd(); goto step_next;
-        // M1/T3: refresh cycle
-        case 4: pins = _z80_refresh(cpu, pins); goto step_next;
-        // M1/T4: branch to instruction 'payload'
-        case 5: {
-            cpu->step = _z80_ddfd_optable[cpu->opcode];
-            cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
-        } goto step_next;
-        //=== optional d-loading cycle for (IX+d), (IY+d)
-        //--- mread
-        case 6: goto step_next;
-        case 7: _wait();_mread(cpu->pc++); goto step_next;
-        case 8: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
-        //--- filler ticks
-        case 9: goto step_next;
-        case 10: goto step_next;
-        case 11: goto step_next;
-        case 12: goto step_next;
-        case 13: {
-            // branch to actual instruction
-            cpu->step = _z80_optable[cpu->opcode];
-        } goto step_next;
-        //=== special case d-loading cycle for (IX+d),n where the immediate load
-        //    is hidden in the d-cycle load
-        //--- mread for d offset
-        case 14: goto step_next;
-        case 15: _wait();_mread(cpu->pc++); goto step_next;
-        case 16: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
-        //--- mread for n
-        case 17: goto step_next;
-        case 18: _wait();_mread(cpu->pc++); goto step_next;
-        case 19: cpu->dlatch=_gd(); goto step_next;
-        //--- filler tick
-        case 20: goto step_next;
-        case 21: {
-            // branch to ld (hl),n and skip the original mread cycle for loading 'n'
-            cpu->step = _z80_optable[cpu->opcode] + 3;
-        } goto step_next;
-        //=== special opcode fetch machine cycle for CB-prefixed instructions
-        case 22: _wait(); cpu->opcode = _gd(); goto step_next;
-        case 23: pins = _z80_refresh(cpu, pins); goto step_next;
-        case 24: {
-            if ((cpu->opcode & 7) == 6) {
-                // this is a (HL) instruction
-                cpu->addr = cpu->hl;
-                cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_CBHL];
-            }
-            else {
-                cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_CB];
-            }
-        } goto step_next;
-        //=== special opcode fetch machine cycle for ED-prefixed instructions
-        // M1/T2: load opcode from data bus
-        case 25: _wait(); cpu->opcode = _gd(); goto step_next;
-        // M1/T3: refresh cycle
-        case 26: pins = _z80_refresh(cpu, pins); goto step_next;
-        // M1/T4: branch to instruction 'payload'
-        case 27: cpu->step = _z80_ed_optable[cpu->opcode]; goto step_next;
-        //=== from here on code-generated
         // <% decoder
         // %>
+        //=== shared fetch machine cycle for non-DD/FD-prefixed ops
+        // M1/T2: load opcode from data bus
+        case Z80_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
+        // M1/T3: refresh cycle
+        case Z80_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
+        // M1/T4: branch to instruction 'payload'
+        case Z80_M1_T4:
+            cpu->step = cpu->opcode;
+            cpu->addr = cpu->hl;
+            goto step_to;
+        //=== shared fetch machine cycle for DD/FD-prefixed ops
+        // M1/T2: load opcode from data bus
+        case Z80_DDFD_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
+        // M1/T3: refresh cycle
+        case Z80_DDFD_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
+        // M1/T4: branch to instruction 'payload'
+        case Z80_DDFD_M1_T4:
+            // FIXME: if indirect_table[cpu->opcode] => DDFD_D_T1 else cpu->opcode
+            cpu->step = _z80_indirect_table[cpu->opcode] ? Z80_DDFD_D_T1 : cpu->opcode;
+            cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
+            goto step_to;
+        //=== optional d-loading cycle for (IX+d), (IY+d)
+        //--- mread
+        case Z80_DDFD_D_T1: goto step_next;
+        case Z80_DDFD_D_T2: _wait();_mread(cpu->pc++); goto step_next;
+        case Z80_DDFD_D_T3: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
+        //--- special case LD (IX/IY+d),n or filler ticks
+        case Z80_DDFD_D_T4: goto step_next;
+        case Z80_DDFD_D_T5: if (cpu->opcode == 0x36) { _wait();_mread(cpu->pc++); }; goto step_next;
+        case Z80_DDFD_D_T6: if (cpu->opcode == 0x36) { cpu->dlatch = _gd(); }; goto step_next;
+        case Z80_DDFD_D_T7: goto step_next;
+        case Z80_DDFD_D_T8:
+            if (cpu->opcode == 0x36) {
+                cpu->step = Z80_DDFD_LDHLN_WR_T1;
+            } else {
+                cpu->step = cpu->opcode;
+            }
+            goto step_to;
+        //--- special case LD (IX/IY+d),n write mcycle
+        case Z80_DDFD_LDHLN_WR_T1: goto step_next;
+        case Z80_DDFD_LDHLN_WR_T2: _wait(); _mwrite(cpu->addr,cpu->dlatch); goto step_next;
+        case Z80_DDFD_LDHLN_WR_T3: goto step_next;
+        case Z80_DDFD_LDHLN_OVERLAPPED: goto fetch_next;
+        //=== special opcode fetch machine cycle for ED-prefixed instructions
+        case Z80_ED_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
+        case Z80_ED_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
+        case Z80_ED_M1_T4: cpu->step = cpu->opcode + 256; goto step_to;
+        //=== special opcode fetch machine cycle for CB-prefixed instructions
+        // FIXME FIXME FIXME
+        // case 22: _wait(); cpu->opcode = _gd(); goto step_next;
+        // case 23: pins = _z80_refresh(cpu, pins); goto step_next;
+        // case 24: {
+        //     if ((cpu->opcode & 7) == 6) {
+        //         // this is a (HL) instruction
+        //         cpu->addr = cpu->hl;
+        //         cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_CBHL];
+        //     }
+        //     else {
+        //         cpu->step = _z80_special_optable[_Z80_OPSTATE_SLOT_CB];
+        //     }
+        // } goto step_next;
+        //=== from here on code-generated
         default: _Z80_UNREACHABLE;
     }
 fetch_next: pins = _z80_fetch(cpu, pins);
