@@ -316,6 +316,16 @@ def gen_decoder():
             cur_extra_step += 1
         op_step += 1
 
+    def add_stepto(action):
+        nonlocal cur_step, cur_extra_step, op_step, op
+        if op_step == 0:
+            l(f'case {cur_step:4}: {action}goto step_to; // {op.name} T:{op_step}')
+            cur_step += 1
+        else:
+            lx(f'case {cur_extra_step:4}: {action}goto step_to; // {op.name} T:{op_step}')
+            cur_extra_step += 1
+        op_step += 1
+
     for op in OPS:
         op_step = 0
         op.num_cycles = compute_tcycles(op)
@@ -370,39 +380,15 @@ def gen_decoder():
                     # if a post-action is defined we can jump to the common fetch block but
                     # instead squeeze the fetch before the fetch action
                     post_action = (f"{mcycle.items['post_action']};" if 'post_action' in mcycle.items else '')
-                    add(f"{action}pins=_z80_fetch(cpu,pins);{post_action}")
+                    add_stepto(f"{action}pins=_z80_fetch(cpu,pins);{post_action}")
                 elif 'prefix' in mcycle.items:
                     # likewise if this is a prefix instruction special case
-                    add(f"{action}_fetch_{mcycle.items['prefix']}();")
+                    add_stepto(f"{action}_fetch_{mcycle.items['prefix']}();")
                 else:
                     # regular case, jump to the shared fetch block after the
                     add_fetch(f'{action}')
         op.num_steps = op_step
     return { 'out_lines': out_lines + out_extra_lines, 'max_step': cur_extra_step }
-
-# def optable_to_string(type):
-#     global indent
-#     indent = 1
-#     res = ''
-#     for op_index,op in enumerate(OPS):
-#         if (type == 'main' or type == 'ddfd') and op_index > 255:
-#             continue
-#         elif type == 'ed' and (op_index < 256 or op_index > 511):
-#             continue
-#         elif type == 'special' and op_index < 512:
-#             continue
-#         # map redundant 'multiple' ops to the original
-#         if flag(op, 'multiple') and op.first_op_index != op_index:
-#             op = OPS[op.first_op_index]
-#         if type == 'ddfd' and flag(op, 'indirect') and flag(op, 'imm8'):
-#             step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"
-#         elif type == 'ddfd' and flag(op, 'indirect'):
-#             step = "_Z80_OPSTATE_STEP_INDIRECT"
-#         else:
-#             step = f"{op.decoder_offset - 1:4}"
-#         res += tab() + f'{step},'
-#         res += f'  // {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
-#     return res
 
 def extra_step_defines_string(max_step):
     manual_steps = [
@@ -427,6 +413,9 @@ def extra_step_defines_string(max_step):
         "ED_M1_T2",
         "ED_M1_T3",
         "ED_M1_T4",
+        "CB_M1_T2",
+        "CB_M1_T3",
+        "CB_M1_T4",
     ]
     res = ''
     step_index = max_step
@@ -447,6 +436,20 @@ def extra_step_defines_string(max_step):
         res += f'#define Z80_{step_name} {op.extra_step_index}\n'
     return res
 
+def indirect_table_string():
+    res = ''
+    for i in range(0, 256):
+        op = OPS[i]
+        if i % 16 == 0:
+            res += '    '
+        if flag(op, 'indirect'):
+            res += '1,'
+        else:
+            res += '0,'
+        if i % 16 == 15:
+            res += '\n'
+    return res
+
 def write_result(decoder_output):
     out_lines = decoder_output['out_lines']
     max_step = decoder_output['max_step']
@@ -454,8 +457,9 @@ def write_result(decoder_output):
         lines = f.read().splitlines()
         lines = templ.replace(lines, 'decoder', out_lines)
         lines = templ.replace(lines, 'extra_step_defines', extra_step_defines_string(max_step))
+        lines = templ.replace(lines, 'indirect_table', indirect_table_string())
     out_str = '\n'.join(lines) + '\n'
-    with open('/Users/floh/scratch/z80.h', 'w') as f:
+    with open(INOUT_PATH, 'w') as f:
         f.write(out_str)
 
 if __name__ == '__main__':
