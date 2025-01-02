@@ -23,8 +23,6 @@ class Op:
         self.prefix = ''
         self.multiple = False
         self.multiple_first_op_index = -1
-        self.num_cycles = 0
-        self.num_steps = 0
         self.step_index = -1
         self.extra_step_index = -1
         self.mcycles = []
@@ -263,13 +261,6 @@ def expand_optable():
     op_index += 1; stampout_op('', -1, op_index, find_opdesc('int_im2'))
     op_index += 1; stampout_op('', -1, op_index, find_opdesc('nmi'))
 
-# compute number of tcycles in an instruction
-def compute_tcycles(op):
-    cycles = 0
-    for mcycle in op.mcycles:
-        cycles += mcycle.tcycles
-    return cycles
-
 # generate code for one op
 def gen_decoder():
     indent = 2
@@ -298,40 +289,39 @@ def gen_decoder():
             if flag(op, 'redundant'):
                 next_step = OPS[op.multiple_first_op_index].extra_step_index
             action = action.replace("$NEXTSTEP", f'{next_step}')
-            l(f'case {cur_step:4}: {action}_goto({next_step}); // {op.name} T:{op_step}')
+            l(f'case {cur_step:4}: {action}_goto({next_step}); // {op.name} ({op_step})')
             cur_step += 1
         else:
             # do not write a payload for redundant ops
             if not flag(op, 'redundant'):
                 next_step = cur_extra_step + 1
                 action = action.replace("$NEXTSTEP", f'{next_step}')
-                lx(f'case {cur_extra_step:4}: {action}_goto({next_step}); // {op.name} T:{op_step}')
+                lx(f'case {cur_extra_step:4}: {action}_goto({next_step}); // {op.name} ({op_step})')
                 cur_extra_step += 1
         op_step += 1
 
     def add_fetch(action):
         nonlocal cur_step, cur_extra_step, op_step, op
         if op_step == 0 and not flag(op, 'special'):
-            l(f'case {cur_step:4}: {action}_fetch(); // {op.name} T:{op_step}')
+            l(f'case {cur_step:4}: {action}_fetch(); // {op.name} ({op_step})')
             cur_step += 1
         else:
-            lx(f'case {cur_extra_step:4}: {action}_fetch(); // {op.name} T:{op_step}')
+            lx(f'case {cur_extra_step:4}: {action}_fetch(); // {op.name} ({op_step})')
             cur_extra_step += 1
         op_step += 1
 
     def add_stepto(action):
         nonlocal cur_step, cur_extra_step, op_step, op
         if op_step == 0:
-            l(f'case {cur_step:4}: {action}goto step_to; // {op.name} T:{op_step}')
+            l(f'case {cur_step:4}: {action}goto step_to; // {op.name} ({op_step})')
             cur_step += 1
         else:
-            lx(f'case {cur_extra_step:4}: {action}goto step_to; // {op.name} T:{op_step}')
+            lx(f'case {cur_extra_step:4}: {action}goto step_to; // {op.name} ({op_step})')
             cur_extra_step += 1
         op_step += 1
 
     for op in OPS:
         op_step = 0
-        op.num_cycles = compute_tcycles(op)
         op.step_index = cur_step
         op.extra_step_index = cur_extra_step
 
@@ -341,7 +331,7 @@ def gen_decoder():
                 pass
             elif mcycle.type == 'mread':
                 addr = mcycle.items['ab']
-                store = mcycle.items['dst'].replace('_X_', '_gd()')
+                store = mcycle.items['dst']
                 add('')
                 add(f'_wait();_mread({addr});')
                 add(f'{store}=_gd();{action}')
@@ -357,7 +347,7 @@ def gen_decoder():
                     add('')
             elif mcycle.type == 'ioread':
                 addr = mcycle.items['ab']
-                store = mcycle.items['dst'].replace('_X_', '_gd()')
+                store = mcycle.items['dst']
                 add('')
                 add('')
                 add(f'_wait();_ioread({addr});')
@@ -390,7 +380,6 @@ def gen_decoder():
                 else:
                     # regular case, jump to the shared fetch block after the
                     add_fetch(f'{action}')
-        op.num_steps = op_step
     return { 'out_lines': out_lines + out_extra_lines, 'max_step': cur_extra_step }
 
 def extra_step_defines_string(max_step):
