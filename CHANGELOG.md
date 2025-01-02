@@ -10,6 +10,9 @@
   - Stepping to the next decoder step is now always 'exclusive', instead
     of incrementing the current step, an explicit step number is written.
     This appears to be a tiny faster.
+  - The separate input template files for the code generation of the Z80
+    and M6502 emulators have been removed, instead the generated code is
+    now injected into the actual source files (search for `<%` and `%>` markers).
 
 * **24-Dec-2024**: complete UI overhaul:
 
