@@ -303,8 +303,9 @@ def gen_decoder():
         else:
             # do not write a payload for redundant ops
             if not flag(op, 'redundant'):
-                action = action.replace("$NEXTSTEP", f'{cur_extra_step + 1}')
-                lx(f'case {cur_extra_step:4}: {action}_step(); // {op.name} T:{op_step}')
+                next_step = cur_extra_step + 1
+                action = action.replace("$NEXTSTEP", f'{next_step}')
+                lx(f'case {cur_extra_step:4}: {action}_goto({next_step}); // {op.name} T:{op_step}')
                 cur_extra_step += 1
         op_step += 1
 
