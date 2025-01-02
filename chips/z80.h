@@ -2765,51 +2765,46 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 1684: _fetch(); // nmi T:10
         // %>
         //=== shared fetch machine cycle for non-DD/FD-prefixed ops
-        case Z80_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
-        case Z80_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
-        case Z80_M1_T4:
-            cpu->step = cpu->opcode;
-            cpu->addr = cpu->hl;
-            goto step_to;
+        case Z80_M1_T2: _wait(); cpu->opcode = _gd(); _step();
+        case Z80_M1_T3: pins = _z80_refresh(cpu, pins); _step();
+        case Z80_M1_T4: cpu->addr = cpu->hl; _goto(cpu->opcode);
         //=== shared fetch machine cycle for DD/FD-prefixed ops
-        case Z80_DDFD_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
-        case Z80_DDFD_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
+        case Z80_DDFD_M1_T2: _wait(); cpu->opcode = _gd(); _step();
+        case Z80_DDFD_M1_T3: pins = _z80_refresh(cpu, pins); _step();
         case Z80_DDFD_M1_T4:
-            cpu->step = _z80_indirect_table[cpu->opcode] ? Z80_DDFD_D_T1 : cpu->opcode;
             cpu->addr = cpu->hlx[cpu->hlx_idx].hl;
-            goto step_to;
+            _goto(_z80_indirect_table[cpu->opcode] ? Z80_DDFD_D_T1 : cpu->opcode);
         //=== optional d-loading cycle for (IX+d), (IY+d)
-        case Z80_DDFD_D_T1: goto step_next;
-        case Z80_DDFD_D_T2: _wait(); _mread(cpu->pc++); goto step_next;
-        case Z80_DDFD_D_T3: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; goto step_next;
+        case Z80_DDFD_D_T1: _step();
+        case Z80_DDFD_D_T2: _wait(); _mread(cpu->pc++); _step();
+        case Z80_DDFD_D_T3: cpu->addr += (int8_t)_gd(); cpu->wz = cpu->addr; _step();
         //--- special case LD (IX/IY+d),n or filler ticks
-        case Z80_DDFD_D_T4: goto step_next;
-        case Z80_DDFD_D_T5: if (cpu->opcode == 0x36) { _wait();_mread(cpu->pc++); }; goto step_next;
-        case Z80_DDFD_D_T6: if (cpu->opcode == 0x36) { cpu->dlatch = _gd(); }; goto step_next;
-        case Z80_DDFD_D_T7: goto step_next;
-        case Z80_DDFD_D_T8: cpu->step = (cpu->opcode==0x36) ? Z80_DDFD_LDHLN_WR_T1 : cpu->opcode; goto step_to;
+        case Z80_DDFD_D_T4: _step();
+        case Z80_DDFD_D_T5: if (cpu->opcode == 0x36) { _wait();_mread(cpu->pc++); }; _step();
+        case Z80_DDFD_D_T6: if (cpu->opcode == 0x36) { cpu->dlatch = _gd(); }; _step();
+        case Z80_DDFD_D_T7: _step();
+        case Z80_DDFD_D_T8: _goto((cpu->opcode==0x36) ? Z80_DDFD_LDHLN_WR_T1 : cpu->opcode);
         //--- special case LD (IX/IY+d),n write mcycle
-        case Z80_DDFD_LDHLN_WR_T1: goto step_next;
-        case Z80_DDFD_LDHLN_WR_T2: _wait(); _mwrite(cpu->addr,cpu->dlatch); goto step_next;
-        case Z80_DDFD_LDHLN_WR_T3: goto step_next;
-        case Z80_DDFD_LDHLN_OVERLAPPED: goto fetch_next;
+        case Z80_DDFD_LDHLN_WR_T1: _step();
+        case Z80_DDFD_LDHLN_WR_T2: _wait(); _mwrite(cpu->addr,cpu->dlatch); _step();
+        case Z80_DDFD_LDHLN_WR_T3: _step();
+        case Z80_DDFD_LDHLN_OVERLAPPED: _fetch();
         //=== special opcode fetch machine cycle for ED-prefixed instructions
-        case Z80_ED_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
-        case Z80_ED_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
-        case Z80_ED_M1_T4: cpu->step = cpu->opcode + 256; goto step_to;
+        case Z80_ED_M1_T2: _wait(); cpu->opcode = _gd(); _step();
+        case Z80_ED_M1_T3: pins = _z80_refresh(cpu, pins); _step();
+        case Z80_ED_M1_T4: _goto(cpu->opcode + 256);
         //=== special opcode fetch machine cycle for CB-prefixed instructions
-        case Z80_CB_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
-        case Z80_CB_M1_T3: pins = _z80_refresh(cpu, pins); goto step_next;
+        case Z80_CB_M1_T2: _wait(); cpu->opcode = _gd(); _step();
+        case Z80_CB_M1_T3: pins = _z80_refresh(cpu, pins); _step();
         case Z80_CB_M1_T4:
             if ((cpu->opcode & 7) == 6) {
                 // this is a (HL) instruction
                 cpu->addr = cpu->hl;
-                cpu->step = Z80_CBHL_STEP;
+                _goto(Z80_CBHL_STEP);
             }
             else {
-                cpu->step = Z80_CB_STEP;
+                _goto(Z80_CB_STEP);
             }
-            goto step_to;
         //=== from here on code-generated
         default: _Z80_UNREACHABLE;
     }
