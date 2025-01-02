@@ -685,7 +685,7 @@ int_im0:
     - { type: generic, tcycles: 1, action: "_wait();cpu->opcode=_z80_get_db(pins)" }
     # combined refresh and branch to loaded instruction cycle
     - { type: generic, tcycles: 1, action: "pins=_z80_refresh(cpu,pins)" }
-    - { type: generic, tcycles: 1, action: "cpu->step=cpu->opcode; cpu->addr=cpu->hl" }
+    - { type: generic, tcycles: 1, action: "cpu->addr=cpu->hl;_goto(cpu->opcode)" }
 
 int_im1:
   flags: { special: true }

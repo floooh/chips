@@ -2718,7 +2718,7 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 1637: pins|=(Z80_M1|Z80_IORQ);_step(); // int_im0 T:1
         case 1638: _wait();cpu->opcode=_z80_get_db(pins);_step(); // int_im0 T:2
         case 1639: pins=_z80_refresh(cpu,pins);_step(); // int_im0 T:3
-        case 1640: cpu->step=cpu->opcode; cpu->addr=cpu->hl;_step(); // int_im0 T:4
+        case 1640: cpu->addr=cpu->hl;_goto(cpu->opcode);_step(); // int_im0 T:4
         case 1641: _fetch(); // int_im0 T:5
         case 1642: cpu->iff1=cpu->iff2=false;_step(); // int_im1 T:0
         case 1643: pins|=(Z80_M1|Z80_IORQ);_step(); // int_im1 T:1
