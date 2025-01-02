@@ -2,10 +2,9 @@
 #   m6502_decoder.py
 #   Generate instruction decoder for m6502.h emulator.
 #-------------------------------------------------------------------------------
-from string import Template
+import templ
 
-InpPath = 'm6502.template.h'
-OutPath = '../chips/m6502.h'
+INOUT_PATH = '../chips/m6502.h'
 
 # flag bits
 CF = (1<<0)
@@ -73,7 +72,7 @@ ops = [
         [[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_],[A_IMM,M_R_]],  # relative branches
         [[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M__W],[A_ZPX,M_R_],[A_ZPX,M_R_],[A_ZPX,M_R_]],
         [[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___],[A____,M___]],
-        [[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M__W],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_]]        
+        [[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M__W],[A_ABX,M_R_],[A_ABX,M_R_],[A_ABX,M_R_]]
     ],
     # cc = 01
     [
@@ -169,7 +168,7 @@ def invalid_opcode(op):
 #-------------------------------------------------------------------------------
 def enc_addr(op, addr_mode, mem_access):
     if addr_mode == A____:
-        # no addressing, this still puts the PC on the address bus without 
+        # no addressing, this still puts the PC on the address bus without
         # incrementing the PC
         op.t('_SA(c->PC);')
     elif addr_mode == A_IMM:
@@ -238,7 +237,7 @@ def enc_addr(op, addr_mode, mem_access):
         # jmp is completely handled in instruction decoding
         pass
     elif addr_mode == A_JSR:
-        # jsr is completely handled in instruction decoding 
+        # jsr is completely handled in instruction decoding
         pass
     else:
         # invalid instruction
@@ -350,7 +349,7 @@ def i_php(o):
 def i_plp(o):
     cmt(o,'PLP')
     o.t('_SA(0x0100|c->S++);')   # read junk byte from current SP
-    o.t('_SA(0x0100|c->S);')     # read actual byte  
+    o.t('_SA(0x0100|c->S);')     # read actual byte
     o.t('c->P=(_GD()|M6502_BF)&~M6502_XF;');
 
 #-------------------------------------------------------------------------------
@@ -643,7 +642,7 @@ def x_sha(o):
 #-------------------------------------------------------------------------------
 def x_shx(o):
     # undocumented SHX
-    # AND X register with the high byte of the target address of the 
+    # AND X register with the high byte of the target address of the
     # argument + 1. Store the result in memory.
     #
     u_cmt(o, 'SHX')
@@ -813,16 +812,16 @@ def enc_op(op):
             else:               i_inc(o)
     elif cc == 3:
         # undocumented block
-        if aaa == 0:    
+        if aaa == 0:
             if bbb == 2:    x_anc(o)
             else:           u_slo(o)
-        elif aaa == 1:  
+        elif aaa == 1:
             if bbb == 2:    x_anc(o)
             else:           u_rla(o)
         elif aaa == 2:
             if bbb == 2:    x_asr(o)
             else:           u_sre(o)
-        elif aaa == 3:  
+        elif aaa == 3:
             if bbb == 2:    x_arr(o)
             else:           u_rra(o)
         elif aaa == 4:
@@ -847,14 +846,15 @@ def enc_op(op):
         o.t('_FETCH();')
     return o
 
-#-------------------------------------------------------------------------------
-#   execution starts here
-#
-for op in range(0, 256):
-    write_op(enc_op(op))
+def write_result():
+    with open(INOUT_PATH, 'r') as f:
+        lines = f.read().splitlines()
+        lines = templ.replace(lines, 'decoder', out_lines)
+    out_str = '\n'.join(lines) + '\n'
+    with open(INOUT_PATH, 'w') as f:
+        f.write(out_str)
 
-with open(InpPath, 'r') as inf:
-    templ = Template(inf.read())
-    c_src = templ.safe_substitute(decode_block=out_lines)
-    with open(OutPath, 'w') as outf:
-        outf.write(c_src)
+if __name__ == '__main__':
+    for op in range(0, 256):
+        write_op(enc_op(op))
+    write_result()

@@ -1,5 +1,19 @@
 ## What's New
 
+* **02-Jan-2024**: Integrated some 'structural ideas' from the Zig Z80 emulator into z80.h
+  (everything backward compatible and no behaviour changes):
+  - Got rid of lookup tables which mapped opcodes to the first instruction
+    payload step in the decoder switch-case statement. Instead the first
+    512 case-branches in the decoder switch-case directly map to the first
+    (and for 4-cycle instructions: only) payload step (256 for the main
+    instruction subset and the next 256 for the ED-prefixed subset).
+  - Stepping to the next decoder step is now always 'exclusive', instead
+    of incrementing the current step, an explicit step number is written.
+    This appears to be a tiny faster.
+  - The separate input template files for the code generation of the Z80
+    and M6502 emulators have been removed, instead the generated code is
+    now injected into the actual source files (search for `<%` and `%>` markers).
+
 * **24-Dec-2024**: complete UI overhaul:
 
   - switched to the Dear ImGui docking branch

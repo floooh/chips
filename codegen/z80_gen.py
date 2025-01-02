@@ -1,10 +1,8 @@
 import yaml, copy
-from string import Template
+import templ
 
-FIRST_DECODER_STEP = 28
 DESC_PATH  = 'z80_desc.yml'
-TEMPL_PATH = 'z80.template.h'
-OUT_PATH   = '../chips/z80.h'
+INOUT_PATH  = '../chips/z80.h'
 TAB_WIDTH  = 4
 
 # a machine cycle description
@@ -23,29 +21,16 @@ class Op:
         self.flags = flags
         self.opcode = -1
         self.prefix = ''
-        self.single = False
-        self.num_cycles = 0
-        self.num_steps = 0
-        self.decoder_offset = 0
-        self.first_op_index = -1
+        self.multiple = False
+        self.multiple_first_op_index = -1
+        self.step_index = -1
+        self.extra_step_index = -1
         self.mcycles = []
 
-OP_PATTERNS = []
-
-OP_INDEX_CB = 512
-OP_INDEX_CBHL = 513
-OP_INDEX_DDFDCB = 514
-OP_INDEX_INT_IM0 = 515
-OP_INDEX_INT_IM1 = 516
-OP_INDEX_INT_IM2 = 517
-OP_INDEX_NMI = 518
+OP_DESCS = []
 
 NUM_SPECIAL_OPS = 7
 
-# 0..255:   core opcodes
-# 256..511: ED prefix opcodes
-# 512..514: special decoder blocks for CB-prefix
-# 515..519: special decoder blocks for interrupt handling
 OPS = [None for _ in range(0,2*256 + NUM_SPECIAL_OPS)]
 
 # a fetch machine cycle is processed as 2 parts because it overlaps
@@ -75,8 +60,8 @@ rp2_map  = [ 'cpu->bc', 'cpu->de', 'cpu->hlx[cpu->hlx_idx].hl', 'cpu->af' ]
 rp2l_map = [ 'cpu->c', 'cpu->e', 'cpu->hlx[cpu->hlx_idx].l', 'cpu->f']
 rp2h_map = [ 'cpu->b', 'cpu->d', 'cpu->hlx[cpu->hlx_idx].h', 'cpu->a']
 cc_map   = [ '_cc_nz', '_cc_z', '_cc_nc', '_cc_c', '_cc_po', '_cc_pe', '_cc_p', '_cc_m' ]
-alu_map  = [ '_z80_add8(cpu,', 
-             '_z80_adc8(cpu,', 
+alu_map  = [ '_z80_add8(cpu,',
+             '_z80_adc8(cpu,',
              '_z80_sub8(cpu,',
              '_z80_sbc8(cpu,',
              '_z80_and8(cpu,',
@@ -95,22 +80,6 @@ im_map = [ '0', '0', '1', '2', '0', '0', '1', '2' ]
 
 def err(msg: str):
     raise BaseException(msg)
-
-def unwrap(maybe_value):
-    if maybe_value is None:
-        err('Expected valid value, found None')
-    return maybe_value
-
-# append a source code line
-indent = 0
-out_lines = ''
-
-def tab():
-    return ' ' * TAB_WIDTH * indent
-
-def l(s) :
-    global out_lines
-    out_lines += tab() + s + '\n'
 
 def map_comment(inp, y, z, p, q):
     return inp\
@@ -226,12 +195,20 @@ def parse_opdescs():
                 op.mcycles.insert(0, MCycle('fetch', FETCH_TCYCLES, {}))
             if num_overlapped == 0:
                 op.mcycles.append(MCycle('overlapped', OVERLAPPED_FETCH_TCYCLES, {}))
-            OP_PATTERNS.append(op)
+            OP_DESCS.append(op)
 
 def find_opdesc(name):
-    for op_desc in OP_PATTERNS:
+    for op_desc in OP_DESCS:
         if op_desc.name == name:
             return op_desc
+    err(f"opdesc not found for '{name}'")
+    return None
+
+def find_op(name):
+    for op in OPS:
+        if op.name == name:
+            return op
+    err(f"op not found for '{name}'")
     return None
 
 def stampout_mcycle_items(mcycle_items, y, z, p, q):
@@ -249,12 +226,14 @@ def stampout_op(prefix, opcode, op_index, op_desc):
     z = opcode & 7
     p = y >> 1
     q = y & 1
-    if op_desc.first_op_index == -1:
-        op_desc.first_op_index = op_index
+    if op_desc.multiple_first_op_index == -1:
+        op_desc.multiple_first_op_index = op_index
     op = copy.deepcopy(op_desc)
     op.name = map_comment(op.name, y, z, p, q)
     op.prefix = prefix
     op.opcode = opcode
+    if flag(op, 'multiple') and op.multiple_first_op_index != op_index:
+        op.flags['redundant'] = True
     for mcycle in op.mcycles:
         mcycle.items = stampout_mcycle_items(mcycle.items, y, z, p, q)
     OPS[op_index] = op
@@ -263,79 +242,102 @@ def expand_optable():
     for oprange,prefix in enumerate(['', 'ed']):
         for opcode in range(0,256):
             x = opcode >> 6 # type: ignore (generated unused warning, but x is needed in 'eval')
-            y = (opcode >> 3) & 7 
+            y = (opcode >> 3) & 7
             z = opcode & 7 # type: ignore
             p = y >> 1 # type: ignore
             q = y & 1 # type: ignore
             op_index = oprange * 256 + opcode
-            for op_desc_index,op_desc in enumerate(OP_PATTERNS):
+            for op_desc_index,op_desc in enumerate(OP_DESCS):
                 if not flag(op_desc, 'special'):
                     if eval(op_desc.cond_compiled) and op_desc.prefix == prefix:
                         if OPS[op_index] is not None:
                             err(f"Condition collission for opcode {op_desc_index:02X} and '{op_desc.name}'")
                         stampout_op(prefix, opcode, op_index, op_desc)
-    stampout_op('cb', 0, OP_INDEX_CB, unwrap(find_opdesc('cb')))
-    stampout_op('cb', 0, OP_INDEX_CBHL, unwrap(find_opdesc('cbhl')))
-    stampout_op('cb', 0, OP_INDEX_DDFDCB, unwrap(find_opdesc('ddfdcb')))
-    stampout_op('', 0, OP_INDEX_INT_IM0, unwrap(find_opdesc('int_im0')))
-    stampout_op('', 0, OP_INDEX_INT_IM1, unwrap(find_opdesc('int_im1')))
-    stampout_op('', 0, OP_INDEX_INT_IM2, unwrap(find_opdesc('int_im2')))
-    stampout_op('', 0, OP_INDEX_NMI, unwrap(find_opdesc('nmi')))
-
-# compute number of tcycles in an instruction
-def compute_tcycles(op):
-    cycles = 0
-    for mcycle in op.mcycles:
-        cycles += mcycle.tcycles
-    return cycles
+    op_index += 1; stampout_op('cb', -1, op_index, find_opdesc('cb'))
+    op_index += 1; stampout_op('cb', -1, op_index, find_opdesc('cbhl'))
+    op_index += 1; stampout_op('cb', -1, op_index, find_opdesc('ddfdcb'))
+    op_index += 1; stampout_op('', -1, op_index, find_opdesc('int_im0'))
+    op_index += 1; stampout_op('', -1, op_index, find_opdesc('int_im1'))
+    op_index += 1; stampout_op('', -1, op_index, find_opdesc('int_im2'))
+    op_index += 1; stampout_op('', -1, op_index, find_opdesc('nmi'))
 
 # generate code for one op
 def gen_decoder():
-    global indent
     indent = 2
-    decoder_step = FIRST_DECODER_STEP
+    cur_step = 0
+    cur_extra_step = 512 # main and ed ops
+    out_lines = ''
+    out_extra_lines = ''
+
+    def tab():
+        return ' ' * TAB_WIDTH * indent
+
+    def l(s):
+        nonlocal out_lines
+        out_lines += tab() + s + '\n'
+
+    def lx(s):
+        nonlocal out_extra_lines
+        out_extra_lines += tab() + s + '\n'
 
     def add(action):
-        nonlocal decoder_step
-        nonlocal step
-        l(f'case {decoder_step:4}: {action}goto step_next;')
-        decoder_step += 1
-        step += 1
-    
+        nonlocal cur_step, cur_extra_step, op_step, op
+        # NOTE: special ops (interrupt handling etc) are entirely written into the 'extra' decoder block
+        if op_step == 0 and not flag(op, 'special'):
+            next_step = cur_extra_step
+            # check if this is a redundant op which needs to step to a shared payload
+            if flag(op, 'redundant'):
+                next_step = OPS[op.multiple_first_op_index].extra_step_index
+            action = action.replace("$NEXTSTEP", f'{next_step}')
+            l(f'case {cur_step:4}: {action}_goto({next_step}); // {op.name} ({op_step})')
+            cur_step += 1
+        else:
+            # do not write a payload for redundant ops
+            if not flag(op, 'redundant'):
+                next_step = cur_extra_step + 1
+                action = action.replace("$NEXTSTEP", f'{next_step}')
+                lx(f'case {cur_extra_step:4}: {action}_goto({next_step}); // {op.name} ({op_step})')
+                cur_extra_step += 1
+        op_step += 1
+
     def add_fetch(action):
-        nonlocal decoder_step
-        nonlocal step
-        l(f'case {decoder_step:4}: {action}goto fetch_next;')
-        decoder_step += 1
-        step += 1
+        nonlocal cur_step, cur_extra_step, op_step, op
+        if op_step == 0 and not flag(op, 'special'):
+            l(f'case {cur_step:4}: {action}_fetch(); // {op.name} ({op_step})')
+            cur_step += 1
+        else:
+            lx(f'case {cur_extra_step:4}: {action}_fetch(); // {op.name} ({op_step})')
+            cur_extra_step += 1
+        op_step += 1
 
-    for op_index,maybe_op in enumerate(OPS):
-        op = unwrap(maybe_op)
-        # ignore duplicate ops if they are flagged as 'single'
-        if flag(op, 'single') and op.first_op_index != op_index:
-            continue
+    def add_stepto(action):
+        nonlocal cur_step, cur_extra_step, op_step, op
+        if op_step == 0:
+            l(f'case {cur_step:4}: {action}goto step_to; // {op.name} ({op_step})')
+            cur_step += 1
+        else:
+            lx(f'case {cur_extra_step:4}: {action}goto step_to; // {op.name} ({op_step})')
+            cur_extra_step += 1
+        op_step += 1
 
-        step = 0
-        op.num_cycles = compute_tcycles(op)
-        op.decoder_offset = decoder_step
+    for op in OPS:
+        op_step = 0
+        op.step_index = cur_step
+        op.extra_step_index = cur_extra_step
 
-        l('')
-        l(f'// {op.prefix.upper()} {op.opcode:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles})')
         for i,mcycle in enumerate(op.mcycles):
             action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
             if mcycle.type == 'fetch':
                 pass
             elif mcycle.type == 'mread':
-                l(f'// -- mread')
                 addr = mcycle.items['ab']
-                store = mcycle.items['dst'].replace('_X_', '_gd()')
+                store = mcycle.items['dst']
                 add('')
                 add(f'_wait();_mread({addr});')
                 add(f'{store}=_gd();{action}')
                 for _ in range(3,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'mwrite':
-                l(f'// -- mwrite')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 add('')
@@ -344,9 +346,8 @@ def gen_decoder():
                 for _ in range(3,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'ioread':
-                l(f'// -- ioread')
                 addr = mcycle.items['ab']
-                store = mcycle.items['dst'].replace('_X_', '_gd()')
+                store = mcycle.items['dst']
                 add('')
                 add('')
                 add(f'_wait();_ioread({addr});')
@@ -354,7 +355,6 @@ def gen_decoder():
                 for _ in range(4,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'iowrite':
-                l(f'// -- iowrite')
                 addr = mcycle.items['ab']
                 data = mcycle.items['db']
                 add('')
@@ -364,66 +364,98 @@ def gen_decoder():
                 for _ in range(4,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'generic':
-                l(f'// -- generic')
                 add(f'{action}')
                 for _ in range(1,mcycle.tcycles):
                     add('')
             elif mcycle.type == 'overlapped':
-                l(f'// -- overlapped')
                 action = (f"{mcycle.items['action']};" if 'action' in mcycle.items else '')
                 if 'post_action' in mcycle.items:
                     # if a post-action is defined we can jump to the common fetch block but
                     # instead squeeze the fetch before the fetch action
                     post_action = (f"{mcycle.items['post_action']};" if 'post_action' in mcycle.items else '')
-                    add(f"{action}pins=_z80_fetch(cpu,pins);{post_action}")
+                    add_stepto(f"{action}pins=_z80_fetch(cpu,pins);{post_action}")
                 elif 'prefix' in mcycle.items:
                     # likewise if this is a prefix instruction special case
-                    add(f"{action}_fetch_{mcycle.items['prefix']}();")
+                    add_stepto(f"{action}_fetch_{mcycle.items['prefix']}();")
                 else:
-                    # regular case, jump to the shared fetch block after the 
+                    # regular case, jump to the shared fetch block after the
                     add_fetch(f'{action}')
-        op.num_steps = step
+    return { 'out_lines': out_lines + out_extra_lines, 'max_step': cur_extra_step }
 
-def optable_to_string(type):
-    global indent
-    indent = 1
+def extra_step_defines_string(max_step):
+    manual_steps = [
+        "DDFD_M1_T2",
+        "DDFD_M1_T3",
+        "DDFD_M1_T4",
+        "DDFD_D_T1",
+        "DDFD_D_T2",
+        "DDFD_D_T3",
+        "DDFD_D_T4",
+        "DDFD_D_T5",
+        "DDFD_D_T6",
+        "DDFD_D_T7",
+        "DDFD_D_T8",
+        "DDFD_LDHLN_WR_T1",
+        "DDFD_LDHLN_WR_T2",
+        "DDFD_LDHLN_WR_T3",
+        "DDFD_LDHLN_OVERLAPPED",
+        "CB_M1_T2",
+        "CB_M1_T3",
+        "CB_M1_T4",
+        "ED_M1_T2",
+        "ED_M1_T3",
+        "ED_M1_T4",
+        "M1_T2",
+        "M1_T3",
+        "M1_T4",
+    ]
     res = ''
-    for op_index,maybe_op in enumerate(OPS):
-        if (type == 'main' or type == 'ddfd') and op_index > 255:
-            continue
-        elif type == 'ed' and (op_index < 256 or op_index > 511):
-            continue
-        elif type == 'special' and op_index < 512:
-            continue
-        op = unwrap(maybe_op)
-        # map redundant 'single' ops to the original
-        if flag(op, 'single') and op.first_op_index != op_index:
-            op = unwrap(OPS[op.first_op_index])
-        if type == 'ddfd' and flag(op, 'indirect') and flag(op, 'imm8'):
-            step = "_Z80_OPSTATE_STEP_INDIRECT_IMM8"
-        elif type == 'ddfd' and flag(op, 'indirect'):
-            step = "_Z80_OPSTATE_STEP_INDIRECT"
-        else:
-            step = f"{op.decoder_offset - 1:4}"
-        res += tab() + f'{step},' 
-        res += f'  // {op_index&0xFF:02X}: {op.name} (M:{len(op.mcycles)-1} T:{op.num_cycles} steps:{op.num_steps})\n'
+    step_index = max_step
+    for step_name in manual_steps:
+        res += f'#define Z80_{step_name} {step_index}\n'
+        step_index += 1
+    special_steps = {
+        'cb': 'CB_STEP',
+        'cbhl': 'CBHL_STEP',
+        'ddfdcb': 'DDFDCB_STEP',
+        'int_im0': 'INT_IM0_STEP',
+        'int_im1': 'INT_IM1_STEP',
+        'int_im2': 'INT_IM2_STEP',
+        'nmi': 'NMI_STEP',
+    }
+    for op_name, step_name in special_steps.items():
+        op = find_op(op_name)
+        res += f'#define Z80_{step_name} {op.extra_step_index}\n'
     return res
 
-def write_result():
-    with open(TEMPL_PATH, 'r') as templf:
-        templ = Template(templf.read())
-        c_src = templ.safe_substitute(
-            decode_block = out_lines,
-            optable = optable_to_string('main'),
-            ddfd_optable = optable_to_string('ddfd'),
-            ed_optable = optable_to_string('ed'),
-            special_optable = optable_to_string('special'))
+def indirect_table_string():
+    res = ''
+    for i in range(0, 256):
+        op = OPS[i]
+        if i % 16 == 0:
+            res += '    '
+        if flag(op, 'indirect'):
+            res += '1,'
+        else:
+            res += '0,'
+        if i % 16 == 15:
+            res += '\n'
+    return res
 
-        with open(OUT_PATH, 'w') as outf:
-            outf.write(c_src)
+def write_result(decoder_output):
+    out_lines = decoder_output['out_lines']
+    max_step = decoder_output['max_step']
+    with open(INOUT_PATH, 'r') as f:
+        lines = f.read().splitlines()
+        lines = templ.replace(lines, 'decoder', out_lines)
+        lines = templ.replace(lines, 'extra_step_defines', extra_step_defines_string(max_step))
+        lines = templ.replace(lines, 'indirect_table', indirect_table_string())
+    out_str = '\n'.join(lines) + '\n'
+    with open(INOUT_PATH, 'w') as f:
+        f.write(out_str)
 
-if __name__=='__main__':
+if __name__ == '__main__':
     parse_opdescs()
     expand_optable()
-    gen_decoder()
-    write_result()
+    decoder_output = gen_decoder()
+    write_result(decoder_output)
