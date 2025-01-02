@@ -398,30 +398,30 @@ bool z80_opdone(z80_t* cpu);
 
 // extra/special decoder steps
 // <% extra_step_defines
-#define Z80_M1_T2 1685
-#define Z80_M1_T3 1686
-#define Z80_M1_T4 1687
-#define Z80_DDFD_M1_T2 1688
-#define Z80_DDFD_M1_T3 1689
-#define Z80_DDFD_M1_T4 1690
-#define Z80_DDFD_D_T1 1691
-#define Z80_DDFD_D_T2 1692
-#define Z80_DDFD_D_T3 1693
-#define Z80_DDFD_D_T4 1694
-#define Z80_DDFD_D_T5 1695
-#define Z80_DDFD_D_T6 1696
-#define Z80_DDFD_D_T7 1697
-#define Z80_DDFD_D_T8 1698
-#define Z80_DDFD_LDHLN_WR_T1 1699
-#define Z80_DDFD_LDHLN_WR_T2 1700
-#define Z80_DDFD_LDHLN_WR_T3 1701
-#define Z80_DDFD_LDHLN_OVERLAPPED 1702
+#define Z80_DDFD_M1_T2 1685
+#define Z80_DDFD_M1_T3 1686
+#define Z80_DDFD_M1_T4 1687
+#define Z80_DDFD_D_T1 1688
+#define Z80_DDFD_D_T2 1689
+#define Z80_DDFD_D_T3 1690
+#define Z80_DDFD_D_T4 1691
+#define Z80_DDFD_D_T5 1692
+#define Z80_DDFD_D_T6 1693
+#define Z80_DDFD_D_T7 1694
+#define Z80_DDFD_D_T8 1695
+#define Z80_DDFD_LDHLN_WR_T1 1696
+#define Z80_DDFD_LDHLN_WR_T2 1697
+#define Z80_DDFD_LDHLN_WR_T3 1698
+#define Z80_DDFD_LDHLN_OVERLAPPED 1699
+#define Z80_CB_M1_T2 1700
+#define Z80_CB_M1_T3 1701
+#define Z80_CB_M1_T4 1702
 #define Z80_ED_M1_T2 1703
 #define Z80_ED_M1_T3 1704
 #define Z80_ED_M1_T4 1705
-#define Z80_CB_M1_T2 1706
-#define Z80_CB_M1_T3 1707
-#define Z80_CB_M1_T4 1708
+#define Z80_M1_T2 1706
+#define Z80_M1_T3 1707
+#define Z80_M1_T4 1708
 #define Z80_CB_STEP 1612
 #define Z80_CBHL_STEP 1613
 #define Z80_DDFDCB_STEP 1621
@@ -2755,10 +2755,6 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case 1683: _goto(1684); // nmi T:9
         case 1684: _fetch(); // nmi T:10
         // %>
-        //=== shared fetch machine cycle for non-DD/FD-prefixed ops
-        case Z80_M1_T2: _wait(); cpu->opcode = _gd(); _goto(Z80_M1_T3);
-        case Z80_M1_T3: pins = _z80_refresh(cpu, pins); _goto(Z80_M1_T4);
-        case Z80_M1_T4: cpu->addr = cpu->hl; _goto(cpu->opcode);
         //=== shared fetch machine cycle for DD/FD-prefixed ops
         case Z80_DDFD_M1_T2: _wait(); cpu->opcode = _gd(); _goto(Z80_DDFD_M1_T3);
         case Z80_DDFD_M1_T3: pins = _z80_refresh(cpu, pins); _goto(Z80_DDFD_M1_T4);
@@ -2780,10 +2776,6 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
         case Z80_DDFD_LDHLN_WR_T2: _wait(); _mwrite(cpu->addr,cpu->dlatch); _goto(Z80_DDFD_LDHLN_WR_T3);
         case Z80_DDFD_LDHLN_WR_T3: _goto(Z80_DDFD_LDHLN_OVERLAPPED);
         case Z80_DDFD_LDHLN_OVERLAPPED: _fetch();
-        //=== special opcode fetch machine cycle for ED-prefixed instructions
-        case Z80_ED_M1_T2: _wait(); cpu->opcode = _gd(); _goto(Z80_ED_M1_T3);
-        case Z80_ED_M1_T3: pins = _z80_refresh(cpu, pins); _goto(Z80_ED_M1_T4);
-        case Z80_ED_M1_T4: _goto(cpu->opcode + 256);
         //=== special opcode fetch machine cycle for CB-prefixed instructions
         case Z80_CB_M1_T2: _wait(); cpu->opcode = _gd(); _goto(Z80_CB_M1_T3);
         case Z80_CB_M1_T3: pins = _z80_refresh(cpu, pins); _goto(Z80_CB_M1_T4);
@@ -2796,7 +2788,14 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
             else {
                 _goto(Z80_CB_STEP);
             }
-        //=== from here on code-generated
+        //=== special opcode fetch machine cycle for ED-prefixed instructions
+        case Z80_ED_M1_T2: _wait(); cpu->opcode = _gd(); _goto(Z80_ED_M1_T3);
+        case Z80_ED_M1_T3: pins = _z80_refresh(cpu, pins); _goto(Z80_ED_M1_T4);
+        case Z80_ED_M1_T4: _goto(cpu->opcode + 256);
+        //=== shared fetch machine cycle for non-DD/FD-prefixed ops
+        case Z80_M1_T2: _wait(); cpu->opcode = _gd(); _goto(Z80_M1_T3);
+        case Z80_M1_T3: pins = _z80_refresh(cpu, pins); _goto(Z80_M1_T4);
+        case Z80_M1_T4: cpu->addr = cpu->hl; _goto(cpu->opcode);
         default: _Z80_UNREACHABLE;
     }
 fetch_next:

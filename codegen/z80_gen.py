@@ -395,9 +395,6 @@ def gen_decoder():
 
 def extra_step_defines_string(max_step):
     manual_steps = [
-        "M1_T2",
-        "M1_T3",
-        "M1_T4",
         "DDFD_M1_T2",
         "DDFD_M1_T3",
         "DDFD_M1_T4",
@@ -413,12 +410,15 @@ def extra_step_defines_string(max_step):
         "DDFD_LDHLN_WR_T2",
         "DDFD_LDHLN_WR_T3",
         "DDFD_LDHLN_OVERLAPPED",
-        "ED_M1_T2",
-        "ED_M1_T3",
-        "ED_M1_T4",
         "CB_M1_T2",
         "CB_M1_T3",
         "CB_M1_T4",
+        "ED_M1_T2",
+        "ED_M1_T3",
+        "ED_M1_T4",
+        "M1_T2",
+        "M1_T3",
+        "M1_T4",
     ]
     res = ''
     step_index = max_step
