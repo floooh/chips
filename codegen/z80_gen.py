@@ -297,22 +297,24 @@ def gen_decoder():
             # check if this is a redundant op which needs to step to a shared payload
             if flag(op, 'redundant'):
                 next_step = OPS[op.multiple_first_op_index].extra_step_index
-            l(f'case {cur_step:4}: {action}cpu->step={next_step};goto step_to; // {op.name} T:{op_step}')
+            action = action.replace("$NEXTSTEP", f'{next_step}')
+            l(f'case {cur_step:4}: {action}_goto({next_step}); // {op.name} T:{op_step}')
             cur_step += 1
         else:
             # do not write a payload for redundant ops
             if not flag(op, 'redundant'):
-                lx(f'case {cur_extra_step:4}: {action}goto step_next; // {op.name} T:{op_step}')
+                action = action.replace("$NEXTSTEP", f'{cur_extra_step + 1}')
+                lx(f'case {cur_extra_step:4}: {action}_step(); // {op.name} T:{op_step}')
                 cur_extra_step += 1
         op_step += 1
 
     def add_fetch(action):
         nonlocal cur_step, cur_extra_step, op_step, op
         if op_step == 0 and not flag(op, 'special'):
-            l(f'case {cur_step:4}: {action}goto fetch_next; // {op.name} T:{op_step}')
+            l(f'case {cur_step:4}: {action}_fetch(); // {op.name} T:{op_step}')
             cur_step += 1
         else:
-            lx(f'case {cur_extra_step:4}: {action}goto fetch_next; // {op.name} T:{op_step}')
+            lx(f'case {cur_extra_step:4}: {action}_fetch(); // {op.name} T:{op_step}')
             cur_extra_step += 1
         op_step += 1
 

@@ -1053,7 +1053,9 @@ uint64_t z80_prefetch(z80_t* cpu, uint16_t new_pc) {
 #define _gd()               _z80_get_db(pins)
 
 // high level helper macros
-#define _skip(n)        cpu->step+=(n);
+#define _goto(n)        cpu->step=n;goto step_to
+#define _step()         goto step_next
+#define _fetch()        goto fetch_next
 #define _fetch_dd()     pins=_z80_fetch_dd(cpu,pins);
 #define _fetch_fd()     pins=_z80_fetch_fd(cpu,pins);
 #define _fetch_ed()     pins=_z80_fetch_ed(cpu,pins);
@@ -1076,1691 +1078,1691 @@ uint64_t z80_tick(z80_t* cpu, uint64_t pins) {
     pins &= ~(Z80_CTRL_PIN_MASK|Z80_RETI);
     switch (cpu->step) {
         // <% decoder
-        case    0: goto fetch_next; // NOP T:0
-        case    1: cpu->step=512;goto step_to; // LD BC,nn T:0
-        case    2: cpu->step=518;goto step_to; // LD (BC),A T:0
-        case    3: cpu->bc++;cpu->step=521;goto step_to; // INC BC T:0
-        case    4: cpu->b=_z80_inc8(cpu,cpu->b);goto fetch_next; // INC B T:0
-        case    5: cpu->b=_z80_dec8(cpu,cpu->b);goto fetch_next; // DEC B T:0
-        case    6: cpu->step=523;goto step_to; // LD B,n T:0
-        case    7: _z80_rlca(cpu);goto fetch_next; // RLCA T:0
-        case    8: _z80_ex_af_af2(cpu);goto fetch_next; // EX AF,AF' T:0
-        case    9: _z80_add16(cpu,cpu->bc);cpu->step=526;goto step_to; // ADD HL,BC T:0
-        case   10: cpu->step=533;goto step_to; // LD A,(BC) T:0
-        case   11: cpu->bc--;cpu->step=536;goto step_to; // DEC BC T:0
-        case   12: cpu->c=_z80_inc8(cpu,cpu->c);goto fetch_next; // INC C T:0
-        case   13: cpu->c=_z80_dec8(cpu,cpu->c);goto fetch_next; // DEC C T:0
-        case   14: cpu->step=538;goto step_to; // LD C,n T:0
-        case   15: _z80_rrca(cpu);goto fetch_next; // RRCA T:0
-        case   16: cpu->step=541;goto step_to; // DJNZ d T:0
-        case   17: cpu->step=550;goto step_to; // LD DE,nn T:0
-        case   18: cpu->step=556;goto step_to; // LD (DE),A T:0
-        case   19: cpu->de++;cpu->step=559;goto step_to; // INC DE T:0
-        case   20: cpu->d=_z80_inc8(cpu,cpu->d);goto fetch_next; // INC D T:0
-        case   21: cpu->d=_z80_dec8(cpu,cpu->d);goto fetch_next; // DEC D T:0
-        case   22: cpu->step=561;goto step_to; // LD D,n T:0
-        case   23: _z80_rla(cpu);goto fetch_next; // RLA T:0
-        case   24: cpu->step=564;goto step_to; // JR d T:0
-        case   25: _z80_add16(cpu,cpu->de);cpu->step=572;goto step_to; // ADD HL,DE T:0
-        case   26: cpu->step=579;goto step_to; // LD A,(DE) T:0
-        case   27: cpu->de--;cpu->step=582;goto step_to; // DEC DE T:0
-        case   28: cpu->e=_z80_inc8(cpu,cpu->e);goto fetch_next; // INC E T:0
-        case   29: cpu->e=_z80_dec8(cpu,cpu->e);goto fetch_next; // DEC E T:0
-        case   30: cpu->step=584;goto step_to; // LD E,n T:0
-        case   31: _z80_rra(cpu);goto fetch_next; // RRA T:0
-        case   32: cpu->step=587;goto step_to; // JR NZ,d T:0
-        case   33: cpu->step=595;goto step_to; // LD HL,nn T:0
-        case   34: cpu->step=601;goto step_to; // LD (nn),HL T:0
-        case   35: cpu->hlx[cpu->hlx_idx].hl++;cpu->step=613;goto step_to; // INC HL T:0
-        case   36: cpu->hlx[cpu->hlx_idx].h=_z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // INC H T:0
-        case   37: cpu->hlx[cpu->hlx_idx].h=_z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // DEC H T:0
-        case   38: cpu->step=615;goto step_to; // LD H,n T:0
-        case   39: _z80_daa(cpu);goto fetch_next; // DAA T:0
-        case   40: cpu->step=618;goto step_to; // JR Z,d T:0
-        case   41: _z80_add16(cpu,cpu->hlx[cpu->hlx_idx].hl);cpu->step=626;goto step_to; // ADD HL,HL T:0
-        case   42: cpu->step=633;goto step_to; // LD HL,(nn) T:0
-        case   43: cpu->hlx[cpu->hlx_idx].hl--;cpu->step=645;goto step_to; // DEC HL T:0
-        case   44: cpu->hlx[cpu->hlx_idx].l=_z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // INC L T:0
-        case   45: cpu->hlx[cpu->hlx_idx].l=_z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // DEC L T:0
-        case   46: cpu->step=647;goto step_to; // LD L,n T:0
-        case   47: _z80_cpl(cpu);goto fetch_next; // CPL T:0
-        case   48: cpu->step=650;goto step_to; // JR NC,d T:0
-        case   49: cpu->step=658;goto step_to; // LD SP,nn T:0
-        case   50: cpu->step=664;goto step_to; // LD (nn),A T:0
-        case   51: cpu->sp++;cpu->step=673;goto step_to; // INC SP T:0
-        case   52: cpu->step=675;goto step_to; // INC (HL) T:0
-        case   53: cpu->step=682;goto step_to; // DEC (HL) T:0
-        case   54: cpu->step=689;goto step_to; // LD (HL),n T:0
-        case   55: _z80_scf(cpu);goto fetch_next; // SCF T:0
-        case   56: cpu->step=695;goto step_to; // JR C,d T:0
-        case   57: _z80_add16(cpu,cpu->sp);cpu->step=703;goto step_to; // ADD HL,SP T:0
-        case   58: cpu->step=710;goto step_to; // LD A,(nn) T:0
-        case   59: cpu->sp--;cpu->step=719;goto step_to; // DEC SP T:0
-        case   60: cpu->a=_z80_inc8(cpu,cpu->a);goto fetch_next; // INC A T:0
-        case   61: cpu->a=_z80_dec8(cpu,cpu->a);goto fetch_next; // DEC A T:0
-        case   62: cpu->step=721;goto step_to; // LD A,n T:0
-        case   63: _z80_ccf(cpu);goto fetch_next; // CCF T:0
-        case   64: cpu->b=cpu->b;goto fetch_next; // LD B,B T:0
-        case   65: cpu->b=cpu->c;goto fetch_next; // LD B,C T:0
-        case   66: cpu->b=cpu->d;goto fetch_next; // LD B,D T:0
-        case   67: cpu->b=cpu->e;goto fetch_next; // LD B,E T:0
-        case   68: cpu->b=cpu->hlx[cpu->hlx_idx].h;goto fetch_next; // LD B,H T:0
-        case   69: cpu->b=cpu->hlx[cpu->hlx_idx].l;goto fetch_next; // LD B,L T:0
-        case   70: cpu->step=724;goto step_to; // LD B,(HL) T:0
-        case   71: cpu->b=cpu->a;goto fetch_next; // LD B,A T:0
-        case   72: cpu->c=cpu->b;goto fetch_next; // LD C,B T:0
-        case   73: cpu->c=cpu->c;goto fetch_next; // LD C,C T:0
-        case   74: cpu->c=cpu->d;goto fetch_next; // LD C,D T:0
-        case   75: cpu->c=cpu->e;goto fetch_next; // LD C,E T:0
-        case   76: cpu->c=cpu->hlx[cpu->hlx_idx].h;goto fetch_next; // LD C,H T:0
-        case   77: cpu->c=cpu->hlx[cpu->hlx_idx].l;goto fetch_next; // LD C,L T:0
-        case   78: cpu->step=727;goto step_to; // LD C,(HL) T:0
-        case   79: cpu->c=cpu->a;goto fetch_next; // LD C,A T:0
-        case   80: cpu->d=cpu->b;goto fetch_next; // LD D,B T:0
-        case   81: cpu->d=cpu->c;goto fetch_next; // LD D,C T:0
-        case   82: cpu->d=cpu->d;goto fetch_next; // LD D,D T:0
-        case   83: cpu->d=cpu->e;goto fetch_next; // LD D,E T:0
-        case   84: cpu->d=cpu->hlx[cpu->hlx_idx].h;goto fetch_next; // LD D,H T:0
-        case   85: cpu->d=cpu->hlx[cpu->hlx_idx].l;goto fetch_next; // LD D,L T:0
-        case   86: cpu->step=730;goto step_to; // LD D,(HL) T:0
-        case   87: cpu->d=cpu->a;goto fetch_next; // LD D,A T:0
-        case   88: cpu->e=cpu->b;goto fetch_next; // LD E,B T:0
-        case   89: cpu->e=cpu->c;goto fetch_next; // LD E,C T:0
-        case   90: cpu->e=cpu->d;goto fetch_next; // LD E,D T:0
-        case   91: cpu->e=cpu->e;goto fetch_next; // LD E,E T:0
-        case   92: cpu->e=cpu->hlx[cpu->hlx_idx].h;goto fetch_next; // LD E,H T:0
-        case   93: cpu->e=cpu->hlx[cpu->hlx_idx].l;goto fetch_next; // LD E,L T:0
-        case   94: cpu->step=733;goto step_to; // LD E,(HL) T:0
-        case   95: cpu->e=cpu->a;goto fetch_next; // LD E,A T:0
-        case   96: cpu->hlx[cpu->hlx_idx].h=cpu->b;goto fetch_next; // LD H,B T:0
-        case   97: cpu->hlx[cpu->hlx_idx].h=cpu->c;goto fetch_next; // LD H,C T:0
-        case   98: cpu->hlx[cpu->hlx_idx].h=cpu->d;goto fetch_next; // LD H,D T:0
-        case   99: cpu->hlx[cpu->hlx_idx].h=cpu->e;goto fetch_next; // LD H,E T:0
-        case  100: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].h;goto fetch_next; // LD H,H T:0
-        case  101: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].l;goto fetch_next; // LD H,L T:0
-        case  102: cpu->step=736;goto step_to; // LD H,(HL) T:0
-        case  103: cpu->hlx[cpu->hlx_idx].h=cpu->a;goto fetch_next; // LD H,A T:0
-        case  104: cpu->hlx[cpu->hlx_idx].l=cpu->b;goto fetch_next; // LD L,B T:0
-        case  105: cpu->hlx[cpu->hlx_idx].l=cpu->c;goto fetch_next; // LD L,C T:0
-        case  106: cpu->hlx[cpu->hlx_idx].l=cpu->d;goto fetch_next; // LD L,D T:0
-        case  107: cpu->hlx[cpu->hlx_idx].l=cpu->e;goto fetch_next; // LD L,E T:0
-        case  108: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].h;goto fetch_next; // LD L,H T:0
-        case  109: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].l;goto fetch_next; // LD L,L T:0
-        case  110: cpu->step=739;goto step_to; // LD L,(HL) T:0
-        case  111: cpu->hlx[cpu->hlx_idx].l=cpu->a;goto fetch_next; // LD L,A T:0
-        case  112: cpu->step=742;goto step_to; // LD (HL),B T:0
-        case  113: cpu->step=745;goto step_to; // LD (HL),C T:0
-        case  114: cpu->step=748;goto step_to; // LD (HL),D T:0
-        case  115: cpu->step=751;goto step_to; // LD (HL),E T:0
-        case  116: cpu->step=754;goto step_to; // LD (HL),H T:0
-        case  117: cpu->step=757;goto step_to; // LD (HL),L T:0
-        case  118: pins=_z80_halt(cpu,pins);goto fetch_next; // HALT T:0
-        case  119: cpu->step=760;goto step_to; // LD (HL),A T:0
-        case  120: cpu->a=cpu->b;goto fetch_next; // LD A,B T:0
-        case  121: cpu->a=cpu->c;goto fetch_next; // LD A,C T:0
-        case  122: cpu->a=cpu->d;goto fetch_next; // LD A,D T:0
-        case  123: cpu->a=cpu->e;goto fetch_next; // LD A,E T:0
-        case  124: cpu->a=cpu->hlx[cpu->hlx_idx].h;goto fetch_next; // LD A,H T:0
-        case  125: cpu->a=cpu->hlx[cpu->hlx_idx].l;goto fetch_next; // LD A,L T:0
-        case  126: cpu->step=763;goto step_to; // LD A,(HL) T:0
-        case  127: cpu->a=cpu->a;goto fetch_next; // LD A,A T:0
-        case  128: _z80_add8(cpu,cpu->b);goto fetch_next; // ADD B T:0
-        case  129: _z80_add8(cpu,cpu->c);goto fetch_next; // ADD C T:0
-        case  130: _z80_add8(cpu,cpu->d);goto fetch_next; // ADD D T:0
-        case  131: _z80_add8(cpu,cpu->e);goto fetch_next; // ADD E T:0
-        case  132: _z80_add8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // ADD H T:0
-        case  133: _z80_add8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // ADD L T:0
-        case  134: cpu->step=766;goto step_to; // ADD (HL) T:0
-        case  135: _z80_add8(cpu,cpu->a);goto fetch_next; // ADD A T:0
-        case  136: _z80_adc8(cpu,cpu->b);goto fetch_next; // ADC B T:0
-        case  137: _z80_adc8(cpu,cpu->c);goto fetch_next; // ADC C T:0
-        case  138: _z80_adc8(cpu,cpu->d);goto fetch_next; // ADC D T:0
-        case  139: _z80_adc8(cpu,cpu->e);goto fetch_next; // ADC E T:0
-        case  140: _z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // ADC H T:0
-        case  141: _z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // ADC L T:0
-        case  142: cpu->step=769;goto step_to; // ADC (HL) T:0
-        case  143: _z80_adc8(cpu,cpu->a);goto fetch_next; // ADC A T:0
-        case  144: _z80_sub8(cpu,cpu->b);goto fetch_next; // SUB B T:0
-        case  145: _z80_sub8(cpu,cpu->c);goto fetch_next; // SUB C T:0
-        case  146: _z80_sub8(cpu,cpu->d);goto fetch_next; // SUB D T:0
-        case  147: _z80_sub8(cpu,cpu->e);goto fetch_next; // SUB E T:0
-        case  148: _z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // SUB H T:0
-        case  149: _z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // SUB L T:0
-        case  150: cpu->step=772;goto step_to; // SUB (HL) T:0
-        case  151: _z80_sub8(cpu,cpu->a);goto fetch_next; // SUB A T:0
-        case  152: _z80_sbc8(cpu,cpu->b);goto fetch_next; // SBC B T:0
-        case  153: _z80_sbc8(cpu,cpu->c);goto fetch_next; // SBC C T:0
-        case  154: _z80_sbc8(cpu,cpu->d);goto fetch_next; // SBC D T:0
-        case  155: _z80_sbc8(cpu,cpu->e);goto fetch_next; // SBC E T:0
-        case  156: _z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // SBC H T:0
-        case  157: _z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // SBC L T:0
-        case  158: cpu->step=775;goto step_to; // SBC (HL) T:0
-        case  159: _z80_sbc8(cpu,cpu->a);goto fetch_next; // SBC A T:0
-        case  160: _z80_and8(cpu,cpu->b);goto fetch_next; // AND B T:0
-        case  161: _z80_and8(cpu,cpu->c);goto fetch_next; // AND C T:0
-        case  162: _z80_and8(cpu,cpu->d);goto fetch_next; // AND D T:0
-        case  163: _z80_and8(cpu,cpu->e);goto fetch_next; // AND E T:0
-        case  164: _z80_and8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // AND H T:0
-        case  165: _z80_and8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // AND L T:0
-        case  166: cpu->step=778;goto step_to; // AND (HL) T:0
-        case  167: _z80_and8(cpu,cpu->a);goto fetch_next; // AND A T:0
-        case  168: _z80_xor8(cpu,cpu->b);goto fetch_next; // XOR B T:0
-        case  169: _z80_xor8(cpu,cpu->c);goto fetch_next; // XOR C T:0
-        case  170: _z80_xor8(cpu,cpu->d);goto fetch_next; // XOR D T:0
-        case  171: _z80_xor8(cpu,cpu->e);goto fetch_next; // XOR E T:0
-        case  172: _z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // XOR H T:0
-        case  173: _z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // XOR L T:0
-        case  174: cpu->step=781;goto step_to; // XOR (HL) T:0
-        case  175: _z80_xor8(cpu,cpu->a);goto fetch_next; // XOR A T:0
-        case  176: _z80_or8(cpu,cpu->b);goto fetch_next; // OR B T:0
-        case  177: _z80_or8(cpu,cpu->c);goto fetch_next; // OR C T:0
-        case  178: _z80_or8(cpu,cpu->d);goto fetch_next; // OR D T:0
-        case  179: _z80_or8(cpu,cpu->e);goto fetch_next; // OR E T:0
-        case  180: _z80_or8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // OR H T:0
-        case  181: _z80_or8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // OR L T:0
-        case  182: cpu->step=784;goto step_to; // OR (HL) T:0
-        case  183: _z80_or8(cpu,cpu->a);goto fetch_next; // OR A T:0
-        case  184: _z80_cp8(cpu,cpu->b);goto fetch_next; // CP B T:0
-        case  185: _z80_cp8(cpu,cpu->c);goto fetch_next; // CP C T:0
-        case  186: _z80_cp8(cpu,cpu->d);goto fetch_next; // CP D T:0
-        case  187: _z80_cp8(cpu,cpu->e);goto fetch_next; // CP E T:0
-        case  188: _z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].h);goto fetch_next; // CP H T:0
-        case  189: _z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].l);goto fetch_next; // CP L T:0
-        case  190: cpu->step=787;goto step_to; // CP (HL) T:0
-        case  191: _z80_cp8(cpu,cpu->a);goto fetch_next; // CP A T:0
-        case  192: if(!_cc_nz){_skip(6);};cpu->step=790;goto step_to; // RET NZ T:0
-        case  193: cpu->step=797;goto step_to; // POP BC T:0
-        case  194: cpu->step=803;goto step_to; // JP NZ,nn T:0
-        case  195: cpu->step=809;goto step_to; // JP nn T:0
-        case  196: cpu->step=815;goto step_to; // CALL NZ,nn T:0
-        case  197: cpu->step=828;goto step_to; // PUSH BC T:0
-        case  198: cpu->step=835;goto step_to; // ADD n T:0
-        case  199: cpu->step=838;goto step_to; // RST 0h T:0
-        case  200: if(!_cc_z){_skip(6);};cpu->step=845;goto step_to; // RET Z T:0
-        case  201: cpu->step=852;goto step_to; // RET T:0
-        case  202: cpu->step=858;goto step_to; // JP Z,nn T:0
+        case    0: _fetch(); // NOP T:0
+        case    1: _goto(512); // LD BC,nn T:0
+        case    2: _goto(518); // LD (BC),A T:0
+        case    3: cpu->bc++;_goto(521); // INC BC T:0
+        case    4: cpu->b=_z80_inc8(cpu,cpu->b);_fetch(); // INC B T:0
+        case    5: cpu->b=_z80_dec8(cpu,cpu->b);_fetch(); // DEC B T:0
+        case    6: _goto(523); // LD B,n T:0
+        case    7: _z80_rlca(cpu);_fetch(); // RLCA T:0
+        case    8: _z80_ex_af_af2(cpu);_fetch(); // EX AF,AF' T:0
+        case    9: _z80_add16(cpu,cpu->bc);_goto(526); // ADD HL,BC T:0
+        case   10: _goto(533); // LD A,(BC) T:0
+        case   11: cpu->bc--;_goto(536); // DEC BC T:0
+        case   12: cpu->c=_z80_inc8(cpu,cpu->c);_fetch(); // INC C T:0
+        case   13: cpu->c=_z80_dec8(cpu,cpu->c);_fetch(); // DEC C T:0
+        case   14: _goto(538); // LD C,n T:0
+        case   15: _z80_rrca(cpu);_fetch(); // RRCA T:0
+        case   16: _goto(541); // DJNZ d T:0
+        case   17: _goto(550); // LD DE,nn T:0
+        case   18: _goto(556); // LD (DE),A T:0
+        case   19: cpu->de++;_goto(559); // INC DE T:0
+        case   20: cpu->d=_z80_inc8(cpu,cpu->d);_fetch(); // INC D T:0
+        case   21: cpu->d=_z80_dec8(cpu,cpu->d);_fetch(); // DEC D T:0
+        case   22: _goto(561); // LD D,n T:0
+        case   23: _z80_rla(cpu);_fetch(); // RLA T:0
+        case   24: _goto(564); // JR d T:0
+        case   25: _z80_add16(cpu,cpu->de);_goto(572); // ADD HL,DE T:0
+        case   26: _goto(579); // LD A,(DE) T:0
+        case   27: cpu->de--;_goto(582); // DEC DE T:0
+        case   28: cpu->e=_z80_inc8(cpu,cpu->e);_fetch(); // INC E T:0
+        case   29: cpu->e=_z80_dec8(cpu,cpu->e);_fetch(); // DEC E T:0
+        case   30: _goto(584); // LD E,n T:0
+        case   31: _z80_rra(cpu);_fetch(); // RRA T:0
+        case   32: _goto(587); // JR NZ,d T:0
+        case   33: _goto(595); // LD HL,nn T:0
+        case   34: _goto(601); // LD (nn),HL T:0
+        case   35: cpu->hlx[cpu->hlx_idx].hl++;_goto(613); // INC HL T:0
+        case   36: cpu->hlx[cpu->hlx_idx].h=_z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // INC H T:0
+        case   37: cpu->hlx[cpu->hlx_idx].h=_z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // DEC H T:0
+        case   38: _goto(615); // LD H,n T:0
+        case   39: _z80_daa(cpu);_fetch(); // DAA T:0
+        case   40: _goto(618); // JR Z,d T:0
+        case   41: _z80_add16(cpu,cpu->hlx[cpu->hlx_idx].hl);_goto(626); // ADD HL,HL T:0
+        case   42: _goto(633); // LD HL,(nn) T:0
+        case   43: cpu->hlx[cpu->hlx_idx].hl--;_goto(645); // DEC HL T:0
+        case   44: cpu->hlx[cpu->hlx_idx].l=_z80_inc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // INC L T:0
+        case   45: cpu->hlx[cpu->hlx_idx].l=_z80_dec8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // DEC L T:0
+        case   46: _goto(647); // LD L,n T:0
+        case   47: _z80_cpl(cpu);_fetch(); // CPL T:0
+        case   48: _goto(650); // JR NC,d T:0
+        case   49: _goto(658); // LD SP,nn T:0
+        case   50: _goto(664); // LD (nn),A T:0
+        case   51: cpu->sp++;_goto(673); // INC SP T:0
+        case   52: _goto(675); // INC (HL) T:0
+        case   53: _goto(682); // DEC (HL) T:0
+        case   54: _goto(689); // LD (HL),n T:0
+        case   55: _z80_scf(cpu);_fetch(); // SCF T:0
+        case   56: _goto(695); // JR C,d T:0
+        case   57: _z80_add16(cpu,cpu->sp);_goto(703); // ADD HL,SP T:0
+        case   58: _goto(710); // LD A,(nn) T:0
+        case   59: cpu->sp--;_goto(719); // DEC SP T:0
+        case   60: cpu->a=_z80_inc8(cpu,cpu->a);_fetch(); // INC A T:0
+        case   61: cpu->a=_z80_dec8(cpu,cpu->a);_fetch(); // DEC A T:0
+        case   62: _goto(721); // LD A,n T:0
+        case   63: _z80_ccf(cpu);_fetch(); // CCF T:0
+        case   64: cpu->b=cpu->b;_fetch(); // LD B,B T:0
+        case   65: cpu->b=cpu->c;_fetch(); // LD B,C T:0
+        case   66: cpu->b=cpu->d;_fetch(); // LD B,D T:0
+        case   67: cpu->b=cpu->e;_fetch(); // LD B,E T:0
+        case   68: cpu->b=cpu->hlx[cpu->hlx_idx].h;_fetch(); // LD B,H T:0
+        case   69: cpu->b=cpu->hlx[cpu->hlx_idx].l;_fetch(); // LD B,L T:0
+        case   70: _goto(724); // LD B,(HL) T:0
+        case   71: cpu->b=cpu->a;_fetch(); // LD B,A T:0
+        case   72: cpu->c=cpu->b;_fetch(); // LD C,B T:0
+        case   73: cpu->c=cpu->c;_fetch(); // LD C,C T:0
+        case   74: cpu->c=cpu->d;_fetch(); // LD C,D T:0
+        case   75: cpu->c=cpu->e;_fetch(); // LD C,E T:0
+        case   76: cpu->c=cpu->hlx[cpu->hlx_idx].h;_fetch(); // LD C,H T:0
+        case   77: cpu->c=cpu->hlx[cpu->hlx_idx].l;_fetch(); // LD C,L T:0
+        case   78: _goto(727); // LD C,(HL) T:0
+        case   79: cpu->c=cpu->a;_fetch(); // LD C,A T:0
+        case   80: cpu->d=cpu->b;_fetch(); // LD D,B T:0
+        case   81: cpu->d=cpu->c;_fetch(); // LD D,C T:0
+        case   82: cpu->d=cpu->d;_fetch(); // LD D,D T:0
+        case   83: cpu->d=cpu->e;_fetch(); // LD D,E T:0
+        case   84: cpu->d=cpu->hlx[cpu->hlx_idx].h;_fetch(); // LD D,H T:0
+        case   85: cpu->d=cpu->hlx[cpu->hlx_idx].l;_fetch(); // LD D,L T:0
+        case   86: _goto(730); // LD D,(HL) T:0
+        case   87: cpu->d=cpu->a;_fetch(); // LD D,A T:0
+        case   88: cpu->e=cpu->b;_fetch(); // LD E,B T:0
+        case   89: cpu->e=cpu->c;_fetch(); // LD E,C T:0
+        case   90: cpu->e=cpu->d;_fetch(); // LD E,D T:0
+        case   91: cpu->e=cpu->e;_fetch(); // LD E,E T:0
+        case   92: cpu->e=cpu->hlx[cpu->hlx_idx].h;_fetch(); // LD E,H T:0
+        case   93: cpu->e=cpu->hlx[cpu->hlx_idx].l;_fetch(); // LD E,L T:0
+        case   94: _goto(733); // LD E,(HL) T:0
+        case   95: cpu->e=cpu->a;_fetch(); // LD E,A T:0
+        case   96: cpu->hlx[cpu->hlx_idx].h=cpu->b;_fetch(); // LD H,B T:0
+        case   97: cpu->hlx[cpu->hlx_idx].h=cpu->c;_fetch(); // LD H,C T:0
+        case   98: cpu->hlx[cpu->hlx_idx].h=cpu->d;_fetch(); // LD H,D T:0
+        case   99: cpu->hlx[cpu->hlx_idx].h=cpu->e;_fetch(); // LD H,E T:0
+        case  100: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].h;_fetch(); // LD H,H T:0
+        case  101: cpu->hlx[cpu->hlx_idx].h=cpu->hlx[cpu->hlx_idx].l;_fetch(); // LD H,L T:0
+        case  102: _goto(736); // LD H,(HL) T:0
+        case  103: cpu->hlx[cpu->hlx_idx].h=cpu->a;_fetch(); // LD H,A T:0
+        case  104: cpu->hlx[cpu->hlx_idx].l=cpu->b;_fetch(); // LD L,B T:0
+        case  105: cpu->hlx[cpu->hlx_idx].l=cpu->c;_fetch(); // LD L,C T:0
+        case  106: cpu->hlx[cpu->hlx_idx].l=cpu->d;_fetch(); // LD L,D T:0
+        case  107: cpu->hlx[cpu->hlx_idx].l=cpu->e;_fetch(); // LD L,E T:0
+        case  108: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].h;_fetch(); // LD L,H T:0
+        case  109: cpu->hlx[cpu->hlx_idx].l=cpu->hlx[cpu->hlx_idx].l;_fetch(); // LD L,L T:0
+        case  110: _goto(739); // LD L,(HL) T:0
+        case  111: cpu->hlx[cpu->hlx_idx].l=cpu->a;_fetch(); // LD L,A T:0
+        case  112: _goto(742); // LD (HL),B T:0
+        case  113: _goto(745); // LD (HL),C T:0
+        case  114: _goto(748); // LD (HL),D T:0
+        case  115: _goto(751); // LD (HL),E T:0
+        case  116: _goto(754); // LD (HL),H T:0
+        case  117: _goto(757); // LD (HL),L T:0
+        case  118: pins=_z80_halt(cpu,pins);_fetch(); // HALT T:0
+        case  119: _goto(760); // LD (HL),A T:0
+        case  120: cpu->a=cpu->b;_fetch(); // LD A,B T:0
+        case  121: cpu->a=cpu->c;_fetch(); // LD A,C T:0
+        case  122: cpu->a=cpu->d;_fetch(); // LD A,D T:0
+        case  123: cpu->a=cpu->e;_fetch(); // LD A,E T:0
+        case  124: cpu->a=cpu->hlx[cpu->hlx_idx].h;_fetch(); // LD A,H T:0
+        case  125: cpu->a=cpu->hlx[cpu->hlx_idx].l;_fetch(); // LD A,L T:0
+        case  126: _goto(763); // LD A,(HL) T:0
+        case  127: cpu->a=cpu->a;_fetch(); // LD A,A T:0
+        case  128: _z80_add8(cpu,cpu->b);_fetch(); // ADD B T:0
+        case  129: _z80_add8(cpu,cpu->c);_fetch(); // ADD C T:0
+        case  130: _z80_add8(cpu,cpu->d);_fetch(); // ADD D T:0
+        case  131: _z80_add8(cpu,cpu->e);_fetch(); // ADD E T:0
+        case  132: _z80_add8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // ADD H T:0
+        case  133: _z80_add8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // ADD L T:0
+        case  134: _goto(766); // ADD (HL) T:0
+        case  135: _z80_add8(cpu,cpu->a);_fetch(); // ADD A T:0
+        case  136: _z80_adc8(cpu,cpu->b);_fetch(); // ADC B T:0
+        case  137: _z80_adc8(cpu,cpu->c);_fetch(); // ADC C T:0
+        case  138: _z80_adc8(cpu,cpu->d);_fetch(); // ADC D T:0
+        case  139: _z80_adc8(cpu,cpu->e);_fetch(); // ADC E T:0
+        case  140: _z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // ADC H T:0
+        case  141: _z80_adc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // ADC L T:0
+        case  142: _goto(769); // ADC (HL) T:0
+        case  143: _z80_adc8(cpu,cpu->a);_fetch(); // ADC A T:0
+        case  144: _z80_sub8(cpu,cpu->b);_fetch(); // SUB B T:0
+        case  145: _z80_sub8(cpu,cpu->c);_fetch(); // SUB C T:0
+        case  146: _z80_sub8(cpu,cpu->d);_fetch(); // SUB D T:0
+        case  147: _z80_sub8(cpu,cpu->e);_fetch(); // SUB E T:0
+        case  148: _z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // SUB H T:0
+        case  149: _z80_sub8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // SUB L T:0
+        case  150: _goto(772); // SUB (HL) T:0
+        case  151: _z80_sub8(cpu,cpu->a);_fetch(); // SUB A T:0
+        case  152: _z80_sbc8(cpu,cpu->b);_fetch(); // SBC B T:0
+        case  153: _z80_sbc8(cpu,cpu->c);_fetch(); // SBC C T:0
+        case  154: _z80_sbc8(cpu,cpu->d);_fetch(); // SBC D T:0
+        case  155: _z80_sbc8(cpu,cpu->e);_fetch(); // SBC E T:0
+        case  156: _z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // SBC H T:0
+        case  157: _z80_sbc8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // SBC L T:0
+        case  158: _goto(775); // SBC (HL) T:0
+        case  159: _z80_sbc8(cpu,cpu->a);_fetch(); // SBC A T:0
+        case  160: _z80_and8(cpu,cpu->b);_fetch(); // AND B T:0
+        case  161: _z80_and8(cpu,cpu->c);_fetch(); // AND C T:0
+        case  162: _z80_and8(cpu,cpu->d);_fetch(); // AND D T:0
+        case  163: _z80_and8(cpu,cpu->e);_fetch(); // AND E T:0
+        case  164: _z80_and8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // AND H T:0
+        case  165: _z80_and8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // AND L T:0
+        case  166: _goto(778); // AND (HL) T:0
+        case  167: _z80_and8(cpu,cpu->a);_fetch(); // AND A T:0
+        case  168: _z80_xor8(cpu,cpu->b);_fetch(); // XOR B T:0
+        case  169: _z80_xor8(cpu,cpu->c);_fetch(); // XOR C T:0
+        case  170: _z80_xor8(cpu,cpu->d);_fetch(); // XOR D T:0
+        case  171: _z80_xor8(cpu,cpu->e);_fetch(); // XOR E T:0
+        case  172: _z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // XOR H T:0
+        case  173: _z80_xor8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // XOR L T:0
+        case  174: _goto(781); // XOR (HL) T:0
+        case  175: _z80_xor8(cpu,cpu->a);_fetch(); // XOR A T:0
+        case  176: _z80_or8(cpu,cpu->b);_fetch(); // OR B T:0
+        case  177: _z80_or8(cpu,cpu->c);_fetch(); // OR C T:0
+        case  178: _z80_or8(cpu,cpu->d);_fetch(); // OR D T:0
+        case  179: _z80_or8(cpu,cpu->e);_fetch(); // OR E T:0
+        case  180: _z80_or8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // OR H T:0
+        case  181: _z80_or8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // OR L T:0
+        case  182: _goto(784); // OR (HL) T:0
+        case  183: _z80_or8(cpu,cpu->a);_fetch(); // OR A T:0
+        case  184: _z80_cp8(cpu,cpu->b);_fetch(); // CP B T:0
+        case  185: _z80_cp8(cpu,cpu->c);_fetch(); // CP C T:0
+        case  186: _z80_cp8(cpu,cpu->d);_fetch(); // CP D T:0
+        case  187: _z80_cp8(cpu,cpu->e);_fetch(); // CP E T:0
+        case  188: _z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].h);_fetch(); // CP H T:0
+        case  189: _z80_cp8(cpu,cpu->hlx[cpu->hlx_idx].l);_fetch(); // CP L T:0
+        case  190: _goto(787); // CP (HL) T:0
+        case  191: _z80_cp8(cpu,cpu->a);_fetch(); // CP A T:0
+        case  192: if(!_cc_nz){_goto(790+6);};_goto(790); // RET NZ T:0
+        case  193: _goto(797); // POP BC T:0
+        case  194: _goto(803); // JP NZ,nn T:0
+        case  195: _goto(809); // JP nn T:0
+        case  196: _goto(815); // CALL NZ,nn T:0
+        case  197: _goto(828); // PUSH BC T:0
+        case  198: _goto(835); // ADD n T:0
+        case  199: _goto(838); // RST 0h T:0
+        case  200: if(!_cc_z){_goto(845+6);};_goto(845); // RET Z T:0
+        case  201: _goto(852); // RET T:0
+        case  202: _goto(858); // JP Z,nn T:0
         case  203: _fetch_cb();goto step_to; // CB prefix T:0
-        case  204: cpu->step=864;goto step_to; // CALL Z,nn T:0
-        case  205: cpu->step=877;goto step_to; // CALL nn T:0
-        case  206: cpu->step=890;goto step_to; // ADC n T:0
-        case  207: cpu->step=893;goto step_to; // RST 8h T:0
-        case  208: if(!_cc_nc){_skip(6);};cpu->step=900;goto step_to; // RET NC T:0
-        case  209: cpu->step=907;goto step_to; // POP DE T:0
-        case  210: cpu->step=913;goto step_to; // JP NC,nn T:0
-        case  211: cpu->step=919;goto step_to; // OUT (n),A T:0
-        case  212: cpu->step=926;goto step_to; // CALL NC,nn T:0
-        case  213: cpu->step=939;goto step_to; // PUSH DE T:0
-        case  214: cpu->step=946;goto step_to; // SUB n T:0
-        case  215: cpu->step=949;goto step_to; // RST 10h T:0
-        case  216: if(!_cc_c){_skip(6);};cpu->step=956;goto step_to; // RET C T:0
-        case  217: _z80_exx(cpu);goto fetch_next; // EXX T:0
-        case  218: cpu->step=963;goto step_to; // JP C,nn T:0
-        case  219: cpu->step=969;goto step_to; // IN A,(n) T:0
-        case  220: cpu->step=976;goto step_to; // CALL C,nn T:0
+        case  204: _goto(864); // CALL Z,nn T:0
+        case  205: _goto(877); // CALL nn T:0
+        case  206: _goto(890); // ADC n T:0
+        case  207: _goto(893); // RST 8h T:0
+        case  208: if(!_cc_nc){_goto(900+6);};_goto(900); // RET NC T:0
+        case  209: _goto(907); // POP DE T:0
+        case  210: _goto(913); // JP NC,nn T:0
+        case  211: _goto(919); // OUT (n),A T:0
+        case  212: _goto(926); // CALL NC,nn T:0
+        case  213: _goto(939); // PUSH DE T:0
+        case  214: _goto(946); // SUB n T:0
+        case  215: _goto(949); // RST 10h T:0
+        case  216: if(!_cc_c){_goto(956+6);};_goto(956); // RET C T:0
+        case  217: _z80_exx(cpu);_fetch(); // EXX T:0
+        case  218: _goto(963); // JP C,nn T:0
+        case  219: _goto(969); // IN A,(n) T:0
+        case  220: _goto(976); // CALL C,nn T:0
         case  221: _fetch_dd();goto step_to; // DD prefix T:0
-        case  222: cpu->step=989;goto step_to; // SBC n T:0
-        case  223: cpu->step=992;goto step_to; // RST 18h T:0
-        case  224: if(!_cc_po){_skip(6);};cpu->step=999;goto step_to; // RET PO T:0
-        case  225: cpu->step=1006;goto step_to; // POP HL T:0
-        case  226: cpu->step=1012;goto step_to; // JP PO,nn T:0
-        case  227: cpu->step=1018;goto step_to; // EX (SP),HL T:0
-        case  228: cpu->step=1033;goto step_to; // CALL PO,nn T:0
-        case  229: cpu->step=1046;goto step_to; // PUSH HL T:0
-        case  230: cpu->step=1053;goto step_to; // AND n T:0
-        case  231: cpu->step=1056;goto step_to; // RST 20h T:0
-        case  232: if(!_cc_pe){_skip(6);};cpu->step=1063;goto step_to; // RET PE T:0
-        case  233: cpu->pc=cpu->hlx[cpu->hlx_idx].hl;goto fetch_next; // JP HL T:0
-        case  234: cpu->step=1070;goto step_to; // JP PE,nn T:0
-        case  235: _z80_ex_de_hl(cpu);goto fetch_next; // EX DE,HL T:0
-        case  236: cpu->step=1076;goto step_to; // CALL PE,nn T:0
+        case  222: _goto(989); // SBC n T:0
+        case  223: _goto(992); // RST 18h T:0
+        case  224: if(!_cc_po){_goto(999+6);};_goto(999); // RET PO T:0
+        case  225: _goto(1006); // POP HL T:0
+        case  226: _goto(1012); // JP PO,nn T:0
+        case  227: _goto(1018); // EX (SP),HL T:0
+        case  228: _goto(1033); // CALL PO,nn T:0
+        case  229: _goto(1046); // PUSH HL T:0
+        case  230: _goto(1053); // AND n T:0
+        case  231: _goto(1056); // RST 20h T:0
+        case  232: if(!_cc_pe){_goto(1063+6);};_goto(1063); // RET PE T:0
+        case  233: cpu->pc=cpu->hlx[cpu->hlx_idx].hl;_fetch(); // JP HL T:0
+        case  234: _goto(1070); // JP PE,nn T:0
+        case  235: _z80_ex_de_hl(cpu);_fetch(); // EX DE,HL T:0
+        case  236: _goto(1076); // CALL PE,nn T:0
         case  237: _fetch_ed();goto step_to; // ED prefix T:0
-        case  238: cpu->step=1089;goto step_to; // XOR n T:0
-        case  239: cpu->step=1092;goto step_to; // RST 28h T:0
-        case  240: if(!_cc_p){_skip(6);};cpu->step=1099;goto step_to; // RET P T:0
-        case  241: cpu->step=1106;goto step_to; // POP AF T:0
-        case  242: cpu->step=1112;goto step_to; // JP P,nn T:0
-        case  243: cpu->iff1=cpu->iff2=false;goto fetch_next; // DI T:0
-        case  244: cpu->step=1118;goto step_to; // CALL P,nn T:0
-        case  245: cpu->step=1131;goto step_to; // PUSH AF T:0
-        case  246: cpu->step=1138;goto step_to; // OR n T:0
-        case  247: cpu->step=1141;goto step_to; // RST 30h T:0
-        case  248: if(!_cc_m){_skip(6);};cpu->step=1148;goto step_to; // RET M T:0
-        case  249: cpu->sp=cpu->hlx[cpu->hlx_idx].hl;cpu->step=1155;goto step_to; // LD SP,HL T:0
-        case  250: cpu->step=1157;goto step_to; // JP M,nn T:0
+        case  238: _goto(1089); // XOR n T:0
+        case  239: _goto(1092); // RST 28h T:0
+        case  240: if(!_cc_p){_goto(1099+6);};_goto(1099); // RET P T:0
+        case  241: _goto(1106); // POP AF T:0
+        case  242: _goto(1112); // JP P,nn T:0
+        case  243: cpu->iff1=cpu->iff2=false;_fetch(); // DI T:0
+        case  244: _goto(1118); // CALL P,nn T:0
+        case  245: _goto(1131); // PUSH AF T:0
+        case  246: _goto(1138); // OR n T:0
+        case  247: _goto(1141); // RST 30h T:0
+        case  248: if(!_cc_m){_goto(1148+6);};_goto(1148); // RET M T:0
+        case  249: cpu->sp=cpu->hlx[cpu->hlx_idx].hl;_goto(1155); // LD SP,HL T:0
+        case  250: _goto(1157); // JP M,nn T:0
         case  251: cpu->iff1=cpu->iff2=false;pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2=true;goto step_to; // EI T:0
-        case  252: cpu->step=1163;goto step_to; // CALL M,nn T:0
+        case  252: _goto(1163); // CALL M,nn T:0
         case  253: _fetch_fd();goto step_to; // FD prefix T:0
-        case  254: cpu->step=1176;goto step_to; // CP n T:0
-        case  255: cpu->step=1179;goto step_to; // RST 38h T:0
-        case  256: goto fetch_next; // ED NOP T:0
-        case  257: goto fetch_next; // ED NOP T:0
-        case  258: goto fetch_next; // ED NOP T:0
-        case  259: goto fetch_next; // ED NOP T:0
-        case  260: goto fetch_next; // ED NOP T:0
-        case  261: goto fetch_next; // ED NOP T:0
-        case  262: goto fetch_next; // ED NOP T:0
-        case  263: goto fetch_next; // ED NOP T:0
-        case  264: goto fetch_next; // ED NOP T:0
-        case  265: goto fetch_next; // ED NOP T:0
-        case  266: goto fetch_next; // ED NOP T:0
-        case  267: goto fetch_next; // ED NOP T:0
-        case  268: goto fetch_next; // ED NOP T:0
-        case  269: goto fetch_next; // ED NOP T:0
-        case  270: goto fetch_next; // ED NOP T:0
-        case  271: goto fetch_next; // ED NOP T:0
-        case  272: goto fetch_next; // ED NOP T:0
-        case  273: goto fetch_next; // ED NOP T:0
-        case  274: goto fetch_next; // ED NOP T:0
-        case  275: goto fetch_next; // ED NOP T:0
-        case  276: goto fetch_next; // ED NOP T:0
-        case  277: goto fetch_next; // ED NOP T:0
-        case  278: goto fetch_next; // ED NOP T:0
-        case  279: goto fetch_next; // ED NOP T:0
-        case  280: goto fetch_next; // ED NOP T:0
-        case  281: goto fetch_next; // ED NOP T:0
-        case  282: goto fetch_next; // ED NOP T:0
-        case  283: goto fetch_next; // ED NOP T:0
-        case  284: goto fetch_next; // ED NOP T:0
-        case  285: goto fetch_next; // ED NOP T:0
-        case  286: goto fetch_next; // ED NOP T:0
-        case  287: goto fetch_next; // ED NOP T:0
-        case  288: goto fetch_next; // ED NOP T:0
-        case  289: goto fetch_next; // ED NOP T:0
-        case  290: goto fetch_next; // ED NOP T:0
-        case  291: goto fetch_next; // ED NOP T:0
-        case  292: goto fetch_next; // ED NOP T:0
-        case  293: goto fetch_next; // ED NOP T:0
-        case  294: goto fetch_next; // ED NOP T:0
-        case  295: goto fetch_next; // ED NOP T:0
-        case  296: goto fetch_next; // ED NOP T:0
-        case  297: goto fetch_next; // ED NOP T:0
-        case  298: goto fetch_next; // ED NOP T:0
-        case  299: goto fetch_next; // ED NOP T:0
-        case  300: goto fetch_next; // ED NOP T:0
-        case  301: goto fetch_next; // ED NOP T:0
-        case  302: goto fetch_next; // ED NOP T:0
-        case  303: goto fetch_next; // ED NOP T:0
-        case  304: goto fetch_next; // ED NOP T:0
-        case  305: goto fetch_next; // ED NOP T:0
-        case  306: goto fetch_next; // ED NOP T:0
-        case  307: goto fetch_next; // ED NOP T:0
-        case  308: goto fetch_next; // ED NOP T:0
-        case  309: goto fetch_next; // ED NOP T:0
-        case  310: goto fetch_next; // ED NOP T:0
-        case  311: goto fetch_next; // ED NOP T:0
-        case  312: goto fetch_next; // ED NOP T:0
-        case  313: goto fetch_next; // ED NOP T:0
-        case  314: goto fetch_next; // ED NOP T:0
-        case  315: goto fetch_next; // ED NOP T:0
-        case  316: goto fetch_next; // ED NOP T:0
-        case  317: goto fetch_next; // ED NOP T:0
-        case  318: goto fetch_next; // ED NOP T:0
-        case  319: goto fetch_next; // ED NOP T:0
-        case  320: cpu->step=1186;goto step_to; // IN B,(C) T:0
-        case  321: cpu->step=1190;goto step_to; // OUT (C),B T:0
-        case  322: _z80_sbc16(cpu,cpu->bc);cpu->step=1194;goto step_to; // SBC HL,BC T:0
-        case  323: cpu->step=1201;goto step_to; // LD (nn),BC T:0
-        case  324: _z80_neg8(cpu);goto fetch_next; // NEG T:0
-        case  325: cpu->step=1213;goto step_to; // RETN T:0
-        case  326: cpu->im=0;goto fetch_next; // IM 0 T:0
-        case  327: cpu->step=1219;goto step_to; // LD I,A T:0
-        case  328: cpu->step=1220;goto step_to; // IN C,(C) T:0
-        case  329: cpu->step=1224;goto step_to; // OUT (C),C T:0
-        case  330: _z80_adc16(cpu,cpu->bc);cpu->step=1228;goto step_to; // ADC HL,BC T:0
-        case  331: cpu->step=1235;goto step_to; // LD BC,(nn) T:0
-        case  332: _z80_neg8(cpu);goto fetch_next; // NEG T:0
-        case  333: cpu->step=1247;goto step_to; // RETI T:0
-        case  334: cpu->im=0;goto fetch_next; // IM 0 T:0
-        case  335: cpu->step=1253;goto step_to; // LD R,A T:0
-        case  336: cpu->step=1254;goto step_to; // IN D,(C) T:0
-        case  337: cpu->step=1258;goto step_to; // OUT (C),D T:0
-        case  338: _z80_sbc16(cpu,cpu->de);cpu->step=1262;goto step_to; // SBC HL,DE T:0
-        case  339: cpu->step=1269;goto step_to; // LD (nn),DE T:0
-        case  340: _z80_neg8(cpu);goto fetch_next; // NEG T:0
-        case  341: cpu->step=1247;goto step_to; // RETI T:0
-        case  342: cpu->im=1;goto fetch_next; // IM 1 T:0
-        case  343: cpu->step=1282;goto step_to; // LD A,I T:0
-        case  344: cpu->step=1283;goto step_to; // IN E,(C) T:0
-        case  345: cpu->step=1287;goto step_to; // OUT (C),E T:0
-        case  346: _z80_adc16(cpu,cpu->de);cpu->step=1291;goto step_to; // ADC HL,DE T:0
-        case  347: cpu->step=1298;goto step_to; // LD DE,(nn) T:0
-        case  348: _z80_neg8(cpu);goto fetch_next; // NEG T:0
-        case  349: cpu->step=1247;goto step_to; // RETI T:0
-        case  350: cpu->im=2;goto fetch_next; // IM 2 T:0
-        case  351: cpu->step=1311;goto step_to; // LD A,R T:0
-        case  352: cpu->step=1312;goto step_to; // IN H,(C) T:0
-        case  353: cpu->step=1316;goto step_to; // OUT (C),H T:0
-        case  354: _z80_sbc16(cpu,cpu->hl);cpu->step=1320;goto step_to; // SBC HL,HL T:0
-        case  355: cpu->step=1327;goto step_to; // LD (nn),HL T:0
-        case  356: _z80_neg8(cpu);goto fetch_next; // NEG T:0
-        case  357: cpu->step=1247;goto step_to; // RETI T:0
-        case  358: cpu->im=0;goto fetch_next; // IM 0 T:0
-        case  359: cpu->step=1340;goto step_to; // RRD T:0
-        case  360: cpu->step=1350;goto step_to; // IN L,(C) T:0
-        case  361: cpu->step=1354;goto step_to; // OUT (C),L T:0
-        case  362: _z80_adc16(cpu,cpu->hl);cpu->step=1358;goto step_to; // ADC HL,HL T:0
-        case  363: cpu->step=1365;goto step_to; // LD HL,(nn) T:0
-        case  364: _z80_neg8(cpu);goto fetch_next; // NEG T:0
-        case  365: cpu->step=1247;goto step_to; // RETI T:0
-        case  366: cpu->im=0;goto fetch_next; // IM 0 T:0
-        case  367: cpu->step=1378;goto step_to; // RLD T:0
-        case  368: cpu->step=1388;goto step_to; // IN (C) T:0
-        case  369: cpu->step=1392;goto step_to; // OUT (C),0 T:0
-        case  370: _z80_sbc16(cpu,cpu->sp);cpu->step=1396;goto step_to; // SBC HL,SP T:0
-        case  371: cpu->step=1403;goto step_to; // LD (nn),SP T:0
-        case  372: _z80_neg8(cpu);goto fetch_next; // NEG T:0
-        case  373: cpu->step=1247;goto step_to; // RETI T:0
-        case  374: cpu->im=1;goto fetch_next; // IM 1 T:0
-        case  375: goto fetch_next; // ED NOP T:0
-        case  376: cpu->step=1416;goto step_to; // IN A,(C) T:0
-        case  377: cpu->step=1420;goto step_to; // OUT (C),A T:0
-        case  378: _z80_adc16(cpu,cpu->sp);cpu->step=1424;goto step_to; // ADC HL,SP T:0
-        case  379: cpu->step=1431;goto step_to; // LD SP,(nn) T:0
-        case  380: _z80_neg8(cpu);goto fetch_next; // NEG T:0
-        case  381: cpu->step=1247;goto step_to; // RETI T:0
-        case  382: cpu->im=2;goto fetch_next; // IM 2 T:0
-        case  383: goto fetch_next; // ED NOP T:0
-        case  384: goto fetch_next; // ED NOP T:0
-        case  385: goto fetch_next; // ED NOP T:0
-        case  386: goto fetch_next; // ED NOP T:0
-        case  387: goto fetch_next; // ED NOP T:0
-        case  388: goto fetch_next; // ED NOP T:0
-        case  389: goto fetch_next; // ED NOP T:0
-        case  390: goto fetch_next; // ED NOP T:0
-        case  391: goto fetch_next; // ED NOP T:0
-        case  392: goto fetch_next; // ED NOP T:0
-        case  393: goto fetch_next; // ED NOP T:0
-        case  394: goto fetch_next; // ED NOP T:0
-        case  395: goto fetch_next; // ED NOP T:0
-        case  396: goto fetch_next; // ED NOP T:0
-        case  397: goto fetch_next; // ED NOP T:0
-        case  398: goto fetch_next; // ED NOP T:0
-        case  399: goto fetch_next; // ED NOP T:0
-        case  400: goto fetch_next; // ED NOP T:0
-        case  401: goto fetch_next; // ED NOP T:0
-        case  402: goto fetch_next; // ED NOP T:0
-        case  403: goto fetch_next; // ED NOP T:0
-        case  404: goto fetch_next; // ED NOP T:0
-        case  405: goto fetch_next; // ED NOP T:0
-        case  406: goto fetch_next; // ED NOP T:0
-        case  407: goto fetch_next; // ED NOP T:0
-        case  408: goto fetch_next; // ED NOP T:0
-        case  409: goto fetch_next; // ED NOP T:0
-        case  410: goto fetch_next; // ED NOP T:0
-        case  411: goto fetch_next; // ED NOP T:0
-        case  412: goto fetch_next; // ED NOP T:0
-        case  413: goto fetch_next; // ED NOP T:0
-        case  414: goto fetch_next; // ED NOP T:0
-        case  415: goto fetch_next; // ED NOP T:0
-        case  416: cpu->step=1444;goto step_to; // LDI T:0
-        case  417: cpu->step=1452;goto step_to; // CPI T:0
-        case  418: cpu->step=1460;goto step_to; // INI T:0
-        case  419: cpu->step=1468;goto step_to; // OUTI T:0
-        case  420: goto fetch_next; // ED NOP T:0
-        case  421: goto fetch_next; // ED NOP T:0
-        case  422: goto fetch_next; // ED NOP T:0
-        case  423: goto fetch_next; // ED NOP T:0
-        case  424: cpu->step=1476;goto step_to; // LDD T:0
-        case  425: cpu->step=1484;goto step_to; // CPD T:0
-        case  426: cpu->step=1492;goto step_to; // IND T:0
-        case  427: cpu->step=1500;goto step_to; // OUTD T:0
-        case  428: goto fetch_next; // ED NOP T:0
-        case  429: goto fetch_next; // ED NOP T:0
-        case  430: goto fetch_next; // ED NOP T:0
-        case  431: goto fetch_next; // ED NOP T:0
-        case  432: cpu->step=1508;goto step_to; // LDIR T:0
-        case  433: cpu->step=1521;goto step_to; // CPIR T:0
-        case  434: cpu->step=1534;goto step_to; // INIR T:0
-        case  435: cpu->step=1547;goto step_to; // OTIR T:0
-        case  436: goto fetch_next; // ED NOP T:0
-        case  437: goto fetch_next; // ED NOP T:0
-        case  438: goto fetch_next; // ED NOP T:0
-        case  439: goto fetch_next; // ED NOP T:0
-        case  440: cpu->step=1560;goto step_to; // LDDR T:0
-        case  441: cpu->step=1573;goto step_to; // CPDR T:0
-        case  442: cpu->step=1586;goto step_to; // INDR T:0
-        case  443: cpu->step=1599;goto step_to; // OTDR T:0
-        case  444: goto fetch_next; // ED NOP T:0
-        case  445: goto fetch_next; // ED NOP T:0
-        case  446: goto fetch_next; // ED NOP T:0
-        case  447: goto fetch_next; // ED NOP T:0
-        case  448: goto fetch_next; // ED NOP T:0
-        case  449: goto fetch_next; // ED NOP T:0
-        case  450: goto fetch_next; // ED NOP T:0
-        case  451: goto fetch_next; // ED NOP T:0
-        case  452: goto fetch_next; // ED NOP T:0
-        case  453: goto fetch_next; // ED NOP T:0
-        case  454: goto fetch_next; // ED NOP T:0
-        case  455: goto fetch_next; // ED NOP T:0
-        case  456: goto fetch_next; // ED NOP T:0
-        case  457: goto fetch_next; // ED NOP T:0
-        case  458: goto fetch_next; // ED NOP T:0
-        case  459: goto fetch_next; // ED NOP T:0
-        case  460: goto fetch_next; // ED NOP T:0
-        case  461: goto fetch_next; // ED NOP T:0
-        case  462: goto fetch_next; // ED NOP T:0
-        case  463: goto fetch_next; // ED NOP T:0
-        case  464: goto fetch_next; // ED NOP T:0
-        case  465: goto fetch_next; // ED NOP T:0
-        case  466: goto fetch_next; // ED NOP T:0
-        case  467: goto fetch_next; // ED NOP T:0
-        case  468: goto fetch_next; // ED NOP T:0
-        case  469: goto fetch_next; // ED NOP T:0
-        case  470: goto fetch_next; // ED NOP T:0
-        case  471: goto fetch_next; // ED NOP T:0
-        case  472: goto fetch_next; // ED NOP T:0
-        case  473: goto fetch_next; // ED NOP T:0
-        case  474: goto fetch_next; // ED NOP T:0
-        case  475: goto fetch_next; // ED NOP T:0
-        case  476: goto fetch_next; // ED NOP T:0
-        case  477: goto fetch_next; // ED NOP T:0
-        case  478: goto fetch_next; // ED NOP T:0
-        case  479: goto fetch_next; // ED NOP T:0
-        case  480: goto fetch_next; // ED NOP T:0
-        case  481: goto fetch_next; // ED NOP T:0
-        case  482: goto fetch_next; // ED NOP T:0
-        case  483: goto fetch_next; // ED NOP T:0
-        case  484: goto fetch_next; // ED NOP T:0
-        case  485: goto fetch_next; // ED NOP T:0
-        case  486: goto fetch_next; // ED NOP T:0
-        case  487: goto fetch_next; // ED NOP T:0
-        case  488: goto fetch_next; // ED NOP T:0
-        case  489: goto fetch_next; // ED NOP T:0
-        case  490: goto fetch_next; // ED NOP T:0
-        case  491: goto fetch_next; // ED NOP T:0
-        case  492: goto fetch_next; // ED NOP T:0
-        case  493: goto fetch_next; // ED NOP T:0
-        case  494: goto fetch_next; // ED NOP T:0
-        case  495: goto fetch_next; // ED NOP T:0
-        case  496: goto fetch_next; // ED NOP T:0
-        case  497: goto fetch_next; // ED NOP T:0
-        case  498: goto fetch_next; // ED NOP T:0
-        case  499: goto fetch_next; // ED NOP T:0
-        case  500: goto fetch_next; // ED NOP T:0
-        case  501: goto fetch_next; // ED NOP T:0
-        case  502: goto fetch_next; // ED NOP T:0
-        case  503: goto fetch_next; // ED NOP T:0
-        case  504: goto fetch_next; // ED NOP T:0
-        case  505: goto fetch_next; // ED NOP T:0
-        case  506: goto fetch_next; // ED NOP T:0
-        case  507: goto fetch_next; // ED NOP T:0
-        case  508: goto fetch_next; // ED NOP T:0
-        case  509: goto fetch_next; // ED NOP T:0
-        case  510: goto fetch_next; // ED NOP T:0
-        case  511: goto fetch_next; // ED NOP T:0
-        case  512: _wait();_mread(cpu->pc++);goto step_next; // LD BC,nn T:1
-        case  513: cpu->c=_gd();goto step_next; // LD BC,nn T:2
-        case  514: goto step_next; // LD BC,nn T:3
-        case  515: _wait();_mread(cpu->pc++);goto step_next; // LD BC,nn T:4
-        case  516: cpu->b=_gd();goto step_next; // LD BC,nn T:5
-        case  517: goto fetch_next; // LD BC,nn T:6
-        case  518: _wait();_mwrite(cpu->bc,cpu->a);cpu->wzl=cpu->c+1;cpu->wzh=cpu->a;goto step_next; // LD (BC),A T:1
-        case  519: goto step_next; // LD (BC),A T:2
-        case  520: goto fetch_next; // LD (BC),A T:3
-        case  521: goto step_next; // INC BC T:1
-        case  522: goto fetch_next; // INC BC T:2
-        case  523: _wait();_mread(cpu->pc++);goto step_next; // LD B,n T:1
-        case  524: cpu->b=_gd();goto step_next; // LD B,n T:2
-        case  525: goto fetch_next; // LD B,n T:3
-        case  526: goto step_next; // ADD HL,BC T:1
-        case  527: goto step_next; // ADD HL,BC T:2
-        case  528: goto step_next; // ADD HL,BC T:3
-        case  529: goto step_next; // ADD HL,BC T:4
-        case  530: goto step_next; // ADD HL,BC T:5
-        case  531: goto step_next; // ADD HL,BC T:6
-        case  532: goto fetch_next; // ADD HL,BC T:7
-        case  533: _wait();_mread(cpu->bc);goto step_next; // LD A,(BC) T:1
-        case  534: cpu->a=_gd();cpu->wz=cpu->bc+1;goto step_next; // LD A,(BC) T:2
-        case  535: goto fetch_next; // LD A,(BC) T:3
-        case  536: goto step_next; // DEC BC T:1
-        case  537: goto fetch_next; // DEC BC T:2
-        case  538: _wait();_mread(cpu->pc++);goto step_next; // LD C,n T:1
-        case  539: cpu->c=_gd();goto step_next; // LD C,n T:2
-        case  540: goto fetch_next; // LD C,n T:3
-        case  541: goto step_next; // DJNZ d T:1
-        case  542: _wait();_mread(cpu->pc++);goto step_next; // DJNZ d T:2
-        case  543: cpu->dlatch=_gd();if(--cpu->b==0){_skip(5);};goto step_next; // DJNZ d T:3
-        case  544: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next; // DJNZ d T:4
-        case  545: goto step_next; // DJNZ d T:5
-        case  546: goto step_next; // DJNZ d T:6
-        case  547: goto step_next; // DJNZ d T:7
-        case  548: goto step_next; // DJNZ d T:8
-        case  549: goto fetch_next; // DJNZ d T:9
-        case  550: _wait();_mread(cpu->pc++);goto step_next; // LD DE,nn T:1
-        case  551: cpu->e=_gd();goto step_next; // LD DE,nn T:2
-        case  552: goto step_next; // LD DE,nn T:3
-        case  553: _wait();_mread(cpu->pc++);goto step_next; // LD DE,nn T:4
-        case  554: cpu->d=_gd();goto step_next; // LD DE,nn T:5
-        case  555: goto fetch_next; // LD DE,nn T:6
-        case  556: _wait();_mwrite(cpu->de,cpu->a);cpu->wzl=cpu->e+1;cpu->wzh=cpu->a;goto step_next; // LD (DE),A T:1
-        case  557: goto step_next; // LD (DE),A T:2
-        case  558: goto fetch_next; // LD (DE),A T:3
-        case  559: goto step_next; // INC DE T:1
-        case  560: goto fetch_next; // INC DE T:2
-        case  561: _wait();_mread(cpu->pc++);goto step_next; // LD D,n T:1
-        case  562: cpu->d=_gd();goto step_next; // LD D,n T:2
-        case  563: goto fetch_next; // LD D,n T:3
-        case  564: _wait();_mread(cpu->pc++);goto step_next; // JR d T:1
-        case  565: cpu->dlatch=_gd();goto step_next; // JR d T:2
-        case  566: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next; // JR d T:3
-        case  567: goto step_next; // JR d T:4
-        case  568: goto step_next; // JR d T:5
-        case  569: goto step_next; // JR d T:6
-        case  570: goto step_next; // JR d T:7
-        case  571: goto fetch_next; // JR d T:8
-        case  572: goto step_next; // ADD HL,DE T:1
-        case  573: goto step_next; // ADD HL,DE T:2
-        case  574: goto step_next; // ADD HL,DE T:3
-        case  575: goto step_next; // ADD HL,DE T:4
-        case  576: goto step_next; // ADD HL,DE T:5
-        case  577: goto step_next; // ADD HL,DE T:6
-        case  578: goto fetch_next; // ADD HL,DE T:7
-        case  579: _wait();_mread(cpu->de);goto step_next; // LD A,(DE) T:1
-        case  580: cpu->a=_gd();cpu->wz=cpu->de+1;goto step_next; // LD A,(DE) T:2
-        case  581: goto fetch_next; // LD A,(DE) T:3
-        case  582: goto step_next; // DEC DE T:1
-        case  583: goto fetch_next; // DEC DE T:2
-        case  584: _wait();_mread(cpu->pc++);goto step_next; // LD E,n T:1
-        case  585: cpu->e=_gd();goto step_next; // LD E,n T:2
-        case  586: goto fetch_next; // LD E,n T:3
-        case  587: _wait();_mread(cpu->pc++);goto step_next; // JR NZ,d T:1
-        case  588: cpu->dlatch=_gd();if(!(_cc_nz)){_skip(5);};goto step_next; // JR NZ,d T:2
-        case  589: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next; // JR NZ,d T:3
-        case  590: goto step_next; // JR NZ,d T:4
-        case  591: goto step_next; // JR NZ,d T:5
-        case  592: goto step_next; // JR NZ,d T:6
-        case  593: goto step_next; // JR NZ,d T:7
-        case  594: goto fetch_next; // JR NZ,d T:8
-        case  595: _wait();_mread(cpu->pc++);goto step_next; // LD HL,nn T:1
-        case  596: cpu->hlx[cpu->hlx_idx].l=_gd();goto step_next; // LD HL,nn T:2
-        case  597: goto step_next; // LD HL,nn T:3
-        case  598: _wait();_mread(cpu->pc++);goto step_next; // LD HL,nn T:4
-        case  599: cpu->hlx[cpu->hlx_idx].h=_gd();goto step_next; // LD HL,nn T:5
-        case  600: goto fetch_next; // LD HL,nn T:6
-        case  601: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),HL T:1
-        case  602: cpu->wzl=_gd();goto step_next; // LD (nn),HL T:2
-        case  603: goto step_next; // LD (nn),HL T:3
-        case  604: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),HL T:4
-        case  605: cpu->wzh=_gd();goto step_next; // LD (nn),HL T:5
-        case  606: goto step_next; // LD (nn),HL T:6
-        case  607: _wait();_mwrite(cpu->wz++,cpu->hlx[cpu->hlx_idx].l);goto step_next; // LD (nn),HL T:7
-        case  608: goto step_next; // LD (nn),HL T:8
-        case  609: goto step_next; // LD (nn),HL T:9
-        case  610: _wait();_mwrite(cpu->wz,cpu->hlx[cpu->hlx_idx].h);goto step_next; // LD (nn),HL T:10
-        case  611: goto step_next; // LD (nn),HL T:11
-        case  612: goto fetch_next; // LD (nn),HL T:12
-        case  613: goto step_next; // INC HL T:1
-        case  614: goto fetch_next; // INC HL T:2
-        case  615: _wait();_mread(cpu->pc++);goto step_next; // LD H,n T:1
-        case  616: cpu->hlx[cpu->hlx_idx].h=_gd();goto step_next; // LD H,n T:2
-        case  617: goto fetch_next; // LD H,n T:3
-        case  618: _wait();_mread(cpu->pc++);goto step_next; // JR Z,d T:1
-        case  619: cpu->dlatch=_gd();if(!(_cc_z)){_skip(5);};goto step_next; // JR Z,d T:2
-        case  620: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next; // JR Z,d T:3
-        case  621: goto step_next; // JR Z,d T:4
-        case  622: goto step_next; // JR Z,d T:5
-        case  623: goto step_next; // JR Z,d T:6
-        case  624: goto step_next; // JR Z,d T:7
-        case  625: goto fetch_next; // JR Z,d T:8
-        case  626: goto step_next; // ADD HL,HL T:1
-        case  627: goto step_next; // ADD HL,HL T:2
-        case  628: goto step_next; // ADD HL,HL T:3
-        case  629: goto step_next; // ADD HL,HL T:4
-        case  630: goto step_next; // ADD HL,HL T:5
-        case  631: goto step_next; // ADD HL,HL T:6
-        case  632: goto fetch_next; // ADD HL,HL T:7
-        case  633: _wait();_mread(cpu->pc++);goto step_next; // LD HL,(nn) T:1
-        case  634: cpu->wzl=_gd();goto step_next; // LD HL,(nn) T:2
-        case  635: goto step_next; // LD HL,(nn) T:3
-        case  636: _wait();_mread(cpu->pc++);goto step_next; // LD HL,(nn) T:4
-        case  637: cpu->wzh=_gd();goto step_next; // LD HL,(nn) T:5
-        case  638: goto step_next; // LD HL,(nn) T:6
-        case  639: _wait();_mread(cpu->wz++);goto step_next; // LD HL,(nn) T:7
-        case  640: cpu->hlx[cpu->hlx_idx].l=_gd();goto step_next; // LD HL,(nn) T:8
-        case  641: goto step_next; // LD HL,(nn) T:9
-        case  642: _wait();_mread(cpu->wz);goto step_next; // LD HL,(nn) T:10
-        case  643: cpu->hlx[cpu->hlx_idx].h=_gd();goto step_next; // LD HL,(nn) T:11
-        case  644: goto fetch_next; // LD HL,(nn) T:12
-        case  645: goto step_next; // DEC HL T:1
-        case  646: goto fetch_next; // DEC HL T:2
-        case  647: _wait();_mread(cpu->pc++);goto step_next; // LD L,n T:1
-        case  648: cpu->hlx[cpu->hlx_idx].l=_gd();goto step_next; // LD L,n T:2
-        case  649: goto fetch_next; // LD L,n T:3
-        case  650: _wait();_mread(cpu->pc++);goto step_next; // JR NC,d T:1
-        case  651: cpu->dlatch=_gd();if(!(_cc_nc)){_skip(5);};goto step_next; // JR NC,d T:2
-        case  652: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next; // JR NC,d T:3
-        case  653: goto step_next; // JR NC,d T:4
-        case  654: goto step_next; // JR NC,d T:5
-        case  655: goto step_next; // JR NC,d T:6
-        case  656: goto step_next; // JR NC,d T:7
-        case  657: goto fetch_next; // JR NC,d T:8
-        case  658: _wait();_mread(cpu->pc++);goto step_next; // LD SP,nn T:1
-        case  659: cpu->spl=_gd();goto step_next; // LD SP,nn T:2
-        case  660: goto step_next; // LD SP,nn T:3
-        case  661: _wait();_mread(cpu->pc++);goto step_next; // LD SP,nn T:4
-        case  662: cpu->sph=_gd();goto step_next; // LD SP,nn T:5
-        case  663: goto fetch_next; // LD SP,nn T:6
-        case  664: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),A T:1
-        case  665: cpu->wzl=_gd();goto step_next; // LD (nn),A T:2
-        case  666: goto step_next; // LD (nn),A T:3
-        case  667: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),A T:4
-        case  668: cpu->wzh=_gd();goto step_next; // LD (nn),A T:5
-        case  669: goto step_next; // LD (nn),A T:6
-        case  670: _wait();_mwrite(cpu->wz++,cpu->a);cpu->wzh=cpu->a;goto step_next; // LD (nn),A T:7
-        case  671: goto step_next; // LD (nn),A T:8
-        case  672: goto fetch_next; // LD (nn),A T:9
-        case  673: goto step_next; // INC SP T:1
-        case  674: goto fetch_next; // INC SP T:2
-        case  675: _wait();_mread(cpu->addr);goto step_next; // INC (HL) T:1
-        case  676: cpu->dlatch=_gd();cpu->dlatch=_z80_inc8(cpu,cpu->dlatch);goto step_next; // INC (HL) T:2
-        case  677: goto step_next; // INC (HL) T:3
-        case  678: goto step_next; // INC (HL) T:4
-        case  679: _wait();_mwrite(cpu->addr,cpu->dlatch);goto step_next; // INC (HL) T:5
-        case  680: goto step_next; // INC (HL) T:6
-        case  681: goto fetch_next; // INC (HL) T:7
-        case  682: _wait();_mread(cpu->addr);goto step_next; // DEC (HL) T:1
-        case  683: cpu->dlatch=_gd();cpu->dlatch=_z80_dec8(cpu,cpu->dlatch);goto step_next; // DEC (HL) T:2
-        case  684: goto step_next; // DEC (HL) T:3
-        case  685: goto step_next; // DEC (HL) T:4
-        case  686: _wait();_mwrite(cpu->addr,cpu->dlatch);goto step_next; // DEC (HL) T:5
-        case  687: goto step_next; // DEC (HL) T:6
-        case  688: goto fetch_next; // DEC (HL) T:7
-        case  689: _wait();_mread(cpu->pc++);goto step_next; // LD (HL),n T:1
-        case  690: cpu->dlatch=_gd();goto step_next; // LD (HL),n T:2
-        case  691: goto step_next; // LD (HL),n T:3
-        case  692: _wait();_mwrite(cpu->addr,cpu->dlatch);goto step_next; // LD (HL),n T:4
-        case  693: goto step_next; // LD (HL),n T:5
-        case  694: goto fetch_next; // LD (HL),n T:6
-        case  695: _wait();_mread(cpu->pc++);goto step_next; // JR C,d T:1
-        case  696: cpu->dlatch=_gd();if(!(_cc_c)){_skip(5);};goto step_next; // JR C,d T:2
-        case  697: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;goto step_next; // JR C,d T:3
-        case  698: goto step_next; // JR C,d T:4
-        case  699: goto step_next; // JR C,d T:5
-        case  700: goto step_next; // JR C,d T:6
-        case  701: goto step_next; // JR C,d T:7
-        case  702: goto fetch_next; // JR C,d T:8
-        case  703: goto step_next; // ADD HL,SP T:1
-        case  704: goto step_next; // ADD HL,SP T:2
-        case  705: goto step_next; // ADD HL,SP T:3
-        case  706: goto step_next; // ADD HL,SP T:4
-        case  707: goto step_next; // ADD HL,SP T:5
-        case  708: goto step_next; // ADD HL,SP T:6
-        case  709: goto fetch_next; // ADD HL,SP T:7
-        case  710: _wait();_mread(cpu->pc++);goto step_next; // LD A,(nn) T:1
-        case  711: cpu->wzl=_gd();goto step_next; // LD A,(nn) T:2
-        case  712: goto step_next; // LD A,(nn) T:3
-        case  713: _wait();_mread(cpu->pc++);goto step_next; // LD A,(nn) T:4
-        case  714: cpu->wzh=_gd();goto step_next; // LD A,(nn) T:5
-        case  715: goto step_next; // LD A,(nn) T:6
-        case  716: _wait();_mread(cpu->wz++);goto step_next; // LD A,(nn) T:7
-        case  717: cpu->a=_gd();goto step_next; // LD A,(nn) T:8
-        case  718: goto fetch_next; // LD A,(nn) T:9
-        case  719: goto step_next; // DEC SP T:1
-        case  720: goto fetch_next; // DEC SP T:2
-        case  721: _wait();_mread(cpu->pc++);goto step_next; // LD A,n T:1
-        case  722: cpu->a=_gd();goto step_next; // LD A,n T:2
-        case  723: goto fetch_next; // LD A,n T:3
-        case  724: _wait();_mread(cpu->addr);goto step_next; // LD B,(HL) T:1
-        case  725: cpu->b=_gd();goto step_next; // LD B,(HL) T:2
-        case  726: goto fetch_next; // LD B,(HL) T:3
-        case  727: _wait();_mread(cpu->addr);goto step_next; // LD C,(HL) T:1
-        case  728: cpu->c=_gd();goto step_next; // LD C,(HL) T:2
-        case  729: goto fetch_next; // LD C,(HL) T:3
-        case  730: _wait();_mread(cpu->addr);goto step_next; // LD D,(HL) T:1
-        case  731: cpu->d=_gd();goto step_next; // LD D,(HL) T:2
-        case  732: goto fetch_next; // LD D,(HL) T:3
-        case  733: _wait();_mread(cpu->addr);goto step_next; // LD E,(HL) T:1
-        case  734: cpu->e=_gd();goto step_next; // LD E,(HL) T:2
-        case  735: goto fetch_next; // LD E,(HL) T:3
-        case  736: _wait();_mread(cpu->addr);goto step_next; // LD H,(HL) T:1
-        case  737: cpu->h=_gd();goto step_next; // LD H,(HL) T:2
-        case  738: goto fetch_next; // LD H,(HL) T:3
-        case  739: _wait();_mread(cpu->addr);goto step_next; // LD L,(HL) T:1
-        case  740: cpu->l=_gd();goto step_next; // LD L,(HL) T:2
-        case  741: goto fetch_next; // LD L,(HL) T:3
-        case  742: _wait();_mwrite(cpu->addr,cpu->b);goto step_next; // LD (HL),B T:1
-        case  743: goto step_next; // LD (HL),B T:2
-        case  744: goto fetch_next; // LD (HL),B T:3
-        case  745: _wait();_mwrite(cpu->addr,cpu->c);goto step_next; // LD (HL),C T:1
-        case  746: goto step_next; // LD (HL),C T:2
-        case  747: goto fetch_next; // LD (HL),C T:3
-        case  748: _wait();_mwrite(cpu->addr,cpu->d);goto step_next; // LD (HL),D T:1
-        case  749: goto step_next; // LD (HL),D T:2
-        case  750: goto fetch_next; // LD (HL),D T:3
-        case  751: _wait();_mwrite(cpu->addr,cpu->e);goto step_next; // LD (HL),E T:1
-        case  752: goto step_next; // LD (HL),E T:2
-        case  753: goto fetch_next; // LD (HL),E T:3
-        case  754: _wait();_mwrite(cpu->addr,cpu->h);goto step_next; // LD (HL),H T:1
-        case  755: goto step_next; // LD (HL),H T:2
-        case  756: goto fetch_next; // LD (HL),H T:3
-        case  757: _wait();_mwrite(cpu->addr,cpu->l);goto step_next; // LD (HL),L T:1
-        case  758: goto step_next; // LD (HL),L T:2
-        case  759: goto fetch_next; // LD (HL),L T:3
-        case  760: _wait();_mwrite(cpu->addr,cpu->a);goto step_next; // LD (HL),A T:1
-        case  761: goto step_next; // LD (HL),A T:2
-        case  762: goto fetch_next; // LD (HL),A T:3
-        case  763: _wait();_mread(cpu->addr);goto step_next; // LD A,(HL) T:1
-        case  764: cpu->a=_gd();goto step_next; // LD A,(HL) T:2
-        case  765: goto fetch_next; // LD A,(HL) T:3
-        case  766: _wait();_mread(cpu->addr);goto step_next; // ADD (HL) T:1
-        case  767: cpu->dlatch=_gd();goto step_next; // ADD (HL) T:2
-        case  768: _z80_add8(cpu,cpu->dlatch);goto fetch_next; // ADD (HL) T:3
-        case  769: _wait();_mread(cpu->addr);goto step_next; // ADC (HL) T:1
-        case  770: cpu->dlatch=_gd();goto step_next; // ADC (HL) T:2
-        case  771: _z80_adc8(cpu,cpu->dlatch);goto fetch_next; // ADC (HL) T:3
-        case  772: _wait();_mread(cpu->addr);goto step_next; // SUB (HL) T:1
-        case  773: cpu->dlatch=_gd();goto step_next; // SUB (HL) T:2
-        case  774: _z80_sub8(cpu,cpu->dlatch);goto fetch_next; // SUB (HL) T:3
-        case  775: _wait();_mread(cpu->addr);goto step_next; // SBC (HL) T:1
-        case  776: cpu->dlatch=_gd();goto step_next; // SBC (HL) T:2
-        case  777: _z80_sbc8(cpu,cpu->dlatch);goto fetch_next; // SBC (HL) T:3
-        case  778: _wait();_mread(cpu->addr);goto step_next; // AND (HL) T:1
-        case  779: cpu->dlatch=_gd();goto step_next; // AND (HL) T:2
-        case  780: _z80_and8(cpu,cpu->dlatch);goto fetch_next; // AND (HL) T:3
-        case  781: _wait();_mread(cpu->addr);goto step_next; // XOR (HL) T:1
-        case  782: cpu->dlatch=_gd();goto step_next; // XOR (HL) T:2
-        case  783: _z80_xor8(cpu,cpu->dlatch);goto fetch_next; // XOR (HL) T:3
-        case  784: _wait();_mread(cpu->addr);goto step_next; // OR (HL) T:1
-        case  785: cpu->dlatch=_gd();goto step_next; // OR (HL) T:2
-        case  786: _z80_or8(cpu,cpu->dlatch);goto fetch_next; // OR (HL) T:3
-        case  787: _wait();_mread(cpu->addr);goto step_next; // CP (HL) T:1
-        case  788: cpu->dlatch=_gd();goto step_next; // CP (HL) T:2
-        case  789: _z80_cp8(cpu,cpu->dlatch);goto fetch_next; // CP (HL) T:3
-        case  790: goto step_next; // RET NZ T:1
-        case  791: _wait();_mread(cpu->sp++);goto step_next; // RET NZ T:2
-        case  792: cpu->wzl=_gd();goto step_next; // RET NZ T:3
-        case  793: goto step_next; // RET NZ T:4
-        case  794: _wait();_mread(cpu->sp++);goto step_next; // RET NZ T:5
-        case  795: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET NZ T:6
-        case  796: goto fetch_next; // RET NZ T:7
-        case  797: _wait();_mread(cpu->sp++);goto step_next; // POP BC T:1
-        case  798: cpu->c=_gd();goto step_next; // POP BC T:2
-        case  799: goto step_next; // POP BC T:3
-        case  800: _wait();_mread(cpu->sp++);goto step_next; // POP BC T:4
-        case  801: cpu->b=_gd();goto step_next; // POP BC T:5
-        case  802: goto fetch_next; // POP BC T:6
-        case  803: _wait();_mread(cpu->pc++);goto step_next; // JP NZ,nn T:1
-        case  804: cpu->wzl=_gd();goto step_next; // JP NZ,nn T:2
-        case  805: goto step_next; // JP NZ,nn T:3
-        case  806: _wait();_mread(cpu->pc++);goto step_next; // JP NZ,nn T:4
-        case  807: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;};goto step_next; // JP NZ,nn T:5
-        case  808: goto fetch_next; // JP NZ,nn T:6
-        case  809: _wait();_mread(cpu->pc++);goto step_next; // JP nn T:1
-        case  810: cpu->wzl=_gd();goto step_next; // JP nn T:2
-        case  811: goto step_next; // JP nn T:3
-        case  812: _wait();_mread(cpu->pc++);goto step_next; // JP nn T:4
-        case  813: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // JP nn T:5
-        case  814: goto fetch_next; // JP nn T:6
-        case  815: _wait();_mread(cpu->pc++);goto step_next; // CALL NZ,nn T:1
-        case  816: cpu->wzl=_gd();goto step_next; // CALL NZ,nn T:2
-        case  817: goto step_next; // CALL NZ,nn T:3
-        case  818: _wait();_mread(cpu->pc++);goto step_next; // CALL NZ,nn T:4
-        case  819: cpu->wzh=_gd();if (!_cc_nz){_skip(7);};goto step_next; // CALL NZ,nn T:5
-        case  820: goto step_next; // CALL NZ,nn T:6
-        case  821: goto step_next; // CALL NZ,nn T:7
-        case  822: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL NZ,nn T:8
-        case  823: goto step_next; // CALL NZ,nn T:9
-        case  824: goto step_next; // CALL NZ,nn T:10
-        case  825: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL NZ,nn T:11
-        case  826: goto step_next; // CALL NZ,nn T:12
-        case  827: goto fetch_next; // CALL NZ,nn T:13
-        case  828: goto step_next; // PUSH BC T:1
-        case  829: _wait();_mwrite(--cpu->sp,cpu->b);goto step_next; // PUSH BC T:2
-        case  830: goto step_next; // PUSH BC T:3
-        case  831: goto step_next; // PUSH BC T:4
-        case  832: _wait();_mwrite(--cpu->sp,cpu->c);goto step_next; // PUSH BC T:5
-        case  833: goto step_next; // PUSH BC T:6
-        case  834: goto fetch_next; // PUSH BC T:7
-        case  835: _wait();_mread(cpu->pc++);goto step_next; // ADD n T:1
-        case  836: cpu->dlatch=_gd();goto step_next; // ADD n T:2
-        case  837: _z80_add8(cpu,cpu->dlatch);goto fetch_next; // ADD n T:3
-        case  838: goto step_next; // RST 0h T:1
-        case  839: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // RST 0h T:2
-        case  840: goto step_next; // RST 0h T:3
-        case  841: goto step_next; // RST 0h T:4
-        case  842: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x00;cpu->pc=cpu->wz;goto step_next; // RST 0h T:5
-        case  843: goto step_next; // RST 0h T:6
-        case  844: goto fetch_next; // RST 0h T:7
-        case  845: goto step_next; // RET Z T:1
-        case  846: _wait();_mread(cpu->sp++);goto step_next; // RET Z T:2
-        case  847: cpu->wzl=_gd();goto step_next; // RET Z T:3
-        case  848: goto step_next; // RET Z T:4
-        case  849: _wait();_mread(cpu->sp++);goto step_next; // RET Z T:5
-        case  850: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET Z T:6
-        case  851: goto fetch_next; // RET Z T:7
-        case  852: _wait();_mread(cpu->sp++);goto step_next; // RET T:1
-        case  853: cpu->wzl=_gd();goto step_next; // RET T:2
-        case  854: goto step_next; // RET T:3
-        case  855: _wait();_mread(cpu->sp++);goto step_next; // RET T:4
-        case  856: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET T:5
-        case  857: goto fetch_next; // RET T:6
-        case  858: _wait();_mread(cpu->pc++);goto step_next; // JP Z,nn T:1
-        case  859: cpu->wzl=_gd();goto step_next; // JP Z,nn T:2
-        case  860: goto step_next; // JP Z,nn T:3
-        case  861: _wait();_mread(cpu->pc++);goto step_next; // JP Z,nn T:4
-        case  862: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;};goto step_next; // JP Z,nn T:5
-        case  863: goto fetch_next; // JP Z,nn T:6
-        case  864: _wait();_mread(cpu->pc++);goto step_next; // CALL Z,nn T:1
-        case  865: cpu->wzl=_gd();goto step_next; // CALL Z,nn T:2
-        case  866: goto step_next; // CALL Z,nn T:3
-        case  867: _wait();_mread(cpu->pc++);goto step_next; // CALL Z,nn T:4
-        case  868: cpu->wzh=_gd();if (!_cc_z){_skip(7);};goto step_next; // CALL Z,nn T:5
-        case  869: goto step_next; // CALL Z,nn T:6
-        case  870: goto step_next; // CALL Z,nn T:7
-        case  871: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL Z,nn T:8
-        case  872: goto step_next; // CALL Z,nn T:9
-        case  873: goto step_next; // CALL Z,nn T:10
-        case  874: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL Z,nn T:11
-        case  875: goto step_next; // CALL Z,nn T:12
-        case  876: goto fetch_next; // CALL Z,nn T:13
-        case  877: _wait();_mread(cpu->pc++);goto step_next; // CALL nn T:1
-        case  878: cpu->wzl=_gd();goto step_next; // CALL nn T:2
-        case  879: goto step_next; // CALL nn T:3
-        case  880: _wait();_mread(cpu->pc++);goto step_next; // CALL nn T:4
-        case  881: cpu->wzh=_gd();goto step_next; // CALL nn T:5
-        case  882: goto step_next; // CALL nn T:6
-        case  883: goto step_next; // CALL nn T:7
-        case  884: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL nn T:8
-        case  885: goto step_next; // CALL nn T:9
-        case  886: goto step_next; // CALL nn T:10
-        case  887: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL nn T:11
-        case  888: goto step_next; // CALL nn T:12
-        case  889: goto fetch_next; // CALL nn T:13
-        case  890: _wait();_mread(cpu->pc++);goto step_next; // ADC n T:1
-        case  891: cpu->dlatch=_gd();goto step_next; // ADC n T:2
-        case  892: _z80_adc8(cpu,cpu->dlatch);goto fetch_next; // ADC n T:3
-        case  893: goto step_next; // RST 8h T:1
-        case  894: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // RST 8h T:2
-        case  895: goto step_next; // RST 8h T:3
-        case  896: goto step_next; // RST 8h T:4
-        case  897: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x08;cpu->pc=cpu->wz;goto step_next; // RST 8h T:5
-        case  898: goto step_next; // RST 8h T:6
-        case  899: goto fetch_next; // RST 8h T:7
-        case  900: goto step_next; // RET NC T:1
-        case  901: _wait();_mread(cpu->sp++);goto step_next; // RET NC T:2
-        case  902: cpu->wzl=_gd();goto step_next; // RET NC T:3
-        case  903: goto step_next; // RET NC T:4
-        case  904: _wait();_mread(cpu->sp++);goto step_next; // RET NC T:5
-        case  905: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET NC T:6
-        case  906: goto fetch_next; // RET NC T:7
-        case  907: _wait();_mread(cpu->sp++);goto step_next; // POP DE T:1
-        case  908: cpu->e=_gd();goto step_next; // POP DE T:2
-        case  909: goto step_next; // POP DE T:3
-        case  910: _wait();_mread(cpu->sp++);goto step_next; // POP DE T:4
-        case  911: cpu->d=_gd();goto step_next; // POP DE T:5
-        case  912: goto fetch_next; // POP DE T:6
-        case  913: _wait();_mread(cpu->pc++);goto step_next; // JP NC,nn T:1
-        case  914: cpu->wzl=_gd();goto step_next; // JP NC,nn T:2
-        case  915: goto step_next; // JP NC,nn T:3
-        case  916: _wait();_mread(cpu->pc++);goto step_next; // JP NC,nn T:4
-        case  917: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;};goto step_next; // JP NC,nn T:5
-        case  918: goto fetch_next; // JP NC,nn T:6
-        case  919: _wait();_mread(cpu->pc++);goto step_next; // OUT (n),A T:1
-        case  920: cpu->wzl=_gd();cpu->wzh=cpu->a;goto step_next; // OUT (n),A T:2
-        case  921: goto step_next; // OUT (n),A T:3
-        case  922: _iowrite(cpu->wz,cpu->a);goto step_next; // OUT (n),A T:4
-        case  923: _wait();cpu->wzl++;goto step_next; // OUT (n),A T:5
-        case  924: goto step_next; // OUT (n),A T:6
-        case  925: goto fetch_next; // OUT (n),A T:7
-        case  926: _wait();_mread(cpu->pc++);goto step_next; // CALL NC,nn T:1
-        case  927: cpu->wzl=_gd();goto step_next; // CALL NC,nn T:2
-        case  928: goto step_next; // CALL NC,nn T:3
-        case  929: _wait();_mread(cpu->pc++);goto step_next; // CALL NC,nn T:4
-        case  930: cpu->wzh=_gd();if (!_cc_nc){_skip(7);};goto step_next; // CALL NC,nn T:5
-        case  931: goto step_next; // CALL NC,nn T:6
-        case  932: goto step_next; // CALL NC,nn T:7
-        case  933: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL NC,nn T:8
-        case  934: goto step_next; // CALL NC,nn T:9
-        case  935: goto step_next; // CALL NC,nn T:10
-        case  936: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL NC,nn T:11
-        case  937: goto step_next; // CALL NC,nn T:12
-        case  938: goto fetch_next; // CALL NC,nn T:13
-        case  939: goto step_next; // PUSH DE T:1
-        case  940: _wait();_mwrite(--cpu->sp,cpu->d);goto step_next; // PUSH DE T:2
-        case  941: goto step_next; // PUSH DE T:3
-        case  942: goto step_next; // PUSH DE T:4
-        case  943: _wait();_mwrite(--cpu->sp,cpu->e);goto step_next; // PUSH DE T:5
-        case  944: goto step_next; // PUSH DE T:6
-        case  945: goto fetch_next; // PUSH DE T:7
-        case  946: _wait();_mread(cpu->pc++);goto step_next; // SUB n T:1
-        case  947: cpu->dlatch=_gd();goto step_next; // SUB n T:2
-        case  948: _z80_sub8(cpu,cpu->dlatch);goto fetch_next; // SUB n T:3
-        case  949: goto step_next; // RST 10h T:1
-        case  950: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // RST 10h T:2
-        case  951: goto step_next; // RST 10h T:3
-        case  952: goto step_next; // RST 10h T:4
-        case  953: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x10;cpu->pc=cpu->wz;goto step_next; // RST 10h T:5
-        case  954: goto step_next; // RST 10h T:6
-        case  955: goto fetch_next; // RST 10h T:7
-        case  956: goto step_next; // RET C T:1
-        case  957: _wait();_mread(cpu->sp++);goto step_next; // RET C T:2
-        case  958: cpu->wzl=_gd();goto step_next; // RET C T:3
-        case  959: goto step_next; // RET C T:4
-        case  960: _wait();_mread(cpu->sp++);goto step_next; // RET C T:5
-        case  961: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET C T:6
-        case  962: goto fetch_next; // RET C T:7
-        case  963: _wait();_mread(cpu->pc++);goto step_next; // JP C,nn T:1
-        case  964: cpu->wzl=_gd();goto step_next; // JP C,nn T:2
-        case  965: goto step_next; // JP C,nn T:3
-        case  966: _wait();_mread(cpu->pc++);goto step_next; // JP C,nn T:4
-        case  967: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;};goto step_next; // JP C,nn T:5
-        case  968: goto fetch_next; // JP C,nn T:6
-        case  969: _wait();_mread(cpu->pc++);goto step_next; // IN A,(n) T:1
-        case  970: cpu->wzl=_gd();cpu->wzh=cpu->a;goto step_next; // IN A,(n) T:2
-        case  971: goto step_next; // IN A,(n) T:3
-        case  972: goto step_next; // IN A,(n) T:4
-        case  973: _wait();_ioread(cpu->wz++);goto step_next; // IN A,(n) T:5
-        case  974: cpu->a=_gd();goto step_next; // IN A,(n) T:6
-        case  975: goto fetch_next; // IN A,(n) T:7
-        case  976: _wait();_mread(cpu->pc++);goto step_next; // CALL C,nn T:1
-        case  977: cpu->wzl=_gd();goto step_next; // CALL C,nn T:2
-        case  978: goto step_next; // CALL C,nn T:3
-        case  979: _wait();_mread(cpu->pc++);goto step_next; // CALL C,nn T:4
-        case  980: cpu->wzh=_gd();if (!_cc_c){_skip(7);};goto step_next; // CALL C,nn T:5
-        case  981: goto step_next; // CALL C,nn T:6
-        case  982: goto step_next; // CALL C,nn T:7
-        case  983: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL C,nn T:8
-        case  984: goto step_next; // CALL C,nn T:9
-        case  985: goto step_next; // CALL C,nn T:10
-        case  986: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL C,nn T:11
-        case  987: goto step_next; // CALL C,nn T:12
-        case  988: goto fetch_next; // CALL C,nn T:13
-        case  989: _wait();_mread(cpu->pc++);goto step_next; // SBC n T:1
-        case  990: cpu->dlatch=_gd();goto step_next; // SBC n T:2
-        case  991: _z80_sbc8(cpu,cpu->dlatch);goto fetch_next; // SBC n T:3
-        case  992: goto step_next; // RST 18h T:1
-        case  993: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // RST 18h T:2
-        case  994: goto step_next; // RST 18h T:3
-        case  995: goto step_next; // RST 18h T:4
-        case  996: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x18;cpu->pc=cpu->wz;goto step_next; // RST 18h T:5
-        case  997: goto step_next; // RST 18h T:6
-        case  998: goto fetch_next; // RST 18h T:7
-        case  999: goto step_next; // RET PO T:1
-        case 1000: _wait();_mread(cpu->sp++);goto step_next; // RET PO T:2
-        case 1001: cpu->wzl=_gd();goto step_next; // RET PO T:3
-        case 1002: goto step_next; // RET PO T:4
-        case 1003: _wait();_mread(cpu->sp++);goto step_next; // RET PO T:5
-        case 1004: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET PO T:6
-        case 1005: goto fetch_next; // RET PO T:7
-        case 1006: _wait();_mread(cpu->sp++);goto step_next; // POP HL T:1
-        case 1007: cpu->hlx[cpu->hlx_idx].l=_gd();goto step_next; // POP HL T:2
-        case 1008: goto step_next; // POP HL T:3
-        case 1009: _wait();_mread(cpu->sp++);goto step_next; // POP HL T:4
-        case 1010: cpu->hlx[cpu->hlx_idx].h=_gd();goto step_next; // POP HL T:5
-        case 1011: goto fetch_next; // POP HL T:6
-        case 1012: _wait();_mread(cpu->pc++);goto step_next; // JP PO,nn T:1
-        case 1013: cpu->wzl=_gd();goto step_next; // JP PO,nn T:2
-        case 1014: goto step_next; // JP PO,nn T:3
-        case 1015: _wait();_mread(cpu->pc++);goto step_next; // JP PO,nn T:4
-        case 1016: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;};goto step_next; // JP PO,nn T:5
-        case 1017: goto fetch_next; // JP PO,nn T:6
-        case 1018: _wait();_mread(cpu->sp);goto step_next; // EX (SP),HL T:1
-        case 1019: cpu->wzl=_gd();goto step_next; // EX (SP),HL T:2
-        case 1020: goto step_next; // EX (SP),HL T:3
-        case 1021: _wait();_mread(cpu->sp+1);goto step_next; // EX (SP),HL T:4
-        case 1022: cpu->wzh=_gd();goto step_next; // EX (SP),HL T:5
-        case 1023: goto step_next; // EX (SP),HL T:6
-        case 1024: goto step_next; // EX (SP),HL T:7
-        case 1025: _wait();_mwrite(cpu->sp+1,cpu->hlx[cpu->hlx_idx].h);goto step_next; // EX (SP),HL T:8
-        case 1026: goto step_next; // EX (SP),HL T:9
-        case 1027: goto step_next; // EX (SP),HL T:10
-        case 1028: _wait();_mwrite(cpu->sp,cpu->hlx[cpu->hlx_idx].l);cpu->hlx[cpu->hlx_idx].hl=cpu->wz;goto step_next; // EX (SP),HL T:11
-        case 1029: goto step_next; // EX (SP),HL T:12
-        case 1030: goto step_next; // EX (SP),HL T:13
-        case 1031: goto step_next; // EX (SP),HL T:14
-        case 1032: goto fetch_next; // EX (SP),HL T:15
-        case 1033: _wait();_mread(cpu->pc++);goto step_next; // CALL PO,nn T:1
-        case 1034: cpu->wzl=_gd();goto step_next; // CALL PO,nn T:2
-        case 1035: goto step_next; // CALL PO,nn T:3
-        case 1036: _wait();_mread(cpu->pc++);goto step_next; // CALL PO,nn T:4
-        case 1037: cpu->wzh=_gd();if (!_cc_po){_skip(7);};goto step_next; // CALL PO,nn T:5
-        case 1038: goto step_next; // CALL PO,nn T:6
-        case 1039: goto step_next; // CALL PO,nn T:7
-        case 1040: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL PO,nn T:8
-        case 1041: goto step_next; // CALL PO,nn T:9
-        case 1042: goto step_next; // CALL PO,nn T:10
-        case 1043: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL PO,nn T:11
-        case 1044: goto step_next; // CALL PO,nn T:12
-        case 1045: goto fetch_next; // CALL PO,nn T:13
-        case 1046: goto step_next; // PUSH HL T:1
-        case 1047: _wait();_mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].h);goto step_next; // PUSH HL T:2
-        case 1048: goto step_next; // PUSH HL T:3
-        case 1049: goto step_next; // PUSH HL T:4
-        case 1050: _wait();_mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].l);goto step_next; // PUSH HL T:5
-        case 1051: goto step_next; // PUSH HL T:6
-        case 1052: goto fetch_next; // PUSH HL T:7
-        case 1053: _wait();_mread(cpu->pc++);goto step_next; // AND n T:1
-        case 1054: cpu->dlatch=_gd();goto step_next; // AND n T:2
-        case 1055: _z80_and8(cpu,cpu->dlatch);goto fetch_next; // AND n T:3
-        case 1056: goto step_next; // RST 20h T:1
-        case 1057: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // RST 20h T:2
-        case 1058: goto step_next; // RST 20h T:3
-        case 1059: goto step_next; // RST 20h T:4
-        case 1060: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x20;cpu->pc=cpu->wz;goto step_next; // RST 20h T:5
-        case 1061: goto step_next; // RST 20h T:6
-        case 1062: goto fetch_next; // RST 20h T:7
-        case 1063: goto step_next; // RET PE T:1
-        case 1064: _wait();_mread(cpu->sp++);goto step_next; // RET PE T:2
-        case 1065: cpu->wzl=_gd();goto step_next; // RET PE T:3
-        case 1066: goto step_next; // RET PE T:4
-        case 1067: _wait();_mread(cpu->sp++);goto step_next; // RET PE T:5
-        case 1068: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET PE T:6
-        case 1069: goto fetch_next; // RET PE T:7
-        case 1070: _wait();_mread(cpu->pc++);goto step_next; // JP PE,nn T:1
-        case 1071: cpu->wzl=_gd();goto step_next; // JP PE,nn T:2
-        case 1072: goto step_next; // JP PE,nn T:3
-        case 1073: _wait();_mread(cpu->pc++);goto step_next; // JP PE,nn T:4
-        case 1074: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;};goto step_next; // JP PE,nn T:5
-        case 1075: goto fetch_next; // JP PE,nn T:6
-        case 1076: _wait();_mread(cpu->pc++);goto step_next; // CALL PE,nn T:1
-        case 1077: cpu->wzl=_gd();goto step_next; // CALL PE,nn T:2
-        case 1078: goto step_next; // CALL PE,nn T:3
-        case 1079: _wait();_mread(cpu->pc++);goto step_next; // CALL PE,nn T:4
-        case 1080: cpu->wzh=_gd();if (!_cc_pe){_skip(7);};goto step_next; // CALL PE,nn T:5
-        case 1081: goto step_next; // CALL PE,nn T:6
-        case 1082: goto step_next; // CALL PE,nn T:7
-        case 1083: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL PE,nn T:8
-        case 1084: goto step_next; // CALL PE,nn T:9
-        case 1085: goto step_next; // CALL PE,nn T:10
-        case 1086: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL PE,nn T:11
-        case 1087: goto step_next; // CALL PE,nn T:12
-        case 1088: goto fetch_next; // CALL PE,nn T:13
-        case 1089: _wait();_mread(cpu->pc++);goto step_next; // XOR n T:1
-        case 1090: cpu->dlatch=_gd();goto step_next; // XOR n T:2
-        case 1091: _z80_xor8(cpu,cpu->dlatch);goto fetch_next; // XOR n T:3
-        case 1092: goto step_next; // RST 28h T:1
-        case 1093: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // RST 28h T:2
-        case 1094: goto step_next; // RST 28h T:3
-        case 1095: goto step_next; // RST 28h T:4
-        case 1096: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x28;cpu->pc=cpu->wz;goto step_next; // RST 28h T:5
-        case 1097: goto step_next; // RST 28h T:6
-        case 1098: goto fetch_next; // RST 28h T:7
-        case 1099: goto step_next; // RET P T:1
-        case 1100: _wait();_mread(cpu->sp++);goto step_next; // RET P T:2
-        case 1101: cpu->wzl=_gd();goto step_next; // RET P T:3
-        case 1102: goto step_next; // RET P T:4
-        case 1103: _wait();_mread(cpu->sp++);goto step_next; // RET P T:5
-        case 1104: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET P T:6
-        case 1105: goto fetch_next; // RET P T:7
-        case 1106: _wait();_mread(cpu->sp++);goto step_next; // POP AF T:1
-        case 1107: cpu->f=_gd();goto step_next; // POP AF T:2
-        case 1108: goto step_next; // POP AF T:3
-        case 1109: _wait();_mread(cpu->sp++);goto step_next; // POP AF T:4
-        case 1110: cpu->a=_gd();goto step_next; // POP AF T:5
-        case 1111: goto fetch_next; // POP AF T:6
-        case 1112: _wait();_mread(cpu->pc++);goto step_next; // JP P,nn T:1
-        case 1113: cpu->wzl=_gd();goto step_next; // JP P,nn T:2
-        case 1114: goto step_next; // JP P,nn T:3
-        case 1115: _wait();_mread(cpu->pc++);goto step_next; // JP P,nn T:4
-        case 1116: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;};goto step_next; // JP P,nn T:5
-        case 1117: goto fetch_next; // JP P,nn T:6
-        case 1118: _wait();_mread(cpu->pc++);goto step_next; // CALL P,nn T:1
-        case 1119: cpu->wzl=_gd();goto step_next; // CALL P,nn T:2
-        case 1120: goto step_next; // CALL P,nn T:3
-        case 1121: _wait();_mread(cpu->pc++);goto step_next; // CALL P,nn T:4
-        case 1122: cpu->wzh=_gd();if (!_cc_p){_skip(7);};goto step_next; // CALL P,nn T:5
-        case 1123: goto step_next; // CALL P,nn T:6
-        case 1124: goto step_next; // CALL P,nn T:7
-        case 1125: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL P,nn T:8
-        case 1126: goto step_next; // CALL P,nn T:9
-        case 1127: goto step_next; // CALL P,nn T:10
-        case 1128: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL P,nn T:11
-        case 1129: goto step_next; // CALL P,nn T:12
-        case 1130: goto fetch_next; // CALL P,nn T:13
-        case 1131: goto step_next; // PUSH AF T:1
-        case 1132: _wait();_mwrite(--cpu->sp,cpu->a);goto step_next; // PUSH AF T:2
-        case 1133: goto step_next; // PUSH AF T:3
-        case 1134: goto step_next; // PUSH AF T:4
-        case 1135: _wait();_mwrite(--cpu->sp,cpu->f);goto step_next; // PUSH AF T:5
-        case 1136: goto step_next; // PUSH AF T:6
-        case 1137: goto fetch_next; // PUSH AF T:7
-        case 1138: _wait();_mread(cpu->pc++);goto step_next; // OR n T:1
-        case 1139: cpu->dlatch=_gd();goto step_next; // OR n T:2
-        case 1140: _z80_or8(cpu,cpu->dlatch);goto fetch_next; // OR n T:3
-        case 1141: goto step_next; // RST 30h T:1
-        case 1142: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // RST 30h T:2
-        case 1143: goto step_next; // RST 30h T:3
-        case 1144: goto step_next; // RST 30h T:4
-        case 1145: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x30;cpu->pc=cpu->wz;goto step_next; // RST 30h T:5
-        case 1146: goto step_next; // RST 30h T:6
-        case 1147: goto fetch_next; // RST 30h T:7
-        case 1148: goto step_next; // RET M T:1
-        case 1149: _wait();_mread(cpu->sp++);goto step_next; // RET M T:2
-        case 1150: cpu->wzl=_gd();goto step_next; // RET M T:3
-        case 1151: goto step_next; // RET M T:4
-        case 1152: _wait();_mread(cpu->sp++);goto step_next; // RET M T:5
-        case 1153: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RET M T:6
-        case 1154: goto fetch_next; // RET M T:7
-        case 1155: goto step_next; // LD SP,HL T:1
-        case 1156: goto fetch_next; // LD SP,HL T:2
-        case 1157: _wait();_mread(cpu->pc++);goto step_next; // JP M,nn T:1
-        case 1158: cpu->wzl=_gd();goto step_next; // JP M,nn T:2
-        case 1159: goto step_next; // JP M,nn T:3
-        case 1160: _wait();_mread(cpu->pc++);goto step_next; // JP M,nn T:4
-        case 1161: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;};goto step_next; // JP M,nn T:5
-        case 1162: goto fetch_next; // JP M,nn T:6
-        case 1163: _wait();_mread(cpu->pc++);goto step_next; // CALL M,nn T:1
-        case 1164: cpu->wzl=_gd();goto step_next; // CALL M,nn T:2
-        case 1165: goto step_next; // CALL M,nn T:3
-        case 1166: _wait();_mread(cpu->pc++);goto step_next; // CALL M,nn T:4
-        case 1167: cpu->wzh=_gd();if (!_cc_m){_skip(7);};goto step_next; // CALL M,nn T:5
-        case 1168: goto step_next; // CALL M,nn T:6
-        case 1169: goto step_next; // CALL M,nn T:7
-        case 1170: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // CALL M,nn T:8
-        case 1171: goto step_next; // CALL M,nn T:9
-        case 1172: goto step_next; // CALL M,nn T:10
-        case 1173: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;goto step_next; // CALL M,nn T:11
-        case 1174: goto step_next; // CALL M,nn T:12
-        case 1175: goto fetch_next; // CALL M,nn T:13
-        case 1176: _wait();_mread(cpu->pc++);goto step_next; // CP n T:1
-        case 1177: cpu->dlatch=_gd();goto step_next; // CP n T:2
-        case 1178: _z80_cp8(cpu,cpu->dlatch);goto fetch_next; // CP n T:3
-        case 1179: goto step_next; // RST 38h T:1
-        case 1180: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // RST 38h T:2
-        case 1181: goto step_next; // RST 38h T:3
-        case 1182: goto step_next; // RST 38h T:4
-        case 1183: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x38;cpu->pc=cpu->wz;goto step_next; // RST 38h T:5
-        case 1184: goto step_next; // RST 38h T:6
-        case 1185: goto fetch_next; // RST 38h T:7
-        case 1186: goto step_next; // IN B,(C) T:1
-        case 1187: _wait();_ioread(cpu->bc);goto step_next; // IN B,(C) T:2
-        case 1188: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next; // IN B,(C) T:3
-        case 1189: cpu->b=_z80_in(cpu,cpu->dlatch);goto fetch_next; // IN B,(C) T:4
-        case 1190: _iowrite(cpu->bc,cpu->b);goto step_next; // OUT (C),B T:1
-        case 1191: _wait();cpu->wz=cpu->bc+1;goto step_next; // OUT (C),B T:2
-        case 1192: goto step_next; // OUT (C),B T:3
-        case 1193: goto fetch_next; // OUT (C),B T:4
-        case 1194: goto step_next; // SBC HL,BC T:1
-        case 1195: goto step_next; // SBC HL,BC T:2
-        case 1196: goto step_next; // SBC HL,BC T:3
-        case 1197: goto step_next; // SBC HL,BC T:4
-        case 1198: goto step_next; // SBC HL,BC T:5
-        case 1199: goto step_next; // SBC HL,BC T:6
-        case 1200: goto fetch_next; // SBC HL,BC T:7
-        case 1201: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),BC T:1
-        case 1202: cpu->wzl=_gd();goto step_next; // LD (nn),BC T:2
-        case 1203: goto step_next; // LD (nn),BC T:3
-        case 1204: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),BC T:4
-        case 1205: cpu->wzh=_gd();goto step_next; // LD (nn),BC T:5
-        case 1206: goto step_next; // LD (nn),BC T:6
-        case 1207: _wait();_mwrite(cpu->wz++,cpu->c);goto step_next; // LD (nn),BC T:7
-        case 1208: goto step_next; // LD (nn),BC T:8
-        case 1209: goto step_next; // LD (nn),BC T:9
-        case 1210: _wait();_mwrite(cpu->wz,cpu->b);goto step_next; // LD (nn),BC T:10
-        case 1211: goto step_next; // LD (nn),BC T:11
-        case 1212: goto fetch_next; // LD (nn),BC T:12
-        case 1213: _wait();_mread(cpu->sp++);goto step_next; // RETN T:1
-        case 1214: cpu->wzl=_gd();goto step_next; // RETN T:2
-        case 1215: goto step_next; // RETN T:3
-        case 1216: _wait();_mread(cpu->sp++);goto step_next; // RETN T:4
-        case 1217: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RETN T:5
+        case  254: _goto(1176); // CP n T:0
+        case  255: _goto(1179); // RST 38h T:0
+        case  256: _fetch(); // ED NOP T:0
+        case  257: _fetch(); // ED NOP T:0
+        case  258: _fetch(); // ED NOP T:0
+        case  259: _fetch(); // ED NOP T:0
+        case  260: _fetch(); // ED NOP T:0
+        case  261: _fetch(); // ED NOP T:0
+        case  262: _fetch(); // ED NOP T:0
+        case  263: _fetch(); // ED NOP T:0
+        case  264: _fetch(); // ED NOP T:0
+        case  265: _fetch(); // ED NOP T:0
+        case  266: _fetch(); // ED NOP T:0
+        case  267: _fetch(); // ED NOP T:0
+        case  268: _fetch(); // ED NOP T:0
+        case  269: _fetch(); // ED NOP T:0
+        case  270: _fetch(); // ED NOP T:0
+        case  271: _fetch(); // ED NOP T:0
+        case  272: _fetch(); // ED NOP T:0
+        case  273: _fetch(); // ED NOP T:0
+        case  274: _fetch(); // ED NOP T:0
+        case  275: _fetch(); // ED NOP T:0
+        case  276: _fetch(); // ED NOP T:0
+        case  277: _fetch(); // ED NOP T:0
+        case  278: _fetch(); // ED NOP T:0
+        case  279: _fetch(); // ED NOP T:0
+        case  280: _fetch(); // ED NOP T:0
+        case  281: _fetch(); // ED NOP T:0
+        case  282: _fetch(); // ED NOP T:0
+        case  283: _fetch(); // ED NOP T:0
+        case  284: _fetch(); // ED NOP T:0
+        case  285: _fetch(); // ED NOP T:0
+        case  286: _fetch(); // ED NOP T:0
+        case  287: _fetch(); // ED NOP T:0
+        case  288: _fetch(); // ED NOP T:0
+        case  289: _fetch(); // ED NOP T:0
+        case  290: _fetch(); // ED NOP T:0
+        case  291: _fetch(); // ED NOP T:0
+        case  292: _fetch(); // ED NOP T:0
+        case  293: _fetch(); // ED NOP T:0
+        case  294: _fetch(); // ED NOP T:0
+        case  295: _fetch(); // ED NOP T:0
+        case  296: _fetch(); // ED NOP T:0
+        case  297: _fetch(); // ED NOP T:0
+        case  298: _fetch(); // ED NOP T:0
+        case  299: _fetch(); // ED NOP T:0
+        case  300: _fetch(); // ED NOP T:0
+        case  301: _fetch(); // ED NOP T:0
+        case  302: _fetch(); // ED NOP T:0
+        case  303: _fetch(); // ED NOP T:0
+        case  304: _fetch(); // ED NOP T:0
+        case  305: _fetch(); // ED NOP T:0
+        case  306: _fetch(); // ED NOP T:0
+        case  307: _fetch(); // ED NOP T:0
+        case  308: _fetch(); // ED NOP T:0
+        case  309: _fetch(); // ED NOP T:0
+        case  310: _fetch(); // ED NOP T:0
+        case  311: _fetch(); // ED NOP T:0
+        case  312: _fetch(); // ED NOP T:0
+        case  313: _fetch(); // ED NOP T:0
+        case  314: _fetch(); // ED NOP T:0
+        case  315: _fetch(); // ED NOP T:0
+        case  316: _fetch(); // ED NOP T:0
+        case  317: _fetch(); // ED NOP T:0
+        case  318: _fetch(); // ED NOP T:0
+        case  319: _fetch(); // ED NOP T:0
+        case  320: _goto(1186); // IN B,(C) T:0
+        case  321: _goto(1190); // OUT (C),B T:0
+        case  322: _z80_sbc16(cpu,cpu->bc);_goto(1194); // SBC HL,BC T:0
+        case  323: _goto(1201); // LD (nn),BC T:0
+        case  324: _z80_neg8(cpu);_fetch(); // NEG T:0
+        case  325: _goto(1213); // RETN T:0
+        case  326: cpu->im=0;_fetch(); // IM 0 T:0
+        case  327: _goto(1219); // LD I,A T:0
+        case  328: _goto(1220); // IN C,(C) T:0
+        case  329: _goto(1224); // OUT (C),C T:0
+        case  330: _z80_adc16(cpu,cpu->bc);_goto(1228); // ADC HL,BC T:0
+        case  331: _goto(1235); // LD BC,(nn) T:0
+        case  332: _z80_neg8(cpu);_fetch(); // NEG T:0
+        case  333: _goto(1247); // RETI T:0
+        case  334: cpu->im=0;_fetch(); // IM 0 T:0
+        case  335: _goto(1253); // LD R,A T:0
+        case  336: _goto(1254); // IN D,(C) T:0
+        case  337: _goto(1258); // OUT (C),D T:0
+        case  338: _z80_sbc16(cpu,cpu->de);_goto(1262); // SBC HL,DE T:0
+        case  339: _goto(1269); // LD (nn),DE T:0
+        case  340: _z80_neg8(cpu);_fetch(); // NEG T:0
+        case  341: _goto(1247); // RETI T:0
+        case  342: cpu->im=1;_fetch(); // IM 1 T:0
+        case  343: _goto(1282); // LD A,I T:0
+        case  344: _goto(1283); // IN E,(C) T:0
+        case  345: _goto(1287); // OUT (C),E T:0
+        case  346: _z80_adc16(cpu,cpu->de);_goto(1291); // ADC HL,DE T:0
+        case  347: _goto(1298); // LD DE,(nn) T:0
+        case  348: _z80_neg8(cpu);_fetch(); // NEG T:0
+        case  349: _goto(1247); // RETI T:0
+        case  350: cpu->im=2;_fetch(); // IM 2 T:0
+        case  351: _goto(1311); // LD A,R T:0
+        case  352: _goto(1312); // IN H,(C) T:0
+        case  353: _goto(1316); // OUT (C),H T:0
+        case  354: _z80_sbc16(cpu,cpu->hl);_goto(1320); // SBC HL,HL T:0
+        case  355: _goto(1327); // LD (nn),HL T:0
+        case  356: _z80_neg8(cpu);_fetch(); // NEG T:0
+        case  357: _goto(1247); // RETI T:0
+        case  358: cpu->im=0;_fetch(); // IM 0 T:0
+        case  359: _goto(1340); // RRD T:0
+        case  360: _goto(1350); // IN L,(C) T:0
+        case  361: _goto(1354); // OUT (C),L T:0
+        case  362: _z80_adc16(cpu,cpu->hl);_goto(1358); // ADC HL,HL T:0
+        case  363: _goto(1365); // LD HL,(nn) T:0
+        case  364: _z80_neg8(cpu);_fetch(); // NEG T:0
+        case  365: _goto(1247); // RETI T:0
+        case  366: cpu->im=0;_fetch(); // IM 0 T:0
+        case  367: _goto(1378); // RLD T:0
+        case  368: _goto(1388); // IN (C) T:0
+        case  369: _goto(1392); // OUT (C),0 T:0
+        case  370: _z80_sbc16(cpu,cpu->sp);_goto(1396); // SBC HL,SP T:0
+        case  371: _goto(1403); // LD (nn),SP T:0
+        case  372: _z80_neg8(cpu);_fetch(); // NEG T:0
+        case  373: _goto(1247); // RETI T:0
+        case  374: cpu->im=1;_fetch(); // IM 1 T:0
+        case  375: _fetch(); // ED NOP T:0
+        case  376: _goto(1416); // IN A,(C) T:0
+        case  377: _goto(1420); // OUT (C),A T:0
+        case  378: _z80_adc16(cpu,cpu->sp);_goto(1424); // ADC HL,SP T:0
+        case  379: _goto(1431); // LD SP,(nn) T:0
+        case  380: _z80_neg8(cpu);_fetch(); // NEG T:0
+        case  381: _goto(1247); // RETI T:0
+        case  382: cpu->im=2;_fetch(); // IM 2 T:0
+        case  383: _fetch(); // ED NOP T:0
+        case  384: _fetch(); // ED NOP T:0
+        case  385: _fetch(); // ED NOP T:0
+        case  386: _fetch(); // ED NOP T:0
+        case  387: _fetch(); // ED NOP T:0
+        case  388: _fetch(); // ED NOP T:0
+        case  389: _fetch(); // ED NOP T:0
+        case  390: _fetch(); // ED NOP T:0
+        case  391: _fetch(); // ED NOP T:0
+        case  392: _fetch(); // ED NOP T:0
+        case  393: _fetch(); // ED NOP T:0
+        case  394: _fetch(); // ED NOP T:0
+        case  395: _fetch(); // ED NOP T:0
+        case  396: _fetch(); // ED NOP T:0
+        case  397: _fetch(); // ED NOP T:0
+        case  398: _fetch(); // ED NOP T:0
+        case  399: _fetch(); // ED NOP T:0
+        case  400: _fetch(); // ED NOP T:0
+        case  401: _fetch(); // ED NOP T:0
+        case  402: _fetch(); // ED NOP T:0
+        case  403: _fetch(); // ED NOP T:0
+        case  404: _fetch(); // ED NOP T:0
+        case  405: _fetch(); // ED NOP T:0
+        case  406: _fetch(); // ED NOP T:0
+        case  407: _fetch(); // ED NOP T:0
+        case  408: _fetch(); // ED NOP T:0
+        case  409: _fetch(); // ED NOP T:0
+        case  410: _fetch(); // ED NOP T:0
+        case  411: _fetch(); // ED NOP T:0
+        case  412: _fetch(); // ED NOP T:0
+        case  413: _fetch(); // ED NOP T:0
+        case  414: _fetch(); // ED NOP T:0
+        case  415: _fetch(); // ED NOP T:0
+        case  416: _goto(1444); // LDI T:0
+        case  417: _goto(1452); // CPI T:0
+        case  418: _goto(1460); // INI T:0
+        case  419: _goto(1468); // OUTI T:0
+        case  420: _fetch(); // ED NOP T:0
+        case  421: _fetch(); // ED NOP T:0
+        case  422: _fetch(); // ED NOP T:0
+        case  423: _fetch(); // ED NOP T:0
+        case  424: _goto(1476); // LDD T:0
+        case  425: _goto(1484); // CPD T:0
+        case  426: _goto(1492); // IND T:0
+        case  427: _goto(1500); // OUTD T:0
+        case  428: _fetch(); // ED NOP T:0
+        case  429: _fetch(); // ED NOP T:0
+        case  430: _fetch(); // ED NOP T:0
+        case  431: _fetch(); // ED NOP T:0
+        case  432: _goto(1508); // LDIR T:0
+        case  433: _goto(1521); // CPIR T:0
+        case  434: _goto(1534); // INIR T:0
+        case  435: _goto(1547); // OTIR T:0
+        case  436: _fetch(); // ED NOP T:0
+        case  437: _fetch(); // ED NOP T:0
+        case  438: _fetch(); // ED NOP T:0
+        case  439: _fetch(); // ED NOP T:0
+        case  440: _goto(1560); // LDDR T:0
+        case  441: _goto(1573); // CPDR T:0
+        case  442: _goto(1586); // INDR T:0
+        case  443: _goto(1599); // OTDR T:0
+        case  444: _fetch(); // ED NOP T:0
+        case  445: _fetch(); // ED NOP T:0
+        case  446: _fetch(); // ED NOP T:0
+        case  447: _fetch(); // ED NOP T:0
+        case  448: _fetch(); // ED NOP T:0
+        case  449: _fetch(); // ED NOP T:0
+        case  450: _fetch(); // ED NOP T:0
+        case  451: _fetch(); // ED NOP T:0
+        case  452: _fetch(); // ED NOP T:0
+        case  453: _fetch(); // ED NOP T:0
+        case  454: _fetch(); // ED NOP T:0
+        case  455: _fetch(); // ED NOP T:0
+        case  456: _fetch(); // ED NOP T:0
+        case  457: _fetch(); // ED NOP T:0
+        case  458: _fetch(); // ED NOP T:0
+        case  459: _fetch(); // ED NOP T:0
+        case  460: _fetch(); // ED NOP T:0
+        case  461: _fetch(); // ED NOP T:0
+        case  462: _fetch(); // ED NOP T:0
+        case  463: _fetch(); // ED NOP T:0
+        case  464: _fetch(); // ED NOP T:0
+        case  465: _fetch(); // ED NOP T:0
+        case  466: _fetch(); // ED NOP T:0
+        case  467: _fetch(); // ED NOP T:0
+        case  468: _fetch(); // ED NOP T:0
+        case  469: _fetch(); // ED NOP T:0
+        case  470: _fetch(); // ED NOP T:0
+        case  471: _fetch(); // ED NOP T:0
+        case  472: _fetch(); // ED NOP T:0
+        case  473: _fetch(); // ED NOP T:0
+        case  474: _fetch(); // ED NOP T:0
+        case  475: _fetch(); // ED NOP T:0
+        case  476: _fetch(); // ED NOP T:0
+        case  477: _fetch(); // ED NOP T:0
+        case  478: _fetch(); // ED NOP T:0
+        case  479: _fetch(); // ED NOP T:0
+        case  480: _fetch(); // ED NOP T:0
+        case  481: _fetch(); // ED NOP T:0
+        case  482: _fetch(); // ED NOP T:0
+        case  483: _fetch(); // ED NOP T:0
+        case  484: _fetch(); // ED NOP T:0
+        case  485: _fetch(); // ED NOP T:0
+        case  486: _fetch(); // ED NOP T:0
+        case  487: _fetch(); // ED NOP T:0
+        case  488: _fetch(); // ED NOP T:0
+        case  489: _fetch(); // ED NOP T:0
+        case  490: _fetch(); // ED NOP T:0
+        case  491: _fetch(); // ED NOP T:0
+        case  492: _fetch(); // ED NOP T:0
+        case  493: _fetch(); // ED NOP T:0
+        case  494: _fetch(); // ED NOP T:0
+        case  495: _fetch(); // ED NOP T:0
+        case  496: _fetch(); // ED NOP T:0
+        case  497: _fetch(); // ED NOP T:0
+        case  498: _fetch(); // ED NOP T:0
+        case  499: _fetch(); // ED NOP T:0
+        case  500: _fetch(); // ED NOP T:0
+        case  501: _fetch(); // ED NOP T:0
+        case  502: _fetch(); // ED NOP T:0
+        case  503: _fetch(); // ED NOP T:0
+        case  504: _fetch(); // ED NOP T:0
+        case  505: _fetch(); // ED NOP T:0
+        case  506: _fetch(); // ED NOP T:0
+        case  507: _fetch(); // ED NOP T:0
+        case  508: _fetch(); // ED NOP T:0
+        case  509: _fetch(); // ED NOP T:0
+        case  510: _fetch(); // ED NOP T:0
+        case  511: _fetch(); // ED NOP T:0
+        case  512: _wait();_mread(cpu->pc++);_step(); // LD BC,nn T:1
+        case  513: cpu->c=_gd();_step(); // LD BC,nn T:2
+        case  514: _step(); // LD BC,nn T:3
+        case  515: _wait();_mread(cpu->pc++);_step(); // LD BC,nn T:4
+        case  516: cpu->b=_gd();_step(); // LD BC,nn T:5
+        case  517: _fetch(); // LD BC,nn T:6
+        case  518: _wait();_mwrite(cpu->bc,cpu->a);cpu->wzl=cpu->c+1;cpu->wzh=cpu->a;_step(); // LD (BC),A T:1
+        case  519: _step(); // LD (BC),A T:2
+        case  520: _fetch(); // LD (BC),A T:3
+        case  521: _step(); // INC BC T:1
+        case  522: _fetch(); // INC BC T:2
+        case  523: _wait();_mread(cpu->pc++);_step(); // LD B,n T:1
+        case  524: cpu->b=_gd();_step(); // LD B,n T:2
+        case  525: _fetch(); // LD B,n T:3
+        case  526: _step(); // ADD HL,BC T:1
+        case  527: _step(); // ADD HL,BC T:2
+        case  528: _step(); // ADD HL,BC T:3
+        case  529: _step(); // ADD HL,BC T:4
+        case  530: _step(); // ADD HL,BC T:5
+        case  531: _step(); // ADD HL,BC T:6
+        case  532: _fetch(); // ADD HL,BC T:7
+        case  533: _wait();_mread(cpu->bc);_step(); // LD A,(BC) T:1
+        case  534: cpu->a=_gd();cpu->wz=cpu->bc+1;_step(); // LD A,(BC) T:2
+        case  535: _fetch(); // LD A,(BC) T:3
+        case  536: _step(); // DEC BC T:1
+        case  537: _fetch(); // DEC BC T:2
+        case  538: _wait();_mread(cpu->pc++);_step(); // LD C,n T:1
+        case  539: cpu->c=_gd();_step(); // LD C,n T:2
+        case  540: _fetch(); // LD C,n T:3
+        case  541: _step(); // DJNZ d T:1
+        case  542: _wait();_mread(cpu->pc++);_step(); // DJNZ d T:2
+        case  543: cpu->dlatch=_gd();if(--cpu->b==0){_goto(544+5);};_step(); // DJNZ d T:3
+        case  544: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;_step(); // DJNZ d T:4
+        case  545: _step(); // DJNZ d T:5
+        case  546: _step(); // DJNZ d T:6
+        case  547: _step(); // DJNZ d T:7
+        case  548: _step(); // DJNZ d T:8
+        case  549: _fetch(); // DJNZ d T:9
+        case  550: _wait();_mread(cpu->pc++);_step(); // LD DE,nn T:1
+        case  551: cpu->e=_gd();_step(); // LD DE,nn T:2
+        case  552: _step(); // LD DE,nn T:3
+        case  553: _wait();_mread(cpu->pc++);_step(); // LD DE,nn T:4
+        case  554: cpu->d=_gd();_step(); // LD DE,nn T:5
+        case  555: _fetch(); // LD DE,nn T:6
+        case  556: _wait();_mwrite(cpu->de,cpu->a);cpu->wzl=cpu->e+1;cpu->wzh=cpu->a;_step(); // LD (DE),A T:1
+        case  557: _step(); // LD (DE),A T:2
+        case  558: _fetch(); // LD (DE),A T:3
+        case  559: _step(); // INC DE T:1
+        case  560: _fetch(); // INC DE T:2
+        case  561: _wait();_mread(cpu->pc++);_step(); // LD D,n T:1
+        case  562: cpu->d=_gd();_step(); // LD D,n T:2
+        case  563: _fetch(); // LD D,n T:3
+        case  564: _wait();_mread(cpu->pc++);_step(); // JR d T:1
+        case  565: cpu->dlatch=_gd();_step(); // JR d T:2
+        case  566: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;_step(); // JR d T:3
+        case  567: _step(); // JR d T:4
+        case  568: _step(); // JR d T:5
+        case  569: _step(); // JR d T:6
+        case  570: _step(); // JR d T:7
+        case  571: _fetch(); // JR d T:8
+        case  572: _step(); // ADD HL,DE T:1
+        case  573: _step(); // ADD HL,DE T:2
+        case  574: _step(); // ADD HL,DE T:3
+        case  575: _step(); // ADD HL,DE T:4
+        case  576: _step(); // ADD HL,DE T:5
+        case  577: _step(); // ADD HL,DE T:6
+        case  578: _fetch(); // ADD HL,DE T:7
+        case  579: _wait();_mread(cpu->de);_step(); // LD A,(DE) T:1
+        case  580: cpu->a=_gd();cpu->wz=cpu->de+1;_step(); // LD A,(DE) T:2
+        case  581: _fetch(); // LD A,(DE) T:3
+        case  582: _step(); // DEC DE T:1
+        case  583: _fetch(); // DEC DE T:2
+        case  584: _wait();_mread(cpu->pc++);_step(); // LD E,n T:1
+        case  585: cpu->e=_gd();_step(); // LD E,n T:2
+        case  586: _fetch(); // LD E,n T:3
+        case  587: _wait();_mread(cpu->pc++);_step(); // JR NZ,d T:1
+        case  588: cpu->dlatch=_gd();if(!(_cc_nz)){_goto(589+5);};_step(); // JR NZ,d T:2
+        case  589: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;_step(); // JR NZ,d T:3
+        case  590: _step(); // JR NZ,d T:4
+        case  591: _step(); // JR NZ,d T:5
+        case  592: _step(); // JR NZ,d T:6
+        case  593: _step(); // JR NZ,d T:7
+        case  594: _fetch(); // JR NZ,d T:8
+        case  595: _wait();_mread(cpu->pc++);_step(); // LD HL,nn T:1
+        case  596: cpu->hlx[cpu->hlx_idx].l=_gd();_step(); // LD HL,nn T:2
+        case  597: _step(); // LD HL,nn T:3
+        case  598: _wait();_mread(cpu->pc++);_step(); // LD HL,nn T:4
+        case  599: cpu->hlx[cpu->hlx_idx].h=_gd();_step(); // LD HL,nn T:5
+        case  600: _fetch(); // LD HL,nn T:6
+        case  601: _wait();_mread(cpu->pc++);_step(); // LD (nn),HL T:1
+        case  602: cpu->wzl=_gd();_step(); // LD (nn),HL T:2
+        case  603: _step(); // LD (nn),HL T:3
+        case  604: _wait();_mread(cpu->pc++);_step(); // LD (nn),HL T:4
+        case  605: cpu->wzh=_gd();_step(); // LD (nn),HL T:5
+        case  606: _step(); // LD (nn),HL T:6
+        case  607: _wait();_mwrite(cpu->wz++,cpu->hlx[cpu->hlx_idx].l);_step(); // LD (nn),HL T:7
+        case  608: _step(); // LD (nn),HL T:8
+        case  609: _step(); // LD (nn),HL T:9
+        case  610: _wait();_mwrite(cpu->wz,cpu->hlx[cpu->hlx_idx].h);_step(); // LD (nn),HL T:10
+        case  611: _step(); // LD (nn),HL T:11
+        case  612: _fetch(); // LD (nn),HL T:12
+        case  613: _step(); // INC HL T:1
+        case  614: _fetch(); // INC HL T:2
+        case  615: _wait();_mread(cpu->pc++);_step(); // LD H,n T:1
+        case  616: cpu->hlx[cpu->hlx_idx].h=_gd();_step(); // LD H,n T:2
+        case  617: _fetch(); // LD H,n T:3
+        case  618: _wait();_mread(cpu->pc++);_step(); // JR Z,d T:1
+        case  619: cpu->dlatch=_gd();if(!(_cc_z)){_goto(620+5);};_step(); // JR Z,d T:2
+        case  620: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;_step(); // JR Z,d T:3
+        case  621: _step(); // JR Z,d T:4
+        case  622: _step(); // JR Z,d T:5
+        case  623: _step(); // JR Z,d T:6
+        case  624: _step(); // JR Z,d T:7
+        case  625: _fetch(); // JR Z,d T:8
+        case  626: _step(); // ADD HL,HL T:1
+        case  627: _step(); // ADD HL,HL T:2
+        case  628: _step(); // ADD HL,HL T:3
+        case  629: _step(); // ADD HL,HL T:4
+        case  630: _step(); // ADD HL,HL T:5
+        case  631: _step(); // ADD HL,HL T:6
+        case  632: _fetch(); // ADD HL,HL T:7
+        case  633: _wait();_mread(cpu->pc++);_step(); // LD HL,(nn) T:1
+        case  634: cpu->wzl=_gd();_step(); // LD HL,(nn) T:2
+        case  635: _step(); // LD HL,(nn) T:3
+        case  636: _wait();_mread(cpu->pc++);_step(); // LD HL,(nn) T:4
+        case  637: cpu->wzh=_gd();_step(); // LD HL,(nn) T:5
+        case  638: _step(); // LD HL,(nn) T:6
+        case  639: _wait();_mread(cpu->wz++);_step(); // LD HL,(nn) T:7
+        case  640: cpu->hlx[cpu->hlx_idx].l=_gd();_step(); // LD HL,(nn) T:8
+        case  641: _step(); // LD HL,(nn) T:9
+        case  642: _wait();_mread(cpu->wz);_step(); // LD HL,(nn) T:10
+        case  643: cpu->hlx[cpu->hlx_idx].h=_gd();_step(); // LD HL,(nn) T:11
+        case  644: _fetch(); // LD HL,(nn) T:12
+        case  645: _step(); // DEC HL T:1
+        case  646: _fetch(); // DEC HL T:2
+        case  647: _wait();_mread(cpu->pc++);_step(); // LD L,n T:1
+        case  648: cpu->hlx[cpu->hlx_idx].l=_gd();_step(); // LD L,n T:2
+        case  649: _fetch(); // LD L,n T:3
+        case  650: _wait();_mread(cpu->pc++);_step(); // JR NC,d T:1
+        case  651: cpu->dlatch=_gd();if(!(_cc_nc)){_goto(652+5);};_step(); // JR NC,d T:2
+        case  652: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;_step(); // JR NC,d T:3
+        case  653: _step(); // JR NC,d T:4
+        case  654: _step(); // JR NC,d T:5
+        case  655: _step(); // JR NC,d T:6
+        case  656: _step(); // JR NC,d T:7
+        case  657: _fetch(); // JR NC,d T:8
+        case  658: _wait();_mread(cpu->pc++);_step(); // LD SP,nn T:1
+        case  659: cpu->spl=_gd();_step(); // LD SP,nn T:2
+        case  660: _step(); // LD SP,nn T:3
+        case  661: _wait();_mread(cpu->pc++);_step(); // LD SP,nn T:4
+        case  662: cpu->sph=_gd();_step(); // LD SP,nn T:5
+        case  663: _fetch(); // LD SP,nn T:6
+        case  664: _wait();_mread(cpu->pc++);_step(); // LD (nn),A T:1
+        case  665: cpu->wzl=_gd();_step(); // LD (nn),A T:2
+        case  666: _step(); // LD (nn),A T:3
+        case  667: _wait();_mread(cpu->pc++);_step(); // LD (nn),A T:4
+        case  668: cpu->wzh=_gd();_step(); // LD (nn),A T:5
+        case  669: _step(); // LD (nn),A T:6
+        case  670: _wait();_mwrite(cpu->wz++,cpu->a);cpu->wzh=cpu->a;_step(); // LD (nn),A T:7
+        case  671: _step(); // LD (nn),A T:8
+        case  672: _fetch(); // LD (nn),A T:9
+        case  673: _step(); // INC SP T:1
+        case  674: _fetch(); // INC SP T:2
+        case  675: _wait();_mread(cpu->addr);_step(); // INC (HL) T:1
+        case  676: cpu->dlatch=_gd();cpu->dlatch=_z80_inc8(cpu,cpu->dlatch);_step(); // INC (HL) T:2
+        case  677: _step(); // INC (HL) T:3
+        case  678: _step(); // INC (HL) T:4
+        case  679: _wait();_mwrite(cpu->addr,cpu->dlatch);_step(); // INC (HL) T:5
+        case  680: _step(); // INC (HL) T:6
+        case  681: _fetch(); // INC (HL) T:7
+        case  682: _wait();_mread(cpu->addr);_step(); // DEC (HL) T:1
+        case  683: cpu->dlatch=_gd();cpu->dlatch=_z80_dec8(cpu,cpu->dlatch);_step(); // DEC (HL) T:2
+        case  684: _step(); // DEC (HL) T:3
+        case  685: _step(); // DEC (HL) T:4
+        case  686: _wait();_mwrite(cpu->addr,cpu->dlatch);_step(); // DEC (HL) T:5
+        case  687: _step(); // DEC (HL) T:6
+        case  688: _fetch(); // DEC (HL) T:7
+        case  689: _wait();_mread(cpu->pc++);_step(); // LD (HL),n T:1
+        case  690: cpu->dlatch=_gd();_step(); // LD (HL),n T:2
+        case  691: _step(); // LD (HL),n T:3
+        case  692: _wait();_mwrite(cpu->addr,cpu->dlatch);_step(); // LD (HL),n T:4
+        case  693: _step(); // LD (HL),n T:5
+        case  694: _fetch(); // LD (HL),n T:6
+        case  695: _wait();_mread(cpu->pc++);_step(); // JR C,d T:1
+        case  696: cpu->dlatch=_gd();if(!(_cc_c)){_goto(697+5);};_step(); // JR C,d T:2
+        case  697: cpu->pc+=(int8_t)cpu->dlatch;cpu->wz=cpu->pc;_step(); // JR C,d T:3
+        case  698: _step(); // JR C,d T:4
+        case  699: _step(); // JR C,d T:5
+        case  700: _step(); // JR C,d T:6
+        case  701: _step(); // JR C,d T:7
+        case  702: _fetch(); // JR C,d T:8
+        case  703: _step(); // ADD HL,SP T:1
+        case  704: _step(); // ADD HL,SP T:2
+        case  705: _step(); // ADD HL,SP T:3
+        case  706: _step(); // ADD HL,SP T:4
+        case  707: _step(); // ADD HL,SP T:5
+        case  708: _step(); // ADD HL,SP T:6
+        case  709: _fetch(); // ADD HL,SP T:7
+        case  710: _wait();_mread(cpu->pc++);_step(); // LD A,(nn) T:1
+        case  711: cpu->wzl=_gd();_step(); // LD A,(nn) T:2
+        case  712: _step(); // LD A,(nn) T:3
+        case  713: _wait();_mread(cpu->pc++);_step(); // LD A,(nn) T:4
+        case  714: cpu->wzh=_gd();_step(); // LD A,(nn) T:5
+        case  715: _step(); // LD A,(nn) T:6
+        case  716: _wait();_mread(cpu->wz++);_step(); // LD A,(nn) T:7
+        case  717: cpu->a=_gd();_step(); // LD A,(nn) T:8
+        case  718: _fetch(); // LD A,(nn) T:9
+        case  719: _step(); // DEC SP T:1
+        case  720: _fetch(); // DEC SP T:2
+        case  721: _wait();_mread(cpu->pc++);_step(); // LD A,n T:1
+        case  722: cpu->a=_gd();_step(); // LD A,n T:2
+        case  723: _fetch(); // LD A,n T:3
+        case  724: _wait();_mread(cpu->addr);_step(); // LD B,(HL) T:1
+        case  725: cpu->b=_gd();_step(); // LD B,(HL) T:2
+        case  726: _fetch(); // LD B,(HL) T:3
+        case  727: _wait();_mread(cpu->addr);_step(); // LD C,(HL) T:1
+        case  728: cpu->c=_gd();_step(); // LD C,(HL) T:2
+        case  729: _fetch(); // LD C,(HL) T:3
+        case  730: _wait();_mread(cpu->addr);_step(); // LD D,(HL) T:1
+        case  731: cpu->d=_gd();_step(); // LD D,(HL) T:2
+        case  732: _fetch(); // LD D,(HL) T:3
+        case  733: _wait();_mread(cpu->addr);_step(); // LD E,(HL) T:1
+        case  734: cpu->e=_gd();_step(); // LD E,(HL) T:2
+        case  735: _fetch(); // LD E,(HL) T:3
+        case  736: _wait();_mread(cpu->addr);_step(); // LD H,(HL) T:1
+        case  737: cpu->h=_gd();_step(); // LD H,(HL) T:2
+        case  738: _fetch(); // LD H,(HL) T:3
+        case  739: _wait();_mread(cpu->addr);_step(); // LD L,(HL) T:1
+        case  740: cpu->l=_gd();_step(); // LD L,(HL) T:2
+        case  741: _fetch(); // LD L,(HL) T:3
+        case  742: _wait();_mwrite(cpu->addr,cpu->b);_step(); // LD (HL),B T:1
+        case  743: _step(); // LD (HL),B T:2
+        case  744: _fetch(); // LD (HL),B T:3
+        case  745: _wait();_mwrite(cpu->addr,cpu->c);_step(); // LD (HL),C T:1
+        case  746: _step(); // LD (HL),C T:2
+        case  747: _fetch(); // LD (HL),C T:3
+        case  748: _wait();_mwrite(cpu->addr,cpu->d);_step(); // LD (HL),D T:1
+        case  749: _step(); // LD (HL),D T:2
+        case  750: _fetch(); // LD (HL),D T:3
+        case  751: _wait();_mwrite(cpu->addr,cpu->e);_step(); // LD (HL),E T:1
+        case  752: _step(); // LD (HL),E T:2
+        case  753: _fetch(); // LD (HL),E T:3
+        case  754: _wait();_mwrite(cpu->addr,cpu->h);_step(); // LD (HL),H T:1
+        case  755: _step(); // LD (HL),H T:2
+        case  756: _fetch(); // LD (HL),H T:3
+        case  757: _wait();_mwrite(cpu->addr,cpu->l);_step(); // LD (HL),L T:1
+        case  758: _step(); // LD (HL),L T:2
+        case  759: _fetch(); // LD (HL),L T:3
+        case  760: _wait();_mwrite(cpu->addr,cpu->a);_step(); // LD (HL),A T:1
+        case  761: _step(); // LD (HL),A T:2
+        case  762: _fetch(); // LD (HL),A T:3
+        case  763: _wait();_mread(cpu->addr);_step(); // LD A,(HL) T:1
+        case  764: cpu->a=_gd();_step(); // LD A,(HL) T:2
+        case  765: _fetch(); // LD A,(HL) T:3
+        case  766: _wait();_mread(cpu->addr);_step(); // ADD (HL) T:1
+        case  767: cpu->dlatch=_gd();_step(); // ADD (HL) T:2
+        case  768: _z80_add8(cpu,cpu->dlatch);_fetch(); // ADD (HL) T:3
+        case  769: _wait();_mread(cpu->addr);_step(); // ADC (HL) T:1
+        case  770: cpu->dlatch=_gd();_step(); // ADC (HL) T:2
+        case  771: _z80_adc8(cpu,cpu->dlatch);_fetch(); // ADC (HL) T:3
+        case  772: _wait();_mread(cpu->addr);_step(); // SUB (HL) T:1
+        case  773: cpu->dlatch=_gd();_step(); // SUB (HL) T:2
+        case  774: _z80_sub8(cpu,cpu->dlatch);_fetch(); // SUB (HL) T:3
+        case  775: _wait();_mread(cpu->addr);_step(); // SBC (HL) T:1
+        case  776: cpu->dlatch=_gd();_step(); // SBC (HL) T:2
+        case  777: _z80_sbc8(cpu,cpu->dlatch);_fetch(); // SBC (HL) T:3
+        case  778: _wait();_mread(cpu->addr);_step(); // AND (HL) T:1
+        case  779: cpu->dlatch=_gd();_step(); // AND (HL) T:2
+        case  780: _z80_and8(cpu,cpu->dlatch);_fetch(); // AND (HL) T:3
+        case  781: _wait();_mread(cpu->addr);_step(); // XOR (HL) T:1
+        case  782: cpu->dlatch=_gd();_step(); // XOR (HL) T:2
+        case  783: _z80_xor8(cpu,cpu->dlatch);_fetch(); // XOR (HL) T:3
+        case  784: _wait();_mread(cpu->addr);_step(); // OR (HL) T:1
+        case  785: cpu->dlatch=_gd();_step(); // OR (HL) T:2
+        case  786: _z80_or8(cpu,cpu->dlatch);_fetch(); // OR (HL) T:3
+        case  787: _wait();_mread(cpu->addr);_step(); // CP (HL) T:1
+        case  788: cpu->dlatch=_gd();_step(); // CP (HL) T:2
+        case  789: _z80_cp8(cpu,cpu->dlatch);_fetch(); // CP (HL) T:3
+        case  790: _step(); // RET NZ T:1
+        case  791: _wait();_mread(cpu->sp++);_step(); // RET NZ T:2
+        case  792: cpu->wzl=_gd();_step(); // RET NZ T:3
+        case  793: _step(); // RET NZ T:4
+        case  794: _wait();_mread(cpu->sp++);_step(); // RET NZ T:5
+        case  795: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET NZ T:6
+        case  796: _fetch(); // RET NZ T:7
+        case  797: _wait();_mread(cpu->sp++);_step(); // POP BC T:1
+        case  798: cpu->c=_gd();_step(); // POP BC T:2
+        case  799: _step(); // POP BC T:3
+        case  800: _wait();_mread(cpu->sp++);_step(); // POP BC T:4
+        case  801: cpu->b=_gd();_step(); // POP BC T:5
+        case  802: _fetch(); // POP BC T:6
+        case  803: _wait();_mread(cpu->pc++);_step(); // JP NZ,nn T:1
+        case  804: cpu->wzl=_gd();_step(); // JP NZ,nn T:2
+        case  805: _step(); // JP NZ,nn T:3
+        case  806: _wait();_mread(cpu->pc++);_step(); // JP NZ,nn T:4
+        case  807: cpu->wzh=_gd();if(_cc_nz){cpu->pc=cpu->wz;};_step(); // JP NZ,nn T:5
+        case  808: _fetch(); // JP NZ,nn T:6
+        case  809: _wait();_mread(cpu->pc++);_step(); // JP nn T:1
+        case  810: cpu->wzl=_gd();_step(); // JP nn T:2
+        case  811: _step(); // JP nn T:3
+        case  812: _wait();_mread(cpu->pc++);_step(); // JP nn T:4
+        case  813: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // JP nn T:5
+        case  814: _fetch(); // JP nn T:6
+        case  815: _wait();_mread(cpu->pc++);_step(); // CALL NZ,nn T:1
+        case  816: cpu->wzl=_gd();_step(); // CALL NZ,nn T:2
+        case  817: _step(); // CALL NZ,nn T:3
+        case  818: _wait();_mread(cpu->pc++);_step(); // CALL NZ,nn T:4
+        case  819: cpu->wzh=_gd();if (!_cc_nz){_goto(820+7);};_step(); // CALL NZ,nn T:5
+        case  820: _step(); // CALL NZ,nn T:6
+        case  821: _step(); // CALL NZ,nn T:7
+        case  822: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL NZ,nn T:8
+        case  823: _step(); // CALL NZ,nn T:9
+        case  824: _step(); // CALL NZ,nn T:10
+        case  825: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL NZ,nn T:11
+        case  826: _step(); // CALL NZ,nn T:12
+        case  827: _fetch(); // CALL NZ,nn T:13
+        case  828: _step(); // PUSH BC T:1
+        case  829: _wait();_mwrite(--cpu->sp,cpu->b);_step(); // PUSH BC T:2
+        case  830: _step(); // PUSH BC T:3
+        case  831: _step(); // PUSH BC T:4
+        case  832: _wait();_mwrite(--cpu->sp,cpu->c);_step(); // PUSH BC T:5
+        case  833: _step(); // PUSH BC T:6
+        case  834: _fetch(); // PUSH BC T:7
+        case  835: _wait();_mread(cpu->pc++);_step(); // ADD n T:1
+        case  836: cpu->dlatch=_gd();_step(); // ADD n T:2
+        case  837: _z80_add8(cpu,cpu->dlatch);_fetch(); // ADD n T:3
+        case  838: _step(); // RST 0h T:1
+        case  839: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // RST 0h T:2
+        case  840: _step(); // RST 0h T:3
+        case  841: _step(); // RST 0h T:4
+        case  842: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x00;cpu->pc=cpu->wz;_step(); // RST 0h T:5
+        case  843: _step(); // RST 0h T:6
+        case  844: _fetch(); // RST 0h T:7
+        case  845: _step(); // RET Z T:1
+        case  846: _wait();_mread(cpu->sp++);_step(); // RET Z T:2
+        case  847: cpu->wzl=_gd();_step(); // RET Z T:3
+        case  848: _step(); // RET Z T:4
+        case  849: _wait();_mread(cpu->sp++);_step(); // RET Z T:5
+        case  850: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET Z T:6
+        case  851: _fetch(); // RET Z T:7
+        case  852: _wait();_mread(cpu->sp++);_step(); // RET T:1
+        case  853: cpu->wzl=_gd();_step(); // RET T:2
+        case  854: _step(); // RET T:3
+        case  855: _wait();_mread(cpu->sp++);_step(); // RET T:4
+        case  856: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET T:5
+        case  857: _fetch(); // RET T:6
+        case  858: _wait();_mread(cpu->pc++);_step(); // JP Z,nn T:1
+        case  859: cpu->wzl=_gd();_step(); // JP Z,nn T:2
+        case  860: _step(); // JP Z,nn T:3
+        case  861: _wait();_mread(cpu->pc++);_step(); // JP Z,nn T:4
+        case  862: cpu->wzh=_gd();if(_cc_z){cpu->pc=cpu->wz;};_step(); // JP Z,nn T:5
+        case  863: _fetch(); // JP Z,nn T:6
+        case  864: _wait();_mread(cpu->pc++);_step(); // CALL Z,nn T:1
+        case  865: cpu->wzl=_gd();_step(); // CALL Z,nn T:2
+        case  866: _step(); // CALL Z,nn T:3
+        case  867: _wait();_mread(cpu->pc++);_step(); // CALL Z,nn T:4
+        case  868: cpu->wzh=_gd();if (!_cc_z){_goto(869+7);};_step(); // CALL Z,nn T:5
+        case  869: _step(); // CALL Z,nn T:6
+        case  870: _step(); // CALL Z,nn T:7
+        case  871: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL Z,nn T:8
+        case  872: _step(); // CALL Z,nn T:9
+        case  873: _step(); // CALL Z,nn T:10
+        case  874: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL Z,nn T:11
+        case  875: _step(); // CALL Z,nn T:12
+        case  876: _fetch(); // CALL Z,nn T:13
+        case  877: _wait();_mread(cpu->pc++);_step(); // CALL nn T:1
+        case  878: cpu->wzl=_gd();_step(); // CALL nn T:2
+        case  879: _step(); // CALL nn T:3
+        case  880: _wait();_mread(cpu->pc++);_step(); // CALL nn T:4
+        case  881: cpu->wzh=_gd();_step(); // CALL nn T:5
+        case  882: _step(); // CALL nn T:6
+        case  883: _step(); // CALL nn T:7
+        case  884: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL nn T:8
+        case  885: _step(); // CALL nn T:9
+        case  886: _step(); // CALL nn T:10
+        case  887: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL nn T:11
+        case  888: _step(); // CALL nn T:12
+        case  889: _fetch(); // CALL nn T:13
+        case  890: _wait();_mread(cpu->pc++);_step(); // ADC n T:1
+        case  891: cpu->dlatch=_gd();_step(); // ADC n T:2
+        case  892: _z80_adc8(cpu,cpu->dlatch);_fetch(); // ADC n T:3
+        case  893: _step(); // RST 8h T:1
+        case  894: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // RST 8h T:2
+        case  895: _step(); // RST 8h T:3
+        case  896: _step(); // RST 8h T:4
+        case  897: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x08;cpu->pc=cpu->wz;_step(); // RST 8h T:5
+        case  898: _step(); // RST 8h T:6
+        case  899: _fetch(); // RST 8h T:7
+        case  900: _step(); // RET NC T:1
+        case  901: _wait();_mread(cpu->sp++);_step(); // RET NC T:2
+        case  902: cpu->wzl=_gd();_step(); // RET NC T:3
+        case  903: _step(); // RET NC T:4
+        case  904: _wait();_mread(cpu->sp++);_step(); // RET NC T:5
+        case  905: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET NC T:6
+        case  906: _fetch(); // RET NC T:7
+        case  907: _wait();_mread(cpu->sp++);_step(); // POP DE T:1
+        case  908: cpu->e=_gd();_step(); // POP DE T:2
+        case  909: _step(); // POP DE T:3
+        case  910: _wait();_mread(cpu->sp++);_step(); // POP DE T:4
+        case  911: cpu->d=_gd();_step(); // POP DE T:5
+        case  912: _fetch(); // POP DE T:6
+        case  913: _wait();_mread(cpu->pc++);_step(); // JP NC,nn T:1
+        case  914: cpu->wzl=_gd();_step(); // JP NC,nn T:2
+        case  915: _step(); // JP NC,nn T:3
+        case  916: _wait();_mread(cpu->pc++);_step(); // JP NC,nn T:4
+        case  917: cpu->wzh=_gd();if(_cc_nc){cpu->pc=cpu->wz;};_step(); // JP NC,nn T:5
+        case  918: _fetch(); // JP NC,nn T:6
+        case  919: _wait();_mread(cpu->pc++);_step(); // OUT (n),A T:1
+        case  920: cpu->wzl=_gd();cpu->wzh=cpu->a;_step(); // OUT (n),A T:2
+        case  921: _step(); // OUT (n),A T:3
+        case  922: _iowrite(cpu->wz,cpu->a);_step(); // OUT (n),A T:4
+        case  923: _wait();cpu->wzl++;_step(); // OUT (n),A T:5
+        case  924: _step(); // OUT (n),A T:6
+        case  925: _fetch(); // OUT (n),A T:7
+        case  926: _wait();_mread(cpu->pc++);_step(); // CALL NC,nn T:1
+        case  927: cpu->wzl=_gd();_step(); // CALL NC,nn T:2
+        case  928: _step(); // CALL NC,nn T:3
+        case  929: _wait();_mread(cpu->pc++);_step(); // CALL NC,nn T:4
+        case  930: cpu->wzh=_gd();if (!_cc_nc){_goto(931+7);};_step(); // CALL NC,nn T:5
+        case  931: _step(); // CALL NC,nn T:6
+        case  932: _step(); // CALL NC,nn T:7
+        case  933: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL NC,nn T:8
+        case  934: _step(); // CALL NC,nn T:9
+        case  935: _step(); // CALL NC,nn T:10
+        case  936: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL NC,nn T:11
+        case  937: _step(); // CALL NC,nn T:12
+        case  938: _fetch(); // CALL NC,nn T:13
+        case  939: _step(); // PUSH DE T:1
+        case  940: _wait();_mwrite(--cpu->sp,cpu->d);_step(); // PUSH DE T:2
+        case  941: _step(); // PUSH DE T:3
+        case  942: _step(); // PUSH DE T:4
+        case  943: _wait();_mwrite(--cpu->sp,cpu->e);_step(); // PUSH DE T:5
+        case  944: _step(); // PUSH DE T:6
+        case  945: _fetch(); // PUSH DE T:7
+        case  946: _wait();_mread(cpu->pc++);_step(); // SUB n T:1
+        case  947: cpu->dlatch=_gd();_step(); // SUB n T:2
+        case  948: _z80_sub8(cpu,cpu->dlatch);_fetch(); // SUB n T:3
+        case  949: _step(); // RST 10h T:1
+        case  950: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // RST 10h T:2
+        case  951: _step(); // RST 10h T:3
+        case  952: _step(); // RST 10h T:4
+        case  953: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x10;cpu->pc=cpu->wz;_step(); // RST 10h T:5
+        case  954: _step(); // RST 10h T:6
+        case  955: _fetch(); // RST 10h T:7
+        case  956: _step(); // RET C T:1
+        case  957: _wait();_mread(cpu->sp++);_step(); // RET C T:2
+        case  958: cpu->wzl=_gd();_step(); // RET C T:3
+        case  959: _step(); // RET C T:4
+        case  960: _wait();_mread(cpu->sp++);_step(); // RET C T:5
+        case  961: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET C T:6
+        case  962: _fetch(); // RET C T:7
+        case  963: _wait();_mread(cpu->pc++);_step(); // JP C,nn T:1
+        case  964: cpu->wzl=_gd();_step(); // JP C,nn T:2
+        case  965: _step(); // JP C,nn T:3
+        case  966: _wait();_mread(cpu->pc++);_step(); // JP C,nn T:4
+        case  967: cpu->wzh=_gd();if(_cc_c){cpu->pc=cpu->wz;};_step(); // JP C,nn T:5
+        case  968: _fetch(); // JP C,nn T:6
+        case  969: _wait();_mread(cpu->pc++);_step(); // IN A,(n) T:1
+        case  970: cpu->wzl=_gd();cpu->wzh=cpu->a;_step(); // IN A,(n) T:2
+        case  971: _step(); // IN A,(n) T:3
+        case  972: _step(); // IN A,(n) T:4
+        case  973: _wait();_ioread(cpu->wz++);_step(); // IN A,(n) T:5
+        case  974: cpu->a=_gd();_step(); // IN A,(n) T:6
+        case  975: _fetch(); // IN A,(n) T:7
+        case  976: _wait();_mread(cpu->pc++);_step(); // CALL C,nn T:1
+        case  977: cpu->wzl=_gd();_step(); // CALL C,nn T:2
+        case  978: _step(); // CALL C,nn T:3
+        case  979: _wait();_mread(cpu->pc++);_step(); // CALL C,nn T:4
+        case  980: cpu->wzh=_gd();if (!_cc_c){_goto(981+7);};_step(); // CALL C,nn T:5
+        case  981: _step(); // CALL C,nn T:6
+        case  982: _step(); // CALL C,nn T:7
+        case  983: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL C,nn T:8
+        case  984: _step(); // CALL C,nn T:9
+        case  985: _step(); // CALL C,nn T:10
+        case  986: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL C,nn T:11
+        case  987: _step(); // CALL C,nn T:12
+        case  988: _fetch(); // CALL C,nn T:13
+        case  989: _wait();_mread(cpu->pc++);_step(); // SBC n T:1
+        case  990: cpu->dlatch=_gd();_step(); // SBC n T:2
+        case  991: _z80_sbc8(cpu,cpu->dlatch);_fetch(); // SBC n T:3
+        case  992: _step(); // RST 18h T:1
+        case  993: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // RST 18h T:2
+        case  994: _step(); // RST 18h T:3
+        case  995: _step(); // RST 18h T:4
+        case  996: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x18;cpu->pc=cpu->wz;_step(); // RST 18h T:5
+        case  997: _step(); // RST 18h T:6
+        case  998: _fetch(); // RST 18h T:7
+        case  999: _step(); // RET PO T:1
+        case 1000: _wait();_mread(cpu->sp++);_step(); // RET PO T:2
+        case 1001: cpu->wzl=_gd();_step(); // RET PO T:3
+        case 1002: _step(); // RET PO T:4
+        case 1003: _wait();_mread(cpu->sp++);_step(); // RET PO T:5
+        case 1004: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET PO T:6
+        case 1005: _fetch(); // RET PO T:7
+        case 1006: _wait();_mread(cpu->sp++);_step(); // POP HL T:1
+        case 1007: cpu->hlx[cpu->hlx_idx].l=_gd();_step(); // POP HL T:2
+        case 1008: _step(); // POP HL T:3
+        case 1009: _wait();_mread(cpu->sp++);_step(); // POP HL T:4
+        case 1010: cpu->hlx[cpu->hlx_idx].h=_gd();_step(); // POP HL T:5
+        case 1011: _fetch(); // POP HL T:6
+        case 1012: _wait();_mread(cpu->pc++);_step(); // JP PO,nn T:1
+        case 1013: cpu->wzl=_gd();_step(); // JP PO,nn T:2
+        case 1014: _step(); // JP PO,nn T:3
+        case 1015: _wait();_mread(cpu->pc++);_step(); // JP PO,nn T:4
+        case 1016: cpu->wzh=_gd();if(_cc_po){cpu->pc=cpu->wz;};_step(); // JP PO,nn T:5
+        case 1017: _fetch(); // JP PO,nn T:6
+        case 1018: _wait();_mread(cpu->sp);_step(); // EX (SP),HL T:1
+        case 1019: cpu->wzl=_gd();_step(); // EX (SP),HL T:2
+        case 1020: _step(); // EX (SP),HL T:3
+        case 1021: _wait();_mread(cpu->sp+1);_step(); // EX (SP),HL T:4
+        case 1022: cpu->wzh=_gd();_step(); // EX (SP),HL T:5
+        case 1023: _step(); // EX (SP),HL T:6
+        case 1024: _step(); // EX (SP),HL T:7
+        case 1025: _wait();_mwrite(cpu->sp+1,cpu->hlx[cpu->hlx_idx].h);_step(); // EX (SP),HL T:8
+        case 1026: _step(); // EX (SP),HL T:9
+        case 1027: _step(); // EX (SP),HL T:10
+        case 1028: _wait();_mwrite(cpu->sp,cpu->hlx[cpu->hlx_idx].l);cpu->hlx[cpu->hlx_idx].hl=cpu->wz;_step(); // EX (SP),HL T:11
+        case 1029: _step(); // EX (SP),HL T:12
+        case 1030: _step(); // EX (SP),HL T:13
+        case 1031: _step(); // EX (SP),HL T:14
+        case 1032: _fetch(); // EX (SP),HL T:15
+        case 1033: _wait();_mread(cpu->pc++);_step(); // CALL PO,nn T:1
+        case 1034: cpu->wzl=_gd();_step(); // CALL PO,nn T:2
+        case 1035: _step(); // CALL PO,nn T:3
+        case 1036: _wait();_mread(cpu->pc++);_step(); // CALL PO,nn T:4
+        case 1037: cpu->wzh=_gd();if (!_cc_po){_goto(1038+7);};_step(); // CALL PO,nn T:5
+        case 1038: _step(); // CALL PO,nn T:6
+        case 1039: _step(); // CALL PO,nn T:7
+        case 1040: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL PO,nn T:8
+        case 1041: _step(); // CALL PO,nn T:9
+        case 1042: _step(); // CALL PO,nn T:10
+        case 1043: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL PO,nn T:11
+        case 1044: _step(); // CALL PO,nn T:12
+        case 1045: _fetch(); // CALL PO,nn T:13
+        case 1046: _step(); // PUSH HL T:1
+        case 1047: _wait();_mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].h);_step(); // PUSH HL T:2
+        case 1048: _step(); // PUSH HL T:3
+        case 1049: _step(); // PUSH HL T:4
+        case 1050: _wait();_mwrite(--cpu->sp,cpu->hlx[cpu->hlx_idx].l);_step(); // PUSH HL T:5
+        case 1051: _step(); // PUSH HL T:6
+        case 1052: _fetch(); // PUSH HL T:7
+        case 1053: _wait();_mread(cpu->pc++);_step(); // AND n T:1
+        case 1054: cpu->dlatch=_gd();_step(); // AND n T:2
+        case 1055: _z80_and8(cpu,cpu->dlatch);_fetch(); // AND n T:3
+        case 1056: _step(); // RST 20h T:1
+        case 1057: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // RST 20h T:2
+        case 1058: _step(); // RST 20h T:3
+        case 1059: _step(); // RST 20h T:4
+        case 1060: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x20;cpu->pc=cpu->wz;_step(); // RST 20h T:5
+        case 1061: _step(); // RST 20h T:6
+        case 1062: _fetch(); // RST 20h T:7
+        case 1063: _step(); // RET PE T:1
+        case 1064: _wait();_mread(cpu->sp++);_step(); // RET PE T:2
+        case 1065: cpu->wzl=_gd();_step(); // RET PE T:3
+        case 1066: _step(); // RET PE T:4
+        case 1067: _wait();_mread(cpu->sp++);_step(); // RET PE T:5
+        case 1068: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET PE T:6
+        case 1069: _fetch(); // RET PE T:7
+        case 1070: _wait();_mread(cpu->pc++);_step(); // JP PE,nn T:1
+        case 1071: cpu->wzl=_gd();_step(); // JP PE,nn T:2
+        case 1072: _step(); // JP PE,nn T:3
+        case 1073: _wait();_mread(cpu->pc++);_step(); // JP PE,nn T:4
+        case 1074: cpu->wzh=_gd();if(_cc_pe){cpu->pc=cpu->wz;};_step(); // JP PE,nn T:5
+        case 1075: _fetch(); // JP PE,nn T:6
+        case 1076: _wait();_mread(cpu->pc++);_step(); // CALL PE,nn T:1
+        case 1077: cpu->wzl=_gd();_step(); // CALL PE,nn T:2
+        case 1078: _step(); // CALL PE,nn T:3
+        case 1079: _wait();_mread(cpu->pc++);_step(); // CALL PE,nn T:4
+        case 1080: cpu->wzh=_gd();if (!_cc_pe){_goto(1081+7);};_step(); // CALL PE,nn T:5
+        case 1081: _step(); // CALL PE,nn T:6
+        case 1082: _step(); // CALL PE,nn T:7
+        case 1083: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL PE,nn T:8
+        case 1084: _step(); // CALL PE,nn T:9
+        case 1085: _step(); // CALL PE,nn T:10
+        case 1086: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL PE,nn T:11
+        case 1087: _step(); // CALL PE,nn T:12
+        case 1088: _fetch(); // CALL PE,nn T:13
+        case 1089: _wait();_mread(cpu->pc++);_step(); // XOR n T:1
+        case 1090: cpu->dlatch=_gd();_step(); // XOR n T:2
+        case 1091: _z80_xor8(cpu,cpu->dlatch);_fetch(); // XOR n T:3
+        case 1092: _step(); // RST 28h T:1
+        case 1093: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // RST 28h T:2
+        case 1094: _step(); // RST 28h T:3
+        case 1095: _step(); // RST 28h T:4
+        case 1096: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x28;cpu->pc=cpu->wz;_step(); // RST 28h T:5
+        case 1097: _step(); // RST 28h T:6
+        case 1098: _fetch(); // RST 28h T:7
+        case 1099: _step(); // RET P T:1
+        case 1100: _wait();_mread(cpu->sp++);_step(); // RET P T:2
+        case 1101: cpu->wzl=_gd();_step(); // RET P T:3
+        case 1102: _step(); // RET P T:4
+        case 1103: _wait();_mread(cpu->sp++);_step(); // RET P T:5
+        case 1104: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET P T:6
+        case 1105: _fetch(); // RET P T:7
+        case 1106: _wait();_mread(cpu->sp++);_step(); // POP AF T:1
+        case 1107: cpu->f=_gd();_step(); // POP AF T:2
+        case 1108: _step(); // POP AF T:3
+        case 1109: _wait();_mread(cpu->sp++);_step(); // POP AF T:4
+        case 1110: cpu->a=_gd();_step(); // POP AF T:5
+        case 1111: _fetch(); // POP AF T:6
+        case 1112: _wait();_mread(cpu->pc++);_step(); // JP P,nn T:1
+        case 1113: cpu->wzl=_gd();_step(); // JP P,nn T:2
+        case 1114: _step(); // JP P,nn T:3
+        case 1115: _wait();_mread(cpu->pc++);_step(); // JP P,nn T:4
+        case 1116: cpu->wzh=_gd();if(_cc_p){cpu->pc=cpu->wz;};_step(); // JP P,nn T:5
+        case 1117: _fetch(); // JP P,nn T:6
+        case 1118: _wait();_mread(cpu->pc++);_step(); // CALL P,nn T:1
+        case 1119: cpu->wzl=_gd();_step(); // CALL P,nn T:2
+        case 1120: _step(); // CALL P,nn T:3
+        case 1121: _wait();_mread(cpu->pc++);_step(); // CALL P,nn T:4
+        case 1122: cpu->wzh=_gd();if (!_cc_p){_goto(1123+7);};_step(); // CALL P,nn T:5
+        case 1123: _step(); // CALL P,nn T:6
+        case 1124: _step(); // CALL P,nn T:7
+        case 1125: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL P,nn T:8
+        case 1126: _step(); // CALL P,nn T:9
+        case 1127: _step(); // CALL P,nn T:10
+        case 1128: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL P,nn T:11
+        case 1129: _step(); // CALL P,nn T:12
+        case 1130: _fetch(); // CALL P,nn T:13
+        case 1131: _step(); // PUSH AF T:1
+        case 1132: _wait();_mwrite(--cpu->sp,cpu->a);_step(); // PUSH AF T:2
+        case 1133: _step(); // PUSH AF T:3
+        case 1134: _step(); // PUSH AF T:4
+        case 1135: _wait();_mwrite(--cpu->sp,cpu->f);_step(); // PUSH AF T:5
+        case 1136: _step(); // PUSH AF T:6
+        case 1137: _fetch(); // PUSH AF T:7
+        case 1138: _wait();_mread(cpu->pc++);_step(); // OR n T:1
+        case 1139: cpu->dlatch=_gd();_step(); // OR n T:2
+        case 1140: _z80_or8(cpu,cpu->dlatch);_fetch(); // OR n T:3
+        case 1141: _step(); // RST 30h T:1
+        case 1142: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // RST 30h T:2
+        case 1143: _step(); // RST 30h T:3
+        case 1144: _step(); // RST 30h T:4
+        case 1145: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x30;cpu->pc=cpu->wz;_step(); // RST 30h T:5
+        case 1146: _step(); // RST 30h T:6
+        case 1147: _fetch(); // RST 30h T:7
+        case 1148: _step(); // RET M T:1
+        case 1149: _wait();_mread(cpu->sp++);_step(); // RET M T:2
+        case 1150: cpu->wzl=_gd();_step(); // RET M T:3
+        case 1151: _step(); // RET M T:4
+        case 1152: _wait();_mread(cpu->sp++);_step(); // RET M T:5
+        case 1153: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RET M T:6
+        case 1154: _fetch(); // RET M T:7
+        case 1155: _step(); // LD SP,HL T:1
+        case 1156: _fetch(); // LD SP,HL T:2
+        case 1157: _wait();_mread(cpu->pc++);_step(); // JP M,nn T:1
+        case 1158: cpu->wzl=_gd();_step(); // JP M,nn T:2
+        case 1159: _step(); // JP M,nn T:3
+        case 1160: _wait();_mread(cpu->pc++);_step(); // JP M,nn T:4
+        case 1161: cpu->wzh=_gd();if(_cc_m){cpu->pc=cpu->wz;};_step(); // JP M,nn T:5
+        case 1162: _fetch(); // JP M,nn T:6
+        case 1163: _wait();_mread(cpu->pc++);_step(); // CALL M,nn T:1
+        case 1164: cpu->wzl=_gd();_step(); // CALL M,nn T:2
+        case 1165: _step(); // CALL M,nn T:3
+        case 1166: _wait();_mread(cpu->pc++);_step(); // CALL M,nn T:4
+        case 1167: cpu->wzh=_gd();if (!_cc_m){_goto(1168+7);};_step(); // CALL M,nn T:5
+        case 1168: _step(); // CALL M,nn T:6
+        case 1169: _step(); // CALL M,nn T:7
+        case 1170: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // CALL M,nn T:8
+        case 1171: _step(); // CALL M,nn T:9
+        case 1172: _step(); // CALL M,nn T:10
+        case 1173: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->pc=cpu->wz;_step(); // CALL M,nn T:11
+        case 1174: _step(); // CALL M,nn T:12
+        case 1175: _fetch(); // CALL M,nn T:13
+        case 1176: _wait();_mread(cpu->pc++);_step(); // CP n T:1
+        case 1177: cpu->dlatch=_gd();_step(); // CP n T:2
+        case 1178: _z80_cp8(cpu,cpu->dlatch);_fetch(); // CP n T:3
+        case 1179: _step(); // RST 38h T:1
+        case 1180: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // RST 38h T:2
+        case 1181: _step(); // RST 38h T:3
+        case 1182: _step(); // RST 38h T:4
+        case 1183: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=0x38;cpu->pc=cpu->wz;_step(); // RST 38h T:5
+        case 1184: _step(); // RST 38h T:6
+        case 1185: _fetch(); // RST 38h T:7
+        case 1186: _step(); // IN B,(C) T:1
+        case 1187: _wait();_ioread(cpu->bc);_step(); // IN B,(C) T:2
+        case 1188: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;_step(); // IN B,(C) T:3
+        case 1189: cpu->b=_z80_in(cpu,cpu->dlatch);_fetch(); // IN B,(C) T:4
+        case 1190: _iowrite(cpu->bc,cpu->b);_step(); // OUT (C),B T:1
+        case 1191: _wait();cpu->wz=cpu->bc+1;_step(); // OUT (C),B T:2
+        case 1192: _step(); // OUT (C),B T:3
+        case 1193: _fetch(); // OUT (C),B T:4
+        case 1194: _step(); // SBC HL,BC T:1
+        case 1195: _step(); // SBC HL,BC T:2
+        case 1196: _step(); // SBC HL,BC T:3
+        case 1197: _step(); // SBC HL,BC T:4
+        case 1198: _step(); // SBC HL,BC T:5
+        case 1199: _step(); // SBC HL,BC T:6
+        case 1200: _fetch(); // SBC HL,BC T:7
+        case 1201: _wait();_mread(cpu->pc++);_step(); // LD (nn),BC T:1
+        case 1202: cpu->wzl=_gd();_step(); // LD (nn),BC T:2
+        case 1203: _step(); // LD (nn),BC T:3
+        case 1204: _wait();_mread(cpu->pc++);_step(); // LD (nn),BC T:4
+        case 1205: cpu->wzh=_gd();_step(); // LD (nn),BC T:5
+        case 1206: _step(); // LD (nn),BC T:6
+        case 1207: _wait();_mwrite(cpu->wz++,cpu->c);_step(); // LD (nn),BC T:7
+        case 1208: _step(); // LD (nn),BC T:8
+        case 1209: _step(); // LD (nn),BC T:9
+        case 1210: _wait();_mwrite(cpu->wz,cpu->b);_step(); // LD (nn),BC T:10
+        case 1211: _step(); // LD (nn),BC T:11
+        case 1212: _fetch(); // LD (nn),BC T:12
+        case 1213: _wait();_mread(cpu->sp++);_step(); // RETN T:1
+        case 1214: cpu->wzl=_gd();_step(); // RETN T:2
+        case 1215: _step(); // RETN T:3
+        case 1216: _wait();_mread(cpu->sp++);_step(); // RETN T:4
+        case 1217: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RETN T:5
         case 1218: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_to; // RETN T:6
-        case 1219: cpu->i=cpu->a;goto fetch_next; // LD I,A T:1
-        case 1220: goto step_next; // IN C,(C) T:1
-        case 1221: _wait();_ioread(cpu->bc);goto step_next; // IN C,(C) T:2
-        case 1222: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next; // IN C,(C) T:3
-        case 1223: cpu->c=_z80_in(cpu,cpu->dlatch);goto fetch_next; // IN C,(C) T:4
-        case 1224: _iowrite(cpu->bc,cpu->c);goto step_next; // OUT (C),C T:1
-        case 1225: _wait();cpu->wz=cpu->bc+1;goto step_next; // OUT (C),C T:2
-        case 1226: goto step_next; // OUT (C),C T:3
-        case 1227: goto fetch_next; // OUT (C),C T:4
-        case 1228: goto step_next; // ADC HL,BC T:1
-        case 1229: goto step_next; // ADC HL,BC T:2
-        case 1230: goto step_next; // ADC HL,BC T:3
-        case 1231: goto step_next; // ADC HL,BC T:4
-        case 1232: goto step_next; // ADC HL,BC T:5
-        case 1233: goto step_next; // ADC HL,BC T:6
-        case 1234: goto fetch_next; // ADC HL,BC T:7
-        case 1235: _wait();_mread(cpu->pc++);goto step_next; // LD BC,(nn) T:1
-        case 1236: cpu->wzl=_gd();goto step_next; // LD BC,(nn) T:2
-        case 1237: goto step_next; // LD BC,(nn) T:3
-        case 1238: _wait();_mread(cpu->pc++);goto step_next; // LD BC,(nn) T:4
-        case 1239: cpu->wzh=_gd();goto step_next; // LD BC,(nn) T:5
-        case 1240: goto step_next; // LD BC,(nn) T:6
-        case 1241: _wait();_mread(cpu->wz++);goto step_next; // LD BC,(nn) T:7
-        case 1242: cpu->c=_gd();goto step_next; // LD BC,(nn) T:8
-        case 1243: goto step_next; // LD BC,(nn) T:9
-        case 1244: _wait();_mread(cpu->wz);goto step_next; // LD BC,(nn) T:10
-        case 1245: cpu->b=_gd();goto step_next; // LD BC,(nn) T:11
-        case 1246: goto fetch_next; // LD BC,(nn) T:12
-        case 1247: _wait();_mread(cpu->sp++);goto step_next; // RETI T:1
-        case 1248: cpu->wzl=_gd();pins|=Z80_RETI;goto step_next; // RETI T:2
-        case 1249: goto step_next; // RETI T:3
-        case 1250: _wait();_mread(cpu->sp++);goto step_next; // RETI T:4
-        case 1251: cpu->wzh=_gd();cpu->pc=cpu->wz;goto step_next; // RETI T:5
+        case 1219: cpu->i=cpu->a;_fetch(); // LD I,A T:1
+        case 1220: _step(); // IN C,(C) T:1
+        case 1221: _wait();_ioread(cpu->bc);_step(); // IN C,(C) T:2
+        case 1222: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;_step(); // IN C,(C) T:3
+        case 1223: cpu->c=_z80_in(cpu,cpu->dlatch);_fetch(); // IN C,(C) T:4
+        case 1224: _iowrite(cpu->bc,cpu->c);_step(); // OUT (C),C T:1
+        case 1225: _wait();cpu->wz=cpu->bc+1;_step(); // OUT (C),C T:2
+        case 1226: _step(); // OUT (C),C T:3
+        case 1227: _fetch(); // OUT (C),C T:4
+        case 1228: _step(); // ADC HL,BC T:1
+        case 1229: _step(); // ADC HL,BC T:2
+        case 1230: _step(); // ADC HL,BC T:3
+        case 1231: _step(); // ADC HL,BC T:4
+        case 1232: _step(); // ADC HL,BC T:5
+        case 1233: _step(); // ADC HL,BC T:6
+        case 1234: _fetch(); // ADC HL,BC T:7
+        case 1235: _wait();_mread(cpu->pc++);_step(); // LD BC,(nn) T:1
+        case 1236: cpu->wzl=_gd();_step(); // LD BC,(nn) T:2
+        case 1237: _step(); // LD BC,(nn) T:3
+        case 1238: _wait();_mread(cpu->pc++);_step(); // LD BC,(nn) T:4
+        case 1239: cpu->wzh=_gd();_step(); // LD BC,(nn) T:5
+        case 1240: _step(); // LD BC,(nn) T:6
+        case 1241: _wait();_mread(cpu->wz++);_step(); // LD BC,(nn) T:7
+        case 1242: cpu->c=_gd();_step(); // LD BC,(nn) T:8
+        case 1243: _step(); // LD BC,(nn) T:9
+        case 1244: _wait();_mread(cpu->wz);_step(); // LD BC,(nn) T:10
+        case 1245: cpu->b=_gd();_step(); // LD BC,(nn) T:11
+        case 1246: _fetch(); // LD BC,(nn) T:12
+        case 1247: _wait();_mread(cpu->sp++);_step(); // RETI T:1
+        case 1248: cpu->wzl=_gd();pins|=Z80_RETI;_step(); // RETI T:2
+        case 1249: _step(); // RETI T:3
+        case 1250: _wait();_mread(cpu->sp++);_step(); // RETI T:4
+        case 1251: cpu->wzh=_gd();cpu->pc=cpu->wz;_step(); // RETI T:5
         case 1252: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_to; // RETI T:6
-        case 1253: cpu->r=cpu->a;goto fetch_next; // LD R,A T:1
-        case 1254: goto step_next; // IN D,(C) T:1
-        case 1255: _wait();_ioread(cpu->bc);goto step_next; // IN D,(C) T:2
-        case 1256: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next; // IN D,(C) T:3
-        case 1257: cpu->d=_z80_in(cpu,cpu->dlatch);goto fetch_next; // IN D,(C) T:4
-        case 1258: _iowrite(cpu->bc,cpu->d);goto step_next; // OUT (C),D T:1
-        case 1259: _wait();cpu->wz=cpu->bc+1;goto step_next; // OUT (C),D T:2
-        case 1260: goto step_next; // OUT (C),D T:3
-        case 1261: goto fetch_next; // OUT (C),D T:4
-        case 1262: goto step_next; // SBC HL,DE T:1
-        case 1263: goto step_next; // SBC HL,DE T:2
-        case 1264: goto step_next; // SBC HL,DE T:3
-        case 1265: goto step_next; // SBC HL,DE T:4
-        case 1266: goto step_next; // SBC HL,DE T:5
-        case 1267: goto step_next; // SBC HL,DE T:6
-        case 1268: goto fetch_next; // SBC HL,DE T:7
-        case 1269: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),DE T:1
-        case 1270: cpu->wzl=_gd();goto step_next; // LD (nn),DE T:2
-        case 1271: goto step_next; // LD (nn),DE T:3
-        case 1272: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),DE T:4
-        case 1273: cpu->wzh=_gd();goto step_next; // LD (nn),DE T:5
-        case 1274: goto step_next; // LD (nn),DE T:6
-        case 1275: _wait();_mwrite(cpu->wz++,cpu->e);goto step_next; // LD (nn),DE T:7
-        case 1276: goto step_next; // LD (nn),DE T:8
-        case 1277: goto step_next; // LD (nn),DE T:9
-        case 1278: _wait();_mwrite(cpu->wz,cpu->d);goto step_next; // LD (nn),DE T:10
-        case 1279: goto step_next; // LD (nn),DE T:11
-        case 1280: goto fetch_next; // LD (nn),DE T:12
+        case 1253: cpu->r=cpu->a;_fetch(); // LD R,A T:1
+        case 1254: _step(); // IN D,(C) T:1
+        case 1255: _wait();_ioread(cpu->bc);_step(); // IN D,(C) T:2
+        case 1256: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;_step(); // IN D,(C) T:3
+        case 1257: cpu->d=_z80_in(cpu,cpu->dlatch);_fetch(); // IN D,(C) T:4
+        case 1258: _iowrite(cpu->bc,cpu->d);_step(); // OUT (C),D T:1
+        case 1259: _wait();cpu->wz=cpu->bc+1;_step(); // OUT (C),D T:2
+        case 1260: _step(); // OUT (C),D T:3
+        case 1261: _fetch(); // OUT (C),D T:4
+        case 1262: _step(); // SBC HL,DE T:1
+        case 1263: _step(); // SBC HL,DE T:2
+        case 1264: _step(); // SBC HL,DE T:3
+        case 1265: _step(); // SBC HL,DE T:4
+        case 1266: _step(); // SBC HL,DE T:5
+        case 1267: _step(); // SBC HL,DE T:6
+        case 1268: _fetch(); // SBC HL,DE T:7
+        case 1269: _wait();_mread(cpu->pc++);_step(); // LD (nn),DE T:1
+        case 1270: cpu->wzl=_gd();_step(); // LD (nn),DE T:2
+        case 1271: _step(); // LD (nn),DE T:3
+        case 1272: _wait();_mread(cpu->pc++);_step(); // LD (nn),DE T:4
+        case 1273: cpu->wzh=_gd();_step(); // LD (nn),DE T:5
+        case 1274: _step(); // LD (nn),DE T:6
+        case 1275: _wait();_mwrite(cpu->wz++,cpu->e);_step(); // LD (nn),DE T:7
+        case 1276: _step(); // LD (nn),DE T:8
+        case 1277: _step(); // LD (nn),DE T:9
+        case 1278: _wait();_mwrite(cpu->wz,cpu->d);_step(); // LD (nn),DE T:10
+        case 1279: _step(); // LD (nn),DE T:11
+        case 1280: _fetch(); // LD (nn),DE T:12
         case 1281: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_to; // RETI T:6
-        case 1282: cpu->a=cpu->i;cpu->f=_z80_sziff2_flags(cpu, cpu->i);goto fetch_next; // LD A,I T:1
-        case 1283: goto step_next; // IN E,(C) T:1
-        case 1284: _wait();_ioread(cpu->bc);goto step_next; // IN E,(C) T:2
-        case 1285: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next; // IN E,(C) T:3
-        case 1286: cpu->e=_z80_in(cpu,cpu->dlatch);goto fetch_next; // IN E,(C) T:4
-        case 1287: _iowrite(cpu->bc,cpu->e);goto step_next; // OUT (C),E T:1
-        case 1288: _wait();cpu->wz=cpu->bc+1;goto step_next; // OUT (C),E T:2
-        case 1289: goto step_next; // OUT (C),E T:3
-        case 1290: goto fetch_next; // OUT (C),E T:4
-        case 1291: goto step_next; // ADC HL,DE T:1
-        case 1292: goto step_next; // ADC HL,DE T:2
-        case 1293: goto step_next; // ADC HL,DE T:3
-        case 1294: goto step_next; // ADC HL,DE T:4
-        case 1295: goto step_next; // ADC HL,DE T:5
-        case 1296: goto step_next; // ADC HL,DE T:6
-        case 1297: goto fetch_next; // ADC HL,DE T:7
-        case 1298: _wait();_mread(cpu->pc++);goto step_next; // LD DE,(nn) T:1
-        case 1299: cpu->wzl=_gd();goto step_next; // LD DE,(nn) T:2
-        case 1300: goto step_next; // LD DE,(nn) T:3
-        case 1301: _wait();_mread(cpu->pc++);goto step_next; // LD DE,(nn) T:4
-        case 1302: cpu->wzh=_gd();goto step_next; // LD DE,(nn) T:5
-        case 1303: goto step_next; // LD DE,(nn) T:6
-        case 1304: _wait();_mread(cpu->wz++);goto step_next; // LD DE,(nn) T:7
-        case 1305: cpu->e=_gd();goto step_next; // LD DE,(nn) T:8
-        case 1306: goto step_next; // LD DE,(nn) T:9
-        case 1307: _wait();_mread(cpu->wz);goto step_next; // LD DE,(nn) T:10
-        case 1308: cpu->d=_gd();goto step_next; // LD DE,(nn) T:11
-        case 1309: goto fetch_next; // LD DE,(nn) T:12
+        case 1282: cpu->a=cpu->i;cpu->f=_z80_sziff2_flags(cpu, cpu->i);_fetch(); // LD A,I T:1
+        case 1283: _step(); // IN E,(C) T:1
+        case 1284: _wait();_ioread(cpu->bc);_step(); // IN E,(C) T:2
+        case 1285: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;_step(); // IN E,(C) T:3
+        case 1286: cpu->e=_z80_in(cpu,cpu->dlatch);_fetch(); // IN E,(C) T:4
+        case 1287: _iowrite(cpu->bc,cpu->e);_step(); // OUT (C),E T:1
+        case 1288: _wait();cpu->wz=cpu->bc+1;_step(); // OUT (C),E T:2
+        case 1289: _step(); // OUT (C),E T:3
+        case 1290: _fetch(); // OUT (C),E T:4
+        case 1291: _step(); // ADC HL,DE T:1
+        case 1292: _step(); // ADC HL,DE T:2
+        case 1293: _step(); // ADC HL,DE T:3
+        case 1294: _step(); // ADC HL,DE T:4
+        case 1295: _step(); // ADC HL,DE T:5
+        case 1296: _step(); // ADC HL,DE T:6
+        case 1297: _fetch(); // ADC HL,DE T:7
+        case 1298: _wait();_mread(cpu->pc++);_step(); // LD DE,(nn) T:1
+        case 1299: cpu->wzl=_gd();_step(); // LD DE,(nn) T:2
+        case 1300: _step(); // LD DE,(nn) T:3
+        case 1301: _wait();_mread(cpu->pc++);_step(); // LD DE,(nn) T:4
+        case 1302: cpu->wzh=_gd();_step(); // LD DE,(nn) T:5
+        case 1303: _step(); // LD DE,(nn) T:6
+        case 1304: _wait();_mread(cpu->wz++);_step(); // LD DE,(nn) T:7
+        case 1305: cpu->e=_gd();_step(); // LD DE,(nn) T:8
+        case 1306: _step(); // LD DE,(nn) T:9
+        case 1307: _wait();_mread(cpu->wz);_step(); // LD DE,(nn) T:10
+        case 1308: cpu->d=_gd();_step(); // LD DE,(nn) T:11
+        case 1309: _fetch(); // LD DE,(nn) T:12
         case 1310: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_to; // RETI T:6
-        case 1311: cpu->a=cpu->r;cpu->f=_z80_sziff2_flags(cpu, cpu->r);goto fetch_next; // LD A,R T:1
-        case 1312: goto step_next; // IN H,(C) T:1
-        case 1313: _wait();_ioread(cpu->bc);goto step_next; // IN H,(C) T:2
-        case 1314: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next; // IN H,(C) T:3
-        case 1315: cpu->h=_z80_in(cpu,cpu->dlatch);goto fetch_next; // IN H,(C) T:4
-        case 1316: _iowrite(cpu->bc,cpu->h);goto step_next; // OUT (C),H T:1
-        case 1317: _wait();cpu->wz=cpu->bc+1;goto step_next; // OUT (C),H T:2
-        case 1318: goto step_next; // OUT (C),H T:3
-        case 1319: goto fetch_next; // OUT (C),H T:4
-        case 1320: goto step_next; // SBC HL,HL T:1
-        case 1321: goto step_next; // SBC HL,HL T:2
-        case 1322: goto step_next; // SBC HL,HL T:3
-        case 1323: goto step_next; // SBC HL,HL T:4
-        case 1324: goto step_next; // SBC HL,HL T:5
-        case 1325: goto step_next; // SBC HL,HL T:6
-        case 1326: goto fetch_next; // SBC HL,HL T:7
-        case 1327: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),HL T:1
-        case 1328: cpu->wzl=_gd();goto step_next; // LD (nn),HL T:2
-        case 1329: goto step_next; // LD (nn),HL T:3
-        case 1330: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),HL T:4
-        case 1331: cpu->wzh=_gd();goto step_next; // LD (nn),HL T:5
-        case 1332: goto step_next; // LD (nn),HL T:6
-        case 1333: _wait();_mwrite(cpu->wz++,cpu->l);goto step_next; // LD (nn),HL T:7
-        case 1334: goto step_next; // LD (nn),HL T:8
-        case 1335: goto step_next; // LD (nn),HL T:9
-        case 1336: _wait();_mwrite(cpu->wz,cpu->h);goto step_next; // LD (nn),HL T:10
-        case 1337: goto step_next; // LD (nn),HL T:11
-        case 1338: goto fetch_next; // LD (nn),HL T:12
+        case 1311: cpu->a=cpu->r;cpu->f=_z80_sziff2_flags(cpu, cpu->r);_fetch(); // LD A,R T:1
+        case 1312: _step(); // IN H,(C) T:1
+        case 1313: _wait();_ioread(cpu->bc);_step(); // IN H,(C) T:2
+        case 1314: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;_step(); // IN H,(C) T:3
+        case 1315: cpu->h=_z80_in(cpu,cpu->dlatch);_fetch(); // IN H,(C) T:4
+        case 1316: _iowrite(cpu->bc,cpu->h);_step(); // OUT (C),H T:1
+        case 1317: _wait();cpu->wz=cpu->bc+1;_step(); // OUT (C),H T:2
+        case 1318: _step(); // OUT (C),H T:3
+        case 1319: _fetch(); // OUT (C),H T:4
+        case 1320: _step(); // SBC HL,HL T:1
+        case 1321: _step(); // SBC HL,HL T:2
+        case 1322: _step(); // SBC HL,HL T:3
+        case 1323: _step(); // SBC HL,HL T:4
+        case 1324: _step(); // SBC HL,HL T:5
+        case 1325: _step(); // SBC HL,HL T:6
+        case 1326: _fetch(); // SBC HL,HL T:7
+        case 1327: _wait();_mread(cpu->pc++);_step(); // LD (nn),HL T:1
+        case 1328: cpu->wzl=_gd();_step(); // LD (nn),HL T:2
+        case 1329: _step(); // LD (nn),HL T:3
+        case 1330: _wait();_mread(cpu->pc++);_step(); // LD (nn),HL T:4
+        case 1331: cpu->wzh=_gd();_step(); // LD (nn),HL T:5
+        case 1332: _step(); // LD (nn),HL T:6
+        case 1333: _wait();_mwrite(cpu->wz++,cpu->l);_step(); // LD (nn),HL T:7
+        case 1334: _step(); // LD (nn),HL T:8
+        case 1335: _step(); // LD (nn),HL T:9
+        case 1336: _wait();_mwrite(cpu->wz,cpu->h);_step(); // LD (nn),HL T:10
+        case 1337: _step(); // LD (nn),HL T:11
+        case 1338: _fetch(); // LD (nn),HL T:12
         case 1339: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_to; // RETI T:6
-        case 1340: _wait();_mread(cpu->hl);goto step_next; // RRD T:1
-        case 1341: cpu->dlatch=_gd();goto step_next; // RRD T:2
-        case 1342: cpu->dlatch=_z80_rrd(cpu,cpu->dlatch);goto step_next; // RRD T:3
-        case 1343: goto step_next; // RRD T:4
-        case 1344: goto step_next; // RRD T:5
-        case 1345: goto step_next; // RRD T:6
-        case 1346: goto step_next; // RRD T:7
-        case 1347: _wait();_mwrite(cpu->hl,cpu->dlatch);cpu->wz=cpu->hl+1;goto step_next; // RRD T:8
-        case 1348: goto step_next; // RRD T:9
-        case 1349: goto fetch_next; // RRD T:10
-        case 1350: goto step_next; // IN L,(C) T:1
-        case 1351: _wait();_ioread(cpu->bc);goto step_next; // IN L,(C) T:2
-        case 1352: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next; // IN L,(C) T:3
-        case 1353: cpu->l=_z80_in(cpu,cpu->dlatch);goto fetch_next; // IN L,(C) T:4
-        case 1354: _iowrite(cpu->bc,cpu->l);goto step_next; // OUT (C),L T:1
-        case 1355: _wait();cpu->wz=cpu->bc+1;goto step_next; // OUT (C),L T:2
-        case 1356: goto step_next; // OUT (C),L T:3
-        case 1357: goto fetch_next; // OUT (C),L T:4
-        case 1358: goto step_next; // ADC HL,HL T:1
-        case 1359: goto step_next; // ADC HL,HL T:2
-        case 1360: goto step_next; // ADC HL,HL T:3
-        case 1361: goto step_next; // ADC HL,HL T:4
-        case 1362: goto step_next; // ADC HL,HL T:5
-        case 1363: goto step_next; // ADC HL,HL T:6
-        case 1364: goto fetch_next; // ADC HL,HL T:7
-        case 1365: _wait();_mread(cpu->pc++);goto step_next; // LD HL,(nn) T:1
-        case 1366: cpu->wzl=_gd();goto step_next; // LD HL,(nn) T:2
-        case 1367: goto step_next; // LD HL,(nn) T:3
-        case 1368: _wait();_mread(cpu->pc++);goto step_next; // LD HL,(nn) T:4
-        case 1369: cpu->wzh=_gd();goto step_next; // LD HL,(nn) T:5
-        case 1370: goto step_next; // LD HL,(nn) T:6
-        case 1371: _wait();_mread(cpu->wz++);goto step_next; // LD HL,(nn) T:7
-        case 1372: cpu->l=_gd();goto step_next; // LD HL,(nn) T:8
-        case 1373: goto step_next; // LD HL,(nn) T:9
-        case 1374: _wait();_mread(cpu->wz);goto step_next; // LD HL,(nn) T:10
-        case 1375: cpu->h=_gd();goto step_next; // LD HL,(nn) T:11
-        case 1376: goto fetch_next; // LD HL,(nn) T:12
+        case 1340: _wait();_mread(cpu->hl);_step(); // RRD T:1
+        case 1341: cpu->dlatch=_gd();_step(); // RRD T:2
+        case 1342: cpu->dlatch=_z80_rrd(cpu,cpu->dlatch);_step(); // RRD T:3
+        case 1343: _step(); // RRD T:4
+        case 1344: _step(); // RRD T:5
+        case 1345: _step(); // RRD T:6
+        case 1346: _step(); // RRD T:7
+        case 1347: _wait();_mwrite(cpu->hl,cpu->dlatch);cpu->wz=cpu->hl+1;_step(); // RRD T:8
+        case 1348: _step(); // RRD T:9
+        case 1349: _fetch(); // RRD T:10
+        case 1350: _step(); // IN L,(C) T:1
+        case 1351: _wait();_ioread(cpu->bc);_step(); // IN L,(C) T:2
+        case 1352: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;_step(); // IN L,(C) T:3
+        case 1353: cpu->l=_z80_in(cpu,cpu->dlatch);_fetch(); // IN L,(C) T:4
+        case 1354: _iowrite(cpu->bc,cpu->l);_step(); // OUT (C),L T:1
+        case 1355: _wait();cpu->wz=cpu->bc+1;_step(); // OUT (C),L T:2
+        case 1356: _step(); // OUT (C),L T:3
+        case 1357: _fetch(); // OUT (C),L T:4
+        case 1358: _step(); // ADC HL,HL T:1
+        case 1359: _step(); // ADC HL,HL T:2
+        case 1360: _step(); // ADC HL,HL T:3
+        case 1361: _step(); // ADC HL,HL T:4
+        case 1362: _step(); // ADC HL,HL T:5
+        case 1363: _step(); // ADC HL,HL T:6
+        case 1364: _fetch(); // ADC HL,HL T:7
+        case 1365: _wait();_mread(cpu->pc++);_step(); // LD HL,(nn) T:1
+        case 1366: cpu->wzl=_gd();_step(); // LD HL,(nn) T:2
+        case 1367: _step(); // LD HL,(nn) T:3
+        case 1368: _wait();_mread(cpu->pc++);_step(); // LD HL,(nn) T:4
+        case 1369: cpu->wzh=_gd();_step(); // LD HL,(nn) T:5
+        case 1370: _step(); // LD HL,(nn) T:6
+        case 1371: _wait();_mread(cpu->wz++);_step(); // LD HL,(nn) T:7
+        case 1372: cpu->l=_gd();_step(); // LD HL,(nn) T:8
+        case 1373: _step(); // LD HL,(nn) T:9
+        case 1374: _wait();_mread(cpu->wz);_step(); // LD HL,(nn) T:10
+        case 1375: cpu->h=_gd();_step(); // LD HL,(nn) T:11
+        case 1376: _fetch(); // LD HL,(nn) T:12
         case 1377: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_to; // RETI T:6
-        case 1378: _wait();_mread(cpu->hl);goto step_next; // RLD T:1
-        case 1379: cpu->dlatch=_gd();goto step_next; // RLD T:2
-        case 1380: cpu->dlatch=_z80_rld(cpu,cpu->dlatch);goto step_next; // RLD T:3
-        case 1381: goto step_next; // RLD T:4
-        case 1382: goto step_next; // RLD T:5
-        case 1383: goto step_next; // RLD T:6
-        case 1384: goto step_next; // RLD T:7
-        case 1385: _wait();_mwrite(cpu->hl,cpu->dlatch);cpu->wz=cpu->hl+1;goto step_next; // RLD T:8
-        case 1386: goto step_next; // RLD T:9
-        case 1387: goto fetch_next; // RLD T:10
-        case 1388: goto step_next; // IN (C) T:1
-        case 1389: _wait();_ioread(cpu->bc);goto step_next; // IN (C) T:2
-        case 1390: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next; // IN (C) T:3
-        case 1391: _z80_in(cpu,cpu->dlatch);goto fetch_next; // IN (C) T:4
-        case 1392: _iowrite(cpu->bc,0);goto step_next; // OUT (C),0 T:1
-        case 1393: _wait();cpu->wz=cpu->bc+1;goto step_next; // OUT (C),0 T:2
-        case 1394: goto step_next; // OUT (C),0 T:3
-        case 1395: goto fetch_next; // OUT (C),0 T:4
-        case 1396: goto step_next; // SBC HL,SP T:1
-        case 1397: goto step_next; // SBC HL,SP T:2
-        case 1398: goto step_next; // SBC HL,SP T:3
-        case 1399: goto step_next; // SBC HL,SP T:4
-        case 1400: goto step_next; // SBC HL,SP T:5
-        case 1401: goto step_next; // SBC HL,SP T:6
-        case 1402: goto fetch_next; // SBC HL,SP T:7
-        case 1403: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),SP T:1
-        case 1404: cpu->wzl=_gd();goto step_next; // LD (nn),SP T:2
-        case 1405: goto step_next; // LD (nn),SP T:3
-        case 1406: _wait();_mread(cpu->pc++);goto step_next; // LD (nn),SP T:4
-        case 1407: cpu->wzh=_gd();goto step_next; // LD (nn),SP T:5
-        case 1408: goto step_next; // LD (nn),SP T:6
-        case 1409: _wait();_mwrite(cpu->wz++,cpu->spl);goto step_next; // LD (nn),SP T:7
-        case 1410: goto step_next; // LD (nn),SP T:8
-        case 1411: goto step_next; // LD (nn),SP T:9
-        case 1412: _wait();_mwrite(cpu->wz,cpu->sph);goto step_next; // LD (nn),SP T:10
-        case 1413: goto step_next; // LD (nn),SP T:11
-        case 1414: goto fetch_next; // LD (nn),SP T:12
+        case 1378: _wait();_mread(cpu->hl);_step(); // RLD T:1
+        case 1379: cpu->dlatch=_gd();_step(); // RLD T:2
+        case 1380: cpu->dlatch=_z80_rld(cpu,cpu->dlatch);_step(); // RLD T:3
+        case 1381: _step(); // RLD T:4
+        case 1382: _step(); // RLD T:5
+        case 1383: _step(); // RLD T:6
+        case 1384: _step(); // RLD T:7
+        case 1385: _wait();_mwrite(cpu->hl,cpu->dlatch);cpu->wz=cpu->hl+1;_step(); // RLD T:8
+        case 1386: _step(); // RLD T:9
+        case 1387: _fetch(); // RLD T:10
+        case 1388: _step(); // IN (C) T:1
+        case 1389: _wait();_ioread(cpu->bc);_step(); // IN (C) T:2
+        case 1390: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;_step(); // IN (C) T:3
+        case 1391: _z80_in(cpu,cpu->dlatch);_fetch(); // IN (C) T:4
+        case 1392: _iowrite(cpu->bc,0);_step(); // OUT (C),0 T:1
+        case 1393: _wait();cpu->wz=cpu->bc+1;_step(); // OUT (C),0 T:2
+        case 1394: _step(); // OUT (C),0 T:3
+        case 1395: _fetch(); // OUT (C),0 T:4
+        case 1396: _step(); // SBC HL,SP T:1
+        case 1397: _step(); // SBC HL,SP T:2
+        case 1398: _step(); // SBC HL,SP T:3
+        case 1399: _step(); // SBC HL,SP T:4
+        case 1400: _step(); // SBC HL,SP T:5
+        case 1401: _step(); // SBC HL,SP T:6
+        case 1402: _fetch(); // SBC HL,SP T:7
+        case 1403: _wait();_mread(cpu->pc++);_step(); // LD (nn),SP T:1
+        case 1404: cpu->wzl=_gd();_step(); // LD (nn),SP T:2
+        case 1405: _step(); // LD (nn),SP T:3
+        case 1406: _wait();_mread(cpu->pc++);_step(); // LD (nn),SP T:4
+        case 1407: cpu->wzh=_gd();_step(); // LD (nn),SP T:5
+        case 1408: _step(); // LD (nn),SP T:6
+        case 1409: _wait();_mwrite(cpu->wz++,cpu->spl);_step(); // LD (nn),SP T:7
+        case 1410: _step(); // LD (nn),SP T:8
+        case 1411: _step(); // LD (nn),SP T:9
+        case 1412: _wait();_mwrite(cpu->wz,cpu->sph);_step(); // LD (nn),SP T:10
+        case 1413: _step(); // LD (nn),SP T:11
+        case 1414: _fetch(); // LD (nn),SP T:12
         case 1415: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_to; // RETI T:6
-        case 1416: goto step_next; // IN A,(C) T:1
-        case 1417: _wait();_ioread(cpu->bc);goto step_next; // IN A,(C) T:2
-        case 1418: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;goto step_next; // IN A,(C) T:3
-        case 1419: cpu->a=_z80_in(cpu,cpu->dlatch);goto fetch_next; // IN A,(C) T:4
-        case 1420: _iowrite(cpu->bc,cpu->a);goto step_next; // OUT (C),A T:1
-        case 1421: _wait();cpu->wz=cpu->bc+1;goto step_next; // OUT (C),A T:2
-        case 1422: goto step_next; // OUT (C),A T:3
-        case 1423: goto fetch_next; // OUT (C),A T:4
-        case 1424: goto step_next; // ADC HL,SP T:1
-        case 1425: goto step_next; // ADC HL,SP T:2
-        case 1426: goto step_next; // ADC HL,SP T:3
-        case 1427: goto step_next; // ADC HL,SP T:4
-        case 1428: goto step_next; // ADC HL,SP T:5
-        case 1429: goto step_next; // ADC HL,SP T:6
-        case 1430: goto fetch_next; // ADC HL,SP T:7
-        case 1431: _wait();_mread(cpu->pc++);goto step_next; // LD SP,(nn) T:1
-        case 1432: cpu->wzl=_gd();goto step_next; // LD SP,(nn) T:2
-        case 1433: goto step_next; // LD SP,(nn) T:3
-        case 1434: _wait();_mread(cpu->pc++);goto step_next; // LD SP,(nn) T:4
-        case 1435: cpu->wzh=_gd();goto step_next; // LD SP,(nn) T:5
-        case 1436: goto step_next; // LD SP,(nn) T:6
-        case 1437: _wait();_mread(cpu->wz++);goto step_next; // LD SP,(nn) T:7
-        case 1438: cpu->spl=_gd();goto step_next; // LD SP,(nn) T:8
-        case 1439: goto step_next; // LD SP,(nn) T:9
-        case 1440: _wait();_mread(cpu->wz);goto step_next; // LD SP,(nn) T:10
-        case 1441: cpu->sph=_gd();goto step_next; // LD SP,(nn) T:11
-        case 1442: goto fetch_next; // LD SP,(nn) T:12
+        case 1416: _step(); // IN A,(C) T:1
+        case 1417: _wait();_ioread(cpu->bc);_step(); // IN A,(C) T:2
+        case 1418: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;_step(); // IN A,(C) T:3
+        case 1419: cpu->a=_z80_in(cpu,cpu->dlatch);_fetch(); // IN A,(C) T:4
+        case 1420: _iowrite(cpu->bc,cpu->a);_step(); // OUT (C),A T:1
+        case 1421: _wait();cpu->wz=cpu->bc+1;_step(); // OUT (C),A T:2
+        case 1422: _step(); // OUT (C),A T:3
+        case 1423: _fetch(); // OUT (C),A T:4
+        case 1424: _step(); // ADC HL,SP T:1
+        case 1425: _step(); // ADC HL,SP T:2
+        case 1426: _step(); // ADC HL,SP T:3
+        case 1427: _step(); // ADC HL,SP T:4
+        case 1428: _step(); // ADC HL,SP T:5
+        case 1429: _step(); // ADC HL,SP T:6
+        case 1430: _fetch(); // ADC HL,SP T:7
+        case 1431: _wait();_mread(cpu->pc++);_step(); // LD SP,(nn) T:1
+        case 1432: cpu->wzl=_gd();_step(); // LD SP,(nn) T:2
+        case 1433: _step(); // LD SP,(nn) T:3
+        case 1434: _wait();_mread(cpu->pc++);_step(); // LD SP,(nn) T:4
+        case 1435: cpu->wzh=_gd();_step(); // LD SP,(nn) T:5
+        case 1436: _step(); // LD SP,(nn) T:6
+        case 1437: _wait();_mread(cpu->wz++);_step(); // LD SP,(nn) T:7
+        case 1438: cpu->spl=_gd();_step(); // LD SP,(nn) T:8
+        case 1439: _step(); // LD SP,(nn) T:9
+        case 1440: _wait();_mread(cpu->wz);_step(); // LD SP,(nn) T:10
+        case 1441: cpu->sph=_gd();_step(); // LD SP,(nn) T:11
+        case 1442: _fetch(); // LD SP,(nn) T:12
         case 1443: pins=_z80_fetch(cpu,pins);cpu->iff1=cpu->iff2;goto step_to; // RETI T:6
-        case 1444: _wait();_mread(cpu->hl++);goto step_next; // LDI T:1
-        case 1445: cpu->dlatch=_gd();goto step_next; // LDI T:2
-        case 1446: goto step_next; // LDI T:3
-        case 1447: _wait();_mwrite(cpu->de++,cpu->dlatch);goto step_next; // LDI T:4
-        case 1448: goto step_next; // LDI T:5
-        case 1449: _z80_ldi_ldd(cpu,cpu->dlatch);goto step_next; // LDI T:6
-        case 1450: goto step_next; // LDI T:7
-        case 1451: goto fetch_next; // LDI T:8
-        case 1452: _wait();_mread(cpu->hl++);goto step_next; // CPI T:1
-        case 1453: cpu->dlatch=_gd();goto step_next; // CPI T:2
-        case 1454: cpu->wz++;_z80_cpi_cpd(cpu,cpu->dlatch);goto step_next; // CPI T:3
-        case 1455: goto step_next; // CPI T:4
-        case 1456: goto step_next; // CPI T:5
-        case 1457: goto step_next; // CPI T:6
-        case 1458: goto step_next; // CPI T:7
-        case 1459: goto fetch_next; // CPI T:8
-        case 1460: goto step_next; // INI T:1
-        case 1461: goto step_next; // INI T:2
-        case 1462: _wait();_ioread(cpu->bc);goto step_next; // INI T:3
-        case 1463: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;cpu->b--;;goto step_next; // INI T:4
-        case 1464: goto step_next; // INI T:5
-        case 1465: _wait();_mwrite(cpu->hl++,cpu->dlatch);_z80_ini_ind(cpu,cpu->dlatch,cpu->c+1);goto step_next; // INI T:6
-        case 1466: goto step_next; // INI T:7
-        case 1467: goto fetch_next; // INI T:8
-        case 1468: goto step_next; // OUTI T:1
-        case 1469: _wait();_mread(cpu->hl++);goto step_next; // OUTI T:2
-        case 1470: cpu->dlatch=_gd();cpu->b--;goto step_next; // OUTI T:3
-        case 1471: goto step_next; // OUTI T:4
-        case 1472: _iowrite(cpu->bc,cpu->dlatch);goto step_next; // OUTI T:5
-        case 1473: _wait();cpu->wz=cpu->bc+1;_z80_outi_outd(cpu,cpu->dlatch);goto step_next; // OUTI T:6
-        case 1474: goto step_next; // OUTI T:7
-        case 1475: goto fetch_next; // OUTI T:8
-        case 1476: _wait();_mread(cpu->hl--);goto step_next; // LDD T:1
-        case 1477: cpu->dlatch=_gd();goto step_next; // LDD T:2
-        case 1478: goto step_next; // LDD T:3
-        case 1479: _wait();_mwrite(cpu->de--,cpu->dlatch);goto step_next; // LDD T:4
-        case 1480: goto step_next; // LDD T:5
-        case 1481: _z80_ldi_ldd(cpu,cpu->dlatch);goto step_next; // LDD T:6
-        case 1482: goto step_next; // LDD T:7
-        case 1483: goto fetch_next; // LDD T:8
-        case 1484: _wait();_mread(cpu->hl--);goto step_next; // CPD T:1
-        case 1485: cpu->dlatch=_gd();goto step_next; // CPD T:2
-        case 1486: cpu->wz--;_z80_cpi_cpd(cpu,cpu->dlatch);goto step_next; // CPD T:3
-        case 1487: goto step_next; // CPD T:4
-        case 1488: goto step_next; // CPD T:5
-        case 1489: goto step_next; // CPD T:6
-        case 1490: goto step_next; // CPD T:7
-        case 1491: goto fetch_next; // CPD T:8
-        case 1492: goto step_next; // IND T:1
-        case 1493: goto step_next; // IND T:2
-        case 1494: _wait();_ioread(cpu->bc);goto step_next; // IND T:3
-        case 1495: cpu->dlatch=_gd();cpu->wz=cpu->bc-1;cpu->b--;;goto step_next; // IND T:4
-        case 1496: goto step_next; // IND T:5
-        case 1497: _wait();_mwrite(cpu->hl--,cpu->dlatch);_z80_ini_ind(cpu,cpu->dlatch,cpu->c-1);goto step_next; // IND T:6
-        case 1498: goto step_next; // IND T:7
-        case 1499: goto fetch_next; // IND T:8
-        case 1500: goto step_next; // OUTD T:1
-        case 1501: _wait();_mread(cpu->hl--);goto step_next; // OUTD T:2
-        case 1502: cpu->dlatch=_gd();cpu->b--;goto step_next; // OUTD T:3
-        case 1503: goto step_next; // OUTD T:4
-        case 1504: _iowrite(cpu->bc,cpu->dlatch);goto step_next; // OUTD T:5
-        case 1505: _wait();cpu->wz=cpu->bc-1;_z80_outi_outd(cpu,cpu->dlatch);goto step_next; // OUTD T:6
-        case 1506: goto step_next; // OUTD T:7
-        case 1507: goto fetch_next; // OUTD T:8
-        case 1508: _wait();_mread(cpu->hl++);goto step_next; // LDIR T:1
-        case 1509: cpu->dlatch=_gd();goto step_next; // LDIR T:2
-        case 1510: goto step_next; // LDIR T:3
-        case 1511: _wait();_mwrite(cpu->de++,cpu->dlatch);goto step_next; // LDIR T:4
-        case 1512: goto step_next; // LDIR T:5
-        case 1513: if(!_z80_ldi_ldd(cpu,cpu->dlatch)){_skip(5);};goto step_next; // LDIR T:6
-        case 1514: goto step_next; // LDIR T:7
-        case 1515: cpu->wz=--cpu->pc;--cpu->pc;;goto step_next; // LDIR T:8
-        case 1516: goto step_next; // LDIR T:9
-        case 1517: goto step_next; // LDIR T:10
-        case 1518: goto step_next; // LDIR T:11
-        case 1519: goto step_next; // LDIR T:12
-        case 1520: goto fetch_next; // LDIR T:13
-        case 1521: _wait();_mread(cpu->hl++);goto step_next; // CPIR T:1
-        case 1522: cpu->dlatch=_gd();goto step_next; // CPIR T:2
-        case 1523: cpu->wz++;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_skip(5);};goto step_next; // CPIR T:3
-        case 1524: goto step_next; // CPIR T:4
-        case 1525: goto step_next; // CPIR T:5
-        case 1526: goto step_next; // CPIR T:6
-        case 1527: goto step_next; // CPIR T:7
-        case 1528: cpu->wz=--cpu->pc;--cpu->pc;goto step_next; // CPIR T:8
-        case 1529: goto step_next; // CPIR T:9
-        case 1530: goto step_next; // CPIR T:10
-        case 1531: goto step_next; // CPIR T:11
-        case 1532: goto step_next; // CPIR T:12
-        case 1533: goto fetch_next; // CPIR T:13
-        case 1534: goto step_next; // INIR T:1
-        case 1535: goto step_next; // INIR T:2
-        case 1536: _wait();_ioread(cpu->bc);goto step_next; // INIR T:3
-        case 1537: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;cpu->b--;;goto step_next; // INIR T:4
-        case 1538: goto step_next; // INIR T:5
-        case 1539: _wait();_mwrite(cpu->hl++,cpu->dlatch);if (!_z80_ini_ind(cpu,cpu->dlatch,cpu->c+1)){_skip(5);};goto step_next; // INIR T:6
-        case 1540: goto step_next; // INIR T:7
-        case 1541: cpu->wz=--cpu->pc;--cpu->pc;goto step_next; // INIR T:8
-        case 1542: goto step_next; // INIR T:9
-        case 1543: goto step_next; // INIR T:10
-        case 1544: goto step_next; // INIR T:11
-        case 1545: goto step_next; // INIR T:12
-        case 1546: goto fetch_next; // INIR T:13
-        case 1547: goto step_next; // OTIR T:1
-        case 1548: _wait();_mread(cpu->hl++);goto step_next; // OTIR T:2
-        case 1549: cpu->dlatch=_gd();cpu->b--;goto step_next; // OTIR T:3
-        case 1550: goto step_next; // OTIR T:4
-        case 1551: _iowrite(cpu->bc,cpu->dlatch);goto step_next; // OTIR T:5
-        case 1552: _wait();cpu->wz=cpu->bc+1;if(!_z80_outi_outd(cpu,cpu->dlatch)){_skip(5);};goto step_next; // OTIR T:6
-        case 1553: goto step_next; // OTIR T:7
-        case 1554: cpu->wz=--cpu->pc;--cpu->pc;goto step_next; // OTIR T:8
-        case 1555: goto step_next; // OTIR T:9
-        case 1556: goto step_next; // OTIR T:10
-        case 1557: goto step_next; // OTIR T:11
-        case 1558: goto step_next; // OTIR T:12
-        case 1559: goto fetch_next; // OTIR T:13
-        case 1560: _wait();_mread(cpu->hl--);goto step_next; // LDDR T:1
-        case 1561: cpu->dlatch=_gd();goto step_next; // LDDR T:2
-        case 1562: goto step_next; // LDDR T:3
-        case 1563: _wait();_mwrite(cpu->de--,cpu->dlatch);goto step_next; // LDDR T:4
-        case 1564: goto step_next; // LDDR T:5
-        case 1565: if(!_z80_ldi_ldd(cpu,cpu->dlatch)){_skip(5);};goto step_next; // LDDR T:6
-        case 1566: goto step_next; // LDDR T:7
-        case 1567: cpu->wz=--cpu->pc;--cpu->pc;;goto step_next; // LDDR T:8
-        case 1568: goto step_next; // LDDR T:9
-        case 1569: goto step_next; // LDDR T:10
-        case 1570: goto step_next; // LDDR T:11
-        case 1571: goto step_next; // LDDR T:12
-        case 1572: goto fetch_next; // LDDR T:13
-        case 1573: _wait();_mread(cpu->hl--);goto step_next; // CPDR T:1
-        case 1574: cpu->dlatch=_gd();goto step_next; // CPDR T:2
-        case 1575: cpu->wz--;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_skip(5);};goto step_next; // CPDR T:3
-        case 1576: goto step_next; // CPDR T:4
-        case 1577: goto step_next; // CPDR T:5
-        case 1578: goto step_next; // CPDR T:6
-        case 1579: goto step_next; // CPDR T:7
-        case 1580: cpu->wz=--cpu->pc;--cpu->pc;goto step_next; // CPDR T:8
-        case 1581: goto step_next; // CPDR T:9
-        case 1582: goto step_next; // CPDR T:10
-        case 1583: goto step_next; // CPDR T:11
-        case 1584: goto step_next; // CPDR T:12
-        case 1585: goto fetch_next; // CPDR T:13
-        case 1586: goto step_next; // INDR T:1
-        case 1587: goto step_next; // INDR T:2
-        case 1588: _wait();_ioread(cpu->bc);goto step_next; // INDR T:3
-        case 1589: cpu->dlatch=_gd();cpu->wz=cpu->bc-1;cpu->b--;;goto step_next; // INDR T:4
-        case 1590: goto step_next; // INDR T:5
-        case 1591: _wait();_mwrite(cpu->hl--,cpu->dlatch);if (!_z80_ini_ind(cpu,cpu->dlatch,cpu->c-1)){_skip(5);};goto step_next; // INDR T:6
-        case 1592: goto step_next; // INDR T:7
-        case 1593: cpu->wz=--cpu->pc;--cpu->pc;goto step_next; // INDR T:8
-        case 1594: goto step_next; // INDR T:9
-        case 1595: goto step_next; // INDR T:10
-        case 1596: goto step_next; // INDR T:11
-        case 1597: goto step_next; // INDR T:12
-        case 1598: goto fetch_next; // INDR T:13
-        case 1599: goto step_next; // OTDR T:1
-        case 1600: _wait();_mread(cpu->hl--);goto step_next; // OTDR T:2
-        case 1601: cpu->dlatch=_gd();cpu->b--;goto step_next; // OTDR T:3
-        case 1602: goto step_next; // OTDR T:4
-        case 1603: _iowrite(cpu->bc,cpu->dlatch);goto step_next; // OTDR T:5
-        case 1604: _wait();cpu->wz=cpu->bc-1;if(!_z80_outi_outd(cpu,cpu->dlatch)){_skip(5);};goto step_next; // OTDR T:6
-        case 1605: goto step_next; // OTDR T:7
-        case 1606: cpu->wz=--cpu->pc;--cpu->pc;goto step_next; // OTDR T:8
-        case 1607: goto step_next; // OTDR T:9
-        case 1608: goto step_next; // OTDR T:10
-        case 1609: goto step_next; // OTDR T:11
-        case 1610: goto step_next; // OTDR T:12
-        case 1611: goto fetch_next; // OTDR T:13
-        case 1612: {uint8_t z=cpu->opcode&7;_z80_cb_action(cpu,z,z);};goto fetch_next; // cb T:0
-        case 1613: goto step_next; // cbhl T:0
-        case 1614: _wait();_mread(cpu->hl);goto step_next; // cbhl T:1
-        case 1615: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,6)){_skip(3);};goto step_next; // cbhl T:2
-        case 1616: goto step_next; // cbhl T:3
-        case 1617: goto step_next; // cbhl T:4
-        case 1618: _wait();_mwrite(cpu->hl,cpu->dlatch);goto step_next; // cbhl T:5
-        case 1619: goto step_next; // cbhl T:6
-        case 1620: goto fetch_next; // cbhl T:7
-        case 1621: _wait();_mread(cpu->pc++);goto step_next; // ddfdcb T:0
-        case 1622: _z80_ddfdcb_addr(cpu,pins);goto step_next; // ddfdcb T:1
-        case 1623: goto step_next; // ddfdcb T:2
-        case 1624: _wait();_mread(cpu->pc++);goto step_next; // ddfdcb T:3
-        case 1625: cpu->opcode=_gd();goto step_next; // ddfdcb T:4
-        case 1626: goto step_next; // ddfdcb T:5
-        case 1627: goto step_next; // ddfdcb T:6
-        case 1628: goto step_next; // ddfdcb T:7
-        case 1629: _wait();_mread(cpu->addr);goto step_next; // ddfdcb T:8
-        case 1630: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_skip(3);};goto step_next; // ddfdcb T:9
-        case 1631: goto step_next; // ddfdcb T:10
-        case 1632: goto step_next; // ddfdcb T:11
-        case 1633: _wait();_mwrite(cpu->addr,cpu->dlatch);goto step_next; // ddfdcb T:12
-        case 1634: goto step_next; // ddfdcb T:13
-        case 1635: goto fetch_next; // ddfdcb T:14
-        case 1636: cpu->iff1=cpu->iff2=false;goto step_next; // int_im0 T:0
-        case 1637: pins|=(Z80_M1|Z80_IORQ);goto step_next; // int_im0 T:1
-        case 1638: _wait();cpu->opcode=_z80_get_db(pins);goto step_next; // int_im0 T:2
-        case 1639: pins=_z80_refresh(cpu,pins);goto step_next; // int_im0 T:3
-        case 1640: cpu->step=cpu->opcode; cpu->addr=cpu->hl;goto step_next; // int_im0 T:4
-        case 1641: goto fetch_next; // int_im0 T:5
-        case 1642: cpu->iff1=cpu->iff2=false;goto step_next; // int_im1 T:0
-        case 1643: pins|=(Z80_M1|Z80_IORQ);goto step_next; // int_im1 T:1
-        case 1644: _wait();goto step_next; // int_im1 T:2
-        case 1645: pins=_z80_refresh(cpu,pins);goto step_next; // int_im1 T:3
-        case 1646: goto step_next; // int_im1 T:4
-        case 1647: goto step_next; // int_im1 T:5
-        case 1648: goto step_next; // int_im1 T:6
-        case 1649: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // int_im1 T:7
-        case 1650: goto step_next; // int_im1 T:8
-        case 1651: goto step_next; // int_im1 T:9
-        case 1652: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=cpu->pc=0x0038;goto step_next; // int_im1 T:10
-        case 1653: goto step_next; // int_im1 T:11
-        case 1654: goto fetch_next; // int_im1 T:12
-        case 1655: cpu->iff1=cpu->iff2=false;goto step_next; // int_im2 T:0
-        case 1656: pins|=(Z80_M1|Z80_IORQ);goto step_next; // int_im2 T:1
-        case 1657: _wait();cpu->dlatch=_z80_get_db(pins);goto step_next; // int_im2 T:2
-        case 1658: pins=_z80_refresh(cpu,pins);goto step_next; // int_im2 T:3
-        case 1659: goto step_next; // int_im2 T:4
-        case 1660: goto step_next; // int_im2 T:5
-        case 1661: goto step_next; // int_im2 T:6
-        case 1662: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // int_im2 T:7
-        case 1663: goto step_next; // int_im2 T:8
-        case 1664: goto step_next; // int_im2 T:9
-        case 1665: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wzl=cpu->dlatch;cpu->wzh=cpu->i;goto step_next; // int_im2 T:10
-        case 1666: goto step_next; // int_im2 T:11
-        case 1667: goto step_next; // int_im2 T:12
-        case 1668: _wait();_mread(cpu->wz++);goto step_next; // int_im2 T:13
-        case 1669: cpu->dlatch=_gd();goto step_next; // int_im2 T:14
-        case 1670: goto step_next; // int_im2 T:15
-        case 1671: _wait();_mread(cpu->wz);goto step_next; // int_im2 T:16
-        case 1672: cpu->wzh=_gd();cpu->wzl=cpu->dlatch;cpu->pc=cpu->wz;goto step_next; // int_im2 T:17
-        case 1673: goto fetch_next; // int_im2 T:18
-        case 1674: _wait();cpu->iff1=false;goto step_next; // nmi T:0
-        case 1675: pins=_z80_refresh(cpu,pins);goto step_next; // nmi T:1
-        case 1676: goto step_next; // nmi T:2
-        case 1677: goto step_next; // nmi T:3
-        case 1678: goto step_next; // nmi T:4
-        case 1679: _wait();_mwrite(--cpu->sp,cpu->pch);goto step_next; // nmi T:5
-        case 1680: goto step_next; // nmi T:6
-        case 1681: goto step_next; // nmi T:7
-        case 1682: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=cpu->pc=0x0066;goto step_next; // nmi T:8
-        case 1683: goto step_next; // nmi T:9
-        case 1684: goto fetch_next; // nmi T:10
+        case 1444: _wait();_mread(cpu->hl++);_step(); // LDI T:1
+        case 1445: cpu->dlatch=_gd();_step(); // LDI T:2
+        case 1446: _step(); // LDI T:3
+        case 1447: _wait();_mwrite(cpu->de++,cpu->dlatch);_step(); // LDI T:4
+        case 1448: _step(); // LDI T:5
+        case 1449: _z80_ldi_ldd(cpu,cpu->dlatch);_step(); // LDI T:6
+        case 1450: _step(); // LDI T:7
+        case 1451: _fetch(); // LDI T:8
+        case 1452: _wait();_mread(cpu->hl++);_step(); // CPI T:1
+        case 1453: cpu->dlatch=_gd();_step(); // CPI T:2
+        case 1454: cpu->wz++;_z80_cpi_cpd(cpu,cpu->dlatch);_step(); // CPI T:3
+        case 1455: _step(); // CPI T:4
+        case 1456: _step(); // CPI T:5
+        case 1457: _step(); // CPI T:6
+        case 1458: _step(); // CPI T:7
+        case 1459: _fetch(); // CPI T:8
+        case 1460: _step(); // INI T:1
+        case 1461: _step(); // INI T:2
+        case 1462: _wait();_ioread(cpu->bc);_step(); // INI T:3
+        case 1463: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;cpu->b--;;_step(); // INI T:4
+        case 1464: _step(); // INI T:5
+        case 1465: _wait();_mwrite(cpu->hl++,cpu->dlatch);_z80_ini_ind(cpu,cpu->dlatch,cpu->c+1);_step(); // INI T:6
+        case 1466: _step(); // INI T:7
+        case 1467: _fetch(); // INI T:8
+        case 1468: _step(); // OUTI T:1
+        case 1469: _wait();_mread(cpu->hl++);_step(); // OUTI T:2
+        case 1470: cpu->dlatch=_gd();cpu->b--;_step(); // OUTI T:3
+        case 1471: _step(); // OUTI T:4
+        case 1472: _iowrite(cpu->bc,cpu->dlatch);_step(); // OUTI T:5
+        case 1473: _wait();cpu->wz=cpu->bc+1;_z80_outi_outd(cpu,cpu->dlatch);_step(); // OUTI T:6
+        case 1474: _step(); // OUTI T:7
+        case 1475: _fetch(); // OUTI T:8
+        case 1476: _wait();_mread(cpu->hl--);_step(); // LDD T:1
+        case 1477: cpu->dlatch=_gd();_step(); // LDD T:2
+        case 1478: _step(); // LDD T:3
+        case 1479: _wait();_mwrite(cpu->de--,cpu->dlatch);_step(); // LDD T:4
+        case 1480: _step(); // LDD T:5
+        case 1481: _z80_ldi_ldd(cpu,cpu->dlatch);_step(); // LDD T:6
+        case 1482: _step(); // LDD T:7
+        case 1483: _fetch(); // LDD T:8
+        case 1484: _wait();_mread(cpu->hl--);_step(); // CPD T:1
+        case 1485: cpu->dlatch=_gd();_step(); // CPD T:2
+        case 1486: cpu->wz--;_z80_cpi_cpd(cpu,cpu->dlatch);_step(); // CPD T:3
+        case 1487: _step(); // CPD T:4
+        case 1488: _step(); // CPD T:5
+        case 1489: _step(); // CPD T:6
+        case 1490: _step(); // CPD T:7
+        case 1491: _fetch(); // CPD T:8
+        case 1492: _step(); // IND T:1
+        case 1493: _step(); // IND T:2
+        case 1494: _wait();_ioread(cpu->bc);_step(); // IND T:3
+        case 1495: cpu->dlatch=_gd();cpu->wz=cpu->bc-1;cpu->b--;;_step(); // IND T:4
+        case 1496: _step(); // IND T:5
+        case 1497: _wait();_mwrite(cpu->hl--,cpu->dlatch);_z80_ini_ind(cpu,cpu->dlatch,cpu->c-1);_step(); // IND T:6
+        case 1498: _step(); // IND T:7
+        case 1499: _fetch(); // IND T:8
+        case 1500: _step(); // OUTD T:1
+        case 1501: _wait();_mread(cpu->hl--);_step(); // OUTD T:2
+        case 1502: cpu->dlatch=_gd();cpu->b--;_step(); // OUTD T:3
+        case 1503: _step(); // OUTD T:4
+        case 1504: _iowrite(cpu->bc,cpu->dlatch);_step(); // OUTD T:5
+        case 1505: _wait();cpu->wz=cpu->bc-1;_z80_outi_outd(cpu,cpu->dlatch);_step(); // OUTD T:6
+        case 1506: _step(); // OUTD T:7
+        case 1507: _fetch(); // OUTD T:8
+        case 1508: _wait();_mread(cpu->hl++);_step(); // LDIR T:1
+        case 1509: cpu->dlatch=_gd();_step(); // LDIR T:2
+        case 1510: _step(); // LDIR T:3
+        case 1511: _wait();_mwrite(cpu->de++,cpu->dlatch);_step(); // LDIR T:4
+        case 1512: _step(); // LDIR T:5
+        case 1513: if(!_z80_ldi_ldd(cpu,cpu->dlatch)){_goto(1514+5);};_step(); // LDIR T:6
+        case 1514: _step(); // LDIR T:7
+        case 1515: cpu->wz=--cpu->pc;--cpu->pc;;_step(); // LDIR T:8
+        case 1516: _step(); // LDIR T:9
+        case 1517: _step(); // LDIR T:10
+        case 1518: _step(); // LDIR T:11
+        case 1519: _step(); // LDIR T:12
+        case 1520: _fetch(); // LDIR T:13
+        case 1521: _wait();_mread(cpu->hl++);_step(); // CPIR T:1
+        case 1522: cpu->dlatch=_gd();_step(); // CPIR T:2
+        case 1523: cpu->wz++;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_goto(1524+5);};_step(); // CPIR T:3
+        case 1524: _step(); // CPIR T:4
+        case 1525: _step(); // CPIR T:5
+        case 1526: _step(); // CPIR T:6
+        case 1527: _step(); // CPIR T:7
+        case 1528: cpu->wz=--cpu->pc;--cpu->pc;_step(); // CPIR T:8
+        case 1529: _step(); // CPIR T:9
+        case 1530: _step(); // CPIR T:10
+        case 1531: _step(); // CPIR T:11
+        case 1532: _step(); // CPIR T:12
+        case 1533: _fetch(); // CPIR T:13
+        case 1534: _step(); // INIR T:1
+        case 1535: _step(); // INIR T:2
+        case 1536: _wait();_ioread(cpu->bc);_step(); // INIR T:3
+        case 1537: cpu->dlatch=_gd();cpu->wz=cpu->bc+1;cpu->b--;;_step(); // INIR T:4
+        case 1538: _step(); // INIR T:5
+        case 1539: _wait();_mwrite(cpu->hl++,cpu->dlatch);if (!_z80_ini_ind(cpu,cpu->dlatch,cpu->c+1)){_goto(1540+5);};_step(); // INIR T:6
+        case 1540: _step(); // INIR T:7
+        case 1541: cpu->wz=--cpu->pc;--cpu->pc;_step(); // INIR T:8
+        case 1542: _step(); // INIR T:9
+        case 1543: _step(); // INIR T:10
+        case 1544: _step(); // INIR T:11
+        case 1545: _step(); // INIR T:12
+        case 1546: _fetch(); // INIR T:13
+        case 1547: _step(); // OTIR T:1
+        case 1548: _wait();_mread(cpu->hl++);_step(); // OTIR T:2
+        case 1549: cpu->dlatch=_gd();cpu->b--;_step(); // OTIR T:3
+        case 1550: _step(); // OTIR T:4
+        case 1551: _iowrite(cpu->bc,cpu->dlatch);_step(); // OTIR T:5
+        case 1552: _wait();cpu->wz=cpu->bc+1;if(!_z80_outi_outd(cpu,cpu->dlatch)){_goto(1553+5);};_step(); // OTIR T:6
+        case 1553: _step(); // OTIR T:7
+        case 1554: cpu->wz=--cpu->pc;--cpu->pc;_step(); // OTIR T:8
+        case 1555: _step(); // OTIR T:9
+        case 1556: _step(); // OTIR T:10
+        case 1557: _step(); // OTIR T:11
+        case 1558: _step(); // OTIR T:12
+        case 1559: _fetch(); // OTIR T:13
+        case 1560: _wait();_mread(cpu->hl--);_step(); // LDDR T:1
+        case 1561: cpu->dlatch=_gd();_step(); // LDDR T:2
+        case 1562: _step(); // LDDR T:3
+        case 1563: _wait();_mwrite(cpu->de--,cpu->dlatch);_step(); // LDDR T:4
+        case 1564: _step(); // LDDR T:5
+        case 1565: if(!_z80_ldi_ldd(cpu,cpu->dlatch)){_goto(1566+5);};_step(); // LDDR T:6
+        case 1566: _step(); // LDDR T:7
+        case 1567: cpu->wz=--cpu->pc;--cpu->pc;;_step(); // LDDR T:8
+        case 1568: _step(); // LDDR T:9
+        case 1569: _step(); // LDDR T:10
+        case 1570: _step(); // LDDR T:11
+        case 1571: _step(); // LDDR T:12
+        case 1572: _fetch(); // LDDR T:13
+        case 1573: _wait();_mread(cpu->hl--);_step(); // CPDR T:1
+        case 1574: cpu->dlatch=_gd();_step(); // CPDR T:2
+        case 1575: cpu->wz--;if(!_z80_cpi_cpd(cpu,cpu->dlatch)){_goto(1576+5);};_step(); // CPDR T:3
+        case 1576: _step(); // CPDR T:4
+        case 1577: _step(); // CPDR T:5
+        case 1578: _step(); // CPDR T:6
+        case 1579: _step(); // CPDR T:7
+        case 1580: cpu->wz=--cpu->pc;--cpu->pc;_step(); // CPDR T:8
+        case 1581: _step(); // CPDR T:9
+        case 1582: _step(); // CPDR T:10
+        case 1583: _step(); // CPDR T:11
+        case 1584: _step(); // CPDR T:12
+        case 1585: _fetch(); // CPDR T:13
+        case 1586: _step(); // INDR T:1
+        case 1587: _step(); // INDR T:2
+        case 1588: _wait();_ioread(cpu->bc);_step(); // INDR T:3
+        case 1589: cpu->dlatch=_gd();cpu->wz=cpu->bc-1;cpu->b--;;_step(); // INDR T:4
+        case 1590: _step(); // INDR T:5
+        case 1591: _wait();_mwrite(cpu->hl--,cpu->dlatch);if (!_z80_ini_ind(cpu,cpu->dlatch,cpu->c-1)){_goto(1592+5);};_step(); // INDR T:6
+        case 1592: _step(); // INDR T:7
+        case 1593: cpu->wz=--cpu->pc;--cpu->pc;_step(); // INDR T:8
+        case 1594: _step(); // INDR T:9
+        case 1595: _step(); // INDR T:10
+        case 1596: _step(); // INDR T:11
+        case 1597: _step(); // INDR T:12
+        case 1598: _fetch(); // INDR T:13
+        case 1599: _step(); // OTDR T:1
+        case 1600: _wait();_mread(cpu->hl--);_step(); // OTDR T:2
+        case 1601: cpu->dlatch=_gd();cpu->b--;_step(); // OTDR T:3
+        case 1602: _step(); // OTDR T:4
+        case 1603: _iowrite(cpu->bc,cpu->dlatch);_step(); // OTDR T:5
+        case 1604: _wait();cpu->wz=cpu->bc-1;if(!_z80_outi_outd(cpu,cpu->dlatch)){_goto(1605+5);};_step(); // OTDR T:6
+        case 1605: _step(); // OTDR T:7
+        case 1606: cpu->wz=--cpu->pc;--cpu->pc;_step(); // OTDR T:8
+        case 1607: _step(); // OTDR T:9
+        case 1608: _step(); // OTDR T:10
+        case 1609: _step(); // OTDR T:11
+        case 1610: _step(); // OTDR T:12
+        case 1611: _fetch(); // OTDR T:13
+        case 1612: {uint8_t z=cpu->opcode&7;_z80_cb_action(cpu,z,z);};_fetch(); // cb T:0
+        case 1613: _step(); // cbhl T:0
+        case 1614: _wait();_mread(cpu->hl);_step(); // cbhl T:1
+        case 1615: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,6)){_goto(1616+3);};_step(); // cbhl T:2
+        case 1616: _step(); // cbhl T:3
+        case 1617: _step(); // cbhl T:4
+        case 1618: _wait();_mwrite(cpu->hl,cpu->dlatch);_step(); // cbhl T:5
+        case 1619: _step(); // cbhl T:6
+        case 1620: _fetch(); // cbhl T:7
+        case 1621: _wait();_mread(cpu->pc++);_step(); // ddfdcb T:0
+        case 1622: _z80_ddfdcb_addr(cpu,pins);_step(); // ddfdcb T:1
+        case 1623: _step(); // ddfdcb T:2
+        case 1624: _wait();_mread(cpu->pc++);_step(); // ddfdcb T:3
+        case 1625: cpu->opcode=_gd();_step(); // ddfdcb T:4
+        case 1626: _step(); // ddfdcb T:5
+        case 1627: _step(); // ddfdcb T:6
+        case 1628: _step(); // ddfdcb T:7
+        case 1629: _wait();_mread(cpu->addr);_step(); // ddfdcb T:8
+        case 1630: cpu->dlatch=_gd();if(!_z80_cb_action(cpu,6,cpu->opcode&7)){_goto(1631+3);};_step(); // ddfdcb T:9
+        case 1631: _step(); // ddfdcb T:10
+        case 1632: _step(); // ddfdcb T:11
+        case 1633: _wait();_mwrite(cpu->addr,cpu->dlatch);_step(); // ddfdcb T:12
+        case 1634: _step(); // ddfdcb T:13
+        case 1635: _fetch(); // ddfdcb T:14
+        case 1636: cpu->iff1=cpu->iff2=false;_step(); // int_im0 T:0
+        case 1637: pins|=(Z80_M1|Z80_IORQ);_step(); // int_im0 T:1
+        case 1638: _wait();cpu->opcode=_z80_get_db(pins);_step(); // int_im0 T:2
+        case 1639: pins=_z80_refresh(cpu,pins);_step(); // int_im0 T:3
+        case 1640: cpu->step=cpu->opcode; cpu->addr=cpu->hl;_step(); // int_im0 T:4
+        case 1641: _fetch(); // int_im0 T:5
+        case 1642: cpu->iff1=cpu->iff2=false;_step(); // int_im1 T:0
+        case 1643: pins|=(Z80_M1|Z80_IORQ);_step(); // int_im1 T:1
+        case 1644: _wait();_step(); // int_im1 T:2
+        case 1645: pins=_z80_refresh(cpu,pins);_step(); // int_im1 T:3
+        case 1646: _step(); // int_im1 T:4
+        case 1647: _step(); // int_im1 T:5
+        case 1648: _step(); // int_im1 T:6
+        case 1649: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // int_im1 T:7
+        case 1650: _step(); // int_im1 T:8
+        case 1651: _step(); // int_im1 T:9
+        case 1652: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=cpu->pc=0x0038;_step(); // int_im1 T:10
+        case 1653: _step(); // int_im1 T:11
+        case 1654: _fetch(); // int_im1 T:12
+        case 1655: cpu->iff1=cpu->iff2=false;_step(); // int_im2 T:0
+        case 1656: pins|=(Z80_M1|Z80_IORQ);_step(); // int_im2 T:1
+        case 1657: _wait();cpu->dlatch=_z80_get_db(pins);_step(); // int_im2 T:2
+        case 1658: pins=_z80_refresh(cpu,pins);_step(); // int_im2 T:3
+        case 1659: _step(); // int_im2 T:4
+        case 1660: _step(); // int_im2 T:5
+        case 1661: _step(); // int_im2 T:6
+        case 1662: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // int_im2 T:7
+        case 1663: _step(); // int_im2 T:8
+        case 1664: _step(); // int_im2 T:9
+        case 1665: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wzl=cpu->dlatch;cpu->wzh=cpu->i;_step(); // int_im2 T:10
+        case 1666: _step(); // int_im2 T:11
+        case 1667: _step(); // int_im2 T:12
+        case 1668: _wait();_mread(cpu->wz++);_step(); // int_im2 T:13
+        case 1669: cpu->dlatch=_gd();_step(); // int_im2 T:14
+        case 1670: _step(); // int_im2 T:15
+        case 1671: _wait();_mread(cpu->wz);_step(); // int_im2 T:16
+        case 1672: cpu->wzh=_gd();cpu->wzl=cpu->dlatch;cpu->pc=cpu->wz;_step(); // int_im2 T:17
+        case 1673: _fetch(); // int_im2 T:18
+        case 1674: _wait();cpu->iff1=false;_step(); // nmi T:0
+        case 1675: pins=_z80_refresh(cpu,pins);_step(); // nmi T:1
+        case 1676: _step(); // nmi T:2
+        case 1677: _step(); // nmi T:3
+        case 1678: _step(); // nmi T:4
+        case 1679: _wait();_mwrite(--cpu->sp,cpu->pch);_step(); // nmi T:5
+        case 1680: _step(); // nmi T:6
+        case 1681: _step(); // nmi T:7
+        case 1682: _wait();_mwrite(--cpu->sp,cpu->pcl);cpu->wz=cpu->pc=0x0066;_step(); // nmi T:8
+        case 1683: _step(); // nmi T:9
+        case 1684: _fetch(); // nmi T:10
         // %>
         //=== shared fetch machine cycle for non-DD/FD-prefixed ops
         case Z80_M1_T2: _wait(); cpu->opcode = _gd(); goto step_next;
