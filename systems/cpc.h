@@ -234,6 +234,7 @@ static void _cpc_bankswitch(uint8_t ram_config, uint8_t rom_enable, uint8_t rom_
 static int _cpc_fdc_seektrack(int drive, int track, void* user_data);
 static int _cpc_fdc_seeksector(int drive, int side, upd765_sectorinfo_t* inout_info, void* user_data);
 static int _cpc_fdc_read(int drive, int side, void* user_data, uint8_t* out_data);
+static int _cpc_fdc_write(int drive, int side, void* user_data, uint8_t data);
 static int _cpc_fdc_trackinfo(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info);
 static void _cpc_fdc_driveinfo(int drive, void* user_data, upd765_driveinfo_t* out_info);
 
@@ -302,6 +303,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         .seektrack_cb = _cpc_fdc_seektrack,
         .seeksector_cb = _cpc_fdc_seeksector,
         .read_cb = _cpc_fdc_read,
+        .write_cb = _cpc_fdc_write,
         .trackinfo_cb = _cpc_fdc_trackinfo,
         .driveinfo_cb = _cpc_fdc_driveinfo,
         .user_data = sys,
@@ -979,6 +981,15 @@ static int _cpc_fdc_read(int drive, int side, void* user_data, uint8_t* out_data
     if (0 == drive) {
         cpc_t* sys = (cpc_t*) user_data;
         return fdd_read(&sys->fdd, side, out_data);
+    } else {
+        return UPD765_RESULT_NOT_READY;
+    }
+}
+
+static int _cpc_fdc_write(int drive, int side, void* user_data, uint8_t data) {
+    if (0 == drive) {
+        cpc_t* sys = (cpc_t*) user_data;
+        return fdd_write(&sys->fdd, side, data);
     } else {
         return UPD765_RESULT_NOT_READY;
     }

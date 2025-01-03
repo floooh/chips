@@ -125,6 +125,8 @@ int fdd_seek_track(fdd_t* fdd, int track);
 int fdd_seek_sector(fdd_t* fdd, int side, uint8_t c, uint8_t h, uint8_t r, uint8_t n);
 // read the next byte from the seeked-to sector, return FDD_RESULT_*
 int fdd_read(fdd_t* fdd, int side, uint8_t* out_data);
+// write the next byte to the seeked-to sector, return FDD_RESULT_*
+int fdd_write(fdd_t* fdd, int side, uint8_t data);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -289,6 +291,27 @@ int fdd_read(fdd_t* fdd, int side, uint8_t* out_data) {
         return FDD_RESULT_NOT_FOUND;
     }
     *out_data = 0xFF;
+    return FDD_RESULT_NOT_READY;
+}
+
+int fdd_write(fdd_t* fdd, int side, uint8_t data) {
+    CHIPS_ASSERT(fdd && (side >= 0) && (side < FDD_MAX_SIDES));
+    if (fdd->has_disc & fdd->motor_on) {
+        fdd->cur_side = side;
+        const fdd_sector_t* sector = &fdd->disc.tracks[side][fdd->cur_track_index].sectors[fdd->cur_sector_index];
+        if (fdd->cur_sector_pos < sector->data_size) {
+            const int data_offset = sector->data_offset + fdd->cur_sector_pos;
+            fdd->data[data_offset] = data;
+            fdd->cur_sector_pos++;
+            if (fdd->cur_sector_pos < sector->data_size) {
+                return FDD_RESULT_SUCCESS;
+            }
+            else {
+                return FDD_RESULT_END_OF_SECTOR;
+            }
+        }
+        return FDD_RESULT_NOT_FOUND;
+    }
     return FDD_RESULT_NOT_READY;
 }
 
