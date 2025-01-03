@@ -337,6 +337,14 @@ void m6569_snapshot_onload(m6569_t* snapshot, m6569_t* sys);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#if defined(__GNUC__)
+#define _M6569_UNREACHABLE __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define _M6569_UNREACHABLE __assume(0)
+#else
+#define _M6569_UNREACHABLE
+#endif
+
 // valid register bits
 static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,     // mob 0..3 xy
@@ -811,10 +819,11 @@ static inline uint16_t _m6569_gunit_decode_mode3(m6569_t* vic) {
             "11": Color from bits 8-11 of c-data (top bits set)
     */
     switch ((bits>>6)&3) {
-        case 0:     return vic->gunit.bg[0]; break;
-        case 1:     return (vic->gunit.c_data>>4) & 0xF; break;
-        case 2:     return 0xFF00 | (vic->gunit.c_data & 0xF); break;
-        default:    return 0xFF00 | ((vic->gunit.c_data>>8) & 0xF); break;
+        case 0: return vic->gunit.bg[0]; break;
+        case 1: return (vic->gunit.c_data>>4) & 0xF; break;
+        case 2: return 0xFF00 | (vic->gunit.c_data & 0xF); break;
+        case 3: return 0xFF00 | ((vic->gunit.c_data>>8) & 0xF); break;
+        default: _M6569_UNREACHABLE;
     }
 }
 
@@ -1122,6 +1131,8 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
             case 2: bmc = _m6569_gunit_decode_mode2(vic); break;
             case 3: bmc = _m6569_gunit_decode_mode3(vic); break;
             case 4: bmc = _m6569_gunit_decode_mode4(vic); break;
+            case 5: case 6: case 7: break;  // illegal modes
+            default: _M6569_UNREACHABLE;
         }
         _m6569_test_mob_data_col(vic, bmc, sc);
         dst[i] = brd ? brd_color : _m6569_color_multiplex(bmc, sc, mdp);
@@ -1607,6 +1618,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, 4, pins);
             _m6569_bunit_end(vic);
             break;
+        default: _M6569_UNREACHABLE;
     }
     //-- main interrupt bit
     if (vic->reg.int_latch & vic->reg.int_mask & 0x0F) {

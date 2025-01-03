@@ -402,6 +402,14 @@ uint16_t m6502_pc(m6502_t* cpu);
     #define CHIPS_ASSERT(c) assert(c)
 #endif
 
+#if defined(__GNUC__)
+#define _M6502_UNREACHABLE __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define _M6502_UNREACHABLE __assume(0)
+#else
+#define _M6502_UNREACHABLE
+#endif
+
 /* register access functions */
 void m6502_set_a(m6502_t* cpu, uint8_t v) { cpu->A = v; }
 void m6502_set_x(m6502_t* cpu, uint8_t v) { cpu->X = v; }
@@ -3074,6 +3082,7 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
         case (0xFF<<3)|6: _FETCH();break;
         case (0xFF<<3)|7: assert(false);break;
     // %>
+        default: _M6502_UNREACHABLE;
     }
     M6510_SET_PORT(pins, c->io_pins);
     c->PINS = pins;
