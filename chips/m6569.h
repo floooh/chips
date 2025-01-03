@@ -533,7 +533,7 @@ static void _m6569_io_update_sunit(m6569_t* vic, size_t i, uint8_t mx, uint8_t m
     /* 1. The expansion flip flop is set as long as the bit in MxYE in register
         $d017 corresponding to the sprite is cleared.
     */
-    su->expand |= ~(mye & mask);
+    su->expand |= ~mye & mask;
 }
 
 // read chip registers
