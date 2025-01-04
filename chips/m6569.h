@@ -709,7 +709,8 @@ static void _m6569_write(m6569_t* vic, uint64_t pins) {
 /* start the graphics sequencer, this happens at the first g_access,
    the graphics sequencer must be delayed by xscroll
 */
-static inline void _m6569_gunit_rewind(m6569_t* vic, uint8_t xscroll) {
+static inline void _m6569_gunit_rewind(m6569_t* vic) {
+    const uint8_t xscroll = vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL;
     vic->gunit.count = xscroll;
     vic->gunit.shift = 0;
     vic->gunit.outp = 0;
@@ -1065,7 +1066,8 @@ static inline uint8_t _m6569_color_multiplex(uint16_t bmc, uint16_t sc, uint8_t 
 }
 
 // decode the next 8 pixels
-static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* dst, uint8_t hpos) {
+static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* dst) {
+    const uint8_t hpos = vic->rs.h_count;
     m6569_sprite_unit_t* su = &vic->sunit;
     if (su->disp_enabled != 0) {
         for (size_t i = 0; i < 8; i++) {
@@ -1126,8 +1128,9 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
 }
 
 /* decode the next 8 pixels as debug visualization */
-static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint8_t* dst, uint8_t hpos) {
-    _m6569_decode_pixels(vic, g_data, dst, hpos);
+static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint8_t* dst) {
+    _m6569_decode_pixels(vic, g_data, dst);
+    const uint8_t hpos = vic->rs.h_count;
     uint8_t c = 0;
     if (vic->rs.badline) {
         c |= 0x10;
@@ -1491,7 +1494,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
-            _m6569_gunit_rewind(vic, vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL);
+            _m6569_gunit_rewind(vic);
             _m6569_sunit_update_mcbase(vic);
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
@@ -1594,7 +1597,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         const size_t x = vic->rs.h_count;
         const size_t y = vic->rs.v_count;
         uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
-        _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
+        _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst);
     }
     else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
              (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
@@ -1602,7 +1605,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         const size_t x = vic->crt.x - vic->crt.vis_x0;
         const size_t y = vic->crt.y - vic->crt.vis_y0;
         uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
-        _m6569_decode_pixels(vic, g_data, dst, vic->rs.h_count);
+        _m6569_decode_pixels(vic, g_data, dst);
     }
     vic->vm.vmli = vic->vm.next_vmli;
     return pins;
