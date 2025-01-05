@@ -1544,6 +1544,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, (1<<0)|(1<<1), pins);
             break;
         case 58:
+            _m6569_rs_update_display_state(vic);
             _m6569_sunit_update_mc_disp_enable(vic);
             _m6569_p_access(vic, 0);
             _m6569_s_access(vic, 0);
@@ -1551,7 +1552,6 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, (1<<0)|(1<<1), pins);
             break;
         case 59:
-            _m6569_rs_update_display_state(vic);
             g_data = _m6569_s_i_access(vic, 0);
             _m6569_s_access(vic, 0);
             pins = _m6569_sunit_dma_aec(vic, (1<<0), pins);
