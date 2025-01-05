@@ -220,6 +220,7 @@ typedef struct {
     uint16_t v_count;
     uint16_t v_irqline;     // raster interrupt line, updated when ctrl_1 or raster is written
     uint16_t vc;            // 10-bit video counter
+    uint16_t next_vc;
     uint16_t vc_base;       // 10-bit video counter base
     uint8_t rc;             // 3-bit raster counter
     bool display_state;             // true: in display state, false: in idle state
@@ -411,7 +412,7 @@ static void _m6569_reset_raster_unit(m6569_raster_unit_t* r) {
     r->h_count = 0;
     r->v_count = 0;
     r->v_irqline = 0;
-    r->vc = r->vc_base = 0;
+    r->vc = r->next_vc = r->vc_base = 0;
     r->rc = 0;
     r->display_state = false;
     r->badline = false;
@@ -1266,7 +1267,7 @@ static inline void _m6569_rs_update_display_state(m6569_t* vic) {
     this phase, RC is also reset to zero.
 */
 static inline void _m6569_rs_rewind_vc_vmli_rc(m6569_t* vic) {
-    vic->rs.vc = vic->rs.vc_base;
+    vic->rs.vc = vic->rs.next_vc = vic->rs.vc_base;
     vic->vm.vmli = 0;
     vic->vm.next_vmli = 0;
     if (vic->rs.badline) {
@@ -1356,7 +1357,7 @@ static inline uint8_t _m6569_g_i_access(m6569_t* vic) {
             addr = ((vic->vm.line[vic->vm.vmli]&0xFF)<<3) | vic->rs.rc;
             addr = (addr | vic->mem.g_addr_or) & vic->mem.g_addr_and;
         }
-        vic->rs.vc = (vic->rs.vc + 1) & 0x3FF;          // VC is a 10-bit counter
+        vic->rs.next_vc = (vic->rs.vc + 1) & 0x3FF;          // VC is a 10-bit counter
         vic->vm.next_vmli = (vic->vm.vmli + 1) & 0x3F;  // VMLI is a 6-bit counter
         return (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
     } else {
@@ -1481,14 +1482,18 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         case 11:
             break;
         case 12:
+            pins = _m6569_ba(vic, pins);
+            break;
         case 13:
+            pins = _m6569_ba(vic, pins);
+            break;
         case 14:
             pins = _m6569_ba(vic, pins);
+            _m6569_rs_rewind_vc_vmli_rc(vic);
             break;
         case 15:
             pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
-            _m6569_rs_rewind_vc_vmli_rc(vic);
             break;
         case 16:
             pins = _m6569_ba(vic, pins);
@@ -1521,7 +1526,6 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             g_data = _m6569_g_i_access(vic);
             break;
         case 55:
-            pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
@@ -1607,6 +1611,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
         _m6569_decode_pixels(vic, g_data, dst);
     }
+    vic->rs.vc = vic->rs.next_vc;
     vic->vm.vmli = vic->vm.next_vmli;
     return pins;
 }
