@@ -220,6 +220,7 @@ typedef struct {
     uint16_t v_count;
     uint16_t v_irqline;     // raster interrupt line, updated when ctrl_1 or raster is written
     uint16_t vc;            // 10-bit video counter
+    uint16_t next_vc;
     uint16_t vc_base;       // 10-bit video counter base
     uint8_t rc;             // 3-bit raster counter
     bool display_state;             // true: in display state, false: in idle state
@@ -276,13 +277,13 @@ typedef struct {
 // sprite sequencer state
 typedef struct {
     // updated when setting sprite position registers
+    uint8_t disp_enabled;       // set bit per sprite for 'display enabled'
+    uint8_t expand;             // set bit per sprite for expand flip-flop
+    uint8_t dma_enabled;        // set bit per sprite for dma enabled
     uint8_t h_first[8];         // first horizontal visible tick
     uint8_t h_last[8];          // last horizontal visible tick
     uint8_t h_offset[8];        // x-offset within 8-pixel raster
     uint8_t p_data[8];          // the byte read by p_access memory fetch
-    bool dma_enabled[8];        // sprite dma is enabled
-    bool disp_enabled[8];       // sprite display is enabled
-    bool expand[8];             // expand flip-flop
     uint8_t mc[8];              // 6-bit mob-data-counter
     uint8_t mc_base[8];         // 6-bit mob-data-counter base
     uint8_t delay_count[8];     // 0..7 delay pixels
@@ -335,6 +336,14 @@ void m6569_snapshot_onload(m6569_t* snapshot, m6569_t* sys);
 #ifndef CHIPS_ASSERT
     #include <assert.h>
     #define CHIPS_ASSERT(c) assert(c)
+#endif
+
+#if defined(__GNUC__)
+#define _M6569_UNREACHABLE __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define _M6569_UNREACHABLE __assume(0)
+#else
+#define _M6569_UNREACHABLE
 #endif
 
 // valid register bits
@@ -403,7 +412,7 @@ static void _m6569_reset_raster_unit(m6569_raster_unit_t* r) {
     r->h_count = 0;
     r->v_count = 0;
     r->v_irqline = 0;
-    r->vc = r->vc_base = 0;
+    r->vc = r->next_vc = r->vc_base = 0;
     r->rc = 0;
     r->display_state = false;
     r->badline = false;
@@ -484,8 +493,7 @@ static inline void _m6569_io_update_border_rsel(m6569_border_unit_t* b, uint8_t 
         // RSEL 1: 25 rows
         b->top = _M6569_RSEL1_BORDER_TOP;
         b->bottom = _M6569_RSEL1_BORDER_BOTTOM;
-    }
-    else {
+    } else {
         // RSEL 0: 24 rows
         b->top = _M6569_RSEL0_BORDER_TOP;
         b->bottom = _M6569_RSEL0_BORDER_BOTTOM;
@@ -498,8 +506,7 @@ static inline void _m6569_io_update_border_csel(m6569_border_unit_t* b, uint8_t 
         // CSEL 1: 40 columns
         b->left = _M6569_CSEL1_BORDER_LEFT;
         b->right = _M6569_CSEL1_BORDER_RIGHT;
-    }
-    else {
+    } else {
         // CSEL 0: 38 columns
         b->left = _M6569_CSEL0_BORDER_LEFT;
         b->right = _M6569_CSEL0_BORDER_RIGHT;
@@ -514,19 +521,18 @@ static inline void _m6569_io_update_gunit_mode(m6569_graphics_unit_t* gu, uint8_
 // update sprite unit positions and sizes when updating registers
 static void _m6569_io_update_sunit(m6569_t* vic, size_t i, uint8_t mx, uint8_t my, uint8_t mx8, uint8_t mxe, uint8_t mye) {
     (void)my;   // FIXME: my is really unused?
+    const uint8_t mask = 1 << i;
     m6569_sprite_unit_t* su = &vic->sunit;
     // mxb: MSB for each xpos
-    uint16_t xpos = ((mx8 & (1<<i))<<(8-i)) | mx;
+    uint16_t xpos = ((mx8 & mask)<<(8-i)) | mx;
     su->h_first[i]  = (xpos / 8) + 13;
     su->h_offset[i] = (xpos & 7);
-    const uint16_t w = ((mxe & (1<<i)) ? 5 : 2) + ((su->h_offset[i] > 0) ? 1:0);
+    const uint16_t w = ((mxe & mask) ? 5 : 2) + ((su->h_offset[i] > 0) ? 1:0);
     su->h_last[i] = su->h_first[i] + w;
     /* 1. The expansion flip flop is set as long as the bit in MxYE in register
         $d017 corresponding to the sprite is cleared.
     */
-    if ((mye & (1<<i)) == 0) {
-        su->expand[i] = true;
-    }
+    su->expand |= ~mye & mask;
 }
 
 // read chip registers
@@ -704,7 +710,8 @@ static void _m6569_write(m6569_t* vic, uint64_t pins) {
 /* start the graphics sequencer, this happens at the first g_access,
    the graphics sequencer must be delayed by xscroll
 */
-static inline void _m6569_gunit_rewind(m6569_t* vic, uint8_t xscroll) {
+static inline void _m6569_gunit_rewind(m6569_t* vic) {
+    const uint8_t xscroll = vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL;
     vic->gunit.count = xscroll;
     vic->gunit.shift = 0;
     vic->gunit.outp = 0;
@@ -722,8 +729,7 @@ static inline void _m6569_gunit_tick(m6569_t* vic, uint8_t g_data) {
         vic->gunit.count = 7;
         vic->gunit.shift |= g_data;
         vic->gunit.c_data = vic->gunit.enabled ? vic->vm.line[vic->vm.vmli] : 0;
-    }
-    else {
+    } else {
         vic->gunit.count--;
     }
     vic->gunit.outp = vic->gunit.shift;
@@ -747,8 +753,7 @@ static inline uint16_t _m6569_gunit_decode_mode0(m6569_t* vic) {
     if (vic->gunit.outp & 0x80) {
         // foreground color (top bits set)
         return 0xFF00 | ((vic->gunit.c_data>>8) & 0xF);
-    }
-    else {
+    } else {
         // background color (top bits clear)
         return vic->gunit.bg[0];
     }
@@ -770,19 +775,16 @@ static inline uint16_t _m6569_gunit_decode_mode1(m6569_t* vic) {
         if (bits == 3) {
             // special case '11'
             return 0xFF00 | fg;
-        }
-        else {
+        } else {
             // one of the 3 background colors (top bits already pre-set)
             return vic->gunit.bg[bits];
         }
-    }
-    else {
+    } else {
         // standard text mode char, but with only 7 foreground colors
         if (vic->gunit.outp & 0x80) {
             // foreground color (top bits set)
             return 0xFF00 | fg;
-        }
-        else {
+        } else {
             // background color (top bits already pre-set to 0)
             return vic->gunit.bg[0];
         }
@@ -793,8 +795,7 @@ static inline uint16_t _m6569_gunit_decode_mode2(m6569_t* vic) {
     if (vic->gunit.outp & 0x80) {
         // foreground pixel (top 8 bits set)
         return 0xFF00 | ((vic->gunit.c_data >> 4) & 0xF);
-    }
-    else {
+    } else {
         // background pixel (top bits clear for multiplexer)
         return vic->gunit.c_data & 0xF;
     }
@@ -811,10 +812,11 @@ static inline uint16_t _m6569_gunit_decode_mode3(m6569_t* vic) {
             "11": Color from bits 8-11 of c-data (top bits set)
     */
     switch ((bits>>6)&3) {
-        case 0:     return vic->gunit.bg[0]; break;
-        case 1:     return (vic->gunit.c_data>>4) & 0xF; break;
-        case 2:     return 0xFF00 | (vic->gunit.c_data & 0xF); break;
-        default:    return 0xFF00 | ((vic->gunit.c_data>>8) & 0xF); break;
+        case 0: return vic->gunit.bg[0]; break;
+        case 1: return (vic->gunit.c_data>>4) & 0xF; break;
+        case 2: return 0xFF00 | (vic->gunit.c_data & 0xF); break;
+        case 3: return 0xFF00 | ((vic->gunit.c_data>>8) & 0xF); break;
+        default: _M6569_UNREACHABLE;
     }
 }
 
@@ -822,8 +824,7 @@ static inline uint16_t _m6569_gunit_decode_mode4(m6569_t* vic) {
     if (vic->gunit.outp & 0x80) {
         // foreground color as usual bits 8..11 of c_data
         return 0xFF00 | ((vic->gunit.c_data>>8) & 0xF);
-    }
-    else {
+    } else {
         // bg color selected by bits 6 and 7 of c_data
         /* FIXME: is the foreground/background selection right?
             values 00 and 01 would return as background color,
@@ -857,25 +858,17 @@ static inline void _m6569_sunit_start(m6569_t* vic) {
     const uint8_t me = vic->reg.me;
     const uint8_t mye = vic->reg.mye;
     m6569_sprite_unit_t* su = &vic->sunit;
+    su->expand ^= mye;
     for (size_t i = 0; i < 8; i++) {
         const uint8_t mask = (1<<i);
-        if (mye & mask) {
-            su->expand[i] = !su->expand[i];
-        }
-        if ((me & mask) && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
-            if (!su->dma_enabled[i]) {
-                su->dma_enabled[i] = true;
-                su->mc_base[i] = 0;
-                if (mye & mask) {
-                    su->expand[i] = false;
-                }
-            }
-        }
-        // NOTE: the following behaviour differes from the recipe
-        if (!su->dma_enabled[i]) {
-            su->disp_enabled[i] = false;
+        if ((~su->dma_enabled & me & mask) && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
+            su->dma_enabled |= mask;
+            su->expand &= ~(mye & mask);
+            su->mc_base[i] = 0;
         }
     }
+    // NOTE: the following behaviour differs from the recipe
+    su->disp_enabled &= su->dma_enabled;
 }
 
 static inline void _m6569_sunit_update_mc_disp_enable(m6569_t* vic) {
@@ -888,8 +881,9 @@ static inline void _m6569_sunit_update_mc_disp_enable(m6569_t* vic) {
     m6569_sprite_unit_t* su = &vic->sunit;
     for (size_t i = 0; i < 8; i++) {
         su->mc[i] = su->mc_base[i];
-        if (su->dma_enabled[i] && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
-            su->disp_enabled[i] = true;
+        const uint8_t mask = (1<<i);
+        if ((su->dma_enabled & mask) && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
+            su->disp_enabled |= mask;
         }
     }
 }
@@ -900,9 +894,11 @@ static inline void _m6569_sunit_update_mc_disp_enable(m6569_t* vic) {
 */
 static inline void _m6569_sunit_update_mcbase(m6569_t* vic) {
     m6569_sprite_unit_t* su = &vic->sunit;
-    for (size_t i = 0; i < 8; i++) {
-        if (su->expand[i]) {
-            su->mc_base[i] = (su->mc_base[i] + 2) & 0x3F;
+    if (su->expand != 0) {
+        for (size_t i = 0; i < 8; i++) {
+            if (su->expand & (1<<i)) {
+                su->mc_base[i] = (su->mc_base[i] + 2) & 0x3F;
+            }
         }
     }
 }
@@ -930,27 +926,31 @@ static inline void _m6569_sunit_update_mcbase(m6569_t* vic) {
 */
 static inline void _m6569_sunit_dma_disp_disable(m6569_t* vic) {
     m6569_sprite_unit_t* su = &vic->sunit;
-    for (size_t i = 0; i < 8; i++) {
-        if (su->expand[i]) {
-            su->mc_base[i] = (su->mc_base[i] + 1) & 0x3F;
+    if (su->expand != 0) {
+        for (size_t i = 0; i < 8; i++) {
+            if (su->expand & (1<<i)) {
+                su->mc_base[i] = (su->mc_base[i] + 1) & 0x3F;
+            }
         }
+    }
+    for (size_t i = 0; i < 8; i++) {
         if (su->mc_base[i] == 0x3F) {
-            su->dma_enabled[i] = false;
+            su->dma_enabled &= ~(1<<i);
         }
     }
 }
 
-// set the BA pin if a sprite's DMA is enabled
-static inline uint64_t _m6569_sunit_dma_ba(m6569_t* vic, uint32_t s_index, uint64_t pins) {
-    if (vic->sunit.dma_enabled[s_index]) {
+// set the BA pin if one or multiple sprite's DMA is enabled
+static inline uint64_t _m6569_sunit_dma_ba(m6569_t* vic, uint8_t mask, uint64_t pins) {
+    if (vic->sunit.dma_enabled & mask) {
         pins |= M6569_BA;
     }
     return pins;
 }
 
-// set the AEC pin if a sprite's DMA is enabled
-static inline uint64_t _m6569_sunit_dma_aec(m6569_t* vic, uint32_t s_index, uint64_t pins) {
-    if (vic->sunit.dma_enabled[s_index]) {
+// set the AEC pin one or multiple sprite's DMA are enabled
+static inline uint64_t _m6569_sunit_dma_aec(m6569_t* vic, uint8_t mask, uint64_t pins) {
+    if (vic->sunit.dma_enabled & mask) {
         pins |= M6569_AEC;
     }
     return pins;
@@ -966,58 +966,57 @@ static inline uint16_t _m6569_sunit_decode(m6569_t* vic, uint8_t hpos) {
         The function returns 0 if the sprite units didn't produce a color.
     */
     uint16_t c = 0;
-    bool collision = false;
     m6569_sprite_unit_t* su = &vic->sunit;
-    uint8_t mxe = vic->reg.mxe;
-    uint8_t mmc = vic->reg.mmc;
-    for (size_t i = 0; i < 8; i++) {
-        if (su->disp_enabled[i] && (hpos >= su->h_first[i]) && (hpos <= su->h_last[i])) {
-            if (su->delay_count[i] == 0) {
-                if ((0 == (su->xexp_count[i]++ & 1)) || (0 == (mxe & (1<<i)))) {
-                    // bit 31 of outp is the current shifter output
-                    su->outp[i] = su->shift[i];
-                    // bits 31 and 30 of outp is half-frequency shifter output
-                    if (0 == (su->outp2_count[i]++ & 1)) {
-                        su->outp2[i] = su->shift[i];
+    if (su->disp_enabled != 0) {
+        bool collision = false;
+        const uint8_t mxe = vic->reg.mxe;
+        const uint8_t mmc = vic->reg.mmc;
+        for (size_t i = 0; i < 8; i++) {
+            const uint8_t mask = 1 << i;
+            if ((su->disp_enabled & mask) && (hpos >= su->h_first[i]) && (hpos <= su->h_last[i])) {
+                if (su->delay_count[i] == 0) {
+                    if ((0 == (su->xexp_count[i]++ & 1)) || (0 == (mxe & mask))) {
+                        // bit 31 of outp is the current shifter output
+                        su->outp[i] = su->shift[i];
+                        // bits 31 and 30 of outp is half-frequency shifter output
+                        if (0 == (su->outp2_count[i]++ & 1)) {
+                            su->outp2[i] = su->shift[i];
+                        }
+                        su->shift[i] <<= 1;
                     }
-                    su->shift[i] <<= 1;
-                }
-                if (mmc & (1<<i)) {
-                    // multicolor mode
-                    uint32_t ci = (su->outp2[i] & ((1<<31)|(1<<30)))>>30;
-                    if (ci != 0) {
-                        // don't overwrite higher-priority colors
-                        if (0 == c) {
-                            c = su->colors[i][ci];
+                    if (mmc & mask) {
+                        // multicolor mode
+                        uint32_t ci = (su->outp2[i] & ((1<<31)|(1<<30)))>>30;
+                        if (ci != 0) {
+                            // don't overwrite higher-priority colors
+                            if (0 == c) {
+                                c = su->colors[i][ci];
+                            } else {
+                                collision = true;
+                            }
+                            c |= (1<<(8+i));
                         }
-                        else {
-                            collision = true;
+                    } else {
+                        /* standard color mode */
+                        if (su->outp[i] & (1<<31)) {
+                            /* don't overwrite higher-priority colors */
+                            if (0 == c) {
+                                c = su->colors[i][2] | (1<<(24+i));
+                            } else {
+                                collision = true;
+                            }
+                            c |= (1<<(8+i));
                         }
-                        c |= (1<<(8+i));
                     }
+                } else {
+                    su->delay_count[i]--;
                 }
-                else {
-                    /* standard color mode */
-                    if (su->outp[i] & (1<<31)) {
-                        /* don't overwrite higher-priority colors */
-                        if (0 == c) {
-                            c = su->colors[i][2] | (1<<(24+i));
-                        }
-                        else {
-                            collision = true;
-                        }
-                        c |= (1<<(8+i));
-                    }
-                }
-            }
-            else {
-                su->delay_count[i]--;
             }
         }
-    }
-    if (collision) {
-        vic->reg.mcm |= (c>>8);
-        vic->reg.int_latch |= M6569_INT_IMMC;
+        if (collision) {
+            vic->reg.mcm |= (c>>8);
+            vic->reg.int_latch |= M6569_INT_IMMC;
+        }
     }
     return c;
 }
@@ -1051,19 +1050,16 @@ static inline uint8_t _m6569_color_multiplex(uint16_t bmc, uint16_t sc, uint8_t 
     if (sc == 0) {
         // sprite unit didn't produce a color, use the bitmap color
         c = bmc;
-    }
-    else if ((sc>>8) & mdp) {
+    } else if ((sc>>8) & mdp) {
         // data priority bit is set, sprite color is behind bitmap foreground color
         if ((bmc & 0xFF00) == 0) {
             // bitmap color is background, use sprite color
             c = sc;
-        }
-        else {
+        } else {
             // bitmap color is foreground
             c = bmc;
         }
-    }
-    else {
+    } else {
         // sprite color is in front of bitmap color
         c = sc;
     }
@@ -1071,14 +1067,16 @@ static inline uint8_t _m6569_color_multiplex(uint16_t bmc, uint16_t sc, uint8_t 
 }
 
 // decode the next 8 pixels
-static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* dst, uint8_t hpos) {
-
+static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* dst) {
+    const uint8_t hpos = vic->rs.h_count;
     m6569_sprite_unit_t* su = &vic->sunit;
-    for (size_t i = 0; i < 8; i++) {
-        if (su->disp_enabled[i] && (hpos == su->h_first[i])) {
-            su->delay_count[i] = su->h_offset[i];
-            su->outp2_count[i] = 0;
-            su->xexp_count[i] = 0;
+    if (su->disp_enabled != 0) {
+        for (size_t i = 0; i < 8; i++) {
+            if ((su->disp_enabled & (1<<i)) && (hpos == su->h_first[i])) {
+                su->delay_count[i] = su->h_offset[i];
+                su->outp2_count[i] = 0;
+                su->xexp_count[i] = 0;
+            }
         }
     }
 
@@ -1122,6 +1120,8 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
             case 2: bmc = _m6569_gunit_decode_mode2(vic); break;
             case 3: bmc = _m6569_gunit_decode_mode3(vic); break;
             case 4: bmc = _m6569_gunit_decode_mode4(vic); break;
+            case 5: case 6: case 7: break;  // illegal modes
+            default: _M6569_UNREACHABLE;
         }
         _m6569_test_mob_data_col(vic, bmc, sc);
         dst[i] = brd ? brd_color : _m6569_color_multiplex(bmc, sc, mdp);
@@ -1129,8 +1129,9 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
 }
 
 /* decode the next 8 pixels as debug visualization */
-static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint8_t* dst, uint8_t hpos) {
-    _m6569_decode_pixels(vic, g_data, dst, hpos);
+static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint8_t* dst) {
+    _m6569_decode_pixels(vic, g_data, dst);
+    const uint8_t hpos = vic->rs.h_count;
     uint8_t c = 0;
     if (vic->rs.badline) {
         c |= 0x10;
@@ -1140,10 +1141,12 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
     }
     // sprites
     const m6569_sprite_unit_t* su = &vic->sunit;
-    for (size_t si = 0; si < 8; si++) {
-        if (su->disp_enabled[si]) {
-            if ((hpos >= su->h_first[si]) && (hpos <= su->h_last[si])) {
-                c |= 0x40;
+    if (su->disp_enabled != 0) {
+        for (size_t si = 0; si < 8; si++) {
+            if (su->disp_enabled & (1<<si)) {
+                if ((hpos >= su->h_first[si]) && (hpos <= su->h_last[si])) {
+                    c |= 0x40;
+                }
             }
         }
     }
@@ -1155,15 +1158,13 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
     uint8_t* prev_dst;
     if (dst == vic->crt.fb) {
         prev_dst = dst;
-    }
-    else {
+    } else {
         prev_dst = dst - M6569_PIXELS_PER_TICK;
     }
     for (size_t i = 0; i < M6569_PIXELS_PER_TICK; i++) {
         if (i == 0) {
             dst[i] = 0;
-        }
-        else {
+        } else {
             dst[i] |= c;
         }
         dst[i] ^= 0xF0;
@@ -1184,8 +1185,7 @@ static inline void _m6569_rs_next_rasterline(m6569_t* vic) {
     if (vic->rs.v_count == (M6569_VTOTAL-1)) {
         vic->rs.v_count = 0;
         vic->rs.vc_base = 0;
-    }
-    else {
+    } else {
         vic->rs.v_count++;
     }
 }
@@ -1225,8 +1225,7 @@ static inline void _m6569_rs_update_badline(m6569_t* vic) {
         */
         bool yscroll_match = ((vic->rs.v_count & 7) == (vic->reg.ctrl_1 & 7));
         vic->rs.badline = vic->rs.frame_badlines_enabled && yscroll_match;
-    }
-    else {
+    } else {
         vic->rs.frame_badlines_enabled = false;
         vic->rs.badline = false;
     }
@@ -1268,7 +1267,7 @@ static inline void _m6569_rs_update_display_state(m6569_t* vic) {
     this phase, RC is also reset to zero.
 */
 static inline void _m6569_rs_rewind_vc_vmli_rc(m6569_t* vic) {
-    vic->rs.vc = vic->rs.vc_base;
+    vic->rs.vc = vic->rs.next_vc = vic->rs.vc_base;
     vic->vm.vmli = 0;
     vic->vm.next_vmli = 0;
     if (vic->rs.badline) {
@@ -1280,8 +1279,7 @@ static inline void _m6569_crt_next_crtline(m6569_t* vic) {
     vic->crt.x = 0;
     if (vic->rs.v_count == _M6569_VRETRACEPOS) {
         vic->crt.y = 0;
-    }
-    else {
+    } else {
         vic->crt.y++;
     }
 }
@@ -1354,17 +1352,15 @@ static inline uint8_t _m6569_g_i_access(m6569_t* vic) {
             // bitmap mode: addr=|CB13|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0|RC2|RC1|RC0|
             addr = vic->rs.vc<<3 | vic->rs.rc;
             addr = (addr | (vic->mem.g_addr_or & (1<<13))) & vic->mem.g_addr_and;
-        }
-        else {
+        } else {
             // text mode: addr=|CB13|CB12|CB11|D7|D6|D5|D4|D3|D2|D1|D0|RC2|RC1|RC0|
             addr = ((vic->vm.line[vic->vm.vmli]&0xFF)<<3) | vic->rs.rc;
             addr = (addr | vic->mem.g_addr_or) & vic->mem.g_addr_and;
         }
-        vic->rs.vc = (vic->rs.vc + 1) & 0x3FF;          // VC is a 10-bit counter
+        vic->rs.next_vc = (vic->rs.vc + 1) & 0x3FF;          // VC is a 10-bit counter
         vic->vm.next_vmli = (vic->vm.vmli + 1) & 0x3F;  // VMLI is a 6-bit counter
         return (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
-    }
-    else {
+    } else {
         return _m6569_i_access(vic);
     }
 }
@@ -1377,7 +1373,7 @@ static inline void _m6569_p_access(m6569_t* vic, uint32_t p_index) {
 static inline void _m6569_s_access(m6569_t* vic, uint32_t s_index) {
     // sprite s-access: |MP7|MP6|MP5|MP4|MP3|MP2|MP1|MP0|MC5|MC4|MC3|MC2|MC1|MC0|
     m6569_sprite_unit_t* su = &vic->sunit;
-    if (su->dma_enabled[s_index]) {
+    if (su->dma_enabled & (1<<s_index)) {
         uint16_t addr = (su->p_data[s_index]<<6) | su->mc[s_index];
         uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
         su->shift[s_index] = (su->shift[s_index]<<8) | (s_data<<8);
@@ -1388,14 +1384,13 @@ static inline void _m6569_s_access(m6569_t* vic, uint32_t s_index) {
 static inline uint8_t _m6569_s_i_access(m6569_t* vic, uint32_t s_index) {
     // perform an s-access if dma is enabled, otherwise an i-access
     m6569_sprite_unit_t* su = &vic->sunit;
-    if (su->dma_enabled[s_index]) {
+    if (su->dma_enabled & (1<<s_index)) {
         uint16_t addr = (su->p_data[s_index]<<6) | su->mc[s_index];
         uint8_t s_data = (uint8_t) vic->mem.fetch_cb(addr, vic->mem.user_data);
         su->shift[s_index] = (su->shift[s_index]<<8) | (s_data<<8);
         su->mc[s_index] = (su->mc[s_index] + 1) & 0x3F;
         return 0;
-    }
-    else {
+    } else {
         return _m6569_i_access(vic);
     }
 }
@@ -1426,92 +1421,85 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         case 1:
             _m6569_p_access(vic, 3);
             _m6569_s_access(vic, 3);
-            pins = _m6569_sunit_dma_aec(vic, 3, pins);
-            pins = _m6569_sunit_dma_ba(vic, 3, pins);
-            pins = _m6569_sunit_dma_ba(vic, 4, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<3), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<3)|(1<<4), pins);
             break;
         case 2:
             g_data = _m6569_s_i_access(vic, 3);
             _m6569_s_access(vic, 3);
-            pins = _m6569_sunit_dma_aec(vic, 3, pins);
-            pins = _m6569_sunit_dma_ba(vic, 3, pins);
-            pins = _m6569_sunit_dma_ba(vic, 4, pins);
-            pins = _m6569_sunit_dma_ba(vic, 5, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<3), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<3)|(1<<4)|(1<<5), pins);
             break;
         case 3:
             _m6569_p_access(vic, 4);
             _m6569_s_access(vic, 4);
-            pins = _m6569_sunit_dma_aec(vic, 4, pins);
-            pins = _m6569_sunit_dma_ba(vic, 4, pins);
-            pins = _m6569_sunit_dma_ba(vic, 5, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<4), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<4)|(1<<5), pins);
             break;
         case 4:
             _m6569_crt_next_crtline(vic);
             g_data = _m6569_s_i_access(vic, 4);
             _m6569_s_access(vic, 4);
-            pins = _m6569_sunit_dma_aec(vic, 4, pins);
-            pins = _m6569_sunit_dma_ba(vic, 4, pins);
-            pins = _m6569_sunit_dma_ba(vic, 5, pins);
-            pins = _m6569_sunit_dma_ba(vic, 6, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<4), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<4)|(1<<5)|(1<<6), pins);
             break;
         case 5:
             _m6569_p_access(vic, 5);
             _m6569_s_access(vic, 5);
-            pins = _m6569_sunit_dma_aec(vic, 5, pins);
-            pins = _m6569_sunit_dma_ba(vic, 5, pins);
-            pins = _m6569_sunit_dma_ba(vic, 6, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<5), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<5)|(1<<6), pins);
             break;
         case 6:
             g_data = _m6569_s_i_access(vic, 5);
             _m6569_s_access(vic, 5);
-            pins = _m6569_sunit_dma_aec(vic, 5, pins);
-            pins = _m6569_sunit_dma_ba(vic, 5, pins);
-            pins = _m6569_sunit_dma_ba(vic, 6, pins);
-            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<5), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<5)|(1<<6)|(1<<7), pins);
             break;
         case 7:
             _m6569_p_access(vic, 6);
             _m6569_s_access(vic, 6);
-            pins = _m6569_sunit_dma_aec(vic, 6, pins);
-            pins = _m6569_sunit_dma_ba(vic, 6, pins);
-            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<6), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<6)|(1<<7), pins);
             break;
         case 8:
             g_data = _m6569_s_i_access(vic, 6);
             _m6569_s_access(vic, 6);
-            pins = _m6569_sunit_dma_aec(vic, 6, pins);
-            pins = _m6569_sunit_dma_ba(vic, 6, pins);
-            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<6), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<6)|(1<<7), pins);
             break;
         case 9:
             _m6569_p_access(vic, 7);
             _m6569_s_access(vic, 7);
-            pins = _m6569_sunit_dma_aec(vic, 7, pins);
-            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<7), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<7), pins);
             break;
         case 10:
             g_data = _m6569_s_i_access(vic, 7);
             _m6569_s_access(vic, 7);
-            pins = _m6569_sunit_dma_aec(vic, 7, pins);
-            pins = _m6569_sunit_dma_ba(vic, 7, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<7), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<7), pins);
             break;
         case 11:
             break;
         case 12:
+            pins = _m6569_ba(vic, pins);
+            break;
         case 13:
+            pins = _m6569_ba(vic, pins);
+            break;
         case 14:
             pins = _m6569_ba(vic, pins);
+            _m6569_rs_rewind_vc_vmli_rc(vic);
             break;
         case 15:
             pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
-            _m6569_rs_rewind_vc_vmli_rc(vic);
             break;
         case 16:
             pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
-            _m6569_gunit_rewind(vic, vic->reg.ctrl_2 & M6569_CTRL2_XSCROLL);
+            _m6569_gunit_rewind(vic);
             _m6569_sunit_update_mcbase(vic);
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
@@ -1538,81 +1526,70 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             g_data = _m6569_g_i_access(vic);
             break;
         case 55:
-            pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
-            pins = _m6569_sunit_dma_ba(vic, 0, pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
             _m6569_bunit_right(vic, 55);
             break;
         case 56:
             vic->gunit.enabled = false;
             _m6569_sunit_start(vic);
             g_data = _m6569_i_access(vic);
-            pins = _m6569_sunit_dma_ba(vic, 0, pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
             _m6569_bunit_right(vic, 56);
             break;
         case 57:
             g_data = _m6569_i_access(vic);
-            pins = _m6569_sunit_dma_ba(vic, 0, pins);
-            pins = _m6569_sunit_dma_ba(vic, 1, pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<0)|(1<<1), pins);
             break;
         case 58:
+            _m6569_rs_update_display_state(vic);
             _m6569_sunit_update_mc_disp_enable(vic);
             _m6569_p_access(vic, 0);
             _m6569_s_access(vic, 0);
-            pins = _m6569_sunit_dma_aec(vic, 0, pins);
-            pins = _m6569_sunit_dma_ba(vic, 0, pins);
-            pins = _m6569_sunit_dma_ba(vic, 1, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<0), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<0)|(1<<1), pins);
             break;
         case 59:
-            _m6569_rs_update_display_state(vic);
             g_data = _m6569_s_i_access(vic, 0);
             _m6569_s_access(vic, 0);
-            pins = _m6569_sunit_dma_aec(vic, 0, pins);
-            pins = _m6569_sunit_dma_ba(vic, 0, pins);
-            pins = _m6569_sunit_dma_ba(vic, 1, pins);
-            pins = _m6569_sunit_dma_ba(vic, 2, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<0), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<0)|(1<<1)|(1<<2), pins);
             break;
         case 60:
             _m6569_p_access(vic, 1);
             _m6569_s_access(vic, 1);
-            pins = _m6569_sunit_dma_aec(vic, 1, pins);
-            pins = _m6569_sunit_dma_ba(vic, 1, pins);
-            pins = _m6569_sunit_dma_ba(vic, 2, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<1), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<1)|(1<<2), pins);
             break;
         case 61:
             g_data = _m6569_s_i_access(vic, 1);
             _m6569_s_access(vic, 1);
-            pins = _m6569_sunit_dma_aec(vic, 1, pins);
-            pins = _m6569_sunit_dma_ba(vic, 1, pins);
-            pins = _m6569_sunit_dma_ba(vic, 2, pins);
-            pins = _m6569_sunit_dma_ba(vic, 3, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<1), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<1)|(1<<2)|(1<<3), pins);
             break;
         case 62:
             _m6569_p_access(vic, 2);
             _m6569_s_access(vic, 2);
-            pins = _m6569_sunit_dma_aec(vic, 2, pins);
-            pins = _m6569_sunit_dma_ba(vic, 2, pins);
-            pins = _m6569_sunit_dma_ba(vic, 3, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<2), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<2)|(1<<3), pins);
             break;
         case 63:    /* HTOTAL */
             _m6569_rs_next_rasterline(vic);
             _m6569_rs_check_irq(vic);
             g_data = _m6569_s_i_access(vic, 2);
             _m6569_s_access(vic, 2);
-            pins = _m6569_sunit_dma_aec(vic, 2, pins);
-            pins = _m6569_sunit_dma_ba(vic, 2, pins);
-            pins = _m6569_sunit_dma_ba(vic, 3, pins);
-            pins = _m6569_sunit_dma_ba(vic, 4, pins);
+            pins = _m6569_sunit_dma_aec(vic, (1<<2), pins);
+            pins = _m6569_sunit_dma_ba(vic, (1<<2)|(1<<3)|(1<<4), pins);
             _m6569_bunit_end(vic);
             break;
+        default: _M6569_UNREACHABLE;
     }
     //-- main interrupt bit
     if (vic->reg.int_latch & vic->reg.int_mask & 0x0F) {
         vic->reg.int_latch |= M6569_INT_IRQ;
-    }
-    else {
+    } else {
         vic->reg.int_latch &= ~M6569_INT_IRQ;
     }
     if (vic->reg.int_latch & M6569_INT_IRQ) {
@@ -1624,7 +1601,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         const size_t x = vic->rs.h_count;
         const size_t y = vic->rs.v_count;
         uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
-        _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
+        _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst);
     }
     else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
              (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
@@ -1632,8 +1609,9 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         const size_t x = vic->crt.x - vic->crt.vis_x0;
         const size_t y = vic->crt.y - vic->crt.vis_y0;
         uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
-        _m6569_decode_pixels(vic, g_data, dst, vic->rs.h_count);
+        _m6569_decode_pixels(vic, g_data, dst);
     }
+    vic->rs.vc = vic->rs.next_vc;
     vic->vm.vmli = vic->vm.next_vmli;
     return pins;
 }
@@ -1647,8 +1625,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
     if (pins & M6569_CS) {
         if (pins & M6569_RW) {
             pins = _m6569_read(vic, pins);
-        }
-        else {
+        } else {
             _m6569_write(vic, pins);
         }
     }

@@ -140,12 +140,16 @@ static void _ui_m6569_draw_hwcolors(void) {
 
 static void _ui_m6569_draw_color(const char* label, uint8_t val) {
     ImGui::Text("%s%X", label, val); ImGui::SameLine();
+    ImGui::PushID(label);
     ImGui::ColorButton("##regclr", ImColor(m6569_color(val&0xF)), ImGuiColorEditFlags_NoAlpha, ImVec2(12,12));
+    ImGui::PopID();
 }
 
 static void _ui_m6569_draw_rgb(const char* label, uint32_t val) {
     ImGui::Text("%s", label); ImGui::SameLine();
+    ImGui::PushID(label);
     ImGui::ColorButton("##rgbclr", ImColor(val | 0xFF000000), ImGuiColorEditFlags_NoAlpha, ImVec2(12,12));
+    ImGui::PopID();
 }
 
 static void _ui_m6569_draw_registers(const ui_m6569_t* win) {
@@ -275,10 +279,12 @@ static void _ui_m6569_draw_sprite_units(const ui_m6569_t* win) {
     };
     const m6569_sprite_unit_t* su = &win->vic->sunit;
     for (int i = 0; i < 8; i++) {
+        ImGui::PushID(i);
+        const uint8_t mask = 1 << i;
         if (ImGui::CollapsingHeader(su_names[i])) {
-            ImGui::Text("dma:%s", su->dma_enabled[i]?"ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("display:%s", su->disp_enabled[i]?"ON ":"OFF"); ImGui::SameLine();
-            ImGui::Text("expand:%s", su->expand[i]?"ON ":"OFF");
+            ImGui::Text("dma:%s", su->dma_enabled & mask ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("display:%s", su->disp_enabled & mask ? "ON ":"OFF"); ImGui::SameLine();
+            ImGui::Text("expand:%s", su->expand & mask ?"ON ":"OFF");
             ImGui::Text("h_first:%02X h_last:%02X h_offset:%02X", su->h_first[i], su->h_last[i], su->h_offset[i]);
             ImGui::Text("p_data:%02X mc:%02X mc_base:%02X", su->p_data[i], su->mc[i], su->mc_base[i]);
             ImGui::Text("delay_cnt:%02X outp2_cnt:%02X xexp_cnt:%02X", su->delay_count[i], su->outp2_count[i], su->xexp_count[i]);
@@ -289,6 +295,7 @@ static void _ui_m6569_draw_sprite_units(const ui_m6569_t* win) {
             _ui_m6569_draw_rgb("main color: ", su->colors[i][2]);
             _ui_m6569_draw_rgb("multicolor1:", su->colors[i][3]);
         }
+        ImGui::PopID();
     }
 }
 
