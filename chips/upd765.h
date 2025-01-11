@@ -209,6 +209,8 @@ typedef int (*upd765_seektrack_cb)(int drive, int track, void* user_data);
 typedef int (*upd765_seeksector_cb)(int drive, int side, upd765_sectorinfo_t* inout_info, void* user_data);
 /* callback to read the next sector data byte */
 typedef int (*upd765_read_cb)(int drive, int side, void* user_data, uint8_t* out_data);
+/* callback to write the next sector data byte */
+typedef int (*upd765_write_cb)(int drive, int side, void* user_data, uint8_t data);
 /* callback to read info about first sector on current reack */
 typedef int (*upd765_trackinfo_cb)(int drive, int side, void* user_data, upd765_sectorinfo_t* out_info);
 /* callback to get info about disk drive (called on SENSE_DRIVE_STATUS command) */
@@ -219,6 +221,7 @@ typedef struct {
     upd765_seektrack_cb seektrack_cb;
     upd765_seeksector_cb seeksector_cb;
     upd765_read_cb read_cb;
+    upd765_write_cb write_cb;
     upd765_trackinfo_cb trackinfo_cb;
     upd765_driveinfo_cb driveinfo_cb;
     void* user_data;
@@ -242,6 +245,7 @@ typedef struct {
     upd765_seektrack_cb seektrack_cb;
     upd765_seeksector_cb seeksector_cb;
     upd765_read_cb read_cb;
+    upd765_write_cb write_cb;
     upd765_trackinfo_cb trackinfo_cb;
     upd765_driveinfo_cb driveinfo_cb;
     void* user_data;
@@ -394,6 +398,7 @@ static void _upd765_cmd(upd765_t* upd) {
     CHIPS_ASSERT(upd->phase == UPD765_PHASE_COMMAND);
     switch (upd->cmd) {
         case UPD765_CMD_READ_DATA:
+        case UPD765_CMD_WRITE_DATA:
             {
                 upd->st[0] = upd->fifo[1] & 7;      /* HD, US1, US0 */
                 upd->sector_info.c = upd->fifo[2];
@@ -528,7 +533,6 @@ static void _upd765_cmd(upd765_t* upd) {
             break;
 
         case UPD765_CMD_READ_DELETED_DATA:
-        case UPD765_CMD_WRITE_DATA:
         case UPD765_CMD_WRITE_DELETED_DATA:
         case UPD765_CMD_READ_A_TRACK:
         case UPD765_CMD_FORMAT_A_TRACK:
@@ -575,9 +579,27 @@ static uint8_t _upd765_exec_rd(upd765_t* upd) {
 
 /* called when a byte is written during the exec phase */
 static void _upd765_exec_wr(upd765_t* upd, uint8_t data) {
-    // FIXME
-    (void)upd;
-    (void)data;
+    CHIPS_ASSERT(upd->phase == UPD765_PHASE_EXEC);
+    switch (upd->cmd) {
+        case UPD765_CMD_WRITE_DATA:
+            {
+                /* write next sector data byte to FDD */
+                const int fdd_index = upd->st[0] & 3;
+                const int side = (upd->st[0] & 4) >> 2;
+                const int res = upd->write_cb(fdd_index, side, upd->user_data, data);
+                if (res != UPD765_RESULT_SUCCESS) {
+                    if (res & UPD765_RESULT_NOT_READY) {
+                        upd->st[0] |= UPD765_ST0_NR;
+                    }
+                    _upd765_to_phase_result(upd);
+                }
+            }
+            break;
+        default:
+            /* shouldn't happen */
+            CHIPS_ASSERT(false);
+            break;
+    }
 }
 
 /* write a data byte to the upd765 */
@@ -627,9 +649,6 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
         for between 2us and 50us, for now just indicate
         that we're always ready during the command and result phase
     */
-    /* FIXME: data direction is currently always set as FDC->CPU,
-       since the emulation doesn't support write operations
-    */
     switch (upd->phase) {
         case UPD765_PHASE_IDLE:
             status |= UPD765_STATUS_RQM;
@@ -638,7 +657,12 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
             status |= UPD765_STATUS_CB|UPD765_STATUS_RQM;
             break;
         case UPD765_PHASE_EXEC:
-            status |= UPD765_STATUS_CB|UPD765_STATUS_EXM|UPD765_STATUS_DIO|UPD765_STATUS_RQM;
+            status |= UPD765_STATUS_CB|UPD765_STATUS_EXM|UPD765_STATUS_RQM;
+            // NOTE: the DIO bit is associated with fifo_write and internal_drq
+            // booleans in MAME, so it's a bit more complicated than what we do here
+            if (upd->cmd != UPD765_CMD_WRITE_DATA) {
+                status |= UPD765_STATUS_DIO;
+            }
             break;
         case UPD765_PHASE_RESULT:
             status |= UPD765_STATUS_CB|UPD765_STATUS_DIO|UPD765_STATUS_RQM;
@@ -658,6 +682,7 @@ void upd765_init(upd765_t* upd, const upd765_desc_t* desc) {
     upd->seektrack_cb = desc->seektrack_cb;
     upd->seeksector_cb = desc->seeksector_cb;
     upd->read_cb = desc->read_cb;
+    upd->write_cb = desc->write_cb;
     upd->trackinfo_cb = desc->trackinfo_cb;
     upd->driveinfo_cb = desc->driveinfo_cb;
     upd->user_data = desc->user_data;
