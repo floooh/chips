@@ -649,7 +649,6 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
         for between 2us and 50us, for now just indicate
         that we're always ready during the command and result phase
     */
-    const int dio = upd->cmd == UPD765_CMD_WRITE_DATA ? 0 : UPD765_STATUS_DIO;
     switch (upd->phase) {
         case UPD765_PHASE_IDLE:
             status |= UPD765_STATUS_RQM;
@@ -658,10 +657,15 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
             status |= UPD765_STATUS_CB|UPD765_STATUS_RQM;
             break;
         case UPD765_PHASE_EXEC:
-            status |= UPD765_STATUS_CB|UPD765_STATUS_EXM|dio|UPD765_STATUS_RQM;
+            status |= UPD765_STATUS_CB|UPD765_STATUS_EXM|UPD765_STATUS_RQM;
+            // NOTE: the DIO bit is associated with fifo_write and internal_drq
+            // booleans in MAME, so it's a bit more complicated than what we do here
+            if (upd->cmd != UPD765_CMD_WRITE_DATA) {
+                status |= UPD765_CMD_WRITE_DATA;
+            }
             break;
         case UPD765_PHASE_RESULT:
-            status |= UPD765_STATUS_CB|dio|UPD765_STATUS_RQM;
+            status |= UPD765_STATUS_CB|UPD765_STATUS_DIO|UPD765_STATUS_RQM;
             break;
     }
     return status;
