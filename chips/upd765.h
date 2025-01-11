@@ -661,7 +661,7 @@ static inline uint8_t _upd765_read_status(upd765_t* upd) {
             // NOTE: the DIO bit is associated with fifo_write and internal_drq
             // booleans in MAME, so it's a bit more complicated than what we do here
             if (upd->cmd != UPD765_CMD_WRITE_DATA) {
-                status |= UPD765_CMD_WRITE_DATA;
+                status |= UPD765_STATUS_DIO;
             }
             break;
         case UPD765_PHASE_RESULT:
