@@ -1,12 +1,12 @@
 ## What's New
 
- * **11-Jan-2024**: writing data back to floppy is now supported in the CPC emulation
+ * **11-Jan-2025**: writing data back to floppy is now supported in the CPC emulation
   (see: https://github.com/floooh/chips/issues/104 and https://github.com/floooh/chips/pull/105),
   note though that the floppy emulation in the CPC is still very rough.
 
   Many thanks to @karlvr for the PR!
 
-* **02-Jan-2024**: Integrated some 'structural ideas' from the Zig Z80 emulator into z80.h
+* **02-Jan-2025**: Integrated some 'structural ideas' from the Zig Z80 emulator into z80.h
   (everything backward compatible and no behaviour changes):
   - Got rid of lookup tables which mapped opcodes to the first instruction
     payload step in the decoder switch-case statement. Instead the first
