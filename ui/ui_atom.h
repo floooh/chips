@@ -30,7 +30,7 @@
     - ui_i8255.h
     - ui_m6522.h
     - ui_audio.h
-    - ui_dislplay.h
+    - ui_display.h
     - ui_dasm.h
     - ui_dbg.h
     - ui_memedit.h
