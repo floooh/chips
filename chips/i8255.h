@@ -386,10 +386,10 @@ static uint64_t _i8255_read(i8255_t* ppi, uint64_t pins) {
 }
 
 static uint64_t _i8255_write_port_pins(i8255_t* ppi, uint64_t pins) {
-    if ((ppi->control & I8255_CTRL_A_OUTPUT) == I8255_CTRL_A_OUTPUT) {
+    if ((ppi->control & I8255_CTRL_A) == I8255_CTRL_A_OUTPUT) {
         I8255_SET_PA(pins, ppi->pa.outp);
     }
-    if ((ppi->control & I8255_CTRL_B_OUTPUT) == I8255_CTRL_B_OUTPUT) {
+    if ((ppi->control & I8255_CTRL_B) == I8255_CTRL_B_OUTPUT) {
         I8255_SET_PB(pins, ppi->pb.outp);
     }
     if ((ppi->control & I8255_CTRL_CHI) == I8255_CTRL_CHI_OUTPUT) {
