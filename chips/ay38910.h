@@ -643,16 +643,18 @@ uint64_t ay38910_tick(ay38910_t* ay, uint64_t pins) {
 */
 
 void ay38910_set_register(ay38910_t* ay, uint8_t addr, uint8_t data) {
-    CHIPS_ASSERT(ay && (addr < AY38910_NUM_REGISTERS));
-    ay->reg[addr] = data & _ay38910_reg_mask[addr];
-    _ay38910_update_values(ay);
-    if (addr == AY38910_REG_ENV_SHAPE_CYCLE) {
-        _ay38910_restart_env_shape(ay);
+    CHIPS_ASSERT(ay);
+    if (addr < AY38910_NUM_REGISTERS) {
+        ay->reg[addr] = data & _ay38910_reg_mask[addr];
+        _ay38910_update_values(ay);
+        if (addr == AY38910_REG_ENV_SHAPE_CYCLE) {
+            _ay38910_restart_env_shape(ay);
+        }
     }
 }
 
 void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr) {
-    CHIPS_ASSERT(ay && (addr < AY38910_NUM_REGISTERS));
+    CHIPS_ASSERT(ay);
     ay->addr = addr;
 }
 
