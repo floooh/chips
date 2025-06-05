@@ -622,6 +622,9 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
             const uint8_t data = ay->reg[ay->addr];
             AY38910_SET_DATA(pins, data);
         }
+        else {
+            AY38910_SET_DATA(pins, 0);
+        }
         AY38910_SET_PA(pins, ay->port_a);
         AY38910_SET_PB(pins, ay->port_b);
         ay->pins = pins;
