@@ -67,6 +67,7 @@ typedef void (*ui_zx_boot_t)(zx_t* sys, zx_type_t type);
 typedef struct {
     zx_t* zx;
     ui_zx_boot_t boot_cb; // user-provided callback to reboot to different config
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture; // user-provided texture create/update/destroy callbacks
     ui_dbg_keys_desc_t dbg_keys;            // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;            // snapshot system creation params
@@ -75,6 +76,7 @@ typedef struct {
 typedef struct {
     zx_t* zx;
     ui_zx_boot_t boot_cb;
+    ui_inject_t inject;
     ui_z80_t cpu;
     ui_ay38910_t ay;
     ui_audio_t audio;
@@ -186,6 +188,9 @@ static void _ui_zx_draw_menu(ui_zx_t* ui) {
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
+        }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
         }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();
@@ -356,6 +361,7 @@ void ui_zx_init(ui_zx_t* ui, const ui_zx_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->zx = ui_desc->zx;
     ui->boot_cb = ui_desc->boot_cb;
+    ui->inject = ui_desc->inject;
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {

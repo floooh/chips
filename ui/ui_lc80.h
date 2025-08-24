@@ -65,6 +65,7 @@ typedef void (*ui_lc80_boot_t)(lc80_t* sys);
 typedef struct {
     lc80_t* sys;
     ui_lc80_boot_t boot_cb; // user-provided callback to reboot to different config
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture;     // texture create/update/destroy callback
     ui_dbg_keys_desc_t dbg_keys;                // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;                // snapshot system creation params
@@ -83,6 +84,7 @@ typedef struct {
     void* imgui_font;
     lc80_t* sys;
     ui_lc80_boot_t boot_cb;
+    ui_inject_t inject;
     struct {
         ui_z80_t cpu;
         ui_z80pio_t pio_sys;
@@ -748,6 +750,9 @@ static void _ui_lc80_draw_menu(ui_lc80_t* ui) {
             }
             ImGui::EndMenu();
         }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
+        }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();
     }
@@ -1168,6 +1173,7 @@ void ui_lc80_init(ui_lc80_t* ui, const ui_lc80_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->sys = ui_desc->sys;
     ui->boot_cb = ui_desc->boot_cb;
+    ui->inject = ui_desc->inject;
     _ui_lc80_init_windows(ui, ui_desc);
     _ui_lc80_init_motherboard(ui);
 }

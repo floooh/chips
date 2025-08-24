@@ -73,6 +73,7 @@ typedef void (*ui_cpc_boot_t)(cpc_t* sys, cpc_type_t type);
 typedef struct {
     cpc_t* cpc;
     ui_cpc_boot_t boot_cb; // user-provided callback to reboot to different config
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture;     // debug texture create/update/destroy callbacks
     ui_dbg_debug_callbacks_t dbg_debug;         // user-provided debugger callbacks
     ui_dbg_keys_desc_t dbg_keys;                // user-defined hotkeys for ui_dbg_t
@@ -88,6 +89,7 @@ typedef struct {
     int dbg_scanline;
     bool dbg_vsync;
     ui_cpc_boot_t boot_cb;
+    ui_inject_t inject;
     ui_z80_t cpu;
     ui_ay38910_t psg;
     ui_mc6845_t vdc;
@@ -196,6 +198,9 @@ static void _ui_cpc_draw_menu(ui_cpc_t* ui) {
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
+        }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
         }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();
@@ -589,6 +594,7 @@ void ui_cpc_init(ui_cpc_t* ui, const ui_cpc_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->cpc = ui_desc->cpc;
     ui->boot_cb = ui_desc->boot_cb;
+    ui->inject = ui_desc->inject;
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {

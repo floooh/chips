@@ -142,7 +142,7 @@ typedef uint8_t (*ui_dbg_read_t)(int layer, uint16_t addr, void* user_data);
 /* callback for evaluating uer breakpoints, return breakpoint index, or -1 */
 typedef int (*ui_dbg_user_break_t)(struct ui_dbg_t* win, int trap_id, uint64_t pins, void* user_data);
 /* a callback to create a dynamic-update RGBA8 UI texture, needs to return an ImTextureID handle */
-typedef ui_texture_t (*ui_dbg_create_texture_t)(int w, int h);
+typedef ui_texture_t (*ui_dbg_create_texture_t)(int w, int h, const char* label);
 /* callback to update a UI texture with new data */
 typedef void (*ui_dbg_update_texture_t)(ui_texture_t tex_handle, void* data, int data_byte_size);
 /* callback to destroy a UI texture */
@@ -1113,7 +1113,7 @@ static void _ui_dbg_heatmap_init(ui_dbg_t* win) {
     win->heatmap.tex_height = 256;
     win->heatmap.tex_width_uicombo_state = 4;
     win->heatmap.next_tex_width = win->heatmap.tex_width;
-    win->heatmap.texture = win->texture_cbs.create_cb(win->heatmap.tex_width, win->heatmap.tex_height);
+    win->heatmap.texture = win->texture_cbs.create_cb(win->heatmap.tex_width, win->heatmap.tex_height, "heatmap");
     win->heatmap.show_ops = win->heatmap.show_reads = win->heatmap.show_writes = true;
     win->heatmap.scale = 1;
     win->heatmap.autoclear_interval = 0;  /* 0 means: no autoclear */
@@ -1129,7 +1129,7 @@ static void _ui_dbg_heatmap_update_texture_size(ui_dbg_t* win, int new_width) {
         win->heatmap.tex_width = new_width;
         win->heatmap.tex_height = (1<<16) / new_width;
         win->texture_cbs.destroy_cb(win->heatmap.texture);
-        win->heatmap.texture = win->texture_cbs.create_cb(win->heatmap.tex_width, win->heatmap.tex_height);
+        win->heatmap.texture = win->texture_cbs.create_cb(win->heatmap.tex_width, win->heatmap.tex_height, "heatmap");
     }
 }
 

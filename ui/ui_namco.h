@@ -65,6 +65,7 @@ extern "C" {
 
 typedef struct {
     namco_t* sys;
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture;         // user-provided texture create/update/destroy callbacks
     ui_dbg_keys_desc_t dbg_keys;                    // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;                    // snapshot system creation params
@@ -72,6 +73,7 @@ typedef struct {
 
 typedef struct {
     namco_t* sys;
+    ui_inject_t inject;
     ui_z80_t cpu;
     ui_dbg_t dbg;
     ui_audio_t audio;
@@ -210,6 +212,7 @@ void ui_namco_init(ui_namco_t* ui, const ui_namco_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->sys);
     memset(ui, 0, sizeof(ui_namco_t));
     ui->sys = ui_desc->sys;
+    ui->inject = ui_desc->inject;
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
@@ -356,6 +359,9 @@ static void _ui_namco_draw_menu(ui_namco_t* ui) {
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
+        }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
         }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();

@@ -73,6 +73,7 @@ typedef void (*ui_c64_boot_cb)(c64_t* sys);
 typedef struct {
     c64_t* c64;             // pointer to c64_t instance to track
     ui_c64_boot_cb boot_cb; // reboot callback function
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture; // texture create/update/destroy callbacks
     ui_dbg_debug_callbacks_t dbg_debug;
     ui_dbg_keys_desc_t dbg_keys;        // user-defined hotkeys for ui_dbg_t
@@ -83,6 +84,7 @@ typedef struct {
     c64_t* c64;
     int dbg_scanline;
     ui_c64_boot_cb boot_cb;
+    ui_inject_t inject;
     ui_m6502_t cpu;
     ui_m6502_t c1541_cpu;
     ui_m6526_t cia[2];
@@ -211,6 +213,9 @@ static void _ui_c64_draw_menu(ui_c64_t* ui) {
                 }
             }
             ImGui::EndMenu();
+        }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
         }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();
@@ -554,6 +559,7 @@ void ui_c64_init(ui_c64_t* ui, const ui_c64_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->c64 = ui_desc->c64;
     ui->boot_cb = ui_desc->boot_cb;
+    ui->inject = ui_desc->inject;
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {

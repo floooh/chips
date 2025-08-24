@@ -73,6 +73,7 @@ typedef void (*ui_vic20_boot_cb)(vic20_t* sys);
 typedef struct {
     vic20_t* vic20;             // pointer to vic20_t instance to track
     ui_vic20_boot_cb boot_cb;   // reboot callback function
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture;     // user-provided texture create/update/destroy callbacks
     ui_dbg_keys_desc_t dbg_keys;    // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;    // snapshot ui setup params
@@ -81,6 +82,7 @@ typedef struct {
 typedef struct {
     vic20_t* vic20;
     int dbg_scanline;
+    ui_inject_t inject;
     ui_c1530_t c1530;
     ui_vic20_boot_cb boot_cb;
     ui_m6502_t cpu;
@@ -194,6 +196,9 @@ static void _ui_vic20_draw_menu(ui_vic20_t* ui) {
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
+        }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
         }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();
@@ -407,6 +412,7 @@ void ui_vic20_init(ui_vic20_t* ui, const ui_vic20_desc_t* ui_desc) {
     ui->vic20 = ui_desc->vic20;
     ui->system.title = "VIC-20 System";
     ui->boot_cb = ui_desc->boot_cb;
+    ui->inject = ui_desc->inject;
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {

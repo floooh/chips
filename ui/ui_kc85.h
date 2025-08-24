@@ -80,6 +80,7 @@ typedef void (*ui_kc85_boot_t)(kc85_t* sys);
 typedef struct {
     kc85_t* kc85;
     ui_kc85_boot_t boot_cb;                 // user-provided callback to reboot
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture; // user-provided texture create/update/destroy callbacks
     ui_dbg_debug_callbacks_t dbg_debug;     // user-provided debugger callbacks
     ui_dbg_keys_desc_t dbg_keys;            // user-defined hotkeys for ui_dbg_t
@@ -93,6 +94,7 @@ typedef struct {
 typedef struct {
     kc85_t* kc85;
     ui_kc85_boot_t boot_cb;
+    ui_inject_t inject;
     ui_z80_t cpu;
     ui_z80pio_t pio;
     ui_z80ctc_t ctc;
@@ -179,6 +181,9 @@ static void _ui_kc85_draw_menu(ui_kc85_t* ui) {
             }
             ImGui::MenuItem("Scan Commands (TODO)");
             ImGui::EndMenu();
+        }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
         }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();
@@ -378,6 +383,7 @@ void ui_kc85_init(ui_kc85_t* ui, const ui_kc85_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->boot_cb);
     ui->kc85 = ui_desc->kc85;
     ui->boot_cb = ui_desc->boot_cb;
+    ui->inject = ui_desc->inject;
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {

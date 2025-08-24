@@ -69,6 +69,7 @@ typedef void (*ui_atom_boot_cb)(atom_t* sys);
 typedef struct {
     atom_t* atom;
     ui_atom_boot_cb boot_cb;
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture;     // texture create/update/destroy callbacks
     ui_dbg_keys_desc_t dbg_keys;                // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;                // snapshot ui setup params
@@ -77,6 +78,7 @@ typedef struct {
 typedef struct {
     atom_t* atom;
     ui_atom_boot_cb boot_cb;
+    ui_inject_t inject;
     ui_m6502_t cpu;
     ui_i8255_t ppi;
     ui_m6522_t via;
@@ -177,6 +179,9 @@ static void _ui_atom_draw_menu(ui_atom_t* ui) {
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
+        }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
         }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();
@@ -351,6 +356,7 @@ void ui_atom_init(ui_atom_t* ui, const ui_atom_desc_t* ui_desc) {
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     ui->atom = ui_desc->atom;
     ui->boot_cb = ui_desc->boot_cb;
+    ui->inject = ui_desc->inject;
     int x = 20, y = 20, dx = 10, dy = 10;
     {
         ui_dbg_desc_t desc = {0};

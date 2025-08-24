@@ -63,6 +63,7 @@ extern "C" {
 
 typedef struct {
     bombjack_t* sys;
+    ui_inject_t inject;
     ui_dbg_texture_callbacks_t dbg_texture; // texture create/update/destroy callbacks
     ui_dbg_keys_desc_t dbg_keys;            // user-defined hotkeys for ui_dbg_t
     ui_snapshot_desc_t snapshot;
@@ -84,6 +85,7 @@ typedef struct {
     bombjack_t* bj;
     uint8_t sys_clear_mask;
     double sys_clear_modified_age;
+    ui_inject_t inject;
     struct {
         ui_z80_t cpu;
         ui_dbg_t dbg;
@@ -260,6 +262,7 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
     CHIPS_ASSERT(ui_desc->sys);
     memset(ui, 0, sizeof(ui_bombjack_t));
     ui->bj = ui_desc->sys;
+    ui->inject = ui_desc->inject;
     ui_snapshot_init(&ui->snapshot, &ui_desc->snapshot);
     int x = 20, y = 20, dx = 10, dy = 10;
     {
@@ -413,10 +416,10 @@ void ui_bombjack_init(ui_bombjack_t* ui, const ui_bombjack_desc_t* ui_desc) {
         ui->video.h = 568;
         ui->video.hovered_palette_column = -1;
         for (int i = 0; i < 24; i++) {
-            ui->video.tex_16x16[i] = ui->video.texture_cbs.create_cb(16, 16);
+            ui->video.tex_16x16[i] = ui->video.texture_cbs.create_cb(16, 16, "sprite-16x16");
         }
         for (int i = 0; i < 24; i++) {
-            ui->video.tex_32x32[i] = ui->video.texture_cbs.create_cb(32, 32);
+            ui->video.tex_32x32[i] = ui->video.texture_cbs.create_cb(32, 32, "sprite-32x32");
         }
     }
 }
@@ -663,6 +666,9 @@ static void _ui_bombjack_draw_menu(ui_bombjack_t* ui) {
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
+        }
+        if (ui->inject.menu_cb) {
+            ui->inject.menu_cb();
         }
         ui_util_options_menu();
         ImGui::EndMainMenuBar();
