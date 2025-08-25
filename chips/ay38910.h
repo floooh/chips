@@ -622,6 +622,11 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
             const uint8_t data = ay->reg[ay->addr];
             AY38910_SET_DATA(pins, data);
         }
+        else {
+            // see: https://github.com/floooh/chips/pull/111
+            //      https://worldofspectrum.org/forums/discussion/23327/
+            AY38910_SET_DATA(pins, 0);
+        }
         AY38910_SET_PA(pins, ay->port_a);
         AY38910_SET_PB(pins, ay->port_b);
         ay->pins = pins;
@@ -629,30 +634,19 @@ uint64_t ay38910_iorq(ay38910_t* ay, uint64_t pins) {
     return pins;
 }
 
-/*
-uint64_t ay38910_tick(ay38910_t* ay, uint64_t pins) {
-    if (pins & (AY38910_BDIR|AY38910_BC1)) {
-        pins = _ay38910_iorq(ay, pins);
-    }
-    pins = _ay38910_tick(ay, pins);
-    AY38910_SET_PA(pins, ay->port_a);
-    AY38910_SET_PB(pins, ay->port_b);
-    ay->pins = pins;
-    return pins;
-}
-*/
-
 void ay38910_set_register(ay38910_t* ay, uint8_t addr, uint8_t data) {
-    CHIPS_ASSERT(ay && (addr < AY38910_NUM_REGISTERS));
-    ay->reg[addr] = data & _ay38910_reg_mask[addr];
-    _ay38910_update_values(ay);
-    if (addr == AY38910_REG_ENV_SHAPE_CYCLE) {
-        _ay38910_restart_env_shape(ay);
+    CHIPS_ASSERT(ay);
+    if (addr < AY38910_NUM_REGISTERS) {
+        ay->reg[addr] = data & _ay38910_reg_mask[addr];
+        _ay38910_update_values(ay);
+        if (addr == AY38910_REG_ENV_SHAPE_CYCLE) {
+            _ay38910_restart_env_shape(ay);
+        }
     }
 }
 
 void ay38910_set_addr_latch(ay38910_t* ay, uint8_t addr) {
-    CHIPS_ASSERT(ay && (addr < AY38910_NUM_REGISTERS));
+    CHIPS_ASSERT(ay);
     ay->addr = addr;
 }
 
