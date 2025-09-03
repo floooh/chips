@@ -564,7 +564,7 @@ uint32_t vic20_exec(vic20_t* sys, uint32_t micro_seconds) {
 
 static uint16_t _vic20_vic_fetch(uint16_t addr, void* user_data) {
     vic20_t* sys = (vic20_t*) user_data;
-    uint16_t data = (sys->color_ram[addr & 0x03FF]<<8) | mem_rd(&sys->mem_vic, addr);
+    uint16_t data = (sys->color_ram[addr & 0x03FF]<<8) | mem_rd(&sys->mem_vic, addr & 0x3FFF);
     return data;
 }
 
