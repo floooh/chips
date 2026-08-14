@@ -1,5 +1,13 @@
 ## What's New
 
+* **12-Aug-2026**: fixed BBRx/BBSx timing and bus behaviour in w65c02.h. These
+  instructions are all reads on the W65C02S — the decoder used to emit a dummy
+  write-back of the zero page value — and their length varies with the branch:
+  5 cycles not taken, 6 taken, 7 taken across a page boundary, instead of a flat
+  6. Verified against the SingleStepTests/65x02 "wdc65c02" v1 vectors; the older
+  ProcessorTests set that the original decode followed predates the July 2024
+  correction.
+
  * **11-Jan-2025**: writing data back to floppy is now supported in the CPC emulation
   (see: https://github.com/floooh/chips/issues/104 and https://github.com/floooh/chips/pull/105),
   note though that the floppy emulation in the CPC is still very rough. Many thanks to @karlvr for the PR!

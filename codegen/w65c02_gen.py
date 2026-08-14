@@ -242,17 +242,18 @@ def i_bra(o):
     o.t('_SA((c->PC&0xFF00)|(c->AD&0x00FF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};')
     o.t('c->PC=c->AD;')
 
-# BBRx/BBSx: flat 6 cycles (RMW-style zp read + always-present branch cycle)
+# BBRx/BBSx: all reads, 5 cycles not taken / 6 taken / 7 taken across a page
 def bbr(bit): return _bitbr(bit, taken='0==')     # branch if bit clear
 def bbs(bit): return _bitbr(bit, taken='0!=')     # branch if bit set
 def _bitbr(bit, taken):
     def i(o):
         o.t('_SA(c->PC++);')                                   # fetch zp addr
         o.t('c->AD=_GD();_SA(c->AD);')                         # read zp value
-        o.t('c->AD=_GD();_SD(c->AD);_WR();')                   # dummy write-back; AD=zp value
+        o.t('c->AD=_GD();_SA(_GA());')                         # re-read, address held
         o.t('c->AD=(c->AD>>%d)&1;_SA(c->PC++);' % bit)         # AD=selected bit; fetch rel
-        o.t('{uint16_t _t=c->PC+(int8_t)_GD();_SA((c->PC&0xFF00)|(_t&0x00FF));if(%s(uint8_t)c->AD){c->PC=_t;}}' % taken)
-        o.t('')
+        o.t('if(%s(uint8_t)c->AD){c->AD=c->PC+(int8_t)_GD();_SA(c->PC);}else{_FETCH();}' % taken)
+        o.t('if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;_FETCH();}else{_SA(c->PC);}')
+        o.t('c->PC=c->AD;')
     return i
 
 # jumps
