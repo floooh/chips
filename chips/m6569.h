@@ -1229,6 +1229,15 @@ static inline void _m6569_rs_update_badline(m6569_t* vic) {
         if (_M6569_RAST(48) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
             vic->rs.frame_badlines_enabled = true;
         }
+        /*  ...and cycle 63 of line $30 still belongs to that window, even
+            though h_count and v_count have already wrapped on to line $31 by
+            the time this runs. Without this the window would be one cycle
+            short at the end and a DEN that is only set in the very last cycle
+            of line $30 would be missed (testprogs/VICII/dentest/den01-49-1).
+        */
+        if ((vic->rs.h_count == 0) && _M6569_RAST(49) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
+            vic->rs.frame_badlines_enabled = true;
+        }
         /* a badline is active when the low 3 bits of raster position
             are identical with YSCROLL
         */
@@ -1238,9 +1247,8 @@ static inline void _m6569_rs_update_badline(m6569_t* vic) {
         vic->rs.frame_badlines_enabled = false;
         vic->rs.badline = false;
     }
-    if (vic->rs.badline) {
-        vic->rs.display_state = true;
-    }
+    // NOTE: the idle->display transition is *not* done here, the display logic
+    // only recognizes the badline one cycle later, see _m6569_tick()
 }
 
 /*
@@ -1421,7 +1429,13 @@ static inline uint64_t _m6569_aec(uint64_t pins) {
 static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     pins &= ~M6569_BA;
     uint8_t g_data = 0x00;
-    _m6569_rs_update_badline(vic);
+    /*  The badline flag is updated at the *end* of the tick, not here - see the
+        comment at the bottom of this function. Everything below therefore sees
+        the badline condition as it was sampled one cycle earlier.
+    */
+    if (vic->rs.badline) {
+        vic->rs.display_state = true;
+    }
 
     // a raster line is 63 ticks, and each line goes through a fixed 'program'
     vic->rs.h_count++;
@@ -1623,6 +1637,21 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     }
     vic->rs.vc = vic->rs.next_vc;
     vic->vm.vmli = vic->vm.next_vmli;
+
+    /*  Sample the badline condition for the *next* cycle. The VIC-II evaluates
+        it at the falling edge of PHI0 at the start of a cycle, so it can only
+        reflect register writes up to the end of the previous cycle - but the CPU
+        write of cycle N-1 is only handed to us after _m6569_tick() has run for
+        cycle N-1, so sampling at the top of cycle N would already include it and
+        act one cycle too early.
+
+        This only shows up when a badline is forced in the middle of a line
+        (VSP / "DMA delay"): the whole cycle-14 / c-access / BA machinery would
+        react one cycle before the real chip does. See
+        testprogs/VICII/dmadelay, where one cycle of delay in the forcing write
+        scrolls the screen by one character.
+    */
+    _m6569_rs_update_badline(vic);
     return pins;
 }
 
