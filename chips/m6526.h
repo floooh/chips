@@ -220,6 +220,7 @@ typedef struct {
     uint8_t cr;         // control register
     bool t_bit;         // toggles between true and false when counter underflows
     bool t_out;         // true for 1 cycle when counter underflow
+    bool t_load;        // true for 1 cycle when the counter was reloaded from the latch
     /* merged delay-pipelines:
         2-cycle 'counter active':   bits 0..7
         1-cycle 'oneshot active':   bits 8..15
@@ -298,6 +299,7 @@ static void _m6526_init_timer(m6526_timer_t* t) {
     t->cr = 0;
     t->t_bit = 0;
     t->t_out = 0;
+    t->t_load = 0;
     t->pip = 0;
 }
 
@@ -492,7 +494,8 @@ static void _m6526_tick_timer(m6526_timer_t* t) {
     }
 
     /* reload counter from latch? */
-    if (_M6526_PIP_TEST(t->pip, M6526_PIP_TIMER_LOAD, 0)) {
+    t->t_load = _M6526_PIP_TEST(t->pip, M6526_PIP_TIMER_LOAD, 0);
+    if (t->t_load) {
         t->counter = t->latch;
         _M6526_PIP_CLR(t->pip, M6526_PIP_TIMER_COUNT, 1);
     }
@@ -624,6 +627,23 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
     return data;
 }
 
+/* NOTE: a latch write in the same cycle the counter is reloaded from the latch
+   also lands in the counter
+*/
+static inline void _m6526_write_latch_lo(m6526_timer_t* t, uint8_t data) {
+    t->latch = (t->latch & 0xFF00) | data;
+    if (t->t_load) {
+        t->counter = (t->counter & 0xFF00) | data;
+    }
+}
+
+static inline void _m6526_write_latch_hi(m6526_timer_t* t, uint8_t data) {
+    t->latch = (data<<8) | (t->latch & 0x00FF);
+    if (t->t_load) {
+        t->counter = (data<<8) | (t->counter & 0x00FF);
+    }
+}
+
 static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
     switch (addr) {
         case M6526_REG_PRA:
@@ -639,20 +659,20 @@ static void _m6526_write(m6526_t* c, uint8_t addr, uint8_t data) {
             c->pb.ddr = data;
             break;
         case M6526_REG_TALO:
-            c->ta.latch = (c->ta.latch & 0xFF00) | data;
+            _m6526_write_latch_lo(&c->ta, data);
             break;
         case M6526_REG_TAHI:
-            c->ta.latch = (data<<8) | (c->ta.latch & 0x00FF);
+            _m6526_write_latch_hi(&c->ta, data);
             /* if timer is not running, writing hi-byte load counter form latch */
             if (!M6526_TIMER_STARTED(c->ta.cr)) {
                 _M6526_PIP_SET(c->ta.pip, M6526_PIP_TIMER_LOAD, 1);
             }
             break;
         case M6526_REG_TBLO:
-            c->tb.latch = (c->tb.latch & 0xFF00) | data;
+            _m6526_write_latch_lo(&c->tb, data);
             break;
         case M6526_REG_TBHI:
-            c->tb.latch = (data<<8) | (c->tb.latch & 0x00FF);
+            _m6526_write_latch_hi(&c->tb, data);
             /* if timer is not running, writing hi-byte writes latch */
             if (!M6526_TIMER_STARTED(c->tb.cr)) {
                 _M6526_PIP_SET(c->tb.pip, M6526_PIP_TIMER_LOAD, 1);
