@@ -332,7 +332,7 @@ typedef struct {
     uint8_t A,X,Y,S,P;  /* regular registers */
     uint64_t PINS;      /* last stored pin state (do NOT modify) */
     uint16_t irq_pip;
-    uint16_t nmi_pip;
+    uint32_t nmi_pip;   /* wider than irq_pip: a pending NMI must not be shifted out while it waits for a long instruction to finish */
     uint8_t brk_flags;  /* M6502_BRK_* */
     uint8_t bcd_enabled;
     /* 6510 IO port state */
@@ -781,10 +781,10 @@ uint64_t m6502_tick(m6502_t* c, uint64_t pins) {
         case (0x00<<3)|0: _SA(c->PC);break;
         case (0x00<<3)|1: if(0==(c->brk_flags&(M6502_BRK_IRQ|M6502_BRK_NMI))){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}break;
         case (0x00<<3)|2: _SAD(0x0100|c->S--,c->PC);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}break;
-        case (0x00<<3)|3: _SAD(0x0100|c->S--,c->P|M6502_XF);if(c->brk_flags&M6502_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}break;
-        case (0x00<<3)|4: _SA(c->AD++);c->P|=(M6502_IF|M6502_BF);c->brk_flags=0; /* RES/NMI hijacking */break;
+        case (0x00<<3)|3: if(c->nmi_pip&&(0==(c->brk_flags&M6502_BRK_RESET))){c->brk_flags|=M6502_BRK_NMI;c->nmi_pip=0;} /* NMI hijacking */_SAD(0x0100|c->S--,c->P|M6502_XF);if(c->brk_flags&M6502_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}break;
+        case (0x00<<3)|4: _SA(c->AD++);c->P|=(M6502_IF|M6502_BF);c->brk_flags=0;break;
         case (0x00<<3)|5: _SA(c->AD);c->AD=_GD(); /* NMI "half-hijacking" not possible */break;
-        case (0x00<<3)|6: c->PC=(_GD()<<8)|c->AD;_FETCH();break;
+        case (0x00<<3)|6: c->PC=(_GD()<<8)|c->AD;if(c->nmi_pip){c->nmi_pip=0x100;} /* no interrupt poll at the end of the interrupt sequence */_FETCH();break;
         case (0x00<<3)|7: assert(false);break;
     /* ORA (zp,X) */
         case (0x01<<3)|0: _SA(c->PC++);break;

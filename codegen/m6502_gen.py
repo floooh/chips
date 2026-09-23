@@ -248,10 +248,10 @@ def i_brk(o):
     cmt(o, 'BRK')
     o.t('if(0==(c->brk_flags&(M6502_BRK_IRQ|M6502_BRK_NMI))){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}')
     o.t('_SAD(0x0100|c->S--,c->PC);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}')
-    o.t('_SAD(0x0100|c->S--,c->P|M6502_XF);if(c->brk_flags&M6502_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}')
-    o.t('_SA(c->AD++);c->P|=(M6502_IF|M6502_BF);c->brk_flags=0; /* RES/NMI hijacking */')
+    o.t('if(c->nmi_pip&&(0==(c->brk_flags&M6502_BRK_RESET))){c->brk_flags|=M6502_BRK_NMI;c->nmi_pip=0;} /* NMI hijacking */_SAD(0x0100|c->S--,c->P|M6502_XF);if(c->brk_flags&M6502_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}')
+    o.t('_SA(c->AD++);c->P|=(M6502_IF|M6502_BF);c->brk_flags=0;')
     o.t('_SA(c->AD);c->AD=_GD(); /* NMI "half-hijacking" not possible */')
-    o.t('c->PC=(_GD()<<8)|c->AD;')
+    o.t('c->PC=(_GD()<<8)|c->AD;if(c->nmi_pip){c->nmi_pip=0x100;} /* no interrupt poll at the end of the interrupt sequence */')
 
 #-------------------------------------------------------------------------------
 def i_nop(o):
