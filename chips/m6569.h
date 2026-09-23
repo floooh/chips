@@ -225,6 +225,7 @@ typedef struct {
     uint8_t rc;             // 3-bit raster counter
     bool display_state;             // true: in display state, false: in idle state
     bool badline;                   // true when the badline state is active
+    bool badline_ds;                // badline delayed by one more cycle, drives display_state
     bool frame_badlines_enabled;    // true when badlines are enabled in frame
     uint8_t ba_count;               // number of cycles BA has been active for a badline
     uint8_t ba_data;                // last data bus value the CPU put on the bus before BA
@@ -460,6 +461,7 @@ static void _m6569_reset_raster_unit(m6569_raster_unit_t* r) {
     r->rc = 0;
     r->display_state = false;
     r->badline = false;
+    r->badline_ds = false;
     r->frame_badlines_enabled = false;
 }
 
@@ -1545,8 +1547,15 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     /*  The badline flag is updated at the *end* of the tick, not here - see the
         comment at the bottom of this function. Everything below therefore sees
         the badline condition as it was sampled one cycle earlier.
+
+        The switch to display state lags the badline by one *further* cycle: the
+        g-accesses (and with them VC/VMLI) only start once the VIC has actually
+        entered display state, so a badline that is forced one cycle too late to
+        make it into display state by cycle 16 loses its first character and the
+        whole row is shifted one character to the right. That's the horizontal
+        half of "DMA delay" / HSP, see testprogs/VICII/dmadelay test*-18.
     */
-    if (vic->rs.badline) {
+    if (vic->rs.badline_ds) {
         vic->rs.display_state = true;
     }
 
@@ -1803,6 +1812,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         testprogs/VICII/dmadelay, where one cycle of delay in the forcing write
         scrolls the screen by one character.
     */
+    vic->rs.badline_ds = vic->rs.badline;
     _m6569_rs_update_badline(vic);
     return pins;
 }
