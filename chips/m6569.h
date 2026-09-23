@@ -258,6 +258,7 @@ typedef struct {
     bool vert;      // vertical border flip flop (as seen by the pixel sequencer)
     bool next_main; // pending flip-flop state, see brd.delay
     bool next_vert;
+    bool bottom_match;  // the bottom comparison matched somewhere in this line, see _m6569_bunit_end()
     uint8_t delay;  // number of pixels the old flip-flop state is still visible
     uint8_t bc;     // border color
 } m6569_border_unit_t;
@@ -480,6 +481,7 @@ static void _m6569_reset_sprite_unit(m6569_sprite_unit_t* su) {
 static void _m6569_reset_border_unit(m6569_border_unit_t* b) {
     b->main = b->vert = b->next_main = b->next_vert = false;
     b->csel = b->next_csel = false;
+    b->bottom_match = false;
     b->delay = 0;
 }
 
@@ -1419,11 +1421,39 @@ static inline void _m6569_bunit_right_csel1(m6569_t* vic) {
     }
 }
 
+/*  Rules 2 and 3 of the VIC article, both evaluated in cycle 63 - but the
+    raster counter increments in that very cycle, and the VICE test suite pins
+    down exactly which side of the increment each input falls on:
+
+    - testprogs/VICII/dentest denrsel-0/1/2: clearing DEN in cycle 62 of line 50
+      keeps the screen closed, clearing it in cycle 0 of line 51 does not. A
+      write becomes visible to the VIC one cycle after it was performed, so rule
+      3 sees a cycle-62 write and compares against the *incremented* raster
+      counter, i.e. it runs after _m6569_rs_next_rasterline().
+
+    - testprogs/VICII/border vborder2-36: a four-cycle RSEL=0 window in the
+      middle of line 247 closes the border at line 248, even though RSEL is back
+      to 1 long before cycle 63. So the bottom comparison isn't sampled in cycle
+      63 at all - it is evaluated in *every* cycle of the line and latched in
+      brd.bottom_match, and cycle 63 only transfers the latch to the flip-flop.
+
+    - testprogs/VICII/border vborder-32 vs vborder-33: RSEL=0 written in cycle 61
+      of line 247 closes the border, written in cycle 62 it doesn't. The cycle-62
+      write is visible in cycle 63, which is one cycle too late for the latch
+      (cycle 63 no longer feeds it) and compares against raster 248 instead of
+      247. vborder2-21 vs vborder2-22 is the mirror image: a window that still
+      covers cycle 63 of line 246 matches raster 247 through the post-increment
+      comparison below.
+
+    Note that none of this usually decides where the border actually appears,
+    that's rules 4 and 5 at the left comparison in cycle 16. Rules 2 and 3 only
+    carry the flip-flop across the line boundary.
+*/
 static inline void _m6569_bunit_end(m6569_t* vic) {
     /* 2. If the Y coordinate reaches the bottom comparison value in cycle 63, the
           vertical border flip flop is set.
     */
-    if (vic->rs.v_count == vic->brd.bottom) {
+    if (vic->brd.bottom_match || (vic->rs.v_count == vic->brd.bottom)) {
         vic->brd.next_vert = true;
     }
     /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
@@ -1433,6 +1463,7 @@ static inline void _m6569_bunit_end(m6569_t* vic) {
     else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
         vic->brd.next_vert = false;
     }
+    vic->brd.bottom_match = false;
 }
 
 /* memory access functions */
@@ -1562,6 +1593,16 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     // a raster line is 63 ticks, and each line goes through a fixed 'program'
     vic->rs.h_count++;
     vic->crt.x++;
+
+    /*  Border rule 2, first half: the bottom comparison is evaluated in every
+        cycle of the line and latched. Cycle 63 is excluded because that's where
+        the latch is consumed again, and because the raster counter has already
+        moved on to the next line by then (see _m6569_bunit_end()).
+    */
+    if ((vic->rs.h_count != 63) && (vic->rs.v_count == vic->brd.bottom)) {
+        vic->brd.bottom_match = true;
+    }
+
     switch (vic->rs.h_count) {
         case 1:
             _m6569_p_access(vic, 3);
@@ -1730,11 +1771,11 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
         case 63:    /* HTOTAL */
             _m6569_rs_next_rasterline(vic);
             _m6569_rs_check_irq(vic);
+            _m6569_bunit_end(vic);
             g_data = _m6569_s_i_access(vic, 2);
             _m6569_s_access(vic, 2);
             pins = _m6569_sunit_dma_aec(vic, (1<<2), pins);
             pins = _m6569_sunit_dma_ba(vic, (1<<2)|(1<<3)|(1<<4), pins);
-            _m6569_bunit_end(vic);
             break;
         default: _M6569_UNREACHABLE;
     }
