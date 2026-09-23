@@ -1177,8 +1177,23 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
             vic->brd.main = vic->brd.next_main;
             vic->brd.vert = vic->brd.next_vert;
         }
-        const bool brd = vic->brd.vert | vic->brd.main;
-        const uint8_t brd_color = vic->brd.main ? vic->brd.bc : vic->gunit.bg[0];
+        /*  Only the *main* border flip-flop gates the pixel output ("The main
+            border flip flop controls the border display. If it is set, the VIC
+            displays the color stored in register $d020, otherwise it displays
+            the color that the priority multiplexer switches through from the
+            graphics or sprite data sequencer").
+
+            The vertical flip-flop never reaches the output stage, it only feeds
+            rule 6 at the left comparison, where it keeps the main flip-flop from
+            being reset. That's an important difference as soon as a test stops
+            the main flip-flop from ever being set: testprogs/VICII/border
+            border-250 skips both right comparisons from line 250 on, so the main
+            flip-flop stays clear while the vertical one is set, and the lower
+            border shows the idle graphics instead of $d020 (hvborder1/hvborder2
+            likewise).
+        */
+        const bool brd = vic->brd.main;
+        const uint8_t brd_color = vic->brd.bc;
         // the new video mode only kicks in a few pixels into the character
         if (vic->gunit.mode_delay > 0) {
             vic->gunit.mode_delay--;
