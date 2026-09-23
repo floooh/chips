@@ -250,9 +250,14 @@ typedef struct {
 
 // border unit state
 typedef struct {
-    uint16_t left, right, top, bottom;
-    bool main;      // main border flip-flop
-    bool vert;      // vertical border flip flop
+    uint16_t top, bottom;
+    bool csel;      // CSEL bit as seen by a compare at the start of a cycle
+    bool next_csel; // CSEL bit including a write from the current cycle
+    bool main;      // main border flip-flop (as seen by the pixel sequencer)
+    bool vert;      // vertical border flip flop (as seen by the pixel sequencer)
+    bool next_main; // pending flip-flop state, see brd.delay
+    bool next_vert;
+    uint8_t delay;  // number of pixels the old flip-flop state is still visible
     uint8_t bc;     // border color
 } m6569_border_unit_t;
 
@@ -376,10 +381,32 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
 #define _M6569_RSEL1_BORDER_BOTTOM  (251)   // bottom border when RSEL=1
 #define _M6569_RSEL0_BORDER_TOP     (55)    // top border when RSEL=0 (24 rows)
 #define _M6569_RSEL0_BORDER_BOTTOM  (247)   // bottom border when RSEL=0 (24 rows)
-#define _M6569_CSEL1_BORDER_LEFT    (16)    // left border when CSEL=1 (40 columns)
-#define _M6569_CSEL1_BORDER_RIGHT   (56)    // right border when CSEL=1
-#define _M6569_CSEL0_BORDER_LEFT    (17)    // left border when CSEL=0 (38 columns)
-#define _M6569_CSEL0_BORDER_RIGHT   (55)    // right border when CSEL=0
+/*  The horizontal border comparison positions.
+
+    The 38-column window is not the 40-column window minus one character on each
+    side: the first/last displayed X coordinates are $018/$157 for CSEL=1 and
+    $01F/$14E for CSEL=0, so the 38 column window starts 7 pixels later and ends
+    9 pixels earlier (see the VIC-II article by Christian Bauer, 3.9. "The
+    border unit"). Getting this wrong by one pixel is visible in 38-column
+    hardware scrollers, where the character leaving on the left side loses its
+    last pixel column one frame too early.
+
+    A chips cycle is 4 pixels 'late' against Bauer's X coordinates (the CSEL=1
+    compare X=$018 lands on the first pixel of cycle 16), which puts the compares
+    at:
+
+        compare     X       chips
+        ----------------------------------
+        left  CSEL1 $018    cycle 16, px 0
+        left  CSEL0 $01F    cycle 16, px 7
+        right CSEL0 $14F    cycle 54, px 7
+        right CSEL1 $158    cycle 56, px 0
+
+    The px-7 compares happen after the CPU write of the current cycle has
+    reached the chip and thus use brd.next_csel, the px-0 compares happen before
+    and use brd.csel.
+*/
+#define _M6569_BORDER_CSEL0_DELAY   (7)     // the CSEL=0 compares are 7 pixels into the cycle
 
 #define _M6569_RAST(r)              (vic->rs.v_count == (r))
 #define _M6569_RAST_RANGE(r0,r1)    ((vic->rs.v_count >= (r0)) && (vic->rs.v_count <= (r1)))
@@ -449,7 +476,9 @@ static void _m6569_reset_sprite_unit(m6569_sprite_unit_t* su) {
 }
 
 static void _m6569_reset_border_unit(m6569_border_unit_t* b) {
-    b->main = b->vert = false;
+    b->main = b->vert = b->next_main = b->next_vert = false;
+    b->csel = b->next_csel = false;
+    b->delay = 0;
 }
 
 static void _m6569_reset_crt(m6569_crt_t* c) {
@@ -511,15 +540,7 @@ static inline void _m6569_io_update_border_rsel(m6569_border_unit_t* b, uint8_t 
 
 // update the border left/right position when updating csel
 static inline void _m6569_io_update_border_csel(m6569_border_unit_t* b, uint8_t ctrl_2) {
-    if (ctrl_2 & M6569_CTRL2_CSEL) {
-        // CSEL 1: 40 columns
-        b->left = _M6569_CSEL1_BORDER_LEFT;
-        b->right = _M6569_CSEL1_BORDER_RIGHT;
-    } else {
-        // CSEL 0: 38 columns
-        b->left = _M6569_CSEL0_BORDER_LEFT;
-        b->right = _M6569_CSEL0_BORDER_RIGHT;
-    }
+    b->next_csel = 0 != (ctrl_2 & M6569_CTRL2_CSEL);
 }
 
 // updates the graphics sequencer display mode (0..7) from the ECM/BMM/MCM bits
@@ -1136,11 +1157,19 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
 
         ...otherwise it displays the background color
     */
-    bool brd = vic->brd.vert | vic->brd.main;
-    uint8_t brd_color = vic->brd.main ? vic->brd.bc : vic->gunit.bg[0];
     const uint8_t mdp = vic->reg.mdp;
     uint16_t bmc = 0;
     for (size_t i = 0; i < 8; i++) {
+        // the border flip-flops only flip a few pixels into the character when CSEL=0
+        if (vic->brd.delay > 0) {
+            vic->brd.delay--;
+        }
+        else {
+            vic->brd.main = vic->brd.next_main;
+            vic->brd.vert = vic->brd.next_vert;
+        }
+        const bool brd = vic->brd.vert | vic->brd.main;
+        const uint8_t brd_color = vic->brd.main ? vic->brd.bc : vic->gunit.bg[0];
         // the new video mode only kicks in a few pixels into the character
         if (vic->gunit.mode_delay > 0) {
             vic->gunit.mode_delay--;
@@ -1331,34 +1360,60 @@ static inline void _m6569_crt_next_crtline(m6569_t* vic) {
     }
 }
 
-// border unit functions
-static inline void _m6569_bunit_left(m6569_t* vic, uint32_t hpos) {
-    if (hpos == vic->brd.left) {
-        /* 4. If the X coordinate reaches the left comparison value and the Y
-              coordinate reaches the bottom one, the vertical border flip flop is set.
-        */
-        if (vic->rs.v_count == vic->brd.bottom) {
-            vic->brd.vert = true;
-        }
-        /* 5. If the X coordinate reaches the left comparison value and the Y
-              coordinate reaches the top one and the DEN bit in register $d011 is set,
-              the vertical border flip flop is reset.
-        */
-        else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
-            vic->brd.vert = false;
-        }
-        /* 6. If the X coordinate reaches the left comparison value and the vertical
-              border flip flop is not set, the main flip flop is reset.
-        */
-        if (!vic->brd.vert) {
-            vic->brd.main = false;
-        }
+/*  border unit functions
+
+    The flip-flop changes are written to brd.next_main/brd.next_vert and only
+    become visible brd.delay pixels into the cycle (the CSEL=0 comparison values
+    don't fall on character boundaries), the pixel loop in
+    _m6569_decode_pixels() moves them over into brd.main/brd.vert.
+*/
+static inline void _m6569_bunit_left_compare(m6569_t* vic, uint8_t delay) {
+    /* 4. If the X coordinate reaches the left comparison value and the Y
+          coordinate reaches the bottom one, the vertical border flip flop is set.
+    */
+    if (vic->rs.v_count == vic->brd.bottom) {
+        vic->brd.next_vert = true;
+    }
+    /* 5. If the X coordinate reaches the left comparison value and the Y
+          coordinate reaches the top one and the DEN bit in register $d011 is set,
+          the vertical border flip flop is reset.
+    */
+    else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
+        vic->brd.next_vert = false;
+    }
+    /* 6. If the X coordinate reaches the left comparison value and the vertical
+          border flip flop is not set, the main flip flop is reset.
+    */
+    if (!vic->brd.next_vert) {
+        vic->brd.next_main = false;
+    }
+    vic->brd.delay = delay;
+}
+
+// left border compare in cycle 16, both CSEL values land in this cycle
+static inline void _m6569_bunit_left(m6569_t* vic) {
+    if (vic->brd.csel) {
+        _m6569_bunit_left_compare(vic, 0);
+    }
+    else if (!vic->brd.next_csel) {
+        _m6569_bunit_left_compare(vic, _M6569_BORDER_CSEL0_DELAY);
     }
 }
 
-static inline void _m6569_bunit_right(m6569_t* vic, uint32_t hpos) {
-    if (hpos == vic->brd.right) {
-        vic->brd.main = true;
+/* 1. If the X coordinate reaches the right comparison value, the main border
+      flip flop is set.
+*/
+static inline void _m6569_bunit_right_csel0(m6569_t* vic) {
+    if (!vic->brd.next_csel) {
+        vic->brd.next_main = true;
+        vic->brd.delay = _M6569_BORDER_CSEL0_DELAY;
+    }
+}
+
+static inline void _m6569_bunit_right_csel1(m6569_t* vic) {
+    if (vic->brd.csel) {
+        vic->brd.next_main = true;
+        vic->brd.delay = 0;
     }
 }
 
@@ -1367,14 +1422,14 @@ static inline void _m6569_bunit_end(m6569_t* vic) {
           vertical border flip flop is set.
     */
     if (vic->rs.v_count == vic->brd.bottom) {
-        vic->brd.vert = true;
+        vic->brd.next_vert = true;
     }
     /* 3. If the Y coordinate reaches the top comparison value in cycle 63 and the
           DEN bit in register $d011 is set, the vertical border flip flop is
           reset.
     */
     else if ((vic->rs.v_count == vic->brd.top) && (vic->reg.ctrl_1 & M6569_CTRL1_DEN)) {
-        vic->brd.vert = false;
+        vic->brd.next_vert = false;
     }
 }
 
@@ -1584,7 +1639,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             _m6569_sunit_update_mcbase(vic);
             _m6569_c_access(vic, pins);
             g_data = _m6569_g_i_access(vic);
-            _m6569_bunit_left(vic, 16);
+            _m6569_bunit_left(vic);
             break;
         case 17:
             pins = _m6569_ba(vic, pins);
@@ -1593,18 +1648,25 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             _m6569_sunit_dma_disp_disable(vic);
             _m6569_c_access(vic, pins);
             g_data = _m6569_g_i_access(vic);
-            _m6569_bunit_left(vic, 17);
             break;
         case 18: case 19:
         case 20: case 21: case 22: case 23: case 24: case 25: case 26: case 27: case 28: case 29:
         case 30: case 31: case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39:
         case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47: case 48: case 49:
-        case 50: case 51: case 52: case 53: case 54:
+        case 50: case 51: case 52: case 53:
             pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_c_access(vic, pins);
             g_data = _m6569_g_i_access(vic);
+            break;
+        case 54:
+            pins = _m6569_ba(vic, pins);
+            pins = _m6569_aec(pins);
+            vic->gunit.enabled = vic->rs.display_state;
+            _m6569_c_access(vic, pins);
+            g_data = _m6569_g_i_access(vic);
+            _m6569_bunit_right_csel0(vic);
             break;
         case 55:
             vic->gunit.enabled = vic->rs.display_state;
@@ -1612,14 +1674,13 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             _m6569_c_access(vic, pins);
             g_data = _m6569_g_i_access(vic);
             pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
-            _m6569_bunit_right(vic, 55);
             break;
         case 56:
             vic->gunit.enabled = false;
             _m6569_sunit_start(vic, false);
             g_data = _m6569_i_access(vic);
             pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
-            _m6569_bunit_right(vic, 56);
+            _m6569_bunit_right_csel1(vic);
             break;
         case 57:
             g_data = _m6569_i_access(vic);
@@ -1703,6 +1764,12 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     vic->gunit.mode = vic->gunit.next_mode;
     vic->gunit.mode_delay = 0;
 
+    // ...same for a pending border flip-flop change
+    vic->brd.main = vic->brd.next_main;
+    vic->brd.vert = vic->brd.next_vert;
+    vic->brd.delay = 0;
+    vic->brd.csel = vic->brd.next_csel;
+
     /*  Count how long BA has been active for the current badline, the VIC only
         gets the bus (AEC goes low) _M6569_BA_TO_AEC cycles later, see
         _m6569_c_access(). This must happen *before* the badline is re-sampled
@@ -1742,12 +1809,13 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
 
 // all-in-one tick function
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
-    /*  A write to the ECM/BMM/MCM bits reaches the pixel sequencer in the same
-        cycle: the CPU writes during PHI2, which is in the middle of the 8 pixels
-        the VIC outputs in that cycle. All other register writes are handled
-        after the tick (and thus take effect in the next cycle), only the video
-        mode has to be pushed into the sequencer pipeline up front, see
-        _M6569_MODE_DELAY.
+    /*  A write to the ECM/BMM/MCM or CSEL bits reaches the pixel sequencer and
+        the border unit in the same cycle: the CPU writes during PHI2, which is
+        in the middle of the 8 pixels the VIC outputs in that cycle. All other
+        register writes are handled after the tick (and thus take effect in the
+        next cycle), only the video mode and the border window width have to be
+        pushed into the pipeline up front, see _M6569_MODE_DELAY and the border
+        comparison positions.
     */
     if ((pins & (M6569_CS|M6569_RW)) == M6569_CS) {
         const uint8_t r_addr = pins & M6569_REG_MASK;
@@ -1757,6 +1825,7 @@ uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
         }
         else if (r_addr == 0x16) {
             _m6569_io_update_gunit_mode(&vic->gunit, vic->reg.ctrl_1, data);
+            _m6569_io_update_border_csel(&vic->brd, data);
         }
     }
 
