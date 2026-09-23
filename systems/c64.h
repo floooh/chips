@@ -709,6 +709,17 @@ static uint64_t _c64_tick(c64_t* sys, uint64_t pins) {
         this goes active during a badline, but is not checked
     */
     {
+        /*  The color RAM data lines are wired to D0..D3 of the shared system
+            data bus. A badline that starts in the middle of a rasterline
+            doesn't have the bus for its first c-accesses and picks up the
+            color nibble from there instead (the "FLI bug", see m6569.h), so
+            hand the current bus value to the VIC. The CPU keeps driving
+            address and data even while it is stopped by BA/RDY, which is why
+            this doesn't look at the RDY state.
+        */
+        if (pins & M6502_RW) {
+            M6569_SET_DATA(vic_pins, mem_rd(&sys->mem_cpu, addr));
+        }
         vic_pins = m6569_tick(&sys->vic, vic_pins);
         pins |= (vic_pins & (M6502_IRQ|M6502_RDY|M6510_AEC));
         if ((vic_pins & (M6569_CS|M6569_RW)) == (M6569_CS|M6569_RW)) {
