@@ -47,14 +47,14 @@
         branchwrap:     ok
         cia1pb6:        ok
         cia1pb7:        ok
-        cia1ta:         FAIL (OK, CIA sysclock not implemented)
+        cia1ta:         ok
         cia1tab:        ok
-        cia1tb:         FAIL (OK, CIA sysclock not implemented)
+        cia1tb:         ok
         cia1tb123:      ok
         cia2pb6:        ok
         cia2pb7:        ok
-        cia2ta:         FAIL (OK, CIA sysclock not implemented)
-        cia2tb:         FAIL (OK, CIA sysclock not implemented)
+        cia2ta:         ok
+        cia2tb:         ok
         cntdef:         ok
         cnto2:          ok
         cpuport:        ok
@@ -66,7 +66,7 @@
         loadth:         ok
         mmu:            ok
         mmufetch:       ok
-        nmi:            FAIL (1 error at 00/5)
+        nmi:            ok
         oneshot:        ok
         trap1..17:      ok
 
