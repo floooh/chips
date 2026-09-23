@@ -226,6 +226,8 @@ typedef struct {
     bool display_state;             // true: in display state, false: in idle state
     bool badline;                   // true when the badline state is active
     bool frame_badlines_enabled;    // true when badlines are enabled in frame
+    uint8_t ba_count;               // number of cycles BA has been active for a badline
+    uint8_t ba_data;                // last data bus value the CPU put on the bus before BA
 } m6569_raster_unit_t;
 
 // address generator / memory interface state
@@ -1349,11 +1351,39 @@ static inline void _m6569_bunit_end(m6569_t* vic) {
 }
 
 /* memory access functions */
-static inline void _m6569_c_access(m6569_t* vic) {
+
+/*  Number of cycles BA has to be active before the VIC actually owns the bus.
+    BA only asks the CPU to stop, and the CPU finishes what it is doing and
+    then halts on its next read access, so AEC follows BA 3 cycles later.
+*/
+#define _M6569_BA_TO_AEC (3)
+
+/*  A c-access can only read the video matrix once the VIC owns the bus. For a
+    badline that is active from the start of a line this is always the case
+    (BA goes active in cycle 12, the first c-access is in cycle 16), but when a
+    badline is forced in the middle of a line the first 3 c-accesses happen
+    while the CPU is still driving the bus: the video matrix byte then reads as
+    0xFF, and the color nibble picks up the low 4 bits of the frozen data bus,
+    because the color RAM data lines are wired to D0..D3 of the system data bus.
+    This is the "FLI bug", see testprogs/VICII/colorfetchbug.
+*/
+static inline void _m6569_c_access(m6569_t* vic, uint64_t pins) {
     if (vic->rs.badline) {
-        /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
-        uint16_t addr = vic->rs.vc | vic->mem.c_addr_or;
-        vic->vm.line[vic->vm.vmli] = vic->mem.fetch_cb(addr, vic->mem.user_data) & 0x0FFF;
+        if (vic->rs.ba_count < _M6569_BA_TO_AEC) {
+            /*  The VIC doesn't own the bus yet. It only latches the open bus
+                into the video matrix buffer while it is actually asking for the
+                bus, a badline that starts after the BA window has closed again
+                (in cycle 55) leaves the buffer alone.
+            */
+            if (pins & M6569_BA) {
+                vic->vm.line[vic->vm.vmli] = 0x0FF | ((vic->rs.ba_data & 0xF)<<8);
+            }
+        }
+        else {
+            /* addr=|VM13|VM12|VM11|VM10|VC9|VC8|VC7|VC6|VC5|VC4|VC3|VC2|VC1|VC0| */
+            uint16_t addr = vic->rs.vc | vic->mem.c_addr_or;
+            vic->vm.line[vic->vm.vmli] = vic->mem.fetch_cb(addr, vic->mem.user_data) & 0x0FFF;
+        }
     }
 }
 
@@ -1524,7 +1554,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_gunit_rewind(vic);
             _m6569_sunit_update_mcbase(vic);
-            _m6569_c_access(vic);
+            _m6569_c_access(vic, pins);
             g_data = _m6569_g_i_access(vic);
             _m6569_bunit_left(vic, 16);
             break;
@@ -1533,7 +1563,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_sunit_dma_disp_disable(vic);
-            _m6569_c_access(vic);
+            _m6569_c_access(vic, pins);
             g_data = _m6569_g_i_access(vic);
             _m6569_bunit_left(vic, 17);
             break;
@@ -1545,13 +1575,13 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_ba(vic, pins);
             pins = _m6569_aec(pins);
             vic->gunit.enabled = vic->rs.display_state;
-            _m6569_c_access(vic);
+            _m6569_c_access(vic, pins);
             g_data = _m6569_g_i_access(vic);
             break;
         case 55:
             vic->gunit.enabled = vic->rs.display_state;
             _m6569_sunit_start(vic, true);
-            _m6569_c_access(vic);
+            _m6569_c_access(vic, pins);
             g_data = _m6569_g_i_access(vic);
             pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
             _m6569_bunit_right(vic, 55);
@@ -1637,6 +1667,26 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     }
     vic->rs.vc = vic->rs.next_vc;
     vic->vm.vmli = vic->vm.next_vmli;
+
+    /*  Count how long BA has been active for the current badline, the VIC only
+        gets the bus (AEC goes low) _M6569_BA_TO_AEC cycles later, see
+        _m6569_c_access(). This must happen *before* the badline is re-sampled
+        below, so that the first c-access of a badline still sees a count of zero.
+
+        While no badline is active the CPU owns the bus, so remember what it has
+        put on the data bus: when the CPU is stopped by BA it freezes the bus
+        with the value from just before, and that's what the c-accesses read
+        until the VIC actually owns the bus.
+    */
+    if (vic->rs.badline) {
+        if (vic->rs.ba_count < _M6569_BA_TO_AEC) {
+            vic->rs.ba_count++;
+        }
+    }
+    else {
+        vic->rs.ba_count = 0;
+        vic->rs.ba_data = M6569_GET_DATA(pins);
+    }
 
     /*  Sample the badline condition for the *next* cycle. The VIC-II evaluates
         it at the falling edge of PHI0 at the start of a cycle, so it can only
