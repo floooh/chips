@@ -248,9 +248,11 @@ static void _ui_m6569_draw_video_matrix(const ui_m6569_t* win) {
 static void _ui_m6569_draw_border_unit(const ui_m6569_t* win) {
     if (ImGui::CollapsingHeader("Border Unit")) {
         const m6569_border_unit_t* brd = &win->vic->brd;
-        ImGui::Text("left:%04X right:%04X", brd->left, brd->right);
         ImGui::Text("top:%04X bottom:%04X", brd->top, brd->bottom);
+        ImGui::Text("csel:%s next_csel:%s", brd->csel?"1":"0", brd->next_csel?"1":"0");
         ImGui::Text("main:%s vert:%s", brd->main?"ON ":"OFF", brd->vert?"ON ":"OFF");
+        ImGui::Text("next_main:%s next_vert:%s delay:%X",
+            brd->next_main?"ON ":"OFF", brd->next_vert?"ON ":"OFF", brd->delay);
         _ui_m6569_draw_color("border color: ", brd->bc);
     }
 }
@@ -260,6 +262,7 @@ static void _ui_m6569_draw_graphics_unit(const ui_m6569_t* win) {
         const m6569_graphics_unit_t* gu = &win->vic->gunit;
         ImGui::Text("enabled:%s", gu->enabled?"YES":"NO "); ImGui::SameLine();
         ImGui::Text("mode:%X", gu->mode); ImGui::SameLine();
+        ImGui::Text("next_mode:%X delay:%X", gu->next_mode, gu->mode_delay); ImGui::SameLine();
         ImGui::Text("c_data:%03X", gu->c_data);
         ImGui::Text("count:%X", gu->count);
         ui_util_b8("shift: ", gu->shift);
