@@ -394,11 +394,24 @@ static void _m6569_init_crt(m6569_crt_t* crt, const m6569_desc_t* desc) {
     crt->vis_y1 = crt->vis_y0 + crt->vis_h;
 }
 
+// also called from m6569_init(), the precomputed address masks must be valid
+// from the start, otherwise every fetch is masked down to address 0 until
+// $d011 or $d018 is written the first time
+static void _m6569_reset_memory_unit(m6569_memory_unit_t* m) {
+    // NOTE: must be identical to _m6569_io_update_memory_unit() with mem_ptrs=0 and ctrl_1=0
+    m->c_addr_or = 0;
+    m->g_addr_and = 0xFFFF;
+    m->g_addr_or = 0;
+    m->i_addr = 0x3FFF;
+    m->p_addr_or = 0x3F8;
+}
+
 void m6569_init(m6569_t* vic, const m6569_desc_t* desc) {
     CHIPS_ASSERT(vic && desc);
     CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= M6569_FRAMEBUFFER_SIZE_BYTES));
     memset(vic, 0, sizeof(*vic));
     _m6569_init_crt(&vic->crt, desc);
+    _m6569_reset_memory_unit(&vic->mem);
     vic->mem.fetch_cb = desc->fetch_cb;
     vic->mem.user_data = desc->user_data;
 }
@@ -417,14 +430,6 @@ static void _m6569_reset_raster_unit(m6569_raster_unit_t* r) {
     r->display_state = false;
     r->badline = false;
     r->frame_badlines_enabled = false;
-}
-
-static void _m6569_reset_memory_unit(m6569_memory_unit_t* m) {
-    m->c_addr_or = 0;
-    m->g_addr_and = 0;
-    m->g_addr_or = 0;
-    m->i_addr = 0;
-    m->p_addr_or = 0;
 }
 
 static void _m6569_reset_video_matrix_unit(m6569_video_matrix_t* vm) {
@@ -836,7 +841,8 @@ static inline uint16_t _m6569_gunit_decode_mode4(m6569_t* vic) {
 
 /*--- sprite sequencer helper ------------------------------------------------*/
 
-static inline void _m6569_sunit_start(m6569_t* vic) {
+// called in the first phase of cycle 55 and 56, cycle_55 selects the cycle-55-only actions
+static inline void _m6569_sunit_start(m6569_t* vic, bool cycle_55) {
     /*
         1. The expansion flip flop is set as long as the bit in MxYE in register
          $d017 corresponding to the sprite is cleared.
@@ -858,7 +864,10 @@ static inline void _m6569_sunit_start(m6569_t* vic) {
     const uint8_t me = vic->reg.me;
     const uint8_t mye = vic->reg.mye;
     m6569_sprite_unit_t* su = &vic->sunit;
-    su->expand ^= mye;
+    // vicii.txt rule 2 is a cycle-55-only action, rule 3 happens in both cycles
+    if (cycle_55) {
+        su->expand ^= mye;
+    }
     for (size_t i = 0; i < 8; i++) {
         const uint8_t mask = (1<<i);
         if ((~su->dma_enabled & me & mask) && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
@@ -1527,6 +1536,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             break;
         case 55:
             vic->gunit.enabled = vic->rs.display_state;
+            _m6569_sunit_start(vic, true);
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
             pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
@@ -1534,7 +1544,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             break;
         case 56:
             vic->gunit.enabled = false;
-            _m6569_sunit_start(vic);
+            _m6569_sunit_start(vic, false);
             g_data = _m6569_i_access(vic);
             pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
             _m6569_bunit_right(vic, 56);
