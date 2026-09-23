@@ -346,6 +346,10 @@ static inline void _m6526_read_port_pins(m6526_t* c, uint64_t pins) {
     c->pb.inp = M6526_GET_PB(pins);
 }
 
+static inline uint8_t _m6526_port_pins(const m6526_port_t* p) {
+    return (uint8_t) ((p->reg | ~p->ddr) & p->inp);
+}
+
 static inline uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
     /* merge timer state bits into data byte */
     if (M6526_PBON(c->ta.cr)) {
@@ -382,8 +386,8 @@ static inline uint8_t _m6526_merge_pb67(m6526_t* c, uint8_t data) {
 }
 
 static inline uint64_t _m6526_write_port_pins(m6526_t* c, uint64_t pins) {
-    c->pa.pins = c->pa.reg | (c->pa.inp & ~c->pa.ddr);
-    c->pb.pins = _m6526_merge_pb67(c, c->pb.reg | (c->pb.inp & ~c->pb.ddr));
+    c->pa.pins = _m6526_port_pins(&c->pa);
+    c->pb.pins = _m6526_merge_pb67(c, _m6526_port_pins(&c->pb));
     M6526_SET_PAB(pins, c->pa.pins, c->pb.pins);
     return pins;
 }
@@ -582,10 +586,10 @@ static uint8_t _m6526_read(m6526_t* c, uint8_t addr) {
     uint8_t data = 0xFF;
     switch (addr) {
         case M6526_REG_PRA:
-            data = c->pa.inp;
+            data = _m6526_port_pins(&c->pa);
             break;
         case M6526_REG_PRB:
-            data = _m6526_merge_pb67(c, c->pb.inp);
+            data = _m6526_merge_pb67(c, _m6526_port_pins(&c->pb));
             break;
         case M6526_REG_DDRA:
             data = c->pa.ddr;
