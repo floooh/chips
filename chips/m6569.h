@@ -268,6 +268,8 @@ typedef struct {
 typedef struct {
     bool enabled;               // true while g_accesses are happening
     uint8_t mode;               // display mode 0..7 precomputed from ECM/BMM/MCM bits
+    uint8_t next_mode;          // pending display mode, see _M6569_MODE_DELAY
+    uint8_t mode_delay;         // number of pixels the old mode is still active
     uint8_t count;              // counts from 0..8
     uint8_t shift;              // current pixel shifter
     uint8_t outp;               // current output byte (bit 7)
@@ -521,8 +523,27 @@ static inline void _m6569_io_update_border_csel(m6569_border_unit_t* b, uint8_t 
 }
 
 // updates the graphics sequencer display mode (0..7) from the ECM/BMM/MCM bits
+/*  A change of the ECM/BMM/MCM bits doesn't take effect at a character
+    boundary, it reaches the pixel sequencer a few pixels into the next
+    character (the real chip needs some time to propagate the new mode through
+    the sequencer logic). Leaving one of the illegal modes takes a bit longer
+    than a switch between two regular modes, the illegal modes force the pixel
+    output to black through a separate path which is slower to release.
+    See testprogs/VICII/videomode.
+*/
+#ifndef _M6569_MODE_DELAY
+#define _M6569_MODE_DELAY (4)
+#endif
+#ifndef _M6569_MODE_DELAY_ILL
+#define _M6569_MODE_DELAY_ILL (6)
+#endif
+
 static inline void _m6569_io_update_gunit_mode(m6569_graphics_unit_t* gu, uint8_t ctrl_1, uint8_t ctrl_2) {
-    gu->mode = ((ctrl_1&(M6569_CTRL1_ECM|M6569_CTRL1_BMM))|(ctrl_2&M6569_CTRL2_MCM))>>4;
+    const uint8_t mode = ((ctrl_1&(M6569_CTRL1_ECM|M6569_CTRL1_BMM))|(ctrl_2&M6569_CTRL2_MCM))>>4;
+    gu->next_mode = mode;
+    if (mode != gu->mode) {
+        gu->mode_delay = (gu->mode >= 5) ? _M6569_MODE_DELAY_ILL : _M6569_MODE_DELAY;
+    }
 }
 
 // update sprite unit positions and sizes when updating registers
@@ -1118,9 +1139,16 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
     bool brd = vic->brd.vert | vic->brd.main;
     uint8_t brd_color = vic->brd.main ? vic->brd.bc : vic->gunit.bg[0];
     const uint8_t mdp = vic->reg.mdp;
-    const uint8_t mode = vic->gunit.mode;
     uint16_t bmc = 0;
     for (size_t i = 0; i < 8; i++) {
+        // the new video mode only kicks in a few pixels into the character
+        if (vic->gunit.mode_delay > 0) {
+            vic->gunit.mode_delay--;
+        }
+        else {
+            vic->gunit.mode = vic->gunit.next_mode;
+        }
+        const uint8_t mode = vic->gunit.mode;
         // lower 8 bit sprite color, top 8 bit 'coverage mask'
         uint16_t sc = _m6569_sunit_decode(vic, hpos);
         _m6569_gunit_tick(vic, g_data);
@@ -1131,7 +1159,7 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
             case 2: bmc = _m6569_gunit_decode_mode2(vic); break;
             case 3: bmc = _m6569_gunit_decode_mode3(vic); break;
             case 4: bmc = _m6569_gunit_decode_mode4(vic); break;
-            case 5: case 6: case 7: break;  // illegal modes
+            case 5: case 6: case 7: bmc = 0; break;  // illegal modes are black
             default: _M6569_UNREACHABLE;
         }
         _m6569_test_mob_data_col(vic, bmc, sc);
@@ -1668,6 +1696,13 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     vic->rs.vc = vic->rs.next_vc;
     vic->vm.vmli = vic->vm.next_vmli;
 
+    /*  A pending video mode change never spans more than one cycle (it is
+        consumed by the pixel loop in _m6569_decode_pixels), make sure it also
+        completes for cycles that are outside the visible area.
+    */
+    vic->gunit.mode = vic->gunit.next_mode;
+    vic->gunit.mode_delay = 0;
+
     /*  Count how long BA has been active for the current badline, the VIC only
         gets the bus (AEC goes low) _M6569_BA_TO_AEC cycles later, see
         _m6569_c_access(). This must happen *before* the badline is re-sampled
@@ -1707,6 +1742,24 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
 
 // all-in-one tick function
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
+    /*  A write to the ECM/BMM/MCM bits reaches the pixel sequencer in the same
+        cycle: the CPU writes during PHI2, which is in the middle of the 8 pixels
+        the VIC outputs in that cycle. All other register writes are handled
+        after the tick (and thus take effect in the next cycle), only the video
+        mode has to be pushed into the sequencer pipeline up front, see
+        _M6569_MODE_DELAY.
+    */
+    if ((pins & (M6569_CS|M6569_RW)) == M6569_CS) {
+        const uint8_t r_addr = pins & M6569_REG_MASK;
+        const uint8_t data = M6569_GET_DATA(pins);
+        if (r_addr == 0x11) {
+            _m6569_io_update_gunit_mode(&vic->gunit, data, vic->reg.ctrl_2);
+        }
+        else if (r_addr == 0x16) {
+            _m6569_io_update_gunit_mode(&vic->gunit, vic->reg.ctrl_1, data);
+        }
+    }
+
     // per-tick actions
     pins = _m6569_tick(vic, pins);
 
