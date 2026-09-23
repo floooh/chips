@@ -404,9 +404,14 @@ static const uint8_t _m6569_reg_mask[M6569_NUM_REGS] = {
         right CSEL0 $14F    cycle 54, px 7
         right CSEL1 $158    cycle 56, px 0
 
-    The px-7 compares happen after the CPU write of the current cycle has
-    reached the chip and thus use brd.next_csel, the px-0 compares happen before
-    and use brd.csel.
+    Only the left CSEL=1 compare is early enough in the cycle to miss the CPU
+    write of that same cycle, so it is the only one that uses brd.csel (the value
+    from before the write), the other three use brd.next_csel. In particular the
+    right CSEL=1 compare has to see the write: the standard "open the side
+    border" trick switches to CSEL=1 in cycle 55 to step over the CSEL=0 compare
+    and back to CSEL=0 in cycle 56 to step over the CSEL=1 one, and only works if
+    that second write still counts (testprogs/VICII/border border-250,
+    hvborder2, and testprogs/VICII/vicii_timing vicii_reg_timing).
 */
 #define _M6569_BORDER_CSEL0_DELAY   (7)     // the CSEL=0 compares are 7 pixels into the cycle
 
@@ -1415,7 +1420,7 @@ static inline void _m6569_bunit_right_csel0(m6569_t* vic) {
 }
 
 static inline void _m6569_bunit_right_csel1(m6569_t* vic) {
-    if (vic->brd.csel) {
+    if (vic->brd.next_csel) {
         vic->brd.next_main = true;
         vic->brd.delay = 0;
     }
