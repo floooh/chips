@@ -280,7 +280,7 @@ void cpc_init(cpc_t* sys, const cpc_desc_t* desc) {
         .out_cb = _cpc_psg_out,
         .tick_hz = _CPC_FREQUENCY / 4,
         .sound_hz = _CPC_DEFAULT(desc->audio.sample_rate, 44100),
-        .magnitude = _CPC_DEFAULT(desc->audio.volume, 0.5f),
+        .magnitude = _CPC_DEFAULT(desc->audio.volume, 0.2f),
         .user_data = sys
     });
     mc6845_init(&sys->crtc, MC6845_TYPE_UM6845R);
