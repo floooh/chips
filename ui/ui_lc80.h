@@ -199,7 +199,7 @@ static void _ui_lc80_draw_seg_hori(ImDrawList* l, const ImVec2& p, bool on, cons
         ImVec2((p.x - dx) + dy, p.y + dy)
     };
     l->AddConvexPolyFilled(points, 6, on ? conf.display.color_on : conf.display.color_off);
-    l->AddPolyline(points, 6, conf.display.color_outline, true, 1.0f);
+    l->AddPolyline(points, 6, conf.display.color_outline, 1.0f);
 }
 
 static void _ui_lc80_draw_seg_vert(ImDrawList* l, const ImVec2& p, bool on, const _ui_lc80_mb_config& conf) {
@@ -214,7 +214,7 @@ static void _ui_lc80_draw_seg_vert(ImDrawList* l, const ImVec2& p, bool on, cons
         ImVec2(p.x - dx, (p.y - dy) + dx)
     };
     l->AddConvexPolyFilled(points, 6, on ? conf.display.color_on : conf.display.color_off);
-    l->AddPolyline(points, 6, conf.display.color_outline, true, 1.0f);
+    l->AddPolyline(points, 6, conf.display.color_outline, 1.0f);
 }
 
 static void _ui_lc80_draw_vqe23_segments(ImDrawList* l, const ImVec2& p, bool enabled, uint8_t segs, const _ui_lc80_mb_config& conf) {
@@ -457,7 +457,7 @@ static void _ui_lc80_draw_wire_pos(ui_lc80_t* ui,
     ImDrawList* l = ImGui::GetWindowDrawList();
     ImDrawListFlags f = l->Flags;
     l->Flags = ImDrawListFlags_None;
-    l->AddPolyline(points, 6, color, false, 1.0f);
+    l->AddPolyline(points, 6, color, 1.0f);
     l->Flags = f;
     if (hovered) {
         CHIPS_ASSERT(ui->wire_hovered_num < UI_LC80_MAX_PIN_CONNECTIONS);
@@ -491,7 +491,7 @@ static void _ui_lc80_draw_hovered_wire(ui_lc80_t* ui) {
     ImU32 color = ui->wire_active ? 0xFFFF00FF : 0xFFCC00CC;
     ImDrawList* l = ImGui::GetWindowDrawList();
     for (int i = 0; i < ui->wire_hovered_num; i++) {
-        l->AddPolyline((ImVec2*)ui->wire_hovered_pos[i], 6, color, false, 5.0f);
+        l->AddPolyline((ImVec2*)ui->wire_hovered_pos[i], 6, color, 5.0f);
     }
     ui->wire_hovered_num = 0;
 }
