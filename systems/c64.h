@@ -47,14 +47,14 @@
         branchwrap:     ok
         cia1pb6:        ok
         cia1pb7:        ok
-        cia1ta:         FAIL (OK, CIA sysclock not implemented)
+        cia1ta:         ok
         cia1tab:        ok
-        cia1tb:         FAIL (OK, CIA sysclock not implemented)
+        cia1tb:         ok
         cia1tb123:      ok
         cia2pb6:        ok
         cia2pb7:        ok
-        cia2ta:         FAIL (OK, CIA sysclock not implemented)
-        cia2tb:         FAIL (OK, CIA sysclock not implemented)
+        cia2ta:         ok
+        cia2tb:         ok
         cntdef:         ok
         cnto2:          ok
         cpuport:        ok
@@ -87,8 +87,8 @@
     mirrors/ciamirrors.prg: green
 
     reload0:
-        reload0a.prg:   red
-        reload0b.prg:   red
+        reload0a.prg:   green
+        reload0b.prg:   green
 
     shiftregister:
         cia-icr-test-continues-old.prg: green
@@ -104,7 +104,7 @@
 
     branchquirk:
         branchquirk-old.prg:    green
-        branchquirk-nmiold.prg: red
+        branchquirk-nmiold.prg: green
 
     cia-int:
         cia-int-irq.prg:    green??
