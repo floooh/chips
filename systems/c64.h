@@ -66,7 +66,7 @@
         loadth:         ok
         mmu:            ok
         mmufetch:       ok
-        nmi:            FAIL (1 error at 00/5)
+        nmi:            ok
         oneshot:        ok
         trap1..17:      ok
 
@@ -79,7 +79,7 @@
     cia-timer/cia-timer-oldcias.prg:
         - left side (CIA-1, IRQ) all green, right side (CIA-2, NMI) some red
 
-    ciatimer/dd0dtest/dd0dtest.prg (NMI related):
+    dd0dtest/dd0dtest.prg (NMI related):
         - some errors
 
     irqdelay:   all green

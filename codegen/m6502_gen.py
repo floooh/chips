@@ -245,13 +245,21 @@ def enc_addr(op, addr_mode, mem_access):
 
 #-------------------------------------------------------------------------------
 def i_brk(o):
+    # NOTE: BRK is also handling IRQ, NMI and RES, that's why the decode
+    # block looks so messy
     cmt(o, 'BRK')
+    # tick 1: push PCH (no PC++ for IRQ/NMI, RES reads instead of writes)
     o.t('if(0==(c->brk_flags&(M6502_BRK_IRQ|M6502_BRK_NMI))){c->PC++;}_SAD(0x0100|c->S--,c->PC>>8);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}')
+    # tick 2: push PCL (RES reads instead of writes)
     o.t('_SAD(0x0100|c->S--,c->PC);if(0==(c->brk_flags&M6502_BRK_RESET)){_WR();}')
-    o.t('_SAD(0x0100|c->S--,c->P|M6502_XF);if(c->brk_flags&M6502_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}')
-    o.t('_SA(c->AD++);c->P|=(M6502_IF|M6502_BF);c->brk_flags=0; /* RES/NMI hijacking */')
+    # tick 3: push P, latch vector address, last chance for a pending NMI to hijack a BRK/IRQ
+    o.t('if(c->nmi_pip&&(0==(c->brk_flags&M6502_BRK_RESET))){c->brk_flags|=M6502_BRK_NMI;c->nmi_pip=0;} /* NMI hijacking */_SAD(0x0100|c->S--,c->P|M6502_XF);if(c->brk_flags&M6502_BRK_RESET){c->AD=0xFFFC;}else{_WR();if(c->brk_flags&M6502_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}}')
+    # tick 4: address vector lo (AD++ to the hi byte), set I and B flags, clear brk_flags
+    o.t('_SA(c->AD++);c->P|=(M6502_IF|M6502_BF);c->brk_flags=0;')
+    # tick 5: address vector hi, stash the vector lo byte read in the previous tick
     o.t('_SA(c->AD);c->AD=_GD(); /* NMI "half-hijacking" not possible */')
-    o.t('c->PC=(_GD()<<8)|c->AD;')
+    # tick 6: load PC, and delay a still-pending NMI by one instruction (last tick doesn't poll)
+    o.t('c->PC=(_GD()<<8)|c->AD;if(c->nmi_pip){c->nmi_pip=0x100;} /* no interrupt poll at the end of the interrupt sequence */')
 
 #-------------------------------------------------------------------------------
 def i_nop(o):
