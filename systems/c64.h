@@ -76,8 +76,7 @@
         - all green, expect cia15.prg, which tests the CIA TOD clock,
           which isn't implemented
 
-    cia-timer/cia-timer-oldcias.prg:
-        - left side (CIA-1, IRQ) all green, right side (CIA-2, NMI) some red
+    cia-timer/cia-timer-oldcias.prg: all green
 
     ciatimer/dd0dtest/dd0dtest.prg (NMI related):
         - some errors
@@ -87,8 +86,8 @@
     mirrors/ciamirrors.prg: green
 
     reload0:
-        reload0a.prg:   red
-        reload0b.prg:   red
+        reload0a.prg:   green
+        reload0b.prg:   green
 
     shiftregister:
         cia-icr-test-continues-old.prg: green
@@ -104,7 +103,7 @@
 
     branchquirk:
         branchquirk-old.prg:    green
-        branchquirk-nmiold.prg: red
+        branchquirk-nmiold.prg: green
 
     cia-int:
         cia-int-irq.prg:    green??
@@ -120,9 +119,9 @@
     irqdma: (takes a long time)
         all fail?
 
-    irqdummy/irqdummy.prg:  green
+    irqdummy/irqdummy.prg: green
 
-    irqnmi/irqnmi-old.prg: left (irq) green,right (nmi) red
+    irqnmi/irqnmi-old.prg: green
 
     VICII:
 
