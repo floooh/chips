@@ -442,9 +442,15 @@ static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
     }
     /* timer B underflow interrupt flag? */
     if (c->tb.t_out) {
-        /* "Timer B Bug": reads from ICR block timer B interrupt generation */
+        /* "Timer B Bug": a read from the ICR in the same cycle eats the timer B
+           flag bit, but the interrupt itself is still generated - the handler
+           then sees an ICR with the IR bit set and no cause bit ($80)
+        */
         if (!_M6526_PIP_TEST(c->intr.pip, M6526_PIP_READ_ICR, 0)) {
             c->intr.icr |= (1<<1);
+        }
+        else if (c->intr.imr & (1<<1)) {
+            _M6526_PIP_SET(c->intr.pip, M6526_PIP_IRQ, 1);
         }
     }
     /* check for FLAG pin trigger */
