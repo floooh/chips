@@ -78,7 +78,8 @@
 
     cia-timer/cia-timer-oldcias.prg: green
 
-    dd0dtest/dd0dtest.prg (NMI related): green
+    dd0dtest/dd0dtest.prg (NMI related):
+        some issues remaining, known and expected
 
     irqdelay:   all green
 
