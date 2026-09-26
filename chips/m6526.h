@@ -416,6 +416,20 @@ static void _m6526_write_icr(m6526_t* c, uint8_t data) {
     if (c->intr.icr & c->intr.imr1) {
         _M6526_PIP_SET(c->intr.pip, M6526_PIP_IRQ, 1);
     }
+    else {
+        /* ...but clearing the mask bit in the *same* cycle as the interrupt
+           condition still kills the interrupt, because it hasn't left the
+           1-cycle delay pipeline yet (its output bit is only sampled in
+           _m6526_update_irq() of the next tick).
+
+           Pinned by Wilfred Bos' dd0dtest (tests/vice-tests/CIA/dd0dtest in
+           chips-test): test 11 writes $01 to $dd0d exactly in the timer A
+           underflow cycle and must *not* see an NMI. Test 10 pins the opposite
+           direction: the same write one cycle later comes too late, the
+           interrupt has already happened and the NMI must be taken.
+        */
+        _M6526_PIP_CLR(c->intr.pip, M6526_PIP_IRQ, 0);
+    }
 }
 
 static uint8_t _m6526_read_icr(m6526_t* c) {
@@ -560,8 +574,12 @@ static void _m6526_tick_pipeline(m6526_t* c) {
         _M6526_PIP_SET(c->tb.pip, M6526_PIP_TIMER_ONESHOT, 1);
     }
 
-    /* interrupt pipeline */
-    if (c->intr.icr & c->intr.imr) {
+    /* interrupt pipeline (NOTE: uses the new mask imr1, not the delayed imr,
+       otherwise a mask bit cleared in the underflow cycle would immediately
+       re-arm the interrupt here from the still-set flag bit, undoing the
+       cancellation in _m6526_write_icr() - see dd0dtest test 11)
+    */
+    if (c->intr.icr & c->intr.imr1) {
         _M6526_PIP_SET(c->intr.pip, M6526_PIP_IRQ, 1);
     }
     c->intr.imr = c->intr.imr1;
