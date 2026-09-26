@@ -204,6 +204,7 @@ extern "C" {
 
 #define M6526_PIP_IRQ       (0)
 #define M6526_PIP_READ_ICR  (8)
+#define M6526_PIP_CLEAR_IR  (16)
 
 // I/O port state
 typedef struct {
@@ -237,9 +238,13 @@ typedef struct {
     /* merged delay pipelines:
         1-cycle delay pipeline to request irq:  bits 0..7
         timer B bug: remember reads from ICR:   bits 8..15
+        delayed clear-on-read of the IR bit:    bits 16..23
     */
     uint32_t pip;
     bool flag;              // last state of flag bit, to detect edge
+    bool irq;               // state of the IRQ output line (not the same as ICR bit 7!)
+    bool ir_now;            // an interrupt is being triggered in this very cycle
+    bool ir_block;          // ...but the ICR was read in the previous cycle
 } m6526_int_t;
 
 // m6526 state
@@ -427,21 +432,43 @@ static void _m6526_write_icr(m6526_t* c, uint8_t data) {
            underflow cycle and must *not* see an NMI. Test 10 pins the opposite
            direction: the same write one cycle later comes too late, the
            interrupt has already happened and the NMI must be taken.
+
+           NOTE: this is old-CIA behaviour (which is what's emulated here, the
+           dd0dtest detects that and checks against its 'expected1' table). On
+           a new CIA the interrupt survives the mask write - that's what the
+           $01 vs $81 difference between icr-oneshot-old.ref and
+           icr-oneshot-new.ref in tests/vice-tests/CIA/shiftregister is.
         */
         _M6526_PIP_CLR(c->intr.pip, M6526_PIP_IRQ, 0);
     }
 }
 
 static uint8_t _m6526_read_icr(m6526_t* c) {
-    /* the icr register is cleared after reading, this will also cause the
-       IRQ line to go inactive, also the irq 1-cycle-delay pipeline is
-       set to cleared state.
+    /* reading the ICR clears it, releases the IRQ line and cancels an
+       interrupt that is still in the 1-cycle delay pipeline
        see Figure 5 https://ist.uwaterloo.ca/~schepers/MJK/cia6526.html
+
+       ...but the IR bit (bit 7) isn't quite the same signal as the IRQ line,
+       and Wilfred Bos' dd0dtest (tests/vice-tests/CIA/dd0dtest in chips-test)
+       pins down two places where they come apart:
+
+       - a read in the cycle the interrupt is triggered still *returns* bit 7
+         set, it only stops the bit from latching and the IRQ line from going
+         active (test 0C/0E/12/13: the dummy read of an 'inc $dd0d,x' lands in
+         the timer A underflow cycle and the real read one cycle later, which
+         must see $80 so that the read-modify-write puts the mask back
+         *enabled*)
+       - the clear-on-read of bit 7 lags the flag bits by one cycle, so a read
+         in the cycle right after another read still sees it (test 0D)
     */
     uint8_t data = c->intr.icr;
-    c->intr.icr = 0;
-    /* cancel an interrupt pending in the pipeline */
-    _M6526_PIP_RESET(c->intr.pip, M6526_PIP_IRQ)
+    if (c->intr.ir_now) {
+        data |= (1<<7);
+    }
+    c->intr.icr &= (1<<7);
+    _M6526_PIP_SET(c->intr.pip, M6526_PIP_CLEAR_IR, 1);
+    c->intr.irq = false;
+    c->intr.ir_block = true;
     /* remember reads from ICR to implement "Timer B Bug" */
     _M6526_PIP_SET(c->intr.pip, M6526_PIP_READ_ICR, 0);
     return data;
@@ -475,13 +502,21 @@ static uint64_t _m6526_update_irq(m6526_t* c, uint64_t pins) {
 
     /* FIXME: ALARM, SP interrupt conditions */
 
-    /* handle main interrupt bit */
-    if (_M6526_PIP_TEST(c->intr.pip, M6526_PIP_IRQ, 0)) {
-        c->intr.icr |= (1<<7);
+    /* handle main interrupt bit: the delayed clear from a read two cycles ago
+       first, so that an interrupt triggered in this cycle still wins
+    */
+    if (_M6526_PIP_TEST(c->intr.pip, M6526_PIP_CLEAR_IR, 0)) {
+        c->intr.icr &= ~(1<<7);
     }
+    c->intr.ir_now = _M6526_PIP_TEST(c->intr.pip, M6526_PIP_IRQ, 0);
+    if (c->intr.ir_now && !c->intr.ir_block) {
+        c->intr.icr |= (1<<7);
+        c->intr.irq = true;
+    }
+    c->intr.ir_block = false;
 
     /* update IRQ pin */
-    if (0 != (c->intr.icr & (1<<7))) {
+    if (c->intr.irq) {
         pins |= M6526_IRQ;
     }
     else {
