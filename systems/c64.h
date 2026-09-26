@@ -78,8 +78,7 @@
 
     cia-timer/cia-timer-oldcias.prg: all green
 
-    ciatimer/dd0dtest/dd0dtest.prg (NMI related):
-        - some errors
+    ciatimer/dd0dtest/dd0dtest.prg: green
 
     irqdelay:   all green
 
@@ -92,8 +91,8 @@
     shiftregister:
         cia-icr-test-continues-old.prg: green
         cia-icr-test-oneshot-old.prg: green
-        cia-icr-test2-continues.prg: some red
-        cia-icr-test2-oneshot.prg: some red
+        cia-icr-test2-continues.prg: some red (expected: old vs new CIA)
+        cia-icr-test2-oneshot.prg: some red (expected: old vs new CIA)
         cia-sp-test-continues-old.prg: much red (ok, CIA SP not implemented)
         cia-sp-test-oneshot-old.prg: much red (ok, CIA SP not implemented)
 
