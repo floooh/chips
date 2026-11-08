@@ -525,7 +525,15 @@ static void _m6569_io_update_sunit(m6569_t* vic, size_t i, uint8_t mx, uint8_t m
     m6569_sprite_unit_t* su = &vic->sunit;
     // mxb: MSB for each xpos
     uint16_t xpos = ((mx8 & mask)<<(8-i)) | mx;
-    su->h_first[i]  = (xpos / 8) + 13;
+    /* the PAL sprite X counter runs $194..$1F7 and then $000..$193, so sprites
+       at the high X positions start before X=0 in the line ($1F8..$1FF never
+       match), positions below $1E0 would be in the horizontal blank anyway
+    */
+    if ((xpos >= 0x1E0) && (xpos < 0x1F8)) {
+        su->h_first[i] = (xpos / 8) - 50;
+    } else {
+        su->h_first[i] = (xpos / 8) + 13;
+    }
     su->h_offset[i] = (xpos & 7);
     const uint16_t w = ((mxe & mask) ? 5 : 2) + ((su->h_offset[i] > 0) ? 1:0);
     su->h_last[i] = su->h_first[i] + w;
@@ -646,6 +654,21 @@ static void _m6569_write(m6569_t* vic, uint64_t pins) {
             _m6569_io_update_gunit_mode(&vic->gunit, r->ctrl_1, data);
             break;
         case 0x17:  // mye
+            /* sprite crunch: clearing an MxYE bit in cycle 15 while the expansion
+               flip-flop is reset mixes MC and MCBASE, the result is copied into
+               MCBASE in the next cycle (see VICE viciisc and
+               https://www.linusakesson.net/scene/lunatico/misc.php)
+            */
+            if (vic->rs.h_count == 15) {
+                const uint8_t crunch = ~data & ~vic->sunit.expand;
+                for (size_t i = 0; i < 8; i++) {
+                    if (crunch & (1<<i)) {
+                        const uint8_t mc = vic->sunit.mc[i];
+                        const uint8_t mc_base = vic->sunit.mc_base[i];
+                        vic->sunit.mc[i] = (0x2A & (mc_base & mc)) | (0x15 & (mc_base | mc));
+                    }
+                }
+            }
             for (size_t i = 0; i < 8; i++) {
                 _m6569_io_update_sunit(vic, i, r->mxy[i][0], r->mxy[i][1], r->mx8, r->mxe, data);
             }
@@ -849,11 +872,6 @@ static inline void _m6569_sunit_start(m6569_t* vic) {
          bits of RASTER. If this is the case and the DMA for the sprite is still
          off, the DMA is switched on, MCBASE is cleared, and if the MxYE bit is
          set the expansion flip flip is reset.
-
-         NOTE: sprite disp_enabled flag is turned off here if dma flag is off,
-         this is different from the recipe in vic-ii.txt (switching off display
-         in tick 15/16 as described in the recipe turns off rendering the
-         last line of a sprite)
     */
     const uint8_t me = vic->reg.me;
     const uint8_t mye = vic->reg.mye;
@@ -867,8 +885,6 @@ static inline void _m6569_sunit_start(m6569_t* vic) {
             su->mc_base[i] = 0;
         }
     }
-    // NOTE: the following behaviour differs from the recipe
-    su->disp_enabled &= su->dma_enabled;
 }
 
 static inline void _m6569_sunit_update_mc_disp_enable(m6569_t* vic) {
@@ -877,8 +893,13 @@ static inline void _m6569_sunit_update_mc_disp_enable(m6569_t* vic) {
         sprite is turned on and the Y coordinate of the sprite matches the lower
         8 bits of RASTER. If this is the case, the display of the sprite is
         turned on.
+
+        NOTE: the sprite display is also turned off here if the DMA is off,
+        this is different from the recipe in vic-ii.txt, see VIC-Addendum.txt
+        and _m6569_sunit_dma_disp_disable()
     */
     m6569_sprite_unit_t* su = &vic->sunit;
+    su->disp_enabled &= su->dma_enabled;
     for (size_t i = 0; i < 8; i++) {
         su->mc[i] = su->mc_base[i];
         const uint8_t mask = (1<<i);
@@ -891,13 +912,17 @@ static inline void _m6569_sunit_update_mc_disp_enable(m6569_t* vic) {
 /*
     7. In the first phase of cycle 15, it is checked if the expansion flip flop
     is set. If so, MCBASE is incremented by 2.
+
+    NOTE: rules 7 and 8 are merged here into loading MCBASE from MC (after the
+    three s-accesses MC is MCBASE+3), this is what makes the sprite crunch
+    work, see the $d017 write handler.
 */
 static inline void _m6569_sunit_update_mcbase(m6569_t* vic) {
     m6569_sprite_unit_t* su = &vic->sunit;
     if (su->expand != 0) {
         for (size_t i = 0; i < 8; i++) {
             if (su->expand & (1<<i)) {
-                su->mc_base[i] = (su->mc_base[i] + 2) & 0x3F;
+                su->mc_base[i] = su->mc[i];
             }
         }
     }
@@ -908,6 +933,8 @@ static inline void _m6569_sunit_update_mcbase(m6569_t* vic) {
     is set. If so, MCBASE is incremented by 1. After that, the VIC checks if
     MCBASE is equal to 63 and turns of the DMA and the display of the sprite
     if it is.
+
+    NOTE: The MCBASE increment happens in _m6569_sunit_update_mcbase().
 
     NOTE: The display is turned off in _m6569_sunit_update_mc_disp_enable()
     instead (at the end of the last valid rasterline the sprite must
@@ -926,13 +953,6 @@ static inline void _m6569_sunit_update_mcbase(m6569_t* vic) {
 */
 static inline void _m6569_sunit_dma_disp_disable(m6569_t* vic) {
     m6569_sprite_unit_t* su = &vic->sunit;
-    if (su->expand != 0) {
-        for (size_t i = 0; i < 8; i++) {
-            if (su->expand & (1<<i)) {
-                su->mc_base[i] = (su->mc_base[i] + 1) & 0x3F;
-            }
-        }
-    }
     for (size_t i = 0; i < 8; i++) {
         if (su->mc_base[i] == 0x3F) {
             su->dma_enabled &= ~(1<<i);
@@ -1618,6 +1638,17 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
 
 // all-in-one tick function
 uint64_t m6569_tick(m6569_t* vic, uint64_t pins) {
+    /* the side border comparisons must see a CSEL write from the same
+       cycle (e.g. the side border trick switches to CSEL=0 in cycle 56),
+       all other register writes take effect in the next cycle
+
+       NOTE: doing the same for RSEL breaks the VICE tests VICII/dentest/denrsel-s1
+       and VICII/border/vborder2-22
+    */
+    if (((pins & (M6569_CS|M6569_RW)) == M6569_CS) && ((pins & M6569_REG_MASK) == 0x16)) {
+        _m6569_io_update_border_csel(&vic->brd, M6569_GET_DATA(pins));
+    }
+
     // per-tick actions
     pins = _m6569_tick(vic, pins);
 
