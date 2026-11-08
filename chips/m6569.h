@@ -461,6 +461,15 @@ void m6569_reset(m6569_t* vic) {
 
 /*--- register read/writes ---------------------------------------------------*/
 
+/* the raster counter as seen by the CPU and the raster IRQ compare: in
+   raster line 0 the reset happens one cycle later than the increment in
+   the other lines, so cycle 1 of line 0 still reads as line 311
+   (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
+*/
+static inline uint16_t _m6569_rs_raster(const m6569_raster_unit_t* rs) {
+    return ((rs->v_count == 0) && (rs->h_count == 1)) ? (M6569_VTOTAL-1) : rs->v_count;
+}
+
 // update the raster-interrupt line from ctrl_1 and raster register updates
 static inline void _m6569_io_update_irq_line(m6569_raster_unit_t* rs, uint8_t ctrl_1, uint8_t rast) {
     rs->v_irqline = ((ctrl_1 & M6569_CTRL1_RST8)<<1) | rast;
@@ -552,11 +561,11 @@ static uint64_t _m6569_read(m6569_t* vic, uint64_t pins) {
     switch (r_addr) {
         case 0x11:
             // bit 7 of 0x11 is bit 8 of the current raster counter
-            data = (r->ctrl_1 & 0x7F) | ((rs->v_count & 0x100)>>1);
+            data = (r->ctrl_1 & 0x7F) | ((_m6569_rs_raster(rs) & 0x100)>>1);
             break;
         case 0x12:
             // reading 0x12 returns bits 0..7 of current raster position
-            data = (uint8_t)rs->v_count;
+            data = (uint8_t)_m6569_rs_raster(rs);
             break;
         case 0x1E:
         case 0x1F:
@@ -1192,26 +1201,23 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
     }
 }
 
-/*
-    (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
+static inline uint16_t _m6569_rs_next_vcount(uint16_t v_count) {
+    return (v_count == (M6569_VTOTAL-1)) ? 0 : (v_count + 1);
+}
 
-    FIXME: "Raster line 0 is, however, an exception: In this line, IRQ
-    and incrementing (resp. resetting) of RASTER are performed one cycle later
-    than in the other lines.
+/* called at the start of cycle 1, the delayed reset in raster line 0
+   is handled in _m6569_rs_raster() and _m6569_rs_check_irq()
 */
 static inline void _m6569_rs_next_rasterline(m6569_t* vic) {
-    vic->rs.h_count = 0;
-    // new scanline
-    if (vic->rs.v_count == (M6569_VTOTAL-1)) {
-        vic->rs.v_count = 0;
+    vic->rs.v_count = _m6569_rs_next_vcount(vic->rs.v_count);
+    if (vic->rs.v_count == 0) {
         vic->rs.vc_base = 0;
-    } else {
-        vic->rs.v_count++;
     }
 }
 
+// called in cycle 1, and in cycle 2 for raster line 0
 static inline void _m6569_rs_check_irq(m6569_t* vic) {
-    if (vic->rs.v_count == vic->rs.v_irqline) {
+    if (_m6569_rs_raster(&vic->rs) == vic->rs.v_irqline) {
         vic->reg.int_latch |= M6569_INT_IRST;
     }
 }
@@ -1432,6 +1438,9 @@ static inline uint64_t _m6569_aec(uint64_t pins) {
 static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     pins &= ~M6569_BA;
     uint8_t g_data = 0x00;
+    if (vic->rs.h_count == 0) {
+        _m6569_rs_next_rasterline(vic);
+    }
     _m6569_rs_update_badline(vic);
 
     // a raster line is 63 ticks, and each line goes through a fixed 'program'
@@ -1439,12 +1448,18 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     vic->crt.x++;
     switch (vic->rs.h_count) {
         case 1:
+            if (vic->rs.v_count != 0) {
+                _m6569_rs_check_irq(vic);
+            }
             _m6569_p_access(vic, 3);
             _m6569_s_access(vic, 3);
             pins = _m6569_sunit_dma_aec(vic, (1<<3), pins);
             pins = _m6569_sunit_dma_ba(vic, (1<<3)|(1<<4), pins);
             break;
         case 2:
+            if (vic->rs.v_count == 0) {
+                _m6569_rs_check_irq(vic);
+            }
             g_data = _m6569_s_i_access(vic, 3);
             _m6569_s_access(vic, 3);
             pins = _m6569_sunit_dma_aec(vic, (1<<3), pins);
@@ -1596,8 +1611,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             pins = _m6569_sunit_dma_ba(vic, (1<<2)|(1<<3), pins);
             break;
         case 63:    /* HTOTAL */
-            _m6569_rs_next_rasterline(vic);
-            _m6569_rs_check_irq(vic);
+            vic->rs.h_count = 0;
             g_data = _m6569_s_i_access(vic, 2);
             _m6569_s_access(vic, 2);
             pins = _m6569_sunit_dma_aec(vic, (1<<2), pins);
