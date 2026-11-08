@@ -868,7 +868,8 @@ static inline uint16_t _m6569_gunit_decode_mode4(m6569_t* vic) {
 
 /*--- sprite sequencer helper ------------------------------------------------*/
 
-static inline void _m6569_sunit_start(m6569_t* vic) {
+// called in the first phase of cycle 55 and 56
+static inline void _m6569_sunit_check_dma(m6569_t* vic) {
     /*
         1. The expansion flip flop is set as long as the bit in MxYE in register
          $d017 corresponding to the sprite is cleared.
@@ -881,19 +882,25 @@ static inline void _m6569_sunit_start(m6569_t* vic) {
          bits of RASTER. If this is the case and the DMA for the sprite is still
          off, the DMA is switched on, MCBASE is cleared, and if the MxYE bit is
          set the expansion flip flip is reset.
+
+        NOTE: like VICE, switching the DMA on sets the expansion flip-flop, it
+        is reset by the following _m6569_sunit_check_exp() if MxYE is set
     */
     const uint8_t me = vic->reg.me;
-    const uint8_t mye = vic->reg.mye;
     m6569_sprite_unit_t* su = &vic->sunit;
-    su->expand ^= mye;
     for (size_t i = 0; i < 8; i++) {
         const uint8_t mask = (1<<i);
         if ((~su->dma_enabled & me & mask) && ((vic->rs.v_count & 0xFF) == vic->reg.mxy[i][1])) {
             su->dma_enabled |= mask;
-            su->expand &= ~(mye & mask);
+            su->expand |= mask;
             su->mc_base[i] = 0;
         }
     }
+}
+
+// rule 2, VICE does this in the second phase of cycle 56 and only for sprites with DMA on
+static inline void _m6569_sunit_check_exp(m6569_t* vic) {
+    vic->sunit.expand ^= vic->sunit.dma_enabled & vic->reg.mye;
 }
 
 static inline void _m6569_sunit_update_mc_disp_enable(m6569_t* vic) {
@@ -1562,6 +1569,7 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             break;
         case 55:
             vic->gunit.enabled = vic->rs.display_state;
+            _m6569_sunit_check_dma(vic);
             _m6569_c_access(vic);
             g_data = _m6569_g_i_access(vic);
             pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
@@ -1569,7 +1577,8 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
             break;
         case 56:
             vic->gunit.enabled = false;
-            _m6569_sunit_start(vic);
+            _m6569_sunit_check_dma(vic);
+            _m6569_sunit_check_exp(vic);
             g_data = _m6569_i_access(vic);
             pins = _m6569_sunit_dma_ba(vic, (1<<0), pins);
             _m6569_bunit_right(vic, 56);
